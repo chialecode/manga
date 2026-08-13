@@ -4,8 +4,9 @@ const STATIC_GUARDS = [
   'module-boundary', 'no-direct-fs', 'no-direct-spawn', 'network-allowlist', 'no-hardcoded-copy',
   'i18n-complete', 'ipc-contract', 'migration-freeze', 'csp-assert', 'vendor-sha256',
   'third-party-notices',
+  'no-bare-new-browserwindow', 'validate-migrations',
 ]
-const RUNTIME_GUARDS = ['fuses-assert', 'migration-replay', 'log-redaction', 'derived-invariant', 'offline-e2e']
+const RUNTIME_GUARDS = ['fuses-assert', 'migration-replay', 'log-redaction', 'derived-invariant', 'offline-e2e', 'release-artifact']
 const group = process.argv[2]
 if (group !== 'static' && group !== 'runtime') throw new Error('Expected static or runtime')
 

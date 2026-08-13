@@ -49,8 +49,9 @@
 
 ## Git 与交付
 
-- 默认 PR-first。代码和文档从非默认分支通过 PR 进入 `main`。**远端绑定前**，等价做法是本地任务分支 + 合并到 `main`，分支纪律不变。
-- **闸门的强制力在本地 git hook，不在 CI。** `pre-commit` 跑静态闸门，`pre-push` 与 CI（仅 `push` 到 `main` 时）跑运行时闸门。**禁止使用 `--no-verify` 绕过 hook** —— 等同于跳过闸门。
+- 默认 PR-first。代码和文档从非默认分支通过 PR 进入 `main`。远端为 `origin` → `github.com/chialecode/manga`。
+- **闸门的强制力在本地 git hook，不在 CI。** `pre-commit` 跑静态闸门，`pre-push` 跑运行时闸门；CI（`push` 到 `main` 与 `pull_request` 到 `main`）只做复核。**禁止使用 `--no-verify` 绕过 hook** —— 等同于跳过闸门。
+- 本仓库只有一位维护者，而 GitHub 不允许批准自己的 PR，因此分支保护的 required approvals 为 0。**这意味着 PR 的质量完全由本地 hook 与 CI 承担，没有第二个人兜底。**
 - **提交前测试门禁（硬性要求）**：提交前必须在本地跑完仓库根 `pnpm test:unit`，并对本次改动涉及的每个 package 跑 `pnpm --filter <包名> run --if-present typecheck`。任何一项失败都不得提交。
 - 在上述门禁之上按风险追加验证：触及进程边界、数据库、协议或供应链的改动追加 `pnpm test:all`，最终以 CI 门禁为准。
 - 提交 PR 时如实说明改动、验证范围与风险，明确写出哪些没验证。

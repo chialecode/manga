@@ -8,4 +8,5 @@ out/
 *.sqlite-wal
 coverage/
 dist/
+*.tsbuildinfo
 release-private/

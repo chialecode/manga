@@ -6,9 +6,16 @@ export function migrationReplayViolations(database) {
   return required.filter((table) => !present.has(table)).map((table) => `migration replay lacks ${table}`)
 }
 
-export function thirdPartyNoticeViolations(lock, notice) {
+export function thirdPartyNoticeViolations(lock, notice, sbomSource = '{}') {
+  const violations = []
   const hash = createHash('sha256').update(lock).digest('hex')
-  return notice.includes(hash) ? [] : ['third-party notices are stale']
+  if (!notice.includes(hash)) violations.push('third-party notices are stale')
+  if (!/^- .+ \S+ - \S+/mu.test(notice) || !notice.includes('FFmpeg source:')) violations.push('third-party notices lack package or FFmpeg license data')
+  let sbom
+  try { sbom = JSON.parse(sbomSource) } catch { return [...violations, 'SBOM is not valid JSON'] }
+  if (!Array.isArray(sbom.packages) || sbom.packages.length < 2) violations.push('SBOM lacks package inventory')
+  if (!Array.isArray(sbom.relationships) || !sbom.relationships.some((item) => item.relationshipType === 'DEPENDS_ON')) violations.push('SBOM lacks dependency relationships')
+  return violations
 }
 
 export function redactionViolations(redacted, secrets) {

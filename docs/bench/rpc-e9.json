@@ -1,0 +1,18 @@
+{
+  "measuredAt": "2026-08-13T11:29:37.414Z",
+  "durationMs": 60000,
+  "echo": {
+    "ok": true,
+    "value": {
+      "value": "ok"
+    }
+  },
+  "cancellationMs": 0,
+  "chunksAtCancel": 3,
+  "chunksAfterWait": 3,
+  "rssGrowthBytes": 0,
+  "slowConsumerReceived": 144,
+  "slowConsumerConsumed": 120,
+  "traceId": "9656a658-9b45-46e1-8f94-f06d546a2d3a",
+  "logContainsTraceId": true
+}

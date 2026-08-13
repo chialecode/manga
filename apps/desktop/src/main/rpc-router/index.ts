@@ -19,7 +19,7 @@ export class RpcWireError extends Error {
 export class RpcRouter {
   readonly #routes = new Map<string, Route>()
 
-  register<I, O>(method: MethodDefinition<I, O>, handler: (input: I, signal: AbortSignal) => O | Promise<O>): void {
+  register<I, O, S>(method: MethodDefinition<I, O, S>, handler: (input: I, signal: AbortSignal) => O | Promise<O>): void {
     if (this.#routes.has(method.name)) throw new Error('Duplicate RPC method')
     this.#routes.set(method.name, {
       method,

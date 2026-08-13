@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "measuredAt": "2026-08-13T19:26:00.6676331+08:00",
+  "input": "vendor-bin/ffmpeg/avcodec-62.dll",
+  "size": 70876672,
+  "bytes": 2147483648,
+  "iterations": 32,
+  "rangeBytes": 67108864,
+  "elapsedMs": 2602.9525,
+  "throughputMbPerSecond": 825.0183774002792,
+  "throughputThresholdMbPerSecond": 400,
+  "averageRequestMs": 0.6636843749999862,
+  "requestThresholdMs": 2,
+  "machine": {
+    "cpu": "Intel(R) Core(TM) i5-14600K",
+    "logicalCpus": 20,
+    "totalMemory": 68422864896,
+    "disk": "KIOXIA-EXCERIA PLUS G3 SSD"
+  }
+}

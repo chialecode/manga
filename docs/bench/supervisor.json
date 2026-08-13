@@ -4,49 +4,49 @@
     {
       "kind": "started",
       "attempt": 0,
-      "pid": 30892,
-      "elapsedMs": 234
+      "pid": 9984,
+      "elapsedMs": 246
     },
     {
       "kind": "restart",
       "attempt": 0,
       "delayMs": 1000,
-      "elapsedMs": 242
+      "elapsedMs": 1050
     },
     {
       "kind": "started",
       "attempt": 1,
-      "pid": 9752,
-      "elapsedMs": 1470
+      "pid": 16912,
+      "elapsedMs": 2311
     },
     {
       "kind": "restart",
       "attempt": 1,
       "delayMs": 2000,
-      "elapsedMs": 1485
+      "elapsedMs": 3105
     },
     {
       "kind": "started",
       "attempt": 2,
-      "pid": 5324,
-      "elapsedMs": 3708
+      "pid": 32052,
+      "elapsedMs": 5375
     },
     {
       "kind": "restart",
       "attempt": 2,
       "delayMs": 4000,
-      "elapsedMs": 3726
+      "elapsedMs": 6161
     },
     {
       "kind": "started",
       "attempt": 3,
-      "pid": 31624,
-      "elapsedMs": 7952
+      "pid": 32412,
+      "elapsedMs": 10408
     },
     {
       "kind": "circuit-open",
       "attempt": 3,
-      "elapsedMs": 7979
+      "elapsedMs": 11210
     }
   ]
 }

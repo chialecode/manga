@@ -69,25 +69,27 @@ Vitest 全局 setup 注入拒绝一切出站连接的 undici Dispatcher，并覆
 
 ## 6. 闸门的强制点与 CI 触发策略
 
-GitHub Actions 有并发与频率风控，且本仓库在阶段 1 期间**不绑定远端**。因此闸门的强制力必须落在**本地提交**上，而不是 CI 或 push。
+GitHub Actions 有并发限制，且 CI 无法拦住一次已经推出去的坏提交。因此闸门的强制力落在**本地 git hook** 上，CI 只做合并前后的复核。
 
-| 强制点 | 跑什么 | 何时生效 |
+| 强制点 | 跑什么 | 状态 |
 |---|---|---|
-| **`pre-commit` hook** | `lint` + `typecheck` + `test:unit` + **全部静态闸门** | 立即，无需远端 |
-| `pre-push` hook | 追加需要构建或运行时的闸门 | 绑定远端后 |
-| CI（`push` 到 `main`） | 全量复核 | 绑定远端后 |
+| **`pre-commit` hook** | `lint` + `typecheck` + `test:unit` + **全部静态闸门** | 生效 |
+| **`pre-push` hook** | 追加需要构建或运行时产物的闸门 | 生效 |
+| CI（`push` 到 `main`、`pull_request` 到 `main`） | 全量复核 | 生效 |
 
 ### 6.1 静态闸门（进 `pre-commit`）
 
 纯文件与 AST 扫描，秒级，无需构建：
 
-`module-boundary`、`no-direct-fs`、`no-direct-spawn`、`network-allowlist`、`no-hardcoded-copy`、`i18n-complete`、`ipc-contract`、`migration-freeze`、`csp-assert`、`vendor-sha256`、`third-party-notices`
+`module-boundary`、`no-direct-fs`、`no-direct-spawn`、`network-allowlist`、`no-hardcoded-copy`、`i18n-complete`、`ipc-contract`、`migration-freeze`、`csp-assert`、`vendor-sha256`、`third-party-notices`、`no-bare-new-browserwindow`、`validate-migrations`、`identity-literals`
 
 ### 6.2 运行时闸门（进 `pre-push` 与 CI）
 
-需要打包产物或启动应用：
+需要打包产物或构建输出：
 
-`fuses-assert`（读打包产物的 Fuses 位）、`migration-replay`、`log-redaction`、`derived-invariant`、`offline-e2e`
+`fuses-assert`（读打包产物的 Fuses 位）、`migration-replay`、`log-redaction`、`derived-invariant`、`offline-e2e`、`release-artifact`（断言发布产物中不含测试模式开关）
+
+> `fuses-assert` 需要 `apps/desktop/out/`，`release-artifact` 需要 `apps/desktop/.vite/build/main.cjs`，两者都被 gitignore。清理过工作区后首次 `git push` 前需先跑 `pnpm --filter @manga/desktop make`，否则会被 `pre-push` 拦下。
 
 ### 6.3 CI 配置
 
@@ -96,12 +98,20 @@ on:
   push:
     branches: [main]
     paths-ignore: ['docs/**', '**/*.md']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
+  workflow_dispatch:
+permissions:
+  contents: read
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
 
-不配置 `pull_request` 触发。PR 的质量由本地 hook 保证，CI 只做合并后复核。
+`pull_request` 触发是必需的：本仓库只有一位维护者，而 GitHub 不允许批准自己的 PR，因此分支保护的 required approvals 只能是 0，CI 是 PR 上唯一的独立复核。仓库为公开仓，标准 runner 不计分钟数。
+
+`cancel-in-progress` 只对 PR 生效：`main` 上的复核运行不得被后续推送取消。
 
 ### 6.4 三条约束
 

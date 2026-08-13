@@ -4,6 +4,12 @@ import ts from 'typescript'
 import { sourceFiles } from './source-files.mjs'
 
 const DERIVED_WRITE = /INSERT\s+INTO\s+(?:transcript|ai_message|ai_artifact)/iu
+export const OFFLINE_NETWORK_ALLOWLIST = Object.freeze([
+  Object.freeze({
+    path: 'apps/desktop/src/main/updater/transport.ts',
+    reason: 'User-triggered signed update transport; core offline workflows never call this module.',
+  }),
+])
 
 export function derivedInvariantViolations(source) {
   return DERIVED_WRITE.test(source) && !/evidence_link/iu.test(source) ? ['derived write lacks evidence_link'] : []
@@ -27,6 +33,7 @@ export async function repositoryOfflineViolations(root) {
   for (const file of await sourceFiles(root)) {
     const name = relative(root, file).split(sep).join('/')
     if (!name.startsWith('apps/') && !name.startsWith('packages/')) continue
+    if (OFFLINE_NETWORK_ALLOWLIST.some((entry) => entry.path === name)) continue
     for (const violation of offlineViolations(await readFile(file, 'utf8'))) violations.push(`${name}: ${violation}`)
   }
   return violations

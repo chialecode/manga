@@ -13,17 +13,32 @@ function ast(source, file) {
 
 export async function directImportViolations(root, moduleName, allowedPrefixes) {
   const violations = []
+  const bareModuleName = moduleName.replace(/^node:/u, '')
+  const isForbiddenModule = (value) =>
+    value === moduleName || value.startsWith(`${moduleName}/`) || value === bareModuleName || value.startsWith(`${bareModuleName}/`)
   for (const file of await sourceFiles(root)) {
     const name = portable(root, file)
     if (allowedPrefixes.some((prefix) => name.startsWith(prefix))) continue
     const tree = ast(await readFile(file, 'utf8'), name)
-    tree.forEachChild((node) => {
-      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === moduleName) {
+    function visit(node) {
+      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && isForbiddenModule(node.moduleSpecifier.text)) {
         violations.push(`${name}: direct ${moduleName} import`)
       }
-    })
+      if (ts.isCallExpression(node) && node.arguments.length > 0) {
+        const [argument] = node.arguments
+        if (argument && ts.isStringLiteral(argument) && isForbiddenModule(argument.text)) {
+          const expression = node.expression
+          const isDynamicImport = expression.kind === ts.SyntaxKind.ImportKeyword
+          const isRequire = ts.isIdentifier(expression) && /require$/u.test(expression.text)
+          const isCreateRequireCall = ts.isCallExpression(expression)
+          if (isDynamicImport || isRequire || isCreateRequireCall) violations.push(`${name}: direct ${moduleName} import`)
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(tree)
   }
-  return violations
+  return [...new Set(violations)]
 }
 
 export async function hardcodedUrlViolations(root) {

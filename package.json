@@ -16,7 +16,7 @@
     "lint": "pnpm exec eslint .",
     "test:unit": "pnpm exec vitest run --passWithNoTests --exclude scripts/__tests__/**",
     "test:db": "node packages/data/__tests__/crash.test.mjs",
-    "test:migration": "pnpm exec vitest run packages/data/__tests__/migration-replay.test.ts && node --test scripts/__tests__/migration-freeze.test.mjs scripts/__tests__/migration-replay.test.mjs",
+    "test:migration": "pnpm exec vitest run packages/data/__tests__/migration-replay.test.ts packages/data/__tests__/backup.test.ts && node --test scripts/__tests__/migration-freeze.test.mjs scripts/__tests__/migration-replay.test.mjs scripts/__tests__/validate-migrations.test.mjs",
     "test:supervisor": "node scripts/bench/supervisor.mjs",
     "ensure-vendor-bin": "node scripts/ensure-vendor-bin.mjs",
     "test:guard": "node --test scripts/__tests__/*.test.mjs",

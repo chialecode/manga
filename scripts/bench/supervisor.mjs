@@ -8,7 +8,7 @@ const startedAtMs = Date.now()
 const events = []
 await supervisor.supervise(
   process.execPath,
-  ['-e', 'setTimeout(() => process.exit(7), 200)'],
+  ['-e', 'setTimeout(() => process.exit(7), 1000)'],
   { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows' },
   { onEvent: (event) => { events.push({ ...event, elapsedMs: Date.now() - startedAtMs }) } },
 )

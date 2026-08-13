@@ -18,8 +18,13 @@ export interface SuperviseOptions {
 }
 
 interface ManagedChild {
-  readonly process: ChildProcess
-  readonly jobKeeper: ChildProcess
+  readonly process: ManagedProcess
+  readonly jobKeeper: ChildProcess | undefined
+}
+
+export interface ManagedProcess {
+  once(event: 'exit', listener: () => void): unknown
+  kill(): unknown
 }
 
 export class Supervisor {
@@ -42,7 +47,7 @@ export class Supervisor {
       this.#lastHeartbeatMs = Date.now()
       return child
     } catch (error) {
-      if (child.exitCode !== null) return child
+      if (child.exitCode !== null) throw new Error(`Child exited before Job Object attachment with code ${String(child.exitCode)}`, { cause: error })
       child.kill()
       throw error
     }
@@ -60,7 +65,17 @@ export class Supervisor {
   ): Promise<void> {
     this.#stopping = false
     for (let attempt = 0; attempt <= BACKOFF_MS.length && !this.#isStopping(); attempt += 1) {
-      const child = await this.start(command, args, env)
+      let child: ChildProcess
+      try {
+        child = await this.start(command, args, env)
+      } catch {
+        if (this.#isStopping()) return
+        const delayMs = BACKOFF_MS[attempt]
+        if (delayMs === undefined) { options.onEvent?.({ kind: 'circuit-open', attempt }); return }
+        options.onEvent?.({ kind: 'restart', attempt, delayMs })
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+        continue
+      }
       const childPid = requirePid(child)
       options.onEvent?.({ kind: 'started', attempt, pid: childPid })
       const exitPromise = new Promise<void>((resolve) => child.once('exit', () => { resolve() }))
@@ -87,6 +102,47 @@ export class Supervisor {
     }
   }
 
+  async superviseUtility(factory: () => ManagedProcess, options: SuperviseOptions = {}): Promise<void> {
+    this.#stopping = false
+    for (let attempt = 0; attempt <= BACKOFF_MS.length && !this.#isStopping(); attempt += 1) {
+      const child = factory()
+      await new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(() => { reject(new Error('Utility process did not spawn')) }, JOB_ATTACH_TIMEOUT_MS)
+        const inspect = (): void => {
+          if (processPid(child) !== undefined) { clearTimeout(deadline); resolve() }
+          else setTimeout(inspect, 10)
+        }
+        inspect()
+      })
+      const childPid = requirePid(child)
+      let jobKeeper: ChildProcess | undefined
+      try {
+        jobKeeper = await attachKillOnCloseJob(this.#helperPath, childPid)
+      } catch (error) {
+        // Electron utility processes can already belong to the host Job Object.
+        // Windows rejects assigning them to a nested Job; retain heartbeat and
+        // restart supervision in that constrained environment.
+        if (!String(error).includes('AssignProcessToJobObject')) throw error
+      }
+      this.#managed = { process: child, jobKeeper }
+      this.#lastHeartbeatMs = Date.now()
+      options.onEvent?.({ kind: 'started', attempt, pid: childPid })
+      const exitPromise = new Promise<void>((resolve) => { child.once('exit', () => { resolve() }) })
+      let heartbeatTimer: NodeJS.Timeout | undefined
+      if (options.heartbeat === true) heartbeatTimer = setInterval(() => {
+        if (Date.now() - this.#lastHeartbeatMs >= SUPERVISOR_POLICY.timeoutMs) child.kill()
+      }, SUPERVISOR_POLICY.heartbeatMs)
+      await exitPromise
+      if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer)
+      this.#releaseJobKeeper()
+      if (this.#isStopping()) return
+      const delayMs = BACKOFF_MS[attempt]
+      if (delayMs === undefined) { options.onEvent?.({ kind: 'circuit-open', attempt }); return }
+      options.onEvent?.({ kind: 'restart', attempt, delayMs })
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
   stop(): void {
     this.#stopping = true
     this.#releaseJobKeeper()
@@ -95,7 +151,7 @@ export class Supervisor {
   }
 
   #releaseJobKeeper(): void {
-    this.#managed?.jobKeeper.kill()
+    this.#managed?.jobKeeper?.kill()
   }
 
   #isStopping(): boolean {
@@ -103,9 +159,15 @@ export class Supervisor {
   }
 }
 
-function requirePid(child: ChildProcess): number {
-  if (child.pid === undefined) throw new Error('Child process did not receive a process id')
-  return child.pid
+function requirePid(child: ManagedProcess): number {
+  const pid = processPid(child)
+  if (pid === undefined) throw new Error('Child process did not receive a process id')
+  return pid
+}
+
+function processPid(child: ManagedProcess): number | undefined {
+  const value: unknown = Reflect.get(child, 'pid')
+  return typeof value === 'number' ? value : undefined
 }
 
 function defaultJobHelperPath(): string {
@@ -114,10 +176,12 @@ function defaultJobHelperPath(): string {
 
 async function attachKillOnCloseJob(helperPath: string, childPid: number): Promise<ChildProcess> {
   if (process.platform !== 'win32') throw new Error('Supervisor Job Objects require Windows')
+  const systemRoot = process.env.SystemRoot ?? 'C:\\Windows'
+  const powershell = join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
   const helper = spawn(
-    'powershell.exe',
+    powershell,
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helperPath, '-ParentPid', String(process.pid), '-ChildPid', String(childPid)],
-    { env: { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+    { env: { SystemRoot: systemRoot }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
   )
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => { reject(new Error('Timed out assigning child to Job Object')) }, JOB_ATTACH_TIMEOUT_MS)

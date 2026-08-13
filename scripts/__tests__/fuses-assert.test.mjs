@@ -5,20 +5,28 @@ import test from 'node:test'
 import { FuseState, FuseV1Options } from '@electron/fuses'
 import { fuseConfigViolations, packagedFuseViolations } from '../lib/security-assertions.mjs'
 
-async function findExe(directory) {
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      const nested = await findExe(path)
-      if (nested) return nested
-    } else if (entry.name.endsWith('.exe')) return path
+// electron-packager writes one directory per platform target, with the app
+// executable at its top level. Returning the first match of a recursive walk
+// would silently validate a stale target left over from an earlier build, so
+// every packaged executable is asserted instead.
+async function packagedExecutables(outDirectory) {
+  const executables = []
+  for (const target of await readdir(outDirectory, { withFileTypes: true })) {
+    if (!target.isDirectory() || target.name === 'make') continue
+    const targetDirectory = join(outDirectory, target.name)
+    for (const entry of await readdir(targetDirectory, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.exe')) executables.push(join(targetDirectory, entry.name))
+    }
   }
+  return executables
 }
 
-test('packaged executable has all eight locked Fuses', async () => {
-  const exe = await findExe(join(process.cwd(), 'apps', 'desktop', 'out'))
-  assert.ok(exe, 'packaged Electron executable is required')
-  assert.deepEqual(await packagedFuseViolations(exe), [])
+test('every packaged executable has all eight locked Fuses', async () => {
+  const executables = await packagedExecutables(join(process.cwd(), 'apps', 'desktop', 'out'))
+  assert.ok(executables.length > 0, 'at least one packaged Electron executable is required')
+  for (const executable of executables) {
+    assert.deepEqual(await packagedFuseViolations(executable), [], executable)
+  }
 })
 
 test('counterexample: RunAsNode enabled is rejected', () => {

@@ -5,7 +5,6 @@ type Waiter = () => void
 
 export class CreditWindow {
   #available = INITIAL_CREDIT
-  #consumed = 0
   readonly #waiters: Waiter[] = []
 
   async acquire(signal?: AbortSignal): Promise<void> {
@@ -29,14 +28,6 @@ export class CreditWindow {
       signal?.addEventListener('abort', onAbort, { once: true })
       this.#waiters.push(waiter)
     })
-  }
-
-  consumed(): number {
-    this.#consumed += 1
-    if (this.#consumed < REPLENISH_AT) return 0
-    this.#consumed = 0
-    this.grant(REPLENISH_AT)
-    return REPLENISH_AT
   }
 
   grant(count: number): void {

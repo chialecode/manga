@@ -68,9 +68,10 @@ export const DISPLAY_NAME = CHANNEL === 'dev' ? 'MANGA Dev' : 'MANGA'
 app.setName(APP_DIR_NAME)                    // 影响 userData 默认值
 app.setAppUserModelId(APP_ID)
 app.setPath('userData',    join(app.getPath('appData'),  APP_DIR_NAME))
-app.setPath('sessionData', join(app.getPath('appData'),  APP_DIR_NAME))
-app.setPath('logs',        join(app.getPath('userCache'), APP_DIR_NAME, 'logs'))
-app.setPath('crashDumps',  join(app.getPath('userCache'), APP_DIR_NAME, 'crashes'))
+const localRoot = join(process.env.LOCALAPPDATA, APP_DIR_NAME)
+app.setPath('sessionData', localRoot)
+app.setPath('logs',        join(localRoot, 'logs'))
+app.setPath('crashDumps',  join(localRoot, 'crashes'))
 ```
 
 > `app.setName()` 用的是**目录名**（小写），不是显示名。显示名只出现在窗口标题、关于框、安装器界面与任务栏悬停文字中，走 i18n 消息目录的品牌键，不参与任何路径拼接。

@@ -13,8 +13,14 @@ import { directImportViolations, hardcodedCopyViolations, hardcodedUrlViolations
 import { derivedInvariantViolations, i18nViolations, ipcSourceViolations, offlineViolations } from './lib/repository-guards.mjs'
 import { vendorManifestViolations } from './lib/vendor.mjs'
 import { migrationReplayViolations, redactionViolations, thirdPartyNoticeViolations } from './lib/runtime-guards.mjs'
+import { Linter } from 'eslint'
+import { noBareNewBrowserWindow } from '../eslint.config.js'
+import { serializeLog } from '../apps/desktop/src/main/logger/redact.ts'
+import { identityLiteralViolations } from './lib/identity-literals.mjs'
+import { migrationValidationViolations } from './validate-migrations.mjs'
+import { releaseArtifactViolations } from './lib/release-artifact.mjs'
 
-const names = ['module-boundary','ipc-contract','derived-invariant','migration-freeze','migration-replay','network-allowlist','no-direct-fs','no-direct-spawn','csp-assert','fuses-assert','vendor-sha256','third-party-notices','log-redaction','offline-e2e','i18n-complete','no-hardcoded-copy']
+const names = ['module-boundary','ipc-contract','derived-invariant','migration-freeze','migration-replay','network-allowlist','no-direct-fs','no-direct-spawn','no-bare-new-browserwindow','csp-assert','fuses-assert','vendor-sha256','third-party-notices','log-redaction','offline-e2e','i18n-complete','no-hardcoded-copy','identity-literals','validate-migrations','release-artifact']
 const selected = process.argv[2]
 
 if (selected) {
@@ -46,16 +52,36 @@ async function counterexample(name) {
   }
   if (name === 'migration-replay') { const db=new Database(':memory:'); try { return migrationReplayViolations(db) } finally { db.close() } }
   if (name === 'network-allowlist') return withSource('packages/providers/bad.ts', "export const x='https://invalid.example'\n", hardcodedUrlViolations)
-  if (name === 'no-direct-fs') return withSource('packages/features/bad.ts', "import 'node:fs'\n", (root) => directImportViolations(root,'node:fs',['apps/desktop/src/main/capability-gate/','packages/data/']))
+  if (name === 'no-direct-fs') return withSource('packages/features/bad.ts', "import 'node:fs'\n", (root) => directImportViolations(root,'node:fs',['apps/desktop/src/main/capability-gate/','apps/desktop/src/main/benchmark/','apps/desktop/src/main/logger/','apps/desktop/src/main/vendor-bin.ts','apps/desktop/src/main/updater/transport.ts','packages/data/']))
   if (name === 'no-direct-spawn') return withSource('packages/media/bad.ts', "import 'node:child_process'\n", (root) => directImportViolations(root,'node:child_process',['apps/desktop/src/main/supervisor/']))
+  if (name === 'no-bare-new-browserwindow') {
+    const linter = new Linter()
+    const messages = linter.verify('new electron.BrowserWindow({})', { files: ['**/*.ts'], plugins: { local: { rules: { rule: noBareNewBrowserWindow } } }, rules: { 'local/rule': 'error' } }, { filename: 'packages/features/bad.ts' })
+    return messages.map((message) => message.message)
+  }
   if (name === 'csp-assert') return cspViolations({APP_CSP:["default-src 'none'"],BOOK_CSP:["script-src 'self'"]})
   if (name === 'fuses-assert') return fuseConfigViolations({ [FuseV1Options.RunAsNode]: FuseState.ENABLE })
   if (name === 'vendor-sha256') return vendorManifestViolations({ffmpeg:{url:'https://invalid/latest.zip',sourceUrl:'x',archiveSha256:'x',files:{}}})
   if (name === 'third-party-notices') return thirdPartyNoticeViolations('new lock','old notice')
-  if (name === 'log-redaction') return redactionViolations({apiKey:'secret-value'}, ['secret-value'])
+  if (name === 'log-redaction') return redactionViolations(serializeLog({apiKey:'secret-value'}, (value) => value), ['secret-value'])
   if (name === 'offline-e2e') return offlineViolations("fetch('https://invalid.example')")
   if (name === 'i18n-complete') return i18nViolations([['a','b'],['a'],['a','b']])
   if (name === 'no-hardcoded-copy') return withSource('packages/features/bad.tsx','export const x=<div>Visible text</div>\n',hardcodedCopyViolations)
+  if (name === 'identity-literals') {
+    const root = await mkdtemp(join(tmpdir(), 'guard-identity-'))
+    try {
+      const sourceDirectory = join(root, 'apps', 'desktop', 'src')
+      await mkdir(sourceDirectory, { recursive: true })
+      await writeFile(join(sourceDirectory, 'bad.ts'), "export const bad='app.manga.desktop'\n")
+      await writeFile(join(root, 'apps', 'desktop', 'forge.config.mjs'), 'export default {}\n')
+      return await identityLiteralViolations(root)
+    } finally { await rm(root, { recursive: true, force: true }) }
+  }
+  if (name === 'validate-migrations') {
+    const root = await mkdtemp(join(tmpdir(), 'guard-validate-migration-'))
+    try { await writeFile(join(root, '0002_gap.sql'), '-- no rollback\n'); return await migrationValidationViolations(root) } finally { await rm(root, { recursive: true, force: true }) }
+  }
+  if (name === 'release-artifact') return releaseArtifactViolations('const marker = process.env.APP_STARTUP_MARKER')
   return ipcSourceViolations("method({ name: 'bad.method' })")
 }
 

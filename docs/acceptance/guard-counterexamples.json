@@ -1,5 +1,5 @@
 {
-  "demonstratedAt": "2026-08-13T05:57:46.361Z",
+  "demonstratedAt": "2026-08-13T13:35:40.834Z",
   "guards": [
     {
       "guard": "module-boundary",
@@ -42,6 +42,11 @@
       "evidence": "REJECTED no-direct-spawn: packages/media/bad.ts: direct node:child_process import"
     },
     {
+      "guard": "no-bare-new-browserwindow",
+      "exitCode": 1,
+      "evidence": "REJECTED no-bare-new-browserwindow: BrowserWindow may only be constructed in the window factory."
+    },
+    {
       "guard": "csp-assert",
       "exitCode": 1,
       "evidence": "REJECTED csp-assert: APP_CSP does not exactly match the locked CSP; BOOK_CSP does not exactly match the locked CSP"
@@ -59,7 +64,7 @@
     {
       "guard": "third-party-notices",
       "exitCode": 1,
-      "evidence": "REJECTED third-party-notices: third-party notices are stale"
+      "evidence": "REJECTED third-party-notices: third-party notices are stale; third-party notices lack package or FFmpeg license data; SBOM lacks package inventory; SBOM lacks dependency relationships"
     },
     {
       "guard": "log-redaction",
@@ -80,6 +85,21 @@
       "guard": "no-hardcoded-copy",
       "exitCode": 1,
       "evidence": "REJECTED no-hardcoded-copy: packages/features/bad.tsx: hardcoded JSX copy"
+    },
+    {
+      "guard": "identity-literals",
+      "exitCode": 1,
+      "evidence": "REJECTED identity-literals: apps/desktop/src/bad.ts: identity literal app.manga.desktop"
+    },
+    {
+      "guard": "validate-migrations",
+      "exitCode": 1,
+      "evidence": "REJECTED validate-migrations: 0002_gap.sql: migration numbers must be continuous; 0002_gap.sql: rollback explanation is required"
+    },
+    {
+      "guard": "release-artifact",
+      "exitCode": 1,
+      "evidence": "REJECTED release-artifact: release bundle contains APP_STARTUP_MARKER"
     }
   ]
 }

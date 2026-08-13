@@ -33,7 +33,7 @@
 | E11 | 待验证事项 V3、V5 有明确结论并写入 ADR | 文档检查 |
 | E12 | 开发版与正式版可同机同时安装运行，数据、缓存、日志、单实例锁、任务栏分组、深链接全部隔离 | 手工，逐项核对 [`naming-and-identifiers.md`](../dev-rules/naming-and-identifiers.md) §3.1 |
 
-> **关于 CI 与闸门强制点**：本阶段不绑定 Git 远端，因此 `pre-push` hook **不会触发**，CI 也无法运行。闸门的强制力必须落在 **`pre-commit` hook** 上（见 [`testing-and-gates.md`](../dev-rules/testing-and-gates.md) §6）：11 个静态闸门进 `pre-commit`，5 个运行时闸门写好脚本并可手动跑，随 `pre-push` 与 CI 在绑定远端后自动生效。`.github/workflows/ci.yml` 按 `on: push: branches: [main]` 写好并提交。
+> **关于 CI 与闸门强制点**：闸门的强制力落在 **本地 git hook** 上，不在 CI（见 [`testing-and-gates.md`](../dev-rules/testing-and-gates.md) §6）：静态闸门进 `pre-commit`，运行时闸门进 `pre-push`。远端已绑定（`origin` → `github.com/chialecode/manga`），`pre-push` 与 CI 均已生效；CI 在 `push` 到 `main` 与 `pull_request` 到 `main` 时运行，只做复核。
 > **验收时必须现场演示每个闸门的反例被拒绝**，不接受「脚本存在」或「手动跑过一次」作为通过证据。
 
 ## 3. 里程碑依赖图

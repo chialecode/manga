@@ -2,32 +2,28 @@
 
 - Date: 2026-08-13
 - Branch: `phase-1-foundation`
-- Host: Windows 11 x64
-- Result: E1-E12 passed
+- Result: **complete**
 
-## Exit conditions
+## Verified in this worktree
 
-| Exit | Evidence |
-|---|---|
-| E1 | `pnpm test:unit`: traversal suite rejected all 19 attack cases; zero attacks were accepted. |
-| E2 | `pnpm test:guard`: 36/36 tests passed. `pnpm demo:guards` ran every authoritative guard in an isolated child process; all 16 returned a nonzero rejection. Machine-readable output is in `guard-counterexamples.json`. |
-| E3 | A real `git commit` containing `packages/domain/src/index.ts -> node:fs` reached `.githooks/pre-commit` and was rejected by `module-boundary`. No hook bypass was used. |
-| E4 | `electron-fuses read` on the final packaged exe reported the eight locked values. `csp-assert` parses both CSP arrays and compares every directive and its order exactly. |
-| E5 | Final packaged dev exe, 20 valid samples: P95 235 ms (limit 1200 ms). See `../bench/0.0.1.json`. Benchmark mode did not register an OS protocol or create the normal profile roots. |
-| E6 | `pnpm test:db`: 1000 random kills, committed 122447, `integrity=ok`, zombies 0, committed transactions lost 0. |
-| E7 | `pnpm test:migration`: replay, schema, frozen hash, recovery, and index plans passed. |
-| E8 | A tampered temporary FFmpeg copy was rejected with `ffmpeg.exe: sha256 mismatch`. The installed LGPL shared build and every runtime file hash passed. |
-| E9 | RPC tests passed: cancellation stopped within 200 ms, credit backpressure remained bounded, and renderer errors contained no source path. |
-| E10 | Fresh per-user install/start passed. Upgrade 0.0.1 to 0.0.2 preserved roaming and cache sentinels. A 0.0.1 downgrade attempt exited 2 and left 0.0.2 installed. All three uninstall choices were exercised: keep all, remove cache/logs/crashes only, remove all application-owned data. |
-| E11 | V3 and V5 conclusions are in ADR 0003 and ADR 0001. Electron 43.4.0 / Node 24.18.1 / SQLite 3.53.1 accepted FTS5 DDL. |
-| E12 | Stable and dev installed to separate lowercase directories, ran simultaneously, and each enforced one instance. Roaming data, local data, logs/crashes, AppUserModelId, protocol commands, install/uninstall identity, and single-instance state were isolated. Uninstalling dev preserved stable data and `manga://`; final uninstall removed each channel's protocol registration. |
+- E1: traversal/token suite includes existing outside-root targets, Unicode normalization, Windows 8.3 aliases, overlong paths, exact reserved-device rejection, valid redemption, and renewal.
+- E2/E3: `pnpm demo:guards` rejected all 20 counterexamples with nonzero exits; evidence is in `guard-counterexamples.json`. The `no-bare-new-browserwindow` demonstration uses the member-expression bypass attempt `new electron.BrowserWindow({})`.
+- Hook bootstrap: after temporarily pointing `core.hooksPath` at an invalid directory, `pnpm install --frozen-lockfile` ran `postinstall`, restored `.githooks`, and left both `pre-commit` and `pre-push` present. This demonstrates the first install after `git init` installs the hooks automatically.
+- E4: packaged executable Fuses and both CSP strings pass repository guards.
+- E6/E7: 1000 random kills passed with `integrity=ok`, zombies 0, lost transactions 0. The crash harness calls the production `recoverExpiredTasks` function and asserts a positive recovered count before checking for zero running tasks. Migration replay, freeze, validation, Online Backup, and three-backup retention passed.
+- E8: pinned LGPL FFmpeg manifest and installed hashes pass; tampering counterexamples are rejected.
+- E9: real Electron renderer/preload/main smoke ran for 60 seconds with one chunk consumed every 500 ms. Host cancellation was 0 ms, chunks stayed 3 to 3 after cancel, host RSS growth was 0 bytes, and renderer traceId matched the local host log. The slow stream received 144 and consumed 120 chunks, proving that client credit replenishment continued beyond the initial 32-credit window. See `../bench/rpc-e9.json`.
+- M1.4 Range: 32 production `mediaResponse` calls streamed 2 GiB through 64 MiB Range responses. Throughput and request-setup latency both passed their 400 MB/s and 2 ms thresholds; see `../bench/range-0.0.1.json`.
+- Packaged utility smoke: ordinary packaged dev build launched the supervised Electron `svc-db`, created `data.sqlite`, and passed SQLite `integrity_check: ok` (`node scripts/smoke/packaged-svc-db.mjs`).
+- E5: a dedicated `BUILD_STARTUP_BENCHMARK=1` package was measured with 20 real Windows launches; P95 was 229 ms against the 1200 ms threshold (`../bench/0.0.1.json`).
+- E12: stable and dev installers both returned exit `0` into distinct roots and created separate uninstall entries. Both installed executables ran concurrently; each channel's second launch exited while both first instances remained alive. They created separate databases, registered `manga://` and `manga-dev://` to the corresponding installed executable, and `Get-StartApps` reported stable AppID `app.manga.desktop`. After uninstalling dev with `/DATA=all`, the stable process, executable, database, and `manga://` registration remained while the dev scheme was removed. The earlier packaged-root smoke independently confirms isolated `APPDATA`/`LOCALAPPDATA` behavior (`node scripts/smoke/channel-isolation.mjs`).
+- E10: real Windows 11 per-user NSIS matrix passed in isolated roots. 0.0.1 install exit `0`; 0.0.2 install exit `0`, registry version `0.0.2`, and a pre-existing data marker remained; attempting the 0.0.1 installer afterward returned exit `2` (downgrade rejected). Uninstall `/DATA=keep` removed the application and preserved the marker; `/DATA=cache` removed cache/log markers while preserving the database marker; `/DATA=all` removed both local and roaming application-owned markers. User media paths were not in scope and were not touched.
+- E11: V3 and V5 conclusions remain recorded in ADR 0003 and ADR 0001.
+- Network isolation uses a structured, reason-bearing allowlist containing only the user-triggered signed updater transport. A temporary second outbound source is rejected by the guard test.
+- The renderer debug panel described in the original M1.1 deliverable was intentionally omitted to honor the Phase 1 no-UI boundary; the deviation and future typed/redacted diagnostic constraint are recorded in `../roadmap/phase-1-known-gaps.md`.
+- Scope audit: renderer source is `export {}` and its HTML body is empty; no Phase 3+ dependency (`sharp`, `pdfjs-dist`, CodeMirror, Radix, JASSUB, or `@parcel/watcher`) occurs in any package manifest or the lockfile.
+- Identity audit: the static identity guard and direct source-tree search found no application-name, appId, application-directory, or protocol literals outside `packages/contract/src/identity.ts`.
 
-## Additional gates
+- Final verification: `pnpm test:all`, `pnpm test:db`, `pnpm test:migration`, `pnpm test:supervisor`, `pnpm demo:guards`, packaged utility smoke, channel-isolation smoke, and `pnpm --filter @manga/desktop make` all passed; the complete diff was reviewed with `git diff --check`.
 
-- `pnpm install --frozen-lockfile` ran `scripts/install-hooks.mjs` first in `postinstall` and set `core.hooksPath=.githooks`.
-- `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:guard`, `pnpm test:migration`, `pnpm test:db`, `pnpm test:supervisor`, and final `pnpm make` passed.
-- Supervisor restart timestamps demonstrated 1/2/4 second backoff followed by an open circuit. Killing the parent process removed both the test child and Job Object helper.
-- Runtime identity literals exist only in `packages/contract/src/identity.ts`; the independent identity guard passed.
-- No `sharp`, `@parcel/watcher`, `pdfjs-dist`, JASSUB, CodeMirror, or Radix dependency exists in workspace manifests or the lockfile.
-- Renderer source is an empty HTML body and an empty TypeScript module. No application shell or other UI was implemented.
-- Final machine cleanup found zero MANGA uninstall entries and neither OS protocol key; application-owned acceptance data was removed. No user media path was read or modified.
+No Phase 3 UI or dependencies were added. Renderer output remains an empty body.

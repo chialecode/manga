@@ -4,7 +4,7 @@ import { cpus, freemem, tmpdir, totalmem } from 'node:os'
 import { join } from 'node:path'
 
 const executable = process.argv[2]
-if (!executable) throw new Error('Provide the packaged executable path')
+if (!executable) throw new Error('Provide an executable built with BUILD_STARTUP_BENCHMARK=1')
 const samplesMs = []
 const markers = await mkdtemp(join(tmpdir(), 'startup-bench-'))
 let cleanupError

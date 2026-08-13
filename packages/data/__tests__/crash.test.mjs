@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import Database from 'better-sqlite3'
+import { recoverExpiredTasks } from '../src/recovery.ts'
 
 const ITERATIONS = 1000
 const directory = await mkdtemp(join(tmpdir(), 'db-crash-'))
@@ -52,7 +53,8 @@ try {
   const exists = verify.prepare('SELECT 1 FROM task WHERE id = ?')
   assert.ok(committed.size > 0, 'crash run must observe committed transactions')
   for (const id of committed) assert.ok(exists.get(id), `committed transaction ${String(id)} was lost`)
-  verify.prepare("UPDATE task SET state='pending', attempts=attempts+1 WHERE state='running' AND lease_until < ?").run(Date.now())
+  const recovered = recoverExpiredTasks(verify, Date.now())
+  assert.ok(recovered > 0, 'crash run must leave expired running tasks for recovery')
   assert.equal(verify.prepare("SELECT count(*) count FROM task WHERE state='running'").get().count, 0)
   verify.close()
   process.stdout.write(`crash iterations=${String(ITERATIONS)} committed=${String(committed.size)} integrity=ok zombies=0 lost=0\n`)
