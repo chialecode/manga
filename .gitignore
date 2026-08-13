@@ -1,0 +1,11 @@
+node_modules/
+vendor-bin/
+out/
+.vite/
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+coverage/
+dist/
+release-private/

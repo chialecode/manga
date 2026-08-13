@@ -1,0 +1,20 @@
+{
+  "ffmpeg": {
+    "version": "n8.1.2-34-g9b6c8969e0-20260731",
+    "buildId": "autobuild-2026-07-31-14-10",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-31-14-10/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip",
+    "archiveSha256": "c222a490dde4e7059f45495deef6bfb98dbcacc2b43df5b607546252037aa95c",
+    "sourceUrl": "https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz",
+    "files": {
+      "ffmpeg.exe": "cfa7457eab838db74cb8888ccaf46549a931a2913312e8dede423a26ddac33d5",
+      "ffprobe.exe": "51b5386857751698dcd679613a61306a45f2466189e41cd6a78ba96b37d2ddda",
+      "avcodec-62.dll": "4b9f8f2dcf6ff62f8a3136f31afdd31f90c24625ce8ea618951e356a7a5a8ce2",
+      "avdevice-62.dll": "51e3fc99da896f3b16ccb381369df8de4e263e8eb0ea7564b950e117e314863b",
+      "avfilter-11.dll": "d1f8efbabe72ca1786feb6613f76690514c1d0c4bde03d3731c84cd145b1d0ef",
+      "avformat-62.dll": "148cfc25efafb0b63998740685e7789636309bb8a8304cbde3241bda66dbc77b",
+      "avutil-60.dll": "93ba0919a68532a718edc8de25c5f4c48a68e5ce3609fd128602c129783fab73",
+      "swresample-6.dll": "a7a66dffe5a5611ef7f7879ab4def1d9f18eaed5dafcdb0e9ac8191461f4dda5",
+      "swscale-9.dll": "65656f162298df89fda00ddedb5669f4233a6a1e6bd159e093168732be62d91d"
+    }
+  }
+}
