@@ -1,8 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
+
+// Optional output directory so the guard can generate into a scratch location
+// instead of mutating the committed artifacts it is supposed to be checking.
+const outputDirectory = resolve(process.argv[2] ?? '.')
 
 const lock = await readFile('pnpm-lock.yaml', 'utf8')
 const manifest = JSON.parse(await readFile('scripts/vendor-bin.manifest.json', 'utf8'))
@@ -44,19 +48,42 @@ spdxPackages.push({ SPDXID: ffmpegId, name: 'FFmpeg', versionInfo: ffmpeg.versio
 const notice = `# Third-Party Notices\n\nGenerated from pnpm-lock.yaml. Package licenses are taken from installed package metadata.\n\n${notices.join('\n')}\n\nFFmpeg source: ${ffmpeg.sourceUrl}\nFFmpeg build: ${ffmpeg.url}\n\nLockfile-SHA256: ${hash}\n`
 const documentId = 'SPDXRef-DOCUMENT'
 const rootId = 'SPDXRef-RootPackage'
+const rootPackage = { SPDXID: rootId, name: 'desktop-client', versionInfo: '0.0.1', downloadLocation: 'NOASSERTION', filesAnalyzed: false, licenseConcluded: 'Apache-2.0', licenseDeclared: 'Apache-2.0', copyrightText: 'NOASSERTION' }
+const allPackages = [rootPackage, ...spdxPackages]
+const relationships = [
+  { spdxElementId: documentId, relationshipType: 'DESCRIBES', relatedSpdxElement: rootId },
+  ...spdxPackages.map((item) => ({ spdxElementId: rootId, relationshipType: 'DEPENDS_ON', relatedSpdxElement: item.SPDXID })),
+]
+
+// Regenerating an unchanged inventory must not churn the committed document.
+// Reuse the previous namespace and creation time when nothing but those two
+// fields would differ, so running the guard leaves the working tree clean.
+const sbomPath = join(outputDirectory, 'sbom.spdx.json')
+let previous
+try {
+  previous = JSON.parse(await readFile(sbomPath, 'utf8'))
+} catch {
+  previous = undefined
+}
+const unchanged =
+  previous?.lockfileSha256 === hash &&
+  JSON.stringify(previous.packages) === JSON.stringify(allPackages) &&
+  JSON.stringify(previous.relationships) === JSON.stringify(relationships)
+
 const sbom = {
   spdxVersion: 'SPDX-2.3',
   dataLicense: 'CC0-1.0',
   SPDXID: documentId,
   name: 'desktop-client-sbom',
-  documentNamespace: `urn:uuid:${randomUUID()}`,
-  creationInfo: { created: new Date().toISOString(), creators: ['Tool: scripts/generate-third-party-notices.mjs'] },
+  documentNamespace: unchanged ? previous.documentNamespace : `urn:uuid:${randomUUID()}`,
+  creationInfo: {
+    created: unchanged ? previous.creationInfo.created : new Date().toISOString(),
+    creators: ['Tool: scripts/generate-third-party-notices.mjs'],
+  },
   lockfileSha256: hash,
-  packages: [{ SPDXID: rootId, name: 'desktop-client', versionInfo: '0.0.1', downloadLocation: 'NOASSERTION', filesAnalyzed: false, licenseConcluded: 'Apache-2.0', licenseDeclared: 'Apache-2.0', copyrightText: 'NOASSERTION' }, ...spdxPackages],
-  relationships: [
-    { spdxElementId: documentId, relationshipType: 'DESCRIBES', relatedSpdxElement: rootId },
-    ...spdxPackages.map((item) => ({ spdxElementId: rootId, relationshipType: 'DEPENDS_ON', relatedSpdxElement: item.SPDXID })),
-  ],
+  packages: allPackages,
+  relationships,
 }
-await writeFile('THIRD-PARTY-NOTICES.md', notice)
-await writeFile('sbom.spdx.json', `${JSON.stringify(sbom, null, 2)}\n`)
+await mkdir(outputDirectory, { recursive: true })
+await writeFile(join(outputDirectory, 'THIRD-PARTY-NOTICES.md'), notice)
+await writeFile(sbomPath, `${JSON.stringify(sbom, null, 2)}\n`)
