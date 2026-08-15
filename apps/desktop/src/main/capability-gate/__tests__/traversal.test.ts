@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -6,11 +6,17 @@ import { resolveAuthorizedPath } from '../resolve.js'
 import { RootRegistry } from '../roots.js'
 
 let root = ''
+// The authorized root is registered as returned by mkdtemp, which on some
+// Windows hosts contains an 8.3 alias (a GitHub runner's TMP is under
+// C:\Users\RUNNER~1). The gate canonicalizes it, so accepted paths must be
+// compared against the resolved root rather than the raw fixture string.
+let rootReal = ''
 let outside = ''
 let registry: RootRegistry
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'cap-root-'))
+  rootReal = await realpath(root)
   outside = await mkdtemp(join(tmpdir(), 'cap-outside-'))
   await mkdir(join(root, 'safe'))
   await writeFile(join(root, 'safe', 'item.bin'), 'x')
@@ -62,12 +68,12 @@ describe('CapabilityGate traversal rejection', () => {
   })
 
   it('accepts an existing in-root file', async () => {
-    await expect(resolveAuthorizedPath(registry, 'root', 'safe/item.bin')).resolves.toBe(join(root, 'safe', 'item.bin'))
+    await expect(resolveAuthorizedPath(registry, 'root', 'safe/item.bin')).resolves.toBe(join(rootReal, 'safe', 'item.bin'))
   })
 
   it('normalizes Unicode path variants before resolving inside the root', async () => {
     const composed = 'caf\u00e9.bin'
     await writeFile(join(root, 'safe', composed), 'x')
-    await expect(resolveAuthorizedPath(registry, 'root', `safe/${composed.normalize('NFD')}`)).resolves.toBe(join(root, 'safe', composed))
+    await expect(resolveAuthorizedPath(registry, 'root', `safe/${composed.normalize('NFD')}`)).resolves.toBe(join(rootReal, 'safe', composed))
   })
 })
