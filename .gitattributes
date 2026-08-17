@@ -1,0 +1,28 @@
+* text=auto eol=lf
+
+# PowerShell 与 Windows 批处理必须是 CRLF
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# NSIS 安装器脚本由 Windows 工具链消费
+*.nsh text eol=crlf
+*.nsi text eol=crlf
+
+# git hook 由 sh 执行，必须是 LF
+.githooks/* text eol=lf
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.sqlite binary
+
+# 生成物：不参与 diff，不计入语言统计
+pnpm-lock.yaml linguist-generated -diff
+sbom.spdx.json linguist-generated -diff
+THIRD-PARTY-NOTICES.md linguist-generated -diff
+docs/acceptance/guard-counterexamples.json linguist-generated -diff

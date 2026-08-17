@@ -1,0 +1,66 @@
+{
+  "name": "manga",
+  "version": "0.0.1",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10 <11"
+  },
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "postinstall": "node scripts/install-hooks.mjs && node scripts/ensure-vendor-bin.mjs",
+    "prepare": "node scripts/install-hooks.mjs",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "pnpm exec eslint .",
+    "test:unit": "pnpm exec vitest run --passWithNoTests --exclude scripts/__tests__/**",
+    "test:db": "node packages/data/__tests__/crash.test.mjs",
+    "test:migration": "pnpm exec vitest run packages/data/__tests__/migration-replay.test.ts packages/data/__tests__/backup.test.ts && node --test scripts/__tests__/migration-freeze.test.mjs scripts/__tests__/migration-replay.test.mjs scripts/__tests__/validate-migrations.test.mjs",
+    "test:supervisor": "node scripts/bench/supervisor.mjs",
+    "ensure-vendor-bin": "node scripts/ensure-vendor-bin.mjs",
+    "licenses:generate": "node scripts/generate-third-party-notices.mjs",
+    "test:guard": "node --test scripts/__tests__/*.test.mjs",
+    "test:guard:static": "node scripts/run-guards.mjs static",
+    "test:guard:runtime": "node scripts/run-guards.mjs runtime",
+    "demo:guards": "node scripts/demo-guard-counterexamples.mjs",
+    "test:all": "pnpm typecheck && pnpm lint && pnpm test:unit && pnpm test:guard",
+    "precommit": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:guard:static",
+    "prepush": "pnpm test:all && pnpm test:guard:runtime"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "electron", "esbuild"],
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@electron/fuses": "2.1.3"
+      }
+    },
+    "overrides": {
+      "electron": "43.4.0",
+      "zod": "4.4.3",
+      "better-sqlite3": "13.0.3"
+    }
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-zip": "7.11.2",
+    "@electron-forge/plugin-auto-unpack-natives": "7.11.2",
+    "@electron-forge/plugin-fuses": "7.11.2",
+    "@electron-forge/plugin-vite": "7.11.2",
+    "@electron/fuses": "2.1.3",
+    "@felixrieseberg/electron-forge-maker-nsis": "7.2.0",
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.10.13",
+    "@types/better-sqlite3": "7.6.13",
+    "electron": "43.4.0",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.2",
+    "eslint": "10.8.1",
+    "node-gyp": "13.0.1",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
+  }
+}

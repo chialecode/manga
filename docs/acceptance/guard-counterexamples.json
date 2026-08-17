@@ -1,0 +1,105 @@
+{
+  "demonstratedAt": "2026-08-14T04:36:16.980Z",
+  "guards": [
+    {
+      "guard": "module-boundary",
+      "exitCode": 1,
+      "evidence": "REJECTED module-boundary: packages/domain/src/bad.ts: domain cannot import node:fs"
+    },
+    {
+      "guard": "ipc-contract",
+      "exitCode": 1,
+      "evidence": "REJECTED ipc-contract: bad.method: missing input schema; bad.method: missing output schema"
+    },
+    {
+      "guard": "derived-invariant",
+      "exitCode": 1,
+      "evidence": "REJECTED derived-invariant: derived write lacks evidence_link"
+    },
+    {
+      "guard": "migration-freeze",
+      "exitCode": 1,
+      "evidence": "REJECTED migration-freeze: 0001_init.sql: frozen migration hash changed"
+    },
+    {
+      "guard": "migration-replay",
+      "exitCode": 1,
+      "evidence": "REJECTED migration-replay: migration replay lacks archive_entry; migration replay lacks file; migration replay lacks file_path_history; migration replay lacks library_root; migration replay lacks task"
+    },
+    {
+      "guard": "network-allowlist",
+      "exitCode": 1,
+      "evidence": "REJECTED network-allowlist: packages/providers/bad.ts: hardcoded URL"
+    },
+    {
+      "guard": "no-direct-fs",
+      "exitCode": 1,
+      "evidence": "REJECTED no-direct-fs: packages/features/bad.ts: direct node:fs import"
+    },
+    {
+      "guard": "no-direct-spawn",
+      "exitCode": 1,
+      "evidence": "REJECTED no-direct-spawn: packages/media/bad.ts: direct node:child_process import"
+    },
+    {
+      "guard": "no-bare-new-browserwindow",
+      "exitCode": 1,
+      "evidence": "REJECTED no-bare-new-browserwindow: BrowserWindow may only be constructed in the window factory."
+    },
+    {
+      "guard": "csp-assert",
+      "exitCode": 1,
+      "evidence": "REJECTED csp-assert: APP_CSP does not exactly match the locked CSP; BOOK_CSP does not exactly match the locked CSP"
+    },
+    {
+      "guard": "fuses-assert",
+      "exitCode": 1,
+      "evidence": "REJECTED fuses-assert: RunAsNode expected 48; EnableNodeOptionsEnvironmentVariable expected 48; EnableNodeCliInspectArguments expected 48; EnableCookieEncryption expected 49; EnableEmbeddedAsarIntegrityValidation expected 49; OnlyLoadAppFromAsar expected 49; LoadBrowserProcessSpecificV8Snapshot expected 48; GrantFileProtocolExtraPrivileges expected 48"
+    },
+    {
+      "guard": "vendor-sha256",
+      "exitCode": 1,
+      "evidence": "REJECTED vendor-sha256: vendor URL must not contain latest; vendor URL must identify a month-end retained build; vendor must be LGPL shared; source tarball URL is required; archive sha256 is invalid"
+    },
+    {
+      "guard": "third-party-notices",
+      "exitCode": 1,
+      "evidence": "REJECTED third-party-notices: third-party notices are stale; third-party notices lack package or FFmpeg license data; SBOM lacks package inventory; SBOM lacks dependency relationships"
+    },
+    {
+      "guard": "log-redaction",
+      "exitCode": 1,
+      "evidence": "REJECTED log-redaction: logger emitted secret-value"
+    },
+    {
+      "guard": "offline-e2e",
+      "exitCode": 1,
+      "evidence": "REJECTED offline-e2e: outbound connection in offline mode"
+    },
+    {
+      "guard": "i18n-complete",
+      "exitCode": 1,
+      "evidence": "REJECTED i18n-complete: i18n keys differ"
+    },
+    {
+      "guard": "no-hardcoded-copy",
+      "exitCode": 1,
+      "evidence": "REJECTED no-hardcoded-copy: packages/features/bad.tsx: hardcoded JSX copy"
+    },
+    {
+      "guard": "identity-literals",
+      "exitCode": 1,
+      "evidence": "REJECTED identity-literals: apps/desktop/src/bad.ts: identity literal app.manga.desktop"
+    },
+    {
+      "guard": "validate-migrations",
+      "exitCode": 1,
+      "evidence": "REJECTED validate-migrations: 0002_gap.sql: migration numbers must be continuous; 0002_gap.sql: rollback explanation is required"
+    },
+    {
+      "guard": "release-artifact",
+      "exitCode": 1,
+      "evidence": "REJECTED release-artifact: release bundle contains APP_STARTUP_MARKER"
+    }
+  ]
+}

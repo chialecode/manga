@@ -1,0 +1,1 @@
+{"extends":"../../tsconfig.base.json","compilerOptions":{"lib":["ES2024","DOM"],"types":["node","vite/client"]},"include":["src/**/*.ts","src/**/*.d.ts","*.ts"]}

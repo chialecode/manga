@@ -1,0 +1,1 @@
+{"name":"@manga/data","version":"0.0.1","private":true,"license":"Apache-2.0","type":"module","exports":"./src/index.ts","scripts":{"typecheck":"tsc --noEmit"},"dependencies":{"better-sqlite3":"13.0.3","drizzle-orm":"0.45.2"},"devDependencies":{"@types/better-sqlite3":"7.6.13","@types/node":"24.10.13"}}

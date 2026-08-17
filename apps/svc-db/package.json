@@ -1,0 +1,1 @@
+{"name":"@manga/svc-db","version":"0.0.1","private":true,"license":"Apache-2.0","type":"module","main":"src/index.ts","scripts":{"typecheck":"tsc --noEmit"},"dependencies":{"@manga/data":"workspace:*"}}

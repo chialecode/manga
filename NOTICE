@@ -1,0 +1,24 @@
+MANGA
+Copyright 2026 chialecode
+
+This product includes software developed by the MANGA project
+(https://github.com/chialecode/manga).
+
+This product is licensed under the Apache License, Version 2.0.
+A copy of the license is available in the LICENSE file at the root
+of this repository.
+
+--------------------------------------------------------------------------------
+
+Third-party components retain their own copyright and license terms.
+The generated attribution list and SPDX SBOM for each build are produced by
+`scripts/generate-third-party-notices.mjs` and recorded in:
+
+  THIRD-PARTY-NOTICES.md
+  sbom.spdx.json
+
+Distribution builds bundle FFmpeg (LGPL-2.1-or-later) as separate shared
+libraries, unmodified, obtained from the upstream build pinned in
+`scripts/vendor-bin.manifest.json`. The corresponding source archive URL is
+recorded in the same manifest. See THIRD-PARTY-NOTICES.md for the exact
+version and hashes.
