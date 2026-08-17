@@ -38,7 +38,10 @@
     "overrides": {
       "electron": "43.4.0",
       "zod": "4.4.3",
-      "better-sqlite3": "13.0.3"
+      "better-sqlite3": "13.0.3",
+      "tar": "^7.5.22",
+      "tmp": "^0.2.7",
+      "glob@10": "^10.5.0"
     }
   },
   "devDependencies": {
