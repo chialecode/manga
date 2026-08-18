@@ -6,11 +6,11 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
+  # pull_request 不设 paths-ignore：verify 是分支保护的必需检查，
+  # 被路径过滤跳过的 workflow 不会上报检查结果，纯文档 PR 会永久卡在
+  # 「Expected — Waiting for status」无法合并。push 侧保留过滤即可。
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:

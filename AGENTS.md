@@ -35,7 +35,7 @@
 - 触及应用名、appId、安装/数据目录、自定义协议名，或开发版与正式版的隔离逻辑前，必须先读 `docs/dev-rules/naming-and-identifiers.md`。这些标识符**发布后不可更改**；**仅显示名用大写 `MANGA`，一切目录与协议名小写**；**内部资源协议禁止带 `manga-` 前缀**；源码中禁止出现这些标识符的字面量，一律从 `packages/contract/identity.ts` 导入。
 - 修改打包配置、Fuses 位、安装器或更新器前，必须先读 `docs/architecture.md` §16。**禁止应用降级**：更新器只接受更高版本。
 - 修改三栏布局、侧栏状态机、已打开资源模型、右栏面板注册、主题令牌或字体栈前，必须先读 `docs/design-rules/app-shell.md`。其中三条是**契约**：**右栏 `closed` 时宽度为 0 且无残留把手**、**`restoreViewState` 收到损坏状态必须静默降级而非丢弃会话行**、**中日文层级不得依赖 600 与 700 的字重差**。
-- 判断当前该做什么、某个交付是否达标时，读 `docs/roadmap/phase-1.md`。
+- 判断当前该做什么、某个交付是否达标时，读 `docs/roadmap/phase-2.md`（当前阶段）；阶段 1 已验收，历史标准见 `docs/roadmap/phase-1.md`。
 
 ## 通用工作流程
 
