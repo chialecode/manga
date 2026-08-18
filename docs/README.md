@@ -8,7 +8,8 @@
 |---|---|---|---|
 | [README.md](./README.md) | 索引 | — | `docs/` 文档目录 |
 | [architecture.md](./architecture.md) | 架构正本 | authoritative | 技术栈、进程拓扑、信任边界、数据模型、依赖清单、合规义务 |
-| [roadmap/phase-1.md](./roadmap/phase-1.md) | 路线图 | authoritative | 第一阶段的里程碑、交付物与验收标准 |
+| [roadmap/phase-1.md](./roadmap/phase-1.md) | 路线图 | authoritative（已验收） | 第一阶段的里程碑、交付物与验收标准 |
+| [roadmap/phase-2.md](./roadmap/phase-2.md) | 路线图 | authoritative | 第二阶段（高风险验证）的里程碑、交付物与验收标准 |
 | [dev-rules/README.md](./dev-rules/README.md) | 开发规则索引 | authoritative | 工程规则总入口 |
 | [dev-rules/dependency-admission.md](./dev-rules/dependency-admission.md) | 依赖准入 | authoritative | 任何新增第三方依赖 |
 | [dev-rules/repo-map.md](./dev-rules/repo-map.md) | 仓库地图 | authoritative | 新代码归属判断、模块定位 |

@@ -1,7 +1,7 @@
 # 第一阶段：骨架与信任边界
 
-> 状态：`authoritative`。本阶段的验收标准是硬门槛，不达标不进入第二阶段。
-> 架构依据见 [`docs/architecture.md`](../architecture.md) §21「实施顺序 · 阶段 1」。
+> 状态：`authoritative`，**已验收完成**（2026-08-18，PR #1 → commit `71dd1ee`，E1–E12 全部满足）。
+> 架构依据见 [`docs/architecture.md`](../architecture.md) §21「实施顺序 · 阶段 1」。当前阶段见 [`phase-2.md`](./phase-2.md)。
 
 ## 1. 阶段目标
 
