@@ -36,3 +36,9 @@ updates:
       # typescript-eslint 官方支持 TS >= 7.1 后人工解除。
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # 类型包跟随被锁定的运行时/库版本，不独立升主版本：
+      # @types/node 跟随 engines 锁定的 Node 24（PR #8 升到 26 被 CI 拦下）；
+      # @types/better-sqlite3 跟随 ADR 锁定的 better-sqlite3，随库一起人工升级。
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/better-sqlite3"
