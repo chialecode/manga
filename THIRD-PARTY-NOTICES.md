@@ -336,7 +336,7 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - get-stream 5.2.0 - MIT
 - glob-parent 5.1.2 - ISC
 - glob-parent 6.0.2 - ISC
-- glob 10.4.5 - ISC
+- glob 10.5.0 - ISC
 - glob 7.2.3 - ISC
 - glob 8.1.0 - ISC
 - global-agent 3.0.0 - BSD-3-Clause
@@ -452,7 +452,6 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - minipass-pipeline 1.2.4 - ISC
 - minipass-sized 1.0.3 - ISC
 - minipass 3.3.6 - ISC
-- minipass 5.0.0 - ISC
 - minipass 7.1.3 - BlueOak-1.0.0
 - minizlib 2.1.2 - MIT
 - minizlib 3.1.0 - MIT
@@ -483,7 +482,6 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - onetime 5.1.2 - MIT
 - optionator 0.9.4 - MIT
 - ora 5.4.1 - MIT
-- os-tmpdir 1.0.2 - MIT
 - p-cancelable 2.1.1 - MIT
 - p-defer 1.0.0 - MIT
 - p-finally 1.0.0 - MIT
@@ -599,7 +597,6 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - supports-preserve-symlinks-flag 1.0.0 - MIT
 - tapable 2.3.3 - MIT
 - tar-stream 2.2.0 - MIT
-- tar 6.2.1 - ISC
 - tar 7.5.22 - BlueOak-1.0.0
 - temp-file 3.4.0 - MIT
 - terser 5.50.0 - BSD-2-Clause
@@ -608,7 +605,6 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - tinyglobby 0.2.17 - MIT
 - tinyrainbow 3.1.1 - MIT
 - tmp-promise 3.0.3 - MIT
-- tmp 0.0.33 - MIT
 - tmp 0.2.7 - MIT
 - to-regex-range 5.0.1 - MIT
 - tr46 0.0.3 - MIT
@@ -669,4 +665,4 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 FFmpeg source: https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
 FFmpeg build: https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-31-14-10/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip
 
-Lockfile-SHA256: 4c6fb795b543ce9f17cffefc4f71d168d668e9e23b53b9267f38f4e2afe05f1f
+Lockfile-SHA256: 33aa9668bd436e0326552bf25d1a2ac9d1b0031d73321bb3d2fbcb70fff7edbc

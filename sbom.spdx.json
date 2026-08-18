@@ -3,14 +3,14 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "desktop-client-sbom",
-  "documentNamespace": "urn:uuid:cddb4e46-ae84-4a67-bdcb-71d685ab5310",
+  "documentNamespace": "urn:uuid:94c02553-2336-4914-b0b7-7b6ff76445f9",
   "creationInfo": {
-    "created": "2026-08-13T13:35:27.854Z",
+    "created": "2026-08-17T20:23:00.041Z",
     "creators": [
       "Tool: scripts/generate-third-party-notices.mjs"
     ]
   },
-  "lockfileSha256": "4c6fb795b543ce9f17cffefc4f71d168d668e9e23b53b9267f38f4e2afe05f1f",
+  "lockfileSha256": "33aa9668bd436e0326552bf25d1a2ac9d1b0031d73321bb3d2fbcb70fff7edbc",
   "packages": [
     {
       "SPDXID": "SPDXRef-RootPackage",
@@ -3365,7 +3365,7 @@
     {
       "SPDXID": "SPDXRef-Package-335",
       "name": "glob",
-      "versionInfo": "10.4.5",
+      "versionInfo": "10.5.0",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "ISC",
@@ -4525,16 +4525,6 @@
     {
       "SPDXID": "SPDXRef-Package-451",
       "name": "minipass",
-      "versionInfo": "5.0.0",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "licenseConcluded": "ISC",
-      "licenseDeclared": "ISC",
-      "copyrightText": "NOASSERTION"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-452",
-      "name": "minipass",
       "versionInfo": "7.1.3",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -4543,7 +4533,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-453",
+      "SPDXID": "SPDXRef-Package-452",
       "name": "minizlib",
       "versionInfo": "2.1.2",
       "downloadLocation": "NOASSERTION",
@@ -4553,7 +4543,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-454",
+      "SPDXID": "SPDXRef-Package-453",
       "name": "minizlib",
       "versionInfo": "3.1.0",
       "downloadLocation": "NOASSERTION",
@@ -4563,7 +4553,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-455",
+      "SPDXID": "SPDXRef-Package-454",
       "name": "mkdirp",
       "versionInfo": "1.0.4",
       "downloadLocation": "NOASSERTION",
@@ -4573,7 +4563,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-456",
+      "SPDXID": "SPDXRef-Package-455",
       "name": "ms",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4583,7 +4573,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-457",
+      "SPDXID": "SPDXRef-Package-456",
       "name": "ms",
       "versionInfo": "2.1.3",
       "downloadLocation": "NOASSERTION",
@@ -4593,7 +4583,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-458",
+      "SPDXID": "SPDXRef-Package-457",
       "name": "mute-stream",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4603,7 +4593,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-459",
+      "SPDXID": "SPDXRef-Package-458",
       "name": "nanoid",
       "versionInfo": "3.3.18",
       "downloadLocation": "NOASSERTION",
@@ -4613,7 +4603,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-460",
+      "SPDXID": "SPDXRef-Package-459",
       "name": "natural-compare",
       "versionInfo": "1.4.0",
       "downloadLocation": "NOASSERTION",
@@ -4623,7 +4613,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-461",
+      "SPDXID": "SPDXRef-Package-460",
       "name": "negotiator",
       "versionInfo": "0.6.4",
       "downloadLocation": "NOASSERTION",
@@ -4633,7 +4623,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-462",
+      "SPDXID": "SPDXRef-Package-461",
       "name": "neo-async",
       "versionInfo": "2.6.2",
       "downloadLocation": "NOASSERTION",
@@ -4643,7 +4633,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-463",
+      "SPDXID": "SPDXRef-Package-462",
       "name": "nice-try",
       "versionInfo": "1.0.5",
       "downloadLocation": "NOASSERTION",
@@ -4653,7 +4643,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-464",
+      "SPDXID": "SPDXRef-Package-463",
       "name": "node-abi",
       "versionInfo": "3.94.0",
       "downloadLocation": "NOASSERTION",
@@ -4663,7 +4653,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-465",
+      "SPDXID": "SPDXRef-Package-464",
       "name": "node-addon-api",
       "versionInfo": "8.9.2",
       "downloadLocation": "NOASSERTION",
@@ -4673,7 +4663,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-466",
+      "SPDXID": "SPDXRef-Package-465",
       "name": "node-api-version",
       "versionInfo": "0.2.1",
       "downloadLocation": "NOASSERTION",
@@ -4683,7 +4673,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-467",
+      "SPDXID": "SPDXRef-Package-466",
       "name": "node-fetch",
       "versionInfo": "2.7.0",
       "downloadLocation": "NOASSERTION",
@@ -4693,7 +4683,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-468",
+      "SPDXID": "SPDXRef-Package-467",
       "name": "node-gyp",
       "versionInfo": "13.0.1",
       "downloadLocation": "NOASSERTION",
@@ -4703,7 +4693,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-469",
+      "SPDXID": "SPDXRef-Package-468",
       "name": "node-releases",
       "versionInfo": "2.0.53",
       "downloadLocation": "NOASSERTION",
@@ -4713,7 +4703,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-470",
+      "SPDXID": "SPDXRef-Package-469",
       "name": "nopt",
       "versionInfo": "10.0.1",
       "downloadLocation": "NOASSERTION",
@@ -4723,7 +4713,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-471",
+      "SPDXID": "SPDXRef-Package-470",
       "name": "nopt",
       "versionInfo": "6.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4733,7 +4723,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-472",
+      "SPDXID": "SPDXRef-Package-471",
       "name": "normalize-package-data",
       "versionInfo": "2.5.0",
       "downloadLocation": "NOASSERTION",
@@ -4743,7 +4733,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-473",
+      "SPDXID": "SPDXRef-Package-472",
       "name": "normalize-path",
       "versionInfo": "3.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4753,7 +4743,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-474",
+      "SPDXID": "SPDXRef-Package-473",
       "name": "normalize-url",
       "versionInfo": "6.1.0",
       "downloadLocation": "NOASSERTION",
@@ -4763,7 +4753,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-475",
+      "SPDXID": "SPDXRef-Package-474",
       "name": "npm-run-path",
       "versionInfo": "2.0.2",
       "downloadLocation": "NOASSERTION",
@@ -4773,7 +4763,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-476",
+      "SPDXID": "SPDXRef-Package-475",
       "name": "object-keys",
       "versionInfo": "1.1.1",
       "downloadLocation": "NOASSERTION",
@@ -4783,7 +4773,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-477",
+      "SPDXID": "SPDXRef-Package-476",
       "name": "obug",
       "versionInfo": "2.1.4",
       "downloadLocation": "NOASSERTION",
@@ -4793,7 +4783,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-478",
+      "SPDXID": "SPDXRef-Package-477",
       "name": "once",
       "versionInfo": "1.4.0",
       "downloadLocation": "NOASSERTION",
@@ -4803,7 +4793,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-479",
+      "SPDXID": "SPDXRef-Package-478",
       "name": "onetime",
       "versionInfo": "5.1.2",
       "downloadLocation": "NOASSERTION",
@@ -4813,7 +4803,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-480",
+      "SPDXID": "SPDXRef-Package-479",
       "name": "optionator",
       "versionInfo": "0.9.4",
       "downloadLocation": "NOASSERTION",
@@ -4823,7 +4813,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-481",
+      "SPDXID": "SPDXRef-Package-480",
       "name": "ora",
       "versionInfo": "5.4.1",
       "downloadLocation": "NOASSERTION",
@@ -4833,17 +4823,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-482",
-      "name": "os-tmpdir",
-      "versionInfo": "1.0.2",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-483",
+      "SPDXID": "SPDXRef-Package-481",
       "name": "p-cancelable",
       "versionInfo": "2.1.1",
       "downloadLocation": "NOASSERTION",
@@ -4853,7 +4833,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-484",
+      "SPDXID": "SPDXRef-Package-482",
       "name": "p-defer",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4863,7 +4843,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-485",
+      "SPDXID": "SPDXRef-Package-483",
       "name": "p-finally",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4873,7 +4853,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-486",
+      "SPDXID": "SPDXRef-Package-484",
       "name": "p-is-promise",
       "versionInfo": "2.1.0",
       "downloadLocation": "NOASSERTION",
@@ -4883,7 +4863,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-487",
+      "SPDXID": "SPDXRef-Package-485",
       "name": "p-limit",
       "versionInfo": "1.3.0",
       "downloadLocation": "NOASSERTION",
@@ -4893,7 +4873,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-488",
+      "SPDXID": "SPDXRef-Package-486",
       "name": "p-limit",
       "versionInfo": "3.1.0",
       "downloadLocation": "NOASSERTION",
@@ -4903,7 +4883,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-489",
+      "SPDXID": "SPDXRef-Package-487",
       "name": "p-locate",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4913,7 +4893,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-490",
+      "SPDXID": "SPDXRef-Package-488",
       "name": "p-locate",
       "versionInfo": "5.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4923,7 +4903,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-491",
+      "SPDXID": "SPDXRef-Package-489",
       "name": "p-map",
       "versionInfo": "4.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4933,7 +4913,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-492",
+      "SPDXID": "SPDXRef-Package-490",
       "name": "p-try",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4943,7 +4923,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-493",
+      "SPDXID": "SPDXRef-Package-491",
       "name": "package-json-from-dist",
       "versionInfo": "1.0.1",
       "downloadLocation": "NOASSERTION",
@@ -4953,7 +4933,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-494",
+      "SPDXID": "SPDXRef-Package-492",
       "name": "parse-author",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4963,7 +4943,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-495",
+      "SPDXID": "SPDXRef-Package-493",
       "name": "parse-json",
       "versionInfo": "2.2.0",
       "downloadLocation": "NOASSERTION",
@@ -4973,7 +4953,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-496",
+      "SPDXID": "SPDXRef-Package-494",
       "name": "path-exists",
       "versionInfo": "3.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4983,7 +4963,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-497",
+      "SPDXID": "SPDXRef-Package-495",
       "name": "path-exists",
       "versionInfo": "4.0.0",
       "downloadLocation": "NOASSERTION",
@@ -4993,7 +4973,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-498",
+      "SPDXID": "SPDXRef-Package-496",
       "name": "path-is-absolute",
       "versionInfo": "1.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5003,7 +4983,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-499",
+      "SPDXID": "SPDXRef-Package-497",
       "name": "path-key",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5013,7 +4993,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-500",
+      "SPDXID": "SPDXRef-Package-498",
       "name": "path-key",
       "versionInfo": "3.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5023,7 +5003,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-501",
+      "SPDXID": "SPDXRef-Package-499",
       "name": "path-parse",
       "versionInfo": "1.0.7",
       "downloadLocation": "NOASSERTION",
@@ -5033,7 +5013,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-502",
+      "SPDXID": "SPDXRef-Package-500",
       "name": "path-scurry",
       "versionInfo": "1.11.1",
       "downloadLocation": "NOASSERTION",
@@ -5043,7 +5023,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-503",
+      "SPDXID": "SPDXRef-Package-501",
       "name": "path-type",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5053,7 +5033,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-504",
+      "SPDXID": "SPDXRef-Package-502",
       "name": "pathe",
       "versionInfo": "2.0.3",
       "downloadLocation": "NOASSERTION",
@@ -5063,7 +5043,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-505",
+      "SPDXID": "SPDXRef-Package-503",
       "name": "pe-library",
       "versionInfo": "1.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5073,7 +5053,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-506",
+      "SPDXID": "SPDXRef-Package-504",
       "name": "pend",
       "versionInfo": "1.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5083,7 +5063,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-507",
+      "SPDXID": "SPDXRef-Package-505",
       "name": "picocolors",
       "versionInfo": "1.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5093,7 +5073,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-508",
+      "SPDXID": "SPDXRef-Package-506",
       "name": "picomatch",
       "versionInfo": "2.3.2",
       "downloadLocation": "NOASSERTION",
@@ -5103,7 +5083,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-509",
+      "SPDXID": "SPDXRef-Package-507",
       "name": "picomatch",
       "versionInfo": "4.0.5",
       "downloadLocation": "NOASSERTION",
@@ -5113,7 +5093,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-510",
+      "SPDXID": "SPDXRef-Package-508",
       "name": "pify",
       "versionInfo": "2.3.0",
       "downloadLocation": "NOASSERTION",
@@ -5123,7 +5103,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-511",
+      "SPDXID": "SPDXRef-Package-509",
       "name": "plist",
       "versionInfo": "3.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5133,7 +5113,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-512",
+      "SPDXID": "SPDXRef-Package-510",
       "name": "postcss",
       "versionInfo": "8.5.26",
       "downloadLocation": "NOASSERTION",
@@ -5143,7 +5123,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-513",
+      "SPDXID": "SPDXRef-Package-511",
       "name": "postject",
       "versionInfo": "1.0.0-alpha.6",
       "downloadLocation": "NOASSERTION",
@@ -5153,7 +5133,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-514",
+      "SPDXID": "SPDXRef-Package-512",
       "name": "prelude-ls",
       "versionInfo": "1.2.1",
       "downloadLocation": "NOASSERTION",
@@ -5163,7 +5143,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-515",
+      "SPDXID": "SPDXRef-Package-513",
       "name": "prettier",
       "versionInfo": "3.9.6",
       "downloadLocation": "NOASSERTION",
@@ -5173,7 +5153,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-516",
+      "SPDXID": "SPDXRef-Package-514",
       "name": "proc-log",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5183,7 +5163,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-517",
+      "SPDXID": "SPDXRef-Package-515",
       "name": "proc-log",
       "versionInfo": "7.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5193,7 +5173,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-518",
+      "SPDXID": "SPDXRef-Package-516",
       "name": "process-nextick-args",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5203,7 +5183,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-519",
+      "SPDXID": "SPDXRef-Package-517",
       "name": "progress",
       "versionInfo": "2.0.3",
       "downloadLocation": "NOASSERTION",
@@ -5213,7 +5193,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-520",
+      "SPDXID": "SPDXRef-Package-518",
       "name": "promise-inflight",
       "versionInfo": "1.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5223,7 +5203,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-521",
+      "SPDXID": "SPDXRef-Package-519",
       "name": "promise-retry",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5233,7 +5213,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-522",
+      "SPDXID": "SPDXRef-Package-520",
       "name": "pump",
       "versionInfo": "3.0.4",
       "downloadLocation": "NOASSERTION",
@@ -5243,7 +5223,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-523",
+      "SPDXID": "SPDXRef-Package-521",
       "name": "punycode",
       "versionInfo": "2.3.1",
       "downloadLocation": "NOASSERTION",
@@ -5253,7 +5233,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-524",
+      "SPDXID": "SPDXRef-Package-522",
       "name": "queue-microtask",
       "versionInfo": "1.2.3",
       "downloadLocation": "NOASSERTION",
@@ -5263,7 +5243,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-525",
+      "SPDXID": "SPDXRef-Package-523",
       "name": "quick-lru",
       "versionInfo": "5.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5273,7 +5253,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-526",
+      "SPDXID": "SPDXRef-Package-524",
       "name": "read-binary-file-arch",
       "versionInfo": "1.0.6",
       "downloadLocation": "NOASSERTION",
@@ -5283,7 +5263,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-527",
+      "SPDXID": "SPDXRef-Package-525",
       "name": "read-config-file",
       "versionInfo": "6.3.2",
       "downloadLocation": "NOASSERTION",
@@ -5293,7 +5273,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-528",
+      "SPDXID": "SPDXRef-Package-526",
       "name": "read-pkg-up",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5303,7 +5283,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-529",
+      "SPDXID": "SPDXRef-Package-527",
       "name": "read-pkg",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5313,7 +5293,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-530",
+      "SPDXID": "SPDXRef-Package-528",
       "name": "readable-stream",
       "versionInfo": "2.3.8",
       "downloadLocation": "NOASSERTION",
@@ -5323,7 +5303,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-531",
+      "SPDXID": "SPDXRef-Package-529",
       "name": "readable-stream",
       "versionInfo": "3.6.2",
       "downloadLocation": "NOASSERTION",
@@ -5333,7 +5313,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-532",
+      "SPDXID": "SPDXRef-Package-530",
       "name": "readdir-glob",
       "versionInfo": "1.1.3",
       "downloadLocation": "NOASSERTION",
@@ -5343,7 +5323,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-533",
+      "SPDXID": "SPDXRef-Package-531",
       "name": "rechoir",
       "versionInfo": "0.8.0",
       "downloadLocation": "NOASSERTION",
@@ -5353,7 +5333,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-534",
+      "SPDXID": "SPDXRef-Package-532",
       "name": "require-directory",
       "versionInfo": "2.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5363,7 +5343,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-535",
+      "SPDXID": "SPDXRef-Package-533",
       "name": "require-from-string",
       "versionInfo": "2.0.2",
       "downloadLocation": "NOASSERTION",
@@ -5373,7 +5353,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-536",
+      "SPDXID": "SPDXRef-Package-534",
       "name": "resedit",
       "versionInfo": "2.0.3",
       "downloadLocation": "NOASSERTION",
@@ -5383,7 +5363,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-537",
+      "SPDXID": "SPDXRef-Package-535",
       "name": "resolve-alpn",
       "versionInfo": "1.2.1",
       "downloadLocation": "NOASSERTION",
@@ -5393,7 +5373,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-538",
+      "SPDXID": "SPDXRef-Package-536",
       "name": "resolve",
       "versionInfo": "1.22.12",
       "downloadLocation": "NOASSERTION",
@@ -5403,7 +5383,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-539",
+      "SPDXID": "SPDXRef-Package-537",
       "name": "responselike",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5413,7 +5393,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-540",
+      "SPDXID": "SPDXRef-Package-538",
       "name": "restore-cursor",
       "versionInfo": "3.1.0",
       "downloadLocation": "NOASSERTION",
@@ -5423,7 +5403,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-541",
+      "SPDXID": "SPDXRef-Package-539",
       "name": "restore-cursor",
       "versionInfo": "4.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5433,7 +5413,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-542",
+      "SPDXID": "SPDXRef-Package-540",
       "name": "retry",
       "versionInfo": "0.12.0",
       "downloadLocation": "NOASSERTION",
@@ -5443,7 +5423,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-543",
+      "SPDXID": "SPDXRef-Package-541",
       "name": "reusify",
       "versionInfo": "1.1.0",
       "downloadLocation": "NOASSERTION",
@@ -5453,7 +5433,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-544",
+      "SPDXID": "SPDXRef-Package-542",
       "name": "rfdc",
       "versionInfo": "1.4.1",
       "downloadLocation": "NOASSERTION",
@@ -5463,7 +5443,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-545",
+      "SPDXID": "SPDXRef-Package-543",
       "name": "rimraf",
       "versionInfo": "3.0.2",
       "downloadLocation": "NOASSERTION",
@@ -5473,7 +5453,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-546",
+      "SPDXID": "SPDXRef-Package-544",
       "name": "roarr",
       "versionInfo": "2.15.4",
       "downloadLocation": "NOASSERTION",
@@ -5483,7 +5463,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-547",
+      "SPDXID": "SPDXRef-Package-545",
       "name": "rolldown",
       "versionInfo": "1.2.4",
       "downloadLocation": "NOASSERTION",
@@ -5493,7 +5473,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-548",
+      "SPDXID": "SPDXRef-Package-546",
       "name": "run-parallel",
       "versionInfo": "1.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5503,7 +5483,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-549",
+      "SPDXID": "SPDXRef-Package-547",
       "name": "safe-buffer",
       "versionInfo": "5.1.2",
       "downloadLocation": "NOASSERTION",
@@ -5513,7 +5493,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-550",
+      "SPDXID": "SPDXRef-Package-548",
       "name": "safe-buffer",
       "versionInfo": "5.2.1",
       "downloadLocation": "NOASSERTION",
@@ -5523,7 +5503,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-551",
+      "SPDXID": "SPDXRef-Package-549",
       "name": "safer-buffer",
       "versionInfo": "2.1.2",
       "downloadLocation": "NOASSERTION",
@@ -5533,7 +5513,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-552",
+      "SPDXID": "SPDXRef-Package-550",
       "name": "sanitize-filename",
       "versionInfo": "1.6.4",
       "downloadLocation": "NOASSERTION",
@@ -5543,7 +5523,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-553",
+      "SPDXID": "SPDXRef-Package-551",
       "name": "sax",
       "versionInfo": "1.6.1",
       "downloadLocation": "NOASSERTION",
@@ -5553,7 +5533,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-554",
+      "SPDXID": "SPDXRef-Package-552",
       "name": "schema-utils",
       "versionInfo": "4.3.3",
       "downloadLocation": "NOASSERTION",
@@ -5563,7 +5543,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-555",
+      "SPDXID": "SPDXRef-Package-553",
       "name": "semver-compare",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5573,7 +5553,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-556",
+      "SPDXID": "SPDXRef-Package-554",
       "name": "semver",
       "versionInfo": "5.7.2",
       "downloadLocation": "NOASSERTION",
@@ -5583,7 +5563,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-557",
+      "SPDXID": "SPDXRef-Package-555",
       "name": "semver",
       "versionInfo": "6.3.1",
       "downloadLocation": "NOASSERTION",
@@ -5593,7 +5573,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-558",
+      "SPDXID": "SPDXRef-Package-556",
       "name": "semver",
       "versionInfo": "7.8.5",
       "downloadLocation": "NOASSERTION",
@@ -5603,7 +5583,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-559",
+      "SPDXID": "SPDXRef-Package-557",
       "name": "serialize-error",
       "versionInfo": "7.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5613,7 +5593,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-560",
+      "SPDXID": "SPDXRef-Package-558",
       "name": "shebang-command",
       "versionInfo": "1.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5623,7 +5603,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-561",
+      "SPDXID": "SPDXRef-Package-559",
       "name": "shebang-command",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5633,7 +5613,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-562",
+      "SPDXID": "SPDXRef-Package-560",
       "name": "shebang-regex",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5643,7 +5623,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-563",
+      "SPDXID": "SPDXRef-Package-561",
       "name": "shebang-regex",
       "versionInfo": "3.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5653,7 +5633,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-564",
+      "SPDXID": "SPDXRef-Package-562",
       "name": "siginfo",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5663,7 +5643,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-565",
+      "SPDXID": "SPDXRef-Package-563",
       "name": "signal-exit",
       "versionInfo": "3.0.7",
       "downloadLocation": "NOASSERTION",
@@ -5673,7 +5653,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-566",
+      "SPDXID": "SPDXRef-Package-564",
       "name": "signal-exit",
       "versionInfo": "4.1.0",
       "downloadLocation": "NOASSERTION",
@@ -5683,7 +5663,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-567",
+      "SPDXID": "SPDXRef-Package-565",
       "name": "slice-ansi",
       "versionInfo": "5.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5693,7 +5673,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-568",
+      "SPDXID": "SPDXRef-Package-566",
       "name": "smart-buffer",
       "versionInfo": "4.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5703,7 +5683,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-569",
+      "SPDXID": "SPDXRef-Package-567",
       "name": "socks-proxy-agent",
       "versionInfo": "7.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5713,7 +5693,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-570",
+      "SPDXID": "SPDXRef-Package-568",
       "name": "socks",
       "versionInfo": "2.8.9",
       "downloadLocation": "NOASSERTION",
@@ -5723,7 +5703,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-571",
+      "SPDXID": "SPDXRef-Package-569",
       "name": "source-map-js",
       "versionInfo": "1.2.1",
       "downloadLocation": "NOASSERTION",
@@ -5733,7 +5713,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-572",
+      "SPDXID": "SPDXRef-Package-570",
       "name": "source-map-support",
       "versionInfo": "0.5.21",
       "downloadLocation": "NOASSERTION",
@@ -5743,7 +5723,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-573",
+      "SPDXID": "SPDXRef-Package-571",
       "name": "source-map",
       "versionInfo": "0.6.1",
       "downloadLocation": "NOASSERTION",
@@ -5753,7 +5733,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-574",
+      "SPDXID": "SPDXRef-Package-572",
       "name": "spdx-correct",
       "versionInfo": "3.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5763,7 +5743,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-575",
+      "SPDXID": "SPDXRef-Package-573",
       "name": "spdx-exceptions",
       "versionInfo": "2.5.0",
       "downloadLocation": "NOASSERTION",
@@ -5773,7 +5753,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-576",
+      "SPDXID": "SPDXRef-Package-574",
       "name": "spdx-expression-parse",
       "versionInfo": "3.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5783,7 +5763,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-577",
+      "SPDXID": "SPDXRef-Package-575",
       "name": "spdx-license-ids",
       "versionInfo": "3.0.23",
       "downloadLocation": "NOASSERTION",
@@ -5793,7 +5773,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-578",
+      "SPDXID": "SPDXRef-Package-576",
       "name": "sprintf-js",
       "versionInfo": "1.1.3",
       "downloadLocation": "NOASSERTION",
@@ -5803,7 +5783,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-579",
+      "SPDXID": "SPDXRef-Package-577",
       "name": "ssri",
       "versionInfo": "9.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5813,7 +5793,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-580",
+      "SPDXID": "SPDXRef-Package-578",
       "name": "stackback",
       "versionInfo": "0.0.2",
       "downloadLocation": "NOASSERTION",
@@ -5823,7 +5803,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-581",
+      "SPDXID": "SPDXRef-Package-579",
       "name": "stat-mode",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5833,7 +5813,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-582",
+      "SPDXID": "SPDXRef-Package-580",
       "name": "std-env",
       "versionInfo": "4.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5843,7 +5823,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-583",
+      "SPDXID": "SPDXRef-Package-581",
       "name": "string_decoder",
       "versionInfo": "1.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5853,7 +5833,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-584",
+      "SPDXID": "SPDXRef-Package-582",
       "name": "string_decoder",
       "versionInfo": "1.3.0",
       "downloadLocation": "NOASSERTION",
@@ -5863,7 +5843,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-585",
+      "SPDXID": "SPDXRef-Package-583",
       "name": "string-width",
       "versionInfo": "4.2.3",
       "downloadLocation": "NOASSERTION",
@@ -5873,7 +5853,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-586",
+      "SPDXID": "SPDXRef-Package-584",
       "name": "string-width",
       "versionInfo": "5.1.2",
       "downloadLocation": "NOASSERTION",
@@ -5883,7 +5863,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-587",
+      "SPDXID": "SPDXRef-Package-585",
       "name": "strip-ansi",
       "versionInfo": "6.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5893,7 +5873,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-588",
+      "SPDXID": "SPDXRef-Package-586",
       "name": "strip-ansi",
       "versionInfo": "7.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5903,7 +5883,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-589",
+      "SPDXID": "SPDXRef-Package-587",
       "name": "strip-bom",
       "versionInfo": "3.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5913,7 +5893,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-590",
+      "SPDXID": "SPDXRef-Package-588",
       "name": "strip-eof",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5923,7 +5903,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-591",
+      "SPDXID": "SPDXRef-Package-589",
       "name": "strip-outer",
       "versionInfo": "1.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5933,7 +5913,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-592",
+      "SPDXID": "SPDXRef-Package-590",
       "name": "sumchecker",
       "versionInfo": "3.0.1",
       "downloadLocation": "NOASSERTION",
@@ -5943,7 +5923,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-593",
+      "SPDXID": "SPDXRef-Package-591",
       "name": "supports-color",
       "versionInfo": "7.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5953,7 +5933,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-594",
+      "SPDXID": "SPDXRef-Package-592",
       "name": "supports-color",
       "versionInfo": "8.1.1",
       "downloadLocation": "NOASSERTION",
@@ -5963,7 +5943,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-595",
+      "SPDXID": "SPDXRef-Package-593",
       "name": "supports-preserve-symlinks-flag",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -5973,7 +5953,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-596",
+      "SPDXID": "SPDXRef-Package-594",
       "name": "tapable",
       "versionInfo": "2.3.3",
       "downloadLocation": "NOASSERTION",
@@ -5983,7 +5963,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-597",
+      "SPDXID": "SPDXRef-Package-595",
       "name": "tar-stream",
       "versionInfo": "2.2.0",
       "downloadLocation": "NOASSERTION",
@@ -5993,17 +5973,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-598",
-      "name": "tar",
-      "versionInfo": "6.2.1",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "licenseConcluded": "ISC",
-      "licenseDeclared": "ISC",
-      "copyrightText": "NOASSERTION"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-599",
+      "SPDXID": "SPDXRef-Package-596",
       "name": "tar",
       "versionInfo": "7.5.22",
       "downloadLocation": "NOASSERTION",
@@ -6013,7 +5983,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-600",
+      "SPDXID": "SPDXRef-Package-597",
       "name": "temp-file",
       "versionInfo": "3.4.0",
       "downloadLocation": "NOASSERTION",
@@ -6023,7 +5993,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-601",
+      "SPDXID": "SPDXRef-Package-598",
       "name": "terser",
       "versionInfo": "5.50.0",
       "downloadLocation": "NOASSERTION",
@@ -6033,7 +6003,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-602",
+      "SPDXID": "SPDXRef-Package-599",
       "name": "tinybench",
       "versionInfo": "2.9.0",
       "downloadLocation": "NOASSERTION",
@@ -6043,7 +6013,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-603",
+      "SPDXID": "SPDXRef-Package-600",
       "name": "tinyexec",
       "versionInfo": "1.3.0",
       "downloadLocation": "NOASSERTION",
@@ -6053,7 +6023,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-604",
+      "SPDXID": "SPDXRef-Package-601",
       "name": "tinyglobby",
       "versionInfo": "0.2.17",
       "downloadLocation": "NOASSERTION",
@@ -6063,7 +6033,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-605",
+      "SPDXID": "SPDXRef-Package-602",
       "name": "tinyrainbow",
       "versionInfo": "3.1.1",
       "downloadLocation": "NOASSERTION",
@@ -6073,7 +6043,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-606",
+      "SPDXID": "SPDXRef-Package-603",
       "name": "tmp-promise",
       "versionInfo": "3.0.3",
       "downloadLocation": "NOASSERTION",
@@ -6083,17 +6053,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-607",
-      "name": "tmp",
-      "versionInfo": "0.0.33",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-608",
+      "SPDXID": "SPDXRef-Package-604",
       "name": "tmp",
       "versionInfo": "0.2.7",
       "downloadLocation": "NOASSERTION",
@@ -6103,7 +6063,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-609",
+      "SPDXID": "SPDXRef-Package-605",
       "name": "to-regex-range",
       "versionInfo": "5.0.1",
       "downloadLocation": "NOASSERTION",
@@ -6113,7 +6073,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-610",
+      "SPDXID": "SPDXRef-Package-606",
       "name": "tr46",
       "versionInfo": "0.0.3",
       "downloadLocation": "NOASSERTION",
@@ -6123,7 +6083,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-611",
+      "SPDXID": "SPDXRef-Package-607",
       "name": "trim-repeated",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6133,7 +6093,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-612",
+      "SPDXID": "SPDXRef-Package-608",
       "name": "truncate-utf8-bytes",
       "versionInfo": "1.0.2",
       "downloadLocation": "NOASSERTION",
@@ -6143,7 +6103,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-613",
+      "SPDXID": "SPDXRef-Package-609",
       "name": "ts-api-utils",
       "versionInfo": "2.5.0",
       "downloadLocation": "NOASSERTION",
@@ -6153,7 +6113,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-614",
+      "SPDXID": "SPDXRef-Package-610",
       "name": "type-check",
       "versionInfo": "0.4.0",
       "downloadLocation": "NOASSERTION",
@@ -6163,7 +6123,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-615",
+      "SPDXID": "SPDXRef-Package-611",
       "name": "type-fest",
       "versionInfo": "0.13.1",
       "downloadLocation": "NOASSERTION",
@@ -6173,7 +6133,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-616",
+      "SPDXID": "SPDXRef-Package-612",
       "name": "type-fest",
       "versionInfo": "0.21.3",
       "downloadLocation": "NOASSERTION",
@@ -6183,7 +6143,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-617",
+      "SPDXID": "SPDXRef-Package-613",
       "name": "type-fest",
       "versionInfo": "1.4.0",
       "downloadLocation": "NOASSERTION",
@@ -6193,7 +6153,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-618",
+      "SPDXID": "SPDXRef-Package-614",
       "name": "typescript-eslint",
       "versionInfo": "8.67.0",
       "downloadLocation": "NOASSERTION",
@@ -6203,7 +6163,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-619",
+      "SPDXID": "SPDXRef-Package-615",
       "name": "typescript",
       "versionInfo": "5.4.5",
       "downloadLocation": "NOASSERTION",
@@ -6213,7 +6173,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-620",
+      "SPDXID": "SPDXRef-Package-616",
       "name": "typescript",
       "versionInfo": "6.0.3",
       "downloadLocation": "NOASSERTION",
@@ -6223,7 +6183,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-621",
+      "SPDXID": "SPDXRef-Package-617",
       "name": "undici-types",
       "versionInfo": "6.21.0",
       "downloadLocation": "NOASSERTION",
@@ -6233,7 +6193,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-622",
+      "SPDXID": "SPDXRef-Package-618",
       "name": "undici-types",
       "versionInfo": "7.16.0",
       "downloadLocation": "NOASSERTION",
@@ -6243,7 +6203,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-623",
+      "SPDXID": "SPDXRef-Package-619",
       "name": "undici",
       "versionInfo": "7.29.0",
       "downloadLocation": "NOASSERTION",
@@ -6253,7 +6213,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-624",
+      "SPDXID": "SPDXRef-Package-620",
       "name": "undici",
       "versionInfo": "8.10.0",
       "downloadLocation": "NOASSERTION",
@@ -6263,7 +6223,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-625",
+      "SPDXID": "SPDXRef-Package-621",
       "name": "unique-filename",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -6273,7 +6233,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-626",
+      "SPDXID": "SPDXRef-Package-622",
       "name": "unique-slug",
       "versionInfo": "3.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6283,7 +6243,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-627",
+      "SPDXID": "SPDXRef-Package-623",
       "name": "universalify",
       "versionInfo": "0.1.2",
       "downloadLocation": "NOASSERTION",
@@ -6293,7 +6253,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-628",
+      "SPDXID": "SPDXRef-Package-624",
       "name": "universalify",
       "versionInfo": "2.0.1",
       "downloadLocation": "NOASSERTION",
@@ -6303,7 +6263,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-629",
+      "SPDXID": "SPDXRef-Package-625",
       "name": "update-browserslist-db",
       "versionInfo": "1.3.1",
       "downloadLocation": "NOASSERTION",
@@ -6313,7 +6273,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-630",
+      "SPDXID": "SPDXRef-Package-626",
       "name": "uri-js",
       "versionInfo": "4.4.1",
       "downloadLocation": "NOASSERTION",
@@ -6323,7 +6283,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-631",
+      "SPDXID": "SPDXRef-Package-627",
       "name": "username",
       "versionInfo": "5.1.0",
       "downloadLocation": "NOASSERTION",
@@ -6333,7 +6293,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-632",
+      "SPDXID": "SPDXRef-Package-628",
       "name": "utf8-byte-length",
       "versionInfo": "1.0.5",
       "downloadLocation": "NOASSERTION",
@@ -6343,7 +6303,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-633",
+      "SPDXID": "SPDXRef-Package-629",
       "name": "util-deprecate",
       "versionInfo": "1.0.2",
       "downloadLocation": "NOASSERTION",
@@ -6353,7 +6313,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-634",
+      "SPDXID": "SPDXRef-Package-630",
       "name": "validate-npm-package-license",
       "versionInfo": "3.0.4",
       "downloadLocation": "NOASSERTION",
@@ -6363,7 +6323,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-635",
+      "SPDXID": "SPDXRef-Package-631",
       "name": "vite",
       "versionInfo": "8.2.1",
       "downloadLocation": "NOASSERTION",
@@ -6373,7 +6333,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-636",
+      "SPDXID": "SPDXRef-Package-632",
       "name": "vitest",
       "versionInfo": "4.1.10",
       "downloadLocation": "NOASSERTION",
@@ -6383,7 +6343,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-637",
+      "SPDXID": "SPDXRef-Package-633",
       "name": "watchpack",
       "versionInfo": "2.5.2",
       "downloadLocation": "NOASSERTION",
@@ -6393,7 +6353,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-638",
+      "SPDXID": "SPDXRef-Package-634",
       "name": "wcwidth",
       "versionInfo": "1.0.1",
       "downloadLocation": "NOASSERTION",
@@ -6403,7 +6363,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-639",
+      "SPDXID": "SPDXRef-Package-635",
       "name": "webidl-conversions",
       "versionInfo": "3.0.1",
       "downloadLocation": "NOASSERTION",
@@ -6413,7 +6373,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-640",
+      "SPDXID": "SPDXRef-Package-636",
       "name": "webpack-sources",
       "versionInfo": "3.5.1",
       "downloadLocation": "NOASSERTION",
@@ -6423,7 +6383,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-641",
+      "SPDXID": "SPDXRef-Package-637",
       "name": "webpack",
       "versionInfo": "5.109.2",
       "downloadLocation": "NOASSERTION",
@@ -6433,7 +6393,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-642",
+      "SPDXID": "SPDXRef-Package-638",
       "name": "whatwg-url",
       "versionInfo": "5.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6443,7 +6403,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-643",
+      "SPDXID": "SPDXRef-Package-639",
       "name": "which",
       "versionInfo": "1.3.1",
       "downloadLocation": "NOASSERTION",
@@ -6453,7 +6413,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-644",
+      "SPDXID": "SPDXRef-Package-640",
       "name": "which",
       "versionInfo": "2.0.2",
       "downloadLocation": "NOASSERTION",
@@ -6463,7 +6423,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-645",
+      "SPDXID": "SPDXRef-Package-641",
       "name": "which",
       "versionInfo": "7.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6473,7 +6433,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-646",
+      "SPDXID": "SPDXRef-Package-642",
       "name": "why-is-node-running",
       "versionInfo": "2.3.0",
       "downloadLocation": "NOASSERTION",
@@ -6483,7 +6443,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-647",
+      "SPDXID": "SPDXRef-Package-643",
       "name": "word-wrap",
       "versionInfo": "1.2.5",
       "downloadLocation": "NOASSERTION",
@@ -6493,7 +6453,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-648",
+      "SPDXID": "SPDXRef-Package-644",
       "name": "wrap-ansi",
       "versionInfo": "6.2.0",
       "downloadLocation": "NOASSERTION",
@@ -6503,7 +6463,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-649",
+      "SPDXID": "SPDXRef-Package-645",
       "name": "wrap-ansi",
       "versionInfo": "7.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6513,7 +6473,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-650",
+      "SPDXID": "SPDXRef-Package-646",
       "name": "wrap-ansi",
       "versionInfo": "8.1.0",
       "downloadLocation": "NOASSERTION",
@@ -6523,7 +6483,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-651",
+      "SPDXID": "SPDXRef-Package-647",
       "name": "wrappy",
       "versionInfo": "1.0.2",
       "downloadLocation": "NOASSERTION",
@@ -6533,7 +6493,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-652",
+      "SPDXID": "SPDXRef-Package-648",
       "name": "xmlbuilder",
       "versionInfo": "15.1.1",
       "downloadLocation": "NOASSERTION",
@@ -6543,7 +6503,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-653",
+      "SPDXID": "SPDXRef-Package-649",
       "name": "y18n",
       "versionInfo": "5.0.8",
       "downloadLocation": "NOASSERTION",
@@ -6553,7 +6513,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-654",
+      "SPDXID": "SPDXRef-Package-650",
       "name": "yallist",
       "versionInfo": "4.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6563,7 +6523,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-655",
+      "SPDXID": "SPDXRef-Package-651",
       "name": "yallist",
       "versionInfo": "5.0.0",
       "downloadLocation": "NOASSERTION",
@@ -6573,7 +6533,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-656",
+      "SPDXID": "SPDXRef-Package-652",
       "name": "yargs-parser",
       "versionInfo": "21.1.1",
       "downloadLocation": "NOASSERTION",
@@ -6583,7 +6543,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-657",
+      "SPDXID": "SPDXRef-Package-653",
       "name": "yargs",
       "versionInfo": "17.7.3",
       "downloadLocation": "NOASSERTION",
@@ -6593,7 +6553,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-658",
+      "SPDXID": "SPDXRef-Package-654",
       "name": "yauzl",
       "versionInfo": "2.10.0",
       "downloadLocation": "NOASSERTION",
@@ -6603,7 +6563,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-659",
+      "SPDXID": "SPDXRef-Package-655",
       "name": "yocto-queue",
       "versionInfo": "0.1.0",
       "downloadLocation": "NOASSERTION",
@@ -6613,7 +6573,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-660",
+      "SPDXID": "SPDXRef-Package-656",
       "name": "yoctocolors-cjs",
       "versionInfo": "2.1.3",
       "downloadLocation": "NOASSERTION",
@@ -6623,7 +6583,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-661",
+      "SPDXID": "SPDXRef-Package-657",
       "name": "zip-stream",
       "versionInfo": "4.1.1",
       "downloadLocation": "NOASSERTION",
@@ -6633,7 +6593,7 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "SPDXID": "SPDXRef-Package-662",
+      "SPDXID": "SPDXRef-Package-658",
       "name": "zod",
       "versionInfo": "4.4.3",
       "downloadLocation": "NOASSERTION",
@@ -9949,26 +9909,6 @@
       "spdxElementId": "SPDXRef-RootPackage",
       "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-Package-658"
-    },
-    {
-      "spdxElementId": "SPDXRef-RootPackage",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-Package-659"
-    },
-    {
-      "spdxElementId": "SPDXRef-RootPackage",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-Package-660"
-    },
-    {
-      "spdxElementId": "SPDXRef-RootPackage",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-Package-661"
-    },
-    {
-      "spdxElementId": "SPDXRef-RootPackage",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-Package-662"
     },
     {
       "spdxElementId": "SPDXRef-RootPackage",
