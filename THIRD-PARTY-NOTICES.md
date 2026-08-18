@@ -103,7 +103,7 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - @types/ms 2.1.0 - MIT
 - @types/mute-stream 0.0.4 - MIT
 - @types/node 22.20.1 - MIT
-- @types/node 24.10.13 - MIT
+- @types/node 24.13.3 - MIT
 - @types/responselike 1.0.3 - MIT
 - @types/wrap-ansi 3.0.0 - MIT
 - @types/yauzl 2.10.3 - MIT
@@ -619,7 +619,7 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 - typescript 5.4.5 - Apache-2.0
 - typescript 6.0.3 - Apache-2.0
 - undici-types 6.21.0 - MIT
-- undici-types 7.16.0 - MIT
+- undici-types 7.18.2 - MIT
 - undici 7.29.0 - MIT
 - undici 8.10.0 - MIT
 - unique-filename 2.0.1 - ISC
@@ -665,4 +665,4 @@ Generated from pnpm-lock.yaml. Package licenses are taken from installed package
 FFmpeg source: https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
 FFmpeg build: https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-31-14-10/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip
 
-Lockfile-SHA256: 33aa9668bd436e0326552bf25d1a2ac9d1b0031d73321bb3d2fbcb70fff7edbc
+Lockfile-SHA256: 33a1c9d1cdf22118aff40215d6c5179f08430dfc81d2db4b0bd0732fb13752e3
