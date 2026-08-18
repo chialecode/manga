@@ -3,14 +3,14 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "desktop-client-sbom",
-  "documentNamespace": "urn:uuid:94c02553-2336-4914-b0b7-7b6ff76445f9",
+  "documentNamespace": "urn:uuid:8d521e70-653b-4aa5-9e16-be4b3ea4880c",
   "creationInfo": {
-    "created": "2026-08-17T20:23:00.041Z",
+    "created": "2026-08-18T01:56:12.888Z",
     "creators": [
       "Tool: scripts/generate-third-party-notices.mjs"
     ]
   },
-  "lockfileSha256": "33aa9668bd436e0326552bf25d1a2ac9d1b0031d73321bb3d2fbcb70fff7edbc",
+  "lockfileSha256": "33a1c9d1cdf22118aff40215d6c5179f08430dfc81d2db4b0bd0732fb13752e3",
   "packages": [
     {
       "SPDXID": "SPDXRef-RootPackage",
@@ -1035,7 +1035,7 @@
     {
       "SPDXID": "SPDXRef-Package-102",
       "name": "@types/node",
-      "versionInfo": "24.10.13",
+      "versionInfo": "24.13.3",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "MIT",
@@ -6195,7 +6195,7 @@
     {
       "SPDXID": "SPDXRef-Package-618",
       "name": "undici-types",
-      "versionInfo": "7.16.0",
+      "versionInfo": "7.18.2",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "MIT",
