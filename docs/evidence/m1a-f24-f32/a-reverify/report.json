@@ -1,0 +1,12 @@
+{
+  "errors": [
+    "audit.json: unresolved technical findings",
+    "audit.json: F-25 restart with the original explicit profile after migration",
+    "audit.json: F-32 committed tool then disconnect; retry returns a variation of its arguments"
+  ],
+  "automationStatus": "failed-or-incomplete",
+  "engineeringReviewable": false,
+  "sourceFingerprint": "1c8a204d83fe6b8b72809aafc8ff0159d9f473e3dbdd246035a9ad93b1642d6c",
+  "m1aSourceFingerprint": "9d4ac3bc85a2bb44e5bfe7e5353be63737651733900f38855fb66a8a840b1778",
+  "at": "2026-09-20T18:17:58.663Z"
+}

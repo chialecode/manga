@@ -1,0 +1,13 @@
+{
+  "name": "@manga/model-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@manga/contracts": "workspace:*",
+    "@earendil-works/pi-ai": "0.85.1"
+  }
+}

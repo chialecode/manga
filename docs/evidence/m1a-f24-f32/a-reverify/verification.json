@@ -1,0 +1,83 @@
+{
+  "status": "technical-review-not-converged",
+  "at": "2026-09-20T18:19:39.882Z",
+  "sourceFingerprint": "1c8a204d83fe6b8b72809aafc8ff0159d9f473e3dbdd246035a9ad93b1642d6c",
+  "m1aSourceFingerprint": "9d4ac3bc85a2bb44e5bfe7e5353be63737651733900f38855fb66a8a840b1778",
+  "agent": "A",
+  "startCommit": "11d0059",
+  "parent": "a33b115",
+  "closedFindings": [
+    "F-21",
+    "F-22",
+    "F-23",
+    "F-26",
+    "F-28",
+    "F-29"
+  ],
+  "openFindings": [
+    "F-24",
+    "F-25",
+    "F-27",
+    "F-30",
+    "F-31",
+    "F-32"
+  ],
+  "preservedMitigation": "F-24 pre-existing, conflicting and active Profile files are retained",
+  "commands": [
+    {
+      "command": "node scripts/verify.mjs",
+      "exitCode": 0,
+      "vitestPassed": 87,
+      "liveSkipped": 4,
+      "m0Passed": 15
+    },
+    {
+      "command": "node scripts/verify-m1a.mjs with M1A_REQUIRE_REPORT=1",
+      "exitCode": 1,
+      "reason": "Independent audit still reproduces F-25 and F-32"
+    },
+    {
+      "command": "node scripts/audit-m1a-reverify.mjs",
+      "exitCode": 1
+    },
+    {
+      "command": "node scripts/m1a.mjs package",
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/m1a.mjs bench",
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/m1a.mjs live",
+      "exitCode": 0,
+      "purposes": {
+        "llm": "passed",
+        "asr": "passed",
+        "embedding": "not-run"
+      }
+    }
+  ],
+  "evidenceFingerprintsVerified": [
+    "audit.json",
+    "bench.json",
+    "cases.json",
+    "live-api.json",
+    "package.json",
+    "report.json",
+    "test-run.json"
+  ],
+  "historicalDirectoriesUnchanged": [
+    "m1a-review",
+    "m1a-acceptance",
+    "m1a-model-routing",
+    "m1a-asr-siliconflow"
+  ],
+  "limits": [
+    "No M1a product acceptance",
+    "No real user data migration",
+    "Unsigned local package; cached native binary",
+    "Performance is service-only and incomplete for F-31",
+    "Prior pre-final TLS/fetch and temporary-profile collision failures are described in the review"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "status": "recorded",
+  "at": "2026-09-20T19:05:17.273Z",
+  "sourceFingerprint": "78276083685baf9dcab69febe355ca18f4e46b773dbe2e4a1ebb5b5304842782",
+  "m1aSourceFingerprint": "cd4e568b2c5bbc57a3474e4699d8d2ac48796be1b85aee05c1cb325ee5c84cb2",
+  "generator": "scripts/m1a-live.mjs",
+  "runner": "vitest tests/m1a/live-models.test.ts with MANGA_LIVE_MODELS=1",
+  "probes": {
+    "llm": {
+      "status": "passed",
+      "tests": [
+        {
+          "name": "live model probes from ignored local config runs a short LLM completion without printing secrets",
+          "status": "passed"
+        },
+        {
+          "name": "live model probes from ignored local config streams LLM text",
+          "status": "passed"
+        }
+      ]
+    },
+    "asr": {
+      "status": "passed",
+      "tests": [
+        {
+          "name": "live model probes from ignored local config transcribes a synthetic wav with the ASR purpose only",
+          "status": "passed"
+        }
+      ]
+    },
+    "embedding": {
+      "status": "not-run",
+      "reason": "MANGA_TEST_EMBEDDING_* unconfigured"
+    }
+  },
+  "network": true,
+  "secretsRecorded": false,
+  "notes": "Synthetic prompts and a silent synthetic WAV only; no user material, credentials or provider bodies are recorded. Purposes read from the ignored .env.local; an unconfigured purpose stays not-run."
+}

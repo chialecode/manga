@@ -45,6 +45,13 @@
 - [M0 收尾 Cursor prompt](delivery/m0-closure-cursor-prompt.md)
 - [M1a 执行计划](delivery/m1a-execution-plan.md)
 - [M1a Cursor 执行 prompt](delivery/m1a-cursor-prompt.md)
+- [M1a 交付报告](evidence/m1a-delivery.md)
+- [M1a 自动验证目录](evidence/m1a-review/package.json)
+- [资料库模块规格](modules/library.md)
+- [笔记模块规格](modules/notes.md)
+- [设置模块规格](modules/settings.md)
+- [资源总览模块规格](modules/inventory.md)
+- [Agent 模块规格](modules/agent.md)
 - [当前执行状态](delivery/status.md)
 
 ## 决定、模板与证据
@@ -89,3 +96,5 @@
 - [POC-09](evidence/2026-09-19-poc-09.md)
 
 - [M0 交付复核与修复](evidence/2026-09-19-m0-followup-review.md)
+
+- [M1a 最新验收审查与集中返工](evidence/m1a-acceptance-review.md)

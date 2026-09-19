@@ -1,0 +1,48 @@
+{
+  "at": "2026-09-20T14:00:46.221Z",
+  "purpose": "asr",
+  "provider": "SiliconFlow",
+  "endpoint": "https://api.siliconflow.cn/v1/audio/transcriptions",
+  "model": "XingChenAGI/XingChenASR-V3.2-Ultra",
+  "adapter": "packages/model-protocol/src/transcription.ts:transcribeAudio",
+  "sourceFingerprint": "8adb9dc95973efaf6a8dc57acbc253ac59d93aea284ad70459f39daa9e6bfa01",
+  "m1aSourceFingerprint": "126d42cb0b9d3e70500c856f5bb8e2be61d325bf48a150f1231fc6fab5b4a832",
+  "sample": {
+    "synthetic": true,
+    "generator": "Windows System.Speech / Microsoft Huihui Desktop",
+    "referenceText": "你好，这是语音转录测试。今天我们测试独立的语音识别模型。",
+    "mimeType": "audio/wav",
+    "encoding": 1,
+    "channels": 1,
+    "sampleRate": 16000,
+    "byteRate": 32000,
+    "bitsPerSample": 16,
+    "durationMs": 7500,
+    "fileBytes": 240046,
+    "sha256": "8af774f62eb3ddbe2f12ba0d7c06a9e9eca4f358d11178280fa1b233db206a7d"
+  },
+  "request": {
+    "method": "POST",
+    "multipartFields": [
+      "file",
+      "model"
+    ],
+    "timeoutMs": 30000,
+    "networkRequests": 1,
+    "audioSentToLlm": false,
+    "userAudioUploaded": false
+  },
+  "result": {
+    "status": "passed",
+    "nonemptyText": true,
+    "transcript": "你好，这是语音转录测试。今天我们测试独立的语音识别模型。",
+    "normalizedExactMatch": true,
+    "httpStatus": 200,
+    "durationMs": 1594
+  },
+  "limitations": [
+    "One synthetic Mandarin file; does not establish real microphone, noise, long-audio or full product workflow acceptance.",
+    "The desktop settings/file-selection flow remains incomplete (F-29).",
+    "Embedding remains unconfigured and not-run."
+  ]
+}
