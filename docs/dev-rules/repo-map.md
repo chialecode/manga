@@ -1,47 +1,74 @@
 # 仓库地图与环境事实
 
-核对日期：2026-09-19。本文区分真实文件与目标结构，建立源码后必须更新。
+核对日期：2026-09-19。本文区分真实文件与目标结构。
 
 ## 当前存在
 
 | 位置 | 职责 |
 | --- | --- |
 | 根 README / AGENTS / CONTRIBUTING / DESIGN / REVIEW | 产品、开发、设计与评审入口；CLAUDE 引用 AGENTS |
-| `docs/product/`、`docs/design/` | 原有需求和详细设计评审稿 |
+| `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` / `tsconfig.json` | M0 验证 monorepo；当前包管理锁定 pnpm 11.24.0；Node 24.19.0 |
+| `packages/contracts` | 公开 DTO、命令/错误/定位/模块 schema |
+| `packages/plugin-sdk` | 模块激活接口 |
+| `packages/kernel` | 自研组合运行时（实验候选） |
+| `packages/storage-sqlite` | `node:sqlite` 单写入适配器（实验候选） |
+| `experiments/m0` | POC 领域、应用服务、样本、测试与 Node 宿主 |
+| `experiments/m0-desktop` | Electron 人工窗口；不进入 CI 依赖 |
+| `docs/product/`、`docs/design/` | 需求和详细设计评审稿 |
 | `docs/product-rules/`、`docs/dev-rules/`、`docs/design-rules/` | 按任务触发的持续约束 |
 | `docs/governance/`、`docs/decisions/` | 文档登记、治理和决定 |
 | `docs/delivery/`、`docs/evidence/`、`docs/templates/` | 计划、当前状态、验证记录与模板 |
 | `scripts/check-docs.mjs` | 无第三方依赖的文档校验 |
-| `scripts/verify.mjs`、`.node-version` | 本地与 CI 共用的离线治理验证入口及 Node 版本 |
-| `.github/workflows/ci.yml` | PR 与手动检查工作流，稳定 job 为 repository-quality |
-| `.github/rulesets/`、`.github/*settings.json`、`.github/actions-policy.json` | 可审阅的远端期望配置；文件本身不自动修改 GitHub |
-| `.github/PULL_REQUEST_TEMPLATE.md`、`.github/ISSUE_TEMPLATE/`、`.github/CODEOWNERS` | 交付、问题模板和责任归属 |
-| `.githooks/pre-push`、`.gitattributes`、`.gitignore`、`.editorconfig` | 本地验证提醒、文本规范与忽略规则 |
-| `.gitbook.yaml`、`docs/SUMMARY.md` | GitBook 内容配置与目录；尚未连接 Space 或发布 |
+| `scripts/check-deps.mjs` | 包依赖方向；内置反例自测 |
+| `scripts/m0-report.mjs` / `m0-report.test.mjs` / `m0-required-cases.json` | 原型必需证据/指纹/包与性能检查及反例；不计算产品验收 |
+| `scripts/m0.mjs`、`scripts/verify-m0.mjs`、`scripts/verify.mjs` | M0 命令、完整自动验证、治理+类型+契约/修复回归门禁 |
+| `.node-version` | CI 与本地 Node 版本 |
+| `.github/workflows/ci.yml` | PR/手动检查，job 名 `repository-quality`；Corepack pnpm 安装锁文件后跑 verify |
+| `.github/rulesets/`、`.github/*settings.json`、`.github/actions-policy.json` | 可审阅的远端期望配置 |
+| `.githooks/pre-push`、`.gitattributes`、`.gitignore`、`.editorconfig` | 本地验证提醒与文本规范 |
+| `.gitbook.yaml`、`docs/SUMMARY.md` | GitBook 准备配置 |
 | `SECURITY.md` | 私密安全报告说明 |
 
-截至本次核对，Git 历史与 [远端仓库](https://github.com/chialecode/manga)已建立，文件包含文档、治理工具与 GitHub 配置；仍没有应用源码、应用依赖清单、锁文件、安装包或数据库。远端实际执行与验证见 [建立报告](../evidence/2026-09-19-github-bootstrap.md)，操作正本见 [Git 与 GitHub](git-and-github.md)。
+目标产品目录 `apps/desktop` 等仍未作为发行工程建立；M0 代码在 `packages/` 与 `experiments/`。
 
-这些是核对时的项目状态。未来任务重新检查目录和 Git 状态，不依据本文假设它们永远不变。
+## 可运行命令
+
+前置：Node.js 24.19+，仓库根 `pnpm install`。测试数据默认在 OS 临时目录 `manga-m0/`，可用 `MANGA_M0_DIR` 覆盖。
+
+| 命令 | 状态 | 作用 |
+| --- | --- | --- |
+| `pnpm install` | 可用 | 按锁文件安装 workspace |
+| `node scripts/verify.mjs` | 可用 | 文档治理 + 依赖方向 + `tsc --noEmit` + 契约/修复回归 |
+| `node scripts/m0.mjs doctor` | 可用 | 工具与环境探测 |
+| `node scripts/m0.mjs fixtures` | 可用 | 生成合成样本 |
+| `node scripts/m0.mjs typecheck` | 可用 | 类型检查 |
+| `node scripts/m0.mjs test` | 可用 | POC 自动测试（串行） |
+| `node scripts/m0.mjs report` | 可用 | 核对 `M0_EVIDENCE_DIR` 的必需文件/用例、包、性能和当前源码指纹；缺项/失败非零退出 |
+| `node scripts/verify-m0.mjs` | 可用 | 环境/依赖/类型/样本/全部 Node 场景与报告；包与性能须先单独运行；不判定里程碑退出 |
+| `node scripts/m0.mjs desktop` | 缺则在 `experiments/m0-desktop` 安装 electron | 打开人工窗口 |
+| `node scripts/m0.mjs bench` | 可用 | 当前参考机检索、输入状态、进程启动、自动保存实测；保留原始数据 |
+| `node scripts/m0.mjs package` | Windows 可用 | 自带 Node/Electron 的本地解包原型；独立环境双启动烟测 |
+| `node scripts/check-deps.mjs` | 可用 | 含反例自测 |
+
+Windows 打包和基准独立运行；以同一个 `M0_EVIDENCE_DIR` 先运行 package、再 bench、最后 verify-m0，具体见[质量门禁](quality-gates.md)。该变量覆盖所有结果路径；未设置仍兼容默认 `docs/evidence/m0-closure/`，新版本应指定新目录保留历史。本轮完整证据在 `docs/evidence/m0-final-review/`。真实跨卷由 `M0_VOL_A` / `M0_VOL_B` 指定已授权目录后随测试运行。
+
+已有包用 `scripts/open-m0-package.ps1` 打开；该脚本读取 `dist/latest-package.json`。原生输入法的受影响路径与真实声学需要人工，尚未实现的校准/设备恢复由开发者先补齐，不要求用户代替工程验证。当前 UI/回放和资料包边界见[最终复核](../evidence/2026-09-19-m0-closure-review.md)。
 
 ## 目标代码归属
 
 [总体架构](../design/architecture.md#3-monorepo-组织)是分层入口，[组合方案第 11 节](../design/composable-ai-native-architecture.md#11-工程结构与约束)细化新增责任，以下只用于选址。
 
-| 目标路径（尚未建立） | 应放置的内容 |
+| 目标路径 | 应放置的内容 |
 | --- | --- |
-| `apps/desktop/`、`apps/reader-host/` | Electron 产品宿主、最小独立宿主验证 |
-| `packages/contracts-*`、`plugin-sdk` | 公共 DTO、版本、schema 与插件接口 |
-| `packages/composition`、`kernel` | 组合计划；运行时契约及最终选定的单一生产实现 |
-| `packages/platform-electron`、`storage-sqlite`、`ui` | 平台、持久化与通用界面基础 |
-| `modules/` | 资源、引用、格式/阅读、记录、创作、Agent 等领域与应用服务 |
-| `providers/` | 模型、元数据、获取源、传输等可替换实现 |
-| `bundles/`、`profiles/` | 组合默认值和宿主装配方案 |
+| `apps/desktop/`、`apps/reader-host/` | Electron 产品宿主、最小独立宿主（产品阶段；M0 用 experiments 验证） |
+| `packages/contracts`、`plugin-sdk` | 公共 DTO、版本、schema 与插件接口 |
+| `packages/kernel` | 运行时契约的自研候选；正式生产只保留一个实现 |
+| `packages/storage-sqlite` | 持久化接口的 SQLite 实现 |
+| `modules/` | 资源、引用、格式/阅读、记录等（产品阶段再建） |
+| `providers/` | 可替换实现（M0 假源在 experiments） |
 
-按场景建立实际需要的包，不提前生成所有空目录；小型契约可以先用一个包的公开子入口。模块私有目录不是跨模块 API。
+按场景建立实际需要的包，不提前生成所有空目录。
 
 ## 建立工程时登记
 
-Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。pnpm、UI 框架、SQLite 驱动和组合运行时的具体选择仍见 [决定台账](../decisions/open-questions.md)。
-
-首次加入可运行工程时，本页补充：精确 Node.js/包管理器版本、安装与锁文件规则、环境变量示例、开发入口、相关测试、类型检查、打包、数据目录和故障排查。只有实际创建并运行过的命令才标可用。密钥示例用占位值，依赖由实际清单与锁文件维护，文档不保存第二份完整版本表。
+Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md)选定，当前实际目录/依赖仍是上表的 M0 原型，尚未完成新栈集成。数据默认 Documents、全部生成位置可配置与通道隔离已确认；需要验证的是实现和启动定位机制。组合运行时、写入宿主与媒体后端的技术定稿见[决定台账](../decisions/open-questions.md)。密钥示例用占位值，实际依赖由锁文件维护。

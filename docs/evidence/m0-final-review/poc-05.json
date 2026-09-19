@@ -1,0 +1,59 @@
+{
+  "poc": "poc-05",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "cases": [
+    {
+      "caseId": "POC-05/undo-block-id",
+      "poc": "POC-05",
+      "title": "block id stable across undo",
+      "status": "passed",
+      "expected": "b1",
+      "actual": "b1",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-05/ime-enter-guard",
+      "poc": "POC-05",
+      "title": "composition blocks Enter submit",
+      "status": "passed",
+      "expected": false,
+      "actual": false,
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-05/shared-source-instances",
+      "poc": "POC-05",
+      "title": "two layout instances share source, keep own position",
+      "status": "passed",
+      "expected": {
+        "source": "doc1",
+        "x2": 80
+      },
+      "actual": {
+        "source": "doc1",
+        "x2": 80
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-05/cycle-placeholder",
+      "poc": "POC-05",
+      "title": "cyclic embed detected",
+      "status": "passed",
+      "expected": "cycle",
+      "actual": "cycle",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-05/human-ime",
+      "poc": "POC-05",
+      "title": "real Chinese IME in Electron",
+      "status": "passed",
+      "expected": "native IME, US keyboard, 100/125/150 zoom",
+      "actual": "user reported WeChat IME, US keyboard, 100%/125%/150% zoom ok on the previous prototype",
+      "kind": "human",
+      "evidence": "docs/evidence/2026-09-19-m0-device-followup.md"
+    }
+  ],
+  "at": "2026-09-19T13:32:28.720Z"
+}

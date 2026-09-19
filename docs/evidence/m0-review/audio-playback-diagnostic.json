@@ -1,0 +1,59 @@
+{
+  "checkedAt": "2026-09-19T11:09:06.790Z",
+  "kind": "synthetic-package-capture-readonly-diagnostic",
+  "device": "fake media from prior package smoke; no real microphone or private recordings used",
+  "electron": "37.4.0",
+  "rendererSha256": "c89b6a80320be693dee89990fe9f7ae66c950d54318593d3ccf7c9960aeb834e",
+  "sample": {
+    "fileName": "capture_982e678f-0a71-4fc3-ad23-cb90247a2e7b.webm",
+    "bytes": 13455,
+    "sha256": "19d9b6ce871f8a4d70e5763a97cde62d445a1027c8b31c3e7e6cf8ff04130ec1"
+  },
+  "ffprobe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "opus",
+        "sample_rate": "48000",
+        "time_base": "1/1000",
+        "start_time": "0.000000"
+      }
+    ],
+    "format": {
+      "format_name": "matroska,webm",
+      "size": "13455"
+    }
+  },
+  "browser": {
+    "metadata": {
+      "duration": "Infinity",
+      "currentTime": 0,
+      "readyState": 4,
+      "seekable": [
+        [
+          0,
+          "Infinity"
+        ]
+      ],
+      "buffered": []
+    },
+    "afterPlayback": {
+      "duration": "1.14",
+      "currentTime": 1.14,
+      "readyState": 4,
+      "seekable": [
+        [
+          0,
+          1.14
+        ]
+      ],
+      "buffered": [
+        [
+          0,
+          1.14
+        ]
+      ]
+    }
+  }
+}

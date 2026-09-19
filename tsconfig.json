@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@manga/contracts": ["packages/contracts/src/index.ts"],
+      "@manga/plugin-sdk": ["packages/plugin-sdk/src/index.ts"],
+      "@manga/kernel": ["packages/kernel/src/index.ts"],
+      "@manga/storage-sqlite": ["packages/storage-sqlite/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "experiments/m0/src/**/*.ts"
+  ]
+}

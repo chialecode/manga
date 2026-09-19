@@ -1,0 +1,241 @@
+{
+  "generatedAt": "2026-09-19T11:57:28.067Z",
+  "git": {
+    "commit": "a0b97796e193b1c3aa4fb62426550bb6c4c1a381",
+    "dirty": true,
+    "sourceFingerprint": "eb126a5981c913b5f836213c401a629a84f51a397ae41582712c0af81d2edc07"
+  },
+  "evidenceDir": "docs/evidence/m0-closure",
+  "pocFiles": [
+    "poc-01-r2.json",
+    "poc-01.json",
+    "poc-02-r1.json",
+    "poc-02-r3.json",
+    "poc-02.json",
+    "poc-03-r4.json",
+    "poc-03.json",
+    "poc-04.json",
+    "poc-05.json",
+    "poc-06.json",
+    "poc-07.json",
+    "poc-08.json",
+    "poc-09.json"
+  ],
+  "automationStatus": "tested-subset-passed",
+  "engineeringReviewable": true,
+  "m0Exit": "not-met",
+  "m1Entry": "not-met",
+  "checks": [
+    {
+      "file": "poc-01-r2.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 2,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-01.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 5,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-02-r1.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 2,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-02-r3.json",
+      "stale": false,
+      "failed": false,
+      "pending": [
+        "POC-02/hardware-offset"
+      ],
+      "kinds": {
+        "automated": 3,
+        "simulated": 1,
+        "human": 1,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-02.json",
+      "stale": false,
+      "failed": false,
+      "pending": [
+        "POC-02/device-headset-speaker"
+      ],
+      "kinds": {
+        "automated": 3,
+        "simulated": 2,
+        "human": 1,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-03-r4.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 3,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-03.json",
+      "stale": false,
+      "failed": false,
+      "pending": [
+        "POC-03/mkv-hevc-ass"
+      ],
+      "kinds": {
+        "automated": 5,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-04.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 4,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-05.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 3,
+        "simulated": 1,
+        "human": 1,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-06.json",
+      "stale": false,
+      "failed": false,
+      "pending": [
+        "POC-06/package-smoke"
+      ],
+      "kinds": {
+        "automated": 6,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 1
+      }
+    },
+    {
+      "file": "poc-07.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 5,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-08.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 3,
+        "simulated": 0,
+        "human": 0,
+        "device": 0,
+        "filesystem": 0
+      }
+    },
+    {
+      "file": "poc-09.json",
+      "stale": false,
+      "failed": false,
+      "pending": [],
+      "kinds": {
+        "automated": 4,
+        "simulated": 1,
+        "human": 0,
+        "device": 0,
+        "filesystem": 1
+      }
+    }
+  ],
+  "supplementary": {
+    "package": {
+      "status": "passed",
+      "stale": false
+    },
+    "bench": {
+      "status": "passed",
+      "stale": false,
+      "unmet": []
+    },
+    "mediaElectron": {
+      "status": "recorded",
+      "h264": "played",
+      "hevc": "rejected"
+    },
+    "formatMatrix": {
+      "status": "passed",
+      "stale": false
+    }
+  },
+  "humanOpen": [
+    "POC-02/hardware-offset",
+    "POC-02/device-headset-speaker"
+  ],
+  "reasons": [
+    "ADR-0003—0006 remain proposed; Q-02/Q-03/Q-04 formal selections are open",
+    "headset/crosstalk/unplug and hardware sampling offset remain not-run",
+    "IME/keyboard/zoom and 外接麦克风 basic capture are user-reported passed on the pre-repair build; playback/export repaired build still needs optional confirmation"
+  ],
+  "note": "m0Exit stays not-met while formal ADRs are proposed or required human device items are not-run. Automation success is not product AT passage.",
+  "publicationRedaction": {
+    "date": "2026-09-19",
+    "scope": "Device identifiers and local hardware details removed; measurements, statuses and source fingerprints unchanged. This is not a rerun."
+  }
+}

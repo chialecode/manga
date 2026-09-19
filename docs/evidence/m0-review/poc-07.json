@@ -1,0 +1,58 @@
+{
+  "poc": "poc-07",
+  "sourceFingerprint": "60522d6ea29db35e2c6b5634dd0c176edd493a6d2fe5d81d9920dca1dab3d66d",
+  "cases": [
+    {
+      "caseId": "POC-07/many-providers",
+      "poc": "POC-07",
+      "title": "many cardinality binds both fake providers",
+      "status": "passed",
+      "expected": [
+        "meta-a",
+        "meta-b"
+      ],
+      "actual": [
+        "meta-a",
+        "meta-b"
+      ],
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-07/explicit-disable",
+      "poc": "POC-07",
+      "title": "explicit disable is not silently re-enabled",
+      "status": "passed",
+      "expected": false,
+      "actual": false,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-07/reader-stop-keeps-data",
+      "poc": "POC-07",
+      "title": "reader stop keeps library data",
+      "status": "passed",
+      "expected": 0,
+      "actual": 0,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-07/activation-failure-cleanup",
+      "poc": "POC-07",
+      "title": "activation failure does not leave active capability",
+      "status": "passed",
+      "expected": "failed",
+      "actual": "failed",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-07/minimal-activator-leak",
+      "poc": "POC-07",
+      "title": "naive activator fails resource cleanup invariant",
+      "status": "passed",
+      "expected": true,
+      "actual": true,
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T10:49:56.895Z"
+}

@@ -1,0 +1,80 @@
+{
+  "poc": "poc-09",
+  "sourceFingerprint": "60522d6ea29db35e2c6b5634dd0c176edd493a6d2fe5d81d9920dca1dab3d66d",
+  "cases": [
+    {
+      "caseId": "POC-09/idempotent-import",
+      "poc": "POC-09",
+      "title": "repeat recovery imports once",
+      "status": "passed",
+      "expected": "res_13e66124-5e7e-4f1f-9bc1-380416ebcc6a",
+      "actual": "res_13e66124-5e7e-4f1f-9bc1-380416ebcc6a",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/no-overwrite",
+      "poc": "POC-09",
+      "title": "same file name does not overwrite",
+      "status": "passed",
+      "expected": "error",
+      "actual": "PUBLISH_CONFLICT",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/redirect-private",
+      "poc": "POC-09",
+      "title": "private redirect rejected",
+      "status": "passed",
+      "expected": "error",
+      "actual": "FORBIDDEN",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/quota-disk",
+      "poc": "POC-09",
+      "title": "quota and injected disk-full",
+      "status": "passed",
+      "expected": [
+        "error",
+        "error"
+      ],
+      "actual": [
+        "QUOTA_EXCEEDED",
+        "DISK_FULL"
+      ],
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-09/remove-acquisition",
+      "poc": "POC-09",
+      "title": "imported file remains after download module stop",
+      "status": "passed",
+      "expected": true,
+      "actual": true,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/cross-volume",
+      "poc": "POC-09",
+      "title": "real distinct Windows volumes",
+      "status": "passed",
+      "expected": "two maintainer-provided volumes",
+      "actual": {
+        "bytes": 260000,
+        "sha256": "6b45d0a28736c430928ee30b2f1d3a4cceb7082326109d6c89f5219a12e9804b",
+        "directions": [
+          "A-to-B",
+          "B-to-A"
+        ],
+        "existingTargetPreserved": true,
+        "distinctFilesystems": true
+      },
+      "kind": "filesystem"
+    }
+  ],
+  "at": "2026-09-19T10:49:57.533Z",
+  "redaction": {
+    "date": "2026-09-19",
+    "scope": "Filesystem device identifiers removed; distinct-filesystem fact retained. Original archived outside repository; status, measurements and source fingerprint unchanged. Not a rerun."
+  }
+}

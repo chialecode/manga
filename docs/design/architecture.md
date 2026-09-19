@@ -9,6 +9,8 @@
 | 输入 | [产品需求](../product/requirements.md) |
 | 详细设计 | [领域模型](domain-model.md)、[Agent 与插件](agent-and-plugins.md)、[界面与工作流](interaction-and-workflows.md) |
 
+M1 先建设 Agent 主页面、OpenAI 格式连接/转录和基础配置；所有业务模块通过同一服务向 UI 与 Agent 暴露能力。目录分区与通道隔离遵循 [领域模型](domain-model.md#112-文件分区)，首次配置与资源总览遵循 [交互设计](interaction-and-workflows.md)。
+
 ## 1. 架构目标
 
 系统采用本地模块化单体：一个桌面宿主组合多个业务模块，通过明确的接口和生命周期协作。业务能力可拆分，运行时不默认引入远程微服务。
@@ -233,7 +235,7 @@ Electron 的上下文隔离、渲染沙箱和 IPC 校验是宿主基础约束。
 
 不把自主实现等同于用 TypeScript 重写编解码器。业务仍以 TS 实现，必要原生二进制由平台适配器封装。所有外部进程采用参数数组调用，用户文件名和模型文本不能拼入 shell 命令。
 
-UI 框架、文本编辑内核和媒体后端不在本版提前锁定；M0 必须以中文输入、选区稳定性、目标格式与打包验证为选择依据。
+UI、编辑、存储驱动与对应工程基础按 [ADR-0007](../decisions/0007-technology-stack.md)采用已确认的基础技术栈。该决定覆盖 React、Tiptap/ProseMirror、CodeMirror、better-sqlite3/Drizzle、Vite/Forge 等；完整范围以 ADR 为准。当前 M0 实现尚未迁移，中文输入、选区、保存恢复、数据库与打包必须在新实现上验证。媒体后端、EPUB 专用解析及画布编辑仍待对应阶段验证。
 
 自研组合运行时以 TypeScript 实现插件声明、依赖绑定、作用域、生命周期、调用代次和诊断。配置解析、权限策略、业务服务、Agent 工具映射和数据迁移各有所有者，不能全部塞入内核。详细职责与验证要求见[组合方案第 2 节](composable-ai-native-architecture.md#2-组合运行时的职责与验证)。
 

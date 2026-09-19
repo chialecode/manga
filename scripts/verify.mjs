@@ -32,6 +32,23 @@ for (const name of [
   catch (error) { console.error(`FAILED ${name}: ${error.message}`); failed = true; }
 }
 run(process.execPath, ['scripts/check-docs.mjs']);
+run(process.execPath, ['--test', 'scripts/check-publication.test.mjs']);
+run(process.execPath, ['--test', 'scripts/m0-report.test.mjs']);
+run(process.execPath, ['scripts/check-publication.mjs']);
+if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
+  run(process.execPath, ['scripts/check-deps.mjs']);
+  const tscJs = path.join(root, 'node_modules/typescript/bin/tsc');
+  if (!fs.existsSync(path.join(root, 'node_modules'))) {
+    console.error('FAILED application typecheck: node_modules missing; run pnpm install');
+    failed = true;
+  } else if (fs.existsSync(tscJs)) {
+    run(process.execPath, [tscJs, '--noEmit', '-p', 'tsconfig.json']);
+    run(process.execPath, ['--test', '--test-concurrency=1', 'experiments/m0/src/tests/poc-contract-schema.test.ts', 'experiments/m0/src/tests/review-regressions.test.ts', 'experiments/m0/src/tests/closure-review.test.ts']);
+  } else {
+    console.error('FAILED application typecheck: tsc is not installed');
+    failed = true;
+  }
+}
 run('git', ['diff', '--check']);
 run('git', ['diff', '--cached', '--check']);
 console.log(JSON.stringify({ status: failed ? 'failed' : 'passed', check: 'repository-quality', node: process.versions.node }));

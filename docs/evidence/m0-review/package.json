@@ -1,0 +1,48 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "60522d6ea29db35e2c6b5634dd0c176edd493a6d2fe5d81d9920dca1dab3d66d",
+  "at": "2026-09-19T10:50:23.087Z",
+  "format": "unsigned unpacked local prototype",
+  "bundledNode": "v24.19.0",
+  "electron": "37.4.0",
+  "standalonePath": true,
+  "smokeResults": [
+    {
+      "status": "passed",
+      "phase": "initial",
+      "packaged": true,
+      "devicePixelRatio": 1.5,
+      "cases": [
+        "import-visible",
+        "composition-event-undo-redo",
+        "save-ack",
+        "fake-audio-capture-save-load",
+        "schema-rejection",
+        "renderer-no-node",
+        "narrow-layout"
+      ],
+      "at": "2026-09-19T10:50:22.341Z",
+      "limitations": [
+        "Synthetic composition events do not validate the Windows IME candidate window",
+        "Fake microphone does not validate actual acoustics"
+      ]
+    },
+    {
+      "status": "passed",
+      "phase": "restart",
+      "packaged": true,
+      "devicePixelRatio": 1.25,
+      "cases": [
+        "process-restart-note-import-audio",
+        "schema-rejection",
+        "renderer-no-node",
+        "narrow-layout"
+      ],
+      "at": "2026-09-19T10:50:23.027Z",
+      "limitations": [
+        "Synthetic composition events do not validate the Windows IME candidate window",
+        "Fake microphone does not validate actual acoustics"
+      ]
+    }
+  ]
+}
