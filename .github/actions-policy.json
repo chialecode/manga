@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "enabled": true,
+    "allowed_actions": "selected",
+    "sha_pinning_required": true
+  },
+  "selectedActions": {
+    "github_owned_allowed": false,
+    "verified_allowed": false,
+    "patterns_allowed": ["actions/checkout@*", "actions/setup-node@*"]
+  },
+  "workflowPermissions": {
+    "default_workflow_permissions": "read",
+    "can_approve_pull_request_reviews": false
+  }
+}

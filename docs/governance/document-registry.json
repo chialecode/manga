@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "documents": [
+    {
+      "path": ".github/PULL_REQUEST_TEMPLATE.md",
+      "kind": "template",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "变更结果、依据、验证与影响的 PR 模板",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA：AI Agent 与开发者工作入口",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交"
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "AGENTS 的宿主兼容入口",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA 开发与贡献指南",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交"
+    },
+    {
+      "path": "DESIGN.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA 设计入口",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/decisions/0001-document-governance.md",
+      "kind": "decision",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "ADR-0001：建立 MANGA 文档治理框架",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/decisions/0002-local-first-github.md",
+      "kind": "decision",
+      "status": "active",
+      "owner": "项目维护者",
+      "scope": "ADR-0002：本地验证优先的 GitHub 协作",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交"
+    },
+    {
+      "path": "docs/decisions/open-questions.md",
+      "kind": "status",
+      "status": "active",
+      "owner": "产品负责人 / 技术负责人",
+      "scope": "确认、假设与待决问题",
+      "reviewed": "2026-09-19",
+      "basis": "原 A-01—A-13 假设；本次用户回复确认 A-01/A-02"
+    },
+    {
+      "path": "docs/decisions/README.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "决定与待决事项",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/delivery/roadmap-and-acceptance.md",
+      "kind": "plan",
+      "status": "draft",
+      "owner": "产品负责人 / 质量负责人",
+      "scope": "MANGA 交付阶段与验收计划",
+      "reviewed": "2026-09-19",
+      "basis": "既有分阶段验收定义；Q-01 排期仍待回复"
+    },
+    {
+      "path": "docs/delivery/status.md",
+      "kind": "status",
+      "status": "active",
+      "owner": "质量负责人",
+      "scope": "当前执行状态",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 Git/GitHub 建立；应用 POC/AT 未执行"
+    },
+    {
+      "path": "docs/design-rules/DESIGN.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "设计负责人",
+      "scope": "MANGA 界面实现与设计治理",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/design-rules/README.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "设计负责人",
+      "scope": "设计规则索引",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/design/agent-and-plugins.md",
+      "kind": "design",
+      "status": "draft",
+      "owner": "技术负责人",
+      "scope": "MANGA Agent、上下文与插件协议",
+      "reviewed": "2026-09-19",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账"
+    },
+    {
+      "path": "docs/design/architecture.md",
+      "kind": "design",
+      "status": "draft",
+      "owner": "技术负责人",
+      "scope": "MANGA 总体架构设计",
+      "reviewed": "2026-09-19",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账"
+    },
+    {
+      "path": "docs/design/composable-ai-native-architecture.md",
+      "kind": "design",
+      "status": "draft",
+      "owner": "技术负责人",
+      "scope": "MANGA 可组合、可拆卸与 AI-Native 架构方案",
+      "reviewed": "2026-09-19",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账"
+    },
+    {
+      "path": "docs/design/domain-model.md",
+      "kind": "design",
+      "status": "draft",
+      "owner": "技术负责人",
+      "scope": "MANGA 领域模型与数据设计",
+      "reviewed": "2026-09-19",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账"
+    },
+    {
+      "path": "docs/design/external-providers-and-acquisition.md",
+      "kind": "design",
+      "status": "draft",
+      "owner": "技术负责人",
+      "scope": "MANGA 外部动漫数据库与下载扩展设计",
+      "reviewed": "2026-09-19",
+      "basis": "既有 0.2/0.3 设计评审稿；未决选择见 A/Q 台账"
+    },
+    {
+      "path": "docs/design/interaction-and-workflows.md",
+      "kind": "design",
+      "status": "draft",
+      "owner": "技术负责人",
+      "scope": "MANGA 界面与工作流设计",
+      "reviewed": "2026-09-19",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账"
+    },
+    {
+      "path": "docs/dev-rules/agent-and-plugins.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "Agent、上下文与插件开发规则",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/dev-rules/architecture-and-contracts.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "架构、模块与契约开发约束",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/dev-rules/data-and-security.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "数据、进程与外部输入约束",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/dev-rules/development-workflow.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "开发流程与完成标准",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交"
+    },
+    {
+      "path": "docs/dev-rules/git-and-github.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "项目维护者",
+      "scope": "Git、GitHub、CI、分支规则及外部集成",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交"
+    },
+    {
+      "path": "docs/dev-rules/quality-gates.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "验证与质量门禁",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/dev-rules/README.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "开发规则索引",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/dev-rules/repo-map.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "技术负责人",
+      "scope": "仓库地图与环境事实",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/evidence/2026-09-19-documentation-framework.md",
+      "kind": "evidence",
+      "status": "reference",
+      "owner": "质量负责人",
+      "scope": "文档框架验证记录",
+      "reviewed": "2026-09-19",
+      "basis": "本次真实结构检查与故障夹具结果；不代表应用验证"
+    },
+    {
+      "path": "docs/evidence/2026-09-19-documentation-revision.md",
+      "kind": "evidence",
+      "status": "reference",
+      "owner": "质量负责人",
+      "scope": "文档整理复核",
+      "reviewed": "2026-09-19",
+      "basis": "文档基线 0.5 的内容、路径与结构复核；不代表应用验证"
+    },
+    {
+      "path": "docs/evidence/2026-09-19-github-bootstrap.md",
+      "kind": "evidence",
+      "status": "reference",
+      "owner": "项目维护者",
+      "scope": "Git 与 GitHub 建立和验证记录",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002"
+    },
+    {
+      "path": "docs/governance/documentation-policy.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "文档治理与变更规则",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/product-rules/core-product-principles.md",
+      "kind": "rule",
+      "status": "active",
+      "owner": "产品负责人",
+      "scope": "MANGA 核心产品原则",
+      "reviewed": "2026-09-19",
+      "basis": "原已确认方向；本次 A-01/A-02 用户明确确认"
+    },
+    {
+      "path": "docs/product-rules/README.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "产品负责人",
+      "scope": "产品规则索引",
+      "reviewed": "2026-09-19",
+      "basis": "原已确认方向；本次 A-01/A-02 用户明确确认"
+    },
+    {
+      "path": "docs/product/requirements.md",
+      "kind": "requirements",
+      "status": "draft",
+      "owner": "产品负责人",
+      "scope": "MANGA 产品需求文档",
+      "reviewed": "2026-09-19",
+      "basis": "既有需求评审稿；已确认原则及本次 A-01/A-02 决定"
+    },
+    {
+      "path": "docs/README.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA 文档导航",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/SUMMARY.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "项目维护者",
+      "scope": "GitBook 阅读目录",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002"
+    },
+    {
+      "path": "docs/templates/change-proposal.md",
+      "kind": "template",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "变更提案模板",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/templates/decision-record.md",
+      "kind": "template",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "ADR 模板：决定名称",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/templates/module-spec.md",
+      "kind": "template",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "模块规格模板",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/templates/README.md",
+      "kind": "index",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "文档模板",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "docs/templates/validation-report.md",
+      "kind": "template",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "验证报告模板",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "README.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+    },
+    {
+      "path": "REVIEW.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA 评审口径",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交"
+    },
+    {
+      "path": "SECURITY.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "项目维护者",
+      "scope": "MANGA 安全报告",
+      "reviewed": "2026-09-19",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+name: 缺陷报告
+description: 报告当前已实现能力的问题
+body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有问题。安全漏洞请使用仓库的私密漏洞报告入口，勿公开凭据或私人内容。
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境
+      description: 提交或发行版本、操作系统和相关模块；当前应用尚未发行。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤、预期与实际结果
+      description: 提供可复现步骤和脱敏的日志或合成样本。
+    validations:
+      required: true
