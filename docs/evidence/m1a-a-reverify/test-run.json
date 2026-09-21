@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "at": "2026-09-20T17:16:23.016Z",
+  "sourceFingerprint": "10f35c490bdf2ba2ea104b7ec6fec8a2bd3bc8828606252c3886f9cb4017124e",
+  "m1aSourceFingerprint": "d6c5689b11b0a9b5c8c3df919248452bee76589ba32b39b76ccf22215959e887",
+  "runner": "vitest",
+  "files": 15,
+  "tests": {
+    "total": 81,
+    "passed": 77,
+    "failed": 0,
+    "skipped": 4
+  },
+  "reportSelfTest": "passed"
+}

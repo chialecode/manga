@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-20T13:30:20.373Z",
+  "sourceFingerprint": "9c75d6523d99f0ca9ba4d23f2619caf91c18920cfb0b443c06cc7b4599533870",
+  "m1aSourceFingerprint": "48e7512fb7888d9d4bf58381778c5fae69428b539afab6a1c4bab2a4ab3c2bdb",
+  "repositoryQuality": "passed",
+  "vitest": {
+    "files": 11,
+    "tests": 48
+  },
+  "m0ContractReviewTests": 15,
+  "packageSmoke": [
+    "initial",
+    "restart"
+  ],
+  "fingerprintComparison": "matched",
+  "m1aAcceptance": "failed-see-F-24-through-F-32",
+  "realLibrariesModified": false,
+  "remoteOperationsPerformed": false
+}

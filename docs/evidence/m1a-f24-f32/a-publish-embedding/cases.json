@@ -1,0 +1,322 @@
+{
+  "status": "passed",
+  "at": "2026-09-21T15:35:55.086Z",
+  "sourceFingerprint": "78276083685baf9dcab69febe355ca18f4e46b773dbe2e4a1ebb5b5304842782",
+  "m1aSourceFingerprint": "53c944e31e47bf305abc0a3e19380c360ae8e1ba54cc6b446b26f08aeae5f67e",
+  "generator": "scripts/verify-m1a.mjs",
+  "cases": [
+    {
+      "caseId": "F-24-owned-rollback",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-24 location ownership rolls back only owned copying/committed files and keeps foreign files",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-24 location ownership resumes an interrupted copy and publishes the new library",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/acceptance-review.test.ts",
+          "name": "A acceptance review regressions never deletes pre-existing files when rolling back a merely proposed location",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-24/F-25 sealed host after a location switch rolls back only the files a crashed copy owned and keeps foreign files at the target",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-24 preserves an unproven copy and a replaced committed file",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-24 never overwrites a copy destination that appeared after planning",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-25-write-barrier",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-25 write barrier after location switch seals the old host and marks the target job succeeded before the pointer switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-25 write barrier after location switch rejects overlapping migration targets",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-25 write barrier after location switch keeps the switched pointer when the process exits after location-switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-25 write barrier after location switch redirects an explicit old profile root to the published library",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-25 write barrier after location switch covers pointer and copy/verify/publish/commit/switch process exits",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-24/25 reopen after migration opens the copied library after a successful switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-24/F-25 sealed host after a location switch refuses rollback and new plans on the sealed old host and keeps the published library",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-24/F-25 sealed host after a location switch treats a job whose target is the already published root as needs-review even when its row looks unfinished",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-26-actor-idempotency",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-26 actor-bound idempotency rejects replaying another actor's receipt",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-26 actor-bound idempotency rejects an in-flight idempotency key from another actor",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-26 refuses an unbound legacy receipt and a different task on the same actor",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-26 re-evaluates inventory after its authorization shrinks",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-26 checks pending task binding and narrowed or revoked object receipts",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-27-immediate-run-id",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-27 immediate run identity returns a runId before the provider finishes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-27 immediate run identity restores run input, live text and history after close",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f27-app.test.tsx",
+          "name": "F-27 App restore sends from the composer, shows history on copilot, stops, and restores after remount",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-27 interrupted runs marks an in-flight run interrupted on close and lets the reopened host retry it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-27 interrupted runs interrupts running tasks before the library moves",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-28-dual-runtime",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-28 dual runtime freeze stores the selected runtime on the run and ignores later settings changes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-28 PI runtime advertises the contract tool schema through PI for both protocols",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-28 PI runtime reports the provider call id and completes an agent tool run through PI on the Responses protocol",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-28 PI runtime maps PI provider faults to the same public codes as the native runtime",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-28 PI runtime defaults to native and persists the runtime choice across restart",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-32 session history feeds earlier completed turns of the same session to the model and keeps sessions apart (native)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-32 session history feeds earlier completed turns of the same session to the model and keeps sessions apart (pi)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-29-purpose-isolation",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-29 model purposes and file transcription probes embedding, clears old capabilities on upsert, and transcribes an authorized wav",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-29 model purposes and file transcription does not mark tools or streaming without a completed provider event",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/model-routing.test.ts",
+          "name": "connection probes stay within their configured model role rejects text connection for transcription before network access",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/model-routing.test.ts",
+          "name": "connection probes stay within their configured model role rejects transcription connection for text before network access",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/model-routing.test.ts",
+          "name": "connection probes stay within their configured model role rejects transcription connection for tools before network access",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/model-routing.test.ts",
+          "name": "connection probes stay within their configured model role rejects transcription connection for streaming before network access",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/model-routing.test.ts",
+          "name": "connection probes stay within their configured model role uses only the selected ASR connection and model for the transcription probe",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-29 does not verify an embedding capability from an empty vector list",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-30-setup-inventory",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-30 settings and inventory reports needsSetup from connections, not from an empty workspace object",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-30 settings and inventory persists a pointer location and cancels a batched scan",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-30 relocation plans rejects per-partition plans without leaving a checkpoint and refuses to index the data partition",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-30 relocation plans keeps index-only originals in place and records them as an indexed root inside the moved library",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-31-scale-report",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "scripts/m1a-report.test.mjs",
+          "name": "scripts/m1a-report.test.mjs",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "F-32-snapshot-retry",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-32 snapshot, retry and budgets keeps material revisions on retry and does not duplicate submitted tools",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-32 snapshot, retry and budgets stops when the step budget is exhausted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/f24-f32.test.ts",
+          "name": "F-32 snapshot, retry and budgets resumes a committed tool after a disconnect without a second note",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/reverify-boundaries.test.ts",
+          "name": "A independent failure boundaries F-32 rejects text streams without a terminal provider event",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-32 session history feeds earlier completed turns of the same session to the model and keeps sessions apart (native)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1a/a-reverify.test.ts",
+          "name": "A re-verification: F-32 session history feeds earlier completed turns of the same session to the model and keeps sessions apart (pi)",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

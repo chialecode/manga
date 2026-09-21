@@ -1,0 +1,18 @@
+{
+  "syntheticOnly": true,
+  "at": "2026-09-20T13:11:42.054Z",
+  "idempotency": {
+    "otherActorStatus": "ok",
+    "replayed": true,
+    "sameObject": true
+  },
+  "relocation": {
+    "applyStatus": "ok",
+    "writeAfterSwitchStatus": "ok",
+    "lateWritePresentAfterRestart": false,
+    "copiedCheckpointStillPending": true
+  },
+  "sourceFingerprint": "4e4ba58105a17a4abbeede4ba439492d5062cbcb56c1c5a36206d15897bacf0e",
+  "m1aSourceFingerprint": "a3030259333ede11ceeb0b44c02acf38323f11f91043b6b14ad567741b8effd8",
+  "reuseBasis": "Subsequent changes only isolate benchmark paths and clarify the PI router comment; audited product/protocol paths unchanged."
+}

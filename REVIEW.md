@@ -28,3 +28,5 @@
 按 [A/B 交接规则](docs/dev-rules/development-workflow.md#agent-handoff)核对同一计划、B 的交付 commit 与实际证据。A 能确定的局部修复在本轮完成；较大实现缺口才集中交回 B，使用稳定问题编号、具体复现、预期与验收，不每发现一条即返工。B 按编号补修复/验证证据后 A 才关闭；新增愿望或风格建议不冒充原任务缺陷。
 
 审查修复的版本保存按 [Git 规则](docs/dev-rules/git-and-github.md#review-commits)：同一交付未 push 时 amend 原提交，消息描述最终结果；不同里程碑或独立交付保留各自提交。报告保留问题与复验依据，不以额外修复 commit 留存本地审查过程；已推送历史的改写仍需明确授权。
+
+审查结束按[下一步建议](docs/dev-rules/development-workflow.md#next-step)明确选择人工验收、给 B 的返工 prompt、完成阶段后的远端操作建议或下一阶段规划；注明理由和条件。A 审查通过不自动授权 push、创建 PR 或合并，必须阶段完成且用户明确表示执行相应动作。

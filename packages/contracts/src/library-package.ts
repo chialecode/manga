@@ -20,9 +20,27 @@ const rows = {
   workLinks: z.object({work_id:id, provider_id:id, external_id:id, snapshot_json:json, confirmed_at:z.string()}),
 };
 export const LibraryPackageManifestSchema = z.object({
-  format:z.literal("manga-library-package-v1"),createdAt:z.string(),
-  ...Object.fromEntries(Object.entries(rows).map(([key,row]) => [key,z.array(row.strict()).max(250000)])),
-  // Optional for reading older v1 packages; new exports preserve note search scope.
-  noteScopes:z.array(z.object({objectId:id,resourceId:id.nullable()}).strict()).max(250000).optional(),
-  attachments:z.array(z.object({id:PackageAttachmentNameSchema,relativePath:z.string(),hash:z.string().regex(/^[a-f0-9]{64}$/),bytes:z.number().int().nonnegative().max(maxAttachmentBytes)}).strict()).max(4096),
+  format: z.literal("manga-library-package-v1"),
+  createdAt: z.string(),
+  works: z.array(rows.works.strict()).max(250000),
+  resources: z.array(rows.resources.strict()).max(250000),
+  revisions: z.array(rows.revisions.strict()).max(250000),
+  objects: z.array(rows.objects.strict()).max(250000),
+  objectRevisions: z.array(rows.objectRevisions.strict()).max(250000),
+  anchors: z.array(rows.anchors.strict()).max(250000),
+  refs: z.array(rows.refs.strict()).max(250000),
+  progress: z.array(rows.progress.strict()).max(250000),
+  captures: z.array(rows.captures.strict()).max(250000),
+  metadataSnapshots: z.array(rows.metadataSnapshots.strict()).max(250000),
+  metadataOverrides: z.array(rows.metadataOverrides.strict()).max(250000),
+  metadataCandidates: z.array(rows.metadataCandidates.strict()).max(250000),
+  workLinks: z.array(rows.workLinks.strict()).max(250000),
+  noteScopes: z.array(z.object({ objectId: id, resourceId: id.nullable() }).strict()).max(250000).optional(),
+  attachments: z.array(z.object({
+    id: PackageAttachmentNameSchema,
+    relativePath: z.string(),
+    hash: z.string().regex(/^[a-f0-9]{64}$/),
+    bytes: z.number().int().nonnegative().max(maxAttachmentBytes),
+  }).strict()).max(4096),
 }).strict();
+export type LibraryPackageManifest = z.infer<typeof LibraryPackageManifestSchema>;

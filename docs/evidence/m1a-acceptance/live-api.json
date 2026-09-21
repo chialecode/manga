@@ -1,0 +1,51 @@
+{
+  "at": "2026-09-20T13:11:15.225Z",
+  "provider": "OpenRouter",
+  "model": "openrouter/free",
+  "syntheticInputsOnly": true,
+  "results": [
+    {
+      "name": "chat-text",
+      "status": "passed",
+      "nonemptyText": true,
+      "durationMs": 3156
+    },
+    {
+      "name": "chat-stream",
+      "status": "passed",
+      "nonemptyText": true,
+      "completed": true,
+      "durationMs": 11319
+    },
+    {
+      "name": "chat-tools",
+      "status": "passed",
+      "completed": true,
+      "parsedToolCalls": 1,
+      "businessToolsExecuted": 0,
+      "durationMs": 1108
+    },
+    {
+      "name": "file-transcription",
+      "status": "failed",
+      "code": "PROVIDER_UNAVAILABLE",
+      "httpStatus": 400,
+      "durationMs": 206,
+      "assessment": {
+        "validForAsrAcceptance": false,
+        "reason": "Invalid test setup: a configured LLM model was incorrectly reused as the ASR model.",
+        "correctedOn": "2026-09-20",
+        "asrStatus": "not-run",
+        "asrConfiguration": "not-configured"
+      }
+    }
+  ],
+  "sourceFingerprint": "4e4ba58105a17a4abbeede4ba439492d5062cbcb56c1c5a36206d15897bacf0e",
+  "m1aSourceFingerprint": "a3030259333ede11ceeb0b44c02acf38323f11f91043b6b14ad567741b8effd8",
+  "reuseBasis": "Subsequent changes only isolate benchmark paths and clarify the PI router comment; audited product/protocol paths unchanged.",
+  "modelPurpose": "llm",
+  "currentAsrValidation": {
+    "status": "not-run",
+    "reason": "No separate ASR model has been configured."
+  }
+}

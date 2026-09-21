@@ -1,7 +1,9 @@
 import {
   MangaError,
   createId,
+  type Actor,
   type CommandEnvelope,
+  type Facet,
   type ModuleManifest,
   type ModuleState,
   type ProfileConfig,
@@ -12,6 +14,12 @@ import { planComposition } from "./planner.ts";
 import { CommandGateway, type CommandHandler } from "./gateway.ts";
 import { ResourceScope } from "./scope.ts";
 import { SequencedBus } from "./bus.ts";
+
+export type RuntimeOptions = {
+  trustedScope?: (actor: Actor, requested: string) => boolean;
+  isCommandAdmitted?: (commandId: string, envelope: CommandEnvelope) => boolean;
+  hostFacets?: Facet[];
+};
 
 export type RuntimeSnapshot = {
   registryGeneration: number;
@@ -47,8 +55,12 @@ export class MangaRuntime {
   private applying: Promise<void> = Promise.resolve();
   private readonly pauseGates = new Map<string, Promise<void>>();
   private readonly pauseResolvers = new Map<string, () => void>();
+  private readonly hostFacets: Facet[];
+  private readonly extraAdmission?: (commandId: string, envelope: CommandEnvelope) => boolean;
 
-  constructor(modules: MangaModule[]) {
+  constructor(modules: MangaModule[], options: RuntimeOptions = {}) {
+    this.hostFacets = options.hostFacets ?? ["service"];
+    this.extraAdmission = options.isCommandAdmitted;
     for (const module of modules) {
       this.slots.set(module.manifest.moduleId, {
         module,
@@ -60,9 +72,9 @@ export class MangaRuntime {
       });
     }
     this.gateway = new CommandGateway({
-      isCommandAdmitted: (commandId) => this.isAdmitted(commandId),
+      isCommandAdmitted: (commandId, envelope) => this.isAdmitted(commandId) && (this.extraAdmission?.(commandId, envelope) ?? true),
       getEpoch: (commandId) => this.epochForCommand(commandId),
-      trustedScope: (actor, scope) => ["user", "agent", "workflow"].includes(actor.kind) && scope === "library",
+      trustedScope: options.trustedScope ?? ((actor, scope) => ["user", "agent", "workflow"].includes(actor.kind) && scope === "library"),
       acquireLease: (envelope) => this.acquireLease(envelope),
     });
   }
@@ -266,6 +278,7 @@ export class MangaRuntime {
       epoch: slot.epoch,
       bindingEpoch: slot.bindingEpoch,
       facet: "service",
+      hostFacets: this.hostFacets,
       isCurrent: () => this.must(slot.module.manifest.moduleId).epoch === epoch
         && this.must(slot.module.manifest.moduleId).bindingEpoch === bindingEpoch
         && this.must(slot.module.manifest.moduleId).state === "active",

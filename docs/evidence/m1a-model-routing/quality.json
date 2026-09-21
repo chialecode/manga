@@ -1,0 +1,35 @@
+{
+  "at": "2026-09-20T13:54:04.340Z",
+  "sourceFingerprint": "8adb9dc95973efaf6a8dc57acbc253ac59d93aea284ad70459f39daa9e6bfa01",
+  "m1aSourceFingerprint": "126d42cb0b9d3e70500c856f5bb8e2be61d325bf48a150f1231fc6fab5b4a832",
+  "repositoryQuality": "passed",
+  "vitest": {
+    "files": 12,
+    "tests": 53,
+    "modelRoutingTests": 5
+  },
+  "m0ContractReviewTests": 15,
+  "packageSmoke": [
+    "initial",
+    "restart"
+  ],
+  "fingerprintComparison": "matched",
+  "screenshotReview": "three synthetic screenshots inspected; no private content or personal paths",
+  "localConfiguration": {
+    "llmConfigured": true,
+    "embeddingConfigured": false,
+    "asrConfigured": false
+  },
+  "liveModelRequestsDuringCorrection": 0,
+  "realAsrValidation": "not-run-no-asr-configuration",
+  "realEmbeddingValidation": "not-run-no-embedding-configuration",
+  "benchmark": "not-rerun-unaffected-by-probe-purpose-check",
+  "limitations": [
+    "M1a report gate still incomplete (F-31); this file summarizes observed checks only.",
+    "Full purpose-specific settings and authorized file transcription remain F-29.",
+    "Prior transcription HTTP 400 used the LLM model and is invalid ASR evidence."
+  ],
+  "m1aAcceptance": "failed-see-F-24-through-F-32",
+  "realLibrariesModified": false,
+  "remoteOperationsPerformed": false
+}

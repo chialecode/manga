@@ -1,0 +1,17 @@
+{
+  "name": "@manga/storage-drizzle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@manga/contracts": "workspace:*",
+    "better-sqlite3": "12.2.0",
+    "drizzle-orm": "0.44.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13"
+  }
+}

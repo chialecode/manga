@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "78276083685baf9dcab69febe355ca18f4e46b773dbe2e4a1ebb5b5304842782",
+  "m1aSourceFingerprint": "53c944e31e47bf305abc0a3e19380c360ae8e1ba54cc6b446b26f08aeae5f67e",
+  "at": "2026-09-21T15:31:35.148Z",
+  "format": "unsigned local Electron package",
+  "electron": "37.4.0",
+  "nativeModuleUnpacked": true,
+  "output": "dist/m1a-package/MANGA-win32-x64",
+  "smoke": [
+    "initial",
+    "restart",
+    "agent",
+    "agent-restart"
+  ]
+}

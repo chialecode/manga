@@ -1,0 +1,99 @@
+{
+  "cases.json": [
+    {
+      "id": "F-24-owned-rollback",
+      "kind": "automated",
+      "tests": [
+        "^F-24 location ownership rolls back only owned copying/committed files and keeps foreign files$",
+        "^F-24 location ownership resumes an interrupted copy and publishes the new library$",
+        "^A acceptance review regressions never deletes pre-existing files when rolling back a merely proposed location$",
+        "^A re-verification: F-24/F-25 sealed host after a location switch rolls back only the files a crashed copy owned and keeps foreign files at the target$",
+        "^A independent failure boundaries F-24 "
+      ]
+    },
+    {
+      "id": "F-25-write-barrier",
+      "kind": "automated",
+      "tests": [
+        "^F-25 write barrier after location switch seals the old host and marks the target job succeeded before the pointer switch$",
+        "^F-25 write barrier after location switch rejects overlapping migration targets$",
+        "^F-25 write barrier after location switch keeps the switched pointer when the process exits after location-switch$",
+        "^F-25 write barrier after location switch redirects an explicit old profile root to the published library$",
+        "^F-25 write barrier after location switch covers pointer and copy/verify/publish/commit/switch process exits$",
+        "^F-24/25 reopen after migration opens the copied library after a successful switch$",
+        "^A re-verification: F-24/F-25 sealed host after a location switch refuses rollback and new plans on the sealed old host and keeps the published library$",
+        "^A re-verification: F-24/F-25 sealed host after a location switch treats a job whose target is the already published root as needs-review even when its row looks unfinished$"
+      ]
+    },
+    {
+      "id": "F-26-actor-idempotency",
+      "kind": "automated",
+      "tests": [
+        "^F-26 actor-bound idempotency rejects replaying another actor's receipt$",
+        "^F-26 actor-bound idempotency rejects an in-flight idempotency key from another actor$",
+        "^A independent failure boundaries F-26 "
+      ]
+    },
+    {
+      "id": "F-27-immediate-run-id",
+      "kind": "automated",
+      "tests": [
+        "^F-27 immediate run identity returns a runId before the provider finishes$",
+        "^F-27 immediate run identity restores run input, live text and history after close$",
+        "^F-27 App restore sends from the composer, shows history on copilot, stops, and restores after remount$",
+        "^A re-verification: F-27 interrupted runs marks an in-flight run interrupted on close and lets the reopened host retry it$",
+        "^A re-verification: F-27 interrupted runs interrupts running tasks before the library moves$"
+      ]
+    },
+    {
+      "id": "F-28-dual-runtime",
+      "kind": "automated",
+      "tests": [
+        "^F-28 dual runtime freeze stores the selected runtime on the run and ignores later settings changes$",
+        "^A re-verification: F-28 PI runtime advertises the contract tool schema through PI for both protocols$",
+        "^A re-verification: F-28 PI runtime reports the provider call id and completes an agent tool run through PI on the Responses protocol$",
+        "^A re-verification: F-28 PI runtime maps PI provider faults to the same public codes as the native runtime$",
+        "^A re-verification: F-28 PI runtime defaults to native and persists the runtime choice across restart$",
+        "^A re-verification: F-32 session history "
+      ]
+    },
+    {
+      "id": "F-29-purpose-isolation",
+      "kind": "automated",
+      "tests": [
+        "^F-29 model purposes and file transcription probes embedding, clears old capabilities on upsert, and transcribes an authorized wav$",
+        "^F-29 model purposes and file transcription does not mark tools or streaming without a completed provider event$",
+        "^connection probes stay within their configured model role ",
+        "^A independent failure boundaries F-29 "
+      ]
+    },
+    {
+      "id": "F-30-setup-inventory",
+      "kind": "automated",
+      "tests": [
+        "^F-30 settings and inventory reports needsSetup from connections, not from an empty workspace object$",
+        "^F-30 settings and inventory persists a pointer location and cancels a batched scan$",
+        "^A re-verification: F-30 relocation plans rejects per-partition plans without leaving a checkpoint and refuses to index the data partition$",
+        "^A re-verification: F-30 relocation plans keeps index-only originals in place and records them as an indexed root inside the moved library$"
+      ]
+    },
+    {
+      "id": "F-31-scale-report",
+      "kind": "automated",
+      "tests": [
+        "^scripts/m1a-report.test.mjs$"
+      ]
+    },
+    {
+      "id": "F-32-snapshot-retry",
+      "kind": "automated",
+      "tests": [
+        "^F-32 snapshot, retry and budgets keeps material revisions on retry and does not duplicate submitted tools$",
+        "^F-32 snapshot, retry and budgets stops when the step budget is exhausted$",
+        "^F-32 snapshot, retry and budgets resumes a committed tool after a disconnect without a second note$",
+        "^A independent failure boundaries F-32 ",
+        "^A re-verification: F-32 session history "
+      ]
+    }
+  ]
+}

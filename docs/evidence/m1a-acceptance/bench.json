@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "9c75d6523d99f0ca9ba4d23f2619caf91c18920cfb0b443c06cc7b4599533870",
+  "m1aSourceFingerprint": "48e7512fb7888d9d4bf58381778c5fae69428b539afab6a1c4bab2a4ab3c2bdb",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v24.19.0",
+  "samples": {
+    "searchMs": {
+      "n": 100,
+      "p95": 0.4309999999999832,
+      "max": 0.6619999999999777
+    },
+    "saveMs": {
+      "n": 1,
+      "value": 0.7420999999999935
+    }
+  },
+  "targets": {
+    "searchP95Ms": 500,
+    "saveMs": 1000
+  },
+  "notes": "Service-level measurements; UI paint latency is not included. 200 resources, not 10,000. 30 MiB EPUB first paint is not claimed."
+}

@@ -67,7 +67,7 @@ export type ProfileConfig = {
 export const ProfileConfigSchema = z.object({
   profileId:z.string().min(1), revision:z.number().int().positive(),
   enabledFeatures:z.array(z.string().min(1)), disabledFeatures:z.array(z.string().min(1)),
-  preferredProviders:z.record(z.array(z.string().min(1))), bundleId:z.string().optional(),
+  preferredProviders:z.record(z.string(), z.array(z.string().min(1))), bundleId:z.string().optional(),
 }).strict();
 
 export type ResourceHandle = {
