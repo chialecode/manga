@@ -10,8 +10,14 @@
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` / `tsconfig.json` | M0 验证 monorepo；当前包管理锁定 pnpm 11.24.0；Node 24.19.0 |
 | `packages/contracts` | 公开 DTO、命令/错误/定位/模块 schema |
 | `packages/plugin-sdk` | 模块激活接口 |
-| `packages/kernel` | 自研组合运行时（实验候选） |
-| `packages/storage-sqlite` | `node:sqlite` 单写入适配器（实验候选） |
+| `packages/kernel` | 已定稿的自研组合运行时（ADR-0005）；产品验收另行记录 |
+| `packages/storage-sqlite` | `node:sqlite` 单写入适配器（M0 实验候选，保留回归） |
+| `packages/storage-drizzle` | better-sqlite3 + Drizzle + FTS5 产品存储 |
+| `packages/i18n` | 中文消息键、测试语言、日期数字 |
+| `packages/model-protocol` | OpenAI Responses/Chat/转录适配与本地 mock |
+| `packages/app-core` | UI 与 Agent 共用的产品应用服务 |
+| `apps/desktop` | React + Vite + Electron Forge Windows 宿主 |
+| `docs/modules/` | M1a 内置模块规格 |
 | `experiments/m0` | POC 领域、应用服务、样本、测试与 Node 宿主 |
 | `experiments/m0-desktop` | Electron 人工窗口；不进入 CI 依赖 |
 | `docs/product/`、`docs/design/` | 需求和详细设计评审稿 |
@@ -21,6 +27,7 @@
 | `scripts/check-docs.mjs` | 无第三方依赖的文档校验 |
 | `scripts/check-deps.mjs` | 包依赖方向；内置反例自测 |
 | `scripts/m0-report.mjs` / `m0-report.test.mjs` / `m0-required-cases.json` | 原型必需证据/指纹/包与性能检查及反例；不计算产品验收 |
+| `scripts/m1a-report.mjs` / `m1a-report.test.mjs` / `m1a-required-cases.json` | M1a 必需证据/指纹/10k·50k 规模与包烟测检查及反例；不计算产品验收 |
 | `scripts/m0.mjs`、`scripts/verify-m0.mjs`、`scripts/verify.mjs` | M0 命令、完整自动验证、治理+类型+契约/修复回归门禁 |
 | `.node-version` | CI 与本地 Node 版本 |
 | `.github/workflows/ci.yml` | PR/手动检查，job 名 `repository-quality`；Corepack pnpm 安装锁文件后跑 verify |
@@ -29,7 +36,7 @@
 | `.gitbook.yaml`、`docs/SUMMARY.md` | GitBook 准备配置 |
 | `SECURITY.md` | 私密安全报告说明 |
 
-目标产品目录 `apps/desktop` 等仍未作为发行工程建立；M0 代码在 `packages/` 与 `experiments/`。
+目标产品目录 `apps/desktop` 已建立为 M1a 宿主；M0 代码继续留在 `packages/` 与 `experiments/`。
 
 ## 可运行命令
 
@@ -38,7 +45,11 @@
 | 命令 | 状态 | 作用 |
 | --- | --- | --- |
 | `pnpm install` | 可用 | 按锁文件安装 workspace |
-| `node scripts/verify.mjs` | 可用 | 文档治理 + 依赖方向 + `tsc --noEmit` + 契约/修复回归 |
+| `node scripts/verify.mjs` | 可用 | 文档治理 + 依赖方向 + 类型检查 + M1a Vitest + 契约/修复回归 |
+| `node scripts/m1a.mjs test` | 可用 | M1a Vitest（授权、存储、协议、界面服务） |
+| `node scripts/verify-m1a.mjs` | 可用 | 运行 M1a 测试；证据齐全时核验报告门禁 |
+| `node scripts/m1a.mjs package` | Windows 可用 | Electron Forge 本地包与启动烟测 |
+| `node scripts/m1a.mjs bench` | 可用 | 新栈服务检索/保存抽样；不宣称 10,000 元数据全集 |
 | `node scripts/m0.mjs doctor` | 可用 | 工具与环境探测 |
 | `node scripts/m0.mjs fixtures` | 可用 | 生成合成样本 |
 | `node scripts/m0.mjs typecheck` | 可用 | 类型检查 |

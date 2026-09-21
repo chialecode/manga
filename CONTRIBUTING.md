@@ -16,11 +16,15 @@ MANGA 当前处于需求、设计与 M0 验证阶段。先读 [AGENTS.md](AGENTS
 
 ## 环境与命令
 
-前置：使用 `.node-version` 指定的 Node.js 24.19+，在仓库根执行 `pnpm install`。没有产品 `pnpm dev` 或发行安装包。
+前置：使用 `.node-version` 指定的 Node.js 24.19+，在仓库根执行 `pnpm install`。没有发行安装包。开发宿主：`pnpm --filter @manga/desktop start`。
 
 | 命令 | 作用 |
 | --- | --- |
-| `node scripts/verify.mjs` | 文档、公开内容、依赖方向、类型检查及必要回归 |
+| `node scripts/verify.mjs` | 文档、公开内容、依赖方向、类型检查、M1a Vitest 及必要回归 |
+| `node scripts/m1a.mjs test` | M1a 自动测试 |
+| `node scripts/m1a.mjs package` | Windows 未签名本地包与烟测 |
+| `node scripts/m1a.mjs bench` | 新栈服务侧检索/保存抽样 |
+| `pnpm --filter @manga/desktop start` | 启动 M1a Electron 宿主（开发） |
 | `node scripts/verify-m0.mjs` | 本机可自动的完整 M0 验证 |
 | `node scripts/check-docs.mjs` | 仅文档检查 |
 | `node scripts/check-publication.mjs` | 工作树与暂存内容的路径、凭据和私有文件检查 |

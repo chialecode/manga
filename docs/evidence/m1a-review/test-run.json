@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "at": "2026-09-20T11:35:07.531Z",
+  "sourceFingerprint": "8548050379e87b7b6390b18d8727c19ed679c6c93f8e61afa6f13b0e99303dc0",
+  "m1aSourceFingerprint": "f12562c5ef2fe19997427e2189ce766b53cf089b3fc21a790d1bed2af4ac1bf5",
+  "runner": "vitest"
+}

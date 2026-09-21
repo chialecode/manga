@@ -8,7 +8,7 @@ MANGA 取自 **Manga、Anime、Novel、Game、Agent**，是一个以 TypeScript 
 
 ## 当前阶段
 
-仓库已完成文档治理，并建立 **M0 验证工程**（`packages/`、`experiments/m0`）。这不是产品发行版：没有用户安装包，产品 AT 均未执行。文档描述目标行为，不能把原型证据写成产品验收通过。
+仓库已完成文档治理，并建立 **M0 验证工程**（`packages/`、`experiments/m0`）。M1a 产品宿主在 `apps/desktop`，当前在 `feat/m1a-agent-foundation` 等待审查。这不是产品发行版：没有用户安装包，产品 AT 均未执行。文档描述目标行为，不能把原型或 M1a 自动测试写成产品验收通过。
 
 首版已确认采用**本地单用户、基础功能无需登录、Windows 11 x64**，其他桌面系统后续独立验收。自动化证据与退出判断见 [M0 汇总](docs/evidence/2026-09-19-m0-summary.md)，推进状态见 [执行台账](docs/delivery/status.md)。
 

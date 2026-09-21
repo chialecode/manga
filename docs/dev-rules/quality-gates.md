@@ -11,7 +11,17 @@ pnpm install
 node scripts/verify.mjs
 ```
 
-`verify.mjs` 检查脚本语法、文档登记、GitHub JSON、文档结构、`git diff --check`、依赖方向、公开内容及报告门禁反例，并在 `node_modules` 存在时运行 `tsc --noEmit` 及契约/修复回归（含 `closure-review.test.ts`）。它不安装依赖；缺少 `node_modules` 时类型检查非零退出。
+`verify.mjs` 检查脚本语法、文档登记、GitHub JSON、文档结构、`git diff --check`、依赖方向、公开内容及报告门禁反例，并在 `node_modules` 存在时运行 `tsc --noEmit`（根配置与 `apps/desktop`）、Vitest M1a 测试及契约/修复回归（含 `closure-review.test.ts`）。它不安装依赖；缺少 `node_modules` 时类型检查非零退出。缺少 vitest 时 M1a 测试非零退出，不使用 `--if-present`。
+
+M1a 独立证据示例：
+
+```powershell
+$env:M1A_EVIDENCE_DIR='docs/evidence/m1a-review'
+node scripts/m1a.mjs test
+node scripts/m1a.mjs bench
+node scripts/m1a.mjs package
+node scripts/verify-m1a.mjs
+```
 
 完整 M0 自动验证需要先生成同一源码版本的 Windows 包和性能结果。PowerShell 示例：
 
@@ -64,7 +74,7 @@ node scripts/m0.mjs report
 
 ## 2. 应用与 M0 工程门禁
 
-正式工程的测试工具按 [ADR-0007](../decisions/0007-technology-stack.md)采用 Vitest、Testing Library/jsdom 和对应浏览器烟测的 playwright-core；这些选型尚未接入，不能把它们列成当前已执行命令。既有 node:test 门禁持续有效，迁移时保留场景覆盖；jsdom 和浏览器烟测不替代 Electron 原生输入法与设备实测。
+正式工程的测试工具按 [ADR-0007](../decisions/0007-technology-stack.md)采用 Vitest、Testing Library/jsdom 和对应浏览器烟测的 playwright-core；上述命令已接入 `node scripts/verify.mjs` / `node scripts/m1a.mjs test`。既有 node:test 门禁持续有效，迁移时保留场景覆盖；jsdom 和浏览器烟测不替代 Electron 原生输入法与设备实测。
 
 M0 验证工程建立后，下列命令已经存在并应实际运行。产品 AT 仍按阶段执行，不能用 POC 子集标为 passed。
 
@@ -95,3 +105,7 @@ M0 验证工程建立后，下列命令已经存在并应实际运行。产品 A
 当前 CI 安装锁定依赖并运行 `verify.mjs`（文档 + 公开检查及其反例 + 依赖方向 + 类型检查 + 契约/修复回归）。Windows 包与性能分别运行 `node scripts/m0.mjs package`、`node scripts/m0.mjs bench`，不纳入无 Windows 桌面的 CI。人工评审仍负责语义和证据质量。完整 POC、Windows 设备与打包走 `verify-m0` / 人工检查单。不把 CI 成功当作 M0 退出或产品发布验证。新增 Actions 需同时更新远端 allowlist，新增必需 job 需先验证真实产出再切换 Ruleset。
 
 门禁反例：`scripts/check-deps.mjs` 内置错误导入自测；`scripts/m0-report.test.mjs` 检查报告对缺项、陈旧指纹、失败包和性能的拒绝。失败必须非零。报告只核对原型证据，不自动计算里程碑退出。
+
+## M1a 报告门禁
+
+`node --test scripts/m1a-report.test.mjs` 用夹具验证缺项、旧指纹、失败基准和不足规模会被拒绝。`scripts/verify-m1a.mjs` 在证据目录已有 `bench.json`/`package.json`/`cases.json` 或设置 `M1A_REQUIRE_REPORT=1` 时按同一规则核验，不能只凭 Vitest 写 `passed`。cases 必须由 Vitest 实际结果生成并匹配必需测试；sourceFingerprint 与 m1aSourceFingerprint 均必填。存在 A 的 audit.json 时，失败或旧指纹同样阻止报告通过。当前审查证据使用独立跑次目录，不得覆盖 `docs/evidence/m1a-f24-f32/` 根级与 `a-reverify` 历史结果。`node scripts/audit-m1a-reverify.mjs` 必须真实通过，不得删除反例或忽略失败。10,000 元数据 / 50,000 检索块、真实进程冷启动、上下文、可见交互与 Windows 包烟测（含 agent 发送/停止/重启）由 `node scripts/m1a.mjs bench` / `package` 生成。B 自检通过不等于 A 复验或产品验收。

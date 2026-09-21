@@ -1,0 +1,38 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "1c8a204d83fe6b8b72809aafc8ff0159d9f473e3dbdd246035a9ad93b1642d6c",
+  "m1aSourceFingerprint": "9d4ac3bc85a2bb44e5bfe7e5353be63737651733900f38855fb66a8a840b1778",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v24.19.0",
+  "metrics": {
+    "searchP95Ms": 0.3126999999999498,
+    "saveMs": 1.2072000000000571,
+    "coldStartMs": 5.034399999999778
+  },
+  "targets": {
+    "searchP95Ms": 500,
+    "saveMs": 1000,
+    "coldStartMs": 5000
+  },
+  "scale": {
+    "metadataCount": 10000,
+    "searchBlocks": 50000
+  },
+  "samples": {
+    "searchMs": {
+      "n": 100,
+      "p95": 0.3126999999999498,
+      "max": 2.8873000000000957
+    },
+    "saveMs": {
+      "n": 1,
+      "value": 1.2072000000000571
+    },
+    "coldStartMs": {
+      "n": 1,
+      "value": 5.034399999999778
+    }
+  },
+  "notes": "Service-level measurements on 10,000 metadata rows and 50,000 search blocks. UI paint latency is not included. 30 MiB EPUB first paint is not claimed."
+}

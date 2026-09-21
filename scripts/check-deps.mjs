@@ -32,6 +32,26 @@ const rules = [
     allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^fflate$/, /^parse5$/],
     forbid: [/^@manga\/kernel/, /^@manga\/storage-sqlite/, /^electron$/],
   },
+  {
+    dir: "packages/i18n/src",
+    allow: [/^node:/, /^\.\//],
+    forbid: [/^@manga\//, /^electron$/],
+  },
+  {
+    dir: "packages/storage-drizzle/src",
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^better-sqlite3$/, /^drizzle-orm/],
+    forbid: [/^@manga\/kernel/, /^electron$/],
+  },
+  {
+    dir: "packages/model-protocol/src",
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^@earendil-works\/pi-ai/],
+    forbid: [/^@manga\/kernel/, /^electron$/],
+  },
+  {
+    dir: "packages/app-core/src",
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/],
+    forbid: [/^electron$/],
+  },
 ];
 
 function walk(dir, acc = []) {

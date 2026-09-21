@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "scope": "A re-verification of F-24, F-25, F-27, F-30, F-31 and F-32 only; VOICE-06—08 and AT-57—59 excluded",
+  "commit": "6d377bb",
+  "sourceFingerprint": "78276083685baf9dcab69febe355ca18f4e46b773dbe2e4a1ebb5b5304842782",
+  "m1aSourceFingerprint": "cd4e568b2c5bbc57a3474e4699d8d2ac48796be1b85aee05c1cb325ee5c84cb2",
+  "checks": {
+    "node scripts/verify.mjs": "passed",
+    "node scripts/m1a.mjs test": "passed: 94 tests, 4 live tests skipped",
+    "node scripts/audit-m1a-reverify.mjs": "passed: 4 observations",
+    "node scripts/m1a.mjs package": "passed: initial, restart, agent, agent-restart",
+    "node scripts/m1a.mjs bench": "passed: 10000 metadata, 50000 search blocks, process and Electron samples",
+    "node scripts/m1a.mjs live": "recorded: LLM and ASR passed; Embedding not-run",
+    "M1A_REQUIRE_REPORT=1 node scripts/verify-m1a.mjs": "passed: report and fingerprints accepted"
+  },
+  "auditAssertions": {
+    "F-25-late-write": "passed",
+    "F-25-old-profile-authority": "passed",
+    "F-32-material-revision": "passed",
+    "F-32-disconnect-retry": "passed: notes remained 1"
+  },
+  "productAcceptance": "not signed; this file records technical re-verification only",
+  "remoteOperations": "none"
+}
