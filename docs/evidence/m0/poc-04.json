@@ -1,0 +1,58 @@
+{
+  "poc": "poc-04",
+  "cases": [
+    {
+      "caseId": "POC-04/ui-agent-same-command",
+      "poc": "POC-04",
+      "title": "UI and fake Agent share notes.create",
+      "status": "passed",
+      "expected": "ok",
+      "actual": {
+        "ui": "ok",
+        "agent": "ok",
+        "replay": true
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-04/start-stop-50",
+      "poc": "POC-04",
+      "title": "50 reader start/stop cycles without handle growth",
+      "status": "passed",
+      "expected": {
+        "subscription": 1,
+        "leases": 0
+      },
+      "actual": {
+        "subscription": 1,
+        "leases": 0
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-04/stale-epoch",
+      "poc": "POC-04",
+      "title": "deactivated module rejects in-flight sealed command",
+      "status": "passed",
+      "expected": "error",
+      "actual": "CAPABILITY_UNAVAILABLE",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-04/ipc-host",
+      "poc": "POC-04",
+      "title": "independent Node IPC host executes the same command",
+      "status": "passed",
+      "expected": "result",
+      "actual": {
+        "status": "ok",
+        "value": {
+          "objectId": "obj_42c611ea-e32e-43a4-95d9-4787e411fc7e",
+          "revision": 1
+        }
+      },
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T09:35:19.952Z"
+}

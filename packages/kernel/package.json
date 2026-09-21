@@ -1,0 +1,13 @@
+{
+  "name": "@manga/kernel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@manga/contracts": "workspace:*",
+    "@manga/plugin-sdk": "workspace:*"
+  }
+}

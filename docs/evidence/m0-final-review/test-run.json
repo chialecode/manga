@@ -1,0 +1,23 @@
+{
+  "status": "passed",
+  "at": "2026-09-19T13:32:36.358Z",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "files": [
+    "experiments\\m0\\src\\tests\\closure-r1-playback.test.ts",
+    "experiments\\m0\\src\\tests\\closure-r2-r6.test.ts",
+    "experiments\\m0\\src\\tests\\closure-r3-capture.test.ts",
+    "experiments\\m0\\src\\tests\\closure-review.test.ts",
+    "experiments\\m0\\src\\tests\\poc-01-location.test.ts",
+    "experiments\\m0\\src\\tests\\poc-02-capture.test.ts",
+    "experiments\\m0\\src\\tests\\poc-03-media.test.ts",
+    "experiments\\m0\\src\\tests\\poc-04-lifecycle.test.ts",
+    "experiments\\m0\\src\\tests\\poc-05-editor.test.ts",
+    "experiments\\m0\\src\\tests\\poc-06-storage.test.ts",
+    "experiments\\m0\\src\\tests\\poc-07-runtime.test.ts",
+    "experiments\\m0\\src\\tests\\poc-08-metadata.test.ts",
+    "experiments\\m0\\src\\tests\\poc-09-acquisition.test.ts",
+    "experiments\\m0\\src\\tests\\poc-contract-schema.test.ts",
+    "experiments\\m0\\src\\tests\\review-formats.test.ts",
+    "experiments\\m0\\src\\tests\\review-regressions.test.ts"
+  ]
+}

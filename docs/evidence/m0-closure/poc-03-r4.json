@@ -1,0 +1,52 @@
+{
+  "poc": "poc-03-r4",
+  "sourceFingerprint": "eb126a5981c913b5f836213c401a629a84f51a397ae41582712c0af81d2edc07",
+  "cases": [
+    {
+      "caseId": "POC-03/concat-copy",
+      "poc": "POC-03",
+      "title": "compatible MP4 copy-concat grows duration",
+      "status": "passed",
+      "expected": {
+        "compatible": true
+      },
+      "actual": {
+        "joinedMs": 8023,
+        "sourceMs": 4000
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-03/copy-cut-requested-vs-actual",
+      "poc": "POC-03",
+      "title": "lossless cut records requested vs actual duration",
+      "status": "passed",
+      "expected": {
+        "requestedMs": 1000
+      },
+      "actual": {
+        "durationMs": 1107,
+        "keyframeAligned": true
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-03/image-budget-long-rotate",
+      "poc": "POC-03",
+      "title": "long-form and rotated images are classified; oversize is rejected",
+      "status": "passed",
+      "expected": {
+        "longForm": true,
+        "rotation": 90,
+        "overBudget": true
+      },
+      "actual": {
+        "longForm": true,
+        "rotation": 90,
+        "overBudget": true
+      },
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T11:57:18.117Z"
+}

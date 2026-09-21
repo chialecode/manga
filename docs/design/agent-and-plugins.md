@@ -348,7 +348,15 @@ M4 的第三方方案需要在受限渲染环境、WASM、受约束 RPC 或操�
 
 ### 9.2 供应商适配
 
-OpenAI 兼容适配器作为首个候选实现。内部采用任务接口，不把请求路径、供应商消息格式和模型特有参数写入领域对象。具体端点和兼容差异在实现时用锁定版本与适配器契约测试确认。
+模型协议适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 `@earendil-works/pi-ai`；对应实时 ASR 传输使用 ws。它们留在服务侧适配器，不能接管工具授权、范围与修订保护，也不将供应商类型写入公共契约。具体模型/ASR 服务、凭据和材料范围继续由本节与 Q-05 管理。
+
+M1a 首批支持 OpenAI 格式，作为已确认要求。文本分别适配 Responses 与 Chat Completions 的消息、工具调用和流式事件；不得混用两套事件格式。文件转录独立适配 audio/transcriptions，使用 multipart 的 file/model 等接口字段，已完成录音可转为提供者支持的上传格式，原始录音保留。Realtime/WebSocket 转录是后续能力，不是文件转录的前置条件；不推导 TTS、图像生成或所有 OpenAI 接口已在首版范围。
+
+连接配置包含 base URI、credentialRef、协议模式、模型 ID、超时与支持的参数；文本和 speech.user 可分别绑定连接与模型。base URI 作为 API 根归一化，保留兼容服务路径前缀，不重复添加 /v1；连接测试显示最终基址，拒绝将凭据嵌入 URL。连接测试按能力分别执行，使用合成短文本/音频，不因可列模型就推定可调用工具或转录。兼容服务缺某接口时明确报缺失能力，不静默切换远端。
+
+内部任务接口不暴露供应商消息格式。API key 仅在受控服务适配器使用，UI/Agent 状态只提供是否配置与连接摘要。取消、限流、网络错误、流式工具参数累积与晚到结果均走统一运行状态和范围校验。可配置服务端存储选项时显式处理；不得把单个请求选项当作所有提供者的数据保留保证。
+
+协议依据：[OpenAI 文本接口迁移说明](https://developers.openai.com/api/docs/guides/migrate-to-responses)、[语音转录接口](https://developers.openai.com/api/docs/guides/speech-to-text)。实际 SDK 与兼容端点逐版本验证。
 
 本地端点和远程端点分别表达网络与数据授权。回退模型只能使用用户已允许的路由；本地模型失败不会自动把材料提交给未经授权的远程服务。
 
@@ -375,6 +383,8 @@ OpenAI 兼容适配器作为首个候选实现。内部采用任务接口，不�
 主要错误码包括 VALIDATION_ERROR、FORBIDDEN、CAPABILITY_UNAVAILABLE、REVISION_CONFLICT、RESOURCE_UNRESOLVED、UNSUPPORTED_FORMAT、MODEL_CAPABILITY_MISSING、AUTHENTICATION_FAILED、PROVIDER_UNAVAILABLE、RATE_LIMITED、BUDGET_EXCEEDED 和 CANCELLED。
 
 运行记录包含任务状态、工具 ID、输入摘要、目标修订、来源 ID、耗时、用量和结果对象。日志默认不记录密钥、整段原始录音或整本正文；调试材料采集需要明确开启并有清理方式。
+
+M1a 的 Agent 主页面和其他页面副驾驶共享 AgentSession/Run、上下文快照与工具调用服务。所有业务功能必须具有 Agent 可发现的查询/命令，UI 不得独占业务入口。系统文件选择器通过用户交互返回已授权目录句柄；模型不能模拟选择或读取明文凭据。功能验证使用真实已注册能力，不以未来模块的空实现满足覆盖。
 
 ## 12. 协议验收要求
 

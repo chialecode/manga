@@ -1,0 +1,48 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "at": "2026-09-19T13:32:32.078Z",
+  "mkv": {
+    "container": "matroska,webm",
+    "durationMs": 1023,
+    "video": {
+      "codec": "hevc",
+      "fps": 24,
+      "width": 160,
+      "height": 120,
+      "startMs": 0
+    },
+    "audio": {
+      "codec": "aac",
+      "channels": 1,
+      "startMs": 0
+    },
+    "subtitle": [
+      "ass"
+    ],
+    "keyframesMs": [
+      0
+    ]
+  },
+  "fractional": {
+    "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    "durationMs": 2002,
+    "video": {
+      "codec": "h264",
+      "fps": 29.97002997002997,
+      "width": 160,
+      "height": 120,
+      "startMs": 0
+    },
+    "subtitle": [],
+    "keyframesMs": [
+      0,
+      1000.9999999999999
+    ]
+  },
+  "vfrFrameIntervalsMs": [
+    67,
+    33
+  ],
+  "scope": "FFmpeg generation/probe only; Electron playback is recorded separately in media-electron.json; ASS rendering and multi-track switching remain unverified"
+}

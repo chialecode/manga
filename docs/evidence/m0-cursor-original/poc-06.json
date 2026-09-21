@@ -1,0 +1,90 @@
+{
+  "poc": "poc-06",
+  "cases": [
+    {
+      "caseId": "POC-06/cjk-search",
+      "poc": "POC-06",
+      "title": "CJK title/body/note/alias search hits",
+      "status": "passed",
+      "expected": {
+        "title": ">=1",
+        "body": ">=1",
+        "note": ">=1",
+        "ja": ">=1",
+        "filtered": 0
+      },
+      "actual": {
+        "title": 1,
+        "body": 1,
+        "note": 1,
+        "ja": 1,
+        "filtered": 0
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-06/second-host",
+      "poc": "POC-06",
+      "title": "second write host conflict",
+      "status": "passed",
+      "expected": "HOST_CONFLICT",
+      "actual": "HOST_CONFLICT",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-06/crash-before-commit",
+      "poc": "POC-06",
+      "title": "kill before commit leaves no operation",
+      "status": "passed",
+      "expected": null,
+      "actual": null,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-06/crash-after-commit",
+      "poc": "POC-06",
+      "title": "kill after commit keeps row and unpublished events",
+      "status": "passed",
+      "expected": "present",
+      "actual": {
+        "committed": true,
+        "unpublished": 1
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-06/bench-search",
+      "poc": "POC-06",
+      "title": "10k resources / 50k fragments search p95",
+      "status": "passed",
+      "expected": {
+        "p95TargetMs": 500
+      },
+      "actual": {
+        "p95Ms": 1,
+        "indexMs": 1131,
+        "n": 100
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-06/backup-unknown",
+      "poc": "POC-06",
+      "title": "backup round-trip keeps unknown module payload",
+      "status": "passed",
+      "expected": true,
+      "actual": true,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-06/package-smoke",
+      "poc": "POC-06",
+      "title": "Windows packed prototype smoke",
+      "status": "not-run",
+      "expected": "packed app starts with independent data dir",
+      "actual": "see m0 package command",
+      "kind": "filesystem"
+    }
+  ],
+  "at": "2026-09-19T09:35:29.686Z"
+}

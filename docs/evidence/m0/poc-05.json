@@ -1,0 +1,57 @@
+{
+  "poc": "poc-05",
+  "cases": [
+    {
+      "caseId": "POC-05/undo-block-id",
+      "poc": "POC-05",
+      "title": "block id stable across undo",
+      "status": "passed",
+      "expected": "b1",
+      "actual": "b1",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-05/ime-enter-guard",
+      "poc": "POC-05",
+      "title": "composition blocks Enter submit",
+      "status": "passed",
+      "expected": false,
+      "actual": false,
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-05/shared-source-instances",
+      "poc": "POC-05",
+      "title": "two layout instances share source, keep own position",
+      "status": "passed",
+      "expected": {
+        "source": "doc1",
+        "x2": 80
+      },
+      "actual": {
+        "source": "doc1",
+        "x2": 80
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-05/cycle-placeholder",
+      "poc": "POC-05",
+      "title": "cyclic embed detected",
+      "status": "passed",
+      "expected": "cycle",
+      "actual": "cycle",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-05/human-ime",
+      "poc": "POC-05",
+      "title": "real Chinese IME in Electron",
+      "status": "not-run",
+      "expected": "human checklist",
+      "actual": "waiting",
+      "kind": "human"
+    }
+  ],
+  "at": "2026-09-19T09:35:27.901Z"
+}

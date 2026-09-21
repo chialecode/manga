@@ -4,6 +4,7 @@
 
 | 模板 | 使用时机 | 建议产物位置 |
 | --- | --- | --- |
+| [Agent A / B 交接](agent-handoff.md) | A 制定计划、B 执行交付、A 审查/集中返工与用户审批 | 复用 `docs/delivery/` 计划和 `docs/evidence/` 交付/审查报告，不逐轮重复建档 |
 | [变更提案](change-proposal.md) | 新功能、跨模块行为或需比较方案 | 对应产品/设计目录下有明确名称的文档 |
 | [模块规格](module-spec.md) | 新模块/提供者、能力或生命周期重大变化 | 模块附近 README，或 `docs/design/` 的专题 |
 | [决定记录](decision-record.md) | 长期架构、选型、产品或治理决定 | `docs/decisions/NNNN-名称.md` |

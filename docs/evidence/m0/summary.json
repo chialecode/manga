@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-09-19T09:36:53.612Z",
+  "git": {
+    "commit": "a0b97796e193b1c3aa4fb62426550bb6c4c1a381",
+    "dirty": true,
+    "dirtyFingerprint": "7d4926775282"
+  },
+  "pocFiles": [
+    "poc-01.json",
+    "poc-02.json",
+    "poc-03.json",
+    "poc-04.json",
+    "poc-05.json",
+    "poc-06.json",
+    "poc-07.json",
+    "poc-08.json",
+    "poc-09.json"
+  ],
+  "automationStatus": "complete-with-human-gaps",
+  "m0Exit": "not-met",
+  "m1Entry": "not-met",
+  "reasons": [
+    "human microphone/IME evidence pending",
+    "windows prototype package not-run",
+    "real cross-volume not-run",
+    "technical ADRs remain proposed",
+    "baseline 4-core/16GiB device not measured"
+  ]
+}
