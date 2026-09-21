@@ -1,0 +1,31 @@
+{
+  "poc": "poc-02-r1",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "cases": [
+    {
+      "caseId": "POC-02/durationless-webm-indexed",
+      "poc": "POC-02",
+      "title": "durationless WebM is indexed without overwriting the original",
+      "status": "passed",
+      "expected": {
+        "originalUnchanged": true,
+        "durationFinite": true
+      },
+      "actual": {
+        "originalUnchanged": true,
+        "durationMs": 1208
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/capture-save-idempotent",
+      "poc": "POC-02",
+      "title": "lost save response retries the same capture identity",
+      "status": "passed",
+      "expected": 1,
+      "actual": 1,
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T13:32:24.588Z"
+}

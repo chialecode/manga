@@ -1,0 +1,48 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "962f1609ae0d2e6791fb723ce24cc259a6e3e0a464f42a7ff6cbf1d53b2eb61f",
+  "at": "2026-09-19T13:25:24.634Z",
+  "mkv": {
+    "container": "matroska,webm",
+    "durationMs": 1023,
+    "video": {
+      "codec": "hevc",
+      "fps": 24,
+      "width": 160,
+      "height": 120,
+      "startMs": 0
+    },
+    "audio": {
+      "codec": "aac",
+      "channels": 1,
+      "startMs": 0
+    },
+    "subtitle": [
+      "ass"
+    ],
+    "keyframesMs": [
+      0
+    ]
+  },
+  "fractional": {
+    "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    "durationMs": 2002,
+    "video": {
+      "codec": "h264",
+      "fps": 29.97002997002997,
+      "width": 160,
+      "height": 120,
+      "startMs": 0
+    },
+    "subtitle": [],
+    "keyframesMs": [
+      0,
+      1000.9999999999999
+    ]
+  },
+  "vfrFrameIntervalsMs": [
+    67,
+    33
+  ],
+  "scope": "FFmpeg generation/probe; Electron media playback and subtitle rendering not implemented"
+}

@@ -1,0 +1,40 @@
+{
+  "poc": "poc-08",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "cases": [
+    {
+      "caseId": "POC-08/cross-medium-ambiguity",
+      "poc": "POC-08",
+      "title": "same title across mediums stays needs_review",
+      "status": "passed",
+      "expected": "needs_review",
+      "actual": "needs_review",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-08/user-lock",
+      "poc": "POC-08",
+      "title": "user lock and explicit empty beat provider fields",
+      "status": "passed",
+      "expected": {
+        "title": "用户锁定标题",
+        "score": "empty"
+      },
+      "actual": {
+        "title": "用户锁定标题",
+        "score": "empty"
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-08/disable-providers",
+      "poc": "POC-08",
+      "title": "local edits survive provider disable",
+      "status": "passed",
+      "expected": "用户锁定标题",
+      "actual": "用户锁定标题",
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T13:32:30.963Z"
+}

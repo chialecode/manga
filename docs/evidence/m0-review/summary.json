@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-09-19T10:51:34.476Z",
+  "git": {
+    "commit": "a0b97796e193b1c3aa4fb62426550bb6c4c1a381",
+    "dirty": true,
+    "sourceFingerprint": "60522d6ea29db35e2c6b5634dd0c176edd493a6d2fe5d81d9920dca1dab3d66d"
+  },
+  "pocFiles": [
+    "poc-01.json",
+    "poc-02.json",
+    "poc-03.json",
+    "poc-04.json",
+    "poc-05.json",
+    "poc-06.json",
+    "poc-07.json",
+    "poc-08.json",
+    "poc-09.json"
+  ],
+  "automationStatus": "tested-subset-passed",
+  "checks": [
+    {
+      "file": "poc-01.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": []
+    },
+    {
+      "file": "poc-02.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": [
+        "POC-02/device-headset-speaker"
+      ]
+    },
+    {
+      "file": "poc-03.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": [
+        "POC-03/mkv-hevc-ass"
+      ]
+    },
+    {
+      "file": "poc-04.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": []
+    },
+    {
+      "file": "poc-05.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": [
+        "POC-05/human-ime"
+      ]
+    },
+    {
+      "file": "poc-06.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [
+        "POC-06/package-smoke"
+      ],
+      "pending": []
+    },
+    {
+      "file": "poc-07.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": []
+    },
+    {
+      "file": "poc-08.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": []
+    },
+    {
+      "file": "poc-09.json",
+      "stale": false,
+      "failed": false,
+      "resolvedExternally": [],
+      "pending": []
+    }
+  ],
+  "supplementary": {
+    "package": {
+      "status": "passed",
+      "stale": false
+    },
+    "bench": {
+      "status": "passed",
+      "stale": false
+    }
+  },
+  "m0Exit": "not-met",
+  "m1Entry": "not-met",
+  "reasons": [
+    "human microphone/IME evidence pending",
+    "technical ADRs remain proposed",
+    "automated subset does not prove the full POC acceptance matrix; consult review report"
+  ]
+}

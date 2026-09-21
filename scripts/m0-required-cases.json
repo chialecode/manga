@@ -1,0 +1,260 @@
+{
+  "poc-01-r2.json": [
+    {
+      "id": "POC-01/full-text-not-preview",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-01/locator-repeat-sentence",
+      "kind": "automated"
+    }
+  ],
+  "poc-01.json": [
+    {
+      "id": "POC-01/utf8-bom",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-01/emoji-cluster",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-01/duplicate-needs-review",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-01/epub-chapter",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-01/epub-reject",
+      "kind": "automated"
+    }
+  ],
+  "poc-02-r1.json": [
+    {
+      "id": "POC-02/durationless-webm-indexed",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/capture-save-idempotent",
+      "kind": "automated"
+    }
+  ],
+  "poc-02-r3.json": [
+    {
+      "id": "POC-02/sample-clock-excludes-permission",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/player-events-during-capture",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/asr-marker-keeps-request-focus",
+      "kind": "simulated"
+    },
+    {
+      "id": "POC-02/playback-progress-persisted",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/hardware-offset",
+      "kind": "human"
+    }
+  ],
+  "poc-02.json": [
+    {
+      "id": "POC-02/segment-on-resource-change",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/media-seek-split",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/asr-fixture",
+      "kind": "simulated"
+    },
+    {
+      "id": "POC-02/pause-and-seek-clock",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-02/asr-keeps-request-focus",
+      "kind": "simulated"
+    },
+    {
+      "id": "POC-02/device-headset-speaker",
+      "kind": "human"
+    }
+  ],
+  "poc-03-r4.json": [
+    {
+      "id": "POC-03/concat-copy",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-03/copy-cut-requested-vs-actual",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-03/image-budget-long-rotate",
+      "kind": "automated"
+    }
+  ],
+  "poc-03.json": [
+    {
+      "id": "POC-03/h264-aac-probe",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-03/copy-cut",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-03/reject-hevc-copy",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-03/cbz-order",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-03/mkv-hevc-ass",
+      "kind": "automated"
+    }
+  ],
+  "poc-04.json": [
+    {
+      "id": "POC-04/ui-agent-same-command",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-04/start-stop-50",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-04/stale-epoch",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-04/ipc-host",
+      "kind": "automated"
+    }
+  ],
+  "poc-05.json": [
+    {
+      "id": "POC-05/undo-block-id",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-05/ime-enter-guard",
+      "kind": "simulated"
+    },
+    {
+      "id": "POC-05/shared-source-instances",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-05/cycle-placeholder",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-05/human-ime",
+      "kind": "human"
+    }
+  ],
+  "poc-06.json": [
+    {
+      "id": "POC-06/cjk-search",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-06/second-host",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-06/crash-before-commit",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-06/crash-after-commit",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-06/bench-search",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-06/backup-unknown",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-06/package-smoke",
+      "kind": "filesystem"
+    }
+  ],
+  "poc-07.json": [
+    {
+      "id": "POC-07/many-providers",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-07/explicit-disable",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-07/reader-stop-keeps-data",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-07/activation-failure-cleanup",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-07/minimal-activator-leak",
+      "kind": "automated"
+    }
+  ],
+  "poc-08.json": [
+    {
+      "id": "POC-08/cross-medium-ambiguity",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-08/user-lock",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-08/disable-providers",
+      "kind": "automated"
+    }
+  ],
+  "poc-09.json": [
+    {
+      "id": "POC-09/idempotent-import",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-09/no-overwrite",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-09/redirect-private",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-09/quota-disk",
+      "kind": "simulated"
+    },
+    {
+      "id": "POC-09/remove-acquisition",
+      "kind": "automated"
+    },
+    {
+      "id": "POC-09/cross-volume",
+      "kind": "filesystem"
+    }
+  ]
+}

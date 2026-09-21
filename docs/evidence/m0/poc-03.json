@@ -1,0 +1,73 @@
+{
+  "poc": "poc-03",
+  "cases": [
+    {
+      "caseId": "POC-03/h264-aac-probe",
+      "poc": "POC-03",
+      "title": "generated MP4 H.264/AAC probe",
+      "status": "passed",
+      "expected": {
+        "video": "h264",
+        "audio": "aac"
+      },
+      "actual": {
+        "video": "h264",
+        "audio": "aac",
+        "durationMs": 4000
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-03/copy-cut",
+      "poc": "POC-03",
+      "title": "requested vs actual copy cut",
+      "status": "passed",
+      "expected": {
+        "requestedMs": 1000
+      },
+      "actual": {
+        "durationMs": 1107,
+        "plan": {
+          "requestedStartMs": 0,
+          "requestedEndMs": 2000,
+          "keyframeAligned": true,
+          "compatible": true
+        }
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-03/reject-hevc-copy",
+      "poc": "POC-03",
+      "title": "incompatible codec rejected for lossless cut",
+      "status": "passed",
+      "expected": false,
+      "actual": false,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-03/cbz-order",
+      "poc": "POC-03",
+      "title": "CBZ numeric order and duplicate names",
+      "status": "passed",
+      "expected": "numeric",
+      "actual": [
+        "1.png",
+        "2-dup.png",
+        "2.png",
+        "3.png"
+      ],
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-03/mkv-hevc-ass",
+      "poc": "POC-03",
+      "title": "MKV/HEVC/ASS matrix row",
+      "status": "not-run",
+      "expected": "sample not supplied",
+      "actual": "untested combination",
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T09:35:19.553Z"
+}

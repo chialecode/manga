@@ -1,0 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
+const root = path.dirname(fileURLToPath(import.meta.url));
+const outDir = path.join(root, "dist");
+fs.mkdirSync(outDir, { recursive: true });
+for (const file of ["main.cjs", "preload.cjs", "smoke.cjs"]) fs.copyFileSync(path.join(root, "src", file), path.join(outDir, file));
+fs.cpSync(path.join(root, "src/renderer"), path.join(outDir, "renderer"), { recursive: true });
+await build({ entryPoints: [path.join(root, "src/service-entry.ts")], bundle: true, platform: "node", target: "node24", format: "cjs", outfile: path.join(outDir, "service.cjs"), sourcemap: true });
+await build({ entryPoints: [path.join(root, "../m0/src/hosts/parse-worker.ts")], bundle: true, platform: "node", target: "node24", format: "cjs", outfile: path.join(outDir, "parse-worker.cjs"), sourcemap: true });
+console.log("Built isolated desktop, bundled service and parse worker");

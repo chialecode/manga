@@ -1,0 +1,36 @@
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+out/
+coverage/
+.cache/
+*.tsbuildinfo
+*.log
+
+# Private environment, credentials and runtime data
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+.local/
+.data/
+
+# Personal editor, agent and worktree state
+.idea/
+.vscode/
+.codex/
+.claude/
+.worktrees/
+*.swp
+*~
+.DS_Store
+Thumbs.db

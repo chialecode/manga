@@ -1,0 +1,10 @@
+{
+  "name": "@manga/m0-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.cjs",
+  "devDependencies": {
+    "electron": "37.4.0"
+  }
+}

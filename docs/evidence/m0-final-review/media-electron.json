@@ -1,0 +1,33 @@
+{
+  "status": "recorded",
+  "h264": {
+    "kind": "video",
+    "name": "h264-aac.mp4",
+    "mime": "video/mp4",
+    "canPlay": "maybe",
+    "duration": 4,
+    "currentTime": 0.231148,
+    "paused": false,
+    "status": "played"
+  },
+  "hevc": {
+    "kind": "hevc",
+    "name": "manga-m0-hevc-6248.mp4",
+    "mime": "video/mp4",
+    "canPlay": "maybe",
+    "duration": 1,
+    "currentTime": 0,
+    "paused": true,
+    "mediaError": "DECODER_ERROR_NOT_SUPPORTED: GetVideoDecoderConfigCount failed: 操作成功完成。 (0x0)",
+    "status": "rejected"
+  },
+  "image": {
+    "kind": "image",
+    "name": "p1.png",
+    "width": 1,
+    "height": 1,
+    "status": "played"
+  },
+  "at": "2026-09-19T13:31:51.258Z",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613"
+}

@@ -1,0 +1,36 @@
+{
+  "status": "passed",
+  "at": "2026-09-19T13:58:37.533Z",
+  "command": "node scripts/verify.mjs",
+  "exitCode": 0,
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "documents": 78,
+  "localLinks": 527,
+  "requirements": 69,
+  "acceptanceCases": 56,
+  "proofs": 9,
+  "publicationCounterexamples": {
+    "passed": 3,
+    "failed": 0
+  },
+  "reportCounterexamples": {
+    "passed": 1,
+    "failed": 0
+  },
+  "contractAndRepairTests": {
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": [
+    "script-syntax",
+    "json-syntax",
+    "documentation",
+    "publication",
+    "dependency-boundary",
+    "typescript",
+    "contract-and-repair-regressions",
+    "working-tree-and-index-diff"
+  ],
+  "note": "Records the completed repository-quality run; not a product or milestone acceptance. The 15 regression tests overlap the full 34-test M0 suite."
+}
