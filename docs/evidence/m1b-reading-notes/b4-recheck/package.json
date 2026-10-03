@@ -1,0 +1,70 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "d176cf572c4858bc09f184eaf52b84515dc1486b95d56c36345c0e3431367fdd",
+  "m1bSourceFingerprint": "630ebb11493363bd199750dd948b04aa571a71df5a5c1040cb605def01b7df83",
+  "lockFingerprint": "a6699b8bf09cba2192f10323919f96261298f3d188418c4b2c0e345af44ab192",
+  "testScriptFingerprint": "2ebe4d7e679ecb3475639665b992c95ace248b938fa0482bfa539889d6b6559a",
+  "buildScriptFingerprint": "cfc1d329bf09d049f8689c6e528563f15e58efb7cc23b20369c5388749fa6497",
+  "productAcceptance": "not-run",
+  "at": "2026-09-23T05:21:55.286Z",
+  "format": "unsigned local Electron package",
+  "electron": "37.4.0",
+  "output": "dist/desktop/packages/MANGA-win32-x64",
+  "smoke": [
+    "initial",
+    "restart",
+    "agent",
+    "agent-restart",
+    "reading",
+    "closure",
+    "closure-restart"
+  ],
+  "viewports": {
+    "wide": {
+      "innerWidth": 1280,
+      "innerHeight": 840,
+      "devicePixelRatio": 1.5
+    },
+    "narrow": {
+      "innerWidth": 720,
+      "innerHeight": 540,
+      "devicePixelRatio": 1.5
+    }
+  },
+  "closure": {
+    "readLastChapter": true,
+    "recordedNote": true,
+    "selectionAccurate": true,
+    "materialsFrozen": true,
+    "materialsFromUi": true,
+    "uiTailVisible": true,
+    "progressAtTail": true,
+    "uiRestoredTail": true,
+    "bookmarkHighlighted": true,
+    "sourceCardOk": true,
+    "restoredProgress": true,
+    "restoredSource": true,
+    "restoredMaterials": true,
+    "diagnostics": {
+      "noteEnabled": true,
+      "noteSurfaceOpened": true,
+      "noteSaved": true,
+      "noteTitle": "闭合样本第一章。chi-close-sel 开头标记。",
+      "selectionMs": 0.8999999761581421,
+      "selectedQuote": "chi-close-sel",
+      "excerpt": "chi-close-sel",
+      "quoteRange": {
+        "start": 8,
+        "end": 21
+      },
+      "readRangesBefore": 1,
+      "contextChars": 343
+    },
+    "timings": {
+      "importMs": 6,
+      "tailMs": 0,
+      "noteMs": 60,
+      "selectionMs": 0.8999999761581421
+    }
+  }
+}

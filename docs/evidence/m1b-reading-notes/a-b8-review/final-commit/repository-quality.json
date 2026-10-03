@@ -1,0 +1,17 @@
+{
+  "at": "2026-09-24T20:07:21.319Z",
+  "command": "node scripts/verify.mjs",
+  "exitCode": 0,
+  "status": "passed",
+  "productAcceptance": "not-run",
+  "independentReview": "rework-required",
+  "summary": [
+    "{\"check\":\"publication\",\"status\":\"passed\",\"files\":1332,\"snapshots\":2588,\"binarySnapshots\":1102}",
+    "{\"status\":\"passed\",\"check\":\"dependency-boundary\",\"errors\":0}",
+    " Test Files  16 passed | 1 skipped (17)",
+    "      Tests  94 passed | 4 skipped (98)",
+    " Test Files  13 passed | 1 skipped (14)",
+    "      Tests  114 passed | 2 skipped (116)",
+    "{\"status\":\"passed\",\"check\":\"repository-quality\",\"node\":\"24.19.0\"}"
+  ]
+}

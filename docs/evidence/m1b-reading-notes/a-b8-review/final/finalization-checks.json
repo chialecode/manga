@@ -1,0 +1,55 @@
+{
+  "at": "2026-09-24T20:01:08.251Z",
+  "status": "passed",
+  "scope": "final documentation/governance and publication checks after A-38/A-39/A-40",
+  "checks": [
+    {
+      "command": "node scripts/check-docs.mjs",
+      "exitCode": 0,
+      "summary": [
+        "{\"status\":\"passed\",\"documents\":90,\"localLinks\":944,\"requirements\":75,\"acceptanceCases\":62,\"proofs\":9}"
+      ]
+    },
+    {
+      "command": "node scripts/check-publication.mjs",
+      "exitCode": 0,
+      "summary": [
+        "{\"check\":\"publication\",\"status\":\"passed\",\"files\":1255,\"snapshots\":2355,\"binarySnapshots\":958}"
+      ]
+    },
+    {
+      "command": "node --test scripts/m1b-report.test.mjs",
+      "exitCode": 0,
+      "summary": [
+        "ℹ tests 9",
+        "ℹ suites 0",
+        "ℹ pass 9",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 115.1093"
+      ]
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0,
+      "summary": []
+    }
+  ],
+  "fingerprints": {
+    "sourceFingerprint": "db8c8f9e32ca981f0365d0d220a3649ab326497963babaa7a5f8dd021437614c",
+    "m1bSourceFingerprint": "dd3214b5a15d9f498a4141650db9b38c504a8b330e107a904eb2f8969191331d",
+    "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+    "testScriptFingerprint": "25f3a4d5c6a8a08b25dac17ff1232a8efe53c998cc79a4710544b4f98010d324",
+    "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1"
+  },
+  "matchFinalRuntimeEvidence": true,
+  "productImplementationUnchanged": true,
+  "previousEvidenceUnchanged": true,
+  "runtimeVerification": "reuse same-source final results; full verify.mjs exit 0, new independent review and verify-m1b.mjs exit 1",
+  "independentReview": "rework-required",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "finalDocCheckAt": "2026-09-24T20:02:26.998Z"
+}

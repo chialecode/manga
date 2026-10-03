@@ -1,0 +1,529 @@
+{
+  "at": "2026-09-24T20:07:21.279Z",
+  "current": {
+    "sourceFingerprint": "ce408c5c1875c6bddfd27cf13396a76735b5090c71a21449e4820ee0a08dd1f5",
+    "m1bSourceFingerprint": "61d27d2e08bd8fb851a8cc73403e8b72358181a2f40310e120d1a50c7c6d8dc1",
+    "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+    "testScriptFingerprint": "c9f7c6f4164d1dcbc994d5d3ffd9d6a89957a7268413ba20e59d6496fa43cd8f",
+    "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1"
+  },
+  "initialRunComparedToB": [
+    {
+      "file": "a-additional-ui-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-adversarial-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b5-deep-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b5-h-checks.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b6-deep-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b6-ui-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b7-deep-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b7-rework-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-b7-ui-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "a-ui-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "b2-ui-review.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "bench.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "cases.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "package.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "report.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "test-run.json",
+      "fields": [
+        {
+          "key": "sourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "m1bSourceFingerprint",
+          "equal": true
+        },
+        {
+          "key": "lockFingerprint",
+          "equal": true
+        },
+        {
+          "key": "testScriptFingerprint",
+          "equal": true
+        },
+        {
+          "key": "buildScriptFingerprint",
+          "equal": true
+        }
+      ],
+      "equal": true
+    }
+  ],
+  "finalEvidence": [
+    {
+      "file": "a-additional-ui-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-adversarial-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b5-deep-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b5-h-checks.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b6-deep-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b6-ui-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b7-deep-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b7-rework-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "a-b7-ui-review.json",
+      "current": true,
+      "packageMatches": true
+    },
+    {
+      "file": "a-b8-independent-review.json",
+      "current": true,
+      "packageMatches": true
+    },
+    {
+      "file": "a-ui-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "b2-ui-review.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "bench.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "cases.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "package.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "report.json",
+      "current": true,
+      "packageMatches": null
+    },
+    {
+      "file": "test-run.json",
+      "current": true,
+      "packageMatches": null
+    }
+  ],
+  "sourceIndexByteCheck": {
+    "count": 229,
+    "mismatches": []
+  },
+  "productGitContentUnchanged": true,
+  "earlierEvidenceUnchanged": true,
+  "m1aSourceMatches": true,
+  "normalizationOnly": [
+    "scripts/review-m1b-reading.mjs",
+    "tests/m1b/samples/external/manifest.json",
+    "tests/m1b/shell-ui.test.tsx"
+  ],
+  "newScriptTrailingWhitespaceRemoved": true,
+  "passed": true
+}

@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sourceFingerprint } from "../experiments/m0/src/report.ts";
 import { m1aSourceFingerprint } from "./m1a-fingerprint.mjs";
+import { desktopPackageDir, latestDesktopPackage } from "./desktop-paths.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 if (process.platform !== "win32") throw new Error("M1a package verification targets Windows x64");
@@ -17,7 +18,7 @@ const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform
   shell: true,
 });
 if (pnpm.status !== 0) process.exit(pnpm.status ?? 1);
-const outDir = path.join(root, "dist/m1a-package");
+const outDir = desktopPackageDir;
 const built = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((name) => name.startsWith("MANGA")) : undefined;
 if (!built) throw new Error("electron-forge package output missing");
 const appPath = path.join(outDir, built);
@@ -72,5 +73,5 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   output: path.relative(root, appPath).replaceAll("\\", "/"),
   smoke: ["initial", "restart", "agent", "agent-restart"],
 }, null, 2)}\n`);
-fs.writeFileSync(path.join(root, "dist/latest-m1a-package.json"), `${JSON.stringify({ target: appPath, profile }, null, 2)}\n`);
+fs.writeFileSync(latestDesktopPackage, `${JSON.stringify({ target: path.relative(root, appPath).replaceAll("\\", "/"), evidence: path.relative(root, evidence).replaceAll("\\", "/"), stage: "m1a", m1aSourceFingerprint: m1aSourceFingerprint(root) }, null, 2)}\n`);
 console.log(JSON.stringify({ status: "passed", check: "m1a-package", output: appPath }));

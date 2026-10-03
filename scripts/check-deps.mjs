@@ -14,22 +14,22 @@ const rules = [
   },
   {
     dir: "packages/plugin-sdk/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/],
     forbid: [/^@manga\/kernel/, /^@manga\/storage-sqlite/, /^electron$/],
   },
   {
     dir: "packages/kernel/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^@manga\/plugin-sdk$/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/],
     forbid: [/^@manga\/storage-sqlite/, /^electron$/],
   },
   {
     dir: "packages/storage-sqlite/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/],
     forbid: [/^@manga\/kernel/, /^electron$/],
   },
   {
     dir: "experiments/m0/src/domain",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^fflate$/, /^parse5$/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^fflate$/, /^parse5$/],
     forbid: [/^@manga\/kernel/, /^@manga\/storage-sqlite/, /^electron$/],
   },
   {
@@ -39,17 +39,17 @@ const rules = [
   },
   {
     dir: "packages/storage-drizzle/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^better-sqlite3$/, /^drizzle-orm/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^better-sqlite3$/, /^drizzle-orm/],
     forbid: [/^@manga\/kernel/, /^electron$/],
   },
   {
     dir: "packages/model-protocol/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^@earendil-works\/pi-ai/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@earendil-works\/pi-ai/],
     forbid: [/^@manga\/kernel/, /^electron$/],
   },
   {
     dir: "packages/app-core/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/],
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/],
     forbid: [/^electron$/],
   },
 ];

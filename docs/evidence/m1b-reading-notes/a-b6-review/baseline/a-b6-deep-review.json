@@ -1,0 +1,36 @@
+{
+  "at": "2026-09-24T15:21:45.171Z",
+  "sourceFingerprint": "ee43c6c4e2e86e4e7561349c6921cfabc04a6cdd96befd4efce8acee19e2b11f",
+  "m1bSourceFingerprint": "b7eb671651f2b9146cdafb7e064e252ef306ffb355b8a3fb11b3a41106c3b1f3",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "fb273e75128a475788bb96c98149e1331bb68f4fb6b928201f2c94ee424c3cdf",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "2e0a5303bb80c2ffb989d0b60e5b12c5d65022861fd848d9986f050a490811c7",
+  "status": "rework-required",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "skipping a note preserves the source resource of its existing anchor",
+      "status": "failed",
+      "actual": "the skipped note's existing anchor was retargeted to the duplicated resource\n+ actual - expected\n\n  {\n+   locator_json: '{\"kind\":\"text\",\"partId\":\"body\",\"representationId\":\"rev_fdc3b5ce-484f-408c-93e6-f6dc29c846c7\",\"normalizationVersion\":\"nfc-lf-codepoint-v1\",\"range\":{\"start\":0,\"end\":4},\"quote\":{\"exact\":\"甲乙丙丁\"}}',\n+   resource_id: 'res_9fe689d5-d03b-4c59-89a2-2b4e141566e3',\n+   resource_revision_id: 'rev_fdc3b5ce-484f-408c-93e6-f6dc29c846c7'\n-   locator_json: '{\"kind\":\"text\",\"partId\":\"body\",\"representationId\":\"rev_53eb0b33-d313-4de8-9b4e-6565475b4935\",\"normalizationVersion\":\"nfc-lf-codepoint-v1\",\"range\":{\"start\":0,\"end\":4},\"quote\":{\"exact\":\"甲乙丙丁\"}}',\n-   resource_id: 'res_ca397af8-292a-43a1-88d4-964fd9a9f7aa',\n-   resource_revision_id: 'rev_53eb0b33-d313-4de8-9b4e-6565475b4935'\n  }\n",
+      "detail": {
+        "sourcePreserved": false,
+        "sourceNowTargetsDuplicate": true
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "skipping a revision while duplicating a resource retains recoverable excerpt provenance",
+      "status": "failed",
+      "actual": "import erased the excerpt's anchor and reference instead of retaining a resolvable or repairable source",
+      "detail": {
+        "excerptTextKept": true,
+        "sourceAnchorKept": false,
+        "sourceReferenceCount": 0,
+        "originalAnchorStillExists": true
+      }
+    }
+  ]
+}

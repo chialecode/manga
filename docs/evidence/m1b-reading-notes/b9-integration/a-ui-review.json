@@ -1,0 +1,52 @@
+{
+  "localFixesStatus": "passed",
+  "reviewDisposition": "rework-required",
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "sourceFingerprint": "81785f68caa8968bcbace537ceac93c464b26c045133f43e841c6744c29fd6b9",
+  "m1bSourceFingerprint": "1bbe90fdad88434c161a0fb527738f7d3f7fc17c99accad4f4912fd01284c6d9",
+  "lockFingerprint": "1e2b3818348bf103defc5cea61fe188eb57f513d1bf277db483a30cdbf46c48b",
+  "testScriptFingerprint": "529cfff5f278226024b5283ea0a3f378f973d26218b8ec457f249a3cebcd15eb",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "ec11eed347e5f92329328442819620e4981cdc17434ac6bee3a6b661df623ab4",
+  "at": "2026-09-24T21:36:02.742Z",
+  "checks": [
+    "note identity and save target",
+    "reading to notes repeated twice",
+    "split at cursor after navigation",
+    "wide dock restore",
+    "360px narrow main panel",
+    "sidebar mode menu and Escape"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 840,
+      "dpr": 1.5,
+      "overflow": false,
+      "mainWidth": 678
+    },
+    {
+      "width": 360,
+      "height": 780,
+      "dpr": 1.5,
+      "overflow": false,
+      "mainWidth": 360
+    }
+  ],
+  "observations": [
+    {
+      "finding": "F-02",
+      "check": "selected range only",
+      "expected": {
+        "start": 4,
+        "end": 6
+      },
+      "actual": {
+        "start": 4,
+        "end": 6
+      },
+      "status": "passed"
+    }
+  ]
+}

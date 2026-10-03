@@ -3,7 +3,7 @@
 | 入口 | 负责内容 |
 | --- | --- |
 | [已确认决定](confirmed-decisions.md) | A 编号索引、有效决定与职责正本 |
-| [待决事项](open-questions.md) | 尚未解决的问题、技术选择及截止点 |
+| [待决定与待处理总表](open-questions.md) | 唯一当前入口：产品/技术决定、人工检查、配置/外部授权、非阻塞后续 loop；已有开发工作链接原计划 |
 | [ADR-0001：建立文档治理框架](0001-document-governance.md) | 本次文档组织与治理选择 |
 | [ADR-0002：本地验证优先的 GitHub 协作](0002-local-first-github.md) | 独立 Git 历史、必要 CI、单人维护 Ruleset 与低频操作 |
 | [ADR-0007：采用 基础技术栈](0007-technology-stack.md) | accepted：UI、编辑、存储驱动及对应工程基础；集成待验证 |

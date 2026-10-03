@@ -1,0 +1,69 @@
+{
+  "at": "2026-09-25T15:46:36.554Z",
+  "sourceFingerprint": "9472a7d8457e71766e4fcf5286710772f6e91046a1faf2af03e9e0907b6bd898",
+  "m1bSourceFingerprint": "a2ff6cab81a2d894243d4a5bc448f0156ae10c4d6e5397f3c970919cda62c126",
+  "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+  "testScriptFingerprint": "1082f8d54f3990cae84756fe20e53d224ca8b76a859f171d1756da7a00f81bc6",
+  "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7",
+  "package": {
+    "target": "dist/desktop/packages/MANGA-win32-x64",
+    "evidence": "docs/evidence/m1b-reading-notes/b11-pdfjs-text",
+    "stage": "m1b",
+    "sourceFingerprint": "9472a7d8457e71766e4fcf5286710772f6e91046a1faf2af03e9e0907b6bd898",
+    "m1bSourceFingerprint": "a2ff6cab81a2d894243d4a5bc448f0156ae10c4d6e5397f3c970919cda62c126",
+    "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+    "testScriptFingerprint": "1082f8d54f3990cae84756fe20e53d224ca8b76a859f171d1756da7a00f81bc6",
+    "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7"
+  },
+  "scriptFingerprint": "57d8b2628c47db71bd10ffd8ff26348116e938e3f995ed1bb87a7687d8106454",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-08",
+      "name": "search continuation stays filtered and opens the oldest match",
+      "status": "passed",
+      "detail": {
+        "listed": 115,
+        "unrelated": [],
+        "totalLabel": "全库共 115 本",
+        "oldestOpened": true,
+        "rowsAfterOpen": 115
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "visible PDF runs do not overlap after consecutive Tj",
+      "status": "passed",
+      "detail": {
+        "layer": "HELLOWORLD",
+        "ink": 396
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "white PDF text retains its fill over a black box",
+      "status": "passed",
+      "detail": {
+        "paint": {
+          "light": 189055,
+          "dark": 29909
+        }
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "EPUB author line height and alignment reach the visible text",
+      "status": "passed",
+      "detail": {
+        "computed": {
+          "color": "rgb(34, 51, 68)",
+          "lineHeight": "41.4px",
+          "fontSize": "18px",
+          "textAlign": "right"
+        }
+      }
+    }
+  ]
+}

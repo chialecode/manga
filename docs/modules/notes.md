@@ -3,13 +3,13 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.notes` / 笔记 / 开发者 |
-| 文档状态 / 实现状态 | M1a 提供可撤销创建/更新/撤销；完整块编辑器归 M1b |
+| 文档状态 / 实现状态 | M1b 已接块拆分/合并/移动/复制/替换、稳定 ID 和桌面编辑器；真实输入法仍待人工 |
 | 需求 / 阶段 / 设计依据 | NOTE-03、AGENT-03；M1a；[领域模型](../design/domain-model.md) |
-| 包与公开入口 | `packages/app-core`；命令 `notes.create`、`notes.update`、`notes.undo` |
+| 包与公开入口 | `packages/app-core` 与 `apps/desktop`；命令另有 `notes.get`、`notes.split`、`notes.merge`、`notes.move`、`notes.copy`、`notes.replace`、`notes.openSource` |
 
 ## 1. 责任与依赖
 
-拥有 `notes.document` 对象、修订历史和笔记检索投影。依赖 `manga.library`。无 Tiptap/CodeMirror；多块更新仍要求 `blockId`。
+拥有 `notes.document` 对象、修订历史和笔记检索投影。依赖 `manga.library`。桌面已有 Tiptap 与 CodeMirror 6 入口；两种视图同步、完整结构操作与源编辑 IME 仍有 [A 审查 F-03](../evidence/m1b-reading-notes-delivery.md#8-a-集中审查与返工) 缺口，不能视为完整编辑闭环；旧 schema v1 载荷保留到被编辑，读取时升到文档 schema 2。修订冲突返回候选且不覆盖。
 
 ## 2. 数据与公开能力
 
@@ -25,4 +25,4 @@ UI 与 Agent 共用同一命令。停用 notes 后旧工具返回 `CAPABILITY_UN
 
 ## 5. 验证与未决
 
-AT-09/10/49；完整结构撤销与跨块选区归 M1b。VOICE-07/08 的分段转录回顾与来源跳转在后续记录工作流中复用稳定的 Transcript/SourceLocator，不在 M1a 声称已实现。
+AT-09/10/49 的块拆分、复制和冲突候选有 M1b 合成测试。真实输入法、跨块选区和语音回顾仍 not-run。VOICE-07/08 不在本轮声称已实现。

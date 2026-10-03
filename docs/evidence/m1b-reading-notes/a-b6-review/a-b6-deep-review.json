@@ -1,0 +1,55 @@
+{
+  "at": "2026-09-24T15:32:34.874Z",
+  "sourceFingerprint": "bd307ec44f5279c9f15ee5d75ca393139026e7823409800a0a797623e0660e56",
+  "m1bSourceFingerprint": "e61ad20964063c4d7c36459f65dc77befb19561ef9dc128ff5950faa10e29960",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "fb273e75128a475788bb96c98149e1331bb68f4fb6b928201f2c94ee424c3cdf",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "82882e53d9c3a7b968b0f720b43b9b6331eeb158427bf4de94317682b8137494",
+  "status": "rework-required",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "skipping a note preserves the source resource of its existing anchor",
+      "status": "failed",
+      "actual": "the skipped note's existing anchor was retargeted to the duplicated resource\n+ actual - expected\n\n  {\n+   locator_json: '{\"kind\":\"text\",\"partId\":\"body\",\"representationId\":\"rev_3840ff2b-ba46-4b31-97db-00d40bb1c3c6\",\"normalizationVersion\":\"nfc-lf-codepoint-v1\",\"range\":{\"start\":0,\"end\":4},\"quote\":{\"exact\":\"甲乙丙丁\"}}',\n+   resource_id: 'res_6ef9b5fa-e9fb-4778-a0c3-b16232bdacfb',\n+   resource_revision_id: 'rev_3840ff2b-ba46-4b31-97db-00d40bb1c3c6'\n-   locator_json: '{\"kind\":\"text\",\"partId\":\"body\",\"representationId\":\"rev_9dcefc05-234c-4a00-9c38-afe33f2bd553\",\"normalizationVersion\":\"nfc-lf-codepoint-v1\",\"range\":{\"start\":0,\"end\":4},\"quote\":{\"exact\":\"甲乙丙丁\"}}',\n-   resource_id: 'res_a4be7774-b97b-40f7-9982-4ec489780055',\n-   resource_revision_id: 'rev_9dcefc05-234c-4a00-9c38-afe33f2bd553'\n  }\n",
+      "detail": {
+        "sourcePreserved": false,
+        "sourceNowTargetsDuplicate": true
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "skipping a revision while duplicating a resource retains recoverable excerpt provenance",
+      "status": "failed",
+      "actual": "import erased the excerpt's anchor and reference instead of retaining a resolvable or repairable source",
+      "detail": {
+        "excerptTextKept": true,
+        "sourceAnchorKept": false,
+        "sourceReferenceCount": 0,
+        "originalAnchorStillExists": true
+      }
+    },
+    {
+      "finding": "F-08",
+      "name": "a truncated library provides a continuation path for the oldest resource",
+      "status": "failed",
+      "actual": "resource 101 is absent from both available lists and neither provides a continuation cursor; the UI has no browse/search path to it",
+      "detail": {
+        "total": 101,
+        "listed": 100,
+        "oldestInInventory": false,
+        "oldestInReading": false,
+        "inventoryFields": [
+          "generatedAt",
+          "totals",
+          "items",
+          "cancelled"
+        ],
+        "continuation": false
+      }
+    }
+  ]
+}

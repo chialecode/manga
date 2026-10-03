@@ -2,7 +2,7 @@
 
 > 公开整理说明（2026-09-19）：设备标识与本机专属信息已脱敏；测试数据、状态和当时结论保留，未重新执行实验。文中的旧待决范围仅代表报告时点，当前决定见 [确认记录](../decisions/confirmed-decisions.md)。
 
-> 当前矩阵以[最终复核](2026-09-19-m0-closure-review.md)和 `m0-final-review/` 为准。旧 `m0-review`、`m0-closure` 保留历史边界；工作树包含未提交交付，不能假设其原文件已进入 Git 历史。
+> 当前矩阵以[最终复核](2026-09-19-m0-closure-review.md)和 `m0-final-review/` 为准。旧 `m0-review`、`m0-closure` 保留历史边界；工作树包含未提交交付，不能假设其原文件已进入 Git 历史。M1b 仓内 TXT/EPUB/MOBI/PDF 适配器见[阅读交付](m1b-reading-notes-delivery.md)，不改写本表单元格，也不把候选解析写成已验收。
 
 | 字段 | 内容 |
 | --- | --- |

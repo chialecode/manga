@@ -1,0 +1,1180 @@
+{
+  "at": "2026-09-25T16:20:40.650Z",
+  "sourceFingerprint": "44369144423f2360b9f3daba834890829caf9ce5e0df99f684a5416d2c0e2ee8",
+  "m1bSourceFingerprint": "8e36dccb67b6b9201fc09c89027d508f46d34d184985df58b7620def7bc48fcb",
+  "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+  "testScriptFingerprint": "3381dfaf8e3e2676f6c1bcfed37849ddd258068f94922786a897e222ffec4c2a",
+  "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7",
+  "status": "passed",
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "duplicate import preserves non-conflicting identities",
+      "status": "passed",
+      "evidence": "a-recheck-original.json"
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicated note payload and reference use the same remapped anchor",
+      "status": "passed",
+      "evidence": "a-recheck-original.json"
+    },
+    {
+      "finding": "F-09",
+      "name": "per-row skip of a conflicting anchor succeeds",
+      "status": "passed",
+      "evidence": "a-recheck-original.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "standard Flate RGB scan produces a browser-decodable image",
+      "status": "passed",
+      "evidence": "a-recheck-original.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "EPUB resolves a sibling image using a parent-relative path",
+      "status": "passed",
+      "evidence": "a-recheck-original.json"
+    },
+    {
+      "finding": "F-09",
+      "name": "replace anchor control",
+      "status": "passed",
+      "detail": {
+        "errorCode": null,
+        "contentUnchanged": false,
+        "attachmentsUnchanged": true,
+        "refBefore": {
+          "id": "ref_94210c46-f65a-4b5c-a5ba-9370e2e70040",
+          "from_object_id": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_2997f068-9804-4df9-875a-974614d11528",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.845Z"
+        },
+        "refAfter": {
+          "id": "ref_94210c46-f65a-4b5c-a5ba-9370e2e70040",
+          "from_object_id": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_2997f068-9804-4df9-875a-974614d11528",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.845Z"
+        },
+        "sourceBefore": {
+          "status": "resolved",
+          "text": "来源正文",
+          "codePointRange": {
+            "start": 0,
+            "end": 4
+          },
+          "utf16Range": {
+            "start": 0,
+            "end": 4
+          },
+          "resourceId": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+          "resourceRevisionId": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+          "partId": "body",
+          "kind": "text",
+          "anchorId": "anc_2997f068-9804-4df9-875a-974614d11528",
+          "locator": {
+            "kind": "text",
+            "partId": "body",
+            "representationId": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+            "normalizationVersion": "nfc-lf-codepoint-v1",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": {
+              "exact": "来源正文"
+            }
+          },
+          "card": {
+            "status": "resolved",
+            "resolution": "resolved",
+            "anchorId": "anc_2997f068-9804-4df9-875a-974614d11528",
+            "resourceId": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+            "title": "来源正文。第二段。",
+            "resourceRevisionId": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+            "partId": "body",
+            "kind": "text",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": "来源正文",
+            "available": true,
+            "revisionAvailable": true,
+            "hosted": false
+          },
+          "returnTo": {
+            "objectId": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+            "blockId": "quote"
+          }
+        },
+        "sourceAfter": {
+          "status": "resolved",
+          "text": "来源正文",
+          "codePointRange": {
+            "start": 0,
+            "end": 4
+          },
+          "utf16Range": {
+            "start": 0,
+            "end": 4
+          },
+          "resourceId": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+          "resourceRevisionId": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+          "partId": "body",
+          "kind": "text",
+          "anchorId": "anc_2997f068-9804-4df9-875a-974614d11528",
+          "locator": {
+            "kind": "text",
+            "partId": "body",
+            "representationId": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+            "normalizationVersion": "nfc-lf-codepoint-v1",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": {
+              "exact": "来源正文"
+            }
+          },
+          "card": {
+            "status": "resolved",
+            "resolution": "resolved",
+            "anchorId": "anc_2997f068-9804-4df9-875a-974614d11528",
+            "resourceId": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+            "title": "来源正文。第二段。",
+            "resourceRevisionId": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+            "partId": "body",
+            "kind": "text",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": "来源正文",
+            "available": true,
+            "revisionAvailable": true,
+            "hosted": false
+          },
+          "returnTo": {
+            "objectId": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+            "blockId": "quote"
+          }
+        },
+        "payload": {
+          "schemaVersion": 2,
+          "blocks": [
+            {
+              "id": "quote",
+              "type": "quote",
+              "text": "来源正文",
+              "anchorId": "anc_2997f068-9804-4df9-875a-974614d11528"
+            },
+            {
+              "id": "b1",
+              "type": "paragraph",
+              "text": "评论"
+            }
+          ]
+        },
+        "history": [
+          {
+            "revision": 1,
+            "payload": {
+              "schemaVersion": 2,
+              "blocks": [
+                {
+                  "id": "quote",
+                  "type": "quote",
+                  "text": "来源正文",
+                  "anchorId": "anc_2997f068-9804-4df9-875a-974614d11528"
+                },
+                {
+                  "id": "b1",
+                  "type": "paragraph",
+                  "text": "评论"
+                }
+              ]
+            }
+          }
+        ],
+        "refs": [
+          {
+            "id": "ref_94210c46-f65a-4b5c-a5ba-9370e2e70040",
+            "from_object_id": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+            "from_block_id": "quote",
+            "to_kind": "anchor",
+            "to_id": "anc_2997f068-9804-4df9-875a-974614d11528",
+            "mode": "snapshot",
+            "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+            "created_at": "2026-09-25T16:14:44.845Z"
+          }
+        ],
+        "anchors": [
+          {
+            "id": "anc_2997f068-9804-4df9-875a-974614d11528",
+            "resource_id": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+            "resource_revision_id": "rev_63275ad8-9b8d-4230-bb2a-d4ede8ee6d30",
+            "revisionOwner": "res_008c1525-73d5-4cb6-9713-baded18ada0a"
+          }
+        ],
+        "indices": [
+          {
+            "object_id": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+            "resource_id": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+            "resource_revision_id": null
+          },
+          {
+            "object_id": "obj_89981562-9263-4c4a-9c7d-bcf68fb6827f",
+            "resource_id": "res_008c1525-73d5-4cb6-9713-baded18ada0a",
+            "resource_revision_id": null
+          }
+        ],
+        "violations": []
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicate anchor retains payload/ref/history agreement",
+      "status": "passed",
+      "detail": {
+        "errorCode": "PUBLISH_CONFLICT",
+        "contentUnchanged": true,
+        "attachmentsUnchanged": true,
+        "refBefore": {
+          "id": "ref_cd45e706-89c2-4aeb-8dd1-ac4ffd1a1a8c",
+          "from_object_id": "obj_abb868cb-b4fa-48bd-8bb7-6fa83a0c922c",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_1d519aa2-0400-451c-a006-bd2f8e8b7a8e",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.879Z"
+        },
+        "refAfter": {
+          "id": "ref_cd45e706-89c2-4aeb-8dd1-ac4ffd1a1a8c",
+          "from_object_id": "obj_abb868cb-b4fa-48bd-8bb7-6fa83a0c922c",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_1d519aa2-0400-451c-a006-bd2f8e8b7a8e",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.879Z"
+        }
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicate resource and anchor keeps skipped ref revision owner",
+      "status": "passed",
+      "detail": {
+        "errorCode": "PUBLISH_CONFLICT",
+        "contentUnchanged": true,
+        "attachmentsUnchanged": true,
+        "refBefore": {
+          "id": "ref_6887ced2-5b2a-438f-b199-a52bed66c08a",
+          "from_object_id": "obj_85fa51b0-854f-407f-979a-e8cab601891e",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_86da760f-b1c7-471f-a757-01c2a1a13374",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.910Z"
+        },
+        "refAfter": {
+          "id": "ref_6887ced2-5b2a-438f-b199-a52bed66c08a",
+          "from_object_id": "obj_85fa51b0-854f-407f-979a-e8cab601891e",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_86da760f-b1c7-471f-a757-01c2a1a13374",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.910Z"
+        }
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicate resource with replaced anchor keeps skipped source identity",
+      "status": "passed",
+      "detail": {
+        "errorCode": null,
+        "contentUnchanged": false,
+        "attachmentsUnchanged": true,
+        "refBefore": {
+          "id": "ref_77aeaa10-8d51-4475-8daa-abfeb1f3f1d2",
+          "from_object_id": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.936Z"
+        },
+        "refAfter": {
+          "id": "ref_77aeaa10-8d51-4475-8daa-abfeb1f3f1d2",
+          "from_object_id": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+          "from_block_id": "quote",
+          "to_kind": "anchor",
+          "to_id": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+          "mode": "snapshot",
+          "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+          "created_at": "2026-09-25T16:14:44.936Z"
+        },
+        "sourceBefore": {
+          "status": "resolved",
+          "text": "来源正文",
+          "codePointRange": {
+            "start": 0,
+            "end": 4
+          },
+          "utf16Range": {
+            "start": 0,
+            "end": 4
+          },
+          "resourceId": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+          "resourceRevisionId": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+          "partId": "body",
+          "kind": "text",
+          "anchorId": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+          "locator": {
+            "kind": "text",
+            "partId": "body",
+            "representationId": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+            "normalizationVersion": "nfc-lf-codepoint-v1",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": {
+              "exact": "来源正文"
+            }
+          },
+          "card": {
+            "status": "resolved",
+            "resolution": "resolved",
+            "anchorId": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+            "resourceId": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+            "title": "来源正文。第二段。",
+            "resourceRevisionId": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+            "partId": "body",
+            "kind": "text",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": "来源正文",
+            "available": true,
+            "revisionAvailable": true,
+            "hosted": false
+          },
+          "returnTo": {
+            "objectId": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+            "blockId": "quote"
+          }
+        },
+        "sourceAfter": {
+          "status": "resolved",
+          "text": "来源正文",
+          "codePointRange": {
+            "start": 0,
+            "end": 4
+          },
+          "utf16Range": {
+            "start": 0,
+            "end": 4
+          },
+          "resourceId": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+          "resourceRevisionId": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+          "partId": "body",
+          "kind": "text",
+          "anchorId": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+          "locator": {
+            "kind": "text",
+            "partId": "body",
+            "representationId": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+            "normalizationVersion": "nfc-lf-codepoint-v1",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": {
+              "exact": "来源正文"
+            }
+          },
+          "card": {
+            "status": "resolved",
+            "resolution": "resolved",
+            "anchorId": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+            "resourceId": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+            "title": "来源正文。第二段。",
+            "resourceRevisionId": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+            "partId": "body",
+            "kind": "text",
+            "range": {
+              "start": 0,
+              "end": 4
+            },
+            "quote": "来源正文",
+            "available": true,
+            "revisionAvailable": true,
+            "hosted": false
+          },
+          "returnTo": {
+            "objectId": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+            "blockId": "quote"
+          }
+        },
+        "payload": {
+          "schemaVersion": 2,
+          "blocks": [
+            {
+              "id": "quote",
+              "type": "quote",
+              "text": "来源正文",
+              "anchorId": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51"
+            },
+            {
+              "id": "b1",
+              "type": "paragraph",
+              "text": "评论"
+            }
+          ]
+        },
+        "history": [
+          {
+            "revision": 1,
+            "payload": {
+              "schemaVersion": 2,
+              "blocks": [
+                {
+                  "id": "quote",
+                  "type": "quote",
+                  "text": "来源正文",
+                  "anchorId": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51"
+                },
+                {
+                  "id": "b1",
+                  "type": "paragraph",
+                  "text": "评论"
+                }
+              ]
+            }
+          }
+        ],
+        "refs": [
+          {
+            "id": "ref_77aeaa10-8d51-4475-8daa-abfeb1f3f1d2",
+            "from_object_id": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+            "from_block_id": "quote",
+            "to_kind": "anchor",
+            "to_id": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+            "mode": "snapshot",
+            "instance_layout_json": "{\"marker\":\"local-after-export\"}",
+            "created_at": "2026-09-25T16:14:44.936Z"
+          }
+        ],
+        "anchors": [
+          {
+            "id": "anc_48e3d38e-1eaf-4d0d-8d70-3bd3959aee51",
+            "resource_id": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+            "resource_revision_id": "rev_1f9069b5-27c2-479f-b593-ba0dfd4d3748",
+            "revisionOwner": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf"
+          }
+        ],
+        "indices": [
+          {
+            "object_id": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+            "resource_id": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+            "resource_revision_id": null
+          },
+          {
+            "object_id": "obj_ea5f2076-94c2-4910-8ea5-1b4ea1a9fc90",
+            "resource_id": "res_303c8e5b-c19b-4520-ab2c-7ddeee23e7cf",
+            "resource_revision_id": null
+          }
+        ],
+        "violations": []
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "embedded font and substitute font stay distinct",
+      "status": "passed",
+      "detail": {
+        "substituteHasFontFile": false,
+        "embeddedHasFontFile": true,
+        "substituteText": "EMBED",
+        "embeddedText": "EMBED",
+        "substituteInk": 1233,
+        "embeddedInk": 1621,
+        "sameRaster": false
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "development server serves pdf.js assets from the local package",
+      "status": "passed",
+      "detail": {
+        "origin": "http://127.0.0.1:5173/",
+        "samples": [
+          {
+            "sample": "cmaps/78-EUC-H.bcmap",
+            "status": 200,
+            "bytes": 2404,
+            "host": "127.0.0.1"
+          },
+          {
+            "sample": "standard_fonts/LiberationSans-Regular.ttf",
+            "status": 200,
+            "bytes": 139512,
+            "host": "127.0.0.1"
+          },
+          {
+            "sample": "wasm/jbig2.wasm",
+            "status": 200,
+            "bytes": 104852,
+            "host": "127.0.0.1"
+          }
+        ],
+        "traversalStatus": 404
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "old revision ambiguity stays needs review and a missing original keeps the note",
+      "status": "passed",
+      "detail": {
+        "reviewStatus": "needs_review",
+        "originalAvailable": false,
+        "revisionId": "rev_dcf80d73-7d38-4bc2-b2da-ea40781d8ffe"
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "pdf parse cancel disable and release stay on the current generation",
+      "status": "passed",
+      "detail": {
+        "generationBefore": 0,
+        "generationAfterDisable": 1,
+        "reread": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "packaged single excerpt and source highlight",
+      "status": "passed",
+      "detail": {
+        "layer": "FIRST LINE",
+        "selection": {
+          "quote": "FIRST LINE",
+          "prefix": "",
+          "html": "<span role=\"presentation\" dir=\"ltr\" data-piece-index=\"0\" data-cp-start=\"0\" data-cp-end=\"10\" style=\"left: 12.5%; top: 15.67%; --font-height: 20.00px; font-family: monospace; --scale-x: 1.2001299586129568;\">FIRST LINE</span>"
+        },
+        "saved": {
+          "status": "ok",
+          "value": [
+            {
+              "objectId": "obj_c2130d1d-22b8-40a7-bf2a-4aacb96caea7",
+              "revision": 1,
+              "title": "FIRST LINE",
+              "tags": [],
+              "preview": "FIRST LINE",
+              "resourceId": "res_25514984-fa70-47e4-8b13-98dc3de60833",
+              "anchorId": "anc_588f4979-d46c-47c1-ad12-500ac8dcbd26",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:46.333Z"
+            }
+          ]
+        },
+        "highlights": [
+          "FIRST LINE"
+        ],
+        "sourceStatus": "resolved",
+        "returnedToNote": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "packaged multiline excerpt and source highlight",
+      "status": "passed",
+      "detail": {
+        "layer": "FIRST LINE\n\n\nSECOND LINE\n\n\nTHIRD LINE",
+        "selection": {
+          "quote": "SECOND LINE",
+          "prefix": "FIRST LINE",
+          "html": "<span role=\"presentation\" dir=\"ltr\" data-piece-index=\"0\" data-cp-start=\"0\" data-cp-end=\"10\" style=\"left: 12.5%; top: 15.67%; --font-height: 20.00px; font-family: monospace; --scale-x: 1.2001299586129568;\">FIRST LINE</span><br role=\"presentation\"><span role=\"presentation\" dir=\"ltr\" data-piece-index=\"1\" data-cp-start=\"11\" data-cp-end=\"22\" style=\"left: 12.5%; top: 21.67%; --font-height: 20.00px; font-family: monospace; --scale-x: 1.2001299586129568;\">SECOND LINE</span><br role=\"presentation\"><span role=\"presentation\" dir=\"ltr\" data-piece-index=\"2\" data-cp-start=\"23\" data-cp-end=\"33\" style=\"left: 12.5%; top: 27.67%; --font-height: 20.00px; font-family: monospace; --scale-x: 1.2001299586129568;\">THIRD LINE</span>"
+        },
+        "saved": {
+          "status": "ok",
+          "value": [
+            {
+              "objectId": "obj_43396675-0df2-47cd-8c5a-06505bfc2402",
+              "revision": 1,
+              "title": "FIRST LINE",
+              "tags": [],
+              "preview": "SECOND LINE",
+              "resourceId": "res_6606841f-8a2e-41a2-973c-cb48e051b7a3",
+              "anchorId": "anc_4ab309e6-67b3-49af-8189-be99a846194c",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:46.731Z"
+            },
+            {
+              "objectId": "obj_c2130d1d-22b8-40a7-bf2a-4aacb96caea7",
+              "revision": 1,
+              "title": "FIRST LINE",
+              "tags": [],
+              "preview": "FIRST LINE",
+              "resourceId": "res_25514984-fa70-47e4-8b13-98dc3de60833",
+              "anchorId": "anc_588f4979-d46c-47c1-ad12-500ac8dcbd26",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:46.333Z"
+            }
+          ]
+        },
+        "highlights": [
+          "SECOND LINE"
+        ],
+        "sourceStatus": "resolved",
+        "returnedToNote": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "text-layer hit area follows Canvas glyph scale",
+      "status": "passed",
+      "detail": {
+        "geometry": {
+          "fontSize": "30.85px",
+          "transform": "matrix(1.20013, 0, 0, 1, 0, 0)",
+          "canvasWidth": 617,
+          "actualWidth": 185.1075439453125,
+          "expectedWidth": 185.1,
+          "actualLeft": 333.4583435058594,
+          "expectedLeft": 333.4583435058594,
+          "scale": 1.5425
+        }
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "zoom and the next page keep the text-layer hit area",
+      "status": "passed",
+      "detail": {
+        "zoomed": {
+          "fontSize": "38.5625px",
+          "transform": "matrix(1.20008, 0, 0, 1, 0, 0)",
+          "canvasWidth": 772,
+          "actualWidth": 231.37753295898438,
+          "expectedWidth": 231.6,
+          "actualLeft": 352.7083435058594,
+          "expectedLeft": 352.8333435058594,
+          "scale": 1.93,
+          "canvasGrew": true
+        },
+        "pageOne": {
+          "fontSize": "30.85px",
+          "transform": "matrix(1.20013, 0, 0, 1, 0, 0)",
+          "canvasWidth": 617,
+          "actualWidth": 185.1075439453125,
+          "expectedWidth": 185.1,
+          "actualLeft": 333.4583435058594,
+          "expectedLeft": 333.4583435058594,
+          "scale": 1.5425
+        },
+        "pageTwo": {
+          "fontSize": "30.85px",
+          "transform": "matrix(1.20013, 0, 0, 1, 0, 0)",
+          "canvasWidth": 617,
+          "actualWidth": 148.091064453125,
+          "expectedWidth": 148.07999999999998,
+          "actualLeft": 333.4583435058594,
+          "expectedLeft": 333.4583435058594,
+          "scale": 1.5425
+        }
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "new PDF multiline selection has a usable locator",
+      "status": "passed",
+      "detail": {
+        "selection": {
+          "quote": "FIRST LINESECOND LINE",
+          "innerText": "FIRST LINE\n\n\nSECOND LINE\n\n\nTHIRD LINE"
+        },
+        "enabled": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "new PDF repeated selection has a usable locator",
+      "status": "passed",
+      "detail": {
+        "selection": {
+          "quote": "REPEAT",
+          "innerText": "REPEAT\n\n\nREPEAT"
+        },
+        "enabled": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "mouse drag selects a line with Chinese, emoji, NFC and spaces",
+      "status": "passed",
+      "detail": {
+        "boxes": [
+          {
+            "text": "中文",
+            "x": 404.40625,
+            "y": 725.15625,
+            "width": 49.364585876464844,
+            "height": 24.67708396911621
+          },
+          {
+            "text": " ",
+            "x": 453.7708435058594,
+            "y": 725.15625,
+            "width": 12.34375,
+            "height": 24.67708396911621
+          },
+          {
+            "text": "😀",
+            "x": 478.44793701171875,
+            "y": 725.15625,
+            "width": 24.68660545349121,
+            "height": 24.67708396911621
+          },
+          {
+            "text": " ",
+            "x": 503.125,
+            "y": 725.15625,
+            "width": 12.34375,
+            "height": 24.67708396911621
+          },
+          {
+            "text": "é",
+            "x": 527.8125,
+            "y": 725.15625,
+            "width": 24.6875,
+            "height": 24.67708396911621
+          }
+        ],
+        "selected": "摘录：中文 😀 é",
+        "highlights": [
+          "中文",
+          " ",
+          "😀",
+          " ",
+          "é"
+        ],
+        "returnedToNote": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "mouse drag across lines keeps the end-of-line in the quote",
+      "status": "passed",
+      "detail": {
+        "boxes": [
+          {
+            "text": "甲行",
+            "x": 404.40625,
+            "y": 725.15625,
+            "width": 49.364585876464844,
+            "height": 24.67708396911621
+          },
+          {
+            "text": "乙行",
+            "x": 404.40625,
+            "y": 758.03125,
+            "width": 49.364585876464844,
+            "height": 24.67708396911621
+          }
+        ],
+        "selected": "摘录：甲行\n乙行",
+        "saved": {
+          "status": "ok",
+          "value": [
+            {
+              "objectId": "obj_34cdaf3c-d49d-4dda-a43f-25595f63e787",
+              "revision": 1,
+              "title": "甲行",
+              "tags": [],
+              "preview": "甲行\n乙行",
+              "resourceId": "res_3e96dc9b-c46b-400a-a5b4-4eac2c8b68d1",
+              "anchorId": "anc_b8ad709c-c2f0-41bf-a7a7-8624b26b476d",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:48.788Z"
+            },
+            {
+              "objectId": "obj_a8134b5b-d3e8-49c2-a7c0-2084ae882c73",
+              "revision": 1,
+              "title": "中文 😀 é",
+              "tags": [],
+              "preview": "中文 😀 é",
+              "resourceId": "res_6e46a9e2-3e34-40d4-b212-1b106301fdf6",
+              "anchorId": "anc_2934ca51-8466-41b0-b390-6ec6c745f2b5",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:48.288Z"
+            },
+            {
+              "objectId": "obj_43396675-0df2-47cd-8c5a-06505bfc2402",
+              "revision": 1,
+              "title": "FIRST LINE",
+              "tags": [],
+              "preview": "SECOND LINE",
+              "resourceId": "res_6606841f-8a2e-41a2-973c-cb48e051b7a3",
+              "anchorId": "anc_4ab309e6-67b3-49af-8189-be99a846194c",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:46.731Z"
+            },
+            {
+              "objectId": "obj_c2130d1d-22b8-40a7-bf2a-4aacb96caea7",
+              "revision": 1,
+              "title": "FIRST LINE",
+              "tags": [],
+              "preview": "FIRST LINE",
+              "resourceId": "res_25514984-fa70-47e4-8b13-98dc3de60833",
+              "anchorId": "anc_588f4979-d46c-47c1-ad12-500ac8dcbd26",
+              "sourceStatus": "linked",
+              "updatedAt": "2026-09-25T16:14:46.333Z"
+            }
+          ]
+        },
+        "highlights": [
+          "甲行",
+          "乙行"
+        ],
+        "returnedToNote": true
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "scan page paints nonblank Canvas and has no selectable text",
+      "status": "passed",
+      "detail": {
+        "canvas": {
+          "width": 300,
+          "height": 150,
+          "dark": 45000
+        },
+        "layer": ""
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "late original bytes cannot replace the current book",
+      "status": "passed",
+      "detail": {
+        "sessionBefore": {
+          "id": "session-open-ses_b09ff709-2aee-45ca-afd6-917d986001f3",
+          "title": "REPEAT · 资料 · 0"
+        },
+        "before": "REPEAT\n\n\nREPEAT",
+        "after": "REPEAT\n\n\nREPEAT",
+        "sessionAfter": {
+          "id": "session-open-ses_b09ff709-2aee-45ca-afd6-917d986001f3",
+          "title": "REPEAT · 资料 · 0"
+        },
+        "activeTitle": "REPEAT"
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "late original failure cannot clear the current book or its session",
+      "status": "passed",
+      "detail": {
+        "sessionBefore": {
+          "id": "session-open-ses_b09ff709-2aee-45ca-afd6-917d986001f3",
+          "title": "REPEAT · 资料 · 0"
+        },
+        "sessionBeforeRelease": {
+          "id": "session-open-ses_b09ff709-2aee-45ca-afd6-917d986001f3",
+          "title": "REPEAT · 资料 · 0"
+        },
+        "after": "REPEAT\n\n\nREPEAT",
+        "canvasWidth": 617,
+        "sessionAfter": {
+          "id": "session-open-ses_b09ff709-2aee-45ca-afd6-917d986001f3",
+          "title": "REPEAT · 资料 · 0"
+        },
+        "epoch": "1"
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "packaged PDF runs without HTTP or HTTPS",
+      "status": "passed",
+      "detail": {
+        "packagedAsset": true,
+        "blockedRequests": []
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "persisted PDF excerpts equal the selected quotes",
+      "status": "passed",
+      "detail": {
+        "objects": [
+          {
+            "id": "obj_c2130d1d-22b8-40a7-bf2a-4aacb96caea7",
+            "payload": {
+              "schemaVersion": 2,
+              "blocks": [
+                {
+                  "id": "quote",
+                  "type": "quote",
+                  "text": "FIRST LINE",
+                  "anchorId": "anc_588f4979-d46c-47c1-ad12-500ac8dcbd26"
+                },
+                {
+                  "id": "b1",
+                  "type": "paragraph",
+                  "text": "FIRST LINE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "obj_43396675-0df2-47cd-8c5a-06505bfc2402",
+            "payload": {
+              "schemaVersion": 2,
+              "blocks": [
+                {
+                  "id": "quote",
+                  "type": "quote",
+                  "text": "SECOND LINE",
+                  "anchorId": "anc_4ab309e6-67b3-49af-8189-be99a846194c"
+                },
+                {
+                  "id": "b1",
+                  "type": "paragraph",
+                  "text": "SECOND LINE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "obj_a8134b5b-d3e8-49c2-a7c0-2084ae882c73",
+            "payload": {
+              "schemaVersion": 2,
+              "blocks": [
+                {
+                  "id": "quote",
+                  "type": "quote",
+                  "text": "中文 😀 é",
+                  "anchorId": "anc_2934ca51-8466-41b0-b390-6ec6c745f2b5"
+                },
+                {
+                  "id": "b1",
+                  "type": "paragraph",
+                  "text": "中文 😀 é"
+                }
+              ]
+            }
+          },
+          {
+            "id": "obj_34cdaf3c-d49d-4dda-a43f-25595f63e787",
+            "payload": {
+              "schemaVersion": 2,
+              "blocks": [
+                {
+                  "id": "quote",
+                  "type": "quote",
+                  "text": "甲行\n乙行",
+                  "anchorId": "anc_b8ad709c-c2f0-41bf-a7a7-8624b26b476d"
+                },
+                {
+                  "id": "b1",
+                  "type": "paragraph",
+                  "text": "甲行\n乙行"
+                }
+              ]
+            }
+          }
+        ],
+        "anchors": [
+          {
+            "id": "anc_588f4979-d46c-47c1-ad12-500ac8dcbd26",
+            "resource_id": "res_25514984-fa70-47e4-8b13-98dc3de60833",
+            "resource_revision_id": "rev_7819d4ad-c91b-4bf1-9773-452708b630cc",
+            "locator_json": "{\"kind\":\"text\",\"partId\":\"page-1\",\"representationId\":\"rev_7819d4ad-c91b-4bf1-9773-452708b630cc\",\"normalizationVersion\":\"text-nfc-lf-v1\",\"range\":{\"start\":0,\"end\":10},\"quote\":{\"exact\":\"FIRST LINE\"}}",
+            "preview_json": "{\"text\":\"FIRST LINE\"}",
+            "created_at": "2026-09-25T16:14:46.333Z"
+          },
+          {
+            "id": "anc_4ab309e6-67b3-49af-8189-be99a846194c",
+            "resource_id": "res_6606841f-8a2e-41a2-973c-cb48e051b7a3",
+            "resource_revision_id": "rev_f57dd042-0bb1-4a55-981a-523b3d4f46d4",
+            "locator_json": "{\"kind\":\"text\",\"partId\":\"page-1\",\"representationId\":\"rev_f57dd042-0bb1-4a55-981a-523b3d4f46d4\",\"normalizationVersion\":\"text-nfc-lf-v1\",\"range\":{\"start\":11,\"end\":22},\"quote\":{\"exact\":\"SECOND LINE\"}}",
+            "preview_json": "{\"text\":\"SECOND LINE\"}",
+            "created_at": "2026-09-25T16:14:46.731Z"
+          },
+          {
+            "id": "anc_2934ca51-8466-41b0-b390-6ec6c745f2b5",
+            "resource_id": "res_6e46a9e2-3e34-40d4-b212-1b106301fdf6",
+            "resource_revision_id": "rev_f5b8aaed-4a2d-44d8-9abc-4173bc8f40c0",
+            "locator_json": "{\"kind\":\"text\",\"partId\":\"page-1\",\"representationId\":\"rev_f5b8aaed-4a2d-44d8-9abc-4173bc8f40c0\",\"normalizationVersion\":\"text-nfc-lf-v1\",\"range\":{\"start\":0,\"end\":6},\"quote\":{\"exact\":\"中文 😀 é\"}}",
+            "preview_json": "{\"text\":\"中文 😀 é\"}",
+            "created_at": "2026-09-25T16:14:48.288Z"
+          },
+          {
+            "id": "anc_b8ad709c-c2f0-41bf-a7a7-8624b26b476d",
+            "resource_id": "res_3e96dc9b-c46b-400a-a5b4-4eac2c8b68d1",
+            "resource_revision_id": "rev_61b498cd-5831-42af-a3e8-b1aabd5dca4c",
+            "locator_json": "{\"kind\":\"text\",\"partId\":\"page-1\",\"representationId\":\"rev_61b498cd-5831-42af-a3e8-b1aabd5dca4c\",\"normalizationVersion\":\"text-nfc-lf-v1\",\"range\":{\"start\":0,\"end\":5},\"quote\":{\"exact\":\"甲行\\n乙行\"}}",
+            "preview_json": "{\"text\":\"甲行\\n乙行\"}",
+            "created_at": "2026-09-25T16:14:48.788Z"
+          }
+        ],
+        "sources": [
+          {
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "quote": "FIRST LINE"
+          },
+          {
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "quote": "SECOND LINE"
+          },
+          {
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "quote": "中文 😀 é"
+          },
+          {
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "quote": "甲行\n乙行"
+          }
+        ]
+      },
+      "evidence": "a-pdfjs-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "late original after leaving reading cannot rebind the selected note session",
+      "status": "passed",
+      "detail": {
+        "before": {
+          "id": "session-open-ses_0e0e5164-7f2b-476b-81cd-8342e4b5392a",
+          "title": "Independent note target · 笔记 · 0"
+        },
+        "after": {
+          "id": "session-open-ses_0e0e5164-7f2b-476b-81cd-8342e4b5392a",
+          "title": "Independent note target · 笔记 · 0"
+        },
+        "noteTitle": "Independent note target"
+      },
+      "evidence": "a-supplemental-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "late getTextContent cannot replace the current page text layer after task destruction",
+      "status": "passed",
+      "detail": {
+        "destroyBeforeSwitch": 2,
+        "destroyAfterSwitch": 3,
+        "before": "PAGE TWO",
+        "after": "PAGE TWO",
+        "currentTitle": "FIRST LINE"
+      },
+      "evidence": "a-supplemental-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "different stored representation oldUnique preserves quote placement without rewriting revision",
+      "status": "passed",
+      "detail": {
+        "cardStatus": "resolved",
+        "highlights": [
+          "SECOND LINE"
+        ],
+        "needsReview": 0
+      },
+      "evidence": "a-supplemental-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "different stored representation oldAmbiguous preserves quote placement without rewriting revision",
+      "status": "passed",
+      "detail": {
+        "cardStatus": "resolved",
+        "highlights": [],
+        "needsReview": 1
+      },
+      "evidence": "a-supplemental-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "old representations anchors notes and histories survive reopening unchanged",
+      "status": "passed",
+      "detail": {
+        "unchanged": [
+          "oldUnique",
+          "oldAmbiguous"
+        ]
+      },
+      "evidence": "a-supplemental-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "in-flight PDF parse observes cancellation after entry",
+      "status": "passed",
+      "detail": {
+        "enteredBeforeCancel": true,
+        "result": "CANCELLED"
+      },
+      "evidence": "a-supplemental-review.json"
+    },
+    {
+      "finding": "F-07",
+      "name": "disable cancels an in-flight PDF import and re-enable starts a fresh worker",
+      "status": "passed",
+      "detail": {
+        "generationAdvanced": true,
+        "newWorker": true,
+        "oldWorkerExited": true,
+        "lateResult": {
+          "status": "error",
+          "code": "CANCELLED"
+        },
+        "resourcesBeforeFreshImport": 0,
+        "freshImport": true
+      },
+      "evidence": "a-supplemental-review.json"
+    }
+  ]
+}

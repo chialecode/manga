@@ -32,6 +32,14 @@ export const InventoryOverviewSchema = z.object({
     bytes: z.number().int().nonnegative(),
   })),
   items: z.array(InventoryItemSchema),
+  // Resource rows beyond the bounded page stay reachable: the cursor names the first row after the page.
+  pagination: z.object({
+    resource: z.object({
+      total: z.number().int().nonnegative(),
+      listed: z.number().int().nonnegative(),
+      nextCursor: z.string().nullable(),
+    }),
+  }).optional(),
   cancelled: z.boolean().default(false),
 }).strict();
 export type InventoryOverview = z.infer<typeof InventoryOverviewSchema>;

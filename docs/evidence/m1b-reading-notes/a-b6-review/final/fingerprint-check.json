@@ -1,0 +1,70 @@
+{
+  "at": "2026-09-24T15:52:49.125Z",
+  "sourceFingerprint": "4dc46c2c0a3d05be3a6d0234516123aa594b257671441fdce6859ae3fad1953e",
+  "m1bSourceFingerprint": "fb55ab24a5bf961da6505d14242f9df8b78756def7bbd641414ed22df0eff0c4",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "fb273e75128a475788bb96c98149e1331bb68f4fb6b928201f2c94ee424c3cdf",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "checks": [
+    {
+      "file": "package.json",
+      "matches": true
+    },
+    {
+      "file": "bench.json",
+      "matches": true
+    },
+    {
+      "file": "test-run.json",
+      "matches": true
+    },
+    {
+      "file": "cases.json",
+      "matches": true
+    },
+    {
+      "file": "report.json",
+      "matches": true
+    },
+    {
+      "file": "a-adversarial-review.json",
+      "matches": true
+    },
+    {
+      "file": "a-additional-ui-review.json",
+      "matches": true
+    },
+    {
+      "file": "a-b5-deep-review.json",
+      "matches": true
+    },
+    {
+      "file": "a-b5-h-checks.json",
+      "matches": true
+    },
+    {
+      "file": "a-b6-deep-review.json",
+      "matches": true
+    },
+    {
+      "file": "a-b6-ui-review.json",
+      "matches": true
+    },
+    {
+      "file": "a-ui-review.json",
+      "matches": true
+    },
+    {
+      "file": "b2-ui-review.json",
+      "matches": true
+    },
+    {
+      "file": "a-b6-settled-capture.json",
+      "matches": true
+    }
+  ],
+  "m1aMatches": true,
+  "status": "passed",
+  "protectedEvidenceUnchanged": true,
+  "scope": "Fingerprint consistency only; independent audit remains failed and formal acceptance not-run."
+}

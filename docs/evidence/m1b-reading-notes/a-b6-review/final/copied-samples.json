@@ -1,0 +1,18 @@
+{
+  "at": "2026-09-24T15:47:02.408Z",
+  "scope": "Copied synthetic fixtures; source evidence is unchanged.",
+  "files": [
+    {
+      "file": "standard-scan.pdf",
+      "source": "docs/evidence/m1b-reading-notes/b6-rework/standard-scan.pdf",
+      "sha256": "f34eef80958420e34942565f297ee1817913e8e97533f96e84dc3e370b06591b",
+      "matchesSource": true
+    },
+    {
+      "file": "relative-image.epub",
+      "source": "docs/evidence/m1b-reading-notes/b6-rework/relative-image.epub",
+      "sha256": "6ce3ad875fdeec71c4c04a692b736469f5a65b411103b0379509d7d56c81c615",
+      "matchesSource": true
+    }
+  ]
+}

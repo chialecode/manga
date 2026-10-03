@@ -1,0 +1,222 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "ce5ada40dbc2415e3c110160bca22b7989d980133688edaedc289495052df019",
+  "m1bSourceFingerprint": "e247fc7e6bc8e9caa83fa57756d5b1fc5a73f695fb3d9d9620aa301ba703209a",
+  "lockFingerprint": "a6699b8bf09cba2192f10323919f96261298f3d188418c4b2c0e345af44ab192",
+  "testScriptFingerprint": "f4ff73b8a766283e65e8e7001fd4c7b6169423aefc87a3a85eeab65f271c6e54",
+  "buildScriptFingerprint": "cfc1d329bf09d049f8689c6e528563f15e58efb7cc23b20369c5388749fa6497",
+  "productAcceptance": "not-run",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v24.19.0",
+  "metrics": {
+    "searchP95Ms": 0.48649999999997817,
+    "contextP95Ms": 0.5226000000000113,
+    "indexedFirstScreenMs": 0.664600000000064,
+    "saveMs": 0.9755000000000109,
+    "progressSaveMs": 1.1622999999999593,
+    "coldStartMs": 22.33000000000004,
+    "interactionP95Ms": 3,
+    "contentAvailableP95Ms": 1.3488999999999578,
+    "saveReceiptP95Ms": 34.65779999999995,
+    "importToReadableP95Ms": 16.302599999999984
+  },
+  "targets": {
+    "searchP95Ms": 500,
+    "contextP95Ms": 150,
+    "indexedFirstScreenMs": 2000,
+    "saveMs": 1000,
+    "progressSaveMs": 1000,
+    "coldStartMs": 5000,
+    "interactionP95Ms": 8000,
+    "contentAvailableP95Ms": 2000,
+    "saveReceiptP95Ms": 1000,
+    "importToReadableP95Ms": 5000
+  },
+  "scale": {
+    "metadataCount": 10000,
+    "searchBlocks": 50000
+  },
+  "samples": {
+    "coldStartMs": {
+      "n": 3,
+      "kind": "process"
+    },
+    "interactionMs": {
+      "n": 3,
+      "kind": "electron",
+      "readyMs": [
+        507,
+        523,
+        508
+      ]
+    },
+    "indexedFirstScreenMs": {
+      "n": 8,
+      "kind": "indexed-read"
+    },
+    "reparseMs": {
+      "n": 3,
+      "kind": "reparse"
+    },
+    "duringParseMs": {
+      "n": 5,
+      "kind": "service-during-parse"
+    },
+    "contentAvailableMs": {
+      "n": 8,
+      "kind": "operation-to-content"
+    },
+    "saveReceiptMs": {
+      "n": 8,
+      "kind": "operation-to-commit-receipt"
+    },
+    "importToReadableMs": {
+      "n": 3,
+      "kind": "operation-import"
+    }
+  },
+  "raw": {
+    "searchMs": [
+      2.97180000000003,
+      0.48649999999997817,
+      0.38239999999996144,
+      0.3229999999998654,
+      0.36850000000004,
+      0.32940000000007785,
+      0.29719999999997526,
+      0.2961999999999989,
+      0.31179999999994834,
+      0.3865000000000691,
+      0.30600000000004,
+      0.24149999999985994,
+      0.26500000000010004,
+      0.3448000000000775,
+      0.2848999999998796,
+      0.2600999999999658,
+      0.2641000000000986,
+      0.253800000000183,
+      0.21880000000010114,
+      0.3005999999998039,
+      0.23330000000009932,
+      0.24509999999986576,
+      0.20900000000006003,
+      0.21790000000009968,
+      0.3003999999998541,
+      0.26840000000015607,
+      0.2937000000001717,
+      0.2115000000001146,
+      0.25349999999980355,
+      0.20199999999999818,
+      0.19669999999996435,
+      0.23129999999991924,
+      0.2062999999998283,
+      0.24299999999993815,
+      0.21420000000011896,
+      0.21520000000009532,
+      0.19820000000004256,
+      0.19240000000013424,
+      0.21829999999999927,
+      0.18899999999985084
+    ],
+    "saveMs": [
+      0.9755000000000109,
+      0.4922999999998865,
+      0.39039999999999964,
+      0.3532000000000153,
+      0.447800000000143,
+      0.4110000000000582,
+      0.33780000000001564,
+      0.393100000000004,
+      0.4915000000000873,
+      0.3706999999999425
+    ],
+    "progressSaveMs": [
+      1.1622999999999593,
+      0.328899999999976,
+      0.3043999999999869,
+      0.28150000000005093,
+      0.315900000000056,
+      0.3469000000000051,
+      0.39400000000000546,
+      0.261600000000044,
+      0.31359999999995125,
+      0.379399999999805
+    ],
+    "contextMs": [
+      0.5226000000000113,
+      0.34789999999998145,
+      0.16820000000006985,
+      0.14360000000010587,
+      0.18319999999994252,
+      0.14409999999998035,
+      0.13059999999995853,
+      0.13020000000005894,
+      0.16280000000006112,
+      0.17190000000005057
+    ],
+    "indexedFirstScreenMs": [
+      0.664600000000064,
+      0.26870000000008076,
+      0.2481999999999971,
+      0.21630000000004657,
+      0.3405999999999949,
+      0.2782000000001972,
+      0.26080000000001746,
+      0.20689999999990505
+    ],
+    "reparseMs": [
+      22.49260000000004,
+      2.4850000000001273,
+      2.3771999999999025
+    ],
+    "duringParseMs": [
+      5.066100000000006,
+      2.697499999999991,
+      2.4891999999999825,
+      2.62480000000005,
+      2.456000000000131
+    ],
+    "coldStartMs": [
+      18.207700000000045,
+      18.325399999999945,
+      22.33000000000004
+    ],
+    "interactionMs": [
+      2,
+      3,
+      3
+    ],
+    "readyMs": [
+      507,
+      523,
+      508
+    ],
+    "operationContentMs": [
+      1.3488999999999578,
+      0.9522999999999229,
+      0.8755000000001019,
+      0.8469000000000051,
+      0.8296000000000276,
+      0.8582000000001244,
+      0.9769000000001142,
+      0.9872000000000298
+    ],
+    "operationSaveMs": [
+      34.65779999999995,
+      28.11259999999993,
+      29.22330000000011,
+      31.58199999999988,
+      27.821899999999914,
+      27.008699999999862,
+      27.353900000000067,
+      26.746900000000096
+    ],
+    "operationImportMs": [
+      16.302599999999984,
+      1.6565999999997985,
+      1.3793000000000575
+    ]
+  },
+  "notes": "Indexed first screen reads an already stored revision. Reparse imports a text file again. duringParseMs is workspace.get while a worker parse is in flight. contentAvailableMs measures a stored book to its readable tail, and saveReceiptMs measures a save request to a committed revision receipt, so neither is a bare click dispatch. Electron interaction is a packaged or built window click, separate from the service samples. This file is a self-check, not product acceptance."
+}

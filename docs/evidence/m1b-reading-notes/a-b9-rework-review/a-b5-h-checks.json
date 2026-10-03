@@ -1,0 +1,531 @@
+{
+  "at": "2026-09-25T06:23:01.122Z",
+  "sourceFingerprint": "dfa7f0d97e2b548b5f3874700a1fab64159bf04743a32d0476960687a32eaf56",
+  "m1bSourceFingerprint": "1cb0463fe9c4d4144c37377a30fa25155a8eead34f48eb133a8be13d2fad457b",
+  "lockFingerprint": "1e2b3818348bf103defc5cea61fe188eb57f513d1bf277db483a30cdbf46c48b",
+  "testScriptFingerprint": "ec87749776eb57e7770acbaf8641bbfad5a928e227e800ab0585a28cb40723f1",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "7e63ad75fdf9007b2bb4546d218b315f795f03192f94f5ed4b075670dffcbe4b",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "scope": "Automated subsets of H-01/H-03/H-04 in the packaged Windows app. No real IME, OS DPI changes, physical dragging/snapping or visual acceptance.",
+  "observations": [
+    {
+      "finding": "H-01",
+      "name": "EPUB final chapter, Unicode excerpt, comment, source return and process restart",
+      "status": "passed",
+      "detail": {
+        "excerpt": "中文日本語😀é",
+        "locator": {
+          "kind": "text",
+          "partId": "last",
+          "representationId": "rev_d0da2150-b4dc-4054-8f65-bf990eda529f",
+          "normalizationVersion": "text-nfc-lf-v1",
+          "range": {
+            "start": 8,
+            "end": 15
+          },
+          "quote": {
+            "exact": "中文日本語😀é"
+          }
+        },
+        "restoredPart": "last",
+        "realIme": "not-run; Unicode text inserted through the test keyboard API"
+      }
+    },
+    {
+      "finding": "F-05",
+      "name": "one resource session keeps its composer draft across reading and Agent pages",
+      "status": "passed",
+      "detail": {
+        "agentDraft": "same-resource-draft",
+        "readingDraft": "same-resource-draft"
+      }
+    },
+    {
+      "finding": "H-04",
+      "name": "keyboard mode menu preserves each mode's draft on returning",
+      "status": "passed",
+      "detail": {
+        "nativeDraggingAndSnapping": "not-run"
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1920x1080, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1920,
+        "cssHeight": 1080,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 1317,
+        "mainScrollWidth": 1317,
+        "bodyWidth": 680,
+        "bodyRight": 1232,
+        "bodyClientWidth": 680,
+        "bodyScrollWidth": 680,
+        "recordButtonBounds": {
+          "x": 418.3333435058594,
+          "y": 717.375,
+          "right": 491.6666793823242,
+          "bottom": 747.7083339691162,
+          "viewportWidth": 1920,
+          "viewportHeight": 1080
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1920x1080, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1536,
+        "cssHeight": 864,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 933,
+        "mainScrollWidth": 933,
+        "bodyWidth": 680.0000610351562,
+        "bodyRight": 1040.0000915527344,
+        "bodyClientWidth": 680,
+        "bodyScrollWidth": 680,
+        "recordButtonBounds": {
+          "x": 417.66668701171875,
+          "y": 744.9417114257812,
+          "right": 490.73336029052734,
+          "bottom": 775.008378982544,
+          "viewportWidth": 1536,
+          "viewportHeight": 864
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1920x1080, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1280,
+        "cssHeight": 720,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 666,
+        "mainScrollWidth": 666,
+        "bodyWidth": 622,
+        "bodyRight": 877.8888854980469,
+        "bodyClientWidth": 622,
+        "bodyScrollWidth": 622,
+        "recordButtonBounds": {
+          "x": 419.4444580078125,
+          "y": 662.2777709960938,
+          "right": 493.2222366333008,
+          "bottom": 693.055549621582,
+          "viewportWidth": 1280,
+          "viewportHeight": 720
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1280x840, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1280,
+        "cssHeight": 840,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 677,
+        "mainScrollWidth": 677,
+        "bodyWidth": 632.6666870117188,
+        "bodyRight": 888.3333587646484,
+        "bodyClientWidth": 633,
+        "bodyScrollWidth": 633,
+        "recordButtonBounds": {
+          "x": 418.3333435058594,
+          "y": 746.7083740234375,
+          "right": 491.6666793823242,
+          "bottom": 777.0417079925537,
+          "viewportWidth": 1280,
+          "viewportHeight": 840
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1280x840, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1024,
+        "cssHeight": 672,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 774,
+        "mainScrollWidth": 774,
+        "bodyWidth": 680.0000610351562,
+        "bodyRight": 960.3667297363281,
+        "bodyClientWidth": 680,
+        "bodyScrollWidth": 680,
+        "recordButtonBounds": {
+          "x": 417.66668701171875,
+          "y": 615.8750610351562,
+          "right": 490.73336029052734,
+          "bottom": 645.941728591919,
+          "viewportWidth": 1024,
+          "viewportHeight": 672
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1280x840, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 853,
+        "cssHeight": 560,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 833,
+        "mainScrollWidth": 833,
+        "bodyWidth": 680,
+        "bodyRight": 761.5555572509766,
+        "bodyClientWidth": 680,
+        "bodyScrollWidth": 680,
+        "recordButtonBounds": {
+          "x": 190.44444274902344,
+          "y": 502.27777099609375,
+          "right": 264.2222213745117,
+          "bottom": 533.055549621582,
+          "viewportWidth": 853,
+          "viewportHeight": 560
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 960x640, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 960,
+        "cssHeight": 640,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 706,
+        "mainScrollWidth": 706,
+        "bodyWidth": 662.3333740234375,
+        "bodyRight": 918.0000457763672,
+        "bodyClientWidth": 662,
+        "bodyScrollWidth": 662,
+        "recordButtonBounds": {
+          "x": 418.3333435058594,
+          "y": 582.7083740234375,
+          "right": 491.6666793823242,
+          "bottom": 613.0417079925537,
+          "viewportWidth": 960,
+          "viewportHeight": 640
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 960x640, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 768,
+        "cssHeight": 512,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 747,
+        "mainScrollWidth": 747,
+        "bodyWidth": 680.0000610351562,
+        "bodyRight": 717.8667297363281,
+        "bodyClientWidth": 680,
+        "bodyScrollWidth": 680,
+        "recordButtonBounds": {
+          "x": 188.6666717529297,
+          "y": 455.8750305175781,
+          "right": 261.7333450317383,
+          "bottom": 485.9416980743408,
+          "viewportWidth": 768,
+          "viewportHeight": 512
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 960x640, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 640,
+        "cssHeight": 426,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 620,
+        "mainScrollWidth": 620,
+        "bodyWidth": 576,
+        "bodyRight": 602.8888893127441,
+        "bodyClientWidth": 576,
+        "bodyScrollWidth": 576,
+        "recordButtonBounds": {
+          "x": 190.44444274902344,
+          "y": 369.1944580078125,
+          "right": 264.2222213745117,
+          "bottom": 399.9722366333008,
+          "viewportWidth": 640,
+          "viewportHeight": 426
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 720x540, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 720,
+        "cssHeight": 540,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 695,
+        "mainScrollWidth": 695,
+        "bodyWidth": 651.3333740234375,
+        "bodyRight": 678.0000419616699,
+        "bodyClientWidth": 651,
+        "bodyScrollWidth": 651,
+        "recordButtonBounds": {
+          "x": 189.33334350585938,
+          "y": 482.7083435058594,
+          "right": 262.6666793823242,
+          "bottom": 513.0416774749756,
+          "viewportWidth": 720,
+          "viewportHeight": 540
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 720x540, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 576,
+        "cssHeight": 432,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 564,
+        "mainScrollWidth": 564,
+        "bodyWidth": 535.7333374023438,
+        "bodyRight": 549.7333383560181,
+        "bodyClientWidth": 536,
+        "bodyScrollWidth": 536,
+        "recordButtonBounds": {
+          "x": 176.1333465576172,
+          "y": 387.683349609375,
+          "right": 249.20001983642578,
+          "bottom": 417.7500171661377,
+          "viewportWidth": 576,
+          "viewportHeight": 432
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 720x540, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 480,
+        "cssHeight": 360,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 470,
+        "mainScrollWidth": 470,
+        "bodyWidth": 441.77777099609375,
+        "bodyRight": 455.77777099609375,
+        "bodyClientWidth": 442,
+        "bodyScrollWidth": 442,
+        "recordButtonBounds": {
+          "x": 177.55555725097656,
+          "y": 314.52777099609375,
+          "right": 251.33333587646484,
+          "bottom": 345.30554962158203,
+          "viewportWidth": 480,
+          "viewportHeight": 360
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 800x1200, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 800,
+        "cssHeight": 1200,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 791,
+        "mainScrollWidth": 791,
+        "bodyWidth": 680,
+        "bodyRight": 740,
+        "bodyClientWidth": 680,
+        "bodyScrollWidth": 680,
+        "recordButtonBounds": {
+          "x": 189.33334350585938,
+          "y": 746.7083740234375,
+          "right": 262.6666793823242,
+          "bottom": 777.0417079925537,
+          "viewportWidth": 800,
+          "viewportHeight": 1200
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 800x1200, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 640,
+        "cssHeight": 960,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 631,
+        "mainScrollWidth": 631,
+        "bodyWidth": 586.933349609375,
+        "bodyRight": 613.4666843414307,
+        "bodyClientWidth": 587,
+        "bodyScrollWidth": 587,
+        "recordButtonBounds": {
+          "x": 188.6666717529297,
+          "y": 774.0833740234375,
+          "right": 261.7333450317383,
+          "bottom": 804.1500415802002,
+          "viewportWidth": 640,
+          "viewportHeight": 960
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 800x1200, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 533,
+        "cssHeight": 800,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 523,
+        "mainScrollWidth": 523,
+        "bodyWidth": 495.1111145019531,
+        "bodyRight": 509.1111145019531,
+        "bodyClientWidth": 495,
+        "bodyScrollWidth": 495,
+        "recordButtonBounds": {
+          "x": 177.55555725097656,
+          "y": 754.5277709960938,
+          "right": 251.33333587646484,
+          "bottom": 785.305549621582,
+          "viewportWidth": 533,
+          "viewportHeight": 800
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 360x780, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 360,
+        "cssHeight": 780,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 345,
+        "mainScrollWidth": 345,
+        "bodyWidth": 316.66668701171875,
+        "bodyRight": 330.66668701171875,
+        "bodyClientWidth": 317,
+        "bodyScrollWidth": 317,
+        "recordButtonBounds": {
+          "x": 176.6666717529297,
+          "y": 696.7083740234375,
+          "right": 250.00000762939453,
+          "bottom": 727.0417079925537,
+          "viewportWidth": 360,
+          "viewportHeight": 780
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 360x780, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 288,
+        "cssHeight": 624,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 276,
+        "mainScrollWidth": 276,
+        "bodyWidth": 247.7333526611328,
+        "bodyRight": 261.73335361480713,
+        "bodyClientWidth": 248,
+        "bodyScrollWidth": 248,
+        "recordButtonBounds": {
+          "x": 176.1333465576172,
+          "y": 541.7083740234375,
+          "right": 249.20001983642578,
+          "bottom": 571.7750415802002,
+          "viewportWidth": 288,
+          "viewportHeight": 624
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 360x780, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 240,
+        "cssHeight": 520,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 230,
+        "mainScrollWidth": 230,
+        "bodyWidth": 201.7777862548828,
+        "bodyRight": 215.7777862548828,
+        "bodyClientWidth": 202,
+        "bodyScrollWidth": 202,
+        "recordButtonBounds": {
+          "x": 14,
+          "y": 435.6944580078125,
+          "right": 87.77777862548828,
+          "bottom": 466.4722366333008,
+          "viewportWidth": 240,
+          "viewportHeight": 520
+        },
+        "recordButtonReachable": true
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "narrow sidebars hover transfer, Escape and focus return",
+      "status": "passed",
+      "detail": {
+        "zoomKind": "Electron content zoom; Windows display scaling is not changed"
+      }
+    }
+  ]
+}

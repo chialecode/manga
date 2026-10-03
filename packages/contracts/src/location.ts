@@ -63,6 +63,8 @@ export type AnchorResolveResult = {
   status: AnchorResolveStatus;
   text?: string;
   utf16Range?: { start: number; end: number };
+  /** Resolved range in normalized code points, for reading windows and stored highlights. */
+  codePointRange?: { start: number; end: number };
   candidates?: Array<{ start: number; end: number; text: string }>;
   reason?: string;
 };

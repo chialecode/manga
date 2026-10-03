@@ -1,0 +1,44 @@
+{
+  "status": "no-open-finding-reproduced",
+  "at": "2026-09-25T04:37:56.294Z",
+  "sourceFingerprint": "81785f68caa8968bcbace537ceac93c464b26c045133f43e841c6744c29fd6b9",
+  "m1aSourceFingerprint": "f097b2fa2001efb6d6d1f36bf08b03a2754aaed3a6e29551d1ee838eb084a24f",
+  "observations": [
+    {
+      "finding": "F-25",
+      "scenario": "import admitted before switch finishes after switch",
+      "status": "passed",
+      "migration": "ok",
+      "lateImport": "error",
+      "expected": "late write rejected by authoritative commit barrier"
+    },
+    {
+      "finding": "F-25",
+      "scenario": "restart with the original explicit profile after migration",
+      "status": "passed",
+      "pointerRestoredToOldRoot": false,
+      "oldLibraryWrite": "ok",
+      "expected": "reject or redirect relocated profile before publishing a pointer"
+    },
+    {
+      "finding": "F-32",
+      "scenario": "context tool requests a revision created after the run snapshot",
+      "status": "passed",
+      "contextStatus": "error",
+      "returnedLaterRevision": false,
+      "expected": "all run material tools enforce the captured revision"
+    },
+    {
+      "finding": "F-32",
+      "scenario": "committed tool then disconnect; retry returns a variation of its arguments",
+      "status": "passed",
+      "firstRun": "failed",
+      "retriedWithSameId": true,
+      "finalRun": "succeeded",
+      "notesBefore": 1,
+      "notesAfter": 1,
+      "expected": "resume committed tool results without regenerating a second business effect"
+    }
+  ],
+  "scope": "Synthetic temporary profiles only; audit failures are unresolved product requirements, not passing regression tests."
+}
