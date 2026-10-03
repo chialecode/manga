@@ -1,0 +1,22 @@
+[
+  { "command": "node scripts/package-m1b.mjs", "exitCode": 0, "note": "eight-stage smoke on the final source tree; an earlier build before the render fix exposed the a-b8 window overlap and was rebuilt" },
+  { "command": "node scripts/review-m1b-a-b8.mjs", "exitCode": 0, "note": "14/14 passed on the final package; an earlier run under the intermediate render representation failed the packaged half-scale window check and drove the x-list + textLength representation" },
+  { "command": "node scripts/audit-m1b-b5-review.mjs", "exitCode": 0 },
+  { "command": "node scripts/audit-m1b-recheck.mjs", "exitCode": 0, "note": "output kept as a-recheck-original.json per the 8.20 split; scan/image fixtures copied from a-b7-review/final with verified SHA-256" },
+  { "command": "node scripts/audit-m1b-b6-review.mjs", "exitCode": 0 },
+  { "command": "node scripts/audit-m1b-b7-rework.mjs", "exitCode": 0 },
+  { "command": "node scripts/audit-m1b-a-b7-review.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-recheck.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-a-b7-ui.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-ui.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-reading.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-b6-ui.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-b5-h-checks.mjs", "exitCode": 0 },
+  { "command": "node scripts/review-m1b-b9-reader-engines.mjs", "exitCode": 0, "note": "7/7 passed; candidates remain accepted=false, product code still does not import them" },
+  { "command": "node scripts/bench-m1b.mjs", "exitCode": 0 },
+  { "command": "node --experimental-strip-types scripts/audit-m1a-reverify.mjs", "exitCode": 0, "env": "M1A_EVIDENCE_DIR=docs/evidence/m1b-m1a-regression/b9-rework" },
+  { "command": "node scripts/verify.mjs", "exitCode": 0 },
+  { "command": "node docs/evidence/m1b-reading-notes/b9-rework/supplementary-review.mjs", "exitCode": 0, "note": "A's 8.20 supplementary review rerun verbatim from a-b9-review: 7/7 passed" },
+  { "command": "node scripts/inventory-m1b-deps.mjs", "exitCode": 0, "note": "12 manifests / 84 direct dependencies including experiments/m0's six" },
+  { "command": "M1B_REQUIRE_REPORT=1 node scripts/verify-m1b.mjs", "exitCode": 0, "note": "strict report gate: engineeringReviewable=true, errors=[]" }
+]

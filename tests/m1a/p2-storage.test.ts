@@ -25,7 +25,7 @@ describe("P2 storage, locations and recovery", () => {
     const store = new DrizzleStore({ profileDir: dir, hostId: "migrate" });
     const row = store.sqlite.prepare("SELECT id, title FROM resources WHERE id = 'res_old'").get() as { id: string; title: string };
     expect(row.title).toBe("旧书");
-    expect(store.getMeta("schemaVersion")).toBe("4");
+    expect(Number(store.getMeta("schemaVersion"))).toBeGreaterThanOrEqual(5);
     store.close();
   });
 

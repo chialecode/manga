@@ -1,0 +1,47 @@
+{
+  "at": "2026-09-25T14:59:21.724Z",
+  "sourceFingerprint": "5e3311139f8d340eda126f123dfc96b4c23403485ce31f10b077dcd8266fb270",
+  "m1bSourceFingerprint": "0e1ce46a72c46ab38f49d9234b374bb094cb554720efd9b67230c95522e9ea55",
+  "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+  "testScriptFingerprint": "c8e675d2192ad2352d846258de6225aae92127c181e621cc0e3f249620530ce1",
+  "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-10",
+      "name": "font choice renders and survives a window reload",
+      "status": "passed"
+    },
+    {
+      "finding": "F-10",
+      "name": "long session titles stay inside the sidebar",
+      "status": "passed",
+      "detail": {
+        "width": 224,
+        "content": 224
+      }
+    },
+    {
+      "finding": "F-05",
+      "name": "a mode switch does not display another mode's composer draft",
+      "status": "passed"
+    },
+    {
+      "finding": "F-05",
+      "name": "the session rail uses the current mode after switching",
+      "status": "passed"
+    },
+    {
+      "finding": "F-07",
+      "name": "standard scan is visible in the packaged reader",
+      "status": "passed",
+      "detail": {
+        "width": 617,
+        "height": 823,
+        "dark": 3594
+      }
+    }
+  ]
+}

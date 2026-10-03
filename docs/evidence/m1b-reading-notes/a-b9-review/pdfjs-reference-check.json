@@ -1,0 +1,37 @@
+{
+  "engine": "pdfjs-dist 6.3.289",
+  "scope": "local API cross-check only, not product runtime",
+  "records": [
+    {
+      "name": "zero-default-cid-width",
+      "items": [
+        {
+          "str": "AB",
+          "width": 0,
+          "x": 50
+        }
+      ]
+    },
+    {
+      "name": "two-byte-space-Tw-control",
+      "items": [
+        {
+          "str": "A",
+          "width": 5,
+          "x": 50
+        },
+        {
+          "str": " ",
+          "width": 15,
+          "x": 55
+        },
+        {
+          "str": "BC",
+          "width": 10,
+          "x": 70
+        }
+      ]
+    }
+  ],
+  "withdrawnHypothesis": "The initial two-byte Tw expected x=65 is not retained as a finding; installed PDF.js also puts C at 75."
+}

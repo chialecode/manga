@@ -1,0 +1,47 @@
+{
+  "at": "2026-09-25T16:16:14.440Z",
+  "sourceFingerprint": "44369144423f2360b9f3daba834890829caf9ce5e0df99f684a5416d2c0e2ee8",
+  "m1bSourceFingerprint": "8e36dccb67b6b9201fc09c89027d508f46d34d184985df58b7620def7bc48fcb",
+  "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+  "testScriptFingerprint": "3381dfaf8e3e2676f6c1bcfed37849ddd258068f94922786a897e222ffec4c2a",
+  "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7",
+  "scriptFingerprint": "e9a0833d79d62b6558620794d716fa9e6acfbcde7898fde8a32d64c4a2e227ab",
+  "status": "passed",
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "skip an existing resource while duplicating its note keeps a resolvable source",
+      "status": "passed",
+      "detail": {
+        "copyId": "obj_fe8285aa-896f-4538-ba55-8a10956f8ff3",
+        "payloadAnchor": "anc_13da7ee0-eaf4-4255-b0e9-5d0b7a22b358",
+        "refTarget": "anc_13da7ee0-eaf4-4255-b0e9-5d0b7a22b358",
+        "anchorExists": true
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "skip a colliding revision preserves its text and search index",
+      "status": "passed",
+      "detail": {
+        "payloadPreserved": true,
+        "indexContainsSkippedText": false
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "PDF text uses an explicit Unicode character map",
+      "status": "passed",
+      "detail": {
+        "expected": "中",
+        "actual": "中",
+        "warnings": [
+          "pdf pages are drawn by PDF.js; selection uses the text layer code-point map"
+        ],
+        "sha256": "2ab818a5c3e48e94ecc0cce38dd19815fa9da6192fa2b30fe2b0e2c0f200bab7"
+      }
+    }
+  ]
+}

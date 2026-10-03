@@ -19,13 +19,14 @@
 | [开发规则](dev-rules/README.md) / [仓库地图](dev-rules/repo-map.md) | 工作流、模块/契约、数据、Agent 与真实命令 |
 | [A/B 协作与集中审批](dev-rules/development-workflow.md#agent-handoff) / [交接模板](templates/agent-handoff.md) | A 规划、B 连续执行、A 集中复核；统一版本/证据与必要用户决定 |
 | [设计规则](design-rules/README.md) | UI 治理、可访问性与视觉证据 |
-| [决定与问题](decisions/README.md) | 用户确认、A/Q 台账、ADR 与截止点 |
+| [待决定与待处理总表](decisions/open-questions.md) / [决定索引](decisions/README.md) | 全项目 Q/ACT/LOOP 唯一入口、已确认决定与 ADR；不逐工作包审批 |
 | [基础技术栈决定](decisions/0007-technology-stack.md) | A-15 已授权的 UI、编辑、存储与工程基础选择；原型到正式工程的迁移/验证边界 |
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
 | [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
 | [M0 执行与交接计划](delivery/m0-execution-plan.md) / [Cursor prompt](delivery/m0-cursor-prompt.md) | 工作包与交接；当前结果见 [复核修复报告](evidence/2026-09-19-m0-followup-review.md) |
 | [M0 收尾计划](delivery/m0-closure-plan.md) / [收尾 Cursor prompt](delivery/m0-closure-cursor-prompt.md) | 历史交接工作包；实际复核结论见下列最终报告 |
-| [M1a 执行计划](delivery/m1a-execution-plan.md) / [Cursor prompt](delivery/m1a-cursor-prompt.md) | 本轮实施入口：新栈、授权/生命周期、数据恢复与目录、Agent/连接/配置、最终验证 |
+| [M1a 执行计划](delivery/m1a-execution-plan.md) / [Cursor prompt](delivery/m1a-cursor-prompt.md) | 已交付阶段的计划与历史交接；当前事实见状态与最新 A 复验 |
+| [M1b 执行计划](delivery/m1b-execution-plan.md) / [B prompt](delivery/m1b-cursor-prompt.md) / [交付报告](evidence/m1b-reading-notes-delivery.md) | 阅读与人工记录的唯一计划、B 历史自检、A 集中审查及返工/人工边界 |
 | [M1a 交付报告](evidence/m1a-delivery.md) / [最新 A 复验](evidence/m1a-f24-f32-review.md) / [原验收审查](evidence/m1a-acceptance-review.md) | 历史交付、当前缺口、用户决定落实及 B 集中返工入口 |
 | [模块规格](modules/library.md) | library / notes / settings / inventory / agent 的数据所有权与启停 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
@@ -55,7 +56,7 @@
 
 ## 3. 假设、待决事项与决定
 
-[已确认决定](decisions/confirmed-decisions.md)保留 A 编号与职责正本，已解决问题已移出[待决事项](decisions/open-questions.md)。M1 先交付 Agent、连接设置与基础配置；基础库按 ADR-0007 实施。剩余问题只在相应阶段阻塞依赖工作，不重复询问已确认项。
+[已确认决定](decisions/confirmed-decisions.md)保留 A 编号与职责正本；[事项总表](decisions/open-questions.md)统一尚需决定、人工检查、配置、外部授权及非阻塞后续 loop，报告只引用当前编号。软件先贯通[全部基本功能 MVP](delivery/roadmap-and-acceptance.md#mvp-loop)，再据反馈迭代；不等单模块所有打磨项清零才推进下一基本功能。基础库按 ADR-0007 实施；已授权实现继续，剩余决定只阻塞具体依赖动作。
 
 ## 4. 约束与范围的表达
 

@@ -1,0 +1,150 @@
+{
+  "status": "passed",
+  "at": "2026-09-21T17:18:55.157Z",
+  "sourceFingerprint": "b1e0945bf0155ce4e73a7ba5f53c4c1a7aa026943a831aca5f18789150f2c3e2",
+  "m1bSourceFingerprint": "6743d89931039faced52e40b923cad8dc872a2b109fce64a5dee30f426cd3643",
+  "lockFingerprint": "a6699b8bf09cba2192f10323919f96261298f3d188418c4b2c0e345af44ab192",
+  "testScriptFingerprint": "7768022a1a7e1e11bba0d4a379ee7e09e2a4729f17df97bbb444c4667484ca9a",
+  "buildScriptFingerprint": "a3167dfa8fbaf998ba247b8dd7474d5cb59a171f8b03daa015dcaa7b3c538d07",
+  "generator": "scripts/verify-m1b.mjs",
+  "productAcceptance": "not-run",
+  "cases": [
+    {
+      "caseId": "G-01",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates rejects invalid txt without replacing bytes and keeps the candidate unaccepted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates reads epub structure, strips script, and records external links",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates decompresses PalmDOC and reads a UTF-8 mobi",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates extracts pdf text, keeps scan pages without OCR, and rejects encryption",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates rejects zip path escape and compression bombs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/large-files.test.ts",
+          "name": "large reading files reads the tail of a 10 MiB txt through a path handle",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/large-files.test.ts",
+          "name": "large reading files reads the last chapter of a 30 MiB epub",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index parses an epub in the worker and does not treat parser candidates as accepted",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "G-05",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index splits, copies and rejects a stale note revision without writing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell does not autosave a note while composition is active and keeps split ids",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index keeps a v4 library and schema v1 note through migration",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "G-06",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index searches a CJK tail past the old 4000-character index and filters unread ranges",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index freezes the selection into the agent snapshot and blocks an unread quote",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index discards a note write when the commit process exits",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index resolves a duplicate sentence as needs_review and a scan page as missing capability",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-60",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell opens one overlay from hover and restores focus with Escape",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index keeps shell measure independent of the dock and delays overlay close",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-61",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell moves the mode menu with the keyboard and keeps a stop control",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-62",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell docks sidebars on a wide window and keeps the reading measure",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

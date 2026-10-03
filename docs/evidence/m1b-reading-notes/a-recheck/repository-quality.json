@@ -1,0 +1,41 @@
+{
+  "status": "passed",
+  "check": "repository-quality",
+  "node": "24.19.0",
+  "at": "2026-09-23T13:45:26.071Z",
+  "sourceFingerprint": "ce5ada40dbc2415e3c110160bca22b7989d980133688edaedc289495052df019",
+  "m1bSourceFingerprint": "e247fc7e6bc8e9caa83fa57756d5b1fc5a73f695fb3d9d9620aa301ba703209a",
+  "lockFingerprint": "a6699b8bf09cba2192f10323919f96261298f3d188418c4b2c0e345af44ab192",
+  "testScriptFingerprint": "f4ff73b8a766283e65e8e7001fd4c7b6169423aefc87a3a85eeab65f271c6e54",
+  "buildScriptFingerprint": "cfc1d329bf09d049f8689c6e528563f15e58efb7cc23b20369c5388749fa6497",
+  "command": "node scripts/verify.mjs",
+  "exitCode": 0,
+  "checks": {
+    "documents": 90,
+    "localLinks": 748,
+    "requirements": 75,
+    "acceptanceCases": 62,
+    "m1a": {
+      "passed": 94,
+      "skipped": 4
+    },
+    "m1b": {
+      "passed": 71,
+      "skipped": 2
+    },
+    "contractRegression": {
+      "passed": 15
+    },
+    "m1bReportCounterexamples": {
+      "passed": 6
+    }
+  },
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "closingDocumentationCheck": {
+    "command": "node scripts/check-docs.mjs",
+    "exitCode": 0,
+    "documents": 90,
+    "localLinks": 749
+  }
+}

@@ -8,7 +8,7 @@ MANGA 当前处于需求、设计与 M0 验证阶段。先读 [AGENTS.md](AGENTS
 2. 阅读受影响规则、设计、代码与测试。产品范围依据 [确认与待决事项](docs/decisions/open-questions.md)，不将评审稿中的每个细节当作用户已经批准。
 3. 实现并同步受影响的需求、接口、迁移、交互和验收映射；记录重要决策，避免重复维护正本。
 4. 按 [质量门禁](docs/dev-rules/quality-gates.md)完成验证，按 [REVIEW.md](REVIEW.md)检查最终变更。
-5. 按 [Git 工作节奏](docs/dev-rules/git-and-github.md#1-本地优先与工作节奏)，同一里程碑/明确子阶段使用一个分支，Agent 首次完整交付一个 commit，同一交付未 push 的审查修复 amend 原提交，消息描述最终结果；不同里程碑或独立交付分别提交，已推送提交默认追加修复。中间提交只按恢复需要建立；审查收敛且统一验证通过后，在有效授权内集中 push。使用 [变更交付模板](.github/PULL_REQUEST_TEMPLATE.md)说明结果和真实验证状态。
+5. 按 [Git 工作节奏](docs/dev-rules/git-and-github.md#1-本地优先与工作节奏)，一个阶段（里程碑或明确子阶段）使用一个分支、一个 commit：push 前阶段内的实现、返工、审查记录和修复全部 amend 进该提交，消息描述最终结果；只有不同阶段分别提交，已推送提交默认追加修复。每个提交都带 DCO `Signed-off-by` 签名，按 Git 规则启用的 hook 会自动补上，未启用时用 `git commit -s`。中间提交只按恢复需要建立；审查收敛且统一验证通过后，在有效授权内集中 push。使用 [变更交付模板](.github/PULL_REQUEST_TEMPLATE.md)说明结果和真实验证状态。
 
 本项目采用[连续执行、集中审批](docs/dev-rules/development-workflow.md#continuous-execution)。本地实现、检查、修复和必要 Git 准备由 Agent 连续处理，不在工作包之间等待“继续”；非阻塞决定、外部操作授权和人工配置统一随可审阅成果交付，真正阻塞的问题只暂停依赖部分。
 

@@ -1,0 +1,82 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "4dc46c2c0a3d05be3a6d0234516123aa594b257671441fdce6859ae3fad1953e",
+  "m1bSourceFingerprint": "fb55ab24a5bf961da6505d14242f9df8b78756def7bbd641414ed22df0eff0c4",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "fb273e75128a475788bb96c98149e1331bb68f4fb6b928201f2c94ee424c3cdf",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "productAcceptance": "not-run",
+  "at": "2026-09-24T15:35:29.432Z",
+  "format": "unsigned local Electron package",
+  "electron": "37.4.0",
+  "output": "dist/desktop/packages/MANGA-win32-x64",
+  "smoke": [
+    "initial",
+    "restart",
+    "agent",
+    "agent-restart",
+    "reading",
+    "closure",
+    "closure-restart",
+    "formats"
+  ],
+  "formats": {
+    "pages": true,
+    "modes": true,
+    "failureVisible": true,
+    "opened": {
+      "txt": true,
+      "epub": true,
+      "pdf": true,
+      "mobi": true
+    }
+  },
+  "viewports": {
+    "wide": {
+      "innerWidth": 1280,
+      "innerHeight": 840,
+      "devicePixelRatio": 1.5
+    },
+    "narrow": {
+      "innerWidth": 720,
+      "innerHeight": 540,
+      "devicePixelRatio": 1.5
+    }
+  },
+  "closure": {
+    "readLastChapter": true,
+    "recordedNote": true,
+    "selectionAccurate": true,
+    "materialsFrozen": true,
+    "materialsFromUi": true,
+    "uiTailVisible": true,
+    "progressAtTail": true,
+    "uiRestoredTail": true,
+    "bookmarkHighlighted": true,
+    "sourceCardOk": true,
+    "restoredProgress": true,
+    "restoredSource": true,
+    "restoredMaterials": true,
+    "diagnostics": {
+      "noteEnabled": true,
+      "noteSurfaceOpened": true,
+      "noteSaved": true,
+      "noteTitle": "闭合样本第一章。chi-close-sel 开头标记。",
+      "selectionMs": 1.100000023841858,
+      "selectedQuote": "chi-close-sel",
+      "excerpt": "chi-close-sel",
+      "quoteRange": {
+        "start": 8,
+        "end": 21
+      },
+      "readRangesBefore": 1,
+      "contextChars": 343
+    },
+    "timings": {
+      "importMs": 9,
+      "tailMs": 1,
+      "noteMs": 60,
+      "selectionMs": 1.100000023841858
+    }
+  }
+}

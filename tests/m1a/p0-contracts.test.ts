@@ -45,6 +45,6 @@ describe("P0 contracts and i18n", () => {
     expect(zh.t("library.count", { count: 3 })).toBe("3 项");
     expect(zh.formatNumber(1250)).toMatch(/1/);
     const testLocale = createTranslator("qps-ploc");
-    expect(testLocale.t("nav.agent")).toBe("[[Agent]]");
+    expect(testLocale.t("nav.agent")).toBe("[[对话]]");
   });
 });

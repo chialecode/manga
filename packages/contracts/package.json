@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./reading": "./src/reading.ts",
+    "./location": "./src/location.ts",
+    "./errors": "./src/errors.ts"
   },
   "dependencies": {
-    "zod": "4.1.5"
+    "zod": "4.6.5"
   }
 }

@@ -10,5 +10,7 @@ allowBuilds:
   "@tailwindcss/oxide": true
   protobufjs: true
   "@google/genai": true
+  core-js: false
+  es5-ext: false
 overrides:
   "@electron/rebuild": "4.2.0"

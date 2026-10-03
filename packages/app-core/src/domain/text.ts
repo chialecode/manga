@@ -2,7 +2,7 @@ import {
   NORMALIZATION_V1,
   PARSER_V1,
   type TextLocator,
-} from "@manga/contracts";
+} from "@manga/contracts/location";
 
 export function codePoints(text: string): string[] {
   return [...text];
@@ -14,6 +14,18 @@ export function codePointLength(text: string): number {
 
 export function sliceCodePoints(text: string, start: number, end: number): string {
   return codePoints(text).slice(start, end).join("");
+}
+
+/** Code-point search. Callers use this instead of UTF-16 indexOf when a quote may contain an EOL or a surrogate pair. */
+export function findQuoteMatches(text: string, quote: string): Array<{ start: number; end: number }> {
+  const hay = codePoints(text);
+  const needle = codePoints(quote);
+  const matches: Array<{ start: number; end: number }> = [];
+  if (!needle.length) return matches;
+  for (let index = 0; index <= hay.length - needle.length; index += 1) {
+    if (needle.every((char, offset) => hay[index + offset] === char)) matches.push({ start: index, end: index + needle.length });
+  }
+  return matches;
 }
 
 export function decodeTextBuffer(buffer: Uint8Array, encoding: "utf-8" | "utf-16le" = "utf-8"): { text: string; bom: boolean } {

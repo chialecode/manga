@@ -11,7 +11,7 @@ pnpm install
 node scripts/verify.mjs
 ```
 
-`verify.mjs` 检查脚本语法、文档登记、GitHub JSON、文档结构、`git diff --check`、依赖方向、公开内容及报告门禁反例，并在 `node_modules` 存在时运行 `tsc --noEmit`（根配置与 `apps/desktop`）、Vitest M1a 测试及契约/修复回归（含 `closure-review.test.ts`）。它不安装依赖；缺少 `node_modules` 时类型检查非零退出。缺少 vitest 时 M1a 测试非零退出，不使用 `--if-present`。
+`verify.mjs` 检查脚本语法、文档登记、GitHub JSON、文档结构、`git diff --check`、依赖方向、公开内容及报告门禁反例，并在 `node_modules` 存在时运行 `tsc --noEmit`（根配置与 `apps/desktop`）、Vitest M1a 测试、不含大文件开关的 M1b Vitest、M1b 报告反例及契约/修复回归（含 `closure-review.test.ts`）。它不安装依赖；缺少 `node_modules` 时类型检查非零退出。缺少 vitest 时 M1a/M1b 测试非零退出，不使用 `--if-present`。10 MiB TXT 与 30 MiB EPUB 只在 `M1B_LARGE=1` 时运行。
 
 M1a 独立证据示例：
 
@@ -22,6 +22,37 @@ node scripts/m1a.mjs bench
 node scripts/m1a.mjs package
 node scripts/verify-m1a.mjs
 ```
+
+开发启动用 `pnpm dev`，自动检查 Electron SQLite ABI 并隔离开发 Profile；目录约定见 [仓库地图](repo-map.md#生成物约定)。人工交付结论须直接列启动、样本、操作和预期，不只引用本页。
+
+M1b 阅读与人工记录使用独立证据目录。报告门禁核对代码、锁文件、测试脚本和构建脚本指纹，不计算产品验收；`cases.json` 覆盖计划指定的 G-01/G-05/G-06 与 AT-04/05/18/52/60—62，仍不等于 P0—P6 完成。实际端到端缺口和返工结论见 [A 审查与 B 返工](../evidence/m1b-reading-notes-delivery.md#8-a-集中审查与返工)。
+
+```powershell
+node scripts/review-m1b-ui.mjs
+node scripts/review-m1b-reading.mjs
+```
+
+两条 UI review 都需先打包，使用合成 Profile，并把原生文件对话框桩替换为合成样本。前者验证 A 的局部修复与 360 px 窄窗，后者验证阅读→记录→来源→返回、书签高亮、冻结材料、会话分区与资料包逐项决策；都不替代真实 IME、缩放或完整产品验收。原 B 自检命令示例：
+
+```powershell
+$env:M1B_EVIDENCE_DIR='docs/evidence/m1b-reading-notes/b3-rework'
+node scripts/m1b.mjs test
+node scripts/m1b.mjs bench
+node scripts/m1b.mjs package
+node scripts/review-m1b-reading.mjs
+$env:M1B_REQUIRE_REPORT='1'
+node scripts/verify-m1b.mjs
+```
+
+以上 `b3-rework` 命令保留为历史跑次示例，新执行必须使用新目录，不能照抄覆盖。最新 B 证据是 `b8-rework`，最新 A 独立证据是 `a-b8-review/final-commit`；此前目录及 `repro-*` 全部保留。
+
+`audit-m1b-recheck.mjs` 验证普通 PDF/EPUB 及资料包混合冲突反例，`review-m1b-recheck.mjs` 使用实际包验证跨模式草稿/会话及扫描页和字体持久化。后者需要先打包；两者默认读取 `a-recheck` 中的标准合成样本，换证据目录时先复制合成样本并核对哈希或重新生成，保留原结果。这两条旧入口及 `audit-m1b-b5-review.mjs` 的 PDF Unicode、资源/修订 skip 反例在最新 A 跑次均通过；`audit-m1b-b6-review.mjs` 新增两种混合导入来源保护和第 101 条资源可达性反例，本轮三项通过；`audit-m1b-b7-rework.mjs` 五项也通过。新增 `audit-m1b-a-b7-review.mjs` 与 `review-m1b-a-b7-ui.mjs` 进一步检查 PDF 文本推进/颜色、EPUB 作者呈现、显式混合导入和搜索续页，均因 F-07/F-09 真实退出 1。F-08 局部修复后通过；新 UI 脚本需先运行新服务审计生成合成 PDF，并使用同源码包。`review-m1b-b6-ui.mjs` 检查 A-37 演示隔离、模式名称、响应布局和原阅读/笔记/Agent 入口。`review-m1b-b5-h-checks.mjs` 验证 H-01/H-03/H-04 的自动子集，不代替实际 IME、Windows DPI、拖动贴靠和产品验收。执行前始终设置新的 `M1B_EVIDENCE_DIR`。
+
+上述退出 1 是 8.16 时的历史结果；在 8.18 的独立复跑中，三份指定服务审计、全部旧审计和 UI/H 子集均退出 0。新入口 `scripts/review-m1b-a-b8.mjs` 使用同源码包同时检查间接字体宽度/CID W/缩放绘制、包外幸存锚点/复制锚点/ref skip、原四组合的完整来源链、钉住冲突拒绝和实际椭圆几何；14 项中 7 passed / 7 failed，实际退出 1。必须保留该失败，不得以旧套件通过替代。
+
+报告门禁在以上九份独立审计及新增 `a-b8-independent-review.json` 存在时校验当前指纹、非空观测和逐项 passed；不可用普通自检覆盖独立失败，也不计算产品验收。窗口性能指标由实际 Electron 原始样本计算，门禁核对有限非负数、p95 阈值、样本数量及摘要一致性。最新跑次包含同一 10k/50k 合成 Profile 的大书末段、后台解析操作与冷启动，全部原阈值与断言保留；隐藏窗口计时截至 DOM 可用，不是绘制帧或正式实机体验。最新结论见 [交付报告 8.18](../evidence/m1b-reading-notes-delivery.md#818-a-独立复核与后续批次安排2026-09-25)，116 项 Vitest 通过与报告门禁因新审计退出 1 分别报告。
+
+当前跑次见 [A 复核 8.22](../evidence/m1b-reading-notes-delivery.md#a-b9-rework-review)：`a-b9-rework-review` 在同源码包上复跑原 14 项、全部旧审计/UI/H、引擎 7 项、155 项 Vitest、bench 与 M1a；新反例合入独立审计，严格报告因失败退出 1。以上旧版本通过/失败均保留历史含义。用户 A-41 已把下一 B 批次改为 [PDF.js MVP 替换](../delivery/m1b-execution-plan.md#pdfjs-mvp)：自研 PDF 的内部 SVG/gx/textLength 断言须带映射迁移为 PDF.js 可见行为与来源不变量，不伪造旧字段、不删除失败场景；非 PDF、数据/权限/恢复、同规模阈值和独立失败传播继续有效。
 
 完整 M0 自动验证需要先生成同一源码版本的 Windows 包和性能结果。PowerShell 示例：
 

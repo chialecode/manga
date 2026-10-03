@@ -1,0 +1,53 @@
+{
+  "at": "2026-09-24T18:10:04.190Z",
+  "sourceFingerprint": "22fb573135c93cd704d7f4cd44e114541921442763502fb1f0c035451d0ffe3c",
+  "m1bSourceFingerprint": "68bf5ec9bb9b6d4723e3804d37ebcf043fed00df39b24c61b73d73e712257311",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "beeda01fc7e0cd4193ae087d13a65dbfa0016029c181d93ce1a2028597bf7e1d",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "82882e53d9c3a7b968b0f720b43b9b6331eeb158427bf4de94317682b8137494",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "skipping a note preserves the source resource of its existing anchor",
+      "status": "passed",
+      "detail": {
+        "sourcePreserved": true,
+        "sourceNowTargetsDuplicate": false
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "skipping a revision while duplicating a resource retains recoverable excerpt provenance",
+      "status": "passed",
+      "detail": {
+        "excerptTextKept": true,
+        "sourceAnchorKept": true,
+        "sourceReferenceCount": 1,
+        "originalAnchorStillExists": true
+      }
+    },
+    {
+      "finding": "F-08",
+      "name": "a truncated library provides a continuation path for the oldest resource",
+      "status": "passed",
+      "detail": {
+        "total": 101,
+        "listed": 100,
+        "oldestInInventory": false,
+        "oldestInReading": false,
+        "inventoryFields": [
+          "generatedAt",
+          "totals",
+          "items",
+          "pagination",
+          "cancelled"
+        ],
+        "continuation": true
+      }
+    }
+  ]
+}

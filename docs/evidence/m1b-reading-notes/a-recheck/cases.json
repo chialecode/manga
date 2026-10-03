@@ -1,0 +1,423 @@
+{
+  "status": "passed",
+  "at": "2026-09-23T13:40:16.959Z",
+  "sourceFingerprint": "ce5ada40dbc2415e3c110160bca22b7989d980133688edaedc289495052df019",
+  "m1bSourceFingerprint": "e247fc7e6bc8e9caa83fa57756d5b1fc5a73f695fb3d9d9620aa301ba703209a",
+  "lockFingerprint": "a6699b8bf09cba2192f10323919f96261298f3d188418c4b2c0e345af44ab192",
+  "testScriptFingerprint": "f4ff73b8a766283e65e8e7001fd4c7b6169423aefc87a3a85eeab65f271c6e54",
+  "buildScriptFingerprint": "cfc1d329bf09d049f8689c6e528563f15e58efb7cc23b20369c5388749fa6497",
+  "generator": "scripts/verify-m1b.mjs",
+  "productAcceptance": "not-run",
+  "cases": [
+    {
+      "caseId": "G-01",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates rejects invalid txt without replacing bytes and keeps the candidate unaccepted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates reads epub structure, strips script, and records external links",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates decompresses PalmDOC and reads a UTF-8 mobi",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates reads mobi html pages and their image records instead of showing raw markup",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates extracts pdf text, keeps scan pages without OCR, and rejects encryption",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates follows the pdf page tree instead of treating every stream as a page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates reads a page tree that only exists inside an object stream with an xref stream",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates keeps a page without text or image instead of renumbering the pages after it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates keeps epub illustrations per chapter and shows a fixed-layout page image",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates rejects zip path escape and compression bombs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates bounds actual zip inflation even when the declared size is forged",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/external-samples.test.ts",
+          "name": "M1b independent reading samples reads an EPUB written by an external zip writer",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/external-samples.test.ts",
+          "name": "M1b independent reading samples reads a PDF whose page tree and inherited resources live in an object stream",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/external-samples.test.ts",
+          "name": "M1b independent reading samples reads a PalmDOC compressed MOBI with recindex and kindle:embed images",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/external-samples.test.ts",
+          "name": "M1b independent reading samples records the external toolchain that produced the samples",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/large-files.test.ts",
+          "name": "large reading files reads the tail of a 10 MiB txt through a path handle",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/large-files.test.ts",
+          "name": "large reading files reads the last chapter of a 30 MiB epub",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index parses an epub in the worker and does not treat parser candidates as accepted",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "G-05",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index splits, copies and rejects a stale note revision without writing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell does not autosave a note while composition is active and keeps split ids",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "A review editor regressions creates and switches every required block type from the toolbar",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "A review editor regressions restores an unsaved draft and offers a real save failure state",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "A review editor regressions keeps the rich view in step with the source editor instead of overwriting it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index keeps a v4 library and schema v1 note through migration",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state keeps an unknown block payload through a replace so a newer editor never loses data",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "G-06",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index searches a CJK tail past the old 4000-character index and filters unread ranges",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index freezes the selection into the agent snapshot and blocks an unread quote",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state freezes the material context message with the run so the model request can be checked",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure returns from a note to its source and resolves the exact stored range",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure reports a missing source and offers the repair entry after the original is replaced",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state re-points a note whose source revision is gone and keeps the link usable",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure restores the stored reading position and never marks a jump as read",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state restores the slice at the stored offset and merges repeated consumed ranges",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure gives each resource its own agent session and freezes the visible materials",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state keeps a note session apart from the book session and from the other work mode",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure previews a conflicting package and imports it with a chosen strategy",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure restores hosted media locations and preserves unknown attachments across a package round trip",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index discards a note write when the commit process exits",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index resolves a duplicate sentence as needs_review and a scan page as missing capability",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-04",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "A review editor regressions maps a repeated quote after emoji to the selected code-point range only",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "reading surface keeps the highlight aligned when the text carries emoji before the marked range",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index resolves a duplicate sentence as needs_review and a scan page as missing capability",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure returns from a note to its source and resolves the exact stored range",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state re-points a note whose source revision is gone and keeps the link usable",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-05",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure supports note tags, listing, search, history and revision restore",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure returns from a note to its source and resolves the exact stored range",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state never opens another block's source for a jump that names one block",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state drops the source link when its block is removed and restores it with the revision",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state keeps an unknown block payload through a replace so a newer editor never loses data",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-18",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure previews a conflicting package and imports it with a chosen strategy",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure restores hosted media locations and preserves unknown attachments across a package round trip",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state applies a per-row revision decision and remaps the revision inside a stored locator",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework2-closure.test.ts",
+          "name": "M1b rework: source repair and reader state treats a library that only holds reader state as non-empty",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-52",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates follows the pdf page tree instead of treating every stream as a page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates keeps epub illustrations per chapter and shows a fixed-layout page image",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates reads mobi html pages and their image records instead of showing raw markup",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/rework-closure.test.ts",
+          "name": "M1b rework: reading notes closure keeps bookmarks, reader style and image parts addressable",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/external-samples.test.ts",
+          "name": "M1b independent reading samples reads an EPUB written by an external zip writer",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/formats.test.ts",
+          "name": "G-01 format candidates keeps a page without text or image instead of renumbering the pages after it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "reading surface shows the source state, the empty search result and the reading style controls",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "reading surface offers the previous and next part controls and the bookmark list",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-60",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell opens one overlay from hover and restores focus with Escape",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/reading-notes.test.ts",
+          "name": "reading, notes and index keeps shell measure independent of the dock and delays overlay close",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell restores docking after a user hides the sidebar and closes pinned narrow panels",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-61",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell moves the mode menu with the keyboard and keeps a stop control",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell shows the opened resource sessions under the left navigation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-62",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 shell docks sidebars on a wide window and keeps the reading measure",
+          "status": "passed"
+        },
+        {
+          "file": "tests/m1b/shell-ui.test.tsx",
+          "name": "reading surface marks the stored bookmark range in the body and reports the restored position",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}
