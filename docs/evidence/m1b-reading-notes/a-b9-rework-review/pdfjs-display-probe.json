@@ -1,0 +1,45 @@
+{
+  "at": "2026-09-25T06:32:12.176Z",
+  "kind": "candidate-display-api-probe",
+  "engine": "pdfjs-dist",
+  "version": "6.3.289",
+  "accepted": false,
+  "productionIntegration": "not-run",
+  "productAcceptance": "not-run",
+  "scope": "Node Display API with local standard fonts and synthetic PDFs; raster equality of equivalent joined/split operators; not an Electron/text-selection/old-anchor validation",
+  "observations": [
+    {
+      "name": "unequal-glyph-extents",
+      "status": "passed",
+      "differentChannels": 0,
+      "nonWhiteChannels": 1305,
+      "pageSize": {
+        "width": 1600,
+        "height": 1600
+      },
+      "inputSha256": "88c447c79c08dc783ae0126f3d1d867666562b51771feabd9d83577e0a021043"
+    },
+    {
+      "name": "courier-spacing-glyph-extents",
+      "status": "passed",
+      "differentChannels": 0,
+      "nonWhiteChannels": 1386,
+      "pageSize": {
+        "width": 1600,
+        "height": 1600
+      },
+      "inputSha256": "50f8306f2dc0cce6f0826f88d7e363c72d50e0efa11aaa47d2fcff285d4f91e7"
+    },
+    {
+      "name": "courier-half-scale-control",
+      "status": "passed",
+      "differentChannels": 0,
+      "nonWhiteChannels": 3789,
+      "pageSize": {
+        "width": 1600,
+        "height": 1600
+      },
+      "inputSha256": "6d85aae6003b5f6e240a6b834038f22a4d50afb1524546cc2beed314bdfd804c"
+    }
+  ]
+}

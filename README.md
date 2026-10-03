@@ -8,9 +8,22 @@ MANGA 取自 **Manga、Anime、Novel、Game、Agent**，是一个以 TypeScript 
 
 ## 当前阶段
 
-仓库已完成文档治理，并建立 **M0 验证工程**（`packages/`、`experiments/m0`）。M1a 产品宿主在 `apps/desktop`，当前在 `feat/m1a-agent-foundation` 等待审查。这不是产品发行版：没有用户安装包，产品 AT 均未执行。文档描述目标行为，不能把原型或 M1a 自动测试写成产品验收通过。
+M0 原型源码位于 `experiments/m0`，M1 产品宿主位于 `apps/desktop`，共用业务包位于 `packages`。M0/M1a 已合入 main；M1b 阅读与人工记录处于 A 审查返工阶段，完整产品验收尚未完成，详见 [交付报告](docs/evidence/m1b-reading-notes-delivery.md)。
 
 首版已确认采用**本地单用户、基础功能无需登录、Windows 11 x64**，其他桌面系统后续独立验收。自动化证据与退出判断见 [M0 汇总](docs/evidence/2026-09-19-m0-summary.md)，推进状态见 [执行台账](docs/delivery/status.md)。
+
+## 本地启动
+
+仓库根执行：
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+要求 Node.js 24.19+、锁定版本 pnpm 和 Windows x64。`pnpm dev` 自动准备并校验 Electron 对应的 SQLite ABI，使用 `dist/desktop/development` 下独立开发 Profile；Node 测试继续使用 Node 的 SQLite 二进制。首次准备需要下载所选依赖，失败时停止启动并显示错误。不要通过替换 `node_modules` 中的原生文件来回切环境。
+
+桌面包位于 `dist/desktop/packages`，构建资产与缓存属于生成物；M1 不需要另建 `experiments/m1`。源码、临时运行与公开证据的区别见 [仓库地图](docs/dev-rules/repo-map.md)。
 
 ## 开发与文档入口
 
@@ -46,4 +59,4 @@ MANGA 取自 **Manga、Anime、Novel、Game、Agent**，是一个以 TypeScript 
 
 实现前先完成文档中的技术验证与范围锁定，再按完整工作流分阶段交付。
 
-项目采用 [Apache License 2.0](LICENSE)。已确认的 M1 顺序为 Agent 与基础配置优先；当前仍是 M0 验证工程，正式功能进度见 [执行状态](docs/delivery/status.md)。
+项目采用 [Apache License 2.0](LICENSE)。已确认的 M1 顺序为 Agent 与基础配置优先；后续优先形成三种媒介的可用阅读/播放闭环，正式功能进度见 [执行状态](docs/delivery/status.md)。

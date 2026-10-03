@@ -1,0 +1,38 @@
+{
+  "at": "2026-09-24T19:25:35.882Z",
+  "sourceFingerprint": "db8c8f9e32ca981f0365d0d220a3649ab326497963babaa7a5f8dd021437614c",
+  "m1bSourceFingerprint": "dd3214b5a15d9f498a4141650db9b38c504a8b330e107a904eb2f8969191331d",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "25f3a4d5c6a8a08b25dac17ff1232a8efe53c998cc79a4710544b4f98010d324",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "status": "passed",
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "duplicate import preserves non-conflicting identities",
+      "status": "passed"
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicated note payload and reference use the same remapped anchor",
+      "status": "passed"
+    },
+    {
+      "finding": "F-09",
+      "name": "per-row skip of a conflicting anchor succeeds",
+      "status": "passed"
+    },
+    {
+      "finding": "F-07",
+      "name": "standard Flate RGB scan produces a browser-decodable image",
+      "status": "passed"
+    },
+    {
+      "finding": "F-07",
+      "name": "EPUB resolves a sibling image using a parent-relative path",
+      "status": "passed"
+    }
+  ]
+}

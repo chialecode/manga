@@ -1,0 +1,97 @@
+{
+  "at": "2026-09-24T15:52:49.114Z",
+  "sourceFingerprint": "4dc46c2c0a3d05be3a6d0234516123aa594b257671441fdce6859ae3fad1953e",
+  "m1bSourceFingerprint": "fb55ab24a5bf961da6505d14242f9df8b78756def7bbd641414ed22df0eff0c4",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "fb273e75128a475788bb96c98149e1331bb68f4fb6b928201f2c94ee424c3cdf",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "evidenceEnvironment": {
+    "M1B_EVIDENCE_DIR": "docs/evidence/m1b-reading-notes/a-b6-review/final",
+    "M1B_REQUIRE_REPORT": "1",
+    "M1A_EVIDENCE_DIR": "docs/evidence/m1b-m1a-regression/a-b6-review/final"
+  },
+  "commands": [
+    {
+      "command": "node scripts/package-m1b.mjs",
+      "exitCode": 0,
+      "evidence": "package.json"
+    },
+    {
+      "command": "node scripts/audit-m1b-b5-review.mjs",
+      "exitCode": 0,
+      "evidence": "a-b5-deep-review.json"
+    },
+    {
+      "command": "node scripts/audit-m1b-recheck.mjs",
+      "exitCode": 0,
+      "evidence": "a-adversarial-review.json"
+    },
+    {
+      "command": "node scripts/audit-m1b-b6-review.mjs",
+      "exitCode": 1,
+      "evidence": "a-b6-deep-review.json",
+      "expectedExit": 1,
+      "reason": "Unresolved independent product failures; this is not a passing acceptance result."
+    },
+    {
+      "command": "node scripts/review-m1b-b6-ui.mjs",
+      "exitCode": 0,
+      "evidence": "a-b6-ui-review.json"
+    },
+    {
+      "command": "node scripts/review-m1b-recheck.mjs",
+      "exitCode": 0,
+      "evidence": "a-additional-ui-review.json"
+    },
+    {
+      "command": "node scripts/review-m1b-reading.mjs",
+      "exitCode": 0,
+      "evidence": "b2-ui-review.json"
+    },
+    {
+      "command": "node scripts/review-m1b-ui.mjs",
+      "exitCode": 0,
+      "evidence": "a-ui-review.json"
+    },
+    {
+      "command": "node scripts/review-m1b-b5-h-checks.mjs",
+      "exitCode": 0,
+      "evidence": "a-b5-h-checks.json"
+    },
+    {
+      "command": "node scripts/bench-m1b.mjs",
+      "exitCode": 0,
+      "evidence": "bench.json"
+    },
+    {
+      "command": "node --experimental-strip-types scripts/audit-m1a-reverify.mjs",
+      "exitCode": 0,
+      "evidence": "../../../m1b-m1a-regression/a-b6-review/final/audit.json"
+    },
+    {
+      "command": "node scripts/verify-m1b.mjs",
+      "exitCode": 1,
+      "evidence": "report.json",
+      "expectedExit": 1,
+      "reason": "Unresolved independent product failures; this is not a passing acceptance result."
+    },
+    {
+      "command": "node scripts/verify.mjs",
+      "exitCode": 0,
+      "evidence": "repository-quality.json",
+      "previousRun": {
+        "exitCode": 1,
+        "evidence": "repro-repository-quality.json",
+        "resolution": "Exact navigation label assertion synchronized, then full repository checks repeated."
+      }
+    },
+    {
+      "command": "node dist/a-b6-capture-settled.mjs",
+      "exitCode": 0,
+      "evidence": "a-b6-settled-capture.json",
+      "scope": "Supplementary same-build settled screenshot; helper is a local ignored artifact."
+    }
+  ],
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run"
+}

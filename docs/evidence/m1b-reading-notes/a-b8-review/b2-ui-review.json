@@ -1,0 +1,282 @@
+{
+  "status": "passed",
+  "scope": "B rework reading and manual notes in the packaged Windows x64 app",
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "comment": "Synthetic profile and samples only; native dialogs were stubbed to files under dist/desktop/review-runs. This is not the manual H list and does not prove real IME, DPI or package migration.",
+  "sourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+  "m1bSourceFingerprint": "a01343965adf1974e9496b84cc02c1fedbf3a1adf5ed08bc0418f872ee5db58a",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "25f3a4d5c6a8a08b25dac17ff1232a8efe53c998cc79a4710544b4f98010d324",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "13138216e1f364bb3854b65ad457da0e967be1428d8af154a62abdbb51550560",
+  "at": "2026-09-24T19:19:30.333Z",
+  "observations": [
+    {
+      "finding": "F-01",
+      "check": "import through the dialog and open the reader",
+      "status": "passed",
+      "resourceId": "res_8aeac6a6-90e1-44ef-8910-0f252e0711f0",
+      "title": "第一卷 开头。"
+    },
+    {
+      "finding": "F-02",
+      "check": "the record keeps the selected range only",
+      "status": "passed",
+      "expected": {
+        "start": 4,
+        "end": 12
+      },
+      "actual": {
+        "start": 4,
+        "end": 12
+      },
+      "excerpt": "开头。\n中段正文"
+    },
+    {
+      "finding": "F-10",
+      "check": "inline note title and tags",
+      "status": "passed",
+      "title": "合成阅读笔记",
+      "tags": [
+        "大纲",
+        "人物"
+      ]
+    },
+    {
+      "finding": "F-10",
+      "check": "note search result and empty state",
+      "status": "passed",
+      "emptyShown": true
+    },
+    {
+      "finding": "F-10",
+      "check": "reader font, line height, margin and background",
+      "status": "passed",
+      "reading": {
+        "measurePx": 680,
+        "fontSizePx": 22,
+        "fontFamily": "sans",
+        "lineHeight": 2,
+        "marginPx": 36,
+        "theme": "paper"
+      }
+    },
+    {
+      "finding": "F-06",
+      "check": "a bookmark jump draws the stored range and reports the position",
+      "status": "passed",
+      "highlighted": "第一卷 开头。\n中段正文：合成样本用于阅读记录与来源返回。\n中段正文：合成样本用于阅读记录与来源返回。\n中段正文：合成样本用于阅读记录与来源返回。\n中段正文：合成样本用于阅读记录与来源返回。\n中段正文：合成样本用于阅读记录与来源返回。\n中段",
+      "rangeStatus": "尚未记录进度，从开头开始 · 尚未标记已读范围"
+    },
+    {
+      "finding": "F-04",
+      "check": "the composer sends what the bound pane shows",
+      "status": "passed",
+      "bound": "当前上下文\n当前资料：第一卷 开头。（修订 rev_ae6d5dac-be42-40c4-ad45-97080e13984d）\n当前笔记：合成阅读笔记（修订 2）\n当前选区：开头。 中段正文\n发送时会自动包含当前上下文",
+      "selectionBound": 2,
+      "noteBound": 2,
+      "selectedNow": "开头。\n中段正文",
+      "frozenChars": 300,
+      "paneEqualsReceipt": true,
+      "frozenMatches": true
+    },
+    {
+      "finding": "F-05",
+      "check": "one rail lists resource and note sessions apart",
+      "status": "passed",
+      "rail": "已打开的资源会话\n第一卷 开头。\n· 资料 · 1\n第一卷 开头。\n· 笔记 · 0",
+      "railKinds": [
+        "resource",
+        "note"
+      ],
+      "kinds": [
+        "resource",
+        "note"
+      ]
+    },
+    {
+      "finding": "F-09",
+      "check": "package export, preview and one decision per conflicting row",
+      "status": "passed",
+      "decisionRows": 7,
+      "actions": 1,
+      "exported": [
+        "attachments",
+        "manifest.json"
+      ]
+    },
+    {
+      "finding": "F-09",
+      "check": "the chosen per-row strategy is what the import applies",
+      "status": "passed",
+      "conflictKind": "work",
+      "before": {
+        "resource": {
+          "count": 1,
+          "bytes": 4425
+        },
+        "note": {
+          "count": 1,
+          "bytes": 211
+        },
+        "attachment": {
+          "count": 0,
+          "bytes": 0
+        },
+        "backup": {
+          "count": 0,
+          "bytes": 0,
+          "missing": false,
+          "scanned": false
+        },
+        "cache": {
+          "count": 0,
+          "bytes": 0,
+          "missing": false,
+          "scanned": false
+        },
+        "indexedRoot": {
+          "count": 0,
+          "bytes": 0
+        }
+      },
+      "after": {
+        "resource": {
+          "count": 2,
+          "bytes": 8850
+        },
+        "note": {
+          "count": 2,
+          "bytes": 422
+        },
+        "attachment": {
+          "count": 0,
+          "bytes": 0
+        },
+        "backup": {
+          "count": 0,
+          "bytes": 0,
+          "missing": false,
+          "scanned": false
+        },
+        "cache": {
+          "count": 0,
+          "bytes": 0,
+          "missing": false,
+          "scanned": false
+        },
+        "indexedRoot": {
+          "count": 0,
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "finding": "F-01",
+      "check": "unavailable file, repair entry and re-read revision",
+      "status": "passed",
+      "staleCard": "来源卡片\n\n来源可用\n\n第一卷 开头。\n\n开头。 中段正文\n返回笔记\n重新指定文件",
+      "repairEntry": 1,
+      "reparsed": true,
+      "repairedStatus": "resolved",
+      "before": {
+        "start": 4,
+        "end": 12
+      },
+      "after": {
+        "start": 4,
+        "end": 12
+      },
+      "keptRevision": true
+    },
+    {
+      "finding": "F-01",
+      "check": "return from the source to the same note position",
+      "status": "passed",
+      "noteId": "obj_668e2666-c635-4d68-93f7-aca8e6107682"
+    },
+    {
+      "finding": "F-03",
+      "check": "shared undo and redo across the block document",
+      "status": "passed",
+      "beforeUndo": "开头。 视图同步 中段正文",
+      "undone": "开头。\n中段正文",
+      "redone": "开头。 视图同步 中段正文"
+    },
+    {
+      "finding": "F-10",
+      "check": "reading column and reader style in the real window",
+      "status": "passed",
+      "viewports": [
+        {
+          "width": 1280,
+          "height": 840,
+          "dpr": 1.5,
+          "overflow": false,
+          "bodyWidth": 617.3333740234375,
+          "fontPx": "22px",
+          "widest": [],
+          "widths": {
+            "body": 1280,
+            "root": 1280,
+            "main": 661
+          }
+        },
+        {
+          "width": 360,
+          "height": 780,
+          "dpr": 1.5,
+          "overflow": false,
+          "bodyWidth": 316.66668701171875,
+          "fontPx": "22px",
+          "widest": [],
+          "widths": {
+            "body": 360,
+            "root": 360,
+            "main": 345
+          }
+        }
+      ]
+    }
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 840,
+      "dpr": 1.5,
+      "overflow": false,
+      "bodyWidth": 617.3333740234375,
+      "fontPx": "22px",
+      "widest": [],
+      "widths": {
+        "body": 1280,
+        "root": 1280,
+        "main": 661
+      }
+    },
+    {
+      "width": 360,
+      "height": 780,
+      "dpr": 1.5,
+      "overflow": false,
+      "bodyWidth": 316.66668701171875,
+      "fontPx": "22px",
+      "widest": [],
+      "widths": {
+        "body": 360,
+        "root": 360,
+        "main": 345
+      }
+    }
+  ],
+  "screenshots": [
+    "b2-notes-rename.png",
+    "b2-reading-bookmark.png",
+    "b2-agent-context.png",
+    "b2-package-decisions.png",
+    "b2-source-repair.png",
+    "b2-reading-1280.png",
+    "b2-reading-360.png"
+  ]
+}

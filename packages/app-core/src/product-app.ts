@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   commandInputJsonSchema,
   MangaError,
+  NOTE_TAG_MAX,
+  type NoteDocument,
   ProfileConfigSchema,
   LOCATION_PARTITIONS,
   createId,
@@ -15,27 +17,54 @@ import {
   type ScopeGrant,
 } from "@manga/contracts";
 import { MangaRuntime } from "@manga/kernel";
-import { DrizzleStore, acquireHostLock, releaseHostLock } from "@manga/storage-drizzle";
+import { DrizzleStore, acquireHostLock, releaseHostLock, type Mutation } from "@manga/storage-drizzle";
 import { defineModule, type MangaModule } from "@manga/plugin-sdk";
 import { completeText, streamText, transcribeAudio, normalizeBaseUrl, rejectCredentialUrl, syntheticWav, joinApiPath, type AiRuntimeId, type ChatMessage, type ToolDefinition } from "@manga/model-protocol";
 import { decodeTextBuffer, normalizeText, sliceCodePoints } from "./domain/text.ts";
+import { parseDocument, type ParsedAsset, type ParsedDocument } from "./domain/formats.ts";
+import {
+  commitNoteOp,
+  filterUnread,
+  listBookmarks,
+  listNotes,
+  noteHistory,
+  openNoteSourceDetail,
+  persistParsedDocument,
+  readAsset,
+  readDocument,
+  readNote,
+  readOriginal,
+  readShell,
+  readSlice,
+  removeBookmark,
+  resolveAnchor,
+  restoreNoteRevision,
+  selectionQuote,
+  setBookmark,
+  setNoteTags,
+  setProgress,
+  sourceCard,
+  writeShell,
+} from "./reading-service.ts";
 import { comparablePath } from "./domain/file-ownership.ts";
-import { exportLibraryPackage, importLibraryPackage, recoverOrRollback } from "./domain/library-package.ts";
+import { exportLibraryPackage, importLibraryPackage, importLibraryPackageResolved, previewLibraryPackage, recoverOrRollback } from "./domain/library-package.ts";
 import { GrantRegistry } from "./grants.ts";
 import { type CredentialVault, UnavailableVault } from "./credentials.ts";
 import { assertSafeMigrationTarget, copyOwnedFile, directoryStats, fingerprintTree, listCopyFiles, persistPointer, persistPointerAt, pathsOverlap, scanDirectoryBatched, type LaunchRequest, resolveLaunchLayout, writeRelocationMarker } from "./locations.ts";
 import { startParseWorker, type ParseClient } from "./parse-client.ts";
 
 const OWNER_COMMANDS = [
-  "workspace.get", "library.importText", "library.getResource", "library.contextSnapshot", "library.search", "library.find",
-  "library.exportPackage", "library.importPackage", "library.transcribeAudio", "library.indexExternal",
-  "notes.create", "notes.update", "notes.undo",
+  "workspace.get", "workspace.sessions", "session.open", "library.importText", "library.importEpub", "library.importDocument", "library.getResource", "library.read", "library.readOriginal", "library.readSlice", "library.contextSnapshot", "library.search", "library.find", "library.list",
+  "library.exportPackage", "library.importPackage", "package.preview", "package.importResolved", "library.transcribeAudio", "library.indexExternal", "library.rebuildIndex", "library.repairSource", "progress.set",
+  "notes.create", "notes.update", "notes.undo", "notes.get", "notes.list", "notes.history", "notes.restore", "notes.tags", "notes.split", "notes.merge", "notes.move", "notes.copy", "notes.replace", "notes.insert", "notes.remove", "notes.setType", "notes.rename", "notes.asset", "notes.openSource",
+  "reader.resolveAnchor", "reader.ui.present", "source.card",
+  "reading.bookmarks", "reading.setBookmark", "reading.removeBookmark",
   "inventory.overview", "inventory.scan", "inventory.cancelScan", "inventory.reveal", "inventory.repair", "settings.get", "settings.skipAi",
-  "settings.proposeLocations", "settings.applyLocations", "settings.recoverJobs", "settings.setRuntime", "settings.setLayout",
+  "settings.proposeLocations", "settings.applyLocations", "settings.recoverJobs", "settings.setRuntime", "settings.setLayout", "settings.getShell", "settings.setShell",
   "connections.list", "connections.upsert", "connections.test", "connections.delete",
   "agent.createSession", "agent.send", "agent.cancel", "agent.retry", "agent.getRun",
 ];
-const AGENT_COMMANDS = ["library.find", "library.getResource", "library.contextSnapshot", "notes.create", "notes.undo", "inventory.overview"];
+const AGENT_COMMANDS = ["library.find", "library.list", "library.getResource", "library.read", "library.contextSnapshot", "source.card", "notes.create", "notes.update", "notes.get", "notes.list", "notes.undo", "inventory.overview"];
 /** Partitions whose files are only located by path, so a move may leave them behind as an indexed root. `data` and `attachments` are referenced by identity and must travel. */
 const INDEXABLE_PARTITIONS = new Set<string>(["resources", "downloads", "backups", "exports", "cache"]);
 
@@ -45,6 +74,7 @@ export type ProductAppOptions = LaunchRequest & {
   vault?: CredentialVault;
   useParseWorker?: boolean;
   parseWorkerPath?: string;
+  nativeBinding?: string;
 };
 
 export class MangaProductApp {
@@ -85,6 +115,7 @@ export class MangaProductApp {
         hostId,
         crashAt: options.crashAt,
         attachmentsDir: this.layout.partitions.attachments,
+        nativeBinding: options.nativeBinding,
       });
     } catch (error) {
       releaseHostLock(this.layout.partitions.data, hostId);
@@ -378,14 +409,49 @@ export class MangaProductApp {
           });
         }
         this.runtime.registerCommand("manga.library", "workspace.get", () => this.workspace());
+        this.runtime.registerCommand("manga.library", "workspace.sessions", (envelope) => {
+          const input = envelope.input as { mode?: "enthusiast" | "creator" };
+          return this.sessionList(input.mode);
+        });
         this.runtime.registerCommand("manga.library", "library.importText", (envelope, signal) => {
           this.assertWritable();
           return this.importText(envelope, signal);
         });
+        this.runtime.registerCommand("manga.library", "library.importEpub", (envelope, signal) => {
+          this.assertWritable();
+          const input = envelope.input as { title: string; bytes: number[] };
+          return this.importDocument({ ...envelope, input: { title: input.title, bytes: input.bytes, format: "epub" } }, signal);
+        });
+        this.runtime.registerCommand("manga.library", "library.importDocument", (envelope, signal) => {
+          this.assertWritable();
+          return this.importDocument(envelope, signal);
+        });
+        this.runtime.registerCommand("manga.library", "library.read", (envelope) => this.readResource(envelope));
+        this.runtime.registerCommand("manga.library", "library.readOriginal", (envelope) => this.readOriginal(envelope));
+        this.runtime.registerCommand("manga.library", "library.readSlice", (envelope) => this.readResourceSlice(envelope));
+        this.runtime.registerCommand("manga.library", "library.rebuildIndex", (envelope) => {
+          this.assertWritable();
+          return this.store.rebuildSearchIndex();
+        });
+        this.runtime.registerCommand("manga.library", "library.repairSource", (envelope, signal) => this.repairSource(envelope, signal));
+        this.runtime.registerCommand("manga.library", "progress.set", (envelope) => {
+          this.assertWritable();
+          return setProgress(this.store, envelope, this.grantOf(envelope), this.grants);
+        });
+        this.runtime.registerCommand("manga.library", "reader.resolveAnchor", (envelope) => {
+          const grant = this.grantOf(envelope);
+          const input = envelope.input as { resourceRevisionId: string; locator: Parameters<typeof resolveAnchor>[2] };
+          const resolved = resolveAnchor(this.store, input.resourceRevisionId, input.locator);
+          const resourceId = resolved.resourceId;
+          if (typeof resourceId === "string" && !this.grants.canRead(grant, resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+          return resolved;
+        });
+        this.runtime.registerCommand("manga.library", "reader.ui.present", () => ({ available: this.uiFacets.has("library"), facet: "ui" }));
         this.runtime.registerCommand("manga.library", "library.getResource", (envelope) => this.getResource(envelope));
         this.runtime.registerCommand("manga.library", "library.contextSnapshot", (envelope) => this.contextSnapshot(envelope));
         this.runtime.registerCommand("manga.library", "library.search", (envelope) => this.search(envelope));
         this.runtime.registerCommand("manga.library", "library.find", (envelope) => this.search(envelope));
+        this.runtime.registerCommand("manga.library", "library.list", (envelope) => this.libraryList(envelope));
         this.runtime.registerCommand("manga.library", "library.exportPackage", (envelope) => {
           const input = envelope.input as { pathHandle?: string; targetDir?: string };
           if (!input.pathHandle || input.targetDir) throw new MangaError("FORBIDDEN", "export requires a host path handle");
@@ -396,6 +462,43 @@ export class MangaProductApp {
           const input = envelope.input as { pathHandle?: string; sourceDir?: string };
           if (!input.pathHandle || input.sourceDir) throw new MangaError("FORBIDDEN", "import requires a host path handle");
           return importLibraryPackage(this.store, this.resolvePath(input.pathHandle), { crashAt: this.store.crashAt, receipt: { key: envelope.idempotencyKey, commandId: envelope.commandId } });
+        });
+        this.runtime.registerCommand("manga.library", "package.preview", (envelope) => {
+          const input = envelope.input as { pathHandle?: string; sourceDir?: string };
+          if (!input.pathHandle || input.sourceDir) throw new MangaError("FORBIDDEN", "preview requires a host path handle");
+          return previewLibraryPackage(this.store, this.resolvePath(input.pathHandle));
+        });
+        this.runtime.registerCommand("manga.library", "package.importResolved", (envelope) => {
+          this.assertWritable();
+          const input = envelope.input as { pathHandle?: string; sourceDir?: string; strategy?: "skip" | "replace" | "duplicate"; decisions?: Array<{ kind: string; id: string; action: "skip" | "replace" | "duplicate" }> };
+          if (!input.pathHandle || input.sourceDir) throw new MangaError("FORBIDDEN", "import requires a host path handle");
+          return importLibraryPackageResolved(this.store, this.resolvePath(input.pathHandle), {
+            crashAt: this.store.crashAt,
+            receipt: { key: envelope.idempotencyKey, commandId: envelope.commandId },
+            strategy: input.strategy ?? "duplicate",
+            decisions: (input.decisions ?? []) as never,
+          });
+        });
+        this.runtime.registerCommand("manga.library", "source.card", (envelope) => {
+          const input = envelope.input as { resourceId: string };
+          if (!this.grants.canRead(this.grantOf(envelope), input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+          return sourceCard(this.store, envelope.input as Parameters<typeof sourceCard>[1]);
+        });
+        this.runtime.registerCommand("manga.library", "reading.bookmarks", (envelope) => {
+          const input = envelope.input as { resourceId?: string };
+          if (input.resourceId && !this.grants.canRead(this.grantOf(envelope), input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+          return listBookmarks(this.store, input.resourceId);
+        });
+        this.runtime.registerCommand("manga.library", "reading.setBookmark", (envelope) => {
+          this.assertWritable();
+          const input = envelope.input as { resourceId: string; bookmarkId?: string; label?: string };
+          if (!this.grants.canRead(this.grantOf(envelope), input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+          const detail = envelope.input as Parameters<typeof setBookmark>[1];
+          return setBookmark(this.store, { ...detail, label: input.label ?? "", idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId });
+        });
+        this.runtime.registerCommand("manga.library", "reading.removeBookmark", (envelope) => {
+          this.assertWritable();
+          return removeBookmark(this.store, { bookmarkId: (envelope.input as { bookmarkId: string }).bookmarkId, idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId });
         });
         this.runtime.registerCommand("manga.library", "library.transcribeAudio", (envelope, signal) => this.transcribeAuthorizedFile(envelope, signal));
         this.runtime.registerCommand("manga.library", "library.indexExternal", (envelope) => this.indexExternalRoot(envelope));
@@ -437,6 +540,58 @@ export class MangaProductApp {
         this.runtime.registerCommand("manga.notes", "notes.undo", (envelope) => {
           this.assertWritable();
           return this.undoNote(envelope);
+        });
+        this.runtime.registerCommand("manga.notes", "notes.get", (envelope) => {
+          const input = envelope.input as { objectId: string };
+          this.assertNoteAccess(envelope, input.objectId, false);
+          return readNote(this.store, input.objectId);
+        });
+        this.runtime.registerCommand("manga.notes", "notes.split", (envelope) => this.noteOp(envelope, "split"));
+        this.runtime.registerCommand("manga.notes", "notes.merge", (envelope) => this.noteOp(envelope, "merge"));
+        this.runtime.registerCommand("manga.notes", "notes.move", (envelope) => this.noteOp(envelope, "move"));
+        this.runtime.registerCommand("manga.notes", "notes.copy", (envelope) => this.noteOp(envelope, "copy"));
+        this.runtime.registerCommand("manga.notes", "notes.replace", (envelope) => this.noteOp(envelope, "replace"));
+        this.runtime.registerCommand("manga.notes", "notes.insert", (envelope) => this.noteOp(envelope, "insert"));
+        this.runtime.registerCommand("manga.notes", "notes.remove", (envelope) => this.noteOp(envelope, "remove"));
+        this.runtime.registerCommand("manga.notes", "notes.setType", (envelope) => this.noteOp(envelope, "setType"));
+        this.runtime.registerCommand("manga.notes", "notes.rename", (envelope) => this.noteOp(envelope, "rename"));
+        this.runtime.registerCommand("manga.notes", "notes.asset", (envelope) => {
+          const input = envelope.input as { resourceRevisionId: string; assetId: string };
+          const grant = this.grantOf(envelope);
+          const owner = this.store.sqlite.prepare("SELECT resource_id FROM resource_assets WHERE id = ?").get(`${input.resourceRevisionId}:${input.assetId}`) as { resource_id: string } | undefined;
+          if (!owner) throw new MangaError("NOT_FOUND", "asset missing");
+          if (!this.grants.canRead(grant, owner.resource_id)) throw new MangaError("SCOPE_DENIED", "asset is outside the authorized set");
+          const asset = readAsset(this.store, input.resourceRevisionId, input.assetId);
+          if (!asset) throw new MangaError("NOT_FOUND", "asset missing");
+          return { mediaType: asset.mediaType, name: asset.name, bytes: [...asset.bytes] };
+        });
+        this.runtime.registerCommand("manga.notes", "notes.openSource", (envelope) => {
+          const input = envelope.input as { objectId: string; blockId?: string };
+          this.assertNoteAccess(envelope, input.objectId, false);
+          return openNoteSourceDetail(this.store, input.objectId, input.blockId);
+        });
+        this.runtime.registerCommand("manga.notes", "notes.list", (envelope) => {
+          const grant = this.grantOf(envelope);
+          const input = envelope.input as { resourceId?: string };
+          if (input.resourceId && !this.grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+          return this.filterNotesForGrant(envelope, listNotes(this.store, envelope.input as Parameters<typeof listNotes>[1]));
+        });
+        this.runtime.registerCommand("manga.notes", "notes.history", (envelope) => {
+          const input = envelope.input as { objectId: string; limit?: number };
+          this.assertNoteAccess(envelope, input.objectId, false);
+          return noteHistory(this.store, input.objectId, input.limit);
+        });
+        this.runtime.registerCommand("manga.notes", "notes.restore", (envelope) => {
+          this.assertWritable();
+          const input = envelope.input as { objectId: string };
+          this.assertNoteAccess(envelope, input.objectId, true);
+          return restoreNoteRevision(this.store, { ...(envelope.input as Parameters<typeof restoreNoteRevision>[1]), objectId: input.objectId, idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId });
+        });
+        this.runtime.registerCommand("manga.notes", "notes.tags", (envelope) => {
+          this.assertWritable();
+          const input = envelope.input as { objectId: string };
+          this.assertNoteAccess(envelope, input.objectId, true);
+          return setNoteTags(this.store, { ...(envelope.input as Parameters<typeof setNoteTags>[1]), objectId: input.objectId, idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId });
         });
       },
       deactivate: () => undefined,
@@ -482,6 +637,18 @@ export class MangaProductApp {
         });
         this.runtime.registerCommand("manga.settings", "settings.setRuntime", (envelope) => this.setRuntime(envelope));
         this.runtime.registerCommand("manga.settings", "settings.setLayout", (envelope) => this.setLayout(envelope));
+        this.runtime.registerCommand("manga.settings", "settings.getShell", () => readShell(this.store));
+        this.runtime.registerCommand("manga.settings", "settings.setShell", (envelope) => {
+          this.assertWritable();
+          return writeShell(this.store, readShell(this.store), envelope.input as {
+            mode?: "enthusiast" | "creator";
+            spoilerGuard?: boolean;
+            focus?: boolean;
+            left?: { visible?: boolean; width?: number };
+            right?: { visible?: boolean; width?: number };
+            reading?: { measurePx?: number; fontSizePx?: number; lineHeight?: number; theme?: "paper" | "night" };
+          }, envelope);
+        });
         this.runtime.registerCommand("manga.settings", "connections.list", () => this.listConnections());
         this.runtime.registerCommand("manga.settings", "connections.upsert", (envelope) => this.upsertConnection(envelope));
         this.runtime.registerCommand("manga.settings", "connections.test", (envelope, signal) => this.testConnection(envelope, signal));
@@ -555,6 +722,11 @@ export class MangaProductApp {
         this.runtime.registerCommand("manga.agent", "agent.cancel", (envelope) => this.cancelRun(envelope));
         this.runtime.registerCommand("manga.agent", "agent.retry", (envelope) => this.retryRun(envelope));
         this.runtime.registerCommand("manga.agent", "agent.getRun", (envelope) => this.getRun(envelope));
+        // Bound resource/project sessions belong to the agent module: it owns their identity and tasks.
+        this.runtime.registerCommand("manga.agent", "session.open", (envelope) => {
+          this.assertWritable();
+          return this.openSession(envelope, envelope.input as { kind: "resource" | "project" | "note"; targetId: string; mode?: "enthusiast" | "creator"; sessionId?: string });
+        });
       },
       deactivate: () => {
         for (const controller of this.runAbort.values()) controller.abort();
@@ -563,20 +735,84 @@ export class MangaProductApp {
   }
 
   workspace() {
-    const notes = this.store.sqlite.prepare("SELECT id, revision, title, payload_json FROM content_objects WHERE type = 'notes.document' AND deleted_at IS NULL ORDER BY updated_at DESC").all() as Array<{ id: string; revision: number; title: string; payload_json: string }>;
-    const resources = this.store.sqlite.prepare("SELECT r.id, r.title, v.id AS revisionId FROM resources r JOIN resource_revisions v ON v.resource_id = r.id ORDER BY r.created_at DESC LIMIT 100").all();
+    const notes = this.store.sqlite.prepare("SELECT id, revision, title, tags_json, payload_json, updated_at AS updatedAt FROM content_objects WHERE type = 'notes.document' AND deleted_at IS NULL ORDER BY updated_at DESC").all() as Array<{ id: string; revision: number; title: string; tags_json: string; payload_json: string; updatedAt: string }>;
+    // One row more than the page shows tells the reader whether older resources exist; the cursor in
+    // resourcePage keeps everything past this window reachable through library.list.
+    const resourceRows = this.store.sqlite.prepare(`SELECT r.id, r.title, r.created_at AS createdAt, v.id AS revisionId FROM resources r
+      LEFT JOIN resource_revisions v ON v.id = (SELECT v2.id FROM resource_revisions v2 WHERE v2.resource_id = r.id ORDER BY v2.created_at DESC, v2.rowid DESC LIMIT 1)
+      ORDER BY r.created_at DESC, r.id DESC LIMIT 101`).all() as Array<{ id: string; title: string; createdAt: string; revisionId: string | null }>;
+    const resources = resourceRows.slice(0, 100);
+    const resourceTotal = (this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources").get() as { n: number }).n;
     const sessions = this.store.sqlite.prepare("SELECT * FROM agent_sessions ORDER BY updated_at DESC").all();
     const runs = this.store.sqlite.prepare("SELECT id, session_id AS sessionId, status, grant_handle AS grantHandle, input_text AS inputText, created_at AS createdAt, updated_at AS updatedAt FROM agent_runs ORDER BY created_at DESC LIMIT 50").all();
+    const refs = this.store.sqlite.prepare(`SELECT r.from_object_id AS objectId, r.from_block_id AS blockId, r.to_id AS anchorId, a.resource_id AS resourceId
+      FROM refs r JOIN anchors a ON a.id = r.to_id WHERE r.to_kind = 'anchor'`).all() as Array<{ objectId: string; blockId: string | null; anchorId: string; resourceId: string }>;
     return {
-      notes: notes.map((row) => ({ ...row, blocks: JSON.parse(row.payload_json).blocks })),
+      notes: notes.map((row) => {
+        const own = refs.filter((ref) => ref.objectId === row.id);
+        const payload = JSON.parse(row.payload_json) as { blocks?: unknown[] };
+        return {
+          id: row.id,
+          revision: row.revision,
+          title: row.title,
+          tags: row.tags_json ? JSON.parse(row.tags_json) as string[] : [],
+          blocks: payload.blocks ?? [],
+          resourceId: own[0]?.resourceId ?? null,
+          anchorId: own[0]?.anchorId ?? null,
+          blockId: own[0]?.blockId ?? null,
+          updatedAt: row.updatedAt,
+        };
+      }),
       resources,
+      resourcePage: {
+        total: resourceTotal,
+        listed: resources.length,
+        nextCursor: resourceRows.length > 100 && resources.length
+          ? encodeResourceCursor({ createdAt: resources[resources.length - 1]!.createdAt, id: resources[resources.length - 1]!.id })
+          : null,
+      },
       sessions,
       runs,
       uiFacets: [...this.uiFacets],
       layout: this.publicLayout(),
       aiSkipped: this.store.getMeta("aiSkipped") === "1",
       restartRequired: this.sealed,
+      shell: readShell(this.store),
     };
+  }
+
+  /** Resource/project sessions shown under the left-rail navigation, each bound to its own agent session. */
+  sessionList(mode?: "enthusiast" | "creator"): Array<Record<string, unknown>> {
+    const rows = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode, updated_at AS updatedAt FROM agent_sessions ORDER BY updated_at DESC LIMIT 100").all() as Array<{ id: string; title: string; kind: string; targetId: string | null; mode: string | null; updatedAt: string }>;
+    // A row saved before modes existed belongs to the enthusiast default, matching session.open.
+    const filtered = mode ? rows.filter((row) => (row.mode ?? "enthusiast") === mode) : rows;
+    return filtered.map((row) => {
+      const runCount = Number((this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_runs WHERE session_id = ?").get(row.id) as { n: number }).n);
+      const active = this.store.sqlite.prepare("SELECT id, status FROM agent_runs WHERE session_id = ? AND status IN ('queued','running','waiting_input') ORDER BY created_at DESC LIMIT 1").get(row.id) as { id: string; status: string } | undefined;
+      const resource = row.targetId ? this.store.sqlite.prepare("SELECT title FROM resources WHERE id = ?").get(row.targetId) as { title: string } | undefined : undefined;
+      return {
+        sessionId: row.id,
+        title: resource?.title ?? row.title,
+        kind: row.kind,
+        targetId: row.targetId,
+        mode: row.mode,
+        runCount,
+        activeRunId: active?.id ?? null,
+        activeRunStatus: active?.status ?? null,
+        updatedAt: row.updatedAt,
+      };
+    });
+  }
+
+  /** A note is visible to a bounded grant only when its own id or its source resource is authorized. */
+  private filterNotesForGrant(envelope: CommandEnvelope, notes: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+    const grant = this.grantOf(envelope);
+    if (grant.access === "owner") return notes;
+    return notes.filter((note) => {
+      if (this.grants.canWriteObject(grant, String(note.objectId))) return true;
+      const resourceId = note.resourceId;
+      return typeof resourceId === "string" && this.grants.canRead(grant, resourceId);
+    });
   }
 
   private publicLayout() {
@@ -614,7 +850,7 @@ export class MangaProductApp {
         { sql: "INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at) VALUES (?,?,?,?,?,?)", params: [resourceId, workId, "novel", input.title, JSON.stringify([input.title]), now] },
         { sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at) VALUES (?,?,?,?,?,?)", params: [revisionId, resourceId, createHash("sha256").update(Buffer.from(input.bytes)).digest("hex"), parsed.parserVersion, JSON.stringify({ id: revisionId, normalized: parsed.normalized, parserVersion: parsed.parserVersion, parts: [{ id: "body", normalized: parsed.normalized, parserVersion: parsed.parserVersion }] }), now] },
         ...this.store.indexFragment({ id: createId("frag"), resourceId, kind: "title", text: input.title }),
-        ...this.store.indexFragment({ id: createId("frag"), resourceId, kind: "body", text: parsed.normalized.slice(0, 4000) }),
+        ...this.store.indexTextChunks({ resourceId, resourceRevisionId: revisionId, partId: "body", representationId: revisionId, kind: "body", text: parsed.normalized }),
       ],
       events: [{ type: "resource.imported", payload: { resourceId, revisionId } }],
       idempotencyKey: envelope.idempotencyKey,
@@ -637,12 +873,60 @@ export class MangaProductApp {
         | { id: string; title: string; kind: string; revisionId: string; parserVersion: string; payload_json: string }
         | undefined;
     if (!row) throw new MangaError("NOT_FOUND", "resource missing");
+    if (grant.access !== "owner" && readShell(this.store).spoilerGuard) {
+      throw new MangaError("SCOPE_DENIED", "spoiler protection requires a bounded context query");
+    }
     const payload = JSON.parse(row.payload_json) as { normalized?: string; parts?: Array<{ id: string; normalized: string; parserVersion: string }> };
     return { id: row.id, title: row.title, kind: row.kind, revisionId: row.revisionId, parserVersion: row.parserVersion, parts: payload.parts ?? [{ id: "body", normalized: payload.normalized ?? "", parserVersion: row.parserVersion }] };
   }
 
-  private snapshotRevision(runId: string, resourceId: string): string | undefined {
-    const run = this.store.sqlite.prepare("SELECT snapshot_json FROM agent_runs WHERE id = ?").get(runId) as { snapshot_json: string | null } | undefined;
+  /**
+   * Bounded, ordered access to the whole library. A page names at most `limit` rows and carries the cursor
+   * of the next older row, so resources past the first window (and titles anywhere in the library) stay
+   * reachable instead of being truncated away.
+   */
+  private libraryList(envelope: CommandEnvelope) {
+    const grant = this.grantOf(envelope);
+    const input = envelope.input as { limit?: number; cursor?: string; query?: string };
+    const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+    const where: string[] = [];
+    const params: string[] = [];
+    if (grant.access !== "owner") {
+      const ids = grant.readResourceIds;
+      if (!ids.length) return { items: [], total: 0, nextCursor: null };
+      where.push(`r.id IN (${ids.map(() => "?").join(",")})`);
+      params.push(...ids);
+    }
+    if (input.query?.trim()) {
+      where.push("r.title LIKE ? ESCAPE '\\'");
+      params.push(`%${input.query.trim().replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
+    }
+    // The total describes the complete filtered library; the cursor only narrows the returned page.
+    const totalFilter = where.length ? ` WHERE ${where.join(" AND ")}` : "";
+    const total = (this.store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r${totalFilter}`).get(...params) as { n: number }).n;
+    if (input.cursor) {
+      const decoded = decodeResourceCursor(input.cursor);
+      if (!decoded) throw new MangaError("VALIDATION_ERROR", "library page cursor is invalid");
+      where.push("(r.created_at < ? OR (r.created_at = ? AND r.id < ?))");
+      params.push(decoded.createdAt, decoded.createdAt, decoded.id);
+    }
+    const filter = where.length ? ` WHERE ${where.join(" AND ")}` : "";
+    const rows = this.store.sqlite.prepare(`SELECT r.id, r.title, r.kind, r.created_at AS createdAt, v.id AS revisionId
+      FROM resources r
+      LEFT JOIN resource_revisions v ON v.id = (
+        SELECT v2.id FROM resource_revisions v2 WHERE v2.resource_id = r.id ORDER BY v2.created_at DESC, v2.rowid DESC LIMIT 1
+      )${filter} ORDER BY r.created_at DESC, r.id DESC LIMIT ?`).all(...params, limit + 1) as Array<{ id: string; title: string; kind: string; createdAt: string; revisionId: string | null }>;
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    return {
+      items: page.map((row) => ({ id: row.id, title: row.title, kind: row.kind, revisionId: row.revisionId ?? null })),
+      total,
+      nextCursor: hasMore && last ? encodeResourceCursor({ createdAt: last.createdAt, id: last.id }) : null,
+    };
+  }
+
+  private snapshotRevision(runId: string, resourceId: string): string | undefined {    const run = this.store.sqlite.prepare("SELECT snapshot_json FROM agent_runs WHERE id = ?").get(runId) as { snapshot_json: string | null } | undefined;
     if (!run?.snapshot_json) return undefined;
     const snapshot = JSON.parse(run.snapshot_json) as { materials?: Array<{ resourceId: string; revisionId: string }> };
     return snapshot.materials?.find((item) => item.resourceId === resourceId)?.revisionId;
@@ -664,6 +948,7 @@ export class MangaProductApp {
     if (!part) throw new MangaError("NOT_FOUND", "resource part missing");
     const start = input.start ?? 0;
     const end = input.end ?? Math.min(start + 240, codePointSafeEnd(part.normalized, start));
+    this.assertConsumedRange(grant, input.resourceId, input.resourceRevisionId, part.id, start, end);
     if (start > end || end - start > 4096) throw new MangaError("VALIDATION_ERROR", "context range is invalid");
     const quote = sliceCodePoints(part.normalized, start, end);
     if (end > [...part.normalized].length) throw new MangaError("VALIDATION_ERROR", "context range is past the end");
@@ -672,33 +957,53 @@ export class MangaProductApp {
 
   private search(envelope: CommandEnvelope) {
     const grant = this.grantOf(envelope);
-    const input = envelope.input as { text: string; readAllowlist?: string[] };
+    const input = envelope.input as { text: string; readAllowlist?: string[]; resourceId?: string; withinProgress?: boolean };
     const allowlist = this.grants.intersectRead(grant, input.readAllowlist);
-    return this.store.search({ text: input.text, readAllowlist: allowlist });
+    const hits = this.store.search({ text: input.text, readAllowlist: allowlist, resourceIds: input.resourceId ? [input.resourceId] : undefined });
+    const spoiler = grant.access !== "owner" && readShell(this.store).spoilerGuard;
+    return input.withinProgress || spoiler ? filterUnread(this.store, hits) : hits;
   }
 
   private createNote(envelope: CommandEnvelope) {
     const grant = this.grantOf(envelope);
-    const input = envelope.input as { title: string; text: string; resourceId?: string };
+    const input = envelope.input as { title: string; text: string; resourceId?: string; resourceRevisionId?: string; tags?: string[]; locator?: { quote?: { exact?: string }; partId?: string; range?: { start: number; end: number } } };
     if (!grant.allowCreateObjects) throw new MangaError("FORBIDDEN", "creating objects is not authorized");
     if (input.resourceId && !this.grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "note source is outside the authorized set");
+    if (input.resourceId && input.resourceRevisionId) {
+      // A note must not point at a revision that does not belong to the resource it names.
+      const revision = this.store.sqlite.prepare("SELECT id FROM resource_revisions WHERE id = ? AND resource_id = ?").get(input.resourceRevisionId, input.resourceId);
+      if (!revision) throw new MangaError("NOT_FOUND", "resource revision does not belong to this resource");
+    }
     const objectId = createId("obj");
+    const anchorId = input.locator && input.resourceId && input.resourceRevisionId ? createId("anc") : undefined;
+    const tags = [...new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean))].slice(0, NOTE_TAG_MAX);
+    // The excerpt is a distinct block from the user's own comment, so the two read as different sources.
+    const blocks = anchorId
+      ? [{ id: "quote", type: "quote", text: input.locator?.quote?.exact ?? "", anchorId }, { id: "b1", type: "paragraph", text: input.text }]
+      : [{ id: "b1", type: "paragraph", text: input.text }];
     const now = new Date().toISOString();
+    const mutations: Mutation[] = [
+        { sql: "INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", params: [objectId, "notes.document", "manga.notes", JSON.stringify({ kind: "library", resourceId: input.resourceId ?? null }), anchorId ? 2 : 1, 1, input.title, JSON.stringify(anchorId ? { schemaVersion: 2, blocks } : { blocks }), JSON.stringify(tags), "[]", JSON.stringify({ text: input.text.slice(0, 80) }), now, now] },
+        { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [objectId, 1, JSON.stringify(anchorId ? { schemaVersion: 2, blocks } : { blocks }), now] },
+        ...this.store.indexFragment({ id: createId("frag"), objectId, resourceId: input.resourceId, kind: "note", text: `${input.locator?.quote?.exact ?? ""}\n${input.text}`.trim() }),
+    ];
+    if (anchorId && input.resourceId && input.resourceRevisionId && input.locator) {
+      mutations.push(
+        { sql: "INSERT INTO anchors(id, resource_id, resource_revision_id, locator_json, preview_json, created_at) VALUES (?,?,?,?,?,?)", params: [anchorId, input.resourceId, input.resourceRevisionId, JSON.stringify(input.locator), JSON.stringify({ text: input.locator.quote?.exact ?? "" }), now] },
+        { sql: "INSERT INTO refs(id, from_object_id, from_block_id, to_kind, to_id, mode, instance_layout_json, created_at) VALUES (?,?,?,?,?,?,?,?)", params: [createId("ref"), objectId, "quote", "anchor", anchorId, "live", null, now] },
+      );
+    }
     this.store.commit({
-      mutations: [
-        { sql: "INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, attachment_ids_json, preview_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", params: [objectId, "notes.document", "manga.notes", JSON.stringify({ kind: "library" }), 1, 1, input.title, JSON.stringify({ blocks: [{ id: "b1", type: "paragraph", text: input.text }] }), "[]", JSON.stringify({ text: input.text.slice(0, 80) }), now, now] },
-        { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [objectId, 1, JSON.stringify({ blocks: [{ id: "b1", text: input.text }] }), now] },
-        ...this.store.indexFragment({ id: createId("frag"), objectId, resourceId: input.resourceId, kind: "note", text: input.text }),
-      ],
+      mutations,
       events: [{ type: "note.created", payload: { objectId } }],
       idempotencyKey: envelope.idempotencyKey,
       commandId: envelope.commandId,
-      result: { objectId, revision: 1 },
+      result: { objectId, revision: 1, anchorId },
     });
     if (grant.access === "enumerated") {
       this.grants.save({ ...grant, writeObjectIds: [...grant.writeObjectIds, objectId] });
     }
-    return { objectId, revision: 1 };
+    return { objectId, revision: 1, anchorId };
   }
 
   private updateNote(envelope: CommandEnvelope) {
@@ -707,29 +1012,21 @@ export class MangaProductApp {
     if (!this.grants.canWriteObject(grant, input.objectId) && grant.access !== "owner") throw new MangaError("SCOPE_DENIED", "object is outside the authorized set");
     const row = this.store.sqlite.prepare("SELECT revision, payload_json FROM content_objects WHERE id = ?").get(input.objectId) as { revision: number; payload_json: string } | undefined;
     if (!row) throw new MangaError("NOT_FOUND", "note missing");
-    if (row.revision !== input.expectedRevision) throw new MangaError("REVISION_CONFLICT", "note revision changed", { details: { expected: input.expectedRevision, actual: row.revision } });
-    const payload = JSON.parse(row.payload_json) as { blocks: Array<{ id: string; type: string; text: string }> };
-    if (!input.blockId && payload.blocks.length !== 1) throw new MangaError("VALIDATION_ERROR", "a blockId is required for a multi-block note");
-    const block = input.blockId ? payload.blocks.find((item) => item.id === input.blockId) : payload.blocks[0];
-    if (!block) throw new MangaError("VALIDATION_ERROR", "editable note block missing");
-    block.text = input.text;
-    const next = row.revision + 1;
-    const now = new Date().toISOString();
-    const fullText = payload.blocks.map((item) => item.text).join("\n");
-    this.store.commit({
-      mutations: [
-        { sql: "UPDATE content_objects SET revision = ?, payload_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, JSON.stringify(payload), JSON.stringify({ text: fullText.slice(0, 80) }), now, input.objectId] },
-        { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [input.objectId, next, JSON.stringify(payload), now] },
-        { sql: "DELETE FROM search_idx WHERE fragment_id IN (SELECT id FROM text_fragments WHERE object_id = ?)", params: [input.objectId] },
-        { sql: "DELETE FROM text_fragments WHERE object_id = ?", params: [input.objectId] },
-        ...this.store.indexFragment({ id: createId("frag"), objectId: input.objectId, kind: "note", text: fullText }),
-      ],
-      events: [{ type: "note.updated", payload: { objectId: input.objectId, revision: next } }],
+    if (row.revision !== input.expectedRevision) {
+      throw new MangaError("REVISION_CONFLICT", "note revision changed", { details: { expected: input.expectedRevision, actual: row.revision, candidate: { text: input.text, blockId: input.blockId } } });
+    }
+    const payload = JSON.parse(row.payload_json) as { blocks?: Array<{ id: string }> };
+    if (!input.blockId && (payload.blocks?.length ?? 0) !== 1) throw new MangaError("VALIDATION_ERROR", "a blockId is required for a multi-block note");
+    const blockId = input.blockId ?? payload.blocks?.[0]?.id;
+    if (!blockId) throw new MangaError("VALIDATION_ERROR", "editable note block missing");
+    return commitNoteOp(this.store, {
+      objectId: input.objectId,
+      expectedRevision: input.expectedRevision,
+      op: { type: "setText", blockId, text: input.text },
       idempotencyKey: envelope.idempotencyKey,
       commandId: envelope.commandId,
-      result: { objectId: input.objectId, revision: next },
+      candidate: { text: input.text, blockId },
     });
-    return { objectId: input.objectId, revision: next };
   }
 
   private undoNote(envelope: CommandEnvelope) {
@@ -743,12 +1040,24 @@ export class MangaProductApp {
     if (!previous) throw new MangaError("NOT_FOUND", "no previous revision to restore");
     const next = row.revision + 1;
     const now = new Date().toISOString();
-    const payload = JSON.parse(previous.payload_json);
-    const text = (payload.blocks ?? []).map((block: { text: string }) => block.text).join("\n");
+    const payload = JSON.parse(previous.payload_json) as { blocks?: Array<{ id?: string; text?: string }> };
+    const text = (payload.blocks ?? []).map((block) => block.text ?? "").join("\n");
+    const linked = this.store.sqlite.prepare("SELECT resource_id FROM text_fragments WHERE object_id = ? AND resource_id IS NOT NULL LIMIT 1").get(input.objectId) as { resource_id?: string } | undefined;
+    const tags = this.store.sqlite.prepare("SELECT tags_json FROM content_objects WHERE id = ?").get(input.objectId) as { tags_json?: string } | undefined;
     this.store.commit({
       mutations: [
-        { sql: "UPDATE content_objects SET revision = ?, payload_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, previous.payload_json, JSON.stringify({ text: text.slice(0, 80) }), now, input.objectId] },
+        { sql: "UPDATE content_objects SET revision = ?, payload_json = ?, tags_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, previous.payload_json, tags?.tags_json ?? "[]", JSON.stringify({ text: text.slice(0, 80) }), now, input.objectId] },
         { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [input.objectId, next, previous.payload_json, now] },
+        { sql: "DELETE FROM search_idx WHERE fragment_id IN (SELECT id FROM text_fragments WHERE object_id = ?)", params: [input.objectId] },
+        { sql: "DELETE FROM text_fragments WHERE object_id = ?", params: [input.objectId] },
+        ...(payload.blocks ?? []).flatMap((block) => this.store.indexTextChunks({
+          objectId: input.objectId,
+          resourceId: linked?.resource_id,
+          partId: block.id,
+          representationId: input.objectId,
+          kind: "note",
+          text: block.text ?? "",
+        })),
       ],
       events: [{ type: "note.undone", payload: { objectId: input.objectId, revision: next } }],
       idempotencyKey: envelope.idempotencyKey,
@@ -770,6 +1079,7 @@ export class MangaProductApp {
       recoveryJobs: this.pendingRecoveryJobs(),
       restartRequired: this.sealed,
       needsSetup: this.store.getMeta("aiSkipped") !== "1" && this.listConnections().length === 0,
+      shell: readShell(this.store),
     };
   }
 
@@ -919,7 +1229,7 @@ export class MangaProductApp {
     this.store.maybeCrash("location-publish");
     const targetData = path.join(targetRoot, "data");
     if (fs.existsSync(path.join(targetData, "manga.sqlite"))) {
-      const remote = new DrizzleStore({ profileDir: targetData, hostId: "migrate-target", attachmentsDir: path.join(targetRoot, "attachments") });
+      const remote = new DrizzleStore({ profileDir: targetData, hostId: "migrate-target", attachmentsDir: path.join(targetRoot, "attachments"), nativeBinding: this.store.options.nativeBinding });
       try {
         remote.sqlite.prepare("UPDATE recovery_jobs SET status = 'succeeded', stage = 'done', payload_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify({ ...payload, verified }), new Date().toISOString(), jobId);
         remote.sqlite.pragma("wal_checkpoint(TRUNCATE)");
@@ -1094,8 +1404,8 @@ export class MangaProductApp {
   }
 
   private resourceBytes(resourceId: string): number {
-    const row = this.store.sqlite.prepare("SELECT payload_json FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC LIMIT 1").get(resourceId) as { payload_json: string } | undefined;
-    return row ? Buffer.byteLength(row.payload_json) : 0;
+    const row = this.store.sqlite.prepare("SELECT length(CAST(payload_json AS BLOB)) AS bytes FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(resourceId) as { bytes: number } | undefined;
+    return row?.bytes ?? 0;
   }
 
   private noteBytes(objectId: string): number {
@@ -1103,8 +1413,8 @@ export class MangaProductApp {
     return row ? Buffer.byteLength(row.payload_json) : 0;
   }
 
-  private inventoryItemForResource(row: { id: string; title: string }, grant: ScopeGrant) {
-    const bytes = this.resourceBytes(row.id);
+  private inventoryItemForResource(row: { id: string; title: string; bytes?: number }, grant: ScopeGrant) {
+    const bytes = row.bytes ?? this.resourceBytes(row.id);
     return {
       id: row.id,
       kind: "resource" as const,
@@ -1133,7 +1443,17 @@ export class MangaProductApp {
       });
       return { generatedAt: new Date().toISOString(), items: [...resources, ...notes], totals: { resource: { count: resources.length, bytes: resources.reduce((sum, item) => sum + item.bytes, 0) }, note: { count: notes.length, bytes: notes.reduce((sum, item) => sum + item.bytes, 0) } }, cancelled: false };
     }
-    const resources = this.store.sqlite.prepare("SELECT id, title FROM resources").all() as Array<{ id: string; title: string }>;
+    // Byte sizes stay in SQLite. Copying every payload into the process, then painting every row, is what
+    // made a 10k library miss the cold-start and click budgets.
+    const revisionSizes = this.store.sqlite.prepare("SELECT resource_id AS resourceId, length(CAST(payload_json AS BLOB)) AS bytes, created_at AS createdAt, rowid FROM resource_revisions").all() as Array<{ resourceId: string; bytes: number; createdAt: string; rowid: number }>;
+    const latestBytes = new Map<string, { bytes: number; createdAt: string; rowid: number }>();
+    for (const row of revisionSizes) {
+      const prev = latestBytes.get(row.resourceId);
+      if (!prev || row.createdAt > prev.createdAt || (row.createdAt === prev.createdAt && row.rowid > prev.rowid)) latestBytes.set(row.resourceId, row);
+    }
+    const resources = this.store.sqlite.prepare("SELECT id, title, created_at AS createdAt FROM resources ORDER BY created_at DESC, id DESC").all() as Array<{ id: string; title: string; createdAt: string }>;
+    const resourceBytesTotal = resources.reduce((sum, row) => sum + (latestBytes.get(row.id)?.bytes ?? 0), 0);
+    const listedResources = resources.slice(0, 100).map((row) => this.inventoryItemForResource({ id: row.id, title: row.title, bytes: latestBytes.get(row.id)?.bytes ?? 0 }, grant));
     const notes = this.store.sqlite.prepare("SELECT id, title FROM content_objects WHERE type='notes.document' AND deleted_at IS NULL").all() as Array<{ id: string; title: string }>;
     const attachmentDir = this.layout.partitions.attachments;
     const attachments = fs.existsSync(attachmentDir) ? fs.readdirSync(attachmentDir).filter((name) => !name.startsWith(".")) : [];
@@ -1163,7 +1483,7 @@ export class MangaProductApp {
       };
     });
     const items = [
-      ...resources.map((row) => this.inventoryItemForResource(row, grant)),
+      ...listedResources,
       ...partitionItems,
       ...notes.map((row) => ({
         id: row.id,
@@ -1211,15 +1531,25 @@ export class MangaProductApp {
       })),
     ];
     if (signal.aborted) return { generatedAt: new Date().toISOString(), totals: {}, items: [], cancelled: true };
+    // Resources past the bounded page stay reachable: the cursor names the next older row for library.list.
+    const resourcePagination = {
+      resource: {
+        total: resources.length,
+        listed: listedResources.length,
+        nextCursor: resources.length > 100 && listedResources.length
+          ? encodeResourceCursor({ createdAt: resources[99]!.createdAt, id: resources[99]!.id })
+          : null,
+      },
+    };
     const totals = {
-      resource: { count: resources.length, bytes: items.filter((item) => item.kind === "resource").reduce((sum, item) => sum + item.bytes, 0) },
+      resource: { count: resources.length, bytes: resourceBytesTotal },
       note: { count: notes.length, bytes: items.filter((item) => item.kind === "note").reduce((sum, item) => sum + item.bytes, 0) },
       attachment: { count: attachments.length, bytes: items.filter((item) => item.kind === "attachment").reduce((sum, item) => sum + item.bytes, 0) },
       backup: { count: backup.fileCount, bytes: backup.bytes, missing: Boolean(backup.missing), scanned: Boolean(backup.scannedAt) },
       cache: { count: cache.fileCount, bytes: cache.bytes, missing: Boolean(cache.missing), scanned: Boolean(cache.scannedAt) },
       indexedRoot: { count: indexed.length, bytes: indexed.reduce((sum, item) => sum + item.bytes, 0) },
     };
-    return { generatedAt: new Date().toISOString(), totals, items, cancelled: false };
+    return { generatedAt: new Date().toISOString(), totals, items, pagination: resourcePagination, cancelled: false };
   }
 
   private async inventory(signal: AbortSignal, scan: boolean, grant: ScopeGrant) {
@@ -1336,11 +1666,67 @@ export class MangaProductApp {
 
   private createSession(envelope: CommandEnvelope) {
     this.assertWritable();
-    const input = envelope.input as { title?: string };
+    const input = envelope.input as { title?: string; kind?: "shared" | "resource" | "project"; targetId?: string; mode?: "enthusiast" | "creator" };
+    if (input.targetId && !this.grants.canRead(this.grantOf(envelope), input.targetId)) throw new MangaError("SCOPE_DENIED", "session target is outside the authorized set");
     const id = createId("ses");
     const now = new Date().toISOString();
-    this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, created_at, updated_at) VALUES (?,?,?,?,?)").run(id, input.title ?? "会话", envelope.scopeHandle, now, now);
-    return { id, title: input.title ?? "会话" };
+    const kind = input.kind ?? "shared";
+    const title = input.title ?? (input.targetId ? this.resourceTitle(input.targetId) ?? "会话" : "会话");
+    this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, mode, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, title, envelope.scopeHandle, kind, input.targetId ?? null, input.mode ?? null, now, now);
+    return { id, title, kind, targetId: input.targetId ?? null, mode: input.mode ?? null };
+  }
+
+  /**
+   * Open (or reuse) the session owned by a resource or project. Each session keeps its own agent
+   * context, so switching targets never reuses another target's task.
+   */
+  private openSession(envelope: CommandEnvelope, input: { kind: "resource" | "project" | "note"; targetId: string; mode?: "enthusiast" | "creator"; sessionId?: string }) {
+    const grant = this.grantOf(envelope);
+    const owner = { kind: "user" as const, id: "desktop-user" };
+    void owner;
+    if (input.kind === "resource") {
+      if (!this.grants.canRead(grant, input.targetId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'resource' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      if (existing) {
+        // Switching back to a session must not silently change its bound model, runtime or grant.
+        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
+        return { ...existing, reused: true };
+      }
+      return { ...this.createSession({ ...envelope, input: { title: this.resourceTitle(input.targetId), kind: "resource", targetId: input.targetId, mode: input.mode } }), reused: false };
+    }
+    if (input.kind === "note") {
+      this.assertNoteAccess(envelope, input.targetId, false);
+      const note = readNote(this.store, input.targetId);
+      const resourceId = ((note.sources as Array<{ resourceId: string }>)[0]?.resourceId) ?? null;
+      // A note session is its own kind, so the left rail opens the note instead of trying to read it as a book.
+      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'note' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      if (existing) {
+        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
+        return { ...existing, resourceId, reused: true };
+      }
+      const id = createId("ses");
+      const now = new Date().toISOString();
+      this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, mode, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, String(note.title), envelope.scopeHandle, "note", input.targetId, input.mode ?? null, now, now);
+      return { id, title: String(note.title), kind: "note", targetId: input.targetId, mode: input.mode ?? null, resourceId, reused: false };
+    }
+    if (input.kind === "project") {
+      // The project workspace arrives in M3. The session identity is already stable: one target and mode, one session.
+      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'project' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      if (existing) {
+        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
+        return { ...existing, reused: true };
+      }
+      return { ...this.createSession({ ...envelope, input: { title: input.targetId, kind: "project", targetId: input.targetId, mode: input.mode } }), reused: false };
+    }
+    if (input.sessionId) {
+      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      if (existing) return { ...existing, reused: true };
+    }
+    throw new MangaError("VALIDATION_ERROR", "session target is missing");
+  }
+
+  private resourceTitle(resourceId: string): string | undefined {
+    return (this.store.sqlite.prepare("SELECT title FROM resources WHERE id = ?").get(resourceId) as { title: string } | undefined)?.title;
   }
 
   private captureMaterials(resourceIds: string[]): Array<{ resourceId: string; revisionId: string; title: string }> {
@@ -1352,7 +1738,7 @@ export class MangaProductApp {
 
   private sendAgent(envelope: CommandEnvelope) {
     this.assertWritable();
-    const input = envelope.input as { sessionId: string; text: string; readResourceIds?: string[] };
+    const input = envelope.input as { sessionId: string; text: string; readResourceIds?: string[]; noteObjectIds?: string[]; selection?: { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number } };
     const session = this.store.sqlite.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; grant_handle: string } | undefined;
     if (!session) throw new MangaError("NOT_FOUND", "session missing");
     const runId = createId("run");
@@ -1365,17 +1751,50 @@ export class MangaProductApp {
     const connection = this.store.sqlite.prepare("SELECT id FROM provider_connections WHERE purpose = 'text' LIMIT 1").get() as { id: string } | undefined;
     const history = this.sessionHistoryForNewRun(session.id, Math.max(0, budget.maxContextChars - [...input.text].length));
     const deadlineAt = new Date(Date.now() + budget.maxDurationMs).toISOString();
+    const selection = input.selection && this.grants.canRead(owner, input.selection.resourceId)
+      ? selectionQuote(this.store, input.selection, readShell(this.store).spoilerGuard)
+      : undefined;
+    // Notes are captured by revision with their text, so the model sees what the user saw and a later
+    // edit cannot silently change the material under a running task.
+    type FrozenNote = { objectId: string; revision: number; title: string; text: string; truncated: boolean; blockCount: number; resourceId?: string; resourceRevisionId?: string };
+    const notes: FrozenNote[] = (input.noteObjectIds ?? []).flatMap((objectId) => {
+      try {
+        const note = readNote(this.store, objectId);
+        if (!this.grants.canRead(owner, String((note.sources as Array<{ resourceId: string }>)[0]?.resourceId ?? "")) && !this.grants.canWriteObject(owner, objectId) && owner.access !== "owner") return [];
+        const document = note.document as { blocks: Array<{ id: string; type: string; text: string }> };
+        const text = document.blocks.map((block) => block.text).join("\n");
+        const source = (note.sources as Array<{ resourceId: string; revisionId: string; blockId: string | null }>)[0];
+        return [{
+          objectId,
+          revision: Number(note.revision),
+          title: String(note.title ?? ""),
+          text: text.slice(0, 8000),
+          truncated: [...text].length > 8000,
+          blockCount: document.blocks.length,
+          resourceId: source?.resourceId,
+          resourceRevisionId: source?.revisionId,
+        }];
+      } catch {
+        return [];
+      }
+    });
     const snapshot = {
       materials: this.captureMaterials(requested),
+      selection,
+      notes,
       capturedAt: now,
       history,
       connectionId: connection?.id ?? null,
       runtime,
     };
+    // The frozen context message is built once at send time and stored with the snapshot, so the receipt
+    // shows the exact wording the model receives and a retry reuses the same frozen material.
+    const contextMessage = this.materialContextMessage(snapshot, budget.maxContextChars);
+    const frozen = { ...snapshot, contextText: contextMessage?.content ?? null };
     this.store.commit({
       mutations: [{
         sql: "INSERT INTO agent_runs(id, session_id, status, grant_handle, snapshot_id, budget_json, input_text, read_resource_ids_json, snapshot_json, runtime, deadline_at, live_text, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        params: [runId, session.id, "running", agentGrant.handle, envelope.contextSnapshotId ?? null, JSON.stringify(budget), input.text, JSON.stringify(requested), JSON.stringify(snapshot), runtime, deadlineAt, "", now, now],
+        params: [runId, session.id, "running", agentGrant.handle, envelope.contextSnapshotId ?? null, JSON.stringify(budget), input.text, JSON.stringify(requested), JSON.stringify(frozen), runtime, deadlineAt, "", now, now],
       }],
       events: [{ type: "agent.run.started", payload: { runId, sessionId: session.id } }],
       idempotencyKey: envelope.idempotencyKey,
@@ -1390,6 +1809,10 @@ export class MangaProductApp {
       grantHandle: agentGrant.handle,
       status: "running",
       inputText: input.text,
+      materials: frozen.materials,
+      selection,
+      noteMaterials: notes.map((note) => ({ objectId: note.objectId, revision: note.revision, title: note.title, blockCount: note.blockCount, truncated: note.truncated, chars: [...note.text].length, preview: [...note.text].slice(0, 120).join("") })),
+      contextText: frozen.contextText,
       messages: [{ role: "user", text: input.text }],
     };
   }
@@ -1423,6 +1846,34 @@ export class MangaProductApp {
     });
   }
 
+  /**
+   * Render the frozen snapshot as one system message. Materials carry their revision id so the model
+   * can ask for the exact revision it was given, and a note keeps the revision it was frozen at.
+   */
+  private materialContextMessage(snapshot: {
+    materials?: Array<{ resourceId: string; revisionId: string; title: string }>;
+    selection?: { resourceId?: string; partId?: string; quote?: string; range?: { start: number; end: number }; blocked?: string } | { blocked?: string };
+    notes?: Array<{ objectId: string; revision: number; title: string; text?: string; truncated?: boolean }>;
+  }, maxChars: number): ChatMessage | undefined {
+    const parts: string[] = [];
+    const selection = snapshot.selection as { resourceId?: string; partId?: string; quote?: string; range?: { start: number; end: number }; blocked?: string } | undefined;
+    if (selection && !selection.blocked && typeof selection.quote === "string") {
+      parts.push(`当前选区（资源 ${selection.resourceId ?? "?"} · 片段 ${selection.partId ?? "?"} · 码点 ${selection.range?.start ?? "?"}-${selection.range?.end ?? "?"}）：\n${selection.quote}`);
+    } else if (selection?.blocked) {
+      parts.push(`当前选区因防剧透边界未提供（${selection.blocked}）。`);
+    }
+    for (const material of snapshot.materials ?? []) {
+      parts.push(`材料：${material.title}（资源 ${material.resourceId}，修订 ${material.revisionId}）`);
+    }
+    for (const note of snapshot.notes ?? []) {
+      const body = note.text ?? "";
+      parts.push(`笔记：${note.title}（对象 ${note.objectId}，修订 ${note.revision}${note.truncated ? "，正文已截断" : ""}）：\n${body}`);
+    }
+    if (!parts.length) return undefined;
+    const joined = parts.join("\n\n");
+    return { role: "system", content: `以下是本次任务冻结的材料快照，只能据此作答；需要更多正文时用工具按修订读取。\n\n${joined}`.slice(0, maxChars) };
+  }
+
   private remainingBudgetMs(runId: string, budget: AgentLoopBudget): number {
     const row = this.store.sqlite.prepare("SELECT deadline_at, created_at FROM agent_runs WHERE id = ?").get(runId) as { deadline_at: string | null; created_at: string } | undefined;
     const deadline = row?.deadline_at ? Date.parse(row.deadline_at) : Date.parse(row?.created_at ?? "") + budget.maxDurationMs;
@@ -1454,7 +1905,14 @@ export class MangaProductApp {
 
   private async runAgentLoop(runId: string, grant: ScopeGrant, text: string, signal: AbortSignal, budget: AgentLoopBudget, runtime: AiRuntimeId) {
     const runRow = this.store.sqlite.prepare("SELECT snapshot_json, usage_json, checkpoint_json FROM agent_runs WHERE id = ?").get(runId) as { snapshot_json: string | null; usage_json: string | null; checkpoint_json: string | null } | undefined;
-    const snapshot = runRow?.snapshot_json ? safeJsonValue(runRow.snapshot_json) as { history?: ChatMessage[]; connectionId?: string | null } : {};
+    const snapshot = runRow?.snapshot_json ? safeJsonValue(runRow.snapshot_json) as {
+      history?: ChatMessage[];
+      connectionId?: string | null;
+      materials?: Array<{ resourceId: string; revisionId: string; title: string }>;
+      selection?: { resourceId?: string; partId?: string; quote?: string; range?: { start: number; end: number } } | { blocked?: string };
+      notes?: Array<{ objectId: string; revision: number; title: string; text?: string }>;
+      contextText?: string | null;
+    } : {};
     const connection = snapshot.connectionId
       ? this.store.sqlite.prepare("SELECT * FROM provider_connections WHERE id = ?").get(snapshot.connectionId) as ConnectionRow | undefined
       : this.store.sqlite.prepare("SELECT * FROM provider_connections WHERE purpose = 'text' LIMIT 1").get() as ConnectionRow | undefined;
@@ -1484,7 +1942,12 @@ export class MangaProductApp {
       this.persistRunMessage(runId, user);
       runMessages = [...runMessages, user];
     }
-    const messages: ChatMessage[] = [...history, ...runMessages];
+    // The frozen materials are what the model may rely on; the request is the last message so the
+    // visible material and the user's instruction agree with the snapshot the receipt records.
+    // The snapshot keeps the message built at send time, so a retry sends exactly the frozen material.
+    const frozenContext = typeof snapshot.contextText === "string" ? snapshot.contextText : undefined;
+    const materialMessage = frozenContext ? { role: "system" as const, content: frozenContext } : this.materialContextMessage(snapshot, budget.maxContextChars);
+    const messages: ChatMessage[] = [...history, ...(materialMessage ? [materialMessage] : []), ...runMessages];
     const toolResults: Array<{ commandId: string; result: unknown }> = [];
     const usage = runRow?.usage_json ? safeJsonValue(runRow.usage_json) as { costUsd?: number; steps?: number } : {};
     const checkpoint = runRow?.checkpoint_json ? safeJsonValue(runRow.checkpoint_json) as { step?: number; costUsd?: number } : {};
@@ -1699,7 +2162,172 @@ export class MangaProductApp {
       tools,
       messages,
       text,
+      // The visible material receipt: exactly what was frozen for this run, with revisions.
+      materials: (safeJsonValue(row.snapshot_json ?? "{}") as { materials?: unknown[] }).materials ?? [],
+      selection: (safeJsonValue(row.snapshot_json ?? "{}") as { selection?: unknown }).selection,
+      // The frozen system message, so the model request can be checked against what the user was shown.
+      contextText: (safeJsonValue(row.snapshot_json ?? "{}") as { contextText?: string | null }).contextText ?? null,
+      capturedAt: (safeJsonValue(row.snapshot_json ?? "{}") as { capturedAt?: string }).capturedAt ?? null,
+      noteMaterials: ((safeJsonValue(row.snapshot_json ?? "{}") as { notes?: Array<{ objectId: string; revision: number; title: string; text?: string; blockCount?: number; truncated?: boolean }> }).notes ?? []).map((note) => ({
+        objectId: note.objectId,
+        revision: note.revision,
+        title: note.title,
+        blockCount: note.blockCount,
+        truncated: Boolean(note.truncated),
+        chars: [...(note.text ?? "")].length,
+        preview: [...(note.text ?? "")].slice(0, 120).join(""),
+      })),
     };
+  }
+
+  private assertNoteAccess(envelope: CommandEnvelope, objectId: string, write: boolean): void {
+    const grant = this.grantOf(envelope);
+    if (write) {
+      if (!this.grants.canWriteObject(grant, objectId) && grant.access !== "owner") throw new MangaError("SCOPE_DENIED", "object is outside the authorized set");
+      return;
+    }
+    if (grant.access === "owner") return;
+    if (this.grants.canWriteObject(grant, objectId)) return;
+    const linked = this.store.sqlite.prepare("SELECT resource_id FROM text_fragments WHERE object_id = ? AND resource_id IS NOT NULL LIMIT 1").get(objectId) as { resource_id?: string } | undefined;
+    if (!linked?.resource_id || !this.grants.canRead(grant, linked.resource_id)) throw new MangaError("SCOPE_DENIED", "note is outside the authorized set");
+  }
+
+  private noteOp(envelope: CommandEnvelope, kind: "split" | "merge" | "move" | "copy" | "replace" | "insert" | "remove" | "setType" | "rename") {
+    this.assertWritable();
+    const input = envelope.input as { objectId: string; expectedRevision: number; blockId?: string; offset?: number; toIndex?: number; atIndex?: number; blockType?: string; level?: number; ordered?: boolean; text?: string; blocks?: NoteDocument["blocks"]; title?: string; tags?: string[] };
+    this.assertNoteAccess(envelope, input.objectId, true);
+    const op = kind === "replace"
+      ? { type: "replace" as const, blocks: input.blocks ?? [], title: input.title }
+      : kind === "split"
+        ? { type: "split" as const, blockId: input.blockId ?? "", offset: input.offset ?? 0 }
+        : kind === "merge"
+          ? { type: "merge" as const, blockId: input.blockId ?? "" }
+          : kind === "move"
+            ? { type: "move" as const, blockId: input.blockId ?? "", toIndex: input.toIndex ?? 0 }
+            : kind === "insert"
+              ? { type: "insert" as const, atIndex: input.atIndex ?? 0, blockType: input.blockType ?? "paragraph", text: input.text, level: input.level, ordered: input.ordered }
+              : kind === "remove"
+                ? { type: "remove" as const, blockId: input.blockId ?? "" }
+                : kind === "setType"
+                  ? { type: "setType" as const, blockId: input.blockId ?? "", blockType: input.blockType ?? "paragraph", level: input.level ?? null, ordered: input.ordered ?? null }
+                  : kind === "rename"
+                    ? { type: "replace" as const, blocks: (readNote(this.store, input.objectId).document as NoteDocument).blocks }
+                    : { type: "copy" as const, blockId: input.blockId ?? "" };
+    return commitNoteOp(this.store, {
+      objectId: input.objectId,
+      expectedRevision: input.expectedRevision,
+      op,
+      title: kind === "rename" ? input.title : input.title,
+      tags: kind === "rename" ? input.tags : undefined,
+      idempotencyKey: envelope.idempotencyKey,
+      commandId: envelope.commandId,
+      candidate: input,
+    });
+  }
+
+  private async parseIncoming(signal: AbortSignal, input: { bytes?: Uint8Array; filePath?: string; format?: "txt" | "epub" | "mobi" | "pdf" | "auto"; encoding?: "utf-8" | "utf-16le" }): Promise<ParsedDocument> {
+    const generation = this.parseGeneration;
+    try {
+      const parsed = this.parseWorker
+        ? await this.parseWorker.parse({
+          kind: "document",
+          bytes: input.filePath ? undefined : [...(input.bytes ?? [])],
+          filePath: input.filePath,
+          format: input.format,
+          encoding: input.encoding,
+          signal,
+        }) as ParsedDocument
+        : await parseDocument(input.bytes ?? new Uint8Array(fs.readFileSync(input.filePath ?? "")), { format: input.format, encoding: input.encoding, signal });
+      if (signal.aborted || generation !== this.parseGeneration) throw new MangaError("CANCELLED", "parse result discarded after deactivate or cancel");
+      return decodeWorkerAssets(parsed);
+    } catch (error) {
+      if (error instanceof MangaError) throw error;
+      if (signal.aborted || generation !== this.parseGeneration) throw new MangaError("CANCELLED", "parse cancelled");
+      const code = (error as { code?: string }).code;
+      const message = error instanceof Error ? error.message : String(error);
+      if (code === "PATH_ESCAPE" || code === "UNSUPPORTED_FORMAT" || code === "VALIDATION_ERROR" || code === "CANCELLED") {
+        throw new MangaError(code, message);
+      }
+      throw error instanceof Error ? error : new MangaError("UNSUPPORTED_FORMAT", message);
+    }
+  }
+
+  private async importDocument(envelope: CommandEnvelope, signal: AbortSignal) {
+    const input = envelope.input as { title: string; bytes?: number[]; pathHandle?: string; format?: "txt" | "epub" | "mobi" | "pdf" | "auto"; encoding?: "utf-8" | "utf-16le"; hosted?: boolean };
+    const sourcePath = input.pathHandle ? this.resolvePath(input.pathHandle) : undefined;
+    if (sourcePath && (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile())) throw new MangaError("NOT_FOUND", "document file is not available");
+    const bytes = sourcePath ? new Uint8Array(fs.readFileSync(sourcePath)) : Uint8Array.from(input.bytes ?? []);
+    const parsed = await this.parseIncoming(signal, sourcePath ? { filePath: sourcePath, format: input.format, encoding: input.encoding } : { bytes, format: input.format, encoding: input.encoding });
+    this.assertWritable();
+    return await persistParsedDocument(this.store, {
+      title: input.title,
+      bytes,
+      parsed,
+      sourcePath,
+      hosted: input.hosted === true,
+      idempotencyKey: envelope.idempotencyKey,
+      commandId: envelope.commandId,
+    });
+  }
+
+  private readOriginal(envelope: CommandEnvelope) {
+    const grant = this.grantOf(envelope);
+    if (grant.access !== "owner") throw new MangaError("FORBIDDEN", "only the owner can read original bytes");
+    const input = envelope.input as { resourceId: string; revisionId?: string };
+    if (!this.grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+    const snapshot = grant.runId ? this.snapshotRevision(grant.runId, input.resourceId) : undefined;
+    if (snapshot && input.revisionId && snapshot !== input.revisionId) throw new MangaError("REVISION_CONFLICT", "requested material revision differs from the run snapshot");
+    return readOriginal(this.store, input.resourceId, snapshot ?? input.revisionId);
+  }
+
+  private readResource(envelope: CommandEnvelope) {
+    const grant = this.grantOf(envelope);
+    const input = envelope.input as { resourceId: string; revisionId?: string };
+    if (!this.grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+    const snapshot = grant.runId ? this.snapshotRevision(grant.runId, input.resourceId) : undefined;
+    if (snapshot && input.revisionId && snapshot !== input.revisionId) throw new MangaError("REVISION_CONFLICT", "requested material revision differs from the run snapshot");
+    const document = readDocument(this.store, input.resourceId, snapshot ?? input.revisionId);
+    const slice = document.slice as { partId: string; start: number; end: number; textLayer: boolean } | null;
+    if (slice?.textLayer) this.assertConsumedRange(grant, input.resourceId, String(document.revisionId), slice.partId, slice.start, slice.end);
+    return document;
+  }
+
+  private readResourceSlice(envelope: CommandEnvelope) {
+    const grant = this.grantOf(envelope);
+    const input = envelope.input as { resourceId: string; revisionId?: string; partId: string; start?: number; limit?: number };
+    if (!this.grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+    const snapshot = grant.runId ? this.snapshotRevision(grant.runId, input.resourceId) : undefined;
+    if (snapshot && input.revisionId && snapshot !== input.revisionId) throw new MangaError("REVISION_CONFLICT", "requested material revision differs from the run snapshot");
+    const slice = readSlice(this.store, { ...input, revisionId: snapshot ?? input.revisionId });
+    if (slice.textLayer) this.assertConsumedRange(grant, input.resourceId, String(slice.revisionId), input.partId, Number(slice.start), Number(slice.end));
+    return slice;
+  }
+
+  private assertConsumedRange(grant: ScopeGrant, resourceId: string, resourceRevisionId: string, partId: string, start: number, end: number): void {
+    if (grant.access === "owner" || !readShell(this.store).spoilerGuard) return;
+    const range = selectionQuote(this.store, { resourceId, resourceRevisionId, partId, start, end }, true);
+    if (range.blocked) throw new MangaError("SCOPE_DENIED", "requested range is outside consumed progress");
+  }
+
+  private async repairSource(envelope: CommandEnvelope, signal: AbortSignal) {
+    this.assertWritable();
+    const grant = this.grantOf(envelope);
+    if (grant.access !== "owner") throw new MangaError("FORBIDDEN", "only the owner can repair a source file");
+    const input = envelope.input as { resourceId: string; pathHandle: string };
+    const sourcePath = this.resolvePath(input.pathHandle);
+    if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) throw new MangaError("NOT_FOUND", "replacement file is not available");
+    const bytes = new Uint8Array(fs.readFileSync(sourcePath));
+    const parsed = await parseDocument(bytes, { signal });
+    return await persistParsedDocument(this.store, {
+      title: sourcePath,
+      bytes,
+      parsed,
+      sourcePath,
+      hosted: false,
+      resourceId: input.resourceId,
+      idempotencyKey: envelope.idempotencyKey,
+      commandId: envelope.commandId,
+    });
   }
 
   recoverPackage(action: "recover" | "rollback") {
@@ -1711,15 +2339,36 @@ export class MangaProductApp {
 
 const TOOL_DESCRIPTIONS: Record<string, string> = {
   "library.find": "在已授权的资源中检索文本片段，返回命中的片段与资源 ID。",
+  "library.list": "分页列出全库资源，可按书名搜索；返回总数与下一页游标。",
   "library.getResource": "读取一个已授权资源的最新修订正文。",
+  "library.read": "按资源与修订读取指定片段的一段正文。",
   "library.contextSnapshot": "按资源修订与码点范围读取一段引用上下文。",
+  "source.card": "读取一个资源的来源卡片（标题、修订、可用性与命中片段）。",
   "notes.create": "创建一条新的笔记；可关联一个已授权的资源 ID。",
+  "notes.update": "按修订更新一条笔记中某个块或单块笔记的正文。",
+  "notes.get": "按对象 ID 读取一条笔记的块、标签与来源。",
+  "notes.list": "列出当前授权范围内的笔记摘要；可按文本、标签或资源筛选。",
   "notes.undo": "撤销本次任务创建的笔记的上一次修改。",
   "inventory.overview": "读取资源、笔记与附件的总览统计。",
 };
 
 function toolParameters(commandId: string): Record<string, unknown> {
   return commandInputJsonSchema(commandId) ?? { type: "object", additionalProperties: false, properties: {} };
+}
+
+/** Opaque keyset cursor over (created_at, id), so pages stay stable while the library grows. */
+function encodeResourceCursor(row: { createdAt: string; id: string }): string {
+  return Buffer.from(JSON.stringify({ a: row.createdAt, i: row.id }), "utf8").toString("base64url");
+}
+
+function decodeResourceCursor(cursor: string): { createdAt: string; id: string } | undefined {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { a?: unknown; i?: unknown };
+    if (typeof parsed.a !== "string" || typeof parsed.i !== "string" || !parsed.a || !parsed.i) return undefined;
+    return { createdAt: parsed.a, id: parsed.i };
+  } catch {
+    return undefined;
+  }
 }
 
 function codePointSafeEnd(text: string, start: number): number {
@@ -1762,4 +2411,19 @@ function safeJsonValue(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+/** Restore base64 asset payloads that crossed the line-delimited JSON worker boundary. */
+function decodeWorkerAssets(parsed: ParsedDocument): ParsedDocument {
+  if (!parsed.assets?.length) return parsed;
+  return {
+    ...parsed,
+    assets: parsed.assets.map((asset) => {
+      const encoded = asset as ParsedAsset & { bytesEncoding?: string; bytes: Uint8Array | string };
+      if (encoded.bytesEncoding === "base64" && typeof encoded.bytes === "string") {
+        return { ...asset, bytes: new Uint8Array(Buffer.from(encoded.bytes, "base64")) };
+      }
+      return asset;
+    }),
+  };
 }

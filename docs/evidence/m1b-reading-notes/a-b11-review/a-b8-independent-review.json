@@ -1,0 +1,499 @@
+{
+  "at": "2026-09-25T16:14:59.792Z",
+  "sourceFingerprint": "44369144423f2360b9f3daba834890829caf9ce5e0df99f684a5416d2c0e2ee8",
+  "m1bSourceFingerprint": "8e36dccb67b6b9201fc09c89027d508f46d34d184985df58b7620def7bc48fcb",
+  "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+  "testScriptFingerprint": "3381dfaf8e3e2676f6c1bcfed37849ddd258068f94922786a897e222ffec4c2a",
+  "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7",
+  "scriptFingerprint": "5f2bcaab2fd36c31361b15a0871ffdedcf412e50a7bae12853821aa1971c21dd",
+  "package": {
+    "target": "dist/desktop/packages/MANGA-win32-x64",
+    "evidence": "docs/evidence/m1b-reading-notes/a-b11-review",
+    "stage": "m1b",
+    "sourceFingerprint": "44369144423f2360b9f3daba834890829caf9ce5e0df99f684a5416d2c0e2ee8",
+    "m1bSourceFingerprint": "8e36dccb67b6b9201fc09c89027d508f46d34d184985df58b7620def7bc48fcb",
+    "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+    "testScriptFingerprint": "3381dfaf8e3e2676f6c1bcfed37849ddd258068f94922786a897e222ffec4c2a",
+    "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7"
+  },
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-07",
+      "name": "indirect-simple-widths",
+      "status": "passed",
+      "detail": {
+        "normalized": "ABC",
+        "runs": [
+          {
+            "text": "ABC",
+            "x": 50,
+            "y": 320,
+            "width": 12.780000000000001,
+            "offset": 0
+          }
+        ],
+        "width": 12.780000000000001
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "cid-array-widths",
+      "status": "passed",
+      "detail": {
+        "normalized": "ABC",
+        "runs": [
+          {
+            "text": "ABC",
+            "x": 50,
+            "y": 320,
+            "width": 12.780000000000001,
+            "offset": 0
+          }
+        ],
+        "width": 12.780000000000001
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "cid-range-widths",
+      "status": "passed",
+      "detail": {
+        "normalized": "ABC",
+        "runs": [
+          {
+            "text": "ABC",
+            "x": 50,
+            "y": 320,
+            "width": 15,
+            "offset": 0
+          }
+        ],
+        "width": 15
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "half-scale-text",
+      "status": "passed",
+      "detail": {
+        "normalized": "HELLOWORLD",
+        "runs": [
+          {
+            "text": "HELLOWORLD",
+            "x": 50,
+            "y": 320,
+            "width": 60,
+            "offset": 0
+          }
+        ],
+        "width": 60
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "implicit-revision-copy",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "object",
+            "action": "skip"
+          }
+        ],
+        "packageContainsNote": true,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": []
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "explicit-revision-replace",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "resource_revision",
+            "action": "replace"
+          },
+          {
+            "kind": "object",
+            "action": "skip"
+          }
+        ],
+        "packageContainsNote": true,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": []
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "copied-object-replaced-ref",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "object",
+            "action": "duplicate"
+          }
+        ],
+        "packageContainsNote": true,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          },
+          {
+            "original": false,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": [
+          {
+            "refCount": 1,
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "historyCount": 1
+          }
+        ]
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicate-with-skipped-revision",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource_revision",
+            "action": "skip"
+          }
+        ],
+        "packageContainsNote": true,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          },
+          {
+            "original": false,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": [
+          {
+            "refCount": 1,
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "historyCount": 1
+          }
+        ]
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "local-anchor-outside-package",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "resource_revision",
+            "action": "replace"
+          }
+        ],
+        "packageContainsNote": false,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": []
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicated-anchor-original-survives",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "resource_revision",
+            "action": "replace"
+          },
+          {
+            "kind": "object",
+            "action": "skip"
+          },
+          {
+            "kind": "anchor",
+            "action": "duplicate"
+          }
+        ],
+        "packageContainsNote": true,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": []
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "copied-object-skipped-ref",
+      "status": "passed",
+      "detail": {
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "resource_revision",
+            "action": "replace"
+          },
+          {
+            "kind": "object",
+            "action": "duplicate"
+          },
+          {
+            "kind": "ref",
+            "action": "skip"
+          }
+        ],
+        "packageContainsNote": true,
+        "originalRefsUnchanged": true,
+        "originalHistoryUnchanged": true,
+        "revisionOwnerPreserved": true,
+        "ownerPairAgrees": true,
+        "topStatus": "resolved",
+        "cardStatus": "resolved",
+        "topResourcePreserved": true,
+        "bodyIndexMismatches": 0,
+        "noteChains": [
+          {
+            "original": true,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          },
+          {
+            "original": false,
+            "blocks": [
+              {
+                "ownerPairAgrees": true,
+                "locatorRevisionAgrees": true,
+                "refAgrees": true,
+                "indexAgrees": true,
+                "historyAgrees": true,
+                "sourceAgrees": true
+              }
+            ]
+          }
+        ],
+        "copies": [
+          {
+            "refCount": 1,
+            "status": "resolved",
+            "cardStatus": "resolved",
+            "historyCount": 1
+          }
+        ]
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "conflicting pins reject without changing content",
+      "status": "passed",
+      "detail": {
+        "errorCode": "PUBLISH_CONFLICT",
+        "contentUnchanged": true
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "packaged window half-scale",
+      "status": "passed",
+      "detail": {
+        "layer": "HELLOWORLD",
+        "ink": 162
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "packaged window circle",
+      "status": "passed",
+      "detail": {
+        "ellipses": [
+          {
+            "cx": "200",
+            "rx": "80",
+            "ry": "80",
+            "fill": "rgb(255, 0, 0)"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -15,6 +15,9 @@
     "baseUrl": ".",
     "paths": {
       "@manga/contracts": ["packages/contracts/src/index.ts"],
+      "@manga/contracts/reading": ["packages/contracts/src/reading.ts"],
+      "@manga/contracts/location": ["packages/contracts/src/location.ts"],
+      "@manga/contracts/errors": ["packages/contracts/src/errors.ts"],
       "@manga/plugin-sdk": ["packages/plugin-sdk/src/index.ts"],
       "@manga/kernel": ["packages/kernel/src/index.ts"],
       "@manga/storage-sqlite": ["packages/storage-sqlite/src/index.ts"],

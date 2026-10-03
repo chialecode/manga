@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { MangaProductApp, TestVault } from "../packages/app-core/src/index.ts";
 import { sourceFingerprint, m1aSourceFingerprint } from "./m1a-fingerprint.mjs";
 import { requiredBenchTargets, requiredScale } from "./m1a-report.mjs";
+import { desktopPackageDir } from "./desktop-paths.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const METADATA = requiredScale.metadataCount;
@@ -99,7 +100,7 @@ function electronBin() {
 }
 
 function packagedApp() {
-  const outDir = path.join(root, "dist/m1a-package");
+  const outDir = desktopPackageDir;
   if (!fs.existsSync(outDir)) return undefined;
   const built = fs.readdirSync(outDir).find((name) => name.startsWith("MANGA"));
   if (!built) return undefined;

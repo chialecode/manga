@@ -1,0 +1,107 @@
+{
+  "at": "2026-09-24T19:07:19.983Z",
+  "generator": "inline-fingerprint-check",
+  "currentSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+  "currentM1bSourceFingerprint": "a01343965adf1974e9496b84cc02c1fedbf3a1adf5ed08bc0418f872ee5db58a",
+  "artifacts": [
+    {
+      "file": "a-additional-ui-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-adversarial-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b5-deep-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b5-h-checks.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b6-deep-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b6-ui-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b7-deep-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b7-rework-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-b7-ui-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "a-ui-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": null
+    },
+    {
+      "file": "b2-ui-review.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "bench.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "cases.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "package.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    },
+    {
+      "file": "report.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "self-check-passed"
+    },
+    {
+      "file": "test-run.json",
+      "embeddedSourceFingerprint": "47ac6b26efa48e536790b1a5bbefcd7621a6f635912458a44ce16b600d47599c",
+      "matchesCurrentSource": true,
+      "status": "passed"
+    }
+  ],
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "status": "passed"
+}

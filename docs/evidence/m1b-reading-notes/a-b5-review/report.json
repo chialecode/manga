@@ -1,0 +1,14 @@
+{
+  "errors": [
+    "a-b5-deep-review.json: independent review failed or incomplete"
+  ],
+  "automationStatus": "failed-or-incomplete",
+  "engineeringReviewable": false,
+  "productAcceptance": "not-run",
+  "sourceFingerprint": "53a8db7592c196ffec7a17777c782b09872c97e4ac8d9251096745127c99ce8b",
+  "m1bSourceFingerprint": "62f154b3f26197fee579571ea0a09ba8b45f571a010cc91370499a35cd649896",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "13d085aafaad1ec11503928d9e54b792b55aeedfcf8d358b5113fff19d584b8a",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "at": "2026-09-24T04:47:58.779Z"
+}
