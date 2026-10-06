@@ -3,10 +3,10 @@
   "stage": "m2",
   "sourceFingerprint": "b264ed024b904f2a756fdcb8aba711797ad515e9e67ae4cd452c6a10ba91409b",
   "lockFingerprint": "897c3a595d8a08e29d4fdc208aab59bbf3237a02f0b4ea30e32cfe05ff5402f5",
-  "testScriptFingerprint": "2d63e6ab1441842a7819de7c5c4df96019750518cf8f006a1d5d8b576c7090d6",
+  "testScriptFingerprint": "ec8c7c8f418828387c489701d69652266099030c28698d16eaf4bb1ce153192c",
   "buildScriptFingerprint": "0402a76884ae3c027a685b8428777da0681466e3eda96c1566e550a3764c2426",
   "productAcceptance": "not-run",
-  "at": "2026-10-06T10:43:55.565Z",
+  "at": "2026-10-06T11:10:19.506Z",
   "format": "unsigned local Electron package",
   "electron": "44.5.1",
   "output": "dist/desktop/packages/MANGA-win32-x64",
@@ -53,12 +53,12 @@
       "changes": 1,
       "timeline": [
         {
-          "ms": 1,
+          "ms": 0,
           "epoch": 0,
           "width": 629
         },
         {
-          "ms": 918,
+          "ms": 921,
           "epoch": 1,
           "width": 629
         }
@@ -164,7 +164,7 @@
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.605922,
+          "playedTo": 0.608157,
           "frames": [
             {
               "after": {
@@ -192,7 +192,7 @@
               "expectedMs": 7500,
               "landed": true,
               "verified": "true",
-              "ms": 124
+              "ms": 117
             },
             {
               "after": {
@@ -255,7 +255,7 @@
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.603853,
+          "playedTo": 0.601157,
           "frames": [
             {
               "after": {
@@ -269,7 +269,7 @@
               "expectedMs": 2375,
               "landed": true,
               "verified": "true",
-              "ms": 117
+              "ms": 110
             },
             {
               "after": {
@@ -283,7 +283,7 @@
               "expectedMs": 12000,
               "landed": true,
               "verified": "true",
-              "ms": 122
+              "ms": 120
             },
             {
               "after": {
@@ -297,7 +297,7 @@
               "expectedMs": 23875,
               "landed": true,
               "verified": "true",
-              "ms": 124
+              "ms": 123
             }
           ],
           "result": "passed"
@@ -338,7 +338,7 @@
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.620559,
+          "playedTo": 0.623042,
           "frames": [
             {
               "after": {
@@ -352,7 +352,7 @@
               "expectedMs": 1000,
               "landed": true,
               "verified": "true",
-              "ms": 124
+              "ms": 120
             },
             {
               "after": {
@@ -366,7 +366,7 @@
               "expectedMs": 5000,
               "landed": true,
               "verified": "true",
-              "ms": 123
+              "ms": 109
             },
             {
               "after": {
@@ -380,7 +380,7 @@
               "expectedMs": 9875,
               "landed": true,
               "verified": "true",
-              "ms": 123
+              "ms": 111
             }
           ],
           "result": "passed"
@@ -415,13 +415,13 @@
           },
           "rvfc": {
             "has": "function",
-            "mediaTime": "0",
+            "mediaTime": null,
             "paused": false,
             "readyState": 4,
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.616965,
+          "playedTo": 0.618458,
           "frames": [
             {
               "after": {
@@ -435,7 +435,7 @@
               "expectedMs": 1000,
               "landed": true,
               "verified": "true",
-              "ms": 123
+              "ms": 122
             },
             {
               "after": {
@@ -449,7 +449,7 @@
               "expectedMs": 5000,
               "landed": true,
               "verified": "true",
-              "ms": 127
+              "ms": 128
             },
             {
               "after": {
@@ -463,7 +463,7 @@
               "expectedMs": 9875,
               "landed": true,
               "verified": "true",
-              "ms": 120
+              "ms": 113
             }
           ],
           "result": "passed"
@@ -508,7 +508,7 @@
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.604458,
+          "playedTo": 0.614798,
           "frames": [
             {
               "after": {
@@ -522,7 +522,7 @@
               "expectedMs": 1000,
               "landed": true,
               "verified": "true",
-              "ms": 120
+              "ms": 122
             },
             {
               "after": {
@@ -536,7 +536,7 @@
               "expectedMs": 5000,
               "landed": true,
               "verified": "true",
-              "ms": 109
+              "ms": 122
             },
             {
               "after": {
@@ -550,7 +550,7 @@
               "expectedMs": 9875,
               "landed": true,
               "verified": "true",
-              "ms": 124
+              "ms": 110
             }
           ],
           "result": "passed"
@@ -589,7 +589,7 @@
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.621172,
+          "playedTo": 0.623388,
           "frames": [
             {
               "after": {
@@ -603,7 +603,7 @@
               "expectedMs": 1066.667,
               "landed": true,
               "verified": "true",
-              "ms": 112
+              "ms": 123
             },
             {
               "after": {
@@ -617,7 +617,7 @@
               "expectedMs": 5333.333,
               "landed": true,
               "verified": "true",
-              "ms": 122
+              "ms": 127
             },
             {
               "after": {
@@ -631,7 +631,7 @@
               "expectedMs": 15700,
               "landed": true,
               "verified": "true",
-              "ms": 119
+              "ms": 111
             }
           ],
           "result": "passed"
@@ -664,13 +664,13 @@
           },
           "rvfc": {
             "has": "function",
-            "mediaTime": "2500",
+            "mediaTime": null,
             "paused": false,
             "readyState": 4,
             "hidden": false,
             "visibility": "visible"
           },
-          "playedTo": 0.6143899999999998,
+          "playedTo": 0.6059549999999998,
           "frames": [
             {
               "after": {
@@ -684,7 +684,7 @@
               "expectedMs": 1000,
               "landed": true,
               "verified": "true",
-              "ms": 114
+              "ms": 122
             },
             {
               "after": {
@@ -698,7 +698,7 @@
               "expectedMs": 5000,
               "landed": true,
               "verified": "true",
-              "ms": 122
+              "ms": 126
             },
             {
               "after": {
@@ -712,7 +712,7 @@
               "expectedMs": 9875,
               "landed": true,
               "verified": "true",
-              "ms": 109
+              "ms": 122
             }
           ],
           "result": "passed"
@@ -750,7 +750,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.605922,
+        "playedTo": 0.608157,
         "frames": [
           {
             "after": {
@@ -778,7 +778,7 @@
             "expectedMs": 7500,
             "landed": true,
             "verified": "true",
-            "ms": 124
+            "ms": 117
           },
           {
             "after": {
@@ -837,7 +837,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.603853,
+        "playedTo": 0.601157,
         "frames": [
           {
             "after": {
@@ -851,7 +851,7 @@
             "expectedMs": 2375,
             "landed": true,
             "verified": "true",
-            "ms": 117
+            "ms": 110
           },
           {
             "after": {
@@ -865,7 +865,7 @@
             "expectedMs": 12000,
             "landed": true,
             "verified": "true",
-            "ms": 122
+            "ms": 120
           },
           {
             "after": {
@@ -879,7 +879,7 @@
             "expectedMs": 23875,
             "landed": true,
             "verified": "true",
-            "ms": 124
+            "ms": 123
           }
         ],
         "result": "passed"
@@ -916,7 +916,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.620559,
+        "playedTo": 0.623042,
         "frames": [
           {
             "after": {
@@ -930,7 +930,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 124
+            "ms": 120
           },
           {
             "after": {
@@ -944,7 +944,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 123
+            "ms": 109
           },
           {
             "after": {
@@ -958,7 +958,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 123
+            "ms": 111
           }
         ],
         "result": "passed"
@@ -989,13 +989,13 @@
         },
         "rvfc": {
           "has": "function",
-          "mediaTime": "0",
+          "mediaTime": null,
           "paused": false,
           "readyState": 4,
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.616965,
+        "playedTo": 0.618458,
         "frames": [
           {
             "after": {
@@ -1009,7 +1009,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 123
+            "ms": 122
           },
           {
             "after": {
@@ -1023,7 +1023,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 127
+            "ms": 128
           },
           {
             "after": {
@@ -1037,7 +1037,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 120
+            "ms": 113
           }
         ],
         "result": "passed"
@@ -1078,7 +1078,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.604458,
+        "playedTo": 0.614798,
         "frames": [
           {
             "after": {
@@ -1092,7 +1092,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 120
+            "ms": 122
           },
           {
             "after": {
@@ -1106,7 +1106,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 109
+            "ms": 122
           },
           {
             "after": {
@@ -1120,7 +1120,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 124
+            "ms": 110
           }
         ],
         "result": "passed"
@@ -1155,7 +1155,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.621172,
+        "playedTo": 0.623388,
         "frames": [
           {
             "after": {
@@ -1169,7 +1169,7 @@
             "expectedMs": 1066.667,
             "landed": true,
             "verified": "true",
-            "ms": 112
+            "ms": 123
           },
           {
             "after": {
@@ -1183,7 +1183,7 @@
             "expectedMs": 5333.333,
             "landed": true,
             "verified": "true",
-            "ms": 122
+            "ms": 127
           },
           {
             "after": {
@@ -1197,7 +1197,7 @@
             "expectedMs": 15700,
             "landed": true,
             "verified": "true",
-            "ms": 119
+            "ms": 111
           }
         ],
         "result": "passed"
@@ -1226,13 +1226,13 @@
         },
         "rvfc": {
           "has": "function",
-          "mediaTime": "2500",
+          "mediaTime": null,
           "paused": false,
           "readyState": 4,
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.6143899999999998,
+        "playedTo": 0.6059549999999998,
         "frames": [
           {
             "after": {
@@ -1246,7 +1246,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 114
+            "ms": 122
           },
           {
             "after": {
@@ -1260,7 +1260,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 122
+            "ms": 126
           },
           {
             "after": {
@@ -1274,7 +1274,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 109
+            "ms": 122
           }
         ],
         "result": "passed"
@@ -1287,67 +1287,67 @@
         "p95": 29,
         "max": 29,
         "samples": [
+          27,
+          28,
           29,
           27,
           28,
-          28,
-          27,
-          4,
-          2,
-          4
+          3,
+          3,
+          3
         ]
       },
       "videoFirstFrameMs": {
         "n": 7,
-        "p50": 77,
-        "p95": 516,
-        "max": 516,
+        "p50": 45,
+        "p95": 490,
+        "max": 490,
         "samples": [
-          71,
-          77,
-          71,
-          81,
-          516,
-          95,
-          46
+          137,
+          41,
+          60,
+          41,
+          490,
+          42,
+          45
         ]
       },
       "videoFrameSeekMs": {
         "n": 21,
         "p50": 122,
-        "p95": 124,
-        "max": 127,
+        "p95": 127,
+        "max": 128,
         "samples": [
           120,
-          124,
-          123,
           117,
-          122,
-          124,
-          124,
           123,
-          123,
-          123,
-          127,
+          110,
           120,
+          123,
           120,
           109,
-          124,
-          112,
+          111,
           122,
-          119,
-          114,
+          128,
+          113,
           122,
-          109
+          122,
+          110,
+          123,
+          127,
+          111,
+          122,
+          126,
+          122
         ]
       },
       "copyBuildMs": {
         "n": 1,
-        "p50": 465,
-        "p95": 465,
-        "max": 465,
+        "p50": 445,
+        "p95": 445,
+        "max": 445,
         "samples": [
-          465
+          445
         ]
       }
     }
@@ -1366,14 +1366,14 @@
         "id": "recording-shown",
         "ok": true,
         "detail": {
-          "feedbackMs": 21
+          "feedbackMs": 14
         }
       },
       {
         "id": "microphone",
         "ok": true,
         "detail": {
-          "level": 0.45,
+          "level": 0.34,
           "clock1": "0:00",
           "clock2": "0:01"
         }
@@ -1395,18 +1395,18 @@
         "ok": true,
         "detail": {
           "session": {
-            "id": "cap_fac6c9ec-63af-4830-b17c-2f952981dab5",
+            "id": "cap_72aad0e3-8d93-4914-af62-cafb51a94549",
             "mode": "toggle",
             "retention": "keep",
             "stage": "done",
             "audioState": "retained",
             "playable": true,
             "durationMs": 11200,
-            "createdAt": "2026-10-06T10:42:54.193Z",
-            "stoppedAt": "2026-10-06T10:43:05.433Z",
-            "workId": "work_047871fb-9c67-4da7-8c93-08590811ca08",
+            "createdAt": "2026-10-06T11:09:17.880Z",
+            "stoppedAt": "2026-10-06T11:09:29.105Z",
+            "workId": "work_2d85b4fe-861d-484f-ae58-e34c31c94188",
             "deviceLabel": "Fake Default Audio Input",
-            "resourceId": "res_ad6954b4-24ba-4feb-9cb0-7ee51c669c06",
+            "resourceId": "res_af5f2744-4cf8-4a89-a7b1-a0ea10025823",
             "error": null,
             "segments": {
               "total": 1,
@@ -1415,7 +1415,7 @@
               "pending": 0,
               "noSpeech": 0
             },
-            "speechMs": 6240
+            "speechMs": 6144
           },
           "segments": 1
         }
@@ -1441,12 +1441,12 @@
             {
               "startMs": 0,
               "endMs": 6700,
-              "resourceId": "res_ad6954b4-24ba-4feb-9cb0-7ee51c669c06",
-              "resourceRevisionId": "rev_680cf664-fede-4361-aa3b-cec8be23f2af",
+              "resourceId": "res_af5f2744-4cf8-4a89-a7b1-a0ea10025823",
+              "resourceRevisionId": "rev_34710d82-4a0d-4d72-9376-c1783f011d41",
               "locator": {
                 "kind": "text",
                 "partId": "body",
-                "representationId": "rev_680cf664-fede-4361-aa3b-cec8be23f2af",
+                "representationId": "rev_34710d82-4a0d-4d72-9376-c1783f011d41",
                 "normalizationVersion": "text-nfc-lf-v1",
                 "range": {
                   "start": 0,
@@ -1480,7 +1480,7 @@
       "askTagShown": true,
       "commentKept": true,
       "noteTitle": "闭合样本正文",
-      "selectionMs": 0.699999988079071,
+      "selectionMs": 0.6000000238418579,
       "selectedQuote": "chi-close-sel",
       "excerpt": "chi-close-sel",
       "quoteRange": {
@@ -1491,10 +1491,10 @@
       "contextChars": 330
     },
     "timings": {
-      "importMs": 7,
+      "importMs": 6,
       "tailMs": 1,
-      "noteMs": 63,
-      "selectionMs": 0.699999988079071
+      "noteMs": 70,
+      "selectionMs": 0.6000000238418579
     }
   }
 }

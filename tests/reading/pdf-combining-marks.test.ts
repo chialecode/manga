@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createCanvas, type SKRSContext2D } from "@napi-rs/canvas";
 import { parsePdfBytes } from "../../packages/app-core/src/index.ts";
 import { evidenceRunDir } from "../../scripts/desktop-paths.ts";
-import { buildEmbeddedFontPdf, embeddableFontFile } from "../../scripts/samples/pdf-embedded-font.ts";
+import { buildEmbeddedFontPdf, embeddableFontFile, embeddedAdvance } from "../../scripts/samples/pdf-embedded-font.ts";
 import { renderPdfPage } from "../helpers/pdf-pixels.ts";
 import { isAvailable, sampleBytes } from "../helpers/samples.ts";
 
@@ -21,34 +21,37 @@ const SCALE = 3;
 const MARK = String.fromCharCode(0x301);
 const PRECOMPOSED = "é";
 
-type Drawn = { ctx: SKRSContext2D; width: number; height: number; accentOffsetEm: number };
+type Drawn = { ctx: SKRSContext2D; width: number; height: number; ink: Array<[number, number]>; accentOffsetEm: number };
 
-/** Draws one letter and measures the horizontal distance, in em, between the centre of its top band (the accent) and its body. */
+/** The horizontal distance, in em, between the centre of the top band of the ink (the accent) and its body. */
+function accentOffsetEm(ink: Array<[number, number]>): number {
+  const top = Math.min(...ink.map(([, y]) => y));
+  const bottom = Math.max(...ink.map(([, y]) => y));
+  const centre = (from: number, to: number) => {
+    const band = ink.filter(([, y]) => y >= from && y < to);
+    return band.length ? band.reduce((sum, [x]) => sum + x, 0) / band.length : Number.NaN;
+  };
+  const span = bottom - top;
+  return (centre(top, top + Math.floor(span * 0.12)) - centre(top + Math.floor(span * 0.5), bottom)) / (SIZE * SCALE);
+}
+
+/** Draws one letter at a fixed pen position and measures where its accent lands against its body. */
 async function draw(text: string, options: Parameters<typeof buildEmbeddedFontPdf>[1]): Promise<Drawn> {
   const { ctx, width, height } = await renderPdfPage(buildEmbeddedFontPdf([{ text, x: 100, y: 200, size: SIZE }], options), SCALE);
   const w = Math.ceil(width);
   const h = Math.ceil(height);
   const data = ctx.getImageData(0, 0, w, h).data;
-  const ink = (x: number, y: number) => data[(y * w + x) * 4]! < 128;
-  let top = h;
-  let bottom = 0;
-  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) if (ink(x, y)) { top = Math.min(top, y); bottom = Math.max(bottom, y); }
-  const centre = (from: number, to: number) => {
-    let sum = 0;
-    let count = 0;
-    for (let y = from; y < to; y += 1) for (let x = 0; x < w; x += 1) if (ink(x, y)) { sum += x; count += 1; }
-    return count ? sum / count : Number.NaN;
-  };
-  const span = bottom - top;
-  const accent = centre(top, top + Math.floor(span * 0.12));
-  const body = centre(top + Math.floor(span * 0.5), bottom);
-  return { ctx, width: w, height: h, accentOffsetEm: (accent - body) / (SIZE * SCALE) };
+  const ink: Array<[number, number]> = [];
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) if (data[(y * w + x) * 4]! < 128) ink.push([x, y]);
+  return { ctx, width: w, height: h, ink, accentOffsetEm: accentOffsetEm(ink) };
 }
 
 describe.skipIf(!hasFont)("combining marks in a PDF drawn with a real embedded font (LOOP-04)", () => {
-  it("draws the accent over its letter when the file positions it, and away from it when the file does not", async () => {
+  it("draws the accent over its letter when the file positions it, and where the pen stands after the letter when the file does not", async () => {
     const precomposed = await draw(PRECOMPOSED, {});
     const raw = await draw(`e${MARK}`, {});
+    const letter = await draw("e", {});
+    const mark = await draw(MARK, {});
     const rawZero = await draw(`e${MARK}`, { zeroAdvanceMarks: true });
     const placed = await draw(`e${MARK}`, { positionMarks: true });
 
@@ -56,8 +59,12 @@ describe.skipIf(!hasFont)("combining marks in a PDF drawn with a real embedded f
     expect(Math.abs(precomposed.accentOffsetEm)).toBeLessThan(0.2);
     expect(Math.abs(placed.accentOffsetEm)).toBeLessThan(0.2);
     expect(Math.abs(placed.accentOffsetEm - precomposed.accentOffsetEm)).toBeLessThan(0.12);
-    // A bare glyph run draws the mark at the pen position after the letter, well to its right...
-    expect(raw.accentOffsetEm).toBeGreaterThan(0.4);
+    // A bare glyph run draws the mark at the pen position after the letter: exactly the letter and the mark drawn on their
+    // own, the mark moved by the letter's advance in the file. How far that is from the letter depends on the font: a
+    // monospace mark (Cascadia Mono) lands about 0.6 em to the right, a mark whose outline reaches back (Noto, DejaVu) less.
+    const advancePx = (embeddedAdvance("e") / 1000) * SIZE * SCALE;
+    const expected = accentOffsetEm([...letter.ink, ...mark.ink.map(([x, y]): [number, number] => [x + advancePx, y])]);
+    expect(raw.accentOffsetEm).toBeCloseTo(expected, 1);
     // ...and giving the mark a zero advance (the change made in M1b) does not move where it is drawn.
     expect(rawZero.accentOffsetEm).toBeCloseTo(raw.accentOffsetEm, 2);
 
