@@ -9,11 +9,19 @@
   },
   "dependencies": {
     "@manga/contracts": "workspace:*",
-    "@manga/plugin-sdk": "workspace:*",
-    "@manga/kernel": "workspace:*",
-    "@manga/storage-drizzle": "workspace:*",
-    "@manga/model-protocol": "workspace:*",
     "@manga/i18n": "workspace:*",
-    "pdfjs-dist": "6.3.289"
+    "@manga/kernel": "workspace:*",
+    "@manga/model-protocol": "workspace:*",
+    "@manga/plugin-sdk": "workspace:*",
+    "@manga/storage-drizzle": "workspace:*",
+    "@napi-rs/canvas": "1.0.10",
+    "anitomy": "0.0.35",
+    "onnxruntime-web": "1.30.0",
+    "pdfjs-dist": "6.3.289",
+    "sharp": "0.35.5",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "@types/yauzl": "^3.4.0"
   }
 }

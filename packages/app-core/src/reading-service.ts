@@ -9,6 +9,8 @@ import {
   createId,
   type CommandEnvelope,
   type NoteDocument,
+  type Ordinal,
+  type WorkMediaKind,
   type ScopeGrant,
   type SearchHit,
   type ShellPreference,
@@ -17,6 +19,9 @@ import {
 } from "@manga/contracts";
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { findQuoteMatches, resolveTextLocator } from "./domain/anchors.ts";
+import { layoutFromPayload } from "./domain/revision-layout.ts";
+import { resolveMediaLocator } from "./domain/media-anchors.ts";
+import { ordinalLabel, sortKeyFor } from "./domain/ordinal.ts";
 import type { ParsedAsset, ParsedDocument, PdfTextRun } from "./domain/formats.ts";
 import { documentLength, slicePart } from "./domain/formats.ts";
 import { applyNoteOp, coerceNoteDocument, notePlainText, type NoteOp } from "./domain/note-document.ts";
@@ -206,6 +211,15 @@ async function ensureBodyIndex(store: DrizzleStore, input: { resourceId: string;
   await writeBodyIndex(store, input);
 }
 
+/**
+ * What a new book is called. An EPUB or MOBI names itself in its metadata; a TXT or PDF does not, and its first line is usually a
+ * chapter heading ("第一章"), so the name it was given (the file's) is kept and the first line is only a fallback.
+ */
+function documentTitle(parsed: ParsedDocument, given: string): string {
+  const embedded = parsed.format === "epub" || parsed.format === "mobi" ? parsed.title.trim() : "";
+  return (embedded && embedded !== "untitled" ? embedded : given.trim()) || parsed.title;
+}
+
 export async function persistParsedDocument(store: DrizzleStore, input: {
   title: string;
   bytes: Uint8Array;
@@ -213,6 +227,11 @@ export async function persistParsedDocument(store: DrizzleStore, input: {
   sourcePath?: string;
   hosted: boolean;
   resourceId?: string;
+  /** What the user chose to import this as. Defaults to a novel. */
+  kind?: Extract<WorkMediaKind, "novel" | "comic">;
+  /** Add the resource to this work instead of creating one. */
+  workId?: string;
+  ordinal?: Ordinal;
   idempotencyKey: string;
   commandId: string;
 }): Promise<Record<string, unknown>> {
@@ -258,6 +277,14 @@ export async function persistParsedDocument(store: DrizzleStore, input: {
     if (existing) return insertRevision(store, { ...input, fingerprint, now, resourceId: existing.resourceId });
   }
   return insertRevision(store, { ...input, fingerprint, now, resourceId: createId("res"), createWork: true });
+}
+
+/** A work takes the kind of its first resource in series order; recomputed whenever a resource joins, leaves or changes kind. */
+export function workKindMutation(workId: string, now: string): Mutation {
+  return {
+    sql: `UPDATE works SET updated_at = ?, media_kind = COALESCE((SELECT r.kind FROM resources r WHERE r.work_id = works.id ORDER BY r.sort_key, r.created_at, r.id LIMIT 1), media_kind) WHERE id = ?`,
+    params: [now, workId],
+  };
 }
 
 /**
@@ -330,8 +357,14 @@ async function insertRevision(store: DrizzleStore, input: {
   now: string;
   resourceId: string;
   createWork?: boolean;
+  kind?: Extract<WorkMediaKind, "novel" | "comic">;
+  workId?: string;
+  ordinal?: Ordinal;
 }): Promise<Record<string, unknown>> {
-  const workId = createId("work");
+  if (input.workId && input.createWork && !store.sqlite.prepare("SELECT id FROM works WHERE id = ?").get(input.workId)) {
+    throw new MangaError("NOT_FOUND", "work missing");
+  }
+  const workId = input.workId ?? createId("work");
   const revisionId = createId("rev");
   const locationId = createId("loc");
   let locationPath = input.sourcePath ?? "";
@@ -354,14 +387,21 @@ async function insertRevision(store: DrizzleStore, input: {
   };
   const mutations: Mutation[] = [];
   if (input.createWork) {
-    mutations.push(
-      { sql: "INSERT INTO works(id,title,created_at) VALUES (?,?,?)", params: [workId, input.parsed.title || input.title, input.now] },
-      { sql: "INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at) VALUES (?,?,?,?,?,?)", params: [input.resourceId, workId, "novel", input.parsed.title || input.title, JSON.stringify([input.parsed.title || input.title]), input.now] },
-    );
+    const kind = input.kind ?? "novel";
+    const title = documentTitle(input.parsed, input.title);
+    const ordinal = input.ordinal ? { ...input.ordinal, label: ordinalLabel(input.ordinal) } : undefined;
+    if (!input.workId) {
+      mutations.push({ sql: "INSERT INTO works(id,title,created_at,media_kind,updated_at) VALUES (?,?,?,?,?)", params: [workId, title, input.now, kind, input.now] });
+    }
+    mutations.push({
+      sql: "INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at, ordinal_label, ordinal_number, ordinal_type, sort_key) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      params: [input.resourceId, workId, kind, title, JSON.stringify([title]), input.now, ordinal?.label ?? null, ordinal?.number ?? null, ordinal?.type ?? null, sortKeyFor(ordinal, title)],
+    });
+    if (input.workId) mutations.push(workKindMutation(workId, input.now));
   }
   mutations.push({
-    sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at) VALUES (?,?,?,?,?,?)",
-    params: [revisionId, input.resourceId, input.fingerprint, input.parsed.parserId, JSON.stringify(payload), input.now],
+    sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at, layout_json) VALUES (?,?,?,?,?,?,?)",
+    params: [revisionId, input.resourceId, input.fingerprint, input.parsed.parserId, JSON.stringify(payload), input.now, JSON.stringify(layoutFromPayload(payload))],
   });
   if (locationPath) {
     mutations.push({
@@ -369,7 +409,7 @@ async function insertRevision(store: DrizzleStore, input: {
       params: [locationId, revisionId, locationPath, input.fingerprint, input.hosted ? 1 : 0],
     });
   }
-  if (input.createWork) mutations.push(...store.indexFragment({ id: createId("frag"), resourceId: input.resourceId, kind: "title", text: input.parsed.title || input.title }));
+  if (input.createWork) mutations.push(...store.indexFragment({ id: createId("frag"), resourceId: input.resourceId, kind: "title", text: documentTitle(input.parsed, input.title) }));
   mutations.push(...assetMutations(store, { resourceId: input.resourceId, revisionId, now: input.now, assets: input.parsed.assets ?? [] }));
   // Reader pointers and notes left over from a revision nothing can resolve follow the new text.
   const relocation = input.createWork ? { mutations: [], moved: 0, kept: 0 } : relocationMutations(store, { resourceId: input.resourceId, revisionId, parts: payloadParts(payload) });
@@ -553,60 +593,13 @@ export function readRangeRaw(store: DrizzleStore, input: { resourceId: string; r
   return { resourceId: input.resourceId, resourceRevisionId: input.resourceRevisionId, ...slicePart(part, input.start, Math.max(1, input.end - input.start)), textLayer: part.kind === "text" };
 }
 
-export function setProgress(store: DrizzleStore, envelope: CommandEnvelope, grant: ScopeGrant, grants: GrantRegistry): Record<string, unknown> {
-  const input = envelope.input as { resourceId: string; resourceRevisionId: string; locator: SourceLocator; consumed?: boolean };
-  if (!grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
-  const row = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE id = ? AND resource_id = ?").get(input.resourceRevisionId, input.resourceId);
-  if (!row) throw new MangaError("NOT_FOUND", "resource revision does not belong to this resource");
-  const existing = store.sqlite.prepare("SELECT consumed_ranges_json FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(input.resourceId, input.resourceRevisionId) as { consumed_ranges_json: string } | undefined;
-  const consumed = existing ? JSON.parse(existing.consumed_ranges_json) as Array<{ partId?: string; start: number; end: number }> : [];
-  if (input.consumed && input.locator.kind === "text") consumed.push({ partId: input.locator.partId, start: input.locator.range.start, end: input.locator.range.end });
-  // Repeated "mark read here" must not inflate the visible range count, so ranges are merged on write.
-  const merged = mergeConsumedRanges(consumed);
-  const now = new Date().toISOString();
-  store.commit({
-    mutations: [{
-      sql: `INSERT INTO progress(resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at)
-        VALUES (?,?,?,?,?,?)
-        ON CONFLICT(resource_id, resource_revision_id) DO UPDATE SET last_locator_json = excluded.last_locator_json, consumed_ranges_json = excluded.consumed_ranges_json, last_interaction_at = excluded.last_interaction_at`,
-      params: [input.resourceId, input.resourceRevisionId, JSON.stringify(input.locator), JSON.stringify(merged), "reading", now],
-    }],
-    events: [{ type: "progress.updated", payload: { resourceId: input.resourceId, resourceRevisionId: input.resourceRevisionId } }],
-    idempotencyKey: envelope.idempotencyKey,
-    commandId: envelope.commandId,
-    result: { resourceId: input.resourceId, resourceRevisionId: input.resourceRevisionId },
-  });
-  return { resourceId: input.resourceId, resourceRevisionId: input.resourceRevisionId, consumed: merged };
-}
-
-/** Overlapping or adjacent ranges of the same part collapse into one, so the read range stays a true union. */
-export function mergeConsumedRanges(ranges: Array<{ partId?: string; start: number; end: number }>): Array<{ partId?: string; start: number; end: number }> {
-  const byPart = new Map<string, Array<{ start: number; end: number }>>();
-  for (const range of ranges) {
-    const key = range.partId ?? "";
-    const list = byPart.get(key) ?? [];
-    list.push({ start: Math.min(range.start, range.end), end: Math.max(range.start, range.end) });
-    byPart.set(key, list);
-  }
-  const merged: Array<{ partId?: string; start: number; end: number }> = [];
-  for (const [key, list] of byPart) {
-    list.sort((left, right) => left.start - right.start);
-    const out: Array<{ start: number; end: number }> = [];
-    for (const range of list) {
-      const last = out[out.length - 1];
-      if (last && range.start <= last.end) last.end = Math.max(last.end, range.end);
-      else out.push({ ...range });
-    }
-    for (const range of out) merged.push(key ? { partId: key, ...range } : { ...range });
-  }
-  return merged;
-}
+export { setProgress, mergeConsumedRanges } from "./progress-service.ts";
 
 export function resolveAnchor(store: DrizzleStore, revisionId: string, locator: SourceLocator): Record<string, unknown> {
   const row = store.sqlite.prepare("SELECT id, resource_id, payload_json FROM resource_revisions WHERE id = ?").get(revisionId) as { id: string; resource_id: string; payload_json: string } | undefined;
   if (!row) return { status: "missing_revision" };
   if (locator.kind !== "text") {
-    return { status: "resolved", kind: locator.kind, pageId: locator.kind === "image" ? locator.pageId : undefined };
+    return { ...resolveMediaLocator(store, revisionId, locator), resourceId: row.resource_id, resourceRevisionId: row.id };
   }
   const payload = JSON.parse(row.payload_json) as StoredPayload;
   const parts = payloadParts(payload);
@@ -641,6 +634,7 @@ export function openNoteSourceDetail(store: DrizzleStore, objectId: string, bloc
     end: range?.end,
     anchorId: source.anchorId,
     resolution: String(resolution.status),
+    locator,
   });
   return {
     ...resolution,
@@ -912,7 +906,7 @@ export function removeBookmark(store: DrizzleStore, input: { bookmarkId: string;
 }
 
 /** Concrete source card for a note or a reading surface: title, revision, availability and the resolve outcome. */
-export function sourceCard(store: DrizzleStore, input: { resourceId: string; resourceRevisionId?: string; partId?: string; start?: number; end?: number; anchorId?: string; resolution?: string }): Record<string, unknown> {
+export function sourceCard(store: DrizzleStore, input: { resourceId: string; resourceRevisionId?: string; partId?: string; start?: number; end?: number; anchorId?: string; resolution?: string; locator?: SourceLocator }): Record<string, unknown> {
   const resource = store.sqlite.prepare("SELECT id, title FROM resources WHERE id = ?").get(input.resourceId) as { id: string; title: string } | undefined;
   if (!resource) return { status: "missing_resource" as const, resourceId: input.resourceId, anchorId: input.anchorId };
   const revision = input.resourceRevisionId
@@ -927,6 +921,25 @@ export function sourceCard(store: DrizzleStore, input: { resourceId: string; res
     : undefined;
   // The card carries how the anchor resolved, so a duplicate sentence or a scan page is not shown as linked.
   const status = input.resolution && input.resolution !== "resolved" ? input.resolution : "resolved";
+  // A page or time source carries its own position instead of a text range.
+  const media = input.locator && input.locator.kind !== "text" ? resolveMediaLocator(store, revision.id, input.locator) : undefined;
+  if (media) {
+    return {
+      status,
+      resolution: input.resolution,
+      anchorId: input.anchorId,
+      resourceId: resource.id,
+      title: resource.title,
+      resourceRevisionId: revision.id,
+      kind: media.kind,
+      media,
+      locator: input.locator,
+      available: location ? location.available === 1 || resourceFileElsewhere(store, resource.id, revision.id) : true,
+      revisionAvailable: location ? location.available === 1 : true,
+      hosted: location ? location.hosted === 1 : false,
+      path: location?.relative_path,
+    };
+  }
   return {
     status,
     resolution: input.resolution,

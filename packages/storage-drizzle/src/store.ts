@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createId, MangaError, type CommandResult, type SearchHit, type SearchQuery } from "@manga/contracts";
-import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL } from "./sql.ts";
+import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL } from "./sql.ts";
 import { ngramsFor, matchQuery } from "./ngrams.ts";
 import * as schema from "./schema.ts";
 
@@ -12,7 +13,6 @@ export type DrizzleStoreOptions = {
   hostId: string;
   crashAt?: string;
   attachmentsDir?: string;
-  nativeBinding?: string;
 };
 
 export type Mutation = {
@@ -37,6 +37,8 @@ export class DrizzleStore {
   readonly attachmentsDir: string;
   readonly crashAt?: string;
   readonly options: DrizzleStoreOptions;
+  /** Set when this open moved the library to a newer schema; `from` is the version it had. */
+  migration: { from: number; to: number; coversImported: number } | null = null;
   private closed = false;
   private listeners: Array<(event: { type: string; payload: Record<string, unknown>; seq: number }) => void> = [];
 
@@ -47,7 +49,7 @@ export class DrizzleStore {
     fs.mkdirSync(this.attachmentsDir, { recursive: true });
     this.dbPath = path.join(options.profileDir, "manga.sqlite");
     this.crashAt = options.crashAt;
-    this.sqlite = new Database(this.dbPath, { nativeBinding: options.nativeBinding });
+    this.sqlite = new Database(this.dbPath);
     this.sqlite.pragma("journal_mode = WAL");
     this.migrate();
     this.db = drizzle(this.sqlite, { schema });
@@ -75,10 +77,52 @@ export class DrizzleStore {
       if (existingVersion < 4) this.sqlite.exec(V4_SCHEMA_SQL);
       if (existingVersion < 5) this.sqlite.exec(V5_SCHEMA_SQL);
       if (existingVersion < 6) this.sqlite.exec(V6_SCHEMA_SQL);
+      if (existingVersion < 7) this.sqlite.exec(V7_SCHEMA_SQL);
+      let coversImported = 0;
+      if (existingVersion < 8) {
+        this.sqlite.exec(V8_SCHEMA_SQL);
+        coversImported = this.importCoverFiles().imported;
+      }
       this.maybeCrash("migration-before-version");
       this.sqlite.prepare("INSERT OR IGNORE INTO schema_meta(key, value) VALUES (?, ?)").run("schemaVersion", String(PRODUCT_SCHEMA_VERSION));
       this.sqlite.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(String(PRODUCT_SCHEMA_VERSION));
+      if (existingVersion > 0 && existingVersion < PRODUCT_SCHEMA_VERSION) this.migration = { from: existingVersion, to: PRODUCT_SCHEMA_VERSION, coversImported };
     })();
+  }
+
+  /**
+   * v7 kept authoritative cover pictures as files in the attachments partition. v8 keeps them in the image table, so a
+   * backup is one file. Each file is read, hashed and compared with the hash recorded when it was saved; a file that is
+   * missing or no longer matches stays a file reference (the cover service still reads it) instead of being imported
+   * wrongly. The files themselves are left where they are: they stop being referenced by the rows that were imported, and the
+   * inventory reports unreferenced attachment files for the user to clean.
+   */
+  private importCoverFiles(): { imported: number; kept: number } {
+    const rows = this.sqlite.prepare("SELECT id, content_hash, media_type, width, height, bytes, file_name, created_at FROM covers WHERE area = 'attachments' AND image_hash IS NULL").all() as Array<{
+      id: string; content_hash: string; media_type: string; width: number | null; height: number | null; bytes: number; file_name: string; created_at: string;
+    }>;
+    let imported = 0;
+    let kept = 0;
+    const insert = this.sqlite.prepare("INSERT OR IGNORE INTO images(hash, media_type, width, height, bytes, payload, source_url, fetched_at, created_at) VALUES (?,?,?,?,?,?,NULL,NULL,?)");
+    const link = this.sqlite.prepare("UPDATE covers SET image_hash = ?, area = 'images' WHERE id = ?");
+    for (const row of rows) {
+      const file = path.join(this.attachmentsDir, row.file_name);
+      let bytes: Buffer;
+      try {
+        bytes = fs.readFileSync(file);
+      } catch {
+        kept += 1;
+        continue;
+      }
+      if (createHash("sha256").update(bytes).digest("hex") !== row.content_hash) {
+        kept += 1;
+        continue;
+      }
+      insert.run(row.content_hash, row.media_type, row.width, row.height, bytes.length, bytes, row.created_at);
+      link.run(row.content_hash, row.id);
+      imported += 1;
+    }
+    return { imported, kept };
   }
 
   onEvent(listener: (event: { type: string; payload: Record<string, unknown>; seq: number }) => void): () => void {

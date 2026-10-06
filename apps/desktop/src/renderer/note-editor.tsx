@@ -334,7 +334,7 @@ export function NoteEditor(props: {
     applying.current = true;
     // The whole document is replaced, so the caret is restored into the same block afterwards.
     const caretBlock = editor ? caretLocation(editor)?.blockId : undefined;
-    editor.commands.setContent(contentFrom(next), false);
+    editor.commands.setContent(contentFrom(next), { emitUpdate: false });
     if (caretBlock) {
       let index = 0;
       let target: number | null = null;

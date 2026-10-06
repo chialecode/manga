@@ -7,7 +7,9 @@
     ".": "./src/index.ts",
     "./reading": "./src/reading.ts",
     "./location": "./src/location.ts",
-    "./errors": "./src/errors.ts"
+    "./errors": "./src/errors.ts",
+    "./media": "./src/media.ts",
+    "./quick-tasks": "./src/quick-tasks.ts"
   },
   "dependencies": {
     "zod": "4.6.5"

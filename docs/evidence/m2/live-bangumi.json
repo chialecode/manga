@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-10-05T19:16:38.304Z",
+  "status": "passed",
+  "requests": 9,
+  "budget": 10,
+  "steps": [
+    {
+      "endpoint": "POST /v0/search/subjects (anime)",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "POST /v0/search/subjects (book)",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET /v0/subjects/{id}",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET /v0/subjects/{id}/subjects",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET /v0/episodes",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET /v0/subjects/{id}/characters",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET /v0/subjects/{id}/characters (reference entry)",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET /v0/subjects/{id}/persons",
+      "outcome": "ok"
+    },
+    {
+      "endpoint": "GET cover image",
+      "outcome": "ok"
+    }
+  ],
+  "shape": {
+    "searchHasTotal": true,
+    "subjectHasTitle": true,
+    "relationCount": "some",
+    "episodeCount": "some",
+    "imageChecked": true,
+    "characterCount": "some",
+    "charactersFrom": "reference-entry",
+    "voiceActorsListed": true,
+    "personCount": "some",
+    "careersListed": true,
+    "characterImagesListed": true,
+    "infoboxPresent": true
+  }
+}

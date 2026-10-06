@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-10-04T10:51:19.252Z",
+  "status": "passed",
+  "requests": 3,
+  "budget": 10,
+  "steps": [
+    {
+      "clip": "zh-CN-0.wav",
+      "options": "plain+no-prompt",
+      "outcome": "ok",
+      "similarity": 1,
+      "seconds": 5.7281875
+    },
+    {
+      "clip": "zh-CN-1.wav",
+      "options": "timestamps+no-prompt",
+      "outcome": "ok",
+      "similarity": 0.926,
+      "segments": 1,
+      "seconds": 6.54125
+    },
+    {
+      "clip": "zh-CN-2.wav",
+      "options": "timestamps+prompt",
+      "outcome": "ok",
+      "similarity": 1,
+      "segments": 1,
+      "seconds": 6.6955625
+    }
+  ],
+  "note": "similarity is edit distance against the known text of each synthetic clip"
+}

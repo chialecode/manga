@@ -1,0 +1,25 @@
+{
+  "version": "n8.1.3-14-g330caae0c1",
+  "source": {
+    "repository": "https://github.com/BtbN/FFmpeg-Builds",
+    "tag": "autobuild-2026-10-01-13-06",
+    "asset": "ffmpeg-n8.1.3-14-g330caae0c1-win64-lgpl-shared-8.1.zip",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-01-13-06/ffmpeg-n8.1.3-14-g330caae0c1-win64-lgpl-shared-8.1.zip",
+    "zipSha256": "bf545d8fee9bb6957c1f3dea0f384bf64edead407d763326dbbd2de1b04768a4",
+    "zipBytes": 80742293
+  },
+  "license": "LGPL-3.0-or-later (built with --enable-version3, without GPL components); full text in LICENSE.txt inside the archive",
+  "files": {
+    "LICENSE.txt": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
+    "bin/avcodec-62.dll": "e7f1183e43425b75a14a4a781f8d2cf29de9ac8238c890f464e7ddcd14633055",
+    "bin/avdevice-62.dll": "b7ff7864dd1dc7e82f26e0c5a65f54bad158eccde6c607005bdac5f6f7392f68",
+    "bin/avfilter-11.dll": "d854a2c4f7e7585f961fea1d3d55ea467afd858fd5d8ec89f58d7223279b1e74",
+    "bin/avformat-62.dll": "30062c7315ec600a97ee731dd05c2f3d8d701d60874541dc0338b8731523c4ff",
+    "bin/avutil-60.dll": "88befd1b2f4f07ec73617fa75cfc5e8175915f70a69e58115c1e1d4ee0035a1e",
+    "bin/ffmpeg.exe": "1d93f786e551355d070f4622bf4cd0f1c990eb6769a1c1ab7b18cf0e638e9f97",
+    "bin/ffplay.exe": "5f53a843d9c31146c3e3a10728f0ed070b043c854dd57319b939289e41d3427a",
+    "bin/ffprobe.exe": "c55888785a631b4e72ec9a7970d9c62678a493d9650a2f92f47c1cf722eed569",
+    "bin/swresample-6.dll": "8d71f620d188e18aadf931550c8867db8969be015221e7d3c705f72d6c192a87",
+    "bin/swscale-9.dll": "73175a6691158584aee3fd0dc93726fa66e428b41830e1a10adc0d022821bdf7"
+  }
+}

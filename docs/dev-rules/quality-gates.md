@@ -11,89 +11,9 @@ pnpm install
 node scripts/verify.mjs
 ```
 
-`verify.mjs` 检查脚本语法、文档登记、GitHub JSON、文档结构、`git diff --check`、依赖方向、公开内容及报告门禁反例，并在 `node_modules` 存在时运行 `tsc --noEmit`（根配置与 `apps/desktop`）、Vitest M1a 测试、不含大文件开关的 M1b Vitest、M1b 报告反例及契约/修复回归（含 `closure-review.test.ts`）。它不安装依赖；缺少 `node_modules` 时类型检查非零退出。缺少 vitest 时 M1a/M1b 测试非零退出，不使用 `--if-present`。10 MiB TXT 与 30 MiB EPUB 只在 `M1B_LARGE=1` 时运行。
+`verify.mjs` 是本地与 CI 共用的统一入口，依次检查：`scripts/` 顶层 MJS 语法；文档登记表与 GitHub 配置 JSON；文档结构（`check-docs.mjs`）；公开内容检查及其反例；文档检查与阶段报告门禁的反例自测；包依赖方向（`check-deps.mjs`，含内置反例）；根与 `apps/desktop` 两个 `tsc --noEmit`；全部 Vitest；`experiments/m0` 的三份回归（契约 schema、评审回归、收尾评审）；`git diff --check` 与 `git diff --cached --check`。它不安装依赖；缺少 `node_modules` 或 vitest 时非零退出，不使用 `--if-present`。10 MiB TXT 与 30 MiB EPUB 等大文件用例只在 `MANGA_LARGE_FILES=1` 时运行，阶段入口会设置它。
 
-M1a 独立证据示例：
-
-```powershell
-$env:M1A_EVIDENCE_DIR='docs/evidence/m1a-review'
-node scripts/m1a.mjs test
-node scripts/m1a.mjs bench
-node scripts/m1a.mjs package
-node scripts/verify-m1a.mjs
-```
-
-开发启动用 `pnpm dev`，自动检查 Electron SQLite ABI 并隔离开发 Profile；目录约定见 [仓库地图](repo-map.md#生成物约定)。人工交付结论须直接列启动、样本、操作和预期，不只引用本页。
-
-M1b 阅读与人工记录使用独立证据目录。报告门禁核对代码、锁文件、测试脚本和构建脚本指纹，不计算产品验收；`cases.json` 覆盖计划指定的 G-01/G-05/G-06 与 AT-04/05/18/52/60—62，仍不等于 P0—P6 完成。实际端到端缺口和返工结论见 [A 审查与 B 返工](../evidence/m1b-reading-notes-delivery.md#8-a-集中审查与返工)。
-
-```powershell
-node scripts/review-m1b-ui.mjs
-node scripts/review-m1b-reading.mjs
-```
-
-两条 UI review 都需先打包，使用合成 Profile，并把原生文件对话框桩替换为合成样本。前者验证 A 的局部修复与 360 px 窄窗，后者验证阅读→记录→来源→返回、书签高亮、冻结材料、会话分区与资料包逐项决策；都不替代真实 IME、缩放或完整产品验收。原 B 自检命令示例：
-
-```powershell
-$env:M1B_EVIDENCE_DIR='docs/evidence/m1b-reading-notes/b3-rework'
-node scripts/m1b.mjs test
-node scripts/m1b.mjs bench
-node scripts/m1b.mjs package
-node scripts/review-m1b-reading.mjs
-$env:M1B_REQUIRE_REPORT='1'
-node scripts/verify-m1b.mjs
-```
-
-以上 `b3-rework` 命令保留为历史跑次示例，新执行必须使用新目录，不能照抄覆盖。最新 B 证据是 `b8-rework`，最新 A 独立证据是 `a-b8-review/final-commit`；此前目录及 `repro-*` 全部保留。
-
-`audit-m1b-recheck.mjs` 验证普通 PDF/EPUB 及资料包混合冲突反例，`review-m1b-recheck.mjs` 使用实际包验证跨模式草稿/会话及扫描页和字体持久化。后者需要先打包；两者默认读取 `a-recheck` 中的标准合成样本，换证据目录时先复制合成样本并核对哈希或重新生成，保留原结果。这两条旧入口及 `audit-m1b-b5-review.mjs` 的 PDF Unicode、资源/修订 skip 反例在最新 A 跑次均通过；`audit-m1b-b6-review.mjs` 新增两种混合导入来源保护和第 101 条资源可达性反例，本轮三项通过；`audit-m1b-b7-rework.mjs` 五项也通过。新增 `audit-m1b-a-b7-review.mjs` 与 `review-m1b-a-b7-ui.mjs` 进一步检查 PDF 文本推进/颜色、EPUB 作者呈现、显式混合导入和搜索续页，均因 F-07/F-09 真实退出 1。F-08 局部修复后通过；新 UI 脚本需先运行新服务审计生成合成 PDF，并使用同源码包。`review-m1b-b6-ui.mjs` 检查 A-37 演示隔离、模式名称、响应布局和原阅读/笔记/Agent 入口。`review-m1b-b5-h-checks.mjs` 验证 H-01/H-03/H-04 的自动子集，不代替实际 IME、Windows DPI、拖动贴靠和产品验收。执行前始终设置新的 `M1B_EVIDENCE_DIR`。
-
-上述退出 1 是 8.16 时的历史结果；在 8.18 的独立复跑中，三份指定服务审计、全部旧审计和 UI/H 子集均退出 0。新入口 `scripts/review-m1b-a-b8.mjs` 使用同源码包同时检查间接字体宽度/CID W/缩放绘制、包外幸存锚点/复制锚点/ref skip、原四组合的完整来源链、钉住冲突拒绝和实际椭圆几何；14 项中 7 passed / 7 failed，实际退出 1。必须保留该失败，不得以旧套件通过替代。
-
-报告门禁在以上九份独立审计及新增 `a-b8-independent-review.json` 存在时校验当前指纹、非空观测和逐项 passed；不可用普通自检覆盖独立失败，也不计算产品验收。窗口性能指标由实际 Electron 原始样本计算，门禁核对有限非负数、p95 阈值、样本数量及摘要一致性。最新跑次包含同一 10k/50k 合成 Profile 的大书末段、后台解析操作与冷启动，全部原阈值与断言保留；隐藏窗口计时截至 DOM 可用，不是绘制帧或正式实机体验。最新结论见 [交付报告 8.18](../evidence/m1b-reading-notes-delivery.md#818-a-独立复核与后续批次安排2026-09-25)，116 项 Vitest 通过与报告门禁因新审计退出 1 分别报告。
-
-当前跑次见 [A 复核 8.22](../evidence/m1b-reading-notes-delivery.md#a-b9-rework-review)：`a-b9-rework-review` 在同源码包上复跑原 14 项、全部旧审计/UI/H、引擎 7 项、155 项 Vitest、bench 与 M1a；新反例合入独立审计，严格报告因失败退出 1。以上旧版本通过/失败均保留历史含义。用户 A-41 已把下一 B 批次改为 [PDF.js MVP 替换](../delivery/m1b-execution-plan.md#pdfjs-mvp)：自研 PDF 的内部 SVG/gx/textLength 断言须带映射迁移为 PDF.js 可见行为与来源不变量，不伪造旧字段、不删除失败场景；非 PDF、数据/权限/恢复、同规模阈值和独立失败传播继续有效。
-
-完整 M0 自动验证需要先生成同一源码版本的 Windows 包和性能结果。PowerShell 示例：
-
-```powershell
-$env:M0_EVIDENCE_DIR='docs/evidence/m0-next-run'
-node scripts/m0.mjs package
-node scripts/m0.mjs bench
-node scripts/verify-m0.mjs
-```
-
-`M0_EVIDENCE_DIR` 统一控制测试、包、性能和汇总目录；为新版本选择独立目录，不能覆盖历史证据。未设置时为兼容旧脚本仍默认 `docs/evidence/m0-closure/`。最新完整复核结果在 `docs/evidence/m0-final-review/`，旧目录的版本边界见[复核报告](../evidence/2026-09-19-m0-closure-review.md)。真实跨卷另以 `M0_VOL_A` / `M0_VOL_B` 指定已授权测试位置。
-
-`verify-m0.mjs` 运行环境/依赖及反例、类型、合成样本、全部 Node 场景测试和报告核对；它不会自动生成 Windows 包或性能结果。报告要求必需文件/用例恰好存在、指纹与当前源码一致、必需包阶段和性能指标/目标通过，否则非零退出。`node --test scripts/m0-report.test.mjs` 验证缺项、旧证据和失败结果会被拒绝。
-
-报告的 `automationStatus: tested-subset-passed`、`engineeringReviewable: true` 仅描述已测原型子集；`m0Exit` / `m1Entry` 固定标明 `not-assessed-see-stage-gates`，不由脚本推断正式阶段通过。实际判断回到[执行状态](../delivery/status.md)与当前阶段门槛。
-
-证据齐全后单独重查报告，或打开最近独立包：
-
-```powershell
-node scripts/m0.mjs report
-./scripts/open-m0-package.ps1
-```
-
-依赖方向反例：`node scripts/check-deps.mjs --self-test-only` 必须通过（内部确认错误导入会被检出）。
-
-只检查文档时执行 `node scripts/check-docs.mjs`。依赖方向与反例：`node scripts/check-deps.mjs`。M0 子命令见 [仓库地图](repo-map.md)。
-
-
-统一入口检查 `scripts/` 顶层 MJS 语法、文档登记和 GitHub 配置 JSON 的语法、文档结构，以及工作树/暂存区的 `git diff --check`；子检查失败返回非零。它不校验 JSON 的 GitHub schema、不解析 YAML，也不证明服务端设置已经生效。CI 工作树通常是干净快照，diff 检查不是历史提交格式审计。
-
-只检查文档时执行 `node scripts/check-docs.mjs`。根目录按脚本自身位置解析，不依赖机器盘符。返回码 0 表示声明的检查通过，1 表示失败；输出具体文件和原因。修改治理脚本时用临时夹具验证失败传播，修改 workflow/ruleset 时另外解析配置并核对必需 job 名与 GitHub 返回结果。
-
-| 当前自动覆盖 | 边界 |
-| --- | --- |
-| 仓库自有 Markdown 与登记表相互覆盖，状态/角色/日期等字段、替代目标合法 | 不识别真实用户审批；不检查第三方依赖和构建输出 |
-| Markdown 行内相对链接、引用式定义和本地锚点存在，目标不逃逸仓库 | 不访问网络链接，不充当完整 Markdown/HTML 解析器；不检查代码块内示例路径 |
-| CLAUDE 只引用 AGENTS | 不验证所有宿主是否自动加载仓库指令 |
-| PRD 需求 ID 唯一、交付矩阵完整且不引用不存在需求/AT、AT/POC 定义唯一 | 不证明测试覆盖深度或需求合理性，不推断阶段子场景已通过 |
-| 执行台账完整登记 POC 定义 | 不证明报告里的实际结果真实 |
-
-链接采用仓库相对路径、ATX 标题或显式 HTML `id` 锚点；避免在文件名/链接内使用空格或嵌套括号。复杂 HTML 导航、外部 URL、Mermaid 语义和视觉渲染人工核对。
+开发启动用 `pnpm dev`，自动检查 Electron SQLite ABI 并隔离开发 Profile；目录约定见 [仓库地图](repo-map.md#生成物约定)。人工检查的启动、样本、操作和预期写在[用户待办](../../USER-ACTIONS.md#checks)，写到用户能直接照做，不只引用本页。
 
 ### 1.1 公开内容检查
 
@@ -101,14 +21,62 @@ node scripts/m0.mjs report
 
 这是一组有限规则，不是全量密钥或语义识别器。外部工程叙述、设备标识、私密正文、二进制/图片、任意格式的新令牌，以及待推送提交中被后来删除的内容仍需人工/Agent 检查；脚本不扫描 Git 历史。推送前核对最终待推送提交/变更集和公开候选文件名，必要时补查相关历史；失败时修复后再验证。第三方库/官方接口链接与合法许可证声明保留。
 
-报告生成后重新运行公开检查；当前性能报告生成器只输出平台/架构/版本，不采集具体 CPU/内存标识到公开报告。旧报告仅脱敏，不重跑或修改测量结果。
+报告生成后重新运行公开检查；性能报告只输出平台/架构/版本，不采集具体 CPU/内存标识到公开报告。真实资源根只用于开发者本机的只读试验，证据里只写数量与类别，不写文件名、标题或路径。
 
-## 2. 应用与 M0 工程门禁
+### 1.2 文档检查
 
-正式工程的测试工具按 [ADR-0007](../decisions/0007-technology-stack.md)采用 Vitest、Testing Library/jsdom 和对应浏览器烟测的 playwright-core；上述命令已接入 `node scripts/verify.mjs` / `node scripts/m1a.mjs test`。既有 node:test 门禁持续有效，迁移时保留场景覆盖；jsdom 和浏览器烟测不替代 Electron 原生输入法与设备实测。
+只检查文档时执行 `node scripts/check-docs.mjs`。根目录按脚本自身位置解析，不依赖机器盘符。返回码 0 表示声明的检查通过，1 表示失败；输出具体文件和原因。修改治理脚本时用 `scripts/check-docs.test.mjs` 的临时夹具验证失败传播，修改 workflow/ruleset 时另外解析配置并核对必需 job 名与 GitHub 返回结果。
 
-M0 验证工程建立后，下列命令已经存在并应实际运行。产品 AT 仍按阶段执行，不能用 POC 子集标为 passed。
+| 当前自动覆盖 | 边界 |
+| --- | --- |
+| 仓库自有 Markdown 与登记表相互覆盖，状态/角色/日期等字段、替代目标合法 | 不识别真实用户审批；不检查第三方依赖和构建输出 |
+| 登记表 `currentStage` 与条目 `retireAfter`：当前阶段晚于 `retireAfter` 而文件仍存在则失败 | 阶段顺序固定在脚本中；不判断提炼是否充分，由 A 抽查 |
+| Markdown 行内相对链接、引用式定义和本地锚点存在，目标不逃逸仓库 | 不访问网络链接，不充当完整 Markdown/HTML 解析器；不检查代码块内示例路径 |
+| CLAUDE 只引用 AGENTS | 不验证所有宿主是否自动加载仓库指令 |
+| PRD 需求 ID 唯一、交付矩阵完整且不引用不存在需求/AT、AT/POC 定义唯一 | 不证明测试覆盖深度或需求合理性，不推断阶段子场景已通过 |
+| 执行台账完整登记 POC 定义 | 不证明报告里的实际结果真实 |
 
+链接采用仓库相对路径、ATX 标题或显式 HTML `id` 锚点；避免在文件名/链接内使用空格或嵌套括号。复杂 HTML 导航、外部 URL、Mermaid 语义和视觉渲染人工核对。
+
+## 2. 阶段证据入口
+
+每个阶段有一份配置 `scripts/stages/<阶段>.json`（指纹覆盖范围、必需用例、基准目标与规模、包烟测阶段），统一入口为：
+
+```powershell
+node scripts/stage.mjs m2 test      # 全部 Vitest + 脚本自测，按必需用例匹配并写 cases.json、test-run.json
+node scripts/stage.mjs m2 bench     # 10,000 元数据 / 50,000 检索块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、封面读取与 1000 条消息右栏
+node scripts/stage.mjs m2 package   # Windows 未签名包及其烟测阶段，写 package.json 与 scenarios.json
+node scripts/stage.mjs m2 report    # 核对上述结果并写 report.json
+```
+
+- 输出默认写到 Git 忽略的 `dist/evidence-runs/<阶段>/<跑次>/`（跑次默认 `current`，`STAGE_RUN` 指定其他）；路径计算正本为 `scripts/desktop-paths.ts`。只把审查需要引用的最终结果复制进 `docs/evidence/<阶段>/`，单阶段入库证据不超过 5 MiB。
+- 报告门禁核对源码（`packages`、`apps/desktop`、`experiments/m0` 及清单）、锁文件、测试与样本脚本、构建脚本四类指纹；结果缺失、指纹不一致、必需用例缺项/重复/重分类/未通过、基准指标缺失或超目标、规模不足、打包烟测阶段缺失，一律非零退出。已声明的 blocked / not-run 项必须带负责人和复测入口（`limits.json`）。报告固定 `productAcceptance: "not-run"`，不计算阶段验收。
+- 必需用例由测试的完整名称（含 `describe`）用正则匹配到用例编号；改测试名要同步 `scripts/stages/<阶段>.json`。`scripts/stage-report.test.mjs` 用夹具验证缺项、旧指纹、失败基准、被重命名的用例和越权的验收声明都会被拒绝。
+- 打包烟测用真实 Windows 包在合成样本和隔离 Profile 上驱动：初次启动/重启、Agent 发送与重启恢复（含运行中与停止态、重启后会话恢复）、阅读→记录→来源→重启恢复、四类格式页（含 LOOP-06：选中时页面只绘制一次且节点仍在文档中）、媒体（漫画与视频样本矩阵）、录音（Chromium 假采集设备播放合成语音）、返工 `rework`（独立的全新 Profile，走过壳与导航、作品主页、右栏聊天窗口、调试面板、设置各页、扫描、手动匹配、快捷任务与三种窗口尺寸（含悬浮胶囊不压住播放器与漫画页的任何控件），每个场景写入 `scenarios.json`，`productAcceptance` 恒为 not-run）；包内缺少随包工具时必须在启动时报错并点名。烟测装置在 `apps/desktop/src/main/smoke/`，只在 `--manga-smoke` 时动态加载，正常启动不加载（`tests/package/smoke-isolation.test.ts`）。
+- 合成样本由 `node scripts/samples/generate-media-samples.mjs` 生成到 `dist/samples/m2`（含清单与哈希），不提交；随包工具由 `scripts/tools/fetch-ffmpeg.mjs`、`fetch-silero-vad.mjs` 按锁定版本与哈希下载到 `dist/tools`。
+- 返工基准（`scripts/stage/bench-rework.mjs`）：合成 5000 个文件（20 个系列 × 100 + 3000 个零散文件）的后台扫描连续 3 次，门禁要求主进程事件循环延迟 p99 ≤ 100 ms（≥ 1000 个 5 ms 采样）、扫描期间常用操作反馈 p95 ≤ 100 ms（≥ 300 个答复样本），并记录扫描吞吐、200 个封面的图片表读取与句柄冷/热读、1000 条消息的右栏滚动与输入（在打包窗口的 `bench-pane` 阶段测量，页面实际载入 ≥ 1000 条）；原始样本与摘要一致性同样核对。
+- 窗口性能指标由实际 Electron 原始样本计算，门禁核对有限非负数、p95 阈值、样本数量及摘要一致性；隐藏窗口计时截至 DOM 可用，不是绘制帧或显示器延迟，也不外推到其他设备。
+
+### 2.1 真实服务与本机资源（默认关闭，不进 CI）
+
+| 开关 | 内容与边界 |
+| --- | --- |
+| `MANGA_LIVE_BANGUMI=1` | Bangumi 只读契约（含条目、角色与人员端点）：不用凭据，每次不超过 10 个请求，证据只含端点、结果与计数；网络不可达记 blocked（可带 `NODE_USE_ENV_PROXY=1` 与代理） |
+| `MANGA_LIVE_ASR=1` | 本地忽略的测试配置里的 ASR 服务：只发送样本生成器的合成 TTS 语音，每次不超过 10 个请求，配置缺失记 not-run；配置值不打印、不写入证据 |
+| `MANGA_LIVE_MODELS=1` + `node scripts/live-models.mjs` | LLM/Embedding/ASR 的有限短测，只发送合成内容；视觉/OCR 与 LLM 整理的真实调用未获授权，不运行 |
+| `MANGA_REAL_SAMPLE_ROOTS` | 开发者自己资源根的只读打开试验；不复制、不写入源目录，摘要只含数量与类别 |
+
+这些结果只证明被测接口当时的形状与协议，不代表服务的长期可用或产品验收。
+
+### 2.2 M0 回归
+
+`experiments/m0` 保留 POC-09 等尚未被产品替代的回归，退出条件见[仓库地图](repo-map.md)。`node scripts/m0.mjs fixtures|typecheck|test` 运行全部原型测试，`verify.mjs` 只运行其中三份。需要系统 FFmpeg（含 libx264/libx265）的 MKV/HEVC 用例在缺少时记为跳过，不记为通过。
+
+## 3. 应用与工程门禁
+
+正式工程的测试工具按 [ADR-0007](../decisions/0007-technology-stack.md) 采用 Vitest、Testing Library/jsdom 和对应浏览器烟测的 playwright-core。jsdom 测试用文件头 `/** @vitest-environment jsdom */`，共享设置在 `tests/helpers/`；jsdom 和浏览器烟测不替代 Electron 原生输入法与设备实测。
+
+产品 AT 仍按阶段执行，不能用 POC 子集标为 passed。
 
 | 变更范围 | 必需验证 |
 | --- | --- |
@@ -123,20 +91,18 @@ M0 验证工程建立后，下列命令已经存在并应实际运行。产品 A
 
 应用相关命令存在后必须运行相应检查；命令不存在时补齐实现或明确记录阻塞，不能使用 `--if-present` 静默把缺少关键检查当成成功。合理低风险豁免写明不适用原因。
 
-## 3. 证据与失败处理
+## 4. 证据与失败处理
 
 按 [报告模板](../templates/validation-report.md)记录输入、版本、环境、实际结果和限制，更新 [执行状态](../delivery/status.md)。检查基础设施变化至少验证能检出一个真实反例，避免脚本永远返回成功。
 
+已合并阶段的过程证据按[阶段收尾清理](../governance/documentation-policy.md#stage-cleanup)在下一阶段提炼进 `docs/evidence/<阶段>-summary.md` 并删除，Git 历史是归档。
+
 环境失败、业务失败和未执行分别报告。不能删测试、弱化断言、重写旧结果或改验收目标来制造通过；合理需求调整由有效决定驱动并同步正本。模型、网络和设备的非确定性场景使用可控故障夹具验证协议，有限真实测试验证实际适配。
 
-## 4. CI 接线与扩展
+## 5. CI 接线与扩展
 
-`.github/workflows/ci.yml` 在面向 main 的 PR 更新及手动触发时运行统一入口，必需状态名称为 `repository-quality`。不设置路径过滤、main push 重复检查或定时全量扫描；触发、权限、Ruleset 与失败处理见 [Git 与 GitHub](git-and-github.md)，实际远端结果见 [建立报告](../evidence/2026-09-19-github-bootstrap.md)。
+`.github/workflows/ci.yml` 在面向 main 的 PR 更新及手动触发时运行统一入口，必需状态名称为 `repository-quality`。不设置路径过滤、main push 重复检查或定时全量扫描；触发、权限、Ruleset 与失败处理见 [Git 与 GitHub](git-and-github.md)，实际远端结果以对应 PR 为准。
 
-当前 CI 安装锁定依赖并运行 `verify.mjs`（文档 + 公开检查及其反例 + 依赖方向 + 类型检查 + 契约/修复回归）。Windows 包与性能分别运行 `node scripts/m0.mjs package`、`node scripts/m0.mjs bench`，不纳入无 Windows 桌面的 CI。人工评审仍负责语义和证据质量。完整 POC、Windows 设备与打包走 `verify-m0` / 人工检查单。不把 CI 成功当作 M0 退出或产品发布验证。新增 Actions 需同时更新远端 allowlist，新增必需 job 需先验证真实产出再切换 Ruleset。
+当前 CI 安装锁定依赖并运行 `verify.mjs`。Windows 包、完整阶段测试与性能走阶段入口，不纳入无 Windows 桌面的 CI；真实服务与设备项不进 CI。人工评审仍负责语义和证据质量。不把 CI 成功当作阶段退出或产品发布验证。新增 Actions 需同时更新远端 allowlist，新增必需 job 需先验证真实产出再切换 Ruleset。
 
-门禁反例：`scripts/check-deps.mjs` 内置错误导入自测；`scripts/m0-report.test.mjs` 检查报告对缺项、陈旧指纹、失败包和性能的拒绝。失败必须非零。报告只核对原型证据，不自动计算里程碑退出。
-
-## M1a 报告门禁
-
-`node --test scripts/m1a-report.test.mjs` 用夹具验证缺项、旧指纹、失败基准和不足规模会被拒绝。`scripts/verify-m1a.mjs` 在证据目录已有 `bench.json`/`package.json`/`cases.json` 或设置 `M1A_REQUIRE_REPORT=1` 时按同一规则核验，不能只凭 Vitest 写 `passed`。cases 必须由 Vitest 实际结果生成并匹配必需测试；sourceFingerprint 与 m1aSourceFingerprint 均必填。存在 A 的 audit.json 时，失败或旧指纹同样阻止报告通过。当前审查证据使用独立跑次目录，不得覆盖 `docs/evidence/m1a-f24-f32/` 根级与 `a-reverify` 历史结果。`node scripts/audit-m1a-reverify.mjs` 必须真实通过，不得删除反例或忽略失败。10,000 元数据 / 50,000 检索块、真实进程冷启动、上下文、可见交互与 Windows 包烟测（含 agent 发送/停止/重启）由 `node scripts/m1a.mjs bench` / `package` 生成。B 自检通过不等于 A 复验或产品验收。
+门禁反例：`scripts/check-deps.mjs` 内置错误导入自测（含越出包目录的相对导入必须报错、包内相对导入必须通过）；`scripts/stage-report.test.mjs` 检查报告对缺项、陈旧指纹、失败包和性能的拒绝；`scripts/check-docs.test.mjs` 检查过期文档与登记缺口会被拒绝。失败必须非零。

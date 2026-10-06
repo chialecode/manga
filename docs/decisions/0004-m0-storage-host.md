@@ -24,7 +24,7 @@ SQLite 驱动：`node:sqlite`、better-sqlite3、sql.js。宿主：单写入文�
 
 ## M1a 实证与正式决定
 
-2026-09-19 在 `packages/storage-drizzle` 接入 better-sqlite3 + Drizzle + FTS5，一个 Profile 一个文件锁写入宿主。已测：旧 schema v1 打开并升级、CJK 检索范围过滤、第二宿主冲突、资料包发布中断后保留暂存/冲突文件、凭据只存引用。推荐继续采用单写入宿主；维护成本是原生 ABI/rebuild/asar 与迁移脚本，复杂宿主替换需要重启。2026-09-20 用户已正式接受此方案。完整迁移/恢复尚有阻断问题，见 [M1a 最新验收审查](../evidence/m1a-acceptance-review.md)。
+2026-09-19 在 `packages/storage-drizzle` 接入 better-sqlite3 + Drizzle + FTS5，一个 Profile 一个文件锁写入宿主。已测：旧 schema v1 打开并升级、CJK 检索范围过滤、第二宿主冲突、资料包发布中断后保留暂存/冲突文件、凭据只存引用。推荐继续采用单写入宿主；维护成本是原生 ABI/rebuild/asar 与迁移脚本，复杂宿主替换需要重启。2026-09-20 用户已正式接受此方案。迁移/恢复的阻断问题（F-24、F-25）已于 2026-09-21 复验关闭，见 [M1a 总结](../evidence/m1a-summary.md)。
 
 ## 后果和实施
 

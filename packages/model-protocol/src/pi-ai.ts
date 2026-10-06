@@ -11,7 +11,8 @@ function unknownCost() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 }
 
-function piModel(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string): Model<"openai-responses" | "openai-completions"> {
+function piModel(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, vision = false): Model<"openai-responses" | "openai-completions"> {
+  const input: Array<"text" | "image"> = vision ? ["text", "image"] : ["text"];
   if (protocol === "openai-responses") {
     return {
       id: modelId,
@@ -20,7 +21,7 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
       provider: "manga-byok",
       baseUrl,
       reasoning: false,
-      input: ["text"],
+      input,
       cost: unknownCost(),
       contextWindow: 128_000,
       maxTokens: 8192,
@@ -34,7 +35,7 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
     provider: "manga-byok",
     baseUrl,
     reasoning: false,
-    input: ["text"],
+    input,
     cost: unknownCost(),
     contextWindow: 128_000,
     maxTokens: 8192,
@@ -101,7 +102,9 @@ function piContext(request: TextRequest, api: "openai-responses" | "openai-compl
     }
     messages.push({
       role: message.role === "system" ? "user" : "user",
-      content: message.role === "system" ? `System: ${message.content}` : message.content,
+      content: message.images?.length && message.role === "user"
+        ? [{ type: "text" as const, text: message.content }, ...message.images.map((image) => ({ type: "image" as const, data: image.base64, mimeType: image.mediaType }))]
+        : message.role === "system" ? `System: ${message.content}` : message.content,
       timestamp: Date.now(),
     });
   }
@@ -125,8 +128,8 @@ function mapPiError(message?: string): MangaError {
   return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", { retryable: true });
 }
 
-function createByokModels(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string) {
-  const model = piModel(protocol, baseUrl, modelId);
+function createByokModels(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, vision = false) {
+  const model = piModel(protocol, baseUrl, modelId, vision);
   const models = createModels();
   models.setProvider(createProvider({
     id: "manga-byok",
@@ -150,7 +153,7 @@ export async function* streamTextPi(
   apiKey: string,
   request: TextRequest,
 ): AsyncGenerator<StreamEvent> {
-  const { models, model } = createByokModels(protocol, baseUrl, request.model);
+  const { models, model } = createByokModels(protocol, baseUrl, request.model, request.messages.some((message) => message.images?.length));
   const stream = models.stream(model, piContext(request, model.api), {
     apiKey,
     signal: request.signal,
@@ -207,7 +210,7 @@ export async function completeTextPi(
   apiKey: string,
   request: TextRequest,
 ): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; arguments: string }>; usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number } }> {
-  const { models, model } = createByokModels(protocol, baseUrl, request.model);
+  const { models, model } = createByokModels(protocol, baseUrl, request.model, request.messages.some((message) => message.images?.length));
   const message = await models.complete(model, piContext(request, model.api), {
     apiKey,
     signal: request.signal,

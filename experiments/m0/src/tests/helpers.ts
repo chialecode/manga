@@ -39,7 +39,7 @@ export function crashChild(args: string[]): { status: number | null; stderr: str
 }
 
 export function writeCases(poc: string, cases: CaseResult[]): void {
-  const dir = path.resolve(process.env.M0_EVIDENCE_DIR ?? path.join(repoRoot(), "docs/evidence/m0-closure"));
+  const dir = path.resolve(process.env.M0_EVIDENCE_DIR ?? path.join(repoRoot(), "dist/evidence-runs/m0"));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, `${poc}.json`), `${JSON.stringify({ poc, sourceFingerprint: sourceFingerprint(repoRoot()), cases, at: new Date().toISOString() }, null, 2)}\n`);
 }

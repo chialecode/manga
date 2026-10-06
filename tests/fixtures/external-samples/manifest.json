@@ -1,0 +1,21 @@
+{
+  "generator": "scripts/samples/build-reading-samples.py",
+  "toolchain": "CPython 3.12.14 stdlib (zipfile/zlib/struct), no project code",
+  "samples": [
+    {
+      "name": "reading-sample.epub",
+      "bytes": 2944,
+      "sha256": "351b2e70cdc1350c481daa5645b446e11f949fc9f5d545393b8c0d230602e581"
+    },
+    {
+      "name": "external-pages.pdf",
+      "bytes": 1608,
+      "sha256": "3a81f4454b2a47b283041c58d41b67601f71f3c3feb998b1fa350229fdaa2df6"
+    },
+    {
+      "name": "palmdoc-sample.mobi",
+      "bytes": 758,
+      "sha256": "e603bef59abb42b4f982665584f377724f299a91ee70857caa4680a4b8380f3f"
+    }
+  ]
+}

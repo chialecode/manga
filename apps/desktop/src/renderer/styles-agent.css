@@ -1,0 +1,15 @@
+/* The right pane's media section: where the reader is, pictures and recordings for the next task, quick tasks, related works. */
+.rp { display: flex; flex-direction: column; gap: 12px; font-size: 12px; min-width: 0; }
+.rp-section { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border); min-width: 0; }
+.rp-section h3 { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--color-text); }
+.rp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rp-chips .secondary-button { padding: 5px 10px; font-size: 12px; white-space: normal; text-align: left; }
+.rp-list { display: flex; flex-direction: column; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.rp-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.rp-images { display: flex; flex-direction: column; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.rp-images li { display: grid; grid-template-columns: 56px 1fr auto; gap: 8px; align-items: center; }
+.rp-images img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-muted); }
+.rp-field { display: flex; flex-direction: column; gap: 4px; }
+.rp-field select { border: 1px solid var(--color-border); border-radius: 8px; padding: 5px 8px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
+.rp-check { display: flex; align-items: flex-start; gap: 8px; }
+.rp-check input { margin-top: 2px; }

@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-PROVIDERS |
 | 版本与日期 | 0.2 / 2026-09-19 |
 | 状态 | 评审稿；接口与配置均为拟议契约，未实现或完成站点验证 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[确认与待决事项](../decisions/open-questions.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
 | 上位方案 | [可组合与 AI-Native 架构](composable-ai-native-architecture.md) |
 | 关联协议 | [领域模型](domain-model.md)、[Agent 与插件](agent-and-plugins.md)、[交付验收](../delivery/roadmap-and-acceptance.md) |
 
@@ -87,6 +87,18 @@ interface FieldCandidate {
 - 尊重条件请求、过期策略和站点缓存要求。断网时可返回已缓存快照，并明确来源与抓取时间。
 - 一个源失败时返回 `partial` 状态、成功源结果和失败原因；只有明确的空结果才是“未找到”。
 - 故障熔断与指数退避有上限；用户刷新不绕过服务限流。提供者停用后不再联网，保留已合法保存的本地来源记录。
+
+### 3.3 首个实现：Bangumi（M2）
+
+以下为 2026-10-03 按官方资料核对的接入约定，实施见 [M2 全阶段计划](../delivery/m2-media-mvp-plan.md)第 3—5 节。
+
+- **接口来源。** 以官方 OpenAPI [`open-api/v0.yaml`](https://github.com/bangumi/api/blob/master/open-api/v0.yaml) 为准，生成类型并记录规范所在提交；运行时只校验实际使用的字段。用到 `POST /v0/search/subjects`（官方标注为实验性接口，字段可能变化）、`GET /v0/subjects/{id}`、`GET /v0/subjects/{id}/subjects`（关联条目，用于“相关作品”）、`GET /v0/episodes?subject_id=`（集标题与序号），以及条目 `images` 中的 large/common/medium/small/grid。条目类型 1 为书籍（以 `platform` 区分小说与漫画），2 为动画。
+- **身份。** namespace 为 `bangumi:subject`，外部 ID 按字符串保存。
+- **请求规范。** User-Agent 按[官方建议](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)写开发者 ID、应用名、版本与项目主页：`chialecode/manga/<版本> (https://github.com/chialecode/manga)`。公开条目不需要凭据；access token 只用于用户自愿开启的受限内容，保存在凭据库，不进入日志与导出。官方未公布限流数值：默认并发 2，429/5xx 按 Retry-After 退避且最多重试 2 次，401/403 不重试。
+- **网络。** 请求由宿主经 Electron 网络栈发出，跟随系统代理；只允许官方 API 与图片主机，拒绝重定向到私网或其他主机。2026-07 起中国大陆无法直连（[bangumi/api#284](https://github.com/bangumi/api/issues/284)），不可达时返回已缓存快照并标明抓取时间，不阻断本地功能。
+- **缓存与存储。** 维护者答复公开条目数据可以自行存储与缓存（[bangumi/api#294](https://github.com/bangumi/api/issues/294)）。MANGA 保存所用字段的快照与封面原图，界面标注“资料来源 Bangumi”、抓取时间和条目页链接。封面与图片的著作权属于原权利人，只供用户本地使用；是否随资料包导出见 Q-20。
+- **只读。** 首版不写入 Bangumi 收藏、评分或进度；这些属于独立的写入能力与工作流。
+- **第二个来源。** M2 同时提供读取文件内置资料的本地提供者实例（EPUB OPF、CBZ 内的 ComicInfo.xml、PDF 信息、视频容器标签），与 Bangumi 一起参与单源、回退与多源组合；换源验证另用假在线提供者。
 
 ## 4. 本地作品身份与字段所有权
 
