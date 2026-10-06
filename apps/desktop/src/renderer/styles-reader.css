@@ -1,0 +1,85 @@
+/* ---- reader frame shared by the novel, comic and video readers --------- */
+.reader { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; background: var(--color-surface); }
+.reader[data-fullscreen] { background: var(--color-surface); }
+.reader-top { position: relative; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--color-border); min-width: 0; flex-shrink: 0; }
+/* Clipped, not overlapped: in a narrow window the tools take the room and the heading (also shown in the title bar) gives way. */
+.reader-heading { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
+.reader-heading h1 { font-size: 15px; font-weight: 600; min-width: 0; padding: 0; }
+.reader-chapter { color: var(--color-subtle); font-size: 12px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.reader-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.reader-toolbar { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); font-size: 12px; flex-shrink: 0; }
+.reader-group { display: inline-flex; align-items: center; gap: 4px; }
+.reader-group select, .reader-more select, .reader-more input[type="number"], .comic-jump input { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
+.reader-more input[type="number"], .comic-jump input { width: 72px; }
+.reader-themes { gap: 6px; }
+.reader-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--color-border); font-size: 11px; line-height: 1; display: grid; place-items: center; padding: 0; }
+.reader-swatch[data-current="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent-soft); }
+.reader-size { min-width: 30px; text-align: center; font-variant-numeric: tabular-nums; color: var(--color-text); }
+.zoom-value { min-width: 48px; padding: 4px 6px; border-radius: 6px; }
+.zoom-value:hover { background: var(--color-muted); }
+.reader-range { display: inline-flex; align-items: center; gap: 6px; }
+.reader-ratio { padding: 3px 9px; font-size: 12px; }
+.reader-ratio[aria-pressed="true"] { color: var(--color-accent); background: var(--color-accent-soft); }
+/* The "…" menu of a reader: a panel under the header, capped to the window so it is never cut off in a short one. */
+.reader-more.reader-more-pop { position: absolute; top: calc(100% + 4px); right: 12px; z-index: 20; flex-basis: auto; flex-direction: column; align-items: flex-start; width: min(340px, calc(100% - 24px)); max-height: calc(100vh - 140px); overflow: auto; padding: 12px 14px; gap: 10px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 8px 24px #30364733; }
+.reader-more { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding-top: 6px; border-top: 1px dashed var(--color-border); }
+.reader-panel { padding: 10px 16px; border-bottom: 1px solid var(--color-border); max-height: 40%; overflow: auto; background: var(--color-muted); font-size: 13px; flex-shrink: 0; }
+.reader-panel input { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); }
+.reader-toc { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+/* The scrollbar's room is kept even when the page is short: a PDF page is painted at the width it finds, so a bar appearing once it has been
+   painted would change that width and paint it again, replacing the text layer under a selection (LOOP-06). */
+.reader-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px; scrollbar-gutter: stable; }
+.reader-spread { display: flex; flex-direction: column; margin: 0 auto; border: 1px solid var(--color-border); border-radius: 10px; }
+.reader-spread-head, .reader-spread-foot { font-size: 11px; opacity: .7; text-align: center; padding: 4px 0; }
+.reader-text, .reader-columns { overflow-wrap: anywhere; }
+.reader-paragraph { overflow-wrap: anywhere; }
+.reader-source { margin: 8px 16px 0; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-muted); font-size: 13px; flex-shrink: 0; }
+.reader-source h2 { font-size: 13px; font-weight: 600; }
+.reader-source blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--color-accent); }
+.reader-source-actions { display: flex; gap: 8px; margin-top: 6px; }
+.reader-notice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 16px 0; font-size: 12px; color: var(--color-subtle); flex-shrink: 0; }
+
+/* ---- comic reader ------------------------------------------------------ */
+.comic-reader { overflow: hidden; }
+/* The frame takes whatever the layout gives it and nothing the pages need; the stage fills it and scrolls. Measuring the frame cannot feed back from the page size. */
+.comic-frame { position: relative; flex: 1 1 0; min-height: 0; min-width: 0; background: var(--color-muted); }
+/* The scrollbar's room is kept even when the page fits: a page that needs one (a tall page fitted to the width) would otherwise take it
+   from the width it was just sized for, and the stage would scroll sideways by the width of the bar. */
+.comic-stage { position: absolute; inset: 0; overflow: auto; display: flex; padding: 8px; scrollbar-gutter: stable; }
+.comic-stage[data-selecting] { cursor: crosshair; }
+.comic-spread { margin: auto; display: flex; flex-direction: row; align-items: center; justify-content: center; flex: 0 0 auto; }
+.comic-spread[data-anim="fade"] { animation: comic-fade 180ms ease-out; }
+.comic-spread[data-anim="slide"] { animation: comic-slide-from-right 200ms ease-out; }
+.comic-spread[data-anim="slide"][data-reading="rtl"][data-step="forward"], .comic-spread[data-anim="slide"][data-reading="ltr"][data-step="back"] { animation-name: comic-slide-from-left; }
+.comic-page { position: relative; flex: 0 0 auto; background: var(--color-surface); user-select: none; overflow: hidden; }
+.comic-image { display: block; width: 100%; height: 100%; object-fit: fill; -webkit-user-drag: none; }
+.comic-pdf { display: block; }
+.comic-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 12px; text-align: center; font-size: 13px; color: var(--color-subtle); background: var(--color-muted); }
+.comic-loading { animation: comic-pulse 1.4s ease-in-out infinite; }
+.comic-region { position: absolute; box-sizing: border-box; pointer-events: none; }
+.comic-region-source { border: 2px solid var(--color-accent); background: #AD326826; box-shadow: 0 0 0 3px #AD326833; }
+.comic-region-draft { border: 2px solid var(--color-accent); background: #AD326833; }
+.comic-region-live { border: 2px dashed var(--color-accent); background: #AD32681A; }
+.comic-select-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.comic-strip { position: relative; margin: 0 auto; flex: 0 0 auto; }
+.comic-strip-slot { position: absolute; left: 0; right: 0; }
+.comic-empty { margin: auto; }
+.comic-end { position: absolute; inset: auto 0 24px 0; margin: 0 auto; width: fit-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 8px 24px #30364722; font-size: 13px; }
+.comic-footer { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px 16px; border-top: 1px solid var(--color-border); flex-shrink: 0; font-size: 12px; }
+.comic-footer-title { max-width: 220px; color: var(--color-text); font-weight: 600; }
+.comic-footer-page { color: var(--color-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.comic-view { gap: 6px; }
+.comic-view select { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
+.comic-slider { flex: 1; min-width: 120px; }
+.comic-jump { display: inline-flex; align-items: center; gap: 6px; }
+.comic-region-bar { gap: 8px; }
+
+@keyframes comic-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes comic-slide-from-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes comic-slide-from-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes comic-pulse { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+
+@media (max-width: 600px) {
+  .reader-top, .reader-toolbar, .comic-footer { padding-left: 12px; padding-right: 12px; }
+  .reader-source, .reader-notice { margin-left: 12px; margin-right: 12px; }
+}

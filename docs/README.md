@@ -2,11 +2,11 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | 0.8（已确认范围与公开内容门禁；各设计文档独立版本） |
-| 编写日期 | 2026-09-19 |
+| 文档版本 | 0.9（阶段清理与退役检查；各设计文档独立版本） |
+| 编写日期 | 2026-09-19；2026-10-04 更新 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | M0 已复核原型与 M1a 分别由 PR #1/#2 交付；用户已授权 DCO 补签、依次合并及分支清理，后续基线为 main。M1a 本轮技术复验、人工反馈与真实 Embedding 证据已记录；完整 AT、M0 整体退出及后续范围仍按状态台账 |
+| 实现状态 | M0、M1a、M1b 已分别由 PR #1/#2/#3 合入 main（`dc925e9`、`a688713`、`5504c97`）；当前阶段 M2 在分支 `feat/m2-media-mvp`。产品验收尚未完成，完整 AT 与后续范围仍按状态台账 |
 
 ## 1. 阅读顺序
 
@@ -17,17 +17,15 @@
 | [文档治理](governance/documentation-policy.md) / [完整登记表](governance/document-registry.json) | 权威范围、状态、责任、更新与归档；所有自有 Markdown 均登记 |
 | [产品规则](product-rules/README.md) | 已确认方向与长期承诺 |
 | [开发规则](dev-rules/README.md) / [仓库地图](dev-rules/repo-map.md) | 工作流、模块/契约、数据、Agent 与真实命令 |
-| [A/B 协作与集中审批](dev-rules/development-workflow.md#agent-handoff) / [交接模板](templates/agent-handoff.md) | A 规划、B 连续执行、A 集中复核；统一版本/证据与必要用户决定 |
+| [A/B 协作](dev-rules/development-workflow.md#agent-handoff) / [Agent 与用户的交流](dev-rules/development-workflow.md#agent-user) / [交接模板](templates/agent-handoff.md) | A 规划、B 连续执行、A 集中复核；Agent 与用户只经用户待办和编号交流，互不阻塞 |
 | [设计规则](design-rules/README.md) | UI 治理、可访问性与视觉证据 |
-| [待决定与待处理总表](decisions/open-questions.md) / [决定索引](decisions/README.md) | 全项目 Q/ACT/LOOP 唯一入口、已确认决定与 ADR；不逐工作包审批 |
+| [用户待办](../USER-ACTIONS.md) | 用户需要做的全部事的唯一入口：待决定（含当前默认）、人工检查（含步骤）、授权；不限阶段，可顺延 |
+| [决定索引](decisions/README.md) | 已确认决定与 ADR |
 | [基础技术栈决定](decisions/0007-technology-stack.md) | A-15 已授权的 UI、编辑、存储与工程基础选择；原型到正式工程的迁移/验证边界 |
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
 | [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
-| [M0 执行与交接计划](delivery/m0-execution-plan.md) / [Cursor prompt](delivery/m0-cursor-prompt.md) | 工作包与交接；当前结果见 [复核修复报告](evidence/2026-09-19-m0-followup-review.md) |
-| [M0 收尾计划](delivery/m0-closure-plan.md) / [收尾 Cursor prompt](delivery/m0-closure-cursor-prompt.md) | 历史交接工作包；实际复核结论见下列最终报告 |
-| [M1a 执行计划](delivery/m1a-execution-plan.md) / [Cursor prompt](delivery/m1a-cursor-prompt.md) | 已交付阶段的计划与历史交接；当前事实见状态与最新 A 复验 |
-| [M1b 执行计划](delivery/m1b-execution-plan.md) / [B prompt](delivery/m1b-cursor-prompt.md) / [交付报告](evidence/m1b-reading-notes-delivery.md) | 阅读与人工记录的唯一计划、B 历史自检、A 集中审查及返工/人工边界 |
-| [M1a 交付报告](evidence/m1a-delivery.md) / [最新 A 复验](evidence/m1a-f24-f32-review.md) / [原验收审查](evidence/m1a-acceptance-review.md) | 历史交付、当前缺口、用户决定落实及 B 集中返工入口 |
+| [阶段总结：M0](evidence/m0-summary.md) / [M1a](evidence/m1a-summary.md) / [M1b](evidence/m1b-summary.md) | 已合并阶段的唯一总结（A-45）：范围、结果与限制、遗留编号、迁移映射、清理记录与固定链接；过程文档与轮次证据已按[阶段收尾清理](governance/documentation-policy.md#stage-cleanup)删除 |
+| [M2 全阶段计划](delivery/m2-media-mvp-plan.md) | 当前阶段唯一计划，覆盖整个阶段（A-46）：上一阶段清理、Electron 与依赖升级、漫画/动画/封面与多源元数据、界面、录音与三媒介语音定位；第 13 节为 B prompt |
 | [模块规格](modules/library.md) | library / notes / settings / inventory / agent 的数据所有权与启停 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 
@@ -41,10 +39,6 @@
 | [Agent 与插件](design/agent-and-plugins.md) | 状态如何被感知、能力如何注册与执行、插件如何停用、模型如何替换？ |
 | [界面与工作流](design/interaction-and-workflows.md) | 用户如何完成阅读、记录、组织、创作和异常恢复？ |
 | [交付与验收](delivery/roadmap-and-acceptance.md) | 先验证什么、按什么顺序交付、怎样判定需求完成？ |
-| [M0 复核修复报告](evidence/2026-09-19-m0-followup-review.md) | 复核当时的自动化证据、已修复问题与边界 |
-| [M0 最新实机反馈与回放诊断](evidence/2026-09-19-m0-device-followup.md) | 微信输入法/键盘/缩放、真实麦克风基础路径及合成录音时长诊断 |
-| [M0 收尾交付最终复核](evidence/2026-09-19-m0-closure-review.md) | 当前修复、匹配源码的验证、M0/M1a 判断和人工边界 |
-| [M0 收尾覆盖与审查摘要](evidence/m0-closure/coverage.md) | Cursor 交付时的历史 R0—R7 自述；不替代最终复核 |
 
 产品行为以需求文档为准，基础数据语义以领域文档为准，命令与上下文契约以 Agent 与插件文档为准。组合机制、自研范围及运行时选型由可组合方案定义，外部身份、字段合并与获取协议由外部扩展文档细化；对应需求、设计入口与验收已同步。改变跨文档约束时必须同步修改对应章节与验收映射。
 
@@ -56,7 +50,7 @@
 
 ## 3. 假设、待决事项与决定
 
-[已确认决定](decisions/confirmed-decisions.md)保留 A 编号与职责正本；[事项总表](decisions/open-questions.md)统一尚需决定、人工检查、配置、外部授权及非阻塞后续 loop，报告只引用当前编号。软件先贯通[全部基本功能 MVP](delivery/roadmap-and-acceptance.md#mvp-loop)，再据反馈迭代；不等单模块所有打磨项清零才推进下一基本功能。基础库按 ADR-0007 实施；已授权实现继续，剩余决定只阻塞具体依赖动作。
+[已确认决定](decisions/confirmed-decisions.md)保留 A 编号与职责正本；[用户待办](../USER-ACTIONS.md)统一尚需用户决定、人工检查、配置与外部授权（A-53），Agent 侧的非阻塞后续 loop 在[执行状态](delivery/status.md#followup-loops)，报告只引用当前编号。软件先贯通[全部基本功能 MVP](delivery/roadmap-and-acceptance.md#mvp-loop)，再据反馈迭代；不等单模块所有打磨项清零才推进下一基本功能。基础库按 ADR-0007 实施；已授权实现继续，剩余决定只阻塞具体依赖动作。
 
 ## 4. 约束与范围的表达
 
@@ -85,5 +79,4 @@
 | 0.6 | 2026-09-19 | 建立 Git/远端管理、本地统一验证、必要 PR CI、单人维护 Ruleset、低频协作规范与 GitBook 接入准备 |
 | 0.7 | 2026-09-19 | 登记 M0 验证工程、POC 证据与 proposed ADR；同步导航与命令入口 |
 | 0.8 | 2026-09-19 | 落实 Agent 优先、可配置目录、媒体/录音/提供者/语言/许可决定；移除已解决问题，新增公开内容检查 |
-
-- [M0 交付复核与修复](evidence/2026-09-19-m0-followup-review.md)
+| 0.9 | 2026-10-04 | M2 阶段清理（A-45）：已合并阶段改为三份阶段总结；登记表增加当前阶段与 `retireAfter`；导航只保留当前阶段计划与正本 |

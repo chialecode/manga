@@ -23,6 +23,8 @@ export type SurfaceSelection = {
 
 export type SurfaceReading = { resourceId: string; revisionId: string; title: string };
 export type SurfaceNote = { objectId: string; revision: number; title: string; resourceId?: string | null };
+/** A work's own page: the conversation there is about the work, not about one file of it. */
+export type SurfaceWork = { workId: string; title: string };
 
 export type AgentSurfaceInput = {
   page: string;
@@ -32,6 +34,7 @@ export type AgentSurfaceInput = {
   sessions: SurfaceSession[];
   reading?: SurfaceReading | null;
   note?: SurfaceNote | null;
+  work?: SurfaceWork | null;
   selection?: SurfaceSelection | null;
 };
 
@@ -40,7 +43,7 @@ export type AgentSurface = {
   sessionId?: string;
   /** Mode this surface's draft, run and session must belong to. */
   mode?: string;
-  open?: { kind: "resource" | "note"; targetId: string };
+  open?: { kind: "resource" | "note" | "work"; targetId: string };
   resourceId?: string;
   resourceRevisionId?: string;
   resourceTitle?: string;
@@ -50,6 +53,9 @@ export type AgentSurface = {
   selection: SurfaceSelection | null;
   label?: string;
 };
+
+/** Pages that show one resource in a reader: the open resource is the Agent's target there. */
+const MEDIA_PAGES = new Set(["reading", "comic", "video"]);
 
 function selectionFor(input: AgentSurfaceInput, resourceId: string | undefined): SurfaceSelection | null {
   const selection = input.selection;
@@ -86,7 +92,11 @@ function resolveAgentSurfaceBody(input: AgentSurfaceInput): AgentSurface {
     };
   }
 
-  if (input.page === "agent" || input.page === "copilot") {
+  if (input.page === "work" && input.work) {
+    return { open: { kind: "work", targetId: input.work.workId }, selection: null, label: input.work.title };
+  }
+
+  if (input.page === "agent") {
     const session = input.sessions.find((item) => item.sessionId === input.sessionId && (!input.mode || !item.mode || item.mode === input.mode));
     if (session?.kind === "note" && session.targetId) {
       const same = note?.objectId === session.targetId ? note : null;
@@ -122,7 +132,7 @@ function resolveAgentSurfaceBody(input: AgentSurfaceInput): AgentSurface {
     return { sessionId: input.sessionId, selection: null, label: session?.title };
   }
 
-  if (input.page === "reading" && reading) {
+  if (MEDIA_PAGES.has(input.page) && reading) {
     const owned = noteForResource(note, reading.resourceId);
     return {
       open: { kind: "resource", targetId: reading.resourceId },

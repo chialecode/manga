@@ -8,9 +8,9 @@ MANGA 取自 **Manga、Anime、Novel、Game、Agent**，是一个以 TypeScript 
 
 ## 当前阶段
 
-M0 原型源码位于 `experiments/m0`，M1 产品宿主位于 `apps/desktop`，共用业务包位于 `packages`。M0/M1a 已合入 main；M1b 阅读与人工记录处于 A 审查返工阶段，完整产品验收尚未完成，详见 [交付报告](docs/evidence/m1b-reading-notes-delivery.md)。
+M0 原型源码位于 `experiments/m0`，M1 产品宿主位于 `apps/desktop`，共用业务包位于 `packages`。M0、M1a、M1b 已合入 main，产品验收尚未完成，阶段结果见 [M0](docs/evidence/m0-summary.md)、[M1a](docs/evidence/m1a-summary.md)、[M1b](docs/evidence/m1b-summary.md) 总结；当前阶段 M2 的计划见 [M2 计划](docs/delivery/m2-media-mvp-plan.md)。
 
-首版已确认采用**本地单用户、基础功能无需登录、Windows 11 x64**，其他桌面系统后续独立验收。自动化证据与退出判断见 [M0 汇总](docs/evidence/2026-09-19-m0-summary.md)，推进状态见 [执行台账](docs/delivery/status.md)。
+首版已确认采用**本地单用户、基础功能无需登录、Windows 11 x64**，其他桌面系统后续独立验收。阶段证据与退出判断见各阶段总结（[M0](docs/evidence/m0-summary.md)），推进状态见 [执行台账](docs/delivery/status.md)。
 
 ## 本地启动
 
@@ -27,9 +27,10 @@ pnpm dev
 
 ## 开发与文档入口
 
+- **项目维护者：你需要做的事（人工检查、待决定、授权）只看 [USER-ACTIONS.md](USER-ACTIONS.md)。**
 - AI Agent 与程序员先读 [AGENTS.md](AGENTS.md)，按任务触发相关规则。
 - 人类开发入门见 [CONTRIBUTING.md](CONTRIBUTING.md)，代码评审见 [REVIEW.md](REVIEW.md)，界面开发见 [DESIGN.md](DESIGN.md)。
-- 文档权威、生命周期和变更流程见 [文档治理](docs/governance/documentation-policy.md)；确认与假设见 [决定台账](docs/decisions/open-questions.md)。
+- 文档权威、生命周期和变更流程见 [文档治理](docs/governance/documentation-policy.md)；已确认的决定见 [确认记录](docs/decisions/confirmed-decisions.md)。
 - 本地执行 `node scripts/verify.mjs`（文档 + 依赖方向 + 类型检查）。完整 M0 自动验证：`node scripts/verify-m0.mjs`。环境和检查边界见 [质量门禁](docs/dev-rules/quality-gates.md)。
 - 仓库为 [chialecode/manga](https://github.com/chialecode/manga)，采用本地验证优先、必要 PR CI 为辅；分支保护、低频协作与 GitBook 准备见 [Git 与 GitHub](docs/dev-rules/git-and-github.md)，安全报告见 [SECURITY.md](SECURITY.md)。
 

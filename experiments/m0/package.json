@@ -11,7 +11,7 @@
     "@manga/plugin-sdk": "workspace:*",
     "@manga/kernel": "workspace:*",
     "@manga/storage-sqlite": "workspace:*",
-    "fflate": "0.8.2",
-    "parse5": "7.3.0"
+    "fflate": "0.8.3",
+    "parse5": "8.0.1"
   }
 }

@@ -11,6 +11,10 @@ export * from "./acquisition.ts";
 export * from "./capture.ts";
 export * from "./report.ts";
 export * from "./inputs.ts";
+export * from "./inputs-media.ts";
+export * from "./inputs-rework.ts";
+export * from "./quick-tasks.ts";
+export * from "./media.ts";
 
 export * from "./library-package.ts";
 export * from "./grant.ts";

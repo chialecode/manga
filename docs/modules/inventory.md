@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.inventory` / 资源总览 / 开发者 |
-| 文档状态 / 实现状态 | M1a 总览含占用字节、分区/指针位置、缺失修复、可取消的逐批扫描和仅索引外部根；独立分区迁移仍拒绝 |
+| 文档状态 / 实现状态 | M1a 总览含占用字节、分区/指针位置、缺失修复、可取消的逐批扫描和仅索引外部根；独立分区迁移仍拒绝。**M2 返工已实施并自检**：资源总览移入设置的“存储与备份”（A-49），见[M2 交付报告第 16 节](../evidence/m2-media-mvp-delivery.md#16-返工交付2026-10-06)；产品验收仍为 not-run |
 | 需求 / 阶段 / 设计依据 | LIB-04、AT-51 |
 | 包与公开入口 | `packages/app-core`；`inventory.overview`、`inventory.scan`、`inventory.cancelScan`、`inventory.reveal`、`inventory.repair` |
 
@@ -17,7 +17,7 @@
 
 ## 3. Agent 与界面
 
-`inventory.overview` 可供 Agent 只读调用；非 owner grant 按已授权资源/对象返回元数据，不返回 Profile 路径或无关附件，空范围返回空集合（F-23）。
+总览在设置的“存储与备份”页，与资料包导出/导入、封面原图选项同页；原独立的总览入口已移除，命令与结果不变。`inventory.overview` 可供 Agent 只读调用；非 owner grant 按已授权资源/对象返回元数据，不返回 Profile 路径或无关附件，空范围返回空集合（F-23）。
 
 ## 4. 生命周期与兼容
 

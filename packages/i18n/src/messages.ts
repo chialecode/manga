@@ -1,19 +1,20 @@
+import { zhCNMedia } from "./messages-media.ts";
+import { zhCNRework } from "./messages-rework.ts";
+
 export const locales = ["zh-CN", "qps-ploc"] as const;
 export type Locale = (typeof locales)[number];
 
 export const defaultLocale: Locale = "zh-CN";
 
-const zhCN = {
+const zhCNBase = {
   "app.title": "MANGA",
   "app.channel.release": "正式版",
   "app.channel.development": "开发版",
   "app.channel.test": "测试通道",
   "nav.agent": "对话",
-  "nav.copilot": "副驾驶",
   "nav.library": "总览",
   "nav.settings": "设置",
   "nav.reading": "小说",
-  "nav.animation": "动画 · 演示",
   "nav.notes": "笔记",
   "status.empty": "还没有内容",
   "status.loading": "正在加载…",
@@ -41,7 +42,7 @@ const zhCN = {
   "agent.scope": "授权范围",
   "agent.empty": "从这里开始一次任务。未配置模型时仍可使用资源和笔记。",
   "agent.running": "任务进行中",
-  "agent.shared": "主页面与副驾驶共用同一会话",
+  "agent.shared": "对话页与右栏共用同一会话",
   "library.import": "导入 TXT",
   "library.importBook": "导入书籍",
   "library.scan": "扫描资源",
@@ -133,55 +134,6 @@ const zhCN = {
   "mode.creatorHint": "造物主：整理笔记与积累创作材料",
   "agent.placeholder": "与 Agent 讨论当前内容、摘录或想法…",
   "agent.diagnostics": "任务详情",
-  "demo.title": "《星海回响》",
-  "demo.episode": "第 {number} 集",
-  "demo.episode1": "初遇",
-  "demo.episode2": "迷航",
-  "demo.episode3": "觉醒",
-  "demo.episode4": "试炼",
-  "demo.episode5": "逆流",
-  "demo.episode6": "远航",
-  "demo.episode7": "星海之约",
-  "demo.badge": "界面演示",
-  "demo.sceneAlt": "少年眺望暮色中的城市与河流，静帧演示画面",
-  "demo.still": "静帧 · 模拟时间轴",
-  "demo.subtitle": "演示字幕：我们终会在星海的另一端重逢。",
-  "demo.seek": "演示时间轴",
-  "demo.pause": "暂停演示计时",
-  "demo.play": "开始演示计时",
-  "demo.silent": "静帧演示，无音轨",
-  "demo.captions": "演示字幕",
-  "demo.speed": "演示计时倍速",
-  "demo.fullscreen": "切换演示画面全屏",
-  "demo.fullscreenFailed": "当前窗口无法进入全屏，可以调整窗口大小继续查看。",
-  "demo.genre1": "科幻",
-  "demo.genre2": "剧情",
-  "demo.genre3": "校园",
-  "demo.position": "演示位置",
-  "demo.mark": "标记此刻",
-  "demo.marked": "已标记",
-  "demo.noteAt": "记录 {time} 的想法（本次演示）",
-  "demo.save": "保存演示笔记",
-  "demo.close": "收起",
-  "demo.saved": "已保存到本次演示，退出应用后清空。",
-  "demo.temporaryNote": "演示笔记",
-  "demo.episodes": "剧集列表",
-  "demo.seven": "7 集演示",
-  "demo.disclosure": "本页使用静帧和模拟时间轴。分集、标记、字幕与笔记仅用于界面演示；退出应用后清空，不导入视频或调用模型。",
-  "demo.context": "演示画面",
-  "demo.script": "示例对话",
-  "demo.question": "这一集发生了什么？",
-  "demo.answer": "示例：主角团在“星环站”遇到神秘信号，并在追寻信号的过程中面对彼此的分歧。",
-  "demo.keyMoments": "示例关键剧情",
-  "demo.moment1": "与队友产生分歧",
-  "demo.moment2": "在天台发现异常信号",
-  "demo.moment3": "线索指向失联的科研团队",
-  "demo.scriptDisclosure": "预设示例文字，不是模型分析结果。",
-  "demo.summaryNotice": "这是预设的演示对话。可在下方输入想法，保存到当前演示时间点。",
-  "demo.localPrompt": "当前演示时间点的笔记",
-  "demo.promptPlaceholder": "记下此刻的想法…（仅保存演示笔记）",
-  "demo.showScript": "说明",
-  "demo.localOnly": "MANGA · 本地演示 · 未连接模型",
   "shell.showLeft": "打开导航",
   "shell.showRight": "打开辅助",
   "shell.hideLeft": "收起导航",
@@ -322,6 +274,9 @@ const zhCN = {
   "session.active": "进行中",
   "session.sleep": "休眠",
 } as const;
+
+// Later catalogs replace the wording of an earlier screen whose behavior the rework changed.
+const zhCN = { ...zhCNBase, ...zhCNMedia, ...zhCNRework } as const;
 
 type MessageKey = keyof typeof zhCN;
 

@@ -13,16 +13,31 @@ export const ShellModeLayoutSchema = z.object({
   right: ShellPanelSchema,
 }).strict();
 
-/** Reader typography. `theme` carries the white / eye-care green / book-yellow backgrounds required by READ-01. */
-export const READING_THEMES = ["white", "green", "paper", "night"] as const;
+/** Reader backgrounds: white, book yellow, eye-care green, teal and dark. Only the reading column takes the color, never the app shell. */
+export const READING_THEMES = ["white", "paper", "green", "teal", "night"] as const;
+export const FONT_PRESETS = ["sans", "serif", "mono"] as const;
+export const READING_PAGE_MODES = ["single", "double"] as const;
+export const READING_PAGE_RATIOS = ["book", "free"] as const;
+
+/**
+ * A preset name or the family name of an installed font. The name goes into a CSS font stack, so it may not carry
+ * quotes, backslashes, braces, semicolons or control characters.
+ */
+export const FontFamilySchema = z.string().min(1).max(64).regex(/^[^"'`\\;{}<>()\x00-\x1f]+$/, "a font family name has no quotes or markup");
+
+/** Reader typography (READ-01 and the M2 reader): old saved values stay valid because every added field has a default. */
 export const ReadingPreferenceSchema = z.object({
-  measurePx: z.number().int().min(320).max(960),
+  measurePx: z.number().int().min(320).max(1200),
   fontSizePx: z.number().int().min(14).max(32),
-  fontFamily: z.enum(["sans", "serif", "mono"]).default("sans"),
+  fontFamily: FontFamilySchema.default("sans"),
   lineHeight: z.number().min(1.2).max(2.4),
   /** Side padding of the reading column, independent of the measure. */
   marginPx: z.number().int().min(0).max(96).default(24),
+  /** Space between paragraphs. */
+  paragraphSpacingPx: z.number().int().min(0).max(40).default(0),
   theme: z.enum(READING_THEMES),
+  pageMode: z.enum(READING_PAGE_MODES).default("single"),
+  pageRatio: z.enum(READING_PAGE_RATIOS).default("book"),
 }).strict();
 
 export const ShellPreferenceSchema = z.object({
@@ -99,12 +114,15 @@ export const BookmarkSchema = z.object({
 export type Bookmark = z.infer<typeof BookmarkSchema>;
 
 export const ReadingStylePatchSchema = z.object({
-  measurePx: z.number().int().min(320).max(960).optional(),
+  measurePx: z.number().int().min(320).max(1200).optional(),
   fontSizePx: z.number().int().min(14).max(32).optional(),
-  fontFamily: z.enum(["sans", "serif", "mono"]).optional(),
+  fontFamily: FontFamilySchema.optional(),
   lineHeight: z.number().min(1.2).max(2.4).optional(),
   marginPx: z.number().int().min(0).max(96).optional(),
+  paragraphSpacingPx: z.number().int().min(0).max(40).optional(),
   theme: z.enum(READING_THEMES).optional(),
+  pageMode: z.enum(READING_PAGE_MODES).optional(),
+  pageRatio: z.enum(READING_PAGE_RATIOS).optional(),
 }).strict();
 
 export type ReadingStylePatch = z.infer<typeof ReadingStylePatchSchema>;
@@ -117,7 +135,7 @@ export const DEFAULT_SHELL_PREFERENCE: ShellPreference = {
     enthusiast: { focus: false, left: { visible: true, width: 224 }, right: { visible: true, width: 360 } },
     creator: { focus: false, left: { visible: true, width: 224 }, right: { visible: true, width: 360 } },
   },
-  reading: { measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, theme: "white" },
+  reading: { measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, paragraphSpacingPx: 0, theme: "white", pageMode: "single", pageRatio: "book" },
 };
 
 /** Candidate parsers are reversible adapters. `accepted` stays false until a separate decision. */

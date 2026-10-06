@@ -36,7 +36,8 @@ function electronResourcesPath(): string {
 }
 
 function workerCandidates(): string[] {
-  const here = path.dirname(fileURLToPath(import.meta.url));
+  // The desktop bundle is CommonJS, where import.meta.url is not provided; __dirname is.
+  const here = typeof __dirname === "string" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
   const argvDir = path.dirname(process.argv[1] ?? here);
   const resources = electronResourcesPath();
   return [

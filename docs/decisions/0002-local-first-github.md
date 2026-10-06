@@ -29,7 +29,7 @@ MANGA 仍处于设计和 M0 准备阶段，只有文档治理脚本，没有应�
 
 ## 执行与后续
 
-操作规则见 [Git 与 GitHub](../dev-rules/git-and-github.md)，执行证据见 [建立报告](../evidence/2026-09-19-github-bootstrap.md)。CI、Ruleset、App 配置和服务端实际生效分别核验；不把 JSON/YAML 文件存在当作已经启用。
+操作规则见 [Git 与 GitHub](../dev-rules/git-and-github.md)，建立与验证记录见 [M0 总结](../evidence/m0-summary.md#1-做了什么)。CI、Ruleset、App 配置和服务端实际生效分别核验；不把 JSON/YAML 文件存在当作已经启用。
 
 新增协作者、正式应用工程、外部贡献协议或产品发布要求时再修订相应部分。任何低频策略都不构成 GitHub 账号免于风控的保证。
 
@@ -63,6 +63,6 @@ A-24 替代此前可以提前推送或创建 draft PR 交审的默认安排：pu
 
 ## 2026-09-23 依赖更新与自动化路线（A-36）
 
-应用工程已有实际依赖，用户要求补充依赖更新 bot，并将适合项目的其他 bot 纳入后续计划。拟扩展原生 Dependabot 到 npm/pnpm workspace 与独立原型锁；保留分组、PR 数量控制、无自动合并和远端操作授权边界。设计依据/模板检查、DCO、建议性 AI review 与发布前安全检查按用途、权限、维护成本和实测结果分阶段接入，具体顺序只在 [M1b 唯一计划第 12 节](../delivery/m1b-execution-plan.md#12-最新稳定依赖与维护-bot-路线)维护。
+应用工程已有实际依赖，用户要求补充依赖更新 bot，并将适合项目的其他 bot 纳入后续计划。拟扩展原生 Dependabot 到 npm/pnpm workspace 与独立原型锁；保留分组、PR 数量控制、无自动合并和远端操作授权边界。设计依据/模板检查、DCO、建议性 AI review 与发布前安全检查按用途、权限、维护成本和实测结果分阶段接入，具体顺序见 [Git 与 GitHub 第 5 节](../dev-rules/git-and-github.md#5-bot-与低频操作)。
 
 这更新了初期“仅 Actions”的目标范围；本次配置仍只有 Actions 更新。计划、仓库配置、默认分支实际生效和 App 安装分开报告，不因文档完成声称 bot 已运行。

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { repoRoot, desktopOutput } from "./desktop-paths.ts";
 
-const prepared = spawnSync(process.execPath, ["scripts/ensure-electron-sqlite.mjs"], { cwd: repoRoot, stdio: "inherit", windowsHide: true });
+const prepared = spawnSync(process.execPath, ["scripts/verify-electron-sqlite.mjs"], { cwd: repoRoot, stdio: "inherit", windowsHide: true });
 if (prepared.status !== 0) process.exit(prepared.status ?? 1);
 const devRoot = path.join(desktopOutput, "development");
 fs.mkdirSync(devRoot, { recursive: true });

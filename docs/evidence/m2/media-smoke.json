@@ -1,0 +1,1256 @@
+{
+  "steps": [
+    {
+      "id": "comic:cbz-basic",
+      "ok": true,
+      "detail": {
+        "suggested": "comic",
+        "decoded": true,
+        "turned": 3,
+        "restored": true,
+        "position": "第 1 / 5 页"
+      }
+    },
+    {
+      "id": "comic:comic-dir-natural",
+      "ok": true,
+      "detail": {
+        "suggested": "comic",
+        "decoded": true,
+        "turned": 2,
+        "restored": true,
+        "position": "第 1 / 6 页"
+      }
+    },
+    {
+      "id": "comic:comic-pdf-images",
+      "ok": true,
+      "detail": {
+        "suggested": "comic",
+        "decoded": true,
+        "turned": 3,
+        "restored": true,
+        "position": "第 1 / 5 页"
+      }
+    },
+    {
+      "id": "video:video-mkv-ass-fonts",
+      "ok": true,
+      "detail": {
+        "sample": "video-mkv-ass-fonts",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          },
+          "withHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          }
+        },
+        "initial": "ready",
+        "path": "original",
+        "originMs": 0,
+        "element": {
+          "readyState": 4,
+          "width": 640,
+          "height": 360,
+          "duration": 15.021,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": "0",
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.608157,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "1500",
+              "currentTime": 1.521,
+              "frame": "37",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 36,
+            "expectedMs": 1500,
+            "landed": true,
+            "verified": "true",
+            "ms": 120
+          },
+          {
+            "after": {
+              "mediaTime": "7500",
+              "currentTime": 7.521,
+              "frame": "181",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 180,
+            "expectedMs": 7500,
+            "landed": true,
+            "verified": "true",
+            "ms": 117
+          },
+          {
+            "after": {
+              "mediaTime": "14875",
+              "currentTime": 14.896,
+              "frame": "358",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 357,
+            "expectedMs": 14875,
+            "landed": true,
+            "verified": "true",
+            "ms": 123
+          }
+        ],
+        "subtitles": {
+          "loadFailedNotice": false,
+          "differingPixels": 10250,
+          "rect": {
+            "x": 234,
+            "y": 91,
+            "width": 677,
+            "height": 677
+          }
+        },
+        "result": "passed"
+      }
+    },
+    {
+      "id": "video:video-mp4-h264-aac",
+      "ok": true,
+      "detail": {
+        "sample": "video-mp4-h264-aac",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          },
+          "withHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          }
+        },
+        "initial": "ready",
+        "path": "original",
+        "originMs": 0,
+        "element": {
+          "readyState": 4,
+          "width": 640,
+          "height": 360,
+          "duration": 24,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": "0",
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.601157,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "2375",
+              "currentTime": 2.395833,
+              "frame": "58",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 57,
+            "expectedMs": 2375,
+            "landed": true,
+            "verified": "true",
+            "ms": 110
+          },
+          {
+            "after": {
+              "mediaTime": "12000",
+              "currentTime": 12.020833,
+              "frame": "289",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 288,
+            "expectedMs": 12000,
+            "landed": true,
+            "verified": "true",
+            "ms": 120
+          },
+          {
+            "after": {
+              "mediaTime": "23875",
+              "currentTime": 23.895833,
+              "frame": "574",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 573,
+            "expectedMs": 23875,
+            "landed": true,
+            "verified": "true",
+            "ms": 123
+          }
+        ],
+        "result": "passed"
+      }
+    },
+    {
+      "id": "video:video-mkv-hevc-8bit",
+      "ok": true,
+      "detail": {
+        "sample": "video-mkv-hevc-8bit",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "play_copy",
+            "reasons": [
+              "no_hardware_hevc"
+            ]
+          },
+          "withHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          }
+        },
+        "initial": "ready",
+        "path": "original",
+        "originMs": 0,
+        "element": {
+          "readyState": 4,
+          "width": 640,
+          "height": 360,
+          "duration": 10.021,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": "0",
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.623042,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "1000",
+              "currentTime": 1.020999,
+              "frame": "25",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 24,
+            "expectedMs": 1000,
+            "landed": true,
+            "verified": "true",
+            "ms": 120
+          },
+          {
+            "after": {
+              "mediaTime": "5000",
+              "currentTime": 5.021,
+              "frame": "121",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 120,
+            "expectedMs": 5000,
+            "landed": true,
+            "verified": "true",
+            "ms": 109
+          },
+          {
+            "after": {
+              "mediaTime": "9875",
+              "currentTime": 9.896,
+              "frame": "238",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 237,
+            "expectedMs": 9875,
+            "landed": true,
+            "verified": "true",
+            "ms": 111
+          }
+        ],
+        "result": "passed"
+      }
+    },
+    {
+      "id": "video:video-mkv-hevc-10bit",
+      "ok": true,
+      "detail": {
+        "sample": "video-mkv-hevc-10bit",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "play_copy",
+            "reasons": [
+              "no_hardware_hevc"
+            ]
+          },
+          "withHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          }
+        },
+        "initial": "ready",
+        "path": "original",
+        "originMs": 0,
+        "element": {
+          "readyState": 4,
+          "width": 1280,
+          "height": 720,
+          "duration": 10.021,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": null,
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.618458,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "1000",
+              "currentTime": 1.020999,
+              "frame": "25",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 24,
+            "expectedMs": 1000,
+            "landed": true,
+            "verified": "true",
+            "ms": 122
+          },
+          {
+            "after": {
+              "mediaTime": "5000",
+              "currentTime": 5.021,
+              "frame": "121",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 120,
+            "expectedMs": 5000,
+            "landed": true,
+            "verified": "true",
+            "ms": 128
+          },
+          {
+            "after": {
+              "mediaTime": "9875",
+              "currentTime": 9.896,
+              "frame": "238",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 237,
+            "expectedMs": 9875,
+            "landed": true,
+            "verified": "true",
+            "ms": 113
+          }
+        ],
+        "result": "passed"
+      }
+    },
+    {
+      "id": "video:video-ac3",
+      "ok": true,
+      "detail": {
+        "sample": "video-ac3",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "play_copy",
+            "reasons": [
+              "unsupported_audio"
+            ]
+          },
+          "withHardwareHevc": {
+            "decision": "play_copy",
+            "reasons": [
+              "unsupported_audio"
+            ]
+          }
+        },
+        "initial": "needs-copy",
+        "copyReason": "unsupported_audio",
+        "copy": "ready",
+        "path": "play_copy",
+        "originMs": 0,
+        "element": {
+          "readyState": 4,
+          "width": 480,
+          "height": 270,
+          "duration": 10.01,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": "0",
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.614798,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "1000",
+              "currentTime": 1.020999,
+              "frame": "25",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 24,
+            "expectedMs": 1000,
+            "landed": true,
+            "verified": "true",
+            "ms": 122
+          },
+          {
+            "after": {
+              "mediaTime": "5000",
+              "currentTime": 5.021,
+              "frame": "121",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 120,
+            "expectedMs": 5000,
+            "landed": true,
+            "verified": "true",
+            "ms": 122
+          },
+          {
+            "after": {
+              "mediaTime": "9875",
+              "currentTime": 9.896,
+              "frame": "238",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 237,
+            "expectedMs": 9875,
+            "landed": true,
+            "verified": "true",
+            "ms": 110
+          }
+        ],
+        "result": "passed"
+      }
+    },
+    {
+      "id": "video:video-vfr",
+      "ok": true,
+      "detail": {
+        "sample": "video-vfr",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          },
+          "withHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          }
+        },
+        "initial": "ready",
+        "path": "original",
+        "originMs": 0,
+        "element": {
+          "readyState": 4,
+          "width": 480,
+          "height": 270,
+          "duration": 15.933333,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": "0",
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.623388,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "1066.667",
+              "currentTime": 1.083333,
+              "frame": "33",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 32,
+            "expectedMs": 1066.667,
+            "landed": true,
+            "verified": "true",
+            "ms": 123
+          },
+          {
+            "after": {
+              "mediaTime": "5333.333",
+              "currentTime": 5.35,
+              "frame": "161",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 160,
+            "expectedMs": 5333.333,
+            "landed": true,
+            "verified": "true",
+            "ms": 127
+          },
+          {
+            "after": {
+              "mediaTime": "15700",
+              "currentTime": 15.75,
+              "frame": "318",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 317,
+            "expectedMs": 15700,
+            "landed": true,
+            "verified": "true",
+            "ms": 111
+          }
+        ],
+        "result": "passed"
+      }
+    },
+    {
+      "id": "video:video-nonzero-start",
+      "ok": true,
+      "detail": {
+        "sample": "video-nonzero-start",
+        "plans": {
+          "withoutHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          },
+          "withHardwareHevc": {
+            "decision": "direct",
+            "reasons": []
+          }
+        },
+        "initial": "ready",
+        "path": "original",
+        "originMs": 2500,
+        "element": {
+          "readyState": 4,
+          "width": 480,
+          "height": 270,
+          "duration": 12.521,
+          "src": "manga-media"
+        },
+        "rvfc": {
+          "has": "function",
+          "mediaTime": null,
+          "paused": false,
+          "readyState": 4,
+          "hidden": false,
+          "visibility": "visible"
+        },
+        "playedTo": 0.6059549999999998,
+        "frames": [
+          {
+            "after": {
+              "mediaTime": "3500",
+              "currentTime": 3.521,
+              "frame": "25",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 24,
+            "expectedMs": 1000,
+            "landed": true,
+            "verified": "true",
+            "ms": 122
+          },
+          {
+            "after": {
+              "mediaTime": "7500",
+              "currentTime": 7.521,
+              "frame": "121",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 120,
+            "expectedMs": 5000,
+            "landed": true,
+            "verified": "true",
+            "ms": 126
+          },
+          {
+            "after": {
+              "mediaTime": "12375",
+              "currentTime": 12.396,
+              "frame": "238",
+              "verified": "true",
+              "error": null
+            },
+            "frame": 237,
+            "expectedMs": 9875,
+            "landed": true,
+            "verified": "true",
+            "ms": 122
+          }
+        ],
+        "result": "passed"
+      }
+    }
+  ],
+  "matrix": [
+    {
+      "sample": "video-mkv-ass-fonts",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        },
+        "withHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        }
+      },
+      "initial": "ready",
+      "path": "original",
+      "originMs": 0,
+      "element": {
+        "readyState": 4,
+        "width": 640,
+        "height": 360,
+        "duration": 15.021,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": "0",
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.608157,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "1500",
+            "currentTime": 1.521,
+            "frame": "37",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 36,
+          "expectedMs": 1500,
+          "landed": true,
+          "verified": "true",
+          "ms": 120
+        },
+        {
+          "after": {
+            "mediaTime": "7500",
+            "currentTime": 7.521,
+            "frame": "181",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 180,
+          "expectedMs": 7500,
+          "landed": true,
+          "verified": "true",
+          "ms": 117
+        },
+        {
+          "after": {
+            "mediaTime": "14875",
+            "currentTime": 14.896,
+            "frame": "358",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 357,
+          "expectedMs": 14875,
+          "landed": true,
+          "verified": "true",
+          "ms": 123
+        }
+      ],
+      "subtitles": {
+        "loadFailedNotice": false,
+        "differingPixels": 10250,
+        "rect": {
+          "x": 234,
+          "y": 91,
+          "width": 677,
+          "height": 677
+        }
+      },
+      "result": "passed"
+    },
+    {
+      "sample": "video-mp4-h264-aac",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        },
+        "withHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        }
+      },
+      "initial": "ready",
+      "path": "original",
+      "originMs": 0,
+      "element": {
+        "readyState": 4,
+        "width": 640,
+        "height": 360,
+        "duration": 24,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": "0",
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.601157,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "2375",
+            "currentTime": 2.395833,
+            "frame": "58",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 57,
+          "expectedMs": 2375,
+          "landed": true,
+          "verified": "true",
+          "ms": 110
+        },
+        {
+          "after": {
+            "mediaTime": "12000",
+            "currentTime": 12.020833,
+            "frame": "289",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 288,
+          "expectedMs": 12000,
+          "landed": true,
+          "verified": "true",
+          "ms": 120
+        },
+        {
+          "after": {
+            "mediaTime": "23875",
+            "currentTime": 23.895833,
+            "frame": "574",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 573,
+          "expectedMs": 23875,
+          "landed": true,
+          "verified": "true",
+          "ms": 123
+        }
+      ],
+      "result": "passed"
+    },
+    {
+      "sample": "video-mkv-hevc-8bit",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "play_copy",
+          "reasons": [
+            "no_hardware_hevc"
+          ]
+        },
+        "withHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        }
+      },
+      "initial": "ready",
+      "path": "original",
+      "originMs": 0,
+      "element": {
+        "readyState": 4,
+        "width": 640,
+        "height": 360,
+        "duration": 10.021,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": "0",
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.623042,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "1000",
+            "currentTime": 1.020999,
+            "frame": "25",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 24,
+          "expectedMs": 1000,
+          "landed": true,
+          "verified": "true",
+          "ms": 120
+        },
+        {
+          "after": {
+            "mediaTime": "5000",
+            "currentTime": 5.021,
+            "frame": "121",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 120,
+          "expectedMs": 5000,
+          "landed": true,
+          "verified": "true",
+          "ms": 109
+        },
+        {
+          "after": {
+            "mediaTime": "9875",
+            "currentTime": 9.896,
+            "frame": "238",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 237,
+          "expectedMs": 9875,
+          "landed": true,
+          "verified": "true",
+          "ms": 111
+        }
+      ],
+      "result": "passed"
+    },
+    {
+      "sample": "video-mkv-hevc-10bit",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "play_copy",
+          "reasons": [
+            "no_hardware_hevc"
+          ]
+        },
+        "withHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        }
+      },
+      "initial": "ready",
+      "path": "original",
+      "originMs": 0,
+      "element": {
+        "readyState": 4,
+        "width": 1280,
+        "height": 720,
+        "duration": 10.021,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": null,
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.618458,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "1000",
+            "currentTime": 1.020999,
+            "frame": "25",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 24,
+          "expectedMs": 1000,
+          "landed": true,
+          "verified": "true",
+          "ms": 122
+        },
+        {
+          "after": {
+            "mediaTime": "5000",
+            "currentTime": 5.021,
+            "frame": "121",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 120,
+          "expectedMs": 5000,
+          "landed": true,
+          "verified": "true",
+          "ms": 128
+        },
+        {
+          "after": {
+            "mediaTime": "9875",
+            "currentTime": 9.896,
+            "frame": "238",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 237,
+          "expectedMs": 9875,
+          "landed": true,
+          "verified": "true",
+          "ms": 113
+        }
+      ],
+      "result": "passed"
+    },
+    {
+      "sample": "video-ac3",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "play_copy",
+          "reasons": [
+            "unsupported_audio"
+          ]
+        },
+        "withHardwareHevc": {
+          "decision": "play_copy",
+          "reasons": [
+            "unsupported_audio"
+          ]
+        }
+      },
+      "initial": "needs-copy",
+      "copyReason": "unsupported_audio",
+      "copy": "ready",
+      "path": "play_copy",
+      "originMs": 0,
+      "element": {
+        "readyState": 4,
+        "width": 480,
+        "height": 270,
+        "duration": 10.01,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": "0",
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.614798,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "1000",
+            "currentTime": 1.020999,
+            "frame": "25",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 24,
+          "expectedMs": 1000,
+          "landed": true,
+          "verified": "true",
+          "ms": 122
+        },
+        {
+          "after": {
+            "mediaTime": "5000",
+            "currentTime": 5.021,
+            "frame": "121",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 120,
+          "expectedMs": 5000,
+          "landed": true,
+          "verified": "true",
+          "ms": 122
+        },
+        {
+          "after": {
+            "mediaTime": "9875",
+            "currentTime": 9.896,
+            "frame": "238",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 237,
+          "expectedMs": 9875,
+          "landed": true,
+          "verified": "true",
+          "ms": 110
+        }
+      ],
+      "result": "passed"
+    },
+    {
+      "sample": "video-vfr",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        },
+        "withHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        }
+      },
+      "initial": "ready",
+      "path": "original",
+      "originMs": 0,
+      "element": {
+        "readyState": 4,
+        "width": 480,
+        "height": 270,
+        "duration": 15.933333,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": "0",
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.623388,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "1066.667",
+            "currentTime": 1.083333,
+            "frame": "33",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 32,
+          "expectedMs": 1066.667,
+          "landed": true,
+          "verified": "true",
+          "ms": 123
+        },
+        {
+          "after": {
+            "mediaTime": "5333.333",
+            "currentTime": 5.35,
+            "frame": "161",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 160,
+          "expectedMs": 5333.333,
+          "landed": true,
+          "verified": "true",
+          "ms": 127
+        },
+        {
+          "after": {
+            "mediaTime": "15700",
+            "currentTime": 15.75,
+            "frame": "318",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 317,
+          "expectedMs": 15700,
+          "landed": true,
+          "verified": "true",
+          "ms": 111
+        }
+      ],
+      "result": "passed"
+    },
+    {
+      "sample": "video-nonzero-start",
+      "plans": {
+        "withoutHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        },
+        "withHardwareHevc": {
+          "decision": "direct",
+          "reasons": []
+        }
+      },
+      "initial": "ready",
+      "path": "original",
+      "originMs": 2500,
+      "element": {
+        "readyState": 4,
+        "width": 480,
+        "height": 270,
+        "duration": 12.521,
+        "src": "manga-media"
+      },
+      "rvfc": {
+        "has": "function",
+        "mediaTime": null,
+        "paused": false,
+        "readyState": 4,
+        "hidden": false,
+        "visibility": "visible"
+      },
+      "playedTo": 0.6059549999999998,
+      "frames": [
+        {
+          "after": {
+            "mediaTime": "3500",
+            "currentTime": 3.521,
+            "frame": "25",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 24,
+          "expectedMs": 1000,
+          "landed": true,
+          "verified": "true",
+          "ms": 122
+        },
+        {
+          "after": {
+            "mediaTime": "7500",
+            "currentTime": 7.521,
+            "frame": "121",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 120,
+          "expectedMs": 5000,
+          "landed": true,
+          "verified": "true",
+          "ms": 126
+        },
+        {
+          "after": {
+            "mediaTime": "12375",
+            "currentTime": 12.396,
+            "frame": "238",
+            "verified": "true",
+            "error": null
+          },
+          "frame": 237,
+          "expectedMs": 9875,
+          "landed": true,
+          "verified": "true",
+          "ms": 122
+        }
+      ],
+      "result": "passed"
+    }
+  ],
+  "timings": {
+    "comicPageTurnMs": {
+      "n": 8,
+      "p50": 27,
+      "p95": 29,
+      "max": 29,
+      "samples": [
+        27,
+        28,
+        29,
+        27,
+        28,
+        3,
+        3,
+        3
+      ]
+    },
+    "videoFirstFrameMs": {
+      "n": 7,
+      "p50": 45,
+      "p95": 490,
+      "max": 490,
+      "samples": [
+        137,
+        41,
+        60,
+        41,
+        490,
+        42,
+        45
+      ]
+    },
+    "videoFrameSeekMs": {
+      "n": 21,
+      "p50": 122,
+      "p95": 127,
+      "max": 128,
+      "samples": [
+        120,
+        117,
+        123,
+        110,
+        120,
+        123,
+        120,
+        109,
+        111,
+        122,
+        128,
+        113,
+        122,
+        122,
+        110,
+        123,
+        127,
+        111,
+        122,
+        126,
+        122
+      ]
+    },
+    "copyBuildMs": {
+      "n": 1,
+      "p50": 445,
+      "p95": 445,
+      "max": 445,
+      "samples": [
+        445
+      ]
+    }
+  }
+}

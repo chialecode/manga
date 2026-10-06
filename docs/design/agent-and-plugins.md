@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-AGENT |
 | 版本与日期 | 0.4 / 2026-09-19 |
 | 状态 | 评审稿；类型片段用于定义契约语义 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[确认与待决事项](../decisions/open-questions.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
 | 对应需求 | BASE-01、CTX、AGENT、MODEL、SEARCH、PLUG 系列 |
 | 相关文档 | [总体架构](architecture.md)、[领域与数据](domain-model.md)、[交互流程](interaction-and-workflows.md) |
 
@@ -362,7 +362,7 @@ M4 的第三方方案需要在受限渲染环境、WASM、受约束 RPC 或操�
 
 M1a 首批支持 OpenAI 格式，作为已确认要求。文本分别适配 Responses 与 Chat Completions 的消息、工具调用和流式事件；不得混用两套事件格式。文件转录独立适配 audio/transcriptions，使用 multipart 的 file/model 等接口字段，已完成录音可转为提供者支持的上传格式；M1a 用户选择的外部音频原件不修改，后续采集音频按保留设置管理。Realtime/WebSocket 转录是后续能力，不是文件转录的前置条件；OpenAI 兼容性也不代表时间戳、说话人识别或人声筛选可用，这些能力须单独验证。
 
-按 A-29，文档不指定具体模型或服务默认值。开发测试读取环境变量中的 OpenAI 兼容 LLM/ASR 配置；必要测试缺配置时才按[开发流程](../dev-rules/development-workflow.md#model-test-config)询问开发者。应用通过 BYOK 设置独立绑定模型，不把测试环境自动变为产品预设。[ASR 历史短测](../evidence/m1a-asr-siliconflow/live-api.json)只证明当时的一个合成样本，不代表完整设置界面或录音流程已验收。
+按 A-29，文档不指定具体模型或服务默认值。开发测试读取环境变量中的 OpenAI 兼容 LLM/ASR 配置；必要测试缺配置时才按[开发流程](../dev-rules/development-workflow.md#model-test-config)询问开发者。应用通过 BYOK 设置独立绑定模型，不把测试环境自动变为产品预设。[ASR 历史短测](../evidence/m1a-summary.md)只证明当时的一个合成样本，不代表完整设置界面或录音流程已验收。
 
 M1b 的长录音在本地筛选人声后才上传 ASR，按接口大小/时长限制分块并保存回到原采集时间轴的映射；全程无人声时不发起转录请求。分段文本的来源与音频保留遵循[领域模型](domain-model.md#9-语音采集与位置映射)，不依赖 LLM 处理音频。
 

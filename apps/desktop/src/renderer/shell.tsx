@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { BookOpen, ChevronDown, Eye, Home, MessageCircle, NotebookPen, PanelLeft, PanelRight, PlayCircle, Settings, Sparkles, Square, WandSparkles } from "lucide-react";
+import { BookOpen, ChevronDown, Eye, Film, GalleryVertical, Home, MessageCircle, MessageSquarePlus, NotebookPen, PanelLeft, PanelRight, Settings, Square, WandSparkles } from "lucide-react";
 import { MangaMark } from "./brand.tsx";
 import { DEFAULT_SHELL_PREFERENCE, type ShellPreference, type WorkMode } from "@manga/contracts/reading";
-import { deriveShell, initialHover, reduceHover, type OverlaySide } from "../../../../packages/app-core/src/domain/shell-layout.ts";
+import { deriveShell, initialHover, reduceHover } from "../../../../packages/app-core/src/domain/shell-layout.ts";
+import { useCovers } from "./lib/covers.ts";
+import type { SessionProgress } from "./lib/shell-model.ts";
 
 export type ShellPage = { id: string; label: string; testId: string };
 export type ShellSession = {
@@ -10,13 +12,50 @@ export type ShellSession = {
   title: string;
   kind: string;
   targetId: string | null;
+  /** Medium of the work a resource session belongs to; the rail groups on it. */
+  mediaKind?: string | null;
+  workId?: string | null;
+  workTitle?: string | null;
+  ordinalLabel?: string | null;
+  coverId?: string | null;
+  progress?: SessionProgress | null;
   mode: string | null;
   runCount: number;
   activeRunId: string | null;
   activeRunStatus: string | null;
+  updatedAt?: string;
 };
 
 const HOVER_MS = 180;
+
+/** Rail groups: one per medium. Only resources that have been opened are listed; work pages and conversations are not. */
+const SESSION_GROUPS = ["novel", "comic", "video"] as const;
+function sessionGroup(session: ShellSession): (typeof SESSION_GROUPS)[number] | null {
+  if (session.kind !== "resource") return null;
+  return session.mediaKind === "comic" || session.mediaKind === "video" ? session.mediaKind : "novel";
+}
+
+const NAV_ICON = { library: Home, agent: MessageCircle, reading: BookOpen, comic: GalleryVertical, video: Film, notes: NotebookPen } as const;
+
+function SessionRow(props: { session: ShellSession; current: boolean; position: string; coverUrl?: string; onOpen: () => void }) {
+  const { session } = props;
+  const Icon = session.mediaKind === "comic" ? GalleryVertical : session.mediaKind === "video" ? Film : BookOpen;
+  return (
+    <button
+      type="button"
+      className={`shell-session w-full text-left ${props.current ? "bg-[var(--color-accent-soft)]" : ""}`}
+      data-testid={`session-open-${session.sessionId}`}
+      data-active={Boolean(session.activeRunId)}
+      data-current={props.current ? "true" : "false"}
+      data-kind={session.kind}
+      onClick={props.onOpen}
+    >
+      <span className="session-cover" aria-hidden="true">{props.coverUrl ? <img src={props.coverUrl} alt="" loading="lazy" draggable={false} /> : <Icon size={18} />}</span>
+      <span className="block truncate session-title" title={session.title}>{session.title}</span>
+      <span className="block truncate session-position text-[var(--color-subtle)]" data-testid={`session-position-${session.sessionId}`}>{props.position}</span>
+    </button>
+  );
+}
 
 export function ShellFrame(props: {
   viewport: { width: number; height: number };
@@ -37,16 +76,28 @@ export function ShellFrame(props: {
     hideRight: string;
     stop: string;
     modeMenu: string;
+    newChat?: string;
   };
   onMode: (mode: WorkMode) => void;
   onHide: (side: "left" | "right") => void;
   onShow: (side: "left" | "right") => void;
   onStop: () => void;
   sessions?: ShellSession[];
-  sessionLabels?: { heading: string; empty: string; active: string; kinds?: Record<string, string> };
+  /** What the rail lists on the conversation page: conversations instead of opened resources. */
+  conversations?: ShellSession[];
+  sessionLabels?: { heading: string; empty: string; active: string; conversations?: string; conversationsEmpty?: string; groups?: Record<string, string>; position: (session: ShellSession) => string };
+  /** Replaces the navigation and the session list (the settings navigation). */
+  leftSlot?: ReactNode;
+  /** Buttons on the right of the title bar: debugging, recording state, scan progress. */
+  titleActions?: ReactNode;
   currentSession?: string;
   onSession?: (session: ShellSession) => void;
+  onNewChat?: () => void;
   right?: ReactNode;
+  /** Shown at the bottom right of the main panel while the right pane is folded away. */
+  capsule?: ReactNode;
+  /** A panel under the page (the context debug panel). */
+  bottom?: ReactNode;
   children: ReactNode;
 }) {
   const preference = props.preference ?? DEFAULT_SHELL_PREFERENCE;
@@ -67,6 +118,8 @@ export function ShellFrame(props: {
     hasRight: props.hasRight,
     overlay: hover.overlay,
   });
+  const listed = props.page === "agent" ? (props.conversations ?? []) : (props.sessions ?? []);
+  const cover = useCovers(listed.map((session) => session.coverId), "grid");
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -156,14 +209,124 @@ export function ShellFrame(props: {
 
   const leftOpen = chrome.left !== "hidden";
   const rightOpen = chrome.right !== "hidden" && Boolean(props.right);
+  const labels = props.sessionLabels;
+  const positionOf = labels?.position ?? (() => "");
+
+  const defaultLeft = (
+    <>
+      <div className="shell-brand"><span><MangaMark /></span><strong>MANGA</strong></div>
+      <div className="relative mode-area">
+        <div className="mode-switch" aria-label={props.labels.modeMenu}>
+          {modes.map((mode) => <button key={mode} type="button" aria-pressed={preference.mode === mode} data-testid={`mode-quick-${mode}`} onClick={() => props.onMode(mode)}>
+            {mode === "enthusiast" ? <Eye size={16} /> : <WandSparkles size={16} />}
+            {props.modeHints[mode].split("：")[0]}
+          </button>)}
+          <button
+            ref={modeButton}
+            type="button"
+            className="shell-no-drag mode-more"
+            data-testid="mode-menu"
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            aria-label={`${props.labels.modeMenu}：${props.modeLabel}`}
+            onClick={() => setMenu((open) => !open)}
+            onKeyDown={onModeKey}
+          >
+            <span className="sr-only">{props.modeLabel}</span><ChevronDown size={14} />
+          </button>
+        </div>
+        {menu ? (
+          <div ref={menuRef} role="menu" data-testid="mode-menu-list" className="shell-no-drag absolute left-2 top-12 z-30 bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-sm p-1" onKeyDown={onMenuKey}>
+            {modes.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="menuitem"
+                data-testid={`mode-${mode}`}
+                className="block w-full text-left px-3 py-1 rounded data-[current=true]:bg-[var(--color-accent-soft)]"
+                data-current={preference.mode === mode}
+                onClick={() => { props.onMode(mode); setMenu(false); modeButton.current?.focus(); }}
+              >
+                <span>{mode === "enthusiast" ? props.modeHints.enthusiast : props.modeHints.creator}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <nav className="shell-nav" aria-label="主导航">
+        {props.pages.filter((item) => item.id !== "settings").map((item) => {
+          const Icon = NAV_ICON[item.id as keyof typeof NAV_ICON] ?? BookOpen;
+          // The page you are on is marked; so is a work page under the shelf it was opened from, which the host reports as the page.
+          return <button key={item.id} type="button" data-testid={item.testId} aria-current={props.page === item.id ? "page" : undefined} onClick={() => props.onPage(item.id)}><Icon size={19} /><span>{item.label}</span></button>;
+        })}
+      </nav>
+      <section className="shell-sessions" data-testid="shell-sessions">
+        {props.page === "agent" ? (
+          <>
+            <div className="session-heading">
+              <h2 className="text-sm">{labels?.conversations ?? labels?.heading ?? ""}</h2>
+              {props.onNewChat ? <button type="button" className="icon-button" data-testid="chat-new" aria-label={props.labels.newChat ?? ""} title={props.labels.newChat ?? ""} onClick={props.onNewChat}><MessageSquarePlus size={16} /></button> : null}
+            </div>
+            {listed.length === 0
+              ? <p className="text-sm text-[var(--color-subtle)]" data-testid="chat-list-empty">{labels?.conversationsEmpty ?? ""}</p>
+              : (
+                <ul className="flex flex-col gap-1 text-sm" data-testid="chat-list">
+                  {listed.map((session) => (
+                    <li key={session.sessionId}>
+                      <button
+                        type="button"
+                        className={`shell-chat w-full text-left ${session.sessionId === props.currentSession ? "bg-[var(--color-accent-soft)]" : ""}`}
+                        data-testid={`session-open-${session.sessionId}`}
+                        data-current={session.sessionId === props.currentSession ? "true" : "false"}
+                        data-active={Boolean(session.activeRunId)}
+                        onClick={() => props.onSession?.(session)}
+                      >
+                        <span className="block truncate" title={session.title}>{session.title}</span>
+                        {session.activeRunId ? <span className="text-[var(--color-accent)] text-xs">{labels?.active ?? ""}</span> : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </>
+        ) : (
+          <>
+            <h2 className="text-sm mb-1">{labels?.heading ?? ""}</h2>
+            {listed.filter((session) => sessionGroup(session) !== null).length === 0
+              ? <p className="text-sm text-[var(--color-subtle)]">{labels?.empty ?? ""}</p>
+              : SESSION_GROUPS.map((group) => {
+                const rows = listed.filter((session) => sessionGroup(session) === group);
+                if (!rows.length) return null;
+                return (
+                  <div key={group} className="session-group" data-testid={`session-group-${group}`}>
+                    <h3 className="session-group-title">{labels?.groups?.[group] ?? group}</h3>
+                    <ul className="flex flex-col gap-1 text-sm">
+                      {rows.map((session) => (
+                        <li key={session.sessionId}>
+                          <SessionRow session={session} current={session.sessionId === props.currentSession} position={positionOf(session)} coverUrl={cover(session.coverId)} onOpen={() => props.onSession?.(session)} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+          </>
+        )}
+      </section>
+      <div className="shell-nav shell-settings">
+        {props.pages.filter((item) => item.id === "settings").map((item) => <button key={item.id} type="button" data-testid={item.testId} aria-current={props.page === item.id ? "page" : undefined} onClick={() => props.onPage(item.id)}><Settings size={19} /><span>{item.label}</span></button>)}
+      </div>
+    </>
+  );
 
   return (
-    <div className="manga-shell h-full flex flex-col min-h-0" data-testid="shell-root" data-compact={chrome.compact ? "true" : "false"} data-mode={preference.mode}>
+    <div className="manga-shell h-full flex flex-col min-h-0" data-testid="shell-root" data-compact={chrome.compact ? "true" : "false"} data-mode={preference.mode} data-page={props.page}>
       <header className="shell-drag shell-titlebar h-9 shrink-0 flex items-center gap-2 px-3" style={{ paddingRight: 138 }}>
         <button ref={leftButton} type="button" className="shell-no-drag shell-icon" aria-label={leftOpen ? props.labels.hideLeft : props.labels.showLeft} title={leftOpen ? props.labels.hideLeft : props.labels.showLeft} aria-expanded={leftOpen} data-testid="shell-left-toggle" onMouseEnter={() => enter("left")} onMouseLeave={(event) => leave("left", event)} onClick={() => pin("left")}><PanelLeft size={18} /></button>
         <strong className="truncate min-w-0 text-sm" data-testid="shell-title">{props.title}</strong>
         <span className="shell-channel shell-no-drag text-xs text-[var(--color-subtle)] truncate">{props.channel}</span>
         <span className="flex-1" />
+        {props.titleActions ? <div className="shell-no-drag flex items-center gap-2" data-testid="shell-title-actions">{props.titleActions}</div> : null}
         {props.running ? <button type="button" className="shell-no-drag shell-icon" aria-label={props.labels.stop} title={props.labels.stop} data-testid="shell-task-stop" onClick={props.onStop}><Square size={16} /></button> : null}
         {props.hasRight ? (
           <button ref={rightButton} type="button" className="shell-no-drag shell-icon" aria-label={rightOpen ? props.labels.hideRight : props.labels.showRight} title={rightOpen ? props.labels.hideRight : props.labels.showRight} aria-expanded={rightOpen} data-testid="shell-right-toggle" onMouseEnter={() => enter("right")} onMouseLeave={(event) => leave("right", event)} onClick={() => pin("right")}><PanelRight size={18} /></button>
@@ -181,86 +344,14 @@ export function ShellFrame(props: {
             onMouseEnter={() => enter("left")}
             onMouseLeave={(event) => leave("left", event)}
           >
-            <div className="shell-brand"><span><MangaMark /></span><strong>MANGA</strong></div>
-            <div className="relative mode-area">
-              <div className="mode-switch" aria-label={props.labels.modeMenu}>
-                {modes.map((mode) => <button key={mode} type="button" aria-pressed={preference.mode === mode} data-testid={`mode-quick-${mode}`} onClick={() => props.onMode(mode)}>
-                  {mode === "enthusiast" ? <Eye size={16} /> : <WandSparkles size={16} />}
-                  {props.modeHints[mode].split("：")[0]}
-                </button>)}
-              <button
-                ref={modeButton}
-                type="button"
-                className="shell-no-drag mode-more"
-                data-testid="mode-menu"
-                aria-haspopup="menu"
-                aria-expanded={menu}
-                aria-label={`${props.labels.modeMenu}：${props.modeLabel}`}
-                onClick={() => setMenu((open) => !open)}
-                onKeyDown={onModeKey}
-              >
-                <span className="sr-only">{props.modeLabel}</span><ChevronDown size={14} />
-              </button>
-              </div>
-              {menu ? (
-                <div ref={menuRef} role="menu" data-testid="mode-menu-list" className="shell-no-drag absolute left-2 top-12 z-30 bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-sm p-1" onKeyDown={onMenuKey}>
-                  {modes.map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="menuitem"
-                      data-testid={`mode-${mode}`}
-                      className="block w-full text-left px-3 py-1 rounded data-[current=true]:bg-[var(--color-accent-soft)]"
-                      data-current={preference.mode === mode}
-                      onClick={() => { props.onMode(mode); setMenu(false); modeButton.current?.focus(); }}
-                    >
-                      <span>{mode === "enthusiast" ? props.modeHints.enthusiast : props.modeHints.creator}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <nav className="shell-nav" aria-label="主导航">
-              {props.pages.filter((item) => item.id !== "settings").map((item) => {
-                const Icon = { library: Home, agent: MessageCircle, reading: BookOpen, notes: NotebookPen, animation: PlayCircle, copilot: Sparkles }[item.id] ?? BookOpen;
-                return <button key={item.id} type="button" data-testid={item.testId} aria-current={props.page === item.id ? "page" : undefined} onClick={() => props.onPage(item.id)}><Icon size={19} /><span>{item.label}</span></button>;
-              })}
-            </nav>
-            <section className="shell-sessions" data-testid="shell-sessions">
-              <h2 className="text-sm mb-1">{props.sessionLabels?.heading ?? "会话"}</h2>
-              {(props.sessions?.length ?? 0) === 0
-                ? <p className="text-sm text-[var(--color-subtle)]">{props.sessionLabels?.empty ?? ""}</p>
-                : (
-                  <ul className="flex flex-col gap-1 text-sm">
-                    {props.sessions!.map((session) => (
-                      <li key={session.sessionId}>
-                        <button
-                          type="button"
-                          className={`shell-session w-full text-left ${session.sessionId === props.currentSession ? "bg-[var(--color-accent-soft)]" : ""}`}
-                          data-testid={`session-open-${session.sessionId}`}
-                          data-active={Boolean(session.activeRunId)}
-                          data-current={session.sessionId === props.currentSession ? "true" : "false"}
-                          data-kind={session.kind}
-                          onClick={() => props.onSession?.(session)}
-                        >
-                          <span className="session-cover" aria-hidden="true">{session.kind === "note" ? <NotebookPen size={19} /> : <BookOpen size={19} />}</span>
-                          <span className="block truncate" title={session.title}>{session.title}</span>
-                          <span className="text-[var(--color-subtle)]"> · {props.sessionLabels?.kinds?.[session.kind] ?? session.kind} · {session.runCount}</span>
-                          {session.activeRunId ? <span className="text-[var(--color-accent)]"> · {props.sessionLabels?.active ?? ""}</span> : null}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-            </section>
-            <div className="shell-nav shell-settings">
-              {props.pages.filter((item) => item.id === "settings").map((item) => <button key={item.id} type="button" data-testid={item.testId} aria-current={props.page === item.id ? "page" : undefined} onClick={() => props.onPage(item.id)}><Settings size={19} /><span>{item.label}</span></button>)}
-            </div>
+            {props.leftSlot ?? defaultLeft}
             {chrome.left === "overlay" ? <button type="button" className="m-2 text-sm border px-2 py-1 rounded" data-testid="shell-left-hide" onClick={() => { setHover(initialHover()); leftButton.current?.focus(); }}>{props.labels.hideLeft}</button> : null}
           </aside>
         ) : null}
         <main data-testid="shell-main" data-measure={chrome.measurePx} className="shell-content flex-1 min-w-0 overflow-auto" style={{ minWidth: 0 }}>
           {props.children}
+          {props.bottom}
+          {props.hasRight && !rightOpen ? props.capsule : null}
         </main>
         {rightOpen ? (
           <aside
@@ -268,7 +359,7 @@ export function ShellFrame(props: {
             tabIndex={-1}
             data-testid="shell-right"
             data-shell-state={chrome.right}
-            className={`shell-assistant ${chrome.right === "overlay" ? "absolute inset-y-0 right-0 z-20 shadow-md" : "shrink-0"} bg-[var(--color-surface)] overflow-auto`}
+            className={`shell-assistant ${chrome.right === "overlay" ? "absolute inset-y-0 right-0 z-20 shadow-md" : "shrink-0"} bg-[var(--color-surface)] overflow-hidden`}
             style={{ width: chrome.rightWidth }}
             onMouseEnter={() => enter("right")}
             onMouseLeave={(event) => leave("right", event)}

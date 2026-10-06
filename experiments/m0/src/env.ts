@@ -18,7 +18,7 @@ export function repoRoot(): string {
 }
 
 export function evidenceDir(): string {
-  return path.join(repoRoot(), "docs/evidence/m0");
+  return path.join(repoRoot(), "dist/evidence-runs/m0");
 }
 
 export function fixturesDir(): string {
