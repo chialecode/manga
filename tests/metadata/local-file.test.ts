@@ -6,6 +6,7 @@ import { makeThumbnail } from "../../packages/app-core/src/media/thumbnails.ts";
 import { cleanPdfInfo, comicInfoFields, decodeXml, isEmptyFields, parseOpf, videoTagFields } from "../../packages/app-core/src/metadata/local-file.ts";
 import { startApp } from "../helpers/app.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
 let counter = 0;
@@ -81,7 +82,7 @@ describe("what a file says about itself, as units", () => {
   });
 });
 
-describe("covers and metadata taken from files at import", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("covers and metadata taken from files at import", () => {
   requireSamples(["cbz-comicinfo", "epub-with-cover", "comic-pdf-images", "comic-mobi-images", "video-mkv-ass-fonts", "video-mp4-h264-aac"]);
 
   it("takes the cover and the ComicInfo fields from a comic archive, once, as the first source", async () => {

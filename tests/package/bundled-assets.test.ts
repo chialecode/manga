@@ -8,6 +8,7 @@ import { stageBundledAssets } from "../../scripts/desktop-assets.ts";
 import { VadWorkerClient, locateVadAssets } from "../../packages/app-core/src/voice/vad-client.ts";
 import { locateFfmpeg } from "../../packages/app-core/src/media/ffmpeg.ts";
 import { join, quiet, tone } from "../helpers/voice.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const repo = path.resolve(import.meta.dirname, "../..");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-assets-"));
@@ -53,6 +54,7 @@ let resources: string;
 let manifest: AssetManifest;
 
 beforeAll(async () => {
+  if (mediaPrerequisitesAbsent) return;
   // The package may be unpacked under a folder whose own package.json says "module" (this is how a build inside the repository looks).
   write(path.join(tmp, "package.json"), JSON.stringify({ private: true, type: "module" }));
   root = fakeRoot();
@@ -69,7 +71,7 @@ beforeAll(async () => {
   manifest = stageBundledAssets(resources, { repoRoot: root, rendererDir: renderer, buildDir: build });
 }, 60_000);
 
-describe("what a package carries", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("what a package carries", () => {
   it("stages every required asset, with sizes and hashes, and checks out", () => {
     const ids = new Set(manifest.assets.map((asset) => asset.id));
     for (const id of REQUIRED_ASSETS) expect(ids.has(id), id).toBe(true);
@@ -132,7 +134,7 @@ describe("what a package carries", () => {
   }, 60_000);
 });
 
-describe("a package that is missing something stops at start", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("a package that is missing something stops at start", () => {
   const copyResources = (name: string) => {
     const target = path.join(tmp, name);
     fs.cpSync(resources, target, { recursive: true });
@@ -185,7 +187,7 @@ describe("a package that is missing something stops at start", () => {
   });
 });
 
-describe("packaging stops when a tool is not in the cache", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("packaging stops when a tool is not in the cache", () => {
   it("names the command that fetches FFmpeg, and the one that fetches the voice model", () => {
     const empty = path.join(tmp, "empty-root");
     fs.mkdirSync(path.join(empty, "scripts", "tools"), { recursive: true });

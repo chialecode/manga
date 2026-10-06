@@ -17,10 +17,13 @@ export function runStageTest(stage, { withReport = false } = {}) {
   const evidence = runDir(stage);
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), `manga-${stage}-vitest-`));
   const reporterFile = path.join(scratch, "vitest.json");
+  // Stage evidence runs every test: the large files on, and never the CI switch that skips tests needing the media tools.
+  const env = { ...process.env, MANGA_LARGE_FILES: "1" };
+  delete env.MANGA_MEDIA_PREREQUISITES;
   const result = spawnSync(process.execPath, [vitest, "run", "--config", "vitest.config.ts", "--reporter=default", "--reporter=json", `--outputFile.json=${reporterFile}`], {
     cwd: root,
     stdio: "inherit",
-    env: { ...process.env, MANGA_LARGE_FILES: "1" },
+    env,
   });
   const vitestReport = fs.existsSync(reporterFile) ? JSON.parse(fs.readFileSync(reporterFile, "utf8")) : undefined;
   fs.rmSync(scratch, { recursive: true, force: true });

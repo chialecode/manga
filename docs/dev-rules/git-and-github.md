@@ -79,7 +79,7 @@ node scripts/verify.mjs
 
 ## 2. CI 的范围与触发
 
-[ci.yml](../../.github/workflows/ci.yml)只提供一个稳定检查 `repository-quality`。面向 main 的 PR 与手动触发会 Corepack 启用 pnpm 11.24.0、按锁文件安装，再运行 `node scripts/verify.mjs`（文档、公开检查及反例、报告反例、依赖、类型和契约/修复回归）。超时 15 分钟。它不下载 Electron、不跑完整 POC-03 媒体矩阵或 Windows 打包。
+[ci.yml](../../.github/workflows/ci.yml)只提供一个稳定检查 `repository-quality`。面向 main 的 PR 与手动触发会 Corepack 启用 pnpm 11.24.0、按锁文件安装，再运行 `node scripts/verify.mjs`（文档、公开检查及反例、报告反例、依赖、类型和契约/修复回归）。超时 15 分钟。它不下载 Electron、不跑完整 POC-03 媒体矩阵或 Windows 打包。runner 上没有 Windows 媒体前置（固定版本的 Windows FFmpeg、语音模型和用它们生成的合成样本），工作流以 `MANGA_MEDIA_PREREQUISITES=absent` 声明，需要它们的用例记为跳过而不是通过；本地 `verify.mjs` 与阶段入口照常运行这些用例（[质量门禁](quality-gates.md#5-ci-接线与扩展)）。
 
 
 | 项目 | 策略与理由 |
@@ -88,7 +88,7 @@ node scripts/verify.mjs
 | 手动触发 | `workflow_dispatch`；用于首次接线或有明确原因的远端诊断 |
 | main push、schedule、PR 文本编辑 | 不触发此 workflow；合并后不重复同一套检查，不做定时全量构建 |
 | 必需检查 | 固定 job 名 `repository-quality`；不按路径过滤，避免某些 PR 永久等待缺失检查 |
-| 运行环境 | 单个 Ubuntu 24.04 runner；Node 版本读取 `.node-version`；当前验证脚本可跨平台执行 |
+| 运行环境 | 单个 Ubuntu 24.04 runner；Node 版本读取 `.node-version`；当前验证脚本可跨平台执行；Windows 媒体前置缺席，相关用例跳过（见上） |
 | 资源控制 | 每次运行最多 15 分钟；同一个 PR/手动分支的新运行取消旧运行 |
 | 权限 | `contents: read`，checkout 不保留凭据；不使用 `pull_request_target`、仓库 secrets 或写入令牌 |
 | 供应链 | Actions 固定完整 SHA；远端只允许 checkout/setup-node，新增 Action 同步调整 allowlist 并评审 |

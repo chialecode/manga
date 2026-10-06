@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { MediaHandleTable, decideRange, mediaUrl, parseMediaUrl, serveMedia, ZipPool } from "../../packages/app-core/src/media/index.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-serve-"));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -221,7 +222,7 @@ describe("serveMedia over a slice, a buffer and a zip member", () => {
     expect(Buffer.from(await part.arrayBuffer()).equals(BODY.subarray(996))).toBe(true);
   });
 
-  it("serves one CBZ member whole or by range, and never reaches an unsafe or encrypted member", async () => {
+  it.skipIf(mediaPrerequisitesAbsent)("serves one CBZ member whole or by range, and never reaches an unsafe or encrypted member", async () => {
     requireSamples(["cbz-basic", "cbz-traversal", "cbz-encrypted"]);
     const handles = new MediaHandleTable();
     const zips = new ZipPool();

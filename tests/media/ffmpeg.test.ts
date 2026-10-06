@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { FfmpegService, locateFfmpeg, redactToolText, runTool, timelineFromPackets } from "../../packages/app-core/src/media/index.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-ffmpeg-"));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -13,7 +14,7 @@ const service = new FfmpegService(tools, { concurrency: 2 });
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
 describe("FFmpeg location and version", () => {
-  it("finds the pinned development build and reports its version", async () => {
+  it.skipIf(mediaPrerequisitesAbsent)("finds the pinned development build and reports its version", async () => {
     expect(tools, "FFmpeg must be installed under dist/tools/ffmpeg or MANGA_FFMPEG_DIR").not.toBeNull();
     expect(await service.version()).toMatch(/^n?\d/);
   });
@@ -28,7 +29,7 @@ describe("FFmpeg location and version", () => {
   });
 });
 
-describe("probing the synthetic videos", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("probing the synthetic videos", () => {
   requireSamples(["video-mp4-h264-aac", "video-mkv-ass-fonts", "video-mkv-hevc-10bit", "video-mkv-hevc-8bit", "video-nonzero-start", "video-vfr", "video-ac3", "video-corrupt"]);
 
   it("reads container, streams, languages and timing of an MP4", async () => {
@@ -117,7 +118,7 @@ describe("probing the synthetic videos", () => {
   });
 });
 
-describe("extracting from video", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("extracting from video", () => {
   it("decodes a frame at a time, scaled to the edge limit", async () => {
     const jpeg = await service.frameJpeg(samplePath("video-mp4-h264-aac"), 1.5, 160);
     expect(jpeg.subarray(0, 3).toString("hex")).toBe("ffd8ff");
@@ -146,7 +147,7 @@ describe("extracting from video", () => {
   });
 });
 
-describe("running tools safely", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("running tools safely", () => {
   it("ends a process that outlives its timeout and says so", async () => {
     let pid: number | undefined;
     const started = Date.now();

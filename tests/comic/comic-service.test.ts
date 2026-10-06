@@ -7,6 +7,7 @@ import { ComicService } from "../../packages/app-core/src/comic/service.ts";
 import { planDirectory } from "../../packages/app-core/src/comic/scan.ts";
 import { MediaServices, serveMedia } from "../../packages/app-core/src/media/index.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-comic-"));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -23,7 +24,7 @@ function setup() {
 
 const get = (env: ReturnType<typeof setup>, url: string, headers: Record<string, string> = {}) => serveMedia({ handles: env.media.handles, zips: env.media.zips }, { url, method: "GET", headers: { get: (name: string) => headers[name.toLowerCase()] ?? null } });
 
-describe("importing a folder of images", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("importing a folder of images", () => {
   requireSamples(["comic-dir-natural", "comic-dir-sparse", "comic-dir-mixed", "comic-dir-corrupt", "comic-dir-long-strip", "comic-dir-huge", "comic-dir-duplicates"]);
 
   it("lists pages in natural order with stable ids, sizes and hashes, and notices a re-import", async () => {
@@ -202,7 +203,7 @@ describe("importing a folder of images", () => {
   });
 });
 
-describe("importing archives and documents", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("importing archives and documents", () => {
   requireSamples(["cbz-basic", "cbz-comicinfo", "cbz-traversal", "cbz-bomb", "cbz-encrypted", "comic-pdf-images", "comic-epub-images", "comic-mobi-images"]);
 
   it("reads a CBZ in order and serves each page from inside the archive", async () => {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { startApp } from "../helpers/app.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
 let counter = 0;
@@ -23,7 +24,7 @@ function scratch(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `manga-${prefix}-`));
 }
 
-describe("comic commands through the product app", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("comic commands through the product app", () => {
   requireSamples(["comic-dir-natural", "comic-dir-sparse", "comic-dir-duplicates", "cbz-basic", "comic-pdf-images", "comic-epub-images", "comic-mobi-images", "epub-with-cover", "video-mp4-h264-aac"]);
 
   it("suggests a media kind from the content, not only the extension", async () => {

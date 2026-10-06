@@ -5,6 +5,7 @@ import { MangaError } from "@manga/contracts";
 import { PCM_BYTES_PER_MS } from "../../packages/app-core/src/voice/audio-files.ts";
 import { CaptureService } from "../../packages/app-core/src/voice/capture.ts";
 import { EnergyVad, feed, join, quiet, seedResource, textLocator, tone, toBase64, voiceHarness, type Harness } from "../helpers/voice.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const harnesses: Harness[] = [];
 const make = (options: Parameters<typeof voiceHarness>[0] = {}) => {
@@ -260,7 +261,7 @@ describe("failures, retry and cancellation", () => {
     expect(view.audioState).toBe("staged");
   });
 
-  it("waits for a connection: the recording is kept, and transcribes once one is configured", async () => {
+  it.skipIf(mediaPrerequisitesAbsent)("waits for a connection: the recording is kept, and transcribes once one is configured", async () => {
     const h = make();
     h.asr.connection = null;
     const { id } = await recordTwoSentences(h, { retention: "keep" });
@@ -347,7 +348,7 @@ describe("keeping and cleaning audio", () => {
     expect(review.audio).toEqual({ state: "cleaned", playable: false });
   });
 
-  it("keeps audio as Opus the user can play, and removes the working copy", async () => {
+  it.skipIf(mediaPrerequisitesAbsent)("keeps audio as Opus the user can play, and removes the working copy", async () => {
     const h = make();
     const { id } = await recordTwoSentences(h, { retention: "keep" });
     await h.settle(id);

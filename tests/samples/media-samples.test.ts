@@ -5,13 +5,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { verifyMediaSamples } from "../../scripts/samples/media-manifest.mjs";
 import { requireSamples, sample, samplePath, samplesRoot, type SampleEntry } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 let manifest: { samples: SampleEntry[] };
 beforeAll(() => {
   manifest = requireSamples();
 });
 
-describe("M2 synthetic samples", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("M2 synthetic samples", () => {
   it("lists every required sample with an ID, a fingerprint and sub-features", () => {
     const required = [
       "comic-dir-natural", "comic-dir-sparse", "comic-dir-duplicates", "comic-dir-long-strip", "comic-dir-huge", "comic-dir-corrupt", "comic-dir-mixed",

@@ -3,10 +3,10 @@
   "stage": "m2",
   "sourceFingerprint": "b264ed024b904f2a756fdcb8aba711797ad515e9e67ae4cd452c6a10ba91409b",
   "lockFingerprint": "897c3a595d8a08e29d4fdc208aab59bbf3237a02f0b4ea30e32cfe05ff5402f5",
-  "testScriptFingerprint": "1bab46e43913c7d6652bf983fb4491647ad3b113446d5731f9cc87500e46d97f",
+  "testScriptFingerprint": "2d63e6ab1441842a7819de7c5c4df96019750518cf8f006a1d5d8b576c7090d6",
   "buildScriptFingerprint": "0402a76884ae3c027a685b8428777da0681466e3eda96c1566e550a3764c2426",
   "productAcceptance": "not-run",
-  "at": "2026-10-06T08:26:07.050Z",
+  "at": "2026-10-06T10:43:55.541Z",
   "source": "packaged window walk, phase rework (synthetic samples, fresh Profile)",
   "windowSizes": {
     "wide": [
@@ -41,7 +41,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 1111,
+        "scanMs": 1104,
         "settledScan": true,
         "grouped": true,
         "seen": {

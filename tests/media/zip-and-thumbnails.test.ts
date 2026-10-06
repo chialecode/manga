@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { buildZip } from "../../packages/app-core/src/index.ts";
 import { MAX_INPUT_PIXELS, ThumbnailCache, ZipPool, imageInfo, makeThumbnail, unsafeEntryName, verifyDecodes } from "../../packages/app-core/src/media/index.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-zip-"));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -23,7 +24,7 @@ describe("unsafeEntryName", () => {
   it("a name that starts with a drive letter and a slash is refused", () => expect(unsafeEntryName(DRIVE_ENTRY)).toBe("drive letter"));
 });
 
-describe("ZipPool on the synthetic CBZ files", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("ZipPool on the synthetic CBZ files", () => {
   requireSamples(["cbz-basic", "cbz-traversal", "cbz-bomb", "cbz-encrypted", "cbz-comicinfo"]);
 
   it("lists entries without reading them and reads one member on demand", async () => {
@@ -111,7 +112,7 @@ describe("ZipPool on the synthetic CBZ files", () => {
   });
 });
 
-describe("thumbnails and image budgets", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("thumbnails and image budgets", () => {
   requireSamples(["cover-images", "comic-dir-huge", "comic-dir-corrupt", "comic-dir-long-strip", "comic-dir-mixed"]);
 
   it("reports dimensions of every supported format and refuses a damaged image", async () => {

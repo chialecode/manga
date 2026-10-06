@@ -8,6 +8,7 @@ import { seedComic } from "../helpers/media-seed.ts";
 import { EnergyVad, FakeAsr, FakeLlm, join, quiet, samplesFor, tone, toBase64 } from "../helpers/voice.ts";
 import { picture } from "../helpers/fake-bangumi.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
 type Call = Awaited<ReturnType<App["app"]["call"]>>;
@@ -153,7 +154,7 @@ describe("comic context", () => {
   });
 });
 
-describe("video context and the spoiler limit", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("video context and the spoiler limit", () => {
   requireSamples(["video-mkv-ass-fonts"]);
 
   async function importVideo(ctx: App) {
@@ -313,7 +314,7 @@ describe("recordings and the library as material", () => {
   });
 });
 
-describe("pictures as material and the model that looks at them", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("pictures as material and the model that looks at them", () => {
   requireSamples(["cbz-basic"]);
 
   async function prepared(ctx: App) {

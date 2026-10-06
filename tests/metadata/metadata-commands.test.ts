@@ -7,6 +7,7 @@ import { MangaError } from "@manga/contracts";
 import { startApp } from "../helpers/app.ts";
 import { startFakeBangumi, picture, type FakeBangumi } from "../helpers/fake-bangumi.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
 type Call = Awaited<ReturnType<App["app"]["call"]>>;
@@ -77,7 +78,7 @@ const work = async (ctx: App, workId: string) => ok<Work>(await run(ctx, "works.
 const search = async (ctx: App, input: Record<string, unknown>) => ok<Outcome>(await run(ctx, "metadata.search", input));
 const isSearch = (item: { method: string; path: string }) => item.method === "POST" && item.path.startsWith("/v0/search/subjects");
 
-describe("searching, picking and linking an entry", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("searching, picking and linking an entry", () => {
   it("asks Bangumi politely, keeps the candidates, and lets the user choose one", async () => {
     const ctx = await boot();
     try {
@@ -195,7 +196,7 @@ describe("searching, picking and linking an entry", () => {
   });
 });
 
-describe("what the user decided survives refreshing, unlinking and going offline", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("what the user decided survives refreshing, unlinking and going offline", () => {
   it("keeps overrides and locks across a refresh that changes the entry", async () => {
     const ctx = await boot();
     try {
@@ -347,7 +348,7 @@ describe("a source that misbehaves", () => {
   });
 });
 
-describe("covers", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("covers", () => {
   it("lets the user pick, add and lock a cover, and a locked cover never moves", async () => {
     const ctx = await boot();
     try {
@@ -402,7 +403,7 @@ describe("covers", () => {
   });
 });
 
-describe("related works and the batch of unknown works", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("related works and the batch of unknown works", () => {
   it("lists related works with their source, marks the ones in the library, and offers works that share tags", async () => {
     const ctx = await boot();
     try {
@@ -455,7 +456,7 @@ describe("related works and the batch of unknown works", () => {
   });
 });
 
-describe("a second source, and turning the module off", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("a second source, and turning the module off", () => {
   class OtherSource implements OnlineProvider {
     readonly id = "other-source";
     readonly displayName = "合成的另一来源";
@@ -558,7 +559,7 @@ describe("a second source, and turning the module off", () => {
   });
 });
 
-describe("the access token", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("the access token", () => {
   it("is stored only protected, sent only to the API, never to a picture host, and never leaves the app", async () => {
     const ctx = await boot();
     try {
@@ -599,7 +600,7 @@ describe("the access token", () => {
   });
 });
 
-describe("grants", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("grants", () => {
   it("keeps covers and metadata away from an agent", async () => {
     const ctx = await boot();
     try {

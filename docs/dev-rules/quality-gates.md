@@ -11,7 +11,7 @@ pnpm install
 node scripts/verify.mjs
 ```
 
-`verify.mjs` 是本地与 CI 共用的统一入口，依次检查：`scripts/` 顶层 MJS 语法；文档登记表与 GitHub 配置 JSON；文档结构（`check-docs.mjs`）；公开内容检查及其反例；文档检查与阶段报告门禁的反例自测；包依赖方向（`check-deps.mjs`，含内置反例）；根与 `apps/desktop` 两个 `tsc --noEmit`；全部 Vitest；`experiments/m0` 的三份回归（契约 schema、评审回归、收尾评审）；`git diff --check` 与 `git diff --cached --check`。它不安装依赖；缺少 `node_modules` 或 vitest 时非零退出，不使用 `--if-present`。10 MiB TXT 与 30 MiB EPUB 等大文件用例只在 `MANGA_LARGE_FILES=1` 时运行，阶段入口会设置它。
+`verify.mjs` 是本地与 CI 共用的统一入口，依次检查：`scripts/` 顶层 MJS 语法；文档登记表与 GitHub 配置 JSON；文档结构（`check-docs.mjs`）；公开内容检查及其反例；文档检查与阶段报告门禁的反例自测；包依赖方向（`check-deps.mjs`，含内置反例）；根与 `apps/desktop` 两个 `tsc --noEmit`；全部 Vitest；`experiments/m0` 的三份回归（契约 schema、评审回归、收尾评审）；`git diff --check` 与 `git diff --cached --check`。它不安装依赖；缺少 `node_modules` 或 vitest 时非零退出，不使用 `--if-present`。10 MiB TXT 与 30 MiB EPUB 等大文件用例只在 `MANGA_LARGE_FILES=1` 时运行，阶段入口会设置它。需要合成样本、固定 FFmpeg 或语音模型的用例在这些前置缺失时失败；只有声明了 `MANGA_MEDIA_PREREQUISITES=absent` 的环境（CI）才把它们记为跳过，阶段入口会清除这个变量。
 
 开发启动用 `pnpm dev`，自动检查 Electron SQLite ABI 并隔离开发 Profile；目录约定见 [仓库地图](repo-map.md#生成物约定)。人工检查的启动、样本、操作和预期写在[用户待办](../../USER-ACTIONS.md#checks)，写到用户能直接照做，不只引用本页。
 
@@ -103,6 +103,6 @@ node scripts/stage.mjs m2 report    # 核对上述结果并写 report.json
 
 `.github/workflows/ci.yml` 在面向 main 的 PR 更新及手动触发时运行统一入口，必需状态名称为 `repository-quality`。不设置路径过滤、main push 重复检查或定时全量扫描；触发、权限、Ruleset 与失败处理见 [Git 与 GitHub](git-and-github.md)，实际远端结果以对应 PR 为准。
 
-当前 CI 安装锁定依赖并运行 `verify.mjs`。Windows 包、完整阶段测试与性能走阶段入口，不纳入无 Windows 桌面的 CI；真实服务与设备项不进 CI。人工评审仍负责语义和证据质量。不把 CI 成功当作阶段退出或产品发布验证。新增 Actions 需同时更新远端 allowlist，新增必需 job 需先验证真实产出再切换 Ruleset。
+当前 CI 安装锁定依赖并运行 `verify.mjs`。Windows 包、完整阶段测试与性能走阶段入口，不纳入无 Windows 桌面的 CI；CI 以 `MANGA_MEDIA_PREREQUISITES=absent` 运行，需要合成样本、固定 FFmpeg 或语音模型的用例（M2 时约 140 个）在 CI 记为跳过，由本地 `verify.mjs` 与 `stage <阶段> test` 覆盖（`tests/helpers/prerequisites.ts`）；真实服务与设备项不进 CI。人工评审仍负责语义和证据质量。不把 CI 成功当作阶段退出或产品发布验证。新增 Actions 需同时更新远端 allowlist，新增必需 job 需先验证真实产出再切换 Ruleset。
 
 门禁反例：`scripts/check-deps.mjs` 内置错误导入自测（含越出包目录的相对导入必须报错、包内相对导入必须通过）；`scripts/stage-report.test.mjs` 检查报告对缺项、陈旧指纹、失败包和性能的拒绝；`scripts/check-docs.test.mjs` 检查过期文档与登记缺口会被拒绝。失败必须非零。

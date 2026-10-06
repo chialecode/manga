@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadManifest, samplesRoot, verifyMediaSamples } from "../../scripts/samples/media-manifest.mjs";
+import { mediaPrerequisitesAbsent } from "./prerequisites.ts";
 
 export type SampleEntry = {
   id: string;
@@ -17,9 +18,11 @@ export type SampleEntry = {
 
 /**
  * Samples must exist and match their manifest fingerprints; otherwise the calling test file fails.
- * Pass the sample IDs a test needs so a change to an unrelated sample does not fail it.
+ * Pass the sample IDs a test needs so a change to an unrelated sample does not fail it. Where the media prerequisites
+ * are declared absent (CI), the tests that call this are skipped and it checks nothing.
  */
 export function requireSamples(ids?: string[]): { samples: SampleEntry[] } {
+  if (mediaPrerequisitesAbsent) return { samples: [] };
   const result = verifyMediaSamples({ ids });
   if (!result.ok) throw new Error(`synthetic samples are not ready: ${result.errors.join("; ")}. Run node scripts/samples/generate-media-samples.mjs`);
   const manifest = loadManifest() as { samples: SampleEntry[] };
@@ -48,6 +51,7 @@ export function sampleBytes(id: string, ...rest: string[]): Buffer {
 }
 
 export function isAvailable(id: string): boolean {
+  if (mediaPrerequisitesAbsent) return false;
   return sample(id).status === "generated";
 }
 

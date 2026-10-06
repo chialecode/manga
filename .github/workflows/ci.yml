@@ -35,5 +35,9 @@ jobs:
           corepack prepare pnpm@11.24.0 --activate
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
+      # This runner has no pinned Windows FFmpeg, voice model or synthetic media samples; the tests that need them
+      # are reported as skipped. Local verify and the stage entry run them.
       - name: Run local verification entry point
+        env:
+          MANGA_MEDIA_PREREQUISITES: absent
         run: node scripts/verify.mjs

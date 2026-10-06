@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { SegmentAnchor, SourceLocator } from "@manga/contracts";
 import { VadWorkerClient, locateVadAssets } from "../../packages/app-core/src/voice/vad-client.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 import { seedResource, voiceHarness, type Harness } from "../helpers/voice.ts";
 
 requireSamples(["voice-recording-30min"]);
@@ -35,7 +36,7 @@ function srcAt(place: Extract<Place, { video: unknown }>, t: number): number {
 const text = (start: number): SourceLocator => ({ kind: "text", partId: "p1", representationId: "r1", normalizationVersion: "text-nfc-lf-v1", range: { start, end: start + 12 } });
 const image = (id: string): SourceLocator => ({ kind: "image", pageId: id });
 
-describe("a 30-minute reading session mapped to its sources", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("a 30-minute reading session mapped to its sources", () => {
   let h: Harness;
   let vad: VadWorkerClient;
   let sessionId = "";

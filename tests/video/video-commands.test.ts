@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { serveMedia } from "../../packages/app-core/src/media/index.ts";
 import { startApp } from "../helpers/app.ts";
 import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
 let counter = 0;
@@ -37,7 +38,7 @@ async function waitFor<T>(label: string, check: () => T | undefined | false, tim
   throw new Error(`timed out waiting for ${label}`);
 }
 
-describe("video import and probing through the product app", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("video import and probing through the product app", () => {
   requireSamples(["video-mp4-h264-aac", "video-mkv-ass-fonts", "video-nonzero-start", "video-vfr", "video-corrupt", "video-episodes", "video-external-subs"]);
 
   it("imports one video in place, records its probe, and does not import it twice", async () => {
@@ -93,7 +94,7 @@ describe("video import and probing through the product app", () => {
   });
 });
 
-describe("frame index and time", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("frame index and time", () => {
   requireSamples(["video-mp4-h264-aac", "video-nonzero-start", "video-vfr"]);
 
   it("answers frame and time questions from presentation times, with a container that does not start at zero", async () => {
@@ -140,7 +141,7 @@ describe("frame index and time", () => {
   });
 });
 
-describe("playback decisions", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("playback decisions", () => {
   requireSamples(["video-mp4-h264-aac", "video-mkv-hevc-8bit", "video-mkv-hevc-10bit", "video-ac3", "video-mkv-ass-fonts"]);
 
   it("plays H.264 and AAC directly, and decides HEVC and AC-3 from what this machine reports", async () => {
@@ -162,7 +163,7 @@ describe("playback decisions", () => {
   });
 });
 
-describe("handles, subtitles and fonts", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("handles, subtitles and fonts", () => {
   requireSamples(["video-mp4-h264-aac", "video-mkv-ass-fonts", "video-external-subs"]);
 
   it("serves the original by handle with byte ranges, and the handle dies with the module", async () => {
@@ -238,7 +239,7 @@ describe("handles, subtitles and fonts", () => {
   });
 });
 
-describe("play copies", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("play copies", () => {
   requireSamples(["video-ac3", "video-mkv-hevc-10bit"]);
 
   it("makes a copy with the audio converted, checks its frame times against the original, and serves it", async () => {
@@ -345,7 +346,7 @@ describe("play copies", () => {
   });
 });
 
-describe("grants", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("grants", () => {
   requireSamples(["video-mkv-ass-fonts"]);
 
   it("keeps handles and play copies away from an agent, and limits reads to the granted resource", async () => {
