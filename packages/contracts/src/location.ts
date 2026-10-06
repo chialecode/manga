@@ -19,15 +19,18 @@ export const TextLocatorSchema = z.object({
   sourceCfi: z.string().optional(),
 });
 
+/** A rectangle in page space: fractions of the original page that stay inside it. */
+export const NormalizedRegionSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  width: z.number().positive().max(1),
+  height: z.number().positive().max(1),
+}).refine((region) => region.x + region.width <= 1 + 1e-9 && region.y + region.height <= 1 + 1e-9, { message: "region must stay inside the page" });
+
 export const ImageLocatorSchema = z.object({
   kind: z.literal("image"),
   pageId: z.string().min(1),
-  region: z.object({
-    x: z.number().min(0).max(1),
-    y: z.number().min(0).max(1),
-    width: z.number().positive().max(1),
-    height: z.number().positive().max(1),
-  }).optional(),
+  region: NormalizedRegionSchema.optional(),
 });
 
 export const TemporalLocatorSchema = z.object({
@@ -35,7 +38,7 @@ export const TemporalLocatorSchema = z.object({
   startMs: z.number().nonnegative(),
   endMs: z.number().nonnegative().optional(),
   trackId: z.string().optional(),
-});
+}).refine((locator) => locator.endMs === undefined || locator.endMs >= locator.startMs, { message: "time range must not end before it starts" });
 
 export const SourceLocatorSchema = z.discriminatedUnion("kind", [
   TextLocatorSchema,

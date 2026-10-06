@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-ARCH |
 | 版本与日期 | 0.5 / 2026-09-25 |
 | 状态 | 评审稿；具体库版本与媒体后端待 M0 验证 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[确认与待决事项](../decisions/open-questions.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
 | 输入 | [产品需求](../product/requirements.md) |
 | 详细设计 | [领域模型](domain-model.md)、[Agent 与插件](agent-and-plugins.md)、[界面与工作流](interaction-and-workflows.md) |
 

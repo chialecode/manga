@@ -1,0 +1,1105 @@
+{
+  "status": "passed",
+  "stage": "m2",
+  "sourceFingerprint": "b264ed024b904f2a756fdcb8aba711797ad515e9e67ae4cd452c6a10ba91409b",
+  "lockFingerprint": "897c3a595d8a08e29d4fdc208aab59bbf3237a02f0b4ea30e32cfe05ff5402f5",
+  "testScriptFingerprint": "ec8c7c8f418828387c489701d69652266099030c28698d16eaf4bb1ce153192c",
+  "buildScriptFingerprint": "0402a76884ae3c027a685b8428777da0681466e3eda96c1566e550a3764c2426",
+  "productAcceptance": "not-run",
+  "at": "2026-10-06T11:10:19.465Z",
+  "source": "packaged window walk, phase rework (synthetic samples, fresh Profile)",
+  "windowSizes": {
+    "wide": [
+      1280,
+      840
+    ],
+    "narrow": [
+      360,
+      780
+    ],
+    "short": [
+      1100,
+      460
+    ]
+  },
+  "observations": [
+    {
+      "name": "starts-on-library-paths",
+      "status": "passed",
+      "detail": {
+        "startedOnPaths": true,
+        "emptyHint": true
+      }
+    },
+    {
+      "name": "library-paths-add-scan",
+      "status": "passed",
+      "detail": {
+        "added": [
+          "novel",
+          "comic",
+          "video"
+        ],
+        "total": 5,
+        "scanMs": 1115,
+        "settledScan": true,
+        "grouped": true,
+        "seen": {
+          "indicator": true,
+          "block": true
+        },
+        "kinds": {
+          "novel": 3,
+          "comic": 1,
+          "video": 1
+        }
+      }
+    },
+    {
+      "name": "work-home-open",
+      "status": "passed",
+      "detail": {
+        "homeShown": true,
+        "readEnabled": true,
+        "readerClosed": true,
+        "title": "合成长篇"
+      }
+    },
+    {
+      "name": "right-pane-note",
+      "status": "passed",
+      "detail": {
+        "pane": true,
+        "bubble": true,
+        "noteSaved": true
+      }
+    },
+    {
+      "name": "settings-pages-reachable",
+      "status": "passed",
+      "detail": {
+        "groups": 4,
+        "pages": 14,
+        "reached": 14,
+        "missing": []
+      }
+    },
+    {
+      "name": "comic-layout-wide-page",
+      "status": "passed",
+      "detail": {
+        "fit": "page",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              451,
+              677
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              564,
+              846
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              169
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              903,
+              1354
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              258,
+              693
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              339,
+              508
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              226,
+              339
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-wide-width",
+      "status": "passed",
+      "detail": {
+        "fit": "width",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              645,
+              968
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              291
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              806,
+              1209
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              161,
+              548
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              1290,
+              1935
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              645,
+              1274
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              484,
+              726
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              49
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              323,
+              484
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-wide-height",
+      "status": "passed",
+      "detail": {
+        "fit": "height",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              451,
+              677
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              564,
+              846
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              169
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              903,
+              1354
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              258,
+              693
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              339,
+              508
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              226,
+              339
+            ],
+            "stage": [
+              677,
+              693
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-narrow-page",
+      "status": "passed",
+      "detail": {
+        "fit": "page",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              329,
+              494
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              411,
+              617
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              82,
+              38
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              658,
+              987
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              329,
+              408
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              247,
+              370
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              165,
+              247
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-narrow-width",
+      "status": "passed",
+      "detail": {
+        "fit": "width",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              329,
+              494
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              411,
+              617
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              82,
+              38
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              658,
+              987
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              329,
+              408
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              247,
+              370
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              165,
+              247
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-narrow-height",
+      "status": "passed",
+      "detail": {
+        "fit": "height",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              396,
+              594
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              67,
+              15
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              495,
+              743
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              166,
+              164
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              792,
+              1188
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              463,
+              609
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              297,
+              446
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              198,
+              297
+            ],
+            "stage": [
+              360,
+              610
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-short-page",
+      "status": "passed",
+      "detail": {
+        "fit": "page",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              213,
+              320
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              267,
+              400
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              80
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              427,
+              640
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              320
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              160,
+              240
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              107,
+              160
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-short-width",
+      "status": "passed",
+      "detail": {
+        "fit": "width",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              830,
+              1245
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              925
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              1037,
+              1556
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              207,
+              1251
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              1660,
+              2490
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              830,
+              2185
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              623,
+              934
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              614
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              415,
+              623
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              303
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-short-height",
+      "status": "passed",
+      "detail": {
+        "fit": "height",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              213,
+              320
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              267,
+              400
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              80
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              427,
+              640
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              320
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              160,
+              240
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              107,
+              160
+            ],
+            "stage": [
+              862,
+              336
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "player-controls-wide",
+      "status": "passed",
+      "detail": {
+        "controls": {
+          "x": 233.6666717529297,
+          "y": 766.6666870117188,
+          "w": 676.6666870117188,
+          "h": 68.66667175292969,
+          "r": 910.3333587646484,
+          "b": 835.3333587646484
+        },
+        "panel": {
+          "x": 338.3333435058594,
+          "y": 613.3333740234375,
+          "w": 560,
+          "h": 148,
+          "r": 898.3333435058594,
+          "b": 761.3333740234375
+        },
+        "viewport": {
+          "w": 1280,
+          "h": 840
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "player-controls-narrow",
+      "status": "passed",
+      "detail": {
+        "controls": {
+          "x": 0,
+          "y": 676.6666870117188,
+          "w": 360,
+          "h": 102.66667175292969,
+          "r": 360,
+          "b": 779.3333587646484
+        },
+        "panel": {
+          "x": 12,
+          "y": 514,
+          "w": 336,
+          "h": 157.33334350585938,
+          "r": 348,
+          "b": 671.3333435058594
+        },
+        "viewport": {
+          "w": 360,
+          "h": 780
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "player-controls-short",
+      "status": "passed",
+      "detail": {
+        "controls": {
+          "x": 233.6666717529297,
+          "y": 386.66668701171875,
+          "w": 861.6666870117188,
+          "h": 68.66667175292969,
+          "r": 1095.3333587646484,
+          "b": 455.33335876464844
+        },
+        "panel": {
+          "x": 523.3333740234375,
+          "y": 233.33334350585938,
+          "w": 560,
+          "h": 148,
+          "r": 1083.3333740234375,
+          "b": 381.3333435058594
+        },
+        "viewport": {
+          "w": 1100,
+          "h": 460
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-controls-wide",
+      "status": "passed",
+      "detail": {
+        "toolbar": {
+          "x": 233.6666717529297,
+          "y": 91.33333587646484,
+          "w": 676.6666870117188,
+          "h": 46.66666793823242,
+          "r": 910.3333587646484,
+          "b": 138.00000381469727
+        },
+        "panel": {
+          "x": 249.6666717529297,
+          "y": 137.33334350585938,
+          "w": 644.6666870117188,
+          "h": 58,
+          "r": 894.3333587646484,
+          "b": 195.33334350585938
+        },
+        "viewport": {
+          "w": 1280,
+          "h": 840
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-controls-narrow",
+      "status": "passed",
+      "detail": {
+        "toolbar": {
+          "x": 0,
+          "y": 87.33333587646484,
+          "w": 360,
+          "h": 84.66667175292969,
+          "r": 360,
+          "b": 172.00000762939453
+        },
+        "panel": {
+          "x": 12,
+          "y": 171.33334350585938,
+          "w": 336,
+          "h": 110,
+          "r": 348,
+          "b": 281.3333435058594
+        },
+        "viewport": {
+          "w": 360,
+          "h": 780
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-controls-short",
+      "status": "passed",
+      "detail": {
+        "toolbar": {
+          "x": 233.6666717529297,
+          "y": 72.66667175292969,
+          "w": 861.6666870117188,
+          "h": 46.66666793823242,
+          "r": 1095.3333587646484,
+          "b": 119.33333969116211
+        },
+        "panel": {
+          "x": 249.6666717529297,
+          "y": 118.66667175292969,
+          "w": 829.6666870117188,
+          "h": 58,
+          "r": 1079.3333587646484,
+          "b": 176.6666717529297
+        },
+        "viewport": {
+          "w": 1100,
+          "h": 460
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "capsule-clear-of-controls",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "label": "comic-wide",
+            "shown": true,
+            "checked": 13,
+            "covered": []
+          },
+          {
+            "label": "comic-narrow",
+            "shown": true,
+            "checked": 13,
+            "covered": []
+          },
+          {
+            "label": "comic-short",
+            "shown": true,
+            "checked": 13,
+            "covered": []
+          },
+          {
+            "label": "player-wide",
+            "shown": true,
+            "checked": 8,
+            "covered": []
+          },
+          {
+            "label": "player-narrow",
+            "shown": true,
+            "checked": 8,
+            "covered": []
+          },
+          {
+            "label": "player-short",
+            "shown": true,
+            "checked": 8,
+            "covered": []
+          }
+        ],
+        "covering": []
+      }
+    }
+  ]
+}

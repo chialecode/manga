@@ -1,0 +1,52 @@
+{
+  "entries": [
+    {
+      "id": "ACT-05-llm-organize-and-vision",
+      "status": "not-run",
+      "scope": "Real LLM organisation of a transcript and real vision/OCR model calls; real Profile migration",
+      "reason": "No authorisation for real calls beyond the Bangumi read-only contract and the synthetic-speech ASR contract (plan section 1)",
+      "owner": "user (authorisation) then B or A",
+      "retest": "tests/agent/live-models.test.ts and a text-model organise run after ACT-05 is granted; failure paths and missing-capability answers are covered with fake endpoints"
+    },
+    {
+      "id": "ACT-06-manual-checks",
+      "status": "not-run",
+      "scope": "H-M2-01 to H-M2-10 and the H-01 recheck (plan section 14.8): library paths and background scan on a real package, manual matching, comic zoom and fit by hand, player look, headphones and speakers, multi-display capsule/overlay, unplugging a microphone, reference machine with hardware HEVC, 125%/150% scaling, debug panel and quick tasks by hand, records page",
+      "reason": "Needs a person, devices and a stable package; the packaged-window scenarios (scenarios.json) and component tests are engineering evidence, not these checks",
+      "owner": "user",
+      "retest": "docs/evidence/m2-media-mvp-delivery.md section 12 (same steps as plan section 14.8) on the package from `node scripts/stage.mjs m2 package`"
+    },
+    {
+      "id": "H-01-recheck",
+      "status": "not-run",
+      "scope": "PDF line-edge drag selection and apostrophe display (LOOP-04)",
+      "reason": "Needs the user's eyes on the stable package",
+      "owner": "user (ACT-01)",
+      "retest": "dist/samples/m2/reading/combining-marks.pdf and the M1b drag samples"
+    },
+    {
+      "id": "play-copy-without-hardware-hevc",
+      "status": "not-run",
+      "scope": "HEVC play copy played in a window on a machine without hardware decoding",
+      "reason": "The development machine decodes HEVC in hardware; the plan table and the AC3 play-copy path are exercised, the HEVC copy path in a window is not",
+      "owner": "user (reference machine)",
+      "retest": "H-M2-07 with the play-copy switch shown in the player status when direct playback is possible"
+    },
+    {
+      "id": "hevc-10bit-sample-needs-nvenc",
+      "status": "not-run",
+      "scope": "Other machines: the 10-bit HEVC synthetic sample is encoded with hevc_nvenc and is optional",
+      "reason": "Generated and exercised on the development machine; absent on machines without a supporting GPU, where the cases that use it skip",
+      "owner": "developer",
+      "retest": "node scripts/samples/generate-media-samples.mjs on a machine with NVENC"
+    },
+    {
+      "id": "poc-03-x264-x265",
+      "status": "not-run",
+      "scope": "experiments/m0/src/tests/review-formats.test.ts (real MKV HEVC + ASS, fractional FPS, VFR keyframes built with libx264/libx265)",
+      "reason": "The bundled FFmpeg is the LGPL build without libx264/libx265; the M0 prototype test skips unless a system FFmpeg with both encoders is on PATH. The product support matrix uses the M2 synthetic samples instead",
+      "owner": "developer (kept until experiments/m0 is removed with POC-09 in M4)",
+      "retest": "node scripts/m0.mjs test with a GPL FFmpeg build (libx264 and libx265) on PATH"
+    }
+  ]
+}

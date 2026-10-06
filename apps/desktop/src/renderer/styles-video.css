@@ -1,0 +1,75 @@
+/* ---- video player ------------------------------------------------------ */
+.video-reader { background: var(--color-surface); }
+.video-shell { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--color-player); color: var(--color-on-player); }
+.video-shell:fullscreen { width: 100%; height: 100%; }
+.video-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; background: var(--color-player-stage); cursor: default; user-select: none; }
+.video-element { width: 100%; height: 100%; object-fit: contain; background: var(--color-player-stage); }
+.video-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: var(--color-player-overlay); cursor: default; }
+.video-status { max-width: 440px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; font-size: 14px; line-height: 1.6; }
+.video-status-reason { color: var(--color-player-status); font-weight: 600; }
+.video-status-note { font-size: 12px; color: var(--color-player-status-note); }
+.video-status-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.video-status progress { width: 260px; height: 8px; accent-color: var(--color-brand); }
+.video-big-play { position: absolute; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--color-player-shade); color: var(--color-on-player); border: 2px solid var(--color-player-edge); }
+.video-big-play:hover { background: var(--color-player-big-hover); }
+.video-holding, .video-subtitle-notice { position: absolute; top: 12px; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: var(--color-player-shade); color: var(--color-on-player); pointer-events: none; }
+.video-holding { left: 50%; transform: translateX(-50%); }
+.video-subtitle-notice { right: 12px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-end { position: absolute; inset: auto 0 24px 0; margin: 0 auto; width: fit-content; max-width: calc(100% - 32px); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: 12px; background: var(--color-player-shade); font-size: 13px; }
+.video-context { position: fixed; z-index: 60; min-width: 140px; padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px var(--color-player-pop-shadow); }
+.video-context > button { text-align: left; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.video-context > button:hover { background: var(--color-accent-soft); }
+.video-context > button[aria-checked="true"]::before { content: "✓ "; }
+
+.video-controls { position: relative; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; padding: 6px 16px 8px; background: var(--color-player-bar); color: var(--color-player-ink); border-top: 1px solid var(--color-player-line); transition: opacity 160ms ease; }
+.video-shell[data-idle] .video-controls { opacity: 0; pointer-events: none; }
+.video-shell[data-idle] .video-stage { cursor: none; }
+.video-shell:fullscreen .video-controls { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-player-bar-overlay); }
+.video-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.video-controls .icon-button, .video-controls .menu-button { color: var(--color-player-ink); }
+.video-controls .icon-button:hover:not(:disabled), .video-controls .menu-button:hover, .video-controls .menu-button[aria-expanded="true"] { background: var(--color-player-hover); color: var(--color-player-ink-strong); }
+.video-controls .icon-button[aria-pressed="true"], .video-controls .icon-button[aria-expanded="true"] { background: var(--color-player-selected); color: var(--color-player-selected-ink); }
+.video-controls .icon-button:disabled { opacity: .4; }
+.video-menu .menu-list { top: auto; bottom: calc(100% + 6px); }
+.video-time { font-size: 12px; font-variant-numeric: tabular-nums; margin: 0 8px; white-space: nowrap; color: var(--color-player-ink-strong); }
+.video-frame { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--color-player-ink); white-space: nowrap; }
+.video-volume { width: 84px; accent-color: var(--color-player-progress); }
+.video-tools { gap: 8px; padding-top: 4px; font-size: 12px; }
+/* What is set once and rarely used sits in a panel above the controls; it is capped to the window so it is never cut off in a short one. */
+.video-more-panel { position: absolute; right: 12px; bottom: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; gap: 6px; width: min(560px, calc(100% - 24px)); max-height: calc(100vh - 160px); overflow: auto; padding: 8px 12px; background: var(--color-surface); color: var(--color-player-ink); border: 1px solid var(--color-player-line); border-radius: 12px; box-shadow: 0 8px 24px var(--color-player-pop-shadow); }
+.video-controls .secondary-button { background: transparent; color: var(--color-player-ink-strong); border-color: var(--color-player-line); padding: 4px 10px; font-size: 12px; }
+.video-controls .secondary-button:hover:not(:disabled) { background: var(--color-player-hover); }
+.video-controls .secondary-button[aria-pressed="true"] { color: var(--color-player-selected-ink); background: var(--color-player-selected); border-color: var(--color-player-progress); }
+.video-controls .secondary-button:disabled { opacity: .4; }
+.video-controls .link-button { color: var(--color-player-selected-ink); }
+.video-interval { font-variant-numeric: tabular-nums; color: var(--color-player-selected-ink); }
+.video-field { display: inline-flex; align-items: center; gap: 6px; }
+.video-field input { width: 76px; padding: 3px 8px; border: 1px solid var(--color-player-line); border-radius: 7px; background: var(--color-surface); color: var(--color-player-ink-strong); font-size: 12px; }
+.video-input-error { color: var(--color-danger); font-size: 12px; }
+.video-help { padding: 8px 12px; border: 1px solid var(--color-player-line); border-radius: 10px; font-size: 12px; }
+.video-help dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 16px; }
+.video-help dl > div { display: flex; gap: 8px; }
+.video-help dt { min-width: 76px; font-variant-numeric: tabular-nums; color: var(--color-player-selected-ink); }
+.video-help p { margin-top: 6px; color: var(--color-player-ink); }
+
+/* timeline */
+.video-seek { position: relative; height: 20px; display: flex; align-items: center; }
+.video-seek-track { position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--color-player-track); overflow: hidden; pointer-events: none; }
+.video-seek-buffered { position: absolute; inset: 0 auto 0 0; background: var(--color-player-buffer); }
+.video-seek-played { position: absolute; inset: 0 auto 0 0; background: var(--color-player-progress); }
+.video-seek-marker { position: absolute; top: 0; bottom: 0; }
+.video-seek-marker[data-kind="recording"] { background: var(--color-player-mark-recording); }
+.video-seek-marker[data-kind="source"] { background: var(--color-player-mark-source); }
+.video-seek-marker[data-kind="mark"] { background: var(--color-player-mark-range); }
+.video-seek-input { position: relative; width: 100%; margin: 0; height: 20px; background: transparent; appearance: none; cursor: pointer; }
+.video-seek-input::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+.video-seek-input::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%; background: var(--color-player-progress); border: 2px solid var(--color-player-bar); box-shadow: 0 0 0 1px var(--color-player-progress); }
+.video-seek-jumps { position: absolute; inset: 0; pointer-events: none; }
+.video-seek-jump { position: absolute; top: 0; width: 10px; height: 6px; margin-left: -5px; pointer-events: auto; background: transparent; }
+.video-seek-jump[data-kind="source"] { border-top: 6px solid var(--color-player-mark-source); height: 0; width: 0; margin-left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; }
+.video-seek-jump[data-kind="recording"] { border-top: 6px solid var(--color-player-mark-recording); height: 0; width: 0; margin-left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; }
+
+@media (max-width: 600px) {
+  .video-controls { padding-left: 12px; padding-right: 12px; }
+  .video-volume { width: 60px; }
+}

@@ -1,0 +1,9 @@
+{
+  "font": "CascadiaMono.ttf",
+  "unit": "accent centre minus letter-body centre, in em",
+  "precomposed": 0.081,
+  "decomposedPositioned": 0.031,
+  "decomposedRaw": 0.632,
+  "decomposedRawZeroAdvance": 0.632,
+  "conclusion": "PDF.js draws what the file says; a bare e + U+0301 run needs a producer's mark positioning, so the sample generator was at fault, not the viewer or the text layer"
+}

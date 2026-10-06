@@ -81,7 +81,7 @@ test("POC-05 editor blocks, undo, embed and IME guard", () => {
       expected: "native IME, US keyboard, 100/125/150 zoom",
       actual: "user reported WeChat IME, US keyboard, 100%/125%/150% zoom ok on the previous prototype",
       kind: "human",
-      evidence: "docs/evidence/2026-09-19-m0-device-followup.md",
+      evidence: "docs/evidence/m0-summary.md",
     },
   ]);
 });

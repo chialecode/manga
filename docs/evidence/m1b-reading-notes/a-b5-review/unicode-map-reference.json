@@ -1,9 +1,0 @@
-{
-  "reader": "pypdf",
-  "version": "6.10.0",
-  "sample": "unicode-map.pdf",
-  "expected": "中",
-  "actual": "中",
-  "status": "passed",
-  "scope": "independent fixture extraction, not MANGA product behavior"
-}

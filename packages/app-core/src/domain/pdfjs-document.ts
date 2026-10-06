@@ -4,6 +4,7 @@
  * There is no fallback to a built-in content-stream interpreter.
  */
 
+import { pathToFileURL } from "node:url";
 import { MangaError, NORMALIZATION_V1 } from "@manga/contracts";
 import { mapCanonicalPieces } from "./pdf-text-map.ts";
 import { normalizeText } from "./text.ts";
@@ -20,6 +21,7 @@ type PdfjsModule = {
 type PdfjsDocument = {
   numPages: number;
   getPage: (index: number) => Promise<PdfjsPage>;
+  getMetadata?: () => Promise<{ info?: Record<string, unknown> }>;
 };
 
 type PdfjsTextItem = {
@@ -31,8 +33,10 @@ type PdfjsTextItem = {
 };
 
 type PdfjsPage = {
+  getViewport?: (options: { scale: number }) => { width: number; height: number };
   getTextContent: () => Promise<{ items: PdfjsTextItem[] }>;
   getOperatorList: () => Promise<{ fnArray: number[] }>;
+  render?: (params: { canvasContext: unknown; viewport: unknown; transform?: number[] }) => { promise: Promise<void> };
   cleanup: () => void;
 };
 
@@ -50,6 +54,17 @@ function latinSample(bytes: Uint8Array): string {
   append(head);
   if (tail !== head) append(tail);
   return out;
+}
+
+/** A PDF either as bytes in memory or as a file PDF.js reads in ranges, so a 400 MB volume costs a few MB. */
+export type PdfSource = Uint8Array | { file: string };
+
+function pdfOpenOptions(source: PdfSource): Record<string, unknown> {
+  const common = {
+    isEvalSupported: false, disableFontFace: true, useSystemFonts: false, useWorkerFetch: false,
+    cMapUrl: pdfjsAssetUrl("cmaps"), cMapPacked: true, standardFontDataUrl: pdfjsAssetUrl("standard_fonts"), wasmUrl: pdfjsAssetUrl("wasm"),
+  };
+  return source instanceof Uint8Array ? { data: new Uint8Array(source), ...common } : { url: pathToFileURL(source.file).href, ...common };
 }
 
 /** One mapping from PDF.js text items onto the normalized page text. Offsets are omitted when NFC would merge across an item boundary. */
@@ -223,5 +238,148 @@ export async function parsePdfDocument(bytes: Uint8Array, options: { signal?: Ab
   } finally {
     options.signal?.removeEventListener("abort", onAbort);
     await destroy();
+  }
+}
+
+/**
+ * Page sizes (in PDF points at scale 1, rotation applied) of a PDF whose pages are pictures. Nothing is rendered or kept.
+ * A file that asks for a password is rejected; one that only restricts permissions (an owner password) opens like any other,
+ * which is what PDF.js and every viewer do, and is common in commercial volumes.
+ */
+export async function readPdfPageSizes(source: PdfSource, signal?: AbortSignal): Promise<Array<{ width: number; height: number }>> {
+  if (signal?.aborted) throw new MangaError("CANCELLED", "pdf read cancelled");
+  const pdfjs = await loadPdfjs();
+  const task = pdfjs.getDocument(pdfOpenOptions(source));
+  const onAbort = () => { void task.destroy().catch(() => undefined); };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const doc = await task.promise;
+    const sizes: Array<{ width: number; height: number }> = [];
+    for (let index = 1; index <= doc.numPages; index += 1) {
+      signal?.throwIfAborted();
+      const page = await doc.getPage(index);
+      const view = page.getViewport?.({ scale: 1 });
+      if (!view || !(view.width > 0) || !(view.height > 0)) throw new MangaError("UNSUPPORTED_FORMAT", `pdf page ${index} has no size`);
+      sizes.push({ width: view.width, height: view.height });
+      page.cleanup();
+    }
+    if (!sizes.length) throw new MangaError("UNSUPPORTED_FORMAT", "pdf has no pages");
+    return sizes;
+  } catch (error) {
+    if (signal?.aborted) throw new MangaError("CANCELLED", "pdf read cancelled");
+    if (error instanceof MangaError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    if (/encrypt|password/i.test(message)) throw new MangaError("UNSUPPORTED_FORMAT", "encrypted pdf rejected", { cause: error });
+    throw new MangaError("UNSUPPORTED_FORMAT", message || "pdf could not be opened", { cause: error });
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    await task.destroy().catch(() => undefined);
+  }
+}
+
+/** Page count and what a few evenly spaced pages hold, to tell a scanned or picture-only PDF from a text one without parsing everything. */
+export async function samplePdfContent(source: PdfSource, options: { signal?: AbortSignal; samples?: number } = {}): Promise<{ pages: number; sampled: number; textChars: number; imagePages: number; textPages: number }> {
+  const { signal } = options;
+  if (signal?.aborted) throw new MangaError("CANCELLED", "pdf read cancelled");
+  const pdfjs = await loadPdfjs();
+  const task = pdfjs.getDocument(pdfOpenOptions(source));
+  const onAbort = () => { void task.destroy().catch(() => undefined); };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const doc = await task.promise;
+    const wanted = Math.min(doc.numPages, Math.max(1, options.samples ?? 6));
+    const indexes = new Set<number>();
+    for (let i = 0; i < wanted; i += 1) indexes.add(1 + Math.floor((i * doc.numPages) / wanted));
+    let textChars = 0;
+    let imagePages = 0;
+    let textPages = 0;
+    for (const index of indexes) {
+      signal?.throwIfAborted();
+      const page = await doc.getPage(index);
+      const content = await page.getTextContent();
+      const chars = content.items.reduce((sum, item) => sum + (item.str ?? "").trim().length, 0);
+      let hasImage = false;
+      try { hasImage = paintImage((await page.getOperatorList()).fnArray, pdfjs.OPS); } catch { hasImage = false; }
+      textChars += chars;
+      if (chars >= 20) textPages += 1;
+      if (hasImage) imagePages += 1;
+      page.cleanup();
+    }
+    return { pages: doc.numPages, sampled: indexes.size, textChars, imagePages, textPages };
+  } catch (error) {
+    if (signal?.aborted) throw new MangaError("CANCELLED", "pdf read cancelled");
+    if (error instanceof MangaError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new MangaError("UNSUPPORTED_FORMAT", /encrypt|password/i.test(message) ? "encrypted pdf rejected" : message || "pdf could not be opened", { cause: error });
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    await task.destroy().catch(() => undefined);
+  }
+}
+
+/**
+ * Paint one PDF page (or a region of it, given as fractions of the page) to a PNG with PDF.js and its Node canvas.
+ * Used for covers and for image materials; the reader itself paints pages in the renderer.
+ */
+export async function renderPdfPage(source: PdfSource, pageNumber: number, options: { maxEdge: number; region?: { x: number; y: number; width: number; height: number }; signal?: AbortSignal }): Promise<{ png: Buffer; width: number; height: number }> {
+  const { signal } = options;
+  if (signal?.aborted) throw new MangaError("CANCELLED", "pdf render cancelled");
+  const [pdfjs, canvasModule] = await Promise.all([loadPdfjs(), import("@napi-rs/canvas")]);
+  const task = pdfjs.getDocument(pdfOpenOptions(source));
+  const onAbort = () => { void task.destroy().catch(() => undefined); };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const doc = await task.promise;
+    if (pageNumber < 1 || pageNumber > doc.numPages) throw new MangaError("NOT_FOUND", "pdf page does not exist");
+    const page = await doc.getPage(pageNumber);
+    if (!page.getViewport || !page.render) throw new MangaError("UNSUPPORTED_FORMAT", "this PDF.js build cannot paint pages");
+    const base = page.getViewport({ scale: 1 });
+    const region = options.region ?? { x: 0, y: 0, width: 1, height: 1 };
+    const regionW = Math.max(1, base.width * region.width);
+    const regionH = Math.max(1, base.height * region.height);
+    const scale = Math.min(8, Math.max(0.05, options.maxEdge / Math.max(regionW, regionH)));
+    const viewport = page.getViewport({ scale });
+    const width = Math.max(1, Math.min(8192, Math.round(regionW * scale)));
+    const height = Math.max(1, Math.min(8192, Math.round(regionH * scale)));
+    const canvas = canvasModule.createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    await page.render({
+      canvasContext: ctx,
+      viewport,
+      transform: [1, 0, 0, 1, -region.x * viewport.width, -region.y * viewport.height],
+    }).promise;
+    signal?.throwIfAborted();
+    page.cleanup();
+    return { png: canvas.toBuffer("image/png"), width, height };
+  } catch (error) {
+    if (signal?.aborted) throw new MangaError("CANCELLED", "pdf render cancelled");
+    if (error instanceof MangaError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    if (/password/i.test(message)) throw new MangaError("UNSUPPORTED_FORMAT", "encrypted pdf rejected", { cause: error });
+    throw new MangaError("UNSUPPORTED_FORMAT", message || "pdf page could not be painted", { cause: error });
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    await task.destroy().catch(() => undefined);
+  }
+}
+
+/** The information dictionary of a PDF (Title, Author, Subject, CreationDate...). Empty when the file has none or cannot be read. */
+export async function readPdfInfo(source: PdfSource, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  if (signal?.aborted) throw new MangaError("CANCELLED", "pdf read cancelled");
+  const pdfjs = await loadPdfjs();
+  const task = pdfjs.getDocument(pdfOpenOptions(source));
+  const onAbort = () => { void task.destroy().catch(() => undefined); };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const doc = await task.promise;
+    return (await doc.getMetadata?.())?.info ?? {};
+  } catch (error) {
+    if (signal?.aborted) throw new MangaError("CANCELLED", "pdf read cancelled");
+    return {};
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    await task.destroy().catch(() => undefined);
   }
 }

@@ -49,7 +49,8 @@ const rules = [
   },
   {
     dir: "packages/app-core/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/],
+    // sharp, yauzl and anitomy serve the comic and media services; zod validates what the Bangumi client receives.
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/, /^sharp$/, /^yauzl$/, /^anitomy$/, /^zod$/],
     forbid: [/^electron$/],
   },
 ];
@@ -71,6 +72,13 @@ export function checkTree(base = root) {
       const text = fs.readFileSync(file, "utf8");
       for (const match of text.matchAll(importRe)) {
         const spec = match[1];
+        // A relative import may go up into a sibling folder of the same package, but not out of it.
+        if (spec.startsWith(".")) {
+          const packageDir = path.join(base, rule.dir);
+          const target = path.resolve(path.dirname(file), spec);
+          if (target !== packageDir && !target.startsWith(packageDir + path.sep)) errors.push(`${path.relative(base, file)}: illegal import ${spec} (leaves ${rule.dir})`);
+          continue;
+        }
         const allowed = rule.allow.some((re) => re.test(spec));
         const forbidden = rule.forbid.some((re) => re.test(spec));
         if (forbidden || !allowed) {
@@ -86,10 +94,18 @@ function selfTest() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-dep-"));
   fs.mkdirSync(path.join(dir, "experiments/m0/src/domain"), { recursive: true });
   fs.writeFileSync(path.join(dir, "experiments/m0/src/domain/bad.ts"), 'import electron from "electron";\n');
+  fs.writeFileSync(path.join(dir, "experiments/m0/src/domain/up.ts"), 'import { x } from "../../../../other/outside.ts";\n');
+  fs.writeFileSync(path.join(dir, "experiments/m0/src/domain/ok.ts"), 'import { y } from "./bad.ts";\n');
   const errors = checkTree(dir);
   fs.rmSync(dir, { recursive: true, force: true });
   if (!errors.some((item) => item.includes("electron"))) {
     throw new Error("dependency gate self-test did not fail on electron import");
+  }
+  if (!errors.some((item) => item.includes("outside.ts"))) {
+    throw new Error("dependency gate self-test did not fail on a relative import that leaves the package");
+  }
+  if (errors.some((item) => item.includes("ok.ts"))) {
+    throw new Error("dependency gate self-test rejected a relative import inside the package");
   }
 }
 

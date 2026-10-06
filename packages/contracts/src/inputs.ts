@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { SourceLocatorSchema, TextLocatorSchema } from "./location.ts";
+import { SourceLocatorSchema } from "./location.ts";
+import { AgentMediaContextSchema, MediaCommandInputs } from "./inputs-media.ts";
+import { ReworkCommandInputs } from "./inputs-rework.ts";
+import { OrdinalSchema } from "./media.ts";
 import { LOCATION_PARTITIONS } from "./paths.ts";
 import { NoteBlockSchema, NOTE_TAG_MAX, ReadingStylePatchSchema, ShellPanelSchema } from "./reading.ts";
 
@@ -12,11 +15,16 @@ export const CommandInputs = {
   "library.importEpub": z.object({ title: id, bytes }).strict(),
   "library.importDocument": z.object({
     title: id,
-    format: z.enum(["txt", "epub", "mobi", "pdf", "auto"]).optional(),
+    format: z.enum(["txt", "epub", "mobi", "pdf", "cbz", "auto"]).optional(),
     bytes: bytes.optional(),
     pathHandle: id.optional(),
     encoding: z.enum(["utf-8", "utf-16le"]).optional(),
     hosted: z.boolean().optional(),
+    /** User's choice of media kind; the import result suggests one from the content when this is absent. */
+    kind: z.enum(["novel", "comic", "video"]).optional(),
+    /** Add the file to an existing work as one more volume or chapter instead of creating a work. */
+    workId: id.optional(),
+    ordinal: OrdinalSchema.optional(),
   }).strict().refine((value) => Boolean(value.bytes?.length) !== Boolean(value.pathHandle), {
     message: "provide either file bytes or a path handle",
   }),
@@ -37,7 +45,7 @@ export const CommandInputs = {
     resourceId: id.optional(),
     withinProgress: z.boolean().optional(),
   }).strict(),
-  "notes.create": z.object({ title: id, text, resourceId: id.optional(), resourceRevisionId: id.optional(), locator: TextLocatorSchema.optional(), tags: z.array(z.string().min(1).max(64)).max(NOTE_TAG_MAX).optional() }).strict(),
+  "notes.create": z.object({ title: id, text, resourceId: id.optional(), workId: id.optional(), resourceRevisionId: id.optional(), locator: SourceLocatorSchema.optional(), quoteText: z.string().max(2000).optional(), tags: z.array(z.string().min(1).max(64)).max(NOTE_TAG_MAX).optional() }).strict(),
   "notes.update": z.object({ objectId: id, expectedRevision: z.number().int().positive(), blockId: id.optional(), text }).strict(),
   "notes.list": z.object({
     text: z.string().max(512).optional(),
@@ -88,7 +96,8 @@ export const CommandInputs = {
     start: z.number().int().nonnegative().optional(),
     end: z.number().int().nonnegative().optional(),
   }).strict(),
-  "library.exportPackage": z.object({ pathHandle: id.optional(), targetDir: z.string().min(1).optional() }).strict(),
+  "library.exportPackage": z.object({ pathHandle: id.optional(), targetDir: z.string().min(1).optional(), includeCovers: z.boolean().optional() }).strict(),
+  "library.cancelExport": z.object({}).strict(),
   "library.importPackage": z.object({ pathHandle: id.optional(), sourceDir: z.string().min(1).optional() }).strict(),
   "notes.get": z.object({ objectId: id }).strict(),
   "notes.split": z.object({ objectId: id, expectedRevision: z.number().int().positive(), blockId: id, offset: z.number().int().nonnegative() }).strict(),
@@ -121,7 +130,7 @@ export const CommandInputs = {
     decisions: z.array(z.object({ kind: z.enum(["work", "resource", "resource_revision", "object", "anchor", "ref", "progress", "capture", "bookmark"]), id: id, action: z.enum(["skip", "replace", "duplicate"]) }).strict()).max(5000).optional(),
   }).strict(),
   "workspace.sessions": z.object({ mode: z.enum(["enthusiast", "creator"]).optional() }).strict(),
-  "session.open": z.object({ kind: z.enum(["resource", "project", "note"]), targetId: id, mode: z.enum(["enthusiast", "creator"]).optional(), sessionId: id.optional() }).strict(),
+  "session.open": z.object({ kind: z.enum(["resource", "project", "note", "work"]), targetId: id, mode: z.enum(["enthusiast", "creator"]).optional(), sessionId: id.optional() }).strict(),
   "notes.embed": z.object({ objectId: id, expectedRevision: z.number().int().positive(), fromBlockId: id, targetId: id, targetKind: z.enum(["object", "anchor"]) }).strict(),
   "capture.stat": z.object({ attachmentId: id }).strict(),
   "capture.preparePlayback": z.object({ attachmentId: id }).strict(),
@@ -181,12 +190,12 @@ export const CommandInputs = {
     baseUrl: z.string().min(1).max(2048),
     modelId: id,
     timeoutMs: z.number().int().positive().max(300_000).optional(),
-    purpose: z.enum(["text", "transcription", "embedding"]),
+    purpose: z.enum(["text", "transcription", "embedding", "vision"]),
     credentialHandle: id.optional(),
   }).strict(),
   "connections.test": z.object({
     connectionId: id,
-    capability: z.enum(["text", "tools", "streaming", "transcription", "embedding"]),
+    capability: z.enum(["text", "tools", "streaming", "transcription", "embedding", "vision"]),
   }).strict(),
   "connections.delete": z.object({ connectionId: id }).strict(),
   "library.transcribeAudio": z.object({
@@ -197,7 +206,7 @@ export const CommandInputs = {
     pathHandle: id,
     kind: z.enum(["novel", "comic", "video", "audio", "file"]).optional(),
   }).strict(),
-  "agent.createSession": z.object({ title: id.optional(), kind: z.enum(["shared", "resource", "project"]).optional(), targetId: id.optional(), mode: z.enum(["enthusiast", "creator"]).optional() }).strict(),
+  "agent.createSession": z.object({ title: id.optional(), kind: z.enum(["shared", "resource", "project", "work"]).optional(), targetId: id.optional(), mode: z.enum(["enthusiast", "creator"]).optional() }).strict(),
   "agent.send": z.object({
     sessionId: id,
     text: z.string().max(32 * 1024),
@@ -211,11 +220,28 @@ export const CommandInputs = {
       start: z.number().int().nonnegative(),
       end: z.number().int().nonnegative(),
     }).strict().optional(),
+    mediaContext: AgentMediaContextSchema.optional(),
+    /** Recordings whose transcripts are text material, with the time and source each sentence was said at. */
+    captureSessionIds: z.array(id).max(3).optional(),
+    /** Stills prepared with `material.region` / `material.frame`; at most four. */
+    imageMaterialIds: z.array(id).max(4).optional(),
+    /** Network commands this task may use. Metadata search reaches an outside service, so it is off unless the user turns it on for the task. */
+    allowCommands: z.array(z.enum(["metadata.search"])).max(1).optional(),
+    /** Set when the message was made by a quick task: the chat shows the task as a tag and the debug panel names it. The task changes nothing about what the run may use. */
+    quickTask: z.object({ id: id.nullable(), name: z.string().min(1).max(80) }).strict().optional(),
   }).strict(),
   "agent.cancel": z.object({ runId: id }).strict(),
   "agent.retry": z.object({ runId: id }).strict(),
   "agent.getRun": z.object({ runId: id }).strict(),
+  ...MediaCommandInputs,
+  ...ReworkCommandInputs,
 };
+
+/**
+ * Commands that only the M0 prototype under `experiments/m0` registers. They stay declared so its regression keeps
+ * validating; the product does not register them and the registration test excludes them.
+ */
+export const LEGACY_EXPERIMENT_COMMANDS = ["capture.save", "capture.stat", "capture.preparePlayback", "capture.markPlayback", "metadata.confirm", "metadata.query", "metadata.override", "acquisition.start"] as const;
 
 export function validateCommandInput(commandId: string, input: unknown): unknown {
   const schema = CommandInputs[commandId as keyof typeof CommandInputs];

@@ -13,10 +13,12 @@ function sha256File(file: string): string {
   return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
-function sqlValue(value: unknown): string | number | bigint | null {
+function sqlValue(value: unknown): string | number | bigint | Buffer | null {
   if (value === null || value === undefined) return null;
   if (typeof value === "number" || typeof value === "bigint") return value;
   if (typeof value === "string") return value;
+  // Picture bytes go in as bytes; turning them into JSON text would store something that is no longer the picture.
+  if (Buffer.isBuffer(value)) return value;
   return JSON.stringify(value);
 }
 
@@ -79,7 +81,28 @@ function validateReferences(manifest: LibraryPackageManifest): void {
     for (const id of ids) PackageAttachmentNameSchema.parse(id);
     if (ids.some((id) => !attachments.has(String(id)))) throw new MangaError("VALIDATION_ERROR", "package object attachment missing");
   }
-  for (const item of manifest.captures) if (!attachments.has(item.attachment_id)) throw new MangaError("VALIDATION_ERROR", "package capture attachment missing");
+  for (const item of manifest.captures) {
+    for (const name of [item.attachment_id, item.staging_name, item.opus_name]) {
+      if (name && !attachments.has(name)) throw new MangaError("VALIDATION_ERROR", "package capture attachment missing");
+    }
+  }
+  const sessions = new Set(manifest.captures.map((item) => item.id));
+  const works = new Set(manifest.works.map((item) => item.id));
+  unique(manifest.covers ?? [], "cover");
+  unique(manifest.transcriptSegments ?? [], "transcript segment");
+  unique(manifest.captureDrafts ?? [], "capture draft");
+  for (const item of manifest.covers ?? []) {
+    if (!works.has(item.work_id)) throw new MangaError("VALIDATION_ERROR", "package cover owner missing");
+    if (!attachments.has(item.file_name)) throw new MangaError("VALIDATION_ERROR", "package cover attachment missing");
+  }
+  for (const item of [...(manifest.characters ?? []), ...(manifest.persons ?? [])]) {
+    if (!works.has(item.work_id)) throw new MangaError("VALIDATION_ERROR", "package credit owner missing");
+    if (item.image && !attachments.has(imageAttachmentName(item.image.hash))) throw new MangaError("VALIDATION_ERROR", "package credit picture missing");
+  }
+  for (const item of manifest.captureEvents ?? []) if (!sessions.has(item.session_id)) throw new MangaError("VALIDATION_ERROR", "package capture event owner missing");
+  for (const item of [...(manifest.transcriptSegments ?? []), ...(manifest.captureDrafts ?? [])]) if (!sessions.has(item.session_id)) throw new MangaError("VALIDATION_ERROR", "package transcript owner missing");
+  for (const item of manifest.workTerms ?? []) if (!works.has(item.work_id)) throw new MangaError("VALIDATION_ERROR", "package term owner missing");
+  for (const item of manifest.mediaProbes ?? []) if (!revisions.has(item.resource_revision_id)) throw new MangaError("VALIDATION_ERROR", "package media probe owner missing");
   for (const item of manifest.fileLocations ?? []) {
     if (!revisions.has(item.resource_revision_id)) throw new MangaError("VALIDATION_ERROR", "package file location owner missing");
   }
@@ -89,7 +112,21 @@ function validateReferences(manifest: LibraryPackageManifest): void {
   }
 }
 
-export function exportLibraryPackage(store: DrizzleStore, destDir: string): LibraryPackageManifest {
+export type PackageExportOptions = {
+  /** Picture originals of covers travel with the package unless the owner leaves them out. */
+  includeCovers?: boolean;
+  signal?: AbortSignal;
+};
+
+/** Package attachment that carries one image of the images table. These are read back into the table on import and are not published as files. */
+export const IMAGE_ATTACHMENT_PREFIX = "img-";
+const imageAttachmentName = (hash: string) => `${IMAGE_ATTACHMENT_PREFIX}${hash}.bin`;
+
+/**
+ * The export as steps: it yields between files, so a caller that can wait (the desktop host) gives the event loop a turn and can stop it
+ * between two files, and a caller that cannot (tests, tools) just runs it to the end.
+ */
+function* exportSteps(store: DrizzleStore, destDir: string, options: PackageExportOptions): Generator<void, LibraryPackageManifest, void> {
   const resolvedDest = path.resolve(destDir);
   const attachmentsRoot = path.resolve(store.attachmentsDir);
   if (resolvedDest === attachmentsRoot || resolvedDest.startsWith(attachmentsRoot + path.sep)) {
@@ -99,10 +136,18 @@ export function exportLibraryPackage(store: DrizzleStore, destDir: string): Libr
   fs.mkdirSync(destDir, { recursive: true });
   const attachmentsDir = path.join(destDir, "attachments");
   fs.mkdirSync(attachmentsDir, { recursive: true });
-  const attachments = [];
+  const attachments: Array<{ id: string; hash: string; relativePath: string; bytes: number }> = [];
   let total = 0;
+  const cancelled = () => {
+    if (!options.signal?.aborted) return;
+    // A cancelled export leaves nothing behind: the half-written folder is removed.
+    fs.rmSync(destDir, { recursive: true, force: true });
+    throw new MangaError("CANCELLED", "the export was cancelled");
+  };
+  cancelled();
   if (fs.existsSync(store.attachmentsDir)) {
     for (const name of fs.readdirSync(store.attachmentsDir)) {
+      yield;
       if (name.startsWith(".import-")) continue;
       PackageAttachmentNameSchema.parse(name);
       const source = checkedFile(store.attachmentsDir, name);
@@ -148,6 +193,42 @@ export function exportLibraryPackage(store: DrizzleStore, destDir: string): Libr
       attachment: attachmentName,
     });
   }
+  // Pictures live in the images table. Each distinct picture is written once, named by its content.
+  const writtenImages = new Set<string>();
+  const writeImage = (hash: string): { name: string; media_type: string; width: number | null; height: number | null } | null => {
+    const image = store.sqlite.prepare("SELECT payload, media_type, width, height FROM images WHERE hash = ?").get(hash) as { payload: Buffer; media_type: string; width: number | null; height: number | null } | undefined;
+    if (!image) return null;
+    const name = imageAttachmentName(hash);
+    if (!writtenImages.has(name)) {
+      fs.writeFileSync(path.join(attachmentsDir, name), image.payload, { flag: "wx" });
+      total += image.payload.byteLength;
+      if (total > MAX_PACKAGE_BYTES) throw new MangaError("VALIDATION_ERROR", "package attachments exceed budget");
+      attachments.push({ id: name, hash, relativePath: `attachments/${name}`, bytes: image.payload.byteLength });
+      writtenImages.add(name);
+    }
+    return { name, media_type: image.media_type, width: image.width, height: image.height };
+  };
+  const imageCovers: Array<Record<string, unknown>> = [];
+  if (options.includeCovers !== false) {
+    const rows = store.sqlite.prepare("SELECT id, work_id, source, provider_id, external_id, content_hash, media_type, width, height, bytes, area, created_at, image_hash FROM covers WHERE area = 'images' AND image_hash IS NOT NULL").all() as Array<Record<string, unknown> & { image_hash: string }>;
+    for (const row of rows) {
+      yield;
+      const written = writeImage(row.image_hash);
+      if (!written) continue;
+      const { image_hash: _hash, ...cover } = row;
+      imageCovers.push({ ...cover, file_name: written.name });
+    }
+  }
+  // The small pictures of characters and staff go along with their rows.
+  const creditRows = (table: "subject_characters" | "subject_persons") => (store.sqlite.prepare(`SELECT * FROM ${table} ORDER BY work_id, provider_id, subject_id, position`).all() as Array<Record<string, unknown> & { image_hash: string | null }>).map((row) => {
+    const { image_hash, ...rest } = row;
+    const written = image_hash ? writeImage(image_hash) : null;
+    return { ...rest, image: written && image_hash ? { hash: image_hash, media_type: written.media_type, width: written.width, height: written.height } : null };
+  });
+  const characters = creditRows("subject_characters");
+  yield;
+  const persons = creditRows("subject_persons");
+  yield;
   const manifest = LibraryPackageManifestSchema.parse({
     format: FORMAT,
     createdAt: new Date().toISOString(),
@@ -164,6 +245,14 @@ export function exportLibraryPackage(store: DrizzleStore, destDir: string): Libr
     metadataOverrides: query("SELECT * FROM metadata_overrides"),
     metadataCandidates: query("SELECT * FROM metadata_candidates"),
     workLinks: query("SELECT * FROM work_links"),
+    covers: [...(options.includeCovers === false ? [] : query("SELECT id, work_id, source, provider_id, external_id, content_hash, media_type, width, height, bytes, area, file_name, created_at FROM covers WHERE area = 'attachments'")), ...imageCovers],
+    characters,
+    persons,
+    captureEvents: query("SELECT session_id, offset_ms, reason, resource_id, resource_revision_id, payload_json FROM capture_events ORDER BY id"),
+    transcriptSegments: query("SELECT id, session_id, seq, chunk_key, start_ms, end_ms, text, revised_text, state, precision, calibrated, anchors_json, attempts, error_json, created_at, updated_at FROM transcript_segments"),
+    captureDrafts: query("SELECT id, session_id, state, text, edited_text, note_object_id, error_json, created_at, updated_at FROM capture_drafts"),
+    workTerms: query("SELECT id, work_id, term, heard, created_at FROM work_terms"),
+    mediaProbes: query("SELECT resource_revision_id, probe_json, tool_version, created_at FROM media_probes"),
     noteScopes: query("SELECT object_id AS objectId, resource_id AS resourceId FROM text_fragments WHERE kind='note' AND object_id IS NOT NULL GROUP BY object_id, resource_id"),
     fileLocations: query("SELECT id, resource_revision_id, relative_path, fingerprint, available, hosted FROM file_locations"),
     // Reading bookmarks travel with the package so a restore keeps the reader's own marks.
@@ -174,6 +263,34 @@ export function exportLibraryPackage(store: DrizzleStore, destDir: string): Libr
   validateReferences(manifest);
   fs.writeFileSync(path.join(destDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
   return manifest;
+}
+
+export function exportLibraryPackage(store: DrizzleStore, destDir: string, options: PackageExportOptions = {}): LibraryPackageManifest {
+  const steps = exportSteps(store, destDir, options);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/** The same export, written so it can be stopped: nothing stays on disk when it is. */
+export async function exportLibraryPackageCancellable(store: DrizzleStore, destDir: string, options: PackageExportOptions = {}): Promise<LibraryPackageManifest> {
+  const existed = fs.existsSync(destDir);
+  const steps = exportSteps(store, destDir, options);
+  try {
+    let step = steps.next();
+    while (!step.done) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      if (options.signal?.aborted) throw new MangaError("CANCELLED", "the export was cancelled");
+      step = steps.next();
+    }
+    return step.value;
+  } catch (error) {
+    steps.return(undefined as never);
+    // A stopped or failed export leaves nothing behind: what it wrote is removed, a folder that was there before stays.
+    if (!existed) fs.rmSync(destDir, { recursive: true, force: true });
+    else for (const name of fs.readdirSync(destDir)) fs.rmSync(path.join(destDir, name), { recursive: true, force: true });
+    throw error;
+  }
 }
 
 export function readLibraryPackage(sourceDir: string): LibraryPackageManifest {
@@ -234,7 +351,7 @@ export function planPackageImport(store: DrizzleStore, manifest: LibraryPackageM
   for (const row of manifest.bookmarks ?? []) {
     check("bookmark", row.id, row.label, "SELECT id FROM bookmarks WHERE id = ?", "bookmark id already exists");
   }
-  const presentTables = ["works", "resources", "resource_revisions", "content_objects", "anchors", "refs", "progress", "file_locations", "bookmarks", "capture_sessions"];
+  const presentTables = ["works", "resources", "resource_revisions", "content_objects", "anchors", "refs", "progress", "file_locations", "bookmarks", "capture_sessions", "covers", "work_links", "metadata_snapshots"];
   const attachmentsPresent = fs.existsSync(store.attachmentsDir) ? fs.readdirSync(store.attachmentsDir).some((name) => !name.startsWith(".import-")) : false;
   // A profile that only holds progress, locations or bookmarks is not empty either.
   const empty = !presentTables.some((table) => Number((store.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n) > 0) && !attachmentsPresent;
@@ -342,6 +459,7 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
     const anchorIds = remap(manifest.anchors.map((row) => row.id), (id) => hasRow(store, "anchors", id), actionOr, "anchor");
     const refIds = remap(manifest.refs.map((row) => row.id), (id) => hasRow(store, "refs", id), actionOr, "ref");
     const bookmarkIds = remap((manifest.bookmarks ?? []).map((row) => row.id), (id) => hasRow(store, "bookmarks", id), actionOr, "bookmark");
+    const captureIds = remap(manifest.captures.map((row) => row.id), (id) => hasRow(store, "capture_sessions", id), actionOr, "capture");
     // A local reference this import does not rewrite keeps naming its anchor, so an anchor write that would
     // overwrite that row must not move the source behind the ref: refs of kept objects, of copies whose
     // original stays, and of local objects the package never mentions all survive.
@@ -535,15 +653,21 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
       for (const row of manifest.works) {
         const action = actionOr("work", row.id);
         if (action === "skip" && hasRow(store, "works", row.id)) { skippedWork.add(row.id); continue; }
-        if (action === "replace") run("INSERT OR REPLACE INTO works(id,title,created_at) VALUES (?,?,?)", row.id, row.title, row.created_at);
-        else run("INSERT INTO works(id,title,created_at) VALUES (?,?,?)", workIds.get(row.id), row.title, row.created_at);
+        // The cover pointer is set after covers are written, because a cover can only be named once it exists here.
+        const lastResource = row.last_resource_id ? (resourceIds.get(row.last_resource_id) ?? row.last_resource_id) : null;
+        const values = [row.title, row.created_at, row.media_kind ?? "novel", row.shelf_state ?? "none", row.author ?? null, row.cover_state ?? "auto", lastResource, row.last_opened_at ?? null, row.projection_json ?? "{}", row.updated_at ?? row.created_at];
+        const columns = "works(id,title,created_at,media_kind,shelf_state,author,cover_state,last_resource_id,last_opened_at,projection_json,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+        if (action === "replace") run(`INSERT OR REPLACE INTO ${columns}`, row.id, ...values);
+        else run(`INSERT INTO ${columns}`, workIds.get(row.id), ...values);
       }
       for (const row of manifest.resources) {
         const action = actionOr("resource", row.id);
         if (action === "skip" && hasRow(store, "resources", row.id)) { skippedResource.add(row.id); continue; }
         const workId = row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null;
-        if (action === "replace") run("INSERT OR REPLACE INTO resources(id, work_id, kind, title, aliases_json, created_at) VALUES (?,?,?,?,?,?)", row.id, workId, row.kind, row.title, row.aliases_json, row.created_at);
-        else run("INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at) VALUES (?,?,?,?,?,?)", resourceIds.get(row.id), workId, row.kind, row.title, row.aliases_json, row.created_at);
+        const columns = "resources(id, work_id, kind, title, aliases_json, created_at, ordinal_label, ordinal_number, ordinal_type, sort_key) VALUES (?,?,?,?,?,?,?,?,?,?)";
+        const ordinal = [row.ordinal_label ?? null, row.ordinal_number ?? null, row.ordinal_type ?? null, row.sort_key ?? ""];
+        if (action === "replace") run(`INSERT OR REPLACE INTO ${columns}`, row.id, workId, row.kind, row.title, row.aliases_json, row.created_at, ...ordinal);
+        else run(`INSERT INTO ${columns}`, resourceIds.get(row.id), workId, row.kind, row.title, row.aliases_json, row.created_at, ...ordinal);
       }
       for (const row of manifest.revisions) {
         if (!writtenRevisions.has(row.id)) continue;
@@ -556,7 +680,7 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
           run("DELETE FROM resource_assets WHERE resource_revision_id = ?", row.id);
           run("DELETE FROM resource_revisions WHERE id = ?", row.id);
         }
-        run("INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at) VALUES (?,?,?,?,?,?)", revisionId, resourceId, row.fingerprint, row.parser_version, row.payload_json, row.created_at);
+        run("INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at, layout_json) VALUES (?,?,?,?,?,?,?)", revisionId, resourceId, row.fingerprint, row.parser_version, row.payload_json, row.created_at, row.layout_json ?? null);
       }
       for (const row of manifest.objects) {
         const action = actionOr("object", row.id);
@@ -575,10 +699,11 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
           run("DELETE FROM search_idx WHERE fragment_id IN (SELECT id FROM text_fragments WHERE object_id = ?)", row.id);
           run("DELETE FROM text_fragments WHERE object_id = ?", row.id);
         }
-        if (action === "replace") run("INSERT OR REPLACE INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at, deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          row.id, row.type, row.owner_module_id, scope, row.schema_version, row.revision, row.title, payload, tags, row.attachment_ids_json, row.preview_json, row.created_at, row.updated_at, row.deleted_at);
-        else run("INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at, deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          objectIds.get(row.id), row.type, row.owner_module_id, scope, row.schema_version, row.revision, row.title, payload, tags, row.attachment_ids_json, row.preview_json, row.created_at, row.updated_at, row.deleted_at);
+        const noteWork = row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null;
+        if (action === "replace") run("INSERT OR REPLACE INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at, deleted_at, work_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          row.id, row.type, row.owner_module_id, scope, row.schema_version, row.revision, row.title, payload, tags, row.attachment_ids_json, row.preview_json, row.created_at, row.updated_at, row.deleted_at, noteWork);
+        else run("INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at, deleted_at, work_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          objectIds.get(row.id), row.type, row.owner_module_id, scope, row.schema_version, row.revision, row.title, payload, tags, row.attachment_ids_json, row.preview_json, row.created_at, row.updated_at, row.deleted_at, noteWork);
       }
       for (const row of manifest.objectRevisions) {
         if (skippedObject.has(row.object_id)) continue;
@@ -644,7 +769,7 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         const revisionId = revisionIds.get(row.resource_revision_id) ?? row.resource_revision_id;
         if (actionOr("progress", `${row.resource_id}:${row.resource_revision_id}`) === "skip") continue;
         const lastLocator = row.last_locator_json ? remapLocator(row.last_locator_json, revisionIds) : row.last_locator_json;
-        run("INSERT OR REPLACE INTO progress(resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at) VALUES (?,?,?,?,?,?)", resourceId, revisionId, lastLocator, row.consumed_ranges_json, row.completion_state, row.last_interaction_at);
+        run("INSERT OR REPLACE INTO progress(resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent) VALUES (?,?,?,?,?,?,?)", resourceId, revisionId, lastLocator, row.consumed_ranges_json, row.completion_state, row.last_interaction_at, row.percent ?? 0);
       }
       for (const row of manifest.bookmarks ?? []) {
         if (skippedResource.has(row.resource_id) || !revisionIds.has(row.resource_revision_id)) continue;
@@ -655,18 +780,109 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         const bookmarkId = action === "replace" ? row.id : (bookmarkIds.get(row.id) ?? row.id);
         run("INSERT OR REPLACE INTO bookmarks(id, resource_id, resource_revision_id, label, locator_json, created_at) VALUES (?,?,?,?,?,?)", bookmarkId, resourceId, revisionId, row.label, remapLocator(row.locator_json, revisionIds), row.created_at);
       }
+      const skippedCapture = new Set<string>();
       for (const row of manifest.captures) {
         const action = actionOr("capture", row.id);
-        if (action === "skip" && hasRow(store, "capture_sessions", row.id)) continue;
-        const sql = action === "replace"
-          ? "INSERT OR REPLACE INTO capture_sessions(id, clock_json, status, attachment_id, created_at) VALUES (?,?,?,?,?)"
-          : "INSERT INTO capture_sessions(id, clock_json, status, attachment_id, created_at) VALUES (?,?,?,?,?)";
-        run(sql, action === "replace" ? row.id : (hasRow(store, "capture_sessions", row.id) ? createId("cap") : row.id), row.clock_json, row.status, row.attachment_id, row.created_at);
+        if (action === "skip" && hasRow(store, "capture_sessions", row.id)) { skippedCapture.add(row.id); continue; }
+        const target = action === "replace" ? row.id : (captureIds.get(row.id) ?? row.id);
+        if (action === "replace" && hasRow(store, "capture_sessions", row.id)) {
+          // A replaced session takes the package's events and transcript; the old ones would contradict it.
+          run("DELETE FROM capture_events WHERE session_id = ?", row.id);
+          run("DELETE FROM transcript_segments WHERE session_id = ?", row.id);
+          run("DELETE FROM capture_drafts WHERE session_id = ?", row.id);
+        }
+        // Audio the package no longer carries is recorded as gone instead of leaving a replay entry that cannot play.
+        const gone = (name: string | null | undefined) => Boolean(name && missingMedia.has(name));
+        const stagingGone = gone(row.staging_name);
+        const opusGone = gone(row.opus_name);
+        const audioGone = stagingGone || opusGone || gone(row.attachment_id);
+        run(`${action === "replace" ? "INSERT OR REPLACE" : "INSERT"} INTO capture_sessions(id, clock_json, status, attachment_id, created_at, mode, retention, audio_state, stage, duration_ms, stopped_at, staging_name, opus_name, device_label, work_id, vad_json, error_json, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          target, row.clock_json, row.status, gone(row.attachment_id) ? null : row.attachment_id, row.created_at, row.mode ?? null, row.retention ?? "discard",
+          audioGone && (row.audio_state ?? "staged") !== "none" ? "cleaned" : (row.audio_state ?? "staged"), row.stage ?? "done", row.duration_ms ?? 0, row.stopped_at ?? null,
+          stagingGone ? null : row.staging_name ?? null, opusGone ? null : row.opus_name ?? null, row.device_label ?? null,
+          row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null, row.vad_json ?? null, row.error_json ?? null, row.updated_at ?? row.created_at);
       }
-      for (const row of manifest.metadataSnapshots) run("INSERT OR REPLACE INTO metadata_snapshots(work_id, provider_id, external_id, snapshot_json) VALUES (?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json);
+      const targetSession = (id: string) => captureIds.get(id) ?? id;
+      for (const row of manifest.captureEvents ?? []) {
+        if (skippedCapture.has(row.session_id)) continue;
+        run("INSERT INTO capture_events(session_id, payload_json, offset_ms, reason, resource_id, resource_revision_id) VALUES (?,?,?,?,?,?)",
+          targetSession(row.session_id), remapEventPayload(row.payload_json, resourceIds, revisionIds), row.offset_ms, row.reason,
+          row.resource_id ? (resourceIds.get(row.resource_id) ?? row.resource_id) : null,
+          row.resource_revision_id ? (revisionIds.get(row.resource_revision_id) ?? row.resource_revision_id) : null);
+      }
+      for (const row of manifest.transcriptSegments ?? []) {
+        if (skippedCapture.has(row.session_id)) continue;
+        const target = actionOr("capture", row.session_id) === "replace" || !hasRow(store, "transcript_segments", row.id) ? row.id : createId("seg");
+        run("INSERT OR REPLACE INTO transcript_segments(id, session_id, seq, chunk_key, start_ms, end_ms, text, revised_text, state, precision, calibrated, anchors_json, attempts, error_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          target, targetSession(row.session_id), row.seq, row.chunk_key, row.start_ms, row.end_ms, row.text, row.revised_text, row.state, row.precision, row.calibrated,
+          remapAnchors(row.anchors_json, resourceIds, revisionIds), row.attempts, row.error_json, row.created_at, row.updated_at);
+      }
+      for (const row of manifest.captureDrafts ?? []) {
+        if (skippedCapture.has(row.session_id)) continue;
+        const target = actionOr("capture", row.session_id) === "replace" || !hasRow(store, "capture_drafts", row.id) ? row.id : createId("drf");
+        run("INSERT OR REPLACE INTO capture_drafts(id, session_id, state, text, edited_text, note_object_id, error_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+          target, targetSession(row.session_id), row.state, row.text, row.edited_text, row.note_object_id ? (objectIds.get(row.note_object_id) ?? row.note_object_id) : null, row.error_json, row.created_at, row.updated_at);
+      }
+      for (const row of manifest.workTerms ?? []) {
+        if (skippedWork.has(row.work_id)) continue;
+        run("INSERT OR IGNORE INTO work_terms(id, work_id, term, heard, created_at) VALUES (?,?,?,?,?)", hasRow(store, "work_terms", row.id) ? createId("trm") : row.id, workIds.get(row.work_id) ?? row.work_id, row.term, row.heard, row.created_at);
+      }
+      for (const row of manifest.mediaProbes ?? []) {
+        if (!writtenRevisions.has(row.resource_revision_id)) continue;
+        run("INSERT OR REPLACE INTO media_probes(resource_revision_id, probe_json, tool_version, created_at) VALUES (?,?,?,?)", revisionIds.get(row.resource_revision_id) ?? row.resource_revision_id, row.probe_json, row.tool_version, row.created_at);
+      }
+      // A cover belongs to the work it was saved with. One the work already holds (same image) is reused, never doubled.
+      const coverTargets = new Map<string, string>();
+      for (const row of manifest.covers ?? []) {
+        if (skippedWork.has(row.work_id) || missingMedia.has(row.file_name)) continue;
+        const workId = workIds.get(row.work_id) ?? row.work_id;
+        const same = store.sqlite.prepare("SELECT id FROM covers WHERE work_id = ? AND content_hash = ?").get(workId, row.content_hash) as { id: string } | undefined;
+        if (same) { coverTargets.set(row.id, same.id); continue; }
+        const coverId = hasRow(store, "covers", row.id) ? createId("cov") : row.id;
+        coverTargets.set(row.id, coverId);
+        if (row.area === "images") {
+          // The original goes back into the images table, once per picture; the staged file was already checked against the manifest hash.
+          const payload = fs.readFileSync(path.join(staging, row.file_name));
+          if (createHash("sha256").update(payload).digest("hex") !== row.content_hash) throw new MangaError("VALIDATION_ERROR", "package cover does not match its hash");
+          run("INSERT OR IGNORE INTO images(hash, media_type, width, height, bytes, payload, source_url, fetched_at, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            row.content_hash, row.media_type, row.width ?? 0, row.height ?? 0, payload.byteLength, payload, null, null, row.created_at);
+          run("INSERT INTO covers(id, work_id, source, provider_id, external_id, content_hash, media_type, width, height, bytes, area, file_name, image_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            coverId, workId, row.source, row.provider_id, row.external_id, row.content_hash, row.media_type, row.width, row.height, row.bytes, "images", "", row.content_hash, row.created_at);
+          continue;
+        }
+        run("INSERT INTO covers(id, work_id, source, provider_id, external_id, content_hash, media_type, width, height, bytes, area, file_name, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          coverId, workId, row.source, row.provider_id, row.external_id, row.content_hash, row.media_type, row.width, row.height, row.bytes, row.area, row.file_name, row.created_at);
+      }
+      for (const row of manifest.works) {
+        if (skippedWork.has(row.id) || !row.cover_id) continue;
+        const coverId = coverTargets.get(row.cover_id);
+        // A cover that was only extracted into the cache is rebuilt from the file; its pointer is not carried over.
+        if (coverId) run("UPDATE works SET cover_id = ? WHERE id = ?", coverId, actionOr("work", row.id) === "replace" ? row.id : (workIds.get(row.id) ?? row.id));
+      }
+      // Characters and staff follow their work. Their pictures go back into the images table; a missing or damaged picture only costs the picture.
+      const creditImage = (image: { hash: string; media_type: string; width: number | null; height: number | null } | null | undefined, savedAt: string): string | null => {
+        if (!image) return null;
+        const file = path.join(staging, imageAttachmentName(image.hash));
+        if (!fs.existsSync(file)) return null;
+        const payload = fs.readFileSync(file);
+        if (createHash("sha256").update(payload).digest("hex") !== image.hash) throw new MangaError("VALIDATION_ERROR", "package credit picture does not match its hash");
+        run("INSERT OR IGNORE INTO images(hash, media_type, width, height, bytes, payload, source_url, fetched_at, created_at) VALUES (?,?,?,?,?,?,?,?,?)", image.hash, image.media_type, image.width ?? 0, image.height ?? 0, payload.byteLength, payload, null, null, savedAt);
+        return image.hash;
+      };
+      for (const row of manifest.characters ?? []) {
+        if (skippedWork.has(row.work_id)) continue;
+        run("INSERT OR REPLACE INTO subject_characters(work_id, provider_id, subject_id, character_id, position, name, relation, summary, actors_json, image_hash, fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.subject_id, row.character_id, row.position, row.name, row.relation, row.summary, row.actors_json, creditImage(row.image, row.fetched_at), row.fetched_at);
+      }
+      for (const row of manifest.persons ?? []) {
+        if (skippedWork.has(row.work_id)) continue;
+        run("INSERT OR REPLACE INTO subject_persons(work_id, provider_id, subject_id, person_id, position, name, relation, career_json, episodes, image_hash, fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.subject_id, row.person_id, row.position, row.name, row.relation, row.career_json, row.episodes, creditImage(row.image, row.fetched_at), row.fetched_at);
+      }
+      for (const row of manifest.metadataSnapshots) run("INSERT OR REPLACE INTO metadata_snapshots(work_id, provider_id, external_id, snapshot_json, fetched_at, source_url, api_version, detached) VALUES (?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.fetched_at ?? null, row.source_url ?? null, row.api_version ?? null, row.detached ?? 0);
       for (const row of manifest.metadataOverrides) run("INSERT OR REPLACE INTO metadata_overrides(work_id, fields_json, locked_json, cleared_json) VALUES (?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.fields_json, row.locked_json, row.cleared_json);
-      for (const row of manifest.metadataCandidates) run("INSERT OR REPLACE INTO metadata_candidates(id, work_id, provider_id, payload_json) VALUES (?,?,?,?)", row.id, row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null, row.provider_id, row.payload_json);
-      for (const row of manifest.workLinks) run("INSERT OR REPLACE INTO work_links(work_id, provider_id, external_id, snapshot_json, confirmed_at) VALUES (?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.confirmed_at);
+      for (const row of manifest.metadataCandidates) run("INSERT OR REPLACE INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)", row.id, row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null, row.provider_id, row.payload_json, row.external_id ?? null, row.search_id ?? null, row.state ?? "open", row.created_at ?? null);
+      for (const row of manifest.workLinks) run("INSERT OR REPLACE INTO work_links(work_id, provider_id, external_id, snapshot_json, confirmed_at, namespace, subject_type, link_state, match_basis) VALUES (?,?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.confirmed_at, row.namespace ?? "", row.subject_type ?? null, row.link_state ?? "linked", row.match_basis ?? null);
       // Managed media keeps a real location row so a hosted book stays readable after the round trip.
       // Usability is judged from the verified staging copy, because durable files are published after
       // these inserts; the target path is where the publish step will place them.
@@ -742,6 +958,8 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
       // Publish durable files before the DB commit so committed rows never refer to missing copies.
       for (const attachment of manifest.attachments) {
         if (missingMedia.has(attachment.id)) continue;
+        // Pictures of the images table were read into it above; they are not kept as files as well.
+        if (attachment.id.startsWith(IMAGE_ATTACHMENT_PREFIX)) continue;
         const target = path.join(store.attachmentsDir, attachment.id);
         if (fs.existsSync(target)) {
           if (sha256File(target) === attachment.hash) continue;
@@ -784,6 +1002,26 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
       fs.rmSync(staging, { recursive: true, force: true });
     }
   }
+}
+
+/** Resource and revision ids inside a recorded position event follow the same remapping as the rows they name. */
+function remapEventPayload(payloadJson: string, resources: Map<string, string>, revisions: Map<string, string>): string {
+  let payload: unknown;
+  try { payload = JSON.parse(payloadJson); } catch { return payloadJson; }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payloadJson;
+  const event = payload as { resourceId?: string; resourceRevisionId?: string; locator?: unknown };
+  if (typeof event.resourceId === "string") event.resourceId = resources.get(event.resourceId) ?? event.resourceId;
+  if (typeof event.resourceRevisionId === "string") event.resourceRevisionId = revisions.get(event.resourceRevisionId) ?? event.resourceRevisionId;
+  if (event.locator) event.locator = JSON.parse(remapLocator(JSON.stringify(event.locator), revisions));
+  return JSON.stringify(event);
+}
+
+/** A transcript segment carries one anchor per stretch of source it covered; each follows the remapped resource and revision. */
+function remapAnchors(anchorsJson: string, resources: Map<string, string>, revisions: Map<string, string>): string {
+  let anchors: unknown;
+  try { anchors = JSON.parse(anchorsJson); } catch { return anchorsJson; }
+  if (!Array.isArray(anchors)) return anchorsJson;
+  return JSON.stringify(anchors.map((anchor) => (anchor && typeof anchor === "object" ? JSON.parse(remapEventPayload(JSON.stringify(anchor), resources, revisions)) : anchor)));
 }
 
 /** Revision ids remapped by the `duplicate` action, shared by every dependent row in one import. */

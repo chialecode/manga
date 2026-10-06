@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-COMPOSITION |
 | 版本与日期 | 0.5 / 2026-09-25 |
 | 状态 | 架构评审稿；M0 已有 `experiments/m0` 契约原型证据，非正式产品实现；协议示例仍可能在定稿后调整 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[确认与待决事项](../decisions/open-questions.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
 | 设计输入 | 当前 MANGA 文档、用户对功能拆卸/下载扩展/多动漫数据库组合的要求 |
 | 配套文档 | [外部数据库与下载扩展](external-providers-and-acquisition.md)、[总体架构](architecture.md)、[Agent 与插件](agent-and-plugins.md)、[领域模型](domain-model.md)、[交付验收](../delivery/roadmap-and-acceptance.md) |
 
@@ -35,7 +35,7 @@ AI-Native 是能力与数据协议的属性。每个业务模块天然可被 Age
 
 MANGA 拥有功能管理、配置语义、权限、领域协议、数据迁移和外部提供者策略。组合运行时负责按这些契约管理依赖、能力与生命周期，业务插件通过稳定 SDK 接入。
 
-格式、播放、字幕、编辑、画布、搜索与下载优先组合活跃开源能力；插件 SDK 负责封装实际所需合同，不重建一个覆盖上游全部 API 的通用框架。选型、维护证据与上游缺陷定位按[开源选型规则](../dev-rules/architecture-and-contracts.md#open-source-first)，阅读/播放本轮现状及适配建议见[唯一计划第 14 节](../delivery/m1b-execution-plan.md#14-阅读播放与开源依赖评估2026-09-25)。
+格式、播放、字幕、编辑、画布、搜索与下载优先组合活跃开源能力；插件 SDK 负责封装实际所需合同，不重建一个覆盖上游全部 API 的通用框架。选型、维护证据与上游缺陷定位按[开源选型规则](../dev-rules/architecture-and-contracts.md#open-source-first)，阅读/播放的候选与适配建议见 [M1b 总结第 5 节](../evidence/m1b-summary.md)与 [Q-14](../../USER-ACTIONS.md#q-14)。
 
 M0 使用同一套 MANGA 契约、测试夹具和三个端到端场景验证候选。自研最小实现与符合契约的适配实现均可作为候选，具体选择以可靠性、维护范围、平台行为和实测性能为依据。最终生产构建只装配一个组合运行时实现。
 
