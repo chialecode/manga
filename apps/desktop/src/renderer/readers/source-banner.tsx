@@ -6,7 +6,7 @@ type T = Translator["t"];
 /** Where a note's source landed: the status of the jump and the way back to the note. Shared by every reader. */
 export function SourceBanner(props: { t: T; card: SourceCard; testPrefix: string; onBackToNote: () => void; onRepair: () => void }) {
   const { t, card } = props;
-  const status = card.status === "resolved" ? t("reading.sourceResolved") : card.status === "needs_review" ? t("reading.sourceNeedsReview") : t("reading.sourceMissing");
+  const status = card.status === "resolved" ? t("reading.sourceResolved") : card.status === "needs_review" ? t("reading.sourceNeedsReview") : card.status === "missing_capability" ? t("reading.scan") : t("reading.sourceMissing");
   return (
     <section className="reader-source" data-testid={`${props.testPrefix}-source-card`} data-source-status={card.status}>
       <h2>{t("reading.sourceCard")}</h2>

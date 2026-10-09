@@ -54,7 +54,7 @@ export type LogInput = {
 export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "library.importText": "library", "library.importEpub": "library", "library.importDocument": "library", "works.importDirectory": "library",
   "library.indexExternal": "library", "library.rebuildIndex": "library", "library.repairSource": "library",
-  "works.setKind": "library", "works.moveResource": "library", "works.setOrdinal": "library", "works.setShelf": "library",
+  "works.setKind": "library", "works.moveResource": "library", "works.delete": "library", "works.setOrdinal": "library", "works.setShelf": "library",
   "library.paths.add": "scan", "library.paths.update": "scan", "library.paths.remove": "scan", "library.scan.start": "scan", "library.scan.cancel": "scan", "library.scan.setSchedule": "scan",
   "works.setOverride": "metadata", "covers.select": "metadata", "covers.lock": "metadata", "covers.fromImage": "metadata",
   "metadata.setProvider": "metadata", "metadata.link": "metadata", "metadata.unlink": "metadata", "metadata.refresh": "metadata", "metadata.findMissing": "metadata",
@@ -63,11 +63,27 @@ export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "agent.send": "agent", "agent.cancel": "agent", "agent.retry": "agent",
   "settings.setModule": "settings", "settings.setRuntime": "settings", "settings.setRecording": "settings", "settings.setMedia": "settings", "settings.skipAi": "settings",
   "quickTasks.save": "settings", "quickTasks.delete": "settings", "quickTasks.reorder": "settings", "quickTasks.restore": "settings",
-  "connections.upsert": "connections", "connections.delete": "connections", "connections.test": "connections",
+  "connections.upsert": "connections", "connections.delete": "connections", "connections.test": "connections", "connections.setProfile": "connections", "connections.probe": "connections",
+  "settings.setAgent": "settings", "agent.trace.clear": "settings",
   "library.exportPackage": "backup", "library.importPackage": "backup", "package.importResolved": "backup",
   "settings.proposeLocations": "backup", "settings.applyLocations": "backup", "settings.setLayout": "backup", "settings.recoverJobs": "backup",
   "inventory.repair": "backup", "inventory.scan": "backup",
   "video.playCopy": "library",
+  "project.create": "projects", "project.update": "projects", "project.delete": "projects", "project.addMaterial": "projects", "project.removeMaterial": "projects", "project.importTerms": "projects", "project.exportPackage": "projects", "project.importPackage": "projects",
+  "conversation.new": "agent", "conversation.resume": "agent", "conversation.delete": "agent", "conversation.deleteAll": "agent",
+  "whiteboard.create": "canvas", "whiteboard.rename": "canvas", "whiteboard.delete": "canvas",
+  "mindmap.create": "canvas", "mindmap.rename": "canvas", "mindmap.delete": "canvas", "mindmap.setTheme": "canvas", "mindmap.export": "canvas",
+  "draft.create": "copy", "draft.rename": "copy", "draft.delete": "copy", "draft.restore": "copy",
+  "draft.suggest": "copy", "draft.adopt": "copy", "draft.undoAdopt": "copy",
+  "semantic.configure": "semantic", "semantic.rebuild": "semantic", "semantic.cancel": "semantic", "semantic.update": "semantic", "semantic.clear": "semantic",
+  "webpage.fetch": "research", "webpage.delete": "research", "excerpt.create": "research", "excerpt.update": "research", "excerpt.delete": "research", "excerpt.follow": "research",
+  "plugin.install": "plugins", "plugin.enable": "plugins", "plugin.disable": "plugins", "plugin.rollback": "plugins", "plugin.uninstall": "plugins", "plugin.exportData": "plugins", "plugin.deleteData": "plugins",
+  "plugin.trust.add": "plugins", "plugin.trust.remove": "plugins",
+  "acquisition.add": "acquisition", "acquisition.select": "acquisition", "acquisition.pause": "acquisition", "acquisition.resume": "acquisition", "acquisition.cancel": "acquisition", "acquisition.remove": "acquisition",
+  "acquisition.retryPublish": "acquisition", "acquisition.retryImport": "acquisition", "acquisition.restart": "acquisition", "acquisition.setSeeding": "acquisition",
+  "danmaku.choose": "danmaku", "danmaku.setCredentials": "danmaku", "danmaku.clearCache": "danmaku",
+  "roughcut.create": "roughcut", "roughcut.rename": "roughcut", "roughcut.delete": "roughcut", "roughcut.export": "roughcut", "roughcut.cancel": "roughcut",
+  "dictionary.add": "recording", "dictionary.update": "recording", "dictionary.remove": "recording", "dictionary.importMetadata": "recording",
 };
 
 type Row = {
@@ -158,6 +174,38 @@ export function describeObject(store: DrizzleStore, input: unknown, value: unkno
   const label = (sql: string, id: string): string | null => {
     try { return (store.sqlite.prepare(sql).get(id) as { label?: string } | undefined)?.label ?? null; } catch { return null; }
   };
+  // A created draft comes back as `{ draft }`, and it, not the project it was made in, is what the entry is about.
+  const created = source.draft && typeof source.draft === "object" && typeof (source.draft as { id?: unknown }).id === "string" ? String((source.draft as { id: string }).id) : null;
+  const draftId = pick("draftId") ?? created;
+  if (draftId) return { kind: "draft", id: draftId, label: label("SELECT title AS label FROM drafts WHERE id = ?", draftId) };
+  const nested = (key: string): string | null => (source[key] && typeof source[key] === "object" && typeof (source[key] as { id?: unknown }).id === "string" ? String((source[key] as { id: string }).id) : null);
+  const excerptId = pick("excerptId") ?? nested("excerpt");
+  if (excerptId) return { kind: "excerpt", id: excerptId, label: label("SELECT title AS label FROM excerpts WHERE id = ?", excerptId) };
+  // Only the page's title is kept, not its address: the entry says which page was meant without writing where it is.
+  const pageId = pick("pageId") ?? nested("page");
+  if (pageId) return { kind: "page", id: pageId, label: label("SELECT title AS label FROM excerpt_pages WHERE id = ?", pageId) };
+  const boardId = pick("boardId");
+  if (boardId) return { kind: "whiteboard", id: boardId, label: label("SELECT title AS label FROM whiteboards WHERE id = ?", boardId) };
+  const mapId = pick("mapId");
+  if (mapId) return { kind: "mindmap", id: mapId, label: label("SELECT title AS label FROM mindmaps WHERE id = ?", mapId) };
+  // A sequence's own commands name it; an export, when cancelled, is found by the sequence it belongs to. The entry never says where a finished file went.
+  const exported = source.export && typeof source.export === "object" ? (source.export as { cutId?: unknown }).cutId : undefined;
+  const cutId = pick("cutId") ?? (typeof exported === "string" && exported ? exported : null) ?? nested("cut");
+  if (cutId) return { kind: "roughcut", id: cutId, label: label("SELECT title AS label FROM rough_cuts WHERE id = ?", cutId) };
+  // A plugin is named by its own id (the publisher's), and its label is the name it declares; a trusted key is named by its label.
+  const pluginId = pick("pluginId");
+  if (pluginId) {
+    const name = pick("pluginName") ?? label("SELECT json_extract(manifest_json, '$.name') AS label FROM plugin_versions WHERE plugin_id = ? ORDER BY installed_at DESC LIMIT 1", pluginId) ?? label("SELECT name AS label FROM plugin_leftovers WHERE plugin_id = ?", pluginId);
+    return { kind: "plugin", id: pluginId, label: name ?? pluginId };
+  }
+  // A download is named by the torrent's name once it is known; its source (a magnet link can carry a tracker key) is never part of an entry.
+  const downloadId = pick("jobId");
+  const download = downloadId ? pick("jobName") ?? label("SELECT name AS label FROM acquisition_jobs WHERE id = ?", downloadId) : null;
+  if (downloadId && download !== null) return { kind: "download", id: downloadId, label: download || null };
+  const keyId = pick("keyId");
+  if (keyId) return { kind: "pluginKey", id: keyId, label: label("SELECT label FROM plugin_keys WHERE key_id = ?", keyId) };
+  const projectId = pick("projectId");
+  if (projectId) return { kind: "project", id: projectId, label: label("SELECT name AS label FROM projects WHERE id = ?", projectId) };
   const workId = pick("workId");
   if (workId) return { kind: "work", id: workId, label: label("SELECT title AS label FROM works WHERE id = ?", workId) };
   const resourceId = pick("resourceId");

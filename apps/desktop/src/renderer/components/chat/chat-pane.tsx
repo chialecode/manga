@@ -10,12 +10,12 @@ type T = Translator["t"];
  * The conversation of one session: messages above, input below. The right pane and the chat page are the same thing at two widths;
  * the page limits the line length so a long answer stays readable.
  */
-export function ChatPane(props: { t: T; stream: StreamState; actions: BubbleActions; composer: ComposerProps; empty: ReactNode; formatDate: (value: string) => string; wide?: boolean; header?: ReactNode }) {
+export function ChatPane(props: { t: T; stream: StreamState; /** The conversation shown: where it is scrolled to is kept under this. */ memoryKey?: string; actions: BubbleActions; composer: ComposerProps; empty: ReactNode; formatDate: (value: string) => string; wide?: boolean; header?: ReactNode }) {
   return (
     <div className={`chat-pane ${props.wide ? "chat-pane-page" : ""}`} data-testid={props.wide ? "chat-page-pane" : "chat-pane"}>
       {props.header}
       {props.stream.status === "error" ? <p className="chat-error" role="alert" data-testid="chat-stream-error">{props.stream.error}</p> : null}
-      <MessageList t={props.t} items={props.stream.items} hasMore={props.stream.hasMore} onOlder={() => { void props.stream.loadOlder(); }} actions={props.actions} empty={props.empty} formatDate={props.formatDate} limited={props.wide} />
+      <MessageList t={props.t} items={props.stream.items} hasMore={props.stream.hasMore} onOlder={() => { void props.stream.loadOlder(); }} actions={props.actions} empty={props.empty} formatDate={props.formatDate} limited={props.wide} memoryKey={props.memoryKey} ready={props.stream.status === "ready" && props.stream.session?.id === props.memoryKey} />
       <Composer {...props.composer} />
     </div>
   );

@@ -14,7 +14,8 @@ export type HostState = {
   appVersion?: string;
 };
 
-export type PickRequest = { mode: "file" | "directory"; filter?: "book" | "comic" | "video" | "subtitle" | "image" | "audio" | "package" | "any" };
+/** `defaultPath` only says where the dialog opens; the choice itself is still the person's. */
+export type PickRequest = { mode: "file" | "directory"; filter?: "book" | "comic" | "video" | "subtitle" | "image" | "audio" | "package" | "plugin" | "torrent" | "any"; defaultPath?: string };
 export type PickResult = { pathHandle: string; name: string; mode: "file" | "directory" };
 
 export type Notice = { topic: string; payload: Record<string, unknown> };
@@ -30,6 +31,8 @@ export type OverlayState = {
   strings: { recording: string; stopping: string; stop: string; keep: string; discard: string; hold: string; toggle: string };
 };
 
+export type WindowControlsState = { controls: boolean; maximized: boolean };
+
 export interface MangaHost {
   command(payload: { commandId: string; idempotencyKey: string; input: unknown }): Promise<CommandResult>;
   state(): Promise<HostState>;
@@ -42,6 +45,14 @@ export interface MangaHost {
   onNotice?(listener: (notice: Notice) => void): () => void;
   stashSecret(value: string): Promise<string | null>;
   reveal(id: string): Promise<CommandResult>;
+  /** Whether the page draws the window's buttons (not on macOS, which keeps its own) and whether the window is maximized now. */
+  windowState?(): Promise<WindowControlsState>;
+  /** Minimize, maximize or restore, and close: all the page can ask of the window. Answers the window's state afterwards. */
+  windowAction?(action: "minimize" | "toggle-maximize" | "close"): Promise<WindowControlsState>;
+  /** Told when the window is maximized or restored, by whatever means. Returns an unsubscribe function. */
+  onWindowState?(listener: (state: WindowControlsState) => void): () => void;
+  /** Leaves the application; the title bar's menu offers it. */
+  quit?(): Promise<void>;
   /** Only pages on the allow list open, in the system browser. */
   openExternal?(url: string): Promise<boolean>;
   overlay?: {

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildZip } from "@manga/app-core";
-import { startApp } from "../helpers/app.ts";
+import { libraryRoot, startApp } from "../helpers/app.ts";
 
 const enabled = process.env.MANGA_LARGE_FILES === "1";
 
@@ -11,7 +11,11 @@ describe.skipIf(!enabled)("large reading files", () => {
     const { app, actor, grant, profileRoot } = await startApp();
     const marker = "十兆末尾甲乙";
     const bytes = Buffer.alloc(10 * 1024 * 1024, 0x41);
-    const file = path.join(profileRoot, "large.txt");
+    // A file is read from a library path (A-80): the folder it lies in is one.
+    const folder = path.join(profileRoot, "large-library");
+    fs.mkdirSync(folder, { recursive: true });
+    libraryRoot(app, folder);
+    const file = path.join(folder, "large.txt");
     fs.writeFileSync(file, Buffer.concat([bytes.subarray(0, bytes.length - Buffer.byteLength(marker)), Buffer.from(marker)]));
     const handle = app.registerPath("file", file);
     const imported = await app.call(actor, { commandId: "library.importDocument", idempotencyKey: "large-txt", input: { title: "大文本", pathHandle: handle, format: "txt" } }, grant.handle);
@@ -36,7 +40,10 @@ describe.skipIf(!enabled)("large reading files", () => {
     const html = `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>${chapter}</p></body></html>`;
     const container = `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`;
     const opf = `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>大书</dc:title></metadata><manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`;
-    const file = path.join(profileRoot, "large.epub");
+    const folder = path.join(profileRoot, "large-library");
+    fs.mkdirSync(folder, { recursive: true });
+    libraryRoot(app, folder);
+    const file = path.join(folder, "large.epub");
     fs.writeFileSync(file, buildZip([
       { name: "mimetype", data: new TextEncoder().encode("application/epub+zip"), method: 0 },
       { name: "META-INF/container.xml", data: new TextEncoder().encode(container) },

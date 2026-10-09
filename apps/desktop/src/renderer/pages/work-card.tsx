@@ -42,9 +42,13 @@ export type CardActions = {
   onDetail: (workId: string) => void;
   onCover: (workId: string) => void;
   onShelf: (workId: string, state: ShelfState) => void;
+  /** "删除条目…": asks first, in a dialog that lists what goes and what stays. */
+  onDelete?: (work: WorkSummary) => void;
 };
 
-export function shelfLabel(t: T, state: ShelfState): string {
+/** The shelf state in the words of the medium: a video is watched ("在看", "想看", "看过"), the rest is read. */
+export function shelfLabel(t: T, state: ShelfState, kind?: string | null): string {
+  if (kind === "video" && (state === "reading" || state === "wishlist" || state === "finished")) return t(`shelf.state.${state}.video` as "shelf.state.reading.video");
   return t(`shelf.state.${state}` as "shelf.state.none");
 }
 
@@ -54,7 +58,8 @@ function WorkMenu(props: { t: T; work: WorkSummary; actions: CardActions }) {
     { id: "open", label: work.mediaKind === "video" ? t("card.continueWatch") : t("card.continueRead"), disabled: !work.lastResource, onSelect: () => actions.onContinue(work) },
     { id: "detail", label: t("card.detail"), onSelect: () => actions.onDetail(work.id) },
     { id: "cover", label: t("card.cover"), onSelect: () => actions.onCover(work.id) },
-    ...(["none", ...SHELF_ORDER] as ShelfState[]).map((state) => ({ id: `shelf-${state}`, label: `${t("card.setShelf")}：${shelfLabel(t, state)}`, checked: work.shelf === state, onSelect: () => actions.onShelf(work.id, state) })),
+    ...(["none", ...SHELF_ORDER] as ShelfState[]).map((state) => ({ id: `shelf-${state}`, label: `${t("card.setShelf")}：${shelfLabel(t, state, work.mediaKind)}`, checked: work.shelf === state, onSelect: () => actions.onShelf(work.id, state) })),
+    ...(actions.onDelete ? [{ id: "delete", label: t("entry.delete"), danger: true, onSelect: () => actions.onDelete!(work) }] : []),
   ];
   return <Menu label={t("card.menu", { title: work.title })} items={items} align="end" testId={`work-menu-${work.id}`} trigger={<MoreHorizontal size={16} />} className="card-menu" />;
 }
@@ -74,7 +79,9 @@ export const WorkCard = memo(function WorkCard(props: {
   const percent = percentOf(work.progress);
   const line = progressLine(t, work);
   const open = () => actions.onOpen(work);
-  const state = work.shelf !== "none" ? shelfLabel(t, work.shelf) : null;
+  const state = work.shelf !== "none" ? shelfLabel(t, work.shelf, work.mediaKind) : null;
+  // Facts of the entry beyond its files: how many versions it has, that it stands outside every library path, that its files are gone.
+  const flags = [work.versionCount > 1 ? t("card.versions", { count: work.versionCount }) : "", work.outsideCount > 0 ? t("card.outside") : "", work.resourceCount === 0 ? t("card.noResource") : ""].filter(Boolean);
   return (
     <article
       className={props.layout === "row" ? "work-row" : "work-card"}
@@ -100,10 +107,10 @@ export const WorkCard = memo(function WorkCard(props: {
         <span className="work-text">
           <span className="work-title" title={work.title}>{work.title}</span>
           <span className="work-sub">{work.author ?? ""}</span>
-          <span className="work-line">{line}</span>
+          <span className="work-line">{line}{flags.length ? <span className="work-flags" data-testid={`work-flags-${work.id}`}>{line ? " · " : ""}{flags.join(" · ")}</span> : null}</span>
           {percent > 0 ? (
             <span className="work-progress" data-testid={`work-progress-${work.id}`}>
-              <span className="work-progress-label">{t("card.read", { percent })}</span>
+              <span className="work-progress-label">{t(landscape ? "card.watched" : "card.read", { percent })}</span>
               <span className="work-progress-bar" aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>
             </span>
           ) : state ? <span className="work-tag" data-shelf={work.shelf}>{state}</span> : <span className="work-tag-space" />}

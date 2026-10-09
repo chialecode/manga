@@ -11,8 +11,18 @@ function unknownCost() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 }
 
-function piModel(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, vision = false): Model<"openai-responses" | "openai-completions"> {
-  const input: Array<"text" | "image"> = vision ? ["text", "image"] : ["text"];
+type PiParams = { vision: boolean; reasoning: boolean; contextWindow: number; maxTokens: number; maxTokensField: "max_tokens" | "max_completion_tokens" };
+
+const paramsOf = (request: TextRequest): PiParams => ({
+  vision: request.messages.some((message) => message.images?.length),
+  reasoning: Boolean(request.reasoningEffort),
+  contextWindow: request.contextWindow ?? 128_000,
+  maxTokens: request.maxOutputTokens ?? 8192,
+  maxTokensField: request.maxTokensField ?? "max_tokens",
+});
+
+function piModel(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, params: PiParams): Model<"openai-responses" | "openai-completions"> {
+  const input: Array<"text" | "image"> = params.vision ? ["text", "image"] : ["text"];
   if (protocol === "openai-responses") {
     return {
       id: modelId,
@@ -20,11 +30,11 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
       api: "openai-responses",
       provider: "manga-byok",
       baseUrl,
-      reasoning: false,
+      reasoning: params.reasoning,
       input,
       cost: unknownCost(),
-      contextWindow: 128_000,
-      maxTokens: 8192,
+      contextWindow: params.contextWindow,
+      maxTokens: params.maxTokens,
       compat: { supportsDeveloperRole: false, supportsLongCacheRetention: false, supportsStrictMode: false },
     };
   }
@@ -34,17 +44,18 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
     api: "openai-completions",
     provider: "manga-byok",
     baseUrl,
-    reasoning: false,
+    reasoning: params.reasoning,
     input,
     cost: unknownCost(),
-    contextWindow: 128_000,
-    maxTokens: 8192,
+    contextWindow: params.contextWindow,
+    maxTokens: params.maxTokens,
     compat: {
       supportsStore: false,
       supportsDeveloperRole: false,
-      supportsReasoningEffort: false,
+      supportsReasoningEffort: params.reasoning,
       supportsUsageInStreaming: false,
       supportsFinishReason: true,
+      maxTokensField: params.maxTokensField,
     },
   };
 }
@@ -120,16 +131,27 @@ function safeJson(text: string): Record<string, unknown> {
   }
 }
 
-function mapPiError(message?: string): MangaError {
+/**
+ * PI reports a failure as text. The words it uses for the status codes and the network are matched here so a failure means the same thing to the person
+ * as it does under the native runtime: the code, the status and the kind.
+ */
+function mapPiError(message: string | undefined, signal?: AbortSignal): MangaError {
   const text = message ?? "provider failed";
-  if (/abort/i.test(text)) return new MangaError("CANCELLED", "request cancelled", { retryable: true });
-  if (/401|unauthor/i.test(text)) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials");
-  if (/429|rate/i.test(text)) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true });
-  return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", { retryable: true });
+  if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true });
+  const status = Number(/\b(40[0-9]|42[0-9]|5[0-9]{2})\b/.exec(text)?.[1]);
+  const known = Number.isFinite(status) ? { status } : {};
+  if (/context[ _-]?(length|window)|maximum context|too many tokens|token limit|prompt is too long|input is too long/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider HTTP 400", { details: { status: 400, kind: "context" } });
+  if (/\b401\b|unauthor|invalid api key|incorrect api key/i.test(text)) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status: 401 } });
+  if (/\b429\b|rate.?limit/i.test(text)) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details: { status: 429 } });
+  if (/\b404\b|not found/i.test(text)) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details: { status: 404, kind: /model/i.test(text) ? "model" : "path" } });
+  if (/time.?out|timed out|abort/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "request timed out", { retryable: true, details: { kind: "timeout" } });
+  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo|connection error|fetch failed|invalid url/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider is not reachable", { retryable: true, details: { kind: "address" } });
+  if (/unexpected token|not valid json|<!doctype|<html|unexpected end of json|without finish_reason|stream ended|empty (response|stream)/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider answered in an unexpected form", { details: { kind: "protocol" } });
+  return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", { retryable: true, details: Number.isFinite(status) ? known : { kind: "network" } });
 }
 
-function createByokModels(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, vision = false) {
-  const model = piModel(protocol, baseUrl, modelId, vision);
+function createByokModels(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, params: PiParams) {
+  const model = piModel(protocol, baseUrl, modelId, params);
   const models = createModels();
   models.setProvider(createProvider({
     id: "manga-byok",
@@ -153,12 +175,10 @@ export async function* streamTextPi(
   apiKey: string,
   request: TextRequest,
 ): AsyncGenerator<StreamEvent> {
-  const { models, model } = createByokModels(protocol, baseUrl, request.model, request.messages.some((message) => message.images?.length));
-  const stream = models.stream(model, piContext(request, model.api), {
-    apiKey,
-    signal: request.signal,
-    timeoutMs: request.timeoutMs,
-  });
+  const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
+  const stream = request.reasoningEffort
+    ? models.streamSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
+    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) });
   const args = new Map<number, { id: string; name: string; last: string }>();
   for await (const event of stream) {
     if (event.type === "text_delta") yield { type: "text-delta", text: event.delta };
@@ -200,7 +220,7 @@ export async function* streamTextPi(
         },
       };
     }
-    if (event.type === "error") throw mapPiError(event.error.errorMessage);
+    if (event.type === "error") throw mapPiError(event.error.errorMessage, request.signal);
   }
 }
 
@@ -210,14 +230,16 @@ export async function completeTextPi(
   apiKey: string,
   request: TextRequest,
 ): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; arguments: string }>; usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number } }> {
-  const { models, model } = createByokModels(protocol, baseUrl, request.model, request.messages.some((message) => message.images?.length));
-  const message = await models.complete(model, piContext(request, model.api), {
-    apiKey,
-    signal: request.signal,
-    timeoutMs: request.timeoutMs,
-  });
-  if (message.stopReason === "aborted") throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-  if (message.stopReason === "error") throw mapPiError(message.errorMessage);
+  const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
+  const message = request.reasoningEffort
+    ? await models.completeSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
+    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) });
+  if (message.stopReason === "aborted") {
+    // Aborted by the caller is a cancel; aborted without the caller asking is the time running out.
+    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
+    throw mapPiError("request timed out", request.signal);
+  }
+  if (message.stopReason === "error") throw mapPiError(message.errorMessage, request.signal);
   const text = message.content.filter((part) => part.type === "text").map((part) => part.type === "text" ? part.text : "").join("");
   const toolCalls = message.content.filter((part) => part.type === "toolCall").map((part) => (
     part.type === "toolCall"

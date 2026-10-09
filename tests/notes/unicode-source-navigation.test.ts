@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NORMALIZATION_V1 } from "@manga/contracts";
 import { resolveTextLocator } from "../../packages/app-core/src/domain/anchors.ts";
 
-describe("A b5 Unicode source navigation", () => {
+describe("Unicode source navigation", () => {
   it("keeps resolved code-point windows separate from DOM offsets, including quote recovery", () => {
     const text = "😀开头。中文日本語😀é。末尾";
     const quote = "中文日本語😀é";

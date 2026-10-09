@@ -1,4 +1,6 @@
 import type { NoteBlock } from "@manga/contracts/reading";
+import { DEFAULT_MODEL_PROFILE } from "@manga/contracts/models";
+import { profileForm, type ProfileForm } from "./model-profile.ts";
 
 export type ConnectionForm = {
   id?: string;
@@ -10,6 +12,9 @@ export type ConnectionForm = {
   purpose: string;
   timeoutMs: string;
   secret: string;
+  /** The numbers and switches of the model as typed, and as they were when the form was opened (only a change is saved). */
+  profile?: ProfileForm;
+  profileBefore?: ProfileForm;
 };
 
 export type NoteSummary = {
@@ -61,14 +66,16 @@ export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], n
 export type AgentSelection = { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number; quote: string };
 
 export const emptyForm = (): ConnectionForm => ({
-  label: "本地",
+  label: "",
   protocol: "openai-chat-completions",
   runtime: "native",
-  baseUrl: "http://127.0.0.1:0",
-  modelId: "local-test",
+  baseUrl: "",
+  modelId: "",
   purpose: "text",
   timeoutMs: "60000",
   secret: "",
+  profile: profileForm(DEFAULT_MODEL_PROFILE),
+  profileBefore: profileForm(DEFAULT_MODEL_PROFILE),
 });
 
 export type NoteDoc = { objectId: string; revision: number; title: string; tags: string[]; blocks: NoteBlock[]; sourceStatus?: string; resourceId?: string | null };

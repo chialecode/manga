@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { serveMedia } from "../../packages/app-core/src/media/index.ts";
 import { startApp } from "../helpers/app.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { inLibrary, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -19,7 +19,7 @@ function ok<T = Record<string, unknown>>(result: Awaited<ReturnType<typeof run>>
   return result.value as T;
 }
 
-const pick = (ctx: App, purpose: "file" | "directory", target: string) => ctx.app.registerPath(purpose, target);
+const pick = (ctx: App, purpose: "file" | "directory", target: string) => ctx.app.registerPath(purpose, inLibrary(ctx.app, target));
 const request = (url: string, headers: Record<string, string> = {}, method = "GET") => ({ url, method, headers: { get: (name: string) => headers[name.toLowerCase()] ?? null } });
 const serve = (ctx: App, url: string, headers: Record<string, string> = {}) => serveMedia({ handles: ctx.app.media.handles, zips: ctx.app.media.zips }, request(url, headers));
 
@@ -164,7 +164,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("playback decisions", () => {
 });
 
 describe.skipIf(mediaPrerequisitesAbsent)("handles, subtitles and fonts", () => {
-  requireSamples(["video-mp4-h264-aac", "video-mkv-ass-fonts", "video-external-subs"]);
+  requireSamples(["video-mp4-h264-aac", "video-mkv-ass-fonts", "video-external-subs", "video-subtitle-layout", "video-mkv-srt-tracks"]);
 
   it("serves the original by handle with byte ranges, and the handle dies with the module", async () => {
     const ctx = await startApp();
@@ -206,9 +206,23 @@ describe.skipIf(mediaPrerequisitesAbsent)("handles, subtitles and fonts", () => 
       expect(text).toContain("[Events]");
       expect(text.split("\n").filter((line) => line.startsWith("Dialogue:"))).toHaveLength(4);
 
-      const fonts = ok<{ fonts: Array<{ id: string; fileName: string; url: string; mediaType: string }> }>(await run(ctx, "video.fonts", { resourceId: item.resourceId, revisionId: item.revisionId }));
+      const fonts = ok<{ fonts: Array<{ id: string; fileName: string; url: string; mediaType: string; families: string[] }>; fallback: { family: string; mediaType: string; url: string } | null }>(await run(ctx, "video.fonts", { resourceId: item.resourceId, revisionId: item.revisionId }));
       expect(fonts.fonts).toHaveLength(1);
       expect(fonts.fonts[0]!.mediaType).toBe("font/ttf");
+      // The names a style can find the attached font by (AT-84): a subtitle that asks for "Arial" finds it, one that asks for another font does not.
+      expect(fonts.fonts[0]!.families).toContain("arial");
+      expect(fonts.fonts[0]!.families).not.toContain("microsoft yahei");
+      // The font that draws Chinese and Japanese when the file's and the machine's fonts do not: served by handle, never by path.
+      const fallbackFont = ctx.app.media.subtitleFont;
+      if (fallbackFont) {
+        expect(fonts.fallback).toMatchObject({ family: "Noto Sans SC", mediaType: "font/otf" });
+        expect(JSON.stringify(fonts.fallback)).not.toContain(path.basename(path.dirname(fallbackFont.path)));
+        const served = await serve(ctx, fonts.fallback!.url, { range: "bytes=0-3" });
+        expect(served.status).toBe(206);
+        expect(Buffer.from(await served.arrayBuffer()).toString("latin1")).toBe("OTTO");
+      } else {
+        expect(fonts.fallback).toBeNull();
+      }
       const fontBytes = Buffer.from(await (await serve(ctx, fonts.fonts[0]!.url)).arrayBuffer());
       expect(fontBytes.length).toBeGreaterThan(1000);
       const cached = fs.readdirSync(ctx.app.media.dir("fonts", item.revisionId));
@@ -220,7 +234,18 @@ describe.skipIf(mediaPrerequisitesAbsent)("handles, subtitles and fonts", () => 
     } finally { ctx.app.close(); }
   });
 
-  it("finds sidecar subtitles next to the video, converts SRT to WebVTT, and ignores another episode's file", async () => {
+  it("gives the fallback font even when the video carries no fonts, and none when the app has no font to give (AT-84)", async () => {
+    const ctx = await startApp();
+    try {
+      const item = await importVideo(ctx, "video-mp4-h264-aac");
+      const plain = ok<{ fonts: unknown[]; fallback: { family: string; url: string } | null }>(await run(ctx, "video.fonts", { resourceId: item.resourceId, revisionId: item.revisionId }));
+      expect(plain.fonts).toEqual([]);
+      expect(plain.fallback === null).toBe(ctx.app.media.subtitleFont === null);
+      if (plain.fallback) expect(plain.fallback.family).toBe("Noto Sans SC");
+    } finally { ctx.app.close(); }
+  });
+
+  it("finds sidecar subtitles next to the video, serves SRT as SRT, and ignores another episode's file", async () => {
     const ctx = await startApp();
     try {
       const file = path.join(samplePath("video-external-subs"), "episode.mp4");
@@ -231,10 +256,47 @@ describe.skipIf(mediaPrerequisitesAbsent)("handles, subtitles and fonts", () => 
       const zh = subs.subtitles.find((track) => track.title === "episode.zh-CN.srt")!;
       expect(zh.language).toBe("zh-CN");
       const handle = ok<{ url: string; format: string; mediaType: string }>(await run(ctx, "video.subtitleHandle", { resourceId: imported.resourceId, revisionId: imported.revisionId, trackId: zh.id }));
-      expect(handle).toMatchObject({ format: "vtt", mediaType: "text/vtt; charset=utf-8" });
-      const vtt = await (await serve(ctx, handle.url)).text();
+      expect(handle).toMatchObject({ format: "srt", mediaType: "application/x-subrip; charset=utf-8" });
+      const srt = await (await serve(ctx, handle.url)).text();
+      expect(srt).toContain("00:00:01,000 --> 00:00:03,500");
+      expect(srt).toContain("第一句台词");
+      expect(srt.startsWith("WEBVTT")).toBe(false);
+    } finally { ctx.app.close(); }
+  });
+
+  it("serves a sidecar's marks for a caption at the top as written, and WebVTT as WebVTT", async () => {
+    const ctx = await startApp();
+    try {
+      const file = path.join(samplePath("video-subtitle-layout"), "episode.mp4");
+      const imported = ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "字幕排版", kind: "video", pathHandle: pick(ctx, "file", file) }));
+      const subs = ok<{ subtitles: Array<{ id: string; format: string | null; title: string }> }>(await run(ctx, "video.subtitles", { resourceId: imported.resourceId }));
+      expect(subs.subtitles.map((track) => track.title).sort()).toEqual(["episode.bilingual.srt", "episode.en.srt", "episode.signs.srt", "episode.top.vtt", "episode.zh-CN.srt"]);
+      const handleOf = async (title: string) => ok<{ url: string; format: string; mediaType: string }>(await run(ctx, "video.subtitleHandle", { resourceId: imported.resourceId, revisionId: imported.revisionId, trackId: subs.subtitles.find((track) => track.title === title)!.id }));
+      const signs = await handleOf("episode.signs.srt");
+      expect(signs.format).toBe("srt");
+      expect(await (await serve(ctx, signs.url)).text()).toContain("{\\an8}区役所");
+      const top = await handleOf("episode.top.vtt");
+      expect(top).toMatchObject({ format: "vtt", mediaType: "text/vtt; charset=utf-8" });
+      const vtt = await (await serve(ctx, top.url)).text();
       expect(vtt.startsWith("WEBVTT")).toBe(true);
-      expect(vtt).toMatch(/([0-9]{2}:)?[0-9]{2}:[0-9]{2}\.[0-9]{3} --> /);
+      expect(vtt).toContain("line:10%");
+    } finally { ctx.app.close(); }
+  });
+
+  it("serves embedded text tracks as SRT, keeping the top-caption mark that a WebVTT conversion would drop", async () => {
+    const ctx = await startApp();
+    try {
+      const item = await importVideo(ctx, "video-mkv-srt-tracks");
+      const subs = ok<{ subtitles: Array<{ id: string; source: string; format: string | null; language: string | null }> }>(await run(ctx, "video.subtitles", { resourceId: item.resourceId }));
+      expect(subs.subtitles.map((track) => [track.source, track.format, track.language])).toEqual([["embedded", "srt", "chi"], ["embedded", "srt", "eng"]]);
+      const handle = ok<{ url: string; format: string; mediaType: string }>(await run(ctx, "video.subtitleHandle", { resourceId: item.resourceId, revisionId: item.revisionId, trackId: subs.subtitles[0]!.id }));
+      expect(handle).toMatchObject({ format: "srt", mediaType: "application/x-subrip; charset=utf-8" });
+      const srt = await (await serve(ctx, handle.url)).text();
+      expect(srt).toContain("{\\an8}区役所");
+      expect(srt).toContain("第二句台词");
+      // The same text feeds search and the Agent as cues, without the marks.
+      const cues = ok<{ cues: Array<{ text: string }> }>(await run(ctx, "material.subtitleWindow", { resourceId: item.resourceId, resourceRevisionId: item.revisionId, centerMs: 5000, beforeMs: 5000, afterMs: 5000 }));
+      expect(cues.cues.map((cue) => cue.text).join("|")).toContain("第二句台词");
     } finally { ctx.app.close(); }
   });
 });

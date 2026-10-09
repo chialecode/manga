@@ -6,19 +6,24 @@ import { DrizzleStore } from "@manga/storage-drizzle";
 import { ComicService } from "../../packages/app-core/src/comic/service.ts";
 import { planDirectory } from "../../packages/app-core/src/comic/scan.ts";
 import { MediaServices, serveMedia } from "../../packages/app-core/src/media/index.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { libraryRoot } from "../helpers/app.ts";
+import { requireSamples, samplePath, samplesRoot } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-comic-"));
-afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+const profiles = fs.mkdtempSync(path.join(os.tmpdir(), "manga-comic-profiles-"));
+afterAll(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(profiles, { recursive: true, force: true }); });
 let counter = 0;
 
 function setup() {
   counter += 1;
-  const dir = path.join(root, `profile-${counter}`);
+  const dir = path.join(profiles, `profile-${counter}`);
   const store = new DrizzleStore({ profileDir: path.join(dir, "data"), hostId: `comic-${counter}`, attachmentsDir: path.join(dir, "attachments") });
   const media = new MediaServices({ cacheDir: path.join(dir, "cache"), tools: null });
   const comics = new ComicService(store, media);
+  // Files are read through library paths (A-80): the generated samples and the folder this file writes its own files in.
+  libraryRoot({ store }, samplesRoot, "comic");
+  libraryRoot({ store }, root, "comic");
   return { store, media, comics, dir, close: () => { media.dispose(); store.close(); } };
 }
 
@@ -173,7 +178,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("importing a folder of images", () => 
     } finally { env.close(); }
   });
 
-  it("answers that the original is gone instead of failing, and refuses a page path that leaves the folder", async () => {
+  it("refuses to open a comic whose original is gone and says which file, and refuses a page path that leaves the folder", async () => {
     const env = setup();
     try {
       const copy = path.join(root, "将被删除");
@@ -187,8 +192,10 @@ describe.skipIf(mediaPrerequisitesAbsent)("importing a folder of images", () => 
       env.store.sqlite.prepare("UPDATE resource_revisions SET payload_json = ? WHERE id = ?").run(JSON.stringify(payload), result.revisionId);
       await expect(env.comics.pageHandle({ ...base, pageId: payload.comic.pages[0].id })).rejects.toMatchObject({ code: "PATH_ESCAPE" });
       fs.rmSync(copy, { recursive: true, force: true });
-      expect(env.comics.pages(result.resourceId).available).toBe(false);
-      expect(await env.comics.pageHandle({ ...base, pageId: payload.comic.pages[1].id })).toMatchObject({ available: false, reason: expect.stringContaining("not available") });
+      // The file is not where its library path says: nothing of it is opened or served (A-86), and the answer names the place for the interface to offer to locate it again.
+      const gone = { code: "LOCATION_UNAVAILABLE", details: expect.objectContaining({ reason: "file-missing", relativePath: path.basename(copy), rootReachable: true }) };
+      expect(() => env.comics.pages(result.resourceId)).toThrow(expect.objectContaining(gone));
+      await expect(env.comics.pageHandle({ ...base, pageId: payload.comic.pages[1].id })).rejects.toMatchObject(gone);
     } finally { env.close(); }
   });
 
@@ -300,10 +307,14 @@ describe.skipIf(mediaPrerequisitesAbsent)("importing archives and documents", ()
       fs.rmSync(copy);
       const handle = await env.comics.pageHandle({ resourceId: result.resourceId, revisionId: result.revisionId, pageId: "002.png" });
       expect(handle).toMatchObject({ available: true });
-      const hosted = fs.readdirSync(env.store.attachmentsDir).filter((name) => name.endsWith(".bin"));
+      // The application's own copy lives in its own library path (A-80), not in the attachments partition.
+      const hosted = fs.readdirSync(env.store.managedLibraryDir).filter((name) => name.endsWith(".bin"));
       expect(hosted).toEqual([`${result.revisionId}.bin`]);
+      expect(fs.readdirSync(env.store.attachmentsDir).filter((name) => name.endsWith(".bin"))).toEqual([]);
+      expect(env.store.sqlite.prepare("SELECT fl.relative_path AS rel, fl.hosted AS hosted, lp.managed AS managed FROM file_locations fl JOIN library_paths lp ON lp.id = fl.library_path_id WHERE fl.resource_revision_id = ?").get(result.revisionId))
+        .toEqual({ rel: `${result.revisionId}.bin`, hosted: 1, managed: 1 });
       await expect(env.comics.importOne({ sourcePath: samplePath("comic-dir-natural"), hosted: true })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-      expect(fs.readdirSync(env.store.attachmentsDir).filter((name) => name.endsWith(".part"))).toEqual([]);
+      expect(fs.readdirSync(env.store.managedLibraryDir).filter((name) => name.endsWith(".part"))).toEqual([]);
     } finally { env.close(); }
   });
 

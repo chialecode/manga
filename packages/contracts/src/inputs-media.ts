@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SourceLocatorSchema } from "./location.ts";
+import { PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } from "./inputs-creative.ts";
 import {
   CAPTURE_EVENT_REASONS,
   CAPTURE_MODES,
@@ -45,7 +46,7 @@ export const AgentMediaContextSchema = z.object({
 }).strict();
 export type AgentMediaContext = z.infer<typeof AgentMediaContextSchema>;
 
-/** Input schemas for the M2 commands: works, covers, metadata, comic, video, recording and image materials. */
+/** Input schemas for the media commands: works, covers, metadata, comic, video, recording and image materials. */
 export const MediaCommandInputs = {
   "library.inspectFile": z.object({ pathHandle: id }).strict(),
 
@@ -60,8 +61,22 @@ export const MediaCommandInputs = {
     format: z.string().min(1).max(32).optional(),
     hasNotes: z.boolean().optional(),
     sort: z.enum(["recent", "added", "title", "progress"]).optional(),
+    /** One entry per title: works of one medium linked to the same Bangumi entry are listed as the version opened last (A-68). Display only. */
+    group: z.boolean().optional(),
   }).strict(),
   "works.get": z.object({ workId: id }).strict(),
+  /** What deleting the entry of a work would remove and what it would keep (A-87), counted, for the confirmation. */
+  "works.deletePreview": z.object({ workId: id }).strict(),
+  /** Delete the entry of a work with all its versions: the online information goes, the files and everything the person made stay. */
+  "works.delete": z.object({ workId: id }).strict(),
+  /** The resources that are in no work: the ones left by a deleted entry or taken out of a work. */
+  "works.unassigned": z.object({ kind: WorkMediaKindSchema.optional(), query: z.string().max(200).optional(), limit: z.number().int().min(1).max(500).optional() }).strict(),
+  /** The same episode or volume in another version of the title, and the place in it that matches where the reader is (A-68). */
+  "works.counterpart": z.object({ resourceId: id, toWorkId: id, fraction: z.number().min(0).max(1).optional() }).strict(),
+  /** What the user made on one resource and whether its file can be opened: the "resource unavailable" view (A-67). */
+  "library.resourceContent": z.object({ resourceId: id }).strict(),
+  /** Whether a resource can be opened now: yes, its file is outside every library path, or it is not where the library path says (A-86). Asked before anything is opened. */
+  "library.openable": z.object({ resourceId: id }).strict(),
   "works.importDirectory": z.object({
     pathHandle: id,
     kind: WorkMediaKindSchema,
@@ -151,9 +166,14 @@ export const MediaCommandInputs = {
     timeMs: nonNegativeMs.optional(),
     frame: z.number().int().nonnegative().max(50_000_000).optional(),
     delta: z.number().int().min(-1000).max(1000).optional(),
+    /** False asks only whether the frame table exists: a missing one is not built, so showing a frame number costs no read of the file. */
+    build: z.boolean().optional(),
   }).strict().refine((value) => value.timeMs === undefined || value.frame === undefined, {
     message: "ask for a frame or a time, not both",
   }),
+  /** The keyframes of a video, for a timeline to show. Without `build`, a frame table that does not exist yet is not built: the answer says it is not ready. */
+  "video.keyframes": z.object({ resourceId: id, revisionId: optionalRevision, build: z.boolean().optional() }).strict(),
+  "video.cancelFrameIndex": z.object({ resourceId: id, revisionId: optionalRevision }).strict(),
   "video.playbackPlan": z.object({
     resourceId: id,
     revisionId: optionalRevision,
@@ -201,6 +221,10 @@ export const MediaCommandInputs = {
     retention: z.enum(CAPTURE_RETENTION).optional(),
     duckPlayback: z.enum(["none", "lower", "pause"]).optional(),
     boundaryMarginMs: z.number().int().min(0).max(2000).optional(),
+    language: z.string().regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/).nullable().optional(),
+    promptChars: z.number().int().min(PROMPT_LIMIT_MIN).max(PROMPT_LIMIT_MAX).optional(),
+    /** Set a connection's limit, or give `null` to go back to the general one. */
+    promptCharsByConnection: z.record(z.string().min(1).max(256), z.number().int().min(PROMPT_LIMIT_MIN).max(PROMPT_LIMIT_MAX).nullable()).optional(),
     overlay: z.object({
       x: z.number().int().min(-20000).max(20000).optional(),
       y: z.number().int().min(-20000).max(20000).optional(),
@@ -223,12 +247,24 @@ export const MediaCommandInputs = {
     }).strict().optional(),
     video: z.object({
       rate: z.number().min(0.25).max(4).optional(),
+      /** The rate list (A-78): each 0.25–4 with at most two decimals; the service sorts it, drops repeats and keeps 1×. */
+      rates: z.array(z.number().min(0.25).max(4)).min(1).max(16).optional(),
+      customRate: z.number().min(0.25).max(4).optional(),
       holdRate: z.number().min(1).max(4).optional(),
       volume: z.number().min(0).max(1).optional(),
       muted: z.boolean().optional(),
       seekStepSeconds: z.number().min(1).max(120).optional(),
       autoNext: z.boolean().optional(),
+      subtitlePlacement: z.enum(["auto", "inside"]).optional(),
+      subtitleSizePct: z.number().min(3).max(8).optional(),
+      subtitleFont: z.enum(["sans", "serif", "kai"]).optional(),
+      subtitleOutline: z.boolean().optional(),
+      assStyle: z.enum(["keep", "standard"]).optional(),
+      /** A screenshot of the picture carries the subtitles on screen (A-92); on unless turned off. */
+      shotSubtitles: z.boolean().optional(),
     }).strict().optional(),
+    /** The keys of the readers and the window, by action (see `@manga/contracts/keys`); `null` puts the default back. The service checks the whole table for conflicts. */
+    keys: z.record(z.string().regex(/^[a-z]+\.[A-Za-z]+$/).max(48), z.array(z.string().max(40)).max(4).nullable()).refine((value) => Object.keys(value).length <= 64, "too many actions").optional(),
   }).strict(),
 
   "capture.start": z.object({
@@ -262,7 +298,7 @@ export const MediaCommandInputs = {
   "capture.transcribe": z.object({ sessionId: id, connectionId: id.optional() }).strict(),
   "capture.retry": z.object({ sessionId: id, segmentId: id.optional() }).strict(),
   "capture.cancel": z.object({ sessionId: id }).strict(),
-  "capture.organize": z.object({ sessionId: id, connectionId: id.optional() }).strict(),
+  "capture.organize": z.object({ sessionId: id, connectionId: id.optional(), projectId: id.optional() }).strict(),
   "capture.editDraft": z.object({ draftId: id, editedText: z.string().max(200_000) }).strict(),
   "capture.acceptDraft": z.object({ draftId: id, editedText: z.string().max(200_000).optional(), title: z.string().min(1).max(256).optional() }).strict(),
   "capture.retain": z.object({ sessionId: id, action: z.enum(["keep", "discard"]) }).strict(),

@@ -33,10 +33,10 @@ async function migrate(app: MangaProductApp, grantHandle: string, target: string
 }
 
 function tempTarget(label: string): string {
-  return path.join(os.tmpdir(), `manga-m1a-rev-${label}-${process.pid}-${Date.now()}`);
+  return path.join(os.tmpdir(), `manga-recovery-${label}-${process.pid}-${Date.now()}`);
 }
 
-describe("A re-verification: F-24/F-25 sealed host after a location switch", () => {
+describe("sealed host after a location switch", () => {
   it("refuses rollback and new plans on the sealed old host and keeps the published library", async () => {
     const { app, grant } = await startApp();
     const target = tempTarget("sealed");
@@ -126,9 +126,27 @@ describe("A re-verification: F-24/F-25 sealed host after a location switch", () 
       recovered.close();
     }
   });
+
+  it("copies a library with thousands of attachment files and verifies every partition", async () => {
+    // The database checkpoints its log on its own while a long copy runs; the verification must not read that as a changed library.
+    const { app, grant } = await startApp();
+    try {
+      for (let index = 0; index < 2500; index += 1) fs.writeFileSync(path.join(app.layout.partitions.attachments, `f${index}.bin`), `payload ${index}`);
+      const target = tempTarget("many-files");
+      const handle = app.registerPath("directory", target);
+      const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "many-plan", input: { pathHandle: handle } }, grant.handle);
+      expect(proposed.status).toBe("ok");
+      const applied = await app.call(actor, { commandId: "settings.applyLocations", idempotencyKey: "many-apply", input: { checkpointId: proposed.value?.checkpointId, pathHandle: handle } }, grant.handle);
+      expect(applied.status).toBe("ok");
+      const copied = fs.readdirSync(path.join(target, "attachments")).filter((name) => name.startsWith("f"));
+      expect(copied).toHaveLength(2500);
+    } finally {
+      app.close();
+    }
+  }, 60_000);
 });
 
-describe("A re-verification: F-30 relocation plans", () => {
+describe("relocation plans", () => {
   it("rejects per-partition plans without leaving a checkpoint and refuses to index the data partition", async () => {
     const { app, grant } = await startApp();
     try {
@@ -186,7 +204,7 @@ describe("A re-verification: F-30 relocation plans", () => {
   });
 });
 
-describe("A re-verification: F-27 interrupted runs", () => {
+describe("interrupted runs", () => {
   it("marks an in-flight run interrupted on close and lets the reopened host retry it", async () => {
     const server = await startMockProvider({ mode: "timeout" });
     const rejections: unknown[] = [];
@@ -241,7 +259,7 @@ describe("A re-verification: F-27 interrupted runs", () => {
   });
 });
 
-describe("A re-verification: F-28 PI runtime", () => {
+describe("PI runtime", () => {
   const schema = { type: "object", properties: { title: { type: "string" }, text: { type: "string" } }, required: ["title", "text"], additionalProperties: false };
 
   it("defaults to native and persists the runtime choice across restart", async () => {
@@ -337,7 +355,7 @@ describe("A re-verification: F-28 PI runtime", () => {
   });
 });
 
-describe("A re-verification: F-32 session history", () => {
+describe("session history", () => {
   it.each(["native", "pi"] as const)("feeds earlier completed turns of the same session to the model and keeps sessions apart (%s)", async (runtime) => {
     const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
     const server = createServer(async (req, res) => {

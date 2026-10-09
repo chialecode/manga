@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, Lock, LockOpen, MoreHorizontal, Pencil, Play, RefreshCw, Replace } from "lucide-react";
 import type { Translator } from "@manga/i18n";
+import { AddToProject } from "../components/add-to-project.tsx";
 import { Menu, type MenuItem } from "../components/menu.tsx";
 import { Modal } from "../components/modal.tsx";
 import { asArray, attempt } from "../lib/api.ts";
 import { forgetCover, useCovers } from "../lib/covers.ts";
 import { useWorkDetail, type CoverSummary } from "../lib/use-work-detail.ts";
 import { SHELF_ORDER, percentOf, type Facets, type ProjectedField, type ShelfState, type WorkMediaKind, type WorkSummary } from "../lib/works.ts";
+import { ResourceContent } from "./resource-content.tsx";
+import { WorkFolderSection } from "./work-folder-section.tsx";
 import { CoverImage, progressLine, shelfLabel } from "./work-card.tsx";
 import { MatchDialog, providerName } from "./work-match.tsx";
+import { DeleteEntryDialog } from "./delete-entry-dialog.tsx";
+import { MoveDialog } from "./move-resource-dialog.tsx";
 
 type T = Translator["t"];
 export type WorkTab = "overview" | "resources" | "characters" | "staff" | "records" | "related";
@@ -40,41 +45,6 @@ function Avatar(props: { url?: string; name: string }) {
   return <span className="credit-avatar" aria-hidden="true">{props.url ? <img src={props.url} alt="" loading="lazy" width={44} height={44} /> : <span>{[...props.name][0] ?? ""}</span>}</span>;
 }
 
-/** Moving a file to another work, or to a new one named here: the work is the unit, so a file filed under the wrong work can be put right. */
-function MoveDialog(props: { t: T; resourceId: string; fromWorkId: string; kind: WorkMediaKind; onClose: () => void; onMoved: () => void; onError: (message: string) => void }) {
-  const { t } = props;
-  const [query, setQuery] = useState("");
-  const [rows, setRows] = useState<WorkSummary[]>([]);
-  const [title, setTitle] = useState("");
-  useEffect(() => {
-    let cancelled = false;
-    void attempt<{ items: WorkSummary[] }>("works.list", { kind: props.kind, limit: 20, ...(query.trim() ? { query: query.trim() } : {}) }).then((result) => {
-      if (!cancelled && result.ok) setRows(asArray<WorkSummary>(result.value.items).filter((work) => work.id !== props.fromWorkId));
-    });
-    return () => { cancelled = true; };
-  }, [query, props.kind, props.fromWorkId]);
-
-  async function move(input: { toWorkId?: string; newWorkTitle?: string }) {
-    const result = await attempt("works.moveResource", { resourceId: props.resourceId, ...input });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onMoved();
-  }
-
-  return (
-    <Modal variant="dialog" testId="work-move" title={t("work.move.title")} closeLabel={t("common.close")} onClose={props.onClose}>
-      <label className="search-box"><input data-testid="work-move-query" value={query} placeholder={t("work.move.search")} aria-label={t("work.move.search")} onChange={(event) => setQuery(event.target.value)} /></label>
-      <ul className="detail-list" data-testid="work-move-list">
-        {rows.map((work) => <li key={work.id}><button type="button" className="link-button" data-testid={`work-move-to-${work.id}`} onClick={() => void move({ toWorkId: work.id })}>{work.title}</button></li>)}
-        {rows.length === 0 ? <li className="detail-muted">{t("work.move.none")}</li> : null}
-      </ul>
-      <form className="match-search" onSubmit={(event) => { event.preventDefault(); if (title.trim()) void move({ newWorkTitle: title.trim() }); }}>
-        <input data-testid="work-move-new" value={title} placeholder={t("work.move.newPlaceholder")} aria-label={t("work.move.newPlaceholder")} onChange={(event) => setTitle(event.target.value)} />
-        <button type="submit" className="secondary-button" data-testid="work-move-new-go" disabled={!title.trim()}>{t("work.move.newGo")}</button>
-      </form>
-    </Modal>
-  );
-}
-
 /**
  * One work's own page (A-47): head, the button that opens the file, the shelf state, matching, and the tabs. Opening a card on a
  * shelf lands here; only "read" or "watch" opens a file. The profile is edited here too: every field is shown and can be filled,
@@ -85,12 +55,16 @@ export function WorkHome(props: {
   workId: string;
   facets: Facets;
   formatDate: (value: string | Date) => string;
-  initialTab?: "cover";
+  initialTab?: "cover" | "match";
   onBack: () => void;
   onOpenResource: (resourceId: string, kind: WorkMediaKind) => void;
   onOpenNote: (objectId: string) => void;
   onOpenWork: (workId: string) => void;
   onOpenRecording?: (sessionId: string) => void;
+  /** A conversation made about one of the work's resources, opened where conversations are read. */
+  onOpenConversation?: (sessionId: string) => void;
+  /** Library paths are where resources come from; a resource imported on its own points the person there. */
+  onAddPath?: () => void;
   /** The work's name and author once they are known, for the conversation beside the page (quick tasks fill them in). */
   onLoaded?: (work: { workId: string; title: string; author: string | null; mediaKind: string }) => void;
   onChanged: () => void;
@@ -107,11 +81,14 @@ export function WorkHome(props: {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [coversOpen, setCoversOpen] = useState(props.initialTab === "cover");
-  const [match, setMatch] = useState<null | "link" | "refresh">(null);
+  const [match, setMatch] = useState<null | "link" | "refresh">(props.initialTab === "match" ? "link" : null);
+  const [deleting, setDeleting] = useState(false);
   const [moving, setMoving] = useState<string | null>(null);
+  /** The resource whose own page (what was made on it, and its file) is shown in place of the work's page (A-67). */
+  const [viewing, setViewing] = useState<string | null>(null);
   const [credits, setCredits] = useState<{ status: "idle" | "loading" | "ready" | "error"; value?: Credits; error?: string }>({ status: "idle" });
 
-  useEffect(() => { setTab("overview"); setEditing(null); setEditMode(false); setCredits({ status: "idle" }); }, [props.workId]);
+  useEffect(() => { setTab("overview"); setEditing(null); setEditMode(false); setViewing(null); setCredits({ status: "idle" }); }, [props.workId]);
 
   const loaded = props.onLoaded;
   useEffect(() => {
@@ -185,20 +162,42 @@ export function WorkHome(props: {
     { id: "unlink", label: t("match.unlink"), onSelect: () => void unlink() },
     ...(linked.sourceUrl ? [{ id: "open", label: t("match.openBrowser"), onSelect: () => external(linked.sourceUrl!) }] : []),
   ] : [];
-  const moreMenu: MenuItem[] = [{ id: "cover", label: t("card.cover"), onSelect: () => setCoversOpen((open) => !open) }];
+  const moreMenu: MenuItem[] = [
+    { id: "cover", label: t("card.cover"), onSelect: () => setCoversOpen((open) => !open) },
+    { id: "delete", label: t("entry.delete"), danger: true, onSelect: () => setDeleting(true) },
+  ];
 
   const tabs: Array<{ id: WorkTab; label: string; show: boolean }> = [
     { id: "overview", label: t("work.tab.overview"), show: true },
-    { id: "resources", label: t("work.tab.resources"), show: true },
+    { id: "resources", label: t(`work.tab.resources.${kind}` as "work.tab.resources.novel"), show: true },
     { id: "characters", label: t("work.tab.characters"), show: metadataOn },
     { id: "staff", label: t("work.tab.staff"), show: metadataOn },
     { id: "records", label: t("work.tab.records"), show: true },
     { id: "related", label: t("work.tab.related"), show: metadataOn },
   ];
 
+  if (viewing) {
+    return (
+      <div className="work-home page-pad" data-testid="page-work" data-view="resource">
+        <ResourceContent
+          t={t}
+          resourceId={viewing}
+          formatDate={formatDate}
+          onBack={() => { setViewing(null); void state.reload(); }}
+          onOpenNote={props.onOpenNote}
+          onOpenRecording={voiceOn ? props.onOpenRecording : undefined}
+          onOpenConversation={props.onOpenConversation}
+          onOpenResource={(resourceId) => props.onOpenResource(resourceId, kind)}
+          onError={props.onError}
+          onNotice={props.onNotice}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="work-home page-pad" data-testid="page-work">
-      <button type="button" className="link-button work-back" data-testid="work-back" onClick={props.onBack}><ArrowLeft size={14} />{t("work.back")}</button>
+      <button type="button" className="link-button work-back" data-testid="work-back" onClick={props.onBack}><ArrowLeft size={14} />{detail ? t("work.back", { name: t(`shelf.title.${kind}` as "shelf.title.novel") }) : t("common.back")}</button>
       {state.status === "loading" ? <p role="status" data-testid="detail-loading">{t("status.loading")}</p> : null}
       {state.status === "error" ? <p role="alert" className="shelf-error" data-testid="detail-error">{state.error}</p> : null}
       {detail ? (
@@ -211,7 +210,7 @@ export function WorkHome(props: {
               <h1 data-testid="detail-title">{detail.title}</h1>
               {detail.originalTitle && detail.originalTitle !== detail.title ? <p className="detail-muted">{detail.originalTitle}</p> : null}
               <p className="detail-muted" data-testid="work-facts">
-                {[detail.author ?? formatValue(detail.fields.studio?.value ?? null), t(`shelf.kind.${kind}` as "shelf.kind.novel"), formatValue(detail.fields.releaseDate?.value ?? null).slice(0, 4), detail.fields.episodeCount?.value ? t("work.episodes", { count: Number(detail.fields.episodeCount.value) }) : detail.resourceCount > 0 ? t("work.files", { count: detail.resourceCount }) : ""].filter(Boolean).join(" · ")}
+                {[detail.author ?? formatValue(detail.fields.studio?.value ?? null), t(`shelf.kind.${kind}` as "shelf.kind.novel"), formatValue(detail.fields.releaseDate?.value ?? null).slice(0, 4), detail.fields.episodeCount?.value ? t(`work.episodes.${kind}` as "work.episodes.video", { count: Number(detail.fields.episodeCount.value) }) : detail.resourceCount > 0 ? t("work.files", { count: detail.resourceCount }) : ""].filter(Boolean).join(" · ")}
               </p>
               {rating ? <p className="detail-muted" data-testid="work-rating">{t("work.rating", { score: rating, provider: providerName(linked!.providerId), time: linked!.fetchedAt ? formatDate(linked!.fetchedAt) : "—" })}</p> : null}
               {formatValue(detail.fields.tags?.value ?? null) ? <p className="work-tags" data-testid="work-tags">{asArray<string>(detail.fields.tags?.value).slice(0, 12).map((tag) => <span key={tag} className="chip">{tag}</span>)}</p> : null}
@@ -220,8 +219,8 @@ export function WorkHome(props: {
                 <label className="detail-shelf">
                   <span>{t("card.setShelf")}</span>
                   <select data-testid="detail-shelf" value={detail.shelf} onChange={(event) => void setShelf(event.target.value as ShelfState)}>
-                    <option value="none">{shelfLabel(t, "none")}</option>
-                    {SHELF_ORDER.map((item) => <option key={item} value={item}>{shelfLabel(t, item)}</option>)}
+                    <option value="none">{shelfLabel(t, "none", kind)}</option>
+                    {SHELF_ORDER.map((item) => <option key={item} value={item}>{shelfLabel(t, item, kind)}</option>)}
                   </select>
                 </label>
                 {metadataOn ? (
@@ -230,9 +229,21 @@ export function WorkHome(props: {
                     : <button type="button" className="secondary-button" data-testid="detail-match" onClick={() => setMatch("link")}>{t("detail.matchAction")}</button>
                 ) : null}
                 <button type="button" className="secondary-button" data-testid="detail-edit" aria-pressed={editMode} onClick={() => { setEditMode((value) => !value); setEditing(null); setTab("overview"); }}><Pencil size={14} />{editMode ? t("work.editDone") : t("work.edit")}</button>
+                {props.facets.has("projects") ? <AddToProject t={t} kind="work" targetId={props.workId} label={detail.title} onError={props.onError} onNotice={props.onNotice} /> : null}
                 <Menu label={t("work.more")} testId="work-more" align="end" trigger={<MoreHorizontal size={16} />} items={moreMenu} />
               </div>
-              {!target ? <p className="detail-muted" data-testid="work-no-resource">{detail.resources.length ? t("work.noneAvailable") : t("work.noResources")}</p> : null}
+              {detail.versions && detail.versions.length > 1 ? (
+                <label className="detail-shelf work-versions" data-testid="work-versions" title={t("work.versionHint")}>
+                  <span>{t("work.versions")}</span>
+                  <select data-testid="work-version" value={props.workId} onChange={(event) => { if (event.target.value !== props.workId) props.onOpenWork(event.target.value); }}>
+                    {detail.versions.map((version) => <option key={version.workId} value={version.workId}>{t("work.versionOption", { title: version.label, count: version.resourceCount })}</option>)}
+                  </select>
+                </label>
+              ) : null}
+              {!target ? <p className="detail-muted" data-testid="work-no-resource">{detail.resources.length ? t("work.noneAvailable") : t("work.noResourcesKept")}</p> : null}
+              {detail.outsideCount > 0 ? (
+                <p className="detail-muted" data-testid="work-outside"><span className="chip chip-muted">{t("work.outside")}</span> {t("work.outsideHint", { count: detail.outsideCount })}{props.onAddPath ? <> <button type="button" className="link-button" data-testid="work-outside-add" onClick={props.onAddPath}>{t("work.outsideAdd")}</button></> : null}</p>
+              ) : null}
             </div>
           </header>
 
@@ -322,12 +333,15 @@ export function WorkHome(props: {
                       <span className="resource-title">
                         <strong>{resource.ordinalLabel ? `${resource.ordinalLabel} · ` : ""}{resource.title}</strong>
                         {!resource.available ? <span className="chip chip-muted">{t("detail.unavailable")}</span> : null}
+                        {resource.outside ? <span className="chip chip-muted" data-testid={`detail-outside-${resource.id}`}>{t("work.outside")}</span> : null}
                       </span>
                       <span className="resource-progress">
-                        <progress value={Math.round(resource.progress.percent)} max={100} aria-label={t("detail.progress")} />
-                        <span>{Math.round(resource.progress.percent)}%</span>
+                        <progress value={percentOf(resource.progress.percent)} max={100} aria-label={t("detail.progress")} />
+                        <span>{percentOf(resource.progress.percent)}%</span>
                       </span>
-                      <button type="button" className="secondary-button" data-testid={`detail-open-${resource.id}`} disabled={!resource.available} onClick={() => props.onOpenResource(resource.id, kind)}><Play size={14} />{verb}</button>
+                      {resource.available
+                        ? <button type="button" className="secondary-button" data-testid={`detail-open-${resource.id}`} onClick={() => props.onOpenResource(resource.id, kind)}><Play size={14} />{verb}</button>
+                        : <button type="button" className="secondary-button" data-testid={`detail-open-${resource.id}`} onClick={() => setViewing(resource.id)}>{t("work.viewContent")}</button>}
                       <button type="button" className="icon-button" data-testid={`detail-move-${resource.id}`} aria-label={t("work.move.title")} title={t("work.move.title")} onClick={() => setMoving(resource.id)}><Replace size={14} /></button>
                     </li>
                   ))}
@@ -400,6 +414,7 @@ export function WorkHome(props: {
                   )}
                 </>
               ) : null}
+              <WorkFolderSection t={t} workId={props.workId} version={`${linkedKey}:${detail.resources.length}`} canTranscribe={voiceOn} formatDate={formatDate} onError={props.onError} onNotice={props.onNotice} onChanged={() => { void state.reload(); props.onChanged(); }} />
             </section>
           ) : null}
 
@@ -450,6 +465,16 @@ export function WorkHome(props: {
               onOpenExternal={external}
               onError={props.onError}
               onApplied={(message) => { setMatch(null); props.onNotice(message); void changed().then(() => { if (tab === "characters" || tab === "staff") void loadCredits(); }); }}
+            />
+          ) : null}
+          {deleting ? (
+            <DeleteEntryDialog
+              t={t}
+              workId={props.workId}
+              title={detail.title}
+              onClose={() => setDeleting(false)}
+              onError={props.onError}
+              onDeleted={(result) => { setDeleting(false); props.onNotice(t("entry.delete.done", { title: result.title, count: result.resourceCount })); props.onChanged(); props.onBack(); }}
             />
           ) : null}
           {moving ? (

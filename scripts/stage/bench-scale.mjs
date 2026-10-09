@@ -4,9 +4,9 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { MangaProductApp, TestVault, buildZip } from "../../packages/app-core/src/index.ts";
 import { NORMALIZATION_V1 } from "../../packages/contracts/src/index.ts";
-import { loadStage } from "./lib.mjs";
+import { loadGate } from "./lib.mjs";
 
-const requiredScale = loadStage(process.argv[2] ?? "m2").bench.scale;
+const requiredScale = loadGate().bench.scale;
 
 const TXT_MARKER = "十兆窗口末尾标记";
 const EPUB_MARKER = "三十兆窗口末章标记";
@@ -39,6 +39,10 @@ async function seedScaleProfile(dir) {
   const actor = { kind: "user", id: "bench-scale" };
   const grant = app.issueOwnerGrant(actor);
   await call(app, actor, grant, "settings.skipAi", {});
+  // A file is read from a library path (A-80): the folder the books lie in is one, in the Profile the windows start on.
+  const books = path.join(dir, "books");
+  fs.mkdirSync(books, { recursive: true });
+  await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
   // Metadata rows are older than the large books so the resource list shows the books first.
   const old = new Date(Date.now() - 86_400_000).toISOString();
   const sqlite = app.store.sqlite;
@@ -56,11 +60,11 @@ async function seedScaleProfile(dir) {
   }
   sqlite.exec("COMMIT");
 
-  const txtFile = path.join(dir, "large.txt");
+  const txtFile = path.join(books, "large.txt");
   const filler = Buffer.alloc(10 * 1024 * 1024, "阅读正文。");
   fs.writeFileSync(txtFile, Buffer.concat([filler.subarray(0, filler.length - (filler.length % Buffer.byteLength("阅读正文。"))), Buffer.from(TXT_MARKER)]));
   const chapter = "章节正文。".repeat(700_000);
-  const epubFile = path.join(dir, "large.epub");
+  const epubFile = path.join(books, "large.epub");
   fs.writeFileSync(epubFile, epubBytes([chapter, chapter, `${chapter}${EPUB_MARKER}`]));
   const txt = await call(app, actor, grant, "library.importDocument", { title: "规模十兆文本", pathHandle: app.registerPath("file", txtFile), format: "txt" });
   const epub = await call(app, actor, grant, "library.importDocument", { title: "规模三十兆书", pathHandle: app.registerPath("file", epubFile), format: "epub" });
@@ -77,7 +81,7 @@ async function seedScaleProfile(dir) {
   }
   const note = await call(app, actor, grant, "notes.create", { title: "规模笔记", text: "规模保存起点" });
   app.close();
-  const parseFile = path.join(dir, "background.txt");
+  const parseFile = path.join(books, "background.txt");
   const sizes = {
     txtBytes: fs.statSync(txtFile).size,
     epubBytes: fs.statSync(epubFile).size,
@@ -97,7 +101,7 @@ export async function runScaleWindowBench({ launch }) {
   const seedMs = Date.now() - seedStarted;
   const runs = [];
   for (let i = 0; i < 3; i += 1) {
-    const parseFile = path.join(dir, `background-${i}.txt`);
+    const parseFile = path.join(dir, "books", `background-${i}.txt`);
     const unit = Buffer.from(`后台解析${i}。`);
     const background = Buffer.alloc(10 * 1024 * 1024, unit);
     fs.writeFileSync(parseFile, background.subarray(0, background.length - (background.length % unit.length)));

@@ -16,7 +16,7 @@ async function command(context: Awaited<ReturnType<typeof startApp>>, commandId:
   return result.value as Record<string, unknown>;
 }
 
-describe("M1b b5 rework parsers", () => {
+describe("parsers", () => {
   it("turns the ReportLab Flate RGB scan into a browser image and keeps the candidate unaccepted", async () => {
     const parsed = await parsePdfBytes(fs.readFileSync(path.join(samples, "standard-scan.pdf")));
     expect(parsed.parts).toHaveLength(1);
@@ -81,7 +81,7 @@ describe("M1b b5 rework parsers", () => {
   });
 });
 
-describe("M1b b5 rework package identity", () => {
+describe("package identity", () => {
   it("keeps a non-conflicting id and aligns a duplicated note payload, history and reference", async () => {
     const source = await startApp();
     const target = await startApp();
@@ -158,7 +158,7 @@ describe("M1b b5 rework package identity", () => {
       const keptAnchor = manifest.anchors.find((row) => manifest.refs.some((ref) => ref.to_id === row.id && ref.from_object_id === second.objectId))!;
       const before = (source.app.store.sqlite.prepare("SELECT COUNT(*) AS n FROM anchors").get() as { n: number }).n;
       const sourceFile = source.app.store.sqlite.prepare("SELECT relative_path FROM file_locations WHERE hosted = 1").get() as { relative_path: string };
-      const sourceBytes = fs.readFileSync(sourceFile.relative_path);
+      const sourceBytes = fs.readFileSync(path.join(source.app.store.managedLibraryDir, sourceFile.relative_path));
       importLibraryPackageResolved(source.app.store, packageDir, {
         strategy: "duplicate",
         decisions: [{ kind: "anchor", id: skippedAnchor.id, action: "skip" }],
@@ -175,7 +175,7 @@ describe("M1b b5 rework package identity", () => {
       expect(skippedRef?.to_id).toBe(skippedAnchor.id);
       expect(keptBlock.anchorId).toBe(keptRef.to_id);
       expect(keptBlock.anchorId).not.toBe(keptAnchor.id);
-      expect(fs.readFileSync(sourceFile.relative_path).equals(sourceBytes)).toBe(true);
+      expect(fs.readFileSync(path.join(source.app.store.managedLibraryDir, sourceFile.relative_path)).equals(sourceBytes)).toBe(true);
 
       const hostedName = path.basename(sourceFile.relative_path);
       fs.rmSync(path.join(packageDir, "attachments", hostedName));
@@ -185,7 +185,7 @@ describe("M1b b5 rework package identity", () => {
       expect(imported.available).toBe(0);
       expect(target.app.store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources").get()).toEqual({ n: 1 });
       expect((source.app.store.sqlite.prepare("SELECT available FROM file_locations WHERE hosted = 1").get() as { available: number }).available).toBe(1);
-      expect(fs.readFileSync(sourceFile.relative_path).equals(sourceBytes)).toBe(true);
+      expect(fs.readFileSync(path.join(source.app.store.managedLibraryDir, sourceFile.relative_path)).equals(sourceBytes)).toBe(true);
     } finally {
       source.app.close();
       target.app.close();

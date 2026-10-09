@@ -9,7 +9,18 @@
     "./location": "./src/location.ts",
     "./errors": "./src/errors.ts",
     "./media": "./src/media.ts",
-    "./quick-tasks": "./src/quick-tasks.ts"
+    "./quick-tasks": "./src/quick-tasks.ts",
+    "./creative": "./src/inputs-creative.ts",
+    "./canvas": "./src/inputs-canvas.ts",
+    "./roughcut": "./src/roughcut.ts",
+    "./roughcut-inputs": "./src/inputs-roughcut.ts",
+    "./copy": "./src/inputs-copy.ts",
+    "./research": "./src/inputs-research.ts",
+    "./semantic": "./src/inputs-semantic.ts",
+    "./plugin": "./src/plugin.ts",
+    "./keys": "./src/key-bindings.ts",
+    "./danmaku": "./src/inputs-danmaku.ts",
+    "./models": "./src/inputs-models.ts"
   },
   "dependencies": {
     "zod": "4.6.5"

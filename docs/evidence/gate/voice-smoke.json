@@ -1,0 +1,107 @@
+{
+  "steps": [
+    {
+      "id": "connection",
+      "ok": true
+    },
+    {
+      "id": "open-reader",
+      "ok": true
+    },
+    {
+      "id": "recording-shown",
+      "ok": true,
+      "detail": {
+        "feedbackMs": 19
+      }
+    },
+    {
+      "id": "microphone",
+      "ok": true,
+      "detail": {
+        "level": 0.5,
+        "clock1": "0:00",
+        "clock2": "0:01"
+      }
+    },
+    {
+      "id": "overlay",
+      "ok": true,
+      "detail": {
+        "windows": 1,
+        "visible": true
+      }
+    },
+    {
+      "id": "stop",
+      "ok": true
+    },
+    {
+      "id": "session",
+      "ok": true,
+      "detail": {
+        "session": {
+          "id": "cap_0e67d626-e6fa-450b-a7df-e131442c8b6a",
+          "mode": "toggle",
+          "retention": "keep",
+          "stage": "done",
+          "audioState": "retained",
+          "playable": true,
+          "durationMs": 11200,
+          "createdAt": "2026-10-15T11:10:42.964Z",
+          "stoppedAt": "2026-10-15T11:10:54.238Z",
+          "workId": "work_b02cc8d0-3292-4c62-8f74-a2da6dccb124",
+          "deviceLabel": "Fake Default Audio Input",
+          "resourceId": "res_6acff00b-e791-43e3-bf84-4b173113f6be",
+          "error": null,
+          "segments": {
+            "total": 1,
+            "done": 1,
+            "failed": 0,
+            "pending": 0,
+            "noSpeech": 0
+          },
+          "speechMs": 6208
+        },
+        "segments": 1
+      }
+    },
+    {
+      "id": "transcript",
+      "ok": true,
+      "detail": {
+        "uploads": 1,
+        "types": [
+          "multipart/form-data"
+        ],
+        "bytes": [
+          213908
+        ]
+      }
+    },
+    {
+      "id": "source",
+      "ok": true,
+      "detail": {
+        "sample": [
+          {
+            "startMs": 0,
+            "endMs": 6668,
+            "resourceId": "res_6acff00b-e791-43e3-bf84-4b173113f6be",
+            "resourceRevisionId": "rev_3794f32f-8d40-474e-b1cb-1fe062072b0d",
+            "locator": {
+              "kind": "text",
+              "partId": "body",
+              "representationId": "rev_3794f32f-8d40-474e-b1cb-1fe062072b0d",
+              "normalizationVersion": "text-nfc-lf-v1",
+              "range": {
+                "start": 0,
+                "end": 280
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

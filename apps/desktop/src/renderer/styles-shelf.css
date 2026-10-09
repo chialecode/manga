@@ -8,11 +8,21 @@
 .menu-root { position: relative; display: inline-flex; }
 .menu-button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border-radius: 8px; color: var(--color-subtle); font-size: 12px; }
 .menu-button:hover, .menu-button[aria-expanded="true"], .menu-button[data-active="true"] { background: var(--color-muted); color: var(--color-text); }
-.menu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; min-width: 160px; padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px #30364722; }
-.menu-list.menu-end { left: auto; right: 0; }
-.menu-list > button { text-align: left; padding: 7px 10px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
-.menu-list > button:hover:not(:disabled), .menu-list > button:focus-visible { background: var(--color-accent-soft); }
-.menu-list > button[data-danger="true"] { color: var(--color-danger); }
+/* A popup is on the top layer (components/popup.tsx), placed beside its anchor by anchor positioning; it turns over when the other side has more room. */
+.popup { position: fixed; inset: auto; margin: 0; width: max-content; max-width: min(100%, calc(100vw - 16px)); max-height: min(100%, 80vh); overflow: auto; color: var(--color-text); position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline; }
+.popup[data-placement="below"] { margin-top: 4px; }
+.popup[data-placement="above"] { margin-bottom: 6px; }
+.popup[data-placement="below"][data-align="start"] { position-area: bottom span-right; }
+.popup[data-placement="below"][data-align="end"] { position-area: bottom span-left; }
+.popup[data-placement="above"][data-align="start"] { position-area: top span-right; }
+.popup[data-placement="above"][data-align="end"] { position-area: top span-left; }
+.menu-list { min-width: 160px; max-width: calc(100vw - 24px); padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px #30364722; }
+.menu-list button { text-align: left; padding: 7px 10px; border-radius: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-list button:hover:not(:disabled), .menu-list button:focus-visible { background: var(--color-accent-soft); }
+.menu-list button[data-danger="true"] { color: var(--color-danger); }
+.menu-group { display: flex; flex-direction: column; }
+.menu-group + .menu-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--color-border); }
+.menu-group-title { padding: 6px 10px 3px; font-size: 11px; color: var(--color-subtle); white-space: nowrap; }
 .icon-button { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; color: var(--color-subtle); }
 .icon-button:hover:not(:disabled) { background: var(--color-muted); color: var(--color-text); }
 .icon-button[aria-pressed="true"] { color: var(--color-accent); background: var(--color-accent-soft); }
@@ -22,7 +32,7 @@
 
 /* ---- page frame ------------------------------------------------------- */
 .page-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.page-pad { padding: 22px; overflow: auto; flex: 1; min-height: 0; }
+.page-pad { padding: 22px; overflow: auto; flex: 1; min-height: 0; scrollbar-gutter: stable; }
 .banner { padding: 8px 18px; font-size: 13px; }
 .banner-danger { color: var(--color-danger); }
 .banner-subtle { color: var(--color-subtle); }
@@ -49,14 +59,14 @@
 .filter-panel label { display: flex; flex-direction: column; gap: 4px; color: var(--color-subtle); }
 .filter-panel select { padding: 5px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text); }
 .shelf-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.shelf-sections { overflow: auto; padding-bottom: 22px; }
+.shelf-sections { overflow: auto; padding-bottom: 22px; scrollbar-gutter: stable; }
 .shelf-count { font-size: 12px; color: var(--color-subtle); margin-bottom: 8px; }
 .shelf-note { font-size: 13px; color: var(--color-subtle); padding: 6px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .shelf-error { color: var(--color-danger); }
 .shelf-empty { display: grid; place-items: center; gap: 8px; text-align: center; padding: 56px 16px; border: 1px dashed var(--color-border); border-radius: 14px; color: var(--color-subtle); }
 .shelf-empty .empty-title { font-size: 15px; color: var(--color-text); }
 .shelf-empty .empty-hint { font-size: 13px; max-width: 420px; }
-.virtual-scroll { flex: 1; min-height: 0; overflow: auto; padding-bottom: 22px; }
+.virtual-scroll { flex: 1; min-height: 0; overflow: auto; padding-bottom: 22px; scrollbar-gutter: stable; }
 .virtual-cell { min-width: 0; }
 .shelf-section { margin-bottom: 26px; }
 .shelf-section > header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -96,6 +106,14 @@
 .work-row .work-text { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 12px; padding: 14px 40px 14px 6px; }
 .work-row .work-progress { display: flex; align-items: center; gap: 8px; }
 .work-row .work-progress-bar { flex: 1; }
+/* The resources that are in no work, at the end of the shelf. */
+.unassigned-group { margin-top: 26px; padding: 0 2px 22px; }
+.unassigned-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.unassigned-row { display: flex; align-items: center; gap: 8px; padding: 2px 6px 2px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.unassigned-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 0; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+.unassigned-title { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.delete-entry h3 { margin: 14px 0 4px; font-size: 13px; font-weight: 600; }
+.delete-entry ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 @media (max-width: 760px) {
   .work-row .work-text { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .shelf { padding: 14px 14px 0; }

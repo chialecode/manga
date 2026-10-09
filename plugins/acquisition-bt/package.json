@@ -1,0 +1,14 @@
+{
+  "name": "@manga/plugin-acquisition-bt",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BitTorrent acquisition engine: the first-party plugin that runs the transfer in its own process.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "webtorrent": "3.0.21"
+  },
+  "devDependencies": {
+    "bittorrent-tracker": "11.2.3"
+  }
+}

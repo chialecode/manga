@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../../lib/api.ts";
 import { formatClock } from "../../readers/video-model.ts";
+import { TraceDialog } from "../../components/trace-dialog.tsx";
 import { Pager, SettingsPage, SettingsSection } from "./rows.tsx";
 
 type T = Translator["t"];
@@ -67,7 +68,7 @@ function SummaryTable(props: { t: T; title: string; rows: UsageSummary[]; testId
  * What each Agent run and transcription used (A-49): the model, the tokens and cost the service reported, how long it took and how it
  * ended, summarised by day and by model. A figure the service did not provide says so instead of showing zero.
  */
-export function UsagePage(props: { t: T; formatDate: (value: string) => string; formatNumber: (value: number) => string; onError: (message: string) => void }) {
+export function UsagePage(props: { t: T; formatDate: (value: string) => string; formatNumber: (value: number) => string; onError: (message: string) => void; onNotice?: (message: string) => void }) {
   const { t } = props;
   const [model, setModel] = useState("");
   const [from, setFrom] = useState("");
@@ -75,6 +76,7 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
   const [offset, setOffset] = useState(0);
   const [found, setFound] = useState<Found | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [traceRun, setTraceRun] = useState<string | null>(null);
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -116,7 +118,7 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
         <SettingsSection title={t("usage.details")} testId="usage-details">
           <div className="table-scroll">
             <table className="usage-table" data-testid="usage-rows">
-              <thead><tr><th scope="col">{t("usage.time")}</th><th scope="col">{t("usage.kind")}</th><th scope="col">{t("usage.model")}</th><th scope="col">{t("usage.input")}</th><th scope="col">{t("usage.output")}</th><th scope="col">{t("usage.cost")}</th><th scope="col">{t("usage.duration")}</th><th scope="col">{t("usage.result")}</th></tr></thead>
+              <thead><tr><th scope="col">{t("usage.time")}</th><th scope="col">{t("usage.kind")}</th><th scope="col">{t("usage.model")}</th><th scope="col">{t("usage.input")}</th><th scope="col">{t("usage.output")}</th><th scope="col">{t("usage.cost")}</th><th scope="col">{t("usage.duration")}</th><th scope="col">{t("usage.result")}</th><th scope="col"><span className="sr-only">{t("usage.trace")}</span></th></tr></thead>
               <tbody>
                 {found.rows.map((row) => (
                   <tr key={`${row.kind}:${row.id}`} data-testid={`usage-row-${row.id}`} data-recorded={row.recorded ? "true" : "false"}>
@@ -128,6 +130,7 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
                     <td>{figure(t, row, row.costUsd, cost)}</td>
                     <td>{row.kind === "transcription" && row.audioMs !== null ? t("usage.audioLength", { time: formatClock(row.audioMs) }) : figure(t, row, row.durationMs, seconds)}</td>
                     <td>{row.errorCode ? `${row.status} · ${row.errorCode}` : row.status}</td>
+                    <td>{row.kind === "run" ? <button type="button" className="link-button" data-testid={`usage-trace-${row.id}`} onClick={() => setTraceRun(row.id)}>{t("usage.trace")}</button> : null}</td>
                   </tr>
                 ))}
               </tbody>
@@ -136,6 +139,7 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
           <Pager testId="usage-pager" offset={offset} limit={PAGE} total={found.total} onPage={setOffset} previous={t("pager.previous")} next={t("pager.next")} label={(a, b, count) => t("pager.range", { from: a, to: b, total: count })} />
         </SettingsSection>
       ) : null}
+      {traceRun ? <TraceDialog t={t} runId={traceRun} formatNumber={number} onNotice={props.onNotice ?? (() => undefined)} onClose={() => setTraceRun(null)} /> : null}
     </SettingsPage>
   );
 }

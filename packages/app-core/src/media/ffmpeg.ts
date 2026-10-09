@@ -177,6 +177,9 @@ export function timelineFromPackets(lines: string[], startMs: number): PacketTim
 
 export type FfmpegRunOptions = Omit<ToolRunOptions, "redact"> & { redactPaths?: string[] };
 
+/** Options of the reading helpers: `background` runs the tool below normal priority, for work nobody is waiting on. */
+export type BackgroundOption = { signal?: AbortSignal; background?: boolean };
+
 /**
  * FFmpeg as a subprocess behind a concurrency cap. A missing build is reported as a capability gap; a tool that fails
  * returns its (path-redacted) complaint in the error and leaves nothing running.
@@ -228,27 +231,31 @@ export class FfmpegService {
     }, options.signal);
   }
 
-  async probe(file: string, options: { signal?: AbortSignal } = {}): Promise<ReturnType<typeof probeFromJson>> {
+  async probe(file: string, options: BackgroundOption = {}): Promise<ReturnType<typeof probeFromJson>> {
     const redactPaths = [file, path.dirname(file)];
-    const run = await this.run("ffprobe", ["-v", "error", "-hide_banner", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters", "-i", file], { signal: options.signal, timeoutMs: 60_000, maxStdoutBytes: 16 * 1024 * 1024, redactPaths });
+    const run = await this.run("ffprobe", ["-v", "error", "-hide_banner", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters", "-i", file], { signal: options.signal, timeoutMs: 60_000, maxStdoutBytes: 16 * 1024 * 1024, redactPaths, lowPriority: options.background });
     let json: FfprobeJson;
     try { json = JSON.parse(run.stdout.toString("utf8")) as FfprobeJson; } catch { throw new MangaError("UNSUPPORTED_FORMAT", "the media file could not be probed"); }
     if (!json.format || !(json.streams ?? []).length) throw new MangaError("UNSUPPORTED_FORMAT", "the media file has no readable streams");
     return probeFromJson(json, { name: "ffprobe", version: await this.version() });
   }
 
+  /**
+   * The frame times of a whole file. This reads every packet header, so on a large cold file it takes as long as reading the file:
+   * only a frame-by-frame operation asks for it, never an import, and it always runs below normal priority.
+   */
   async packetTimeline(file: string, streamIndex: number, startMs: number, options: { signal?: AbortSignal } = {}): Promise<PacketTimeline> {
     const run = await this.run("ffprobe", ["-v", "error", "-select_streams", String(streamIndex), "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", "-i", file], {
-      signal: options.signal, timeoutMs: 5 * 60_000, maxStdoutBytes: 128 * 1024 * 1024, redactPaths: [file, path.dirname(file)],
+      signal: options.signal, timeoutMs: 5 * 60_000, maxStdoutBytes: 128 * 1024 * 1024, redactPaths: [file, path.dirname(file)], lowPriority: true,
     });
     return timelineFromPackets(run.stdout.toString("utf8").split(/\r?\n/), startMs);
   }
 
   /** One decoded frame near `timeMs` (container timeline), scaled so its long edge fits `maxEdge`. */
-  async frameJpeg(file: string, containerTimeSec: number, maxEdge: number, options: { signal?: AbortSignal } = {}): Promise<Buffer> {
+  async frameJpeg(file: string, containerTimeSec: number, maxEdge: number, options: BackgroundOption = {}): Promise<Buffer> {
     const scale = `scale='if(gt(iw,ih),min(${maxEdge},iw),-2)':'if(gt(iw,ih),-2,min(${maxEdge},ih))'`;
     const run = await this.run("ffmpeg", ["-v", "error", "-nostdin", "-ss", containerTimeSec.toFixed(3), "-i", file, "-frames:v", "1", "-vf", scale, "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"], {
-      signal: options.signal, timeoutMs: 60_000, maxStdoutBytes: 32 * 1024 * 1024, redactPaths: [file, path.dirname(file)], allowFailure: true,
+      signal: options.signal, timeoutMs: 60_000, maxStdoutBytes: 32 * 1024 * 1024, redactPaths: [file, path.dirname(file)], allowFailure: true, lowPriority: options.background,
     });
     // A time past the end decodes nothing; that is an absent frame, not a broken file.
     if (!run.stdout.length) throw new MangaError("NOT_FOUND", "no frame at that time");

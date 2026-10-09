@@ -21,6 +21,8 @@ import { parseOverride, projectWork, projectedValue, type FieldOverride, type Pr
 import { readLayout } from "./domain/revision-layout.ts";
 import { touchWorkMutation } from "./progress-service.ts";
 import { workKindMutation } from "./reading-service.ts";
+import { resolveLocation } from "./library-locations.ts";
+import { groupKeySql, outsideCount, outsideSql, userContentSql, versionCount, versionsOf, workHoldsUserContent } from "./works-versions.ts";
 
 type WorkRow = {
   id: string;
@@ -132,45 +134,65 @@ function readableResourceIds(store: DrizzleStore, workId: string, grant: ScopeGr
   return rows.map((row) => row.id).filter((id) => grants.canRead(grant, id));
 }
 
-export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit?: number; cursor?: string; query?: string; kind?: WorkMediaKind; shelf?: ShelfState; linked?: boolean; format?: string; hasNotes?: boolean; sort?: "recent" | "added" | "title" | "progress" }): WorkListPage {
+export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit?: number; cursor?: string; query?: string; kind?: WorkMediaKind; shelf?: ShelfState; linked?: boolean; format?: string; hasNotes?: boolean; sort?: "recent" | "added" | "title" | "progress"; group?: boolean }): WorkListPage {
   const limit = Math.min(Math.max(input.limit ?? 60, 1), 200);
   const sort = input.sort ?? "recent";
-  const where: string[] = ["EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = w.id)"];
-  const params: Array<string | number> = [];
-  if (grant.access !== "owner") {
-    const ids = grant.readResourceIds;
-    if (!ids.length) return { items: [], total: 0, nextCursor: null };
-    where.push(`EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = w.id AND rr.id IN (${ids.map(() => "?").join(",")}))`);
-    params.push(...ids);
-  }
-  if (input.kind) {
-    where.push("w.media_kind = ?");
-    params.push(input.kind);
-  }
-  if (input.shelf) {
-    where.push("w.shelf_state = ?");
-    params.push(input.shelf);
-  }
-  if (input.linked !== undefined) {
-    where.push(`${input.linked ? "" : "NOT "}EXISTS (SELECT 1 FROM work_links l WHERE l.work_id = w.id AND l.link_state = 'linked')`);
-  }
-  if (input.format) {
-    // The format a file is listed under: a comic's container, else the book format, else the video container; plain text books carry none.
-    where.push(`EXISTS (SELECT 1 FROM resources rf JOIN resource_revisions vf ON vf.resource_id = rf.id WHERE rf.work_id = w.id
-      AND LOWER(COALESCE(json_extract(vf.payload_json, '$.comic.source'), json_extract(vf.payload_json, '$.format'), json_extract(vf.payload_json, '$.video.container'), 'txt')) = ?)`);
-    params.push(input.format.toLowerCase());
-  }
-  if (input.hasNotes !== undefined) {
-    where.push(`${input.hasNotes ? "" : "NOT "}EXISTS (SELECT 1 FROM refs nr JOIN anchors na ON na.id = nr.to_id JOIN resources nrr ON nrr.id = na.resource_id WHERE nr.to_kind = 'anchor' AND nrr.work_id = w.id)`);
-  }
-  const text = input.query?.trim();
-  if (text) {
-    const like = escapeLike(text);
-    where.push(`(w.title LIKE ? ESCAPE '\\' OR w.author LIKE ? ESCAPE '\\' OR json_extract(w.projection_json, '$.title.value') LIKE ? ESCAPE '\\' OR json_extract(w.projection_json, '$.titleOriginal.value') LIKE ? ESCAPE '\\')`);
-    params.push(like, like, like, like);
-  }
+  const owner = grant.access === "owner";
+  if (!owner && !grant.readResourceIds.length) return { items: [], total: 0, nextCursor: null };
+  // What narrows the list, written for the table alias it is applied to: the list itself, or the inner pass that picks one version per title.
+  const filters = (a: string): { where: string[]; params: Array<string | number> } => {
+    // A work with no resource is listed when it holds something the user wrote (A-67); an agent only sees works it can read a resource of.
+    const where: string[] = [owner
+      ? `(EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id) OR ${userContentSql(a)})`
+      : `EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id)`];
+    const params: Array<string | number> = [];
+    if (!owner) {
+      const ids = grant.readResourceIds;
+      where.push(`EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id AND rr.id IN (${ids.map(() => "?").join(",")}))`);
+      params.push(...ids);
+    }
+    if (input.kind) {
+      where.push(`${a}.media_kind = ?`);
+      params.push(input.kind);
+    }
+    if (input.shelf) {
+      where.push(`${a}.shelf_state = ?`);
+      params.push(input.shelf);
+    }
+    if (input.linked !== undefined) {
+      where.push(`${input.linked ? "" : "NOT "}EXISTS (SELECT 1 FROM work_links l WHERE l.work_id = ${a}.id AND l.link_state = 'linked')`);
+    }
+    if (input.format) {
+      // The format a file is listed under: a comic's container, else the book format, else the video container; plain text books carry none.
+      where.push(`EXISTS (SELECT 1 FROM resources rf JOIN resource_revisions vf ON vf.resource_id = rf.id WHERE rf.work_id = ${a}.id
+        AND LOWER(COALESCE(json_extract(vf.payload_json, '$.comic.source'), json_extract(vf.payload_json, '$.format'), json_extract(vf.payload_json, '$.video.container'), 'txt')) = ?)`);
+      params.push(input.format.toLowerCase());
+    }
+    if (input.hasNotes !== undefined) {
+      where.push(`${input.hasNotes ? "" : "NOT "}EXISTS (SELECT 1 FROM refs nr JOIN anchors na ON na.id = nr.to_id JOIN resources nrr ON nrr.id = na.resource_id WHERE nr.to_kind = 'anchor' AND nrr.work_id = ${a}.id)`);
+    }
+    const text = input.query?.trim();
+    if (text) {
+      const like = escapeLike(text);
+      where.push(`(${a}.title LIKE ? ESCAPE '\\' OR ${a}.author LIKE ? ESCAPE '\\' OR json_extract(${a}.projection_json, '$.title.value') LIKE ? ESCAPE '\\' OR json_extract(${a}.projection_json, '$.titleOriginal.value') LIKE ? ESCAPE '\\')`);
+      params.push(like, like, like, like);
+    }
+    return { where, params };
+  };
+  // With `group`, works of one medium linked to one Bangumi entry are one entry (A-68): the version opened last stands for them, and the
+  // filters pick which versions count. The data is not merged; unlinking a work lists it on its own again.
+  const grouped = input.group === true && owner;
+  const own = filters("w");
+  const inner = grouped ? filters("x") : null;
+  const from = inner
+    ? `works w JOIN (SELECT x.id AS id, ROW_NUMBER() OVER (PARTITION BY ${groupKeySql("x")} ORDER BY COALESCE(x.last_opened_at, '') DESC, x.created_at DESC, x.id DESC) AS rn FROM works x WHERE ${inner.where.join(" AND ")}) g ON g.id = w.id AND g.rn = 1`
+    : "works w";
+  const fromParams: Array<string | number> = inner ? inner.params : [];
+  const where: string[] = inner ? [] : own.where;
+  const params: Array<string | number> = inner ? [] : own.params;
+  const clause = () => (where.length ? `WHERE ${where.join(" AND ")}` : "");
   // The total describes the complete filtered library; the cursor only narrows the returned page.
-  const total = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM works w WHERE ${where.join(" AND ")}`).get(...params) as { n: number }).n;
+  const total = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${from} ${clause()}`).get(...fromParams, ...params) as { n: number }).n;
   // Progress of the resource the card shows (the last opened one, else the first), on its newest revision.
   const shown = "COALESCE(w.last_resource_id, (SELECT sr.id FROM resources sr WHERE sr.work_id = w.id ORDER BY sr.sort_key, sr.created_at, sr.id LIMIT 1))";
   const progressExpr = `COALESCE((SELECT sp.percent FROM progress sp WHERE sp.resource_id = ${shown} AND sp.resource_revision_id = (SELECT sv.id FROM resource_revisions sv WHERE sv.resource_id = ${shown} ORDER BY sv.created_at DESC, sv.rowid DESC LIMIT 1)), 0)`;
@@ -190,7 +212,7 @@ export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit
     }
   }
   const order = secondExpr ? `${keyExpr} ${direction}, ${secondExpr} ${direction}, w.id ${direction}` : `${keyExpr} ${direction}, w.id ${direction}`;
-  const rows = store.sqlite.prepare(`SELECT w.*, ${keyExpr} AS k1${secondExpr ? `, ${secondExpr} AS k2` : ""} FROM works w WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ?`).all(...params, limit + 1) as Array<WorkRow & { k1: string; k2?: string }>;
+  const rows = store.sqlite.prepare(`SELECT w.*, ${keyExpr} AS k1${secondExpr ? `, ${secondExpr} AS k2` : ""} FROM ${from} ${clause()} ORDER BY ${order} LIMIT ?`).all(...fromParams, ...params, limit + 1) as Array<WorkRow & { k1: string; k2?: string }>;
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   return {
@@ -226,6 +248,8 @@ function summarize(store: DrizzleStore, row: WorkRow): WorkSummary {
     progress,
     finishedCount: finished,
     resourceCount,
+    versionCount: versionCount(store, row.id),
+    outsideCount: outsideCount(store, row.id),
     linked,
     createdAt: row.created_at,
     lastOpenedAt: row.last_opened_at,
@@ -236,14 +260,14 @@ export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantReg
   const row = workOf(store, workId);
   const readable = new Set(readableResourceIds(store, workId, grant, grants));
   if (grant.access !== "owner" && !readable.size) throw new MangaError("SCOPE_DENIED", "work is outside the authorized set");
-  const resourceRows = store.sqlite.prepare("SELECT id, title, kind, ordinal_label, ordinal_number, ordinal_type, sort_key FROM resources WHERE work_id = ? ORDER BY sort_key, created_at, id").all(workId) as Array<{
-    id: string; title: string; kind: string; ordinal_label: string | null; ordinal_number: number | null; ordinal_type: string | null;
+  const resourceRows = store.sqlite.prepare(`SELECT r.id, r.title, r.kind, r.ordinal_label, r.ordinal_number, r.ordinal_type, r.sort_key, ${outsideSql("r")} AS outside FROM resources r WHERE r.work_id = ? ORDER BY r.sort_key, r.created_at, r.id`).all(workId) as Array<{
+    id: string; title: string; kind: string; ordinal_label: string | null; ordinal_number: number | null; ordinal_type: string | null; outside: number;
   }>;
   const resources: WorkResourceRow[] = resourceRows.filter((item) => readable.has(item.id)).map((item) => {
     const revision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(item.id) as { id: string } | undefined;
     const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state, last_locator_json, last_interaction_at FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(item.id, revision.id) as { percent: number; completion_state: string; last_locator_json: string | null; last_interaction_at: string } | undefined : undefined;
     const layout = revision ? readLayout(store, revision.id) : undefined;
-    const location = revision ? store.sqlite.prepare("SELECT relative_path, available FROM file_locations WHERE resource_revision_id = ? ORDER BY rowid DESC LIMIT 1").get(revision.id) as { relative_path: string; available: number } | undefined : undefined;
+    const location = revision ? resolveLocation(store, revision.id) ?? undefined : undefined;
     return {
       id: item.id,
       title: item.title,
@@ -260,7 +284,8 @@ export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantReg
       },
       unit: layout?.unit ?? null,
       total: layout?.total ?? 0,
-      available: location ? location.available === 1 && fs.existsSync(location.relative_path) : true,
+      available: location ? location.available && location.path !== null && fs.existsSync(location.path) : true,
+      outside: item.outside === 1,
     };
   });
   const projection = parseProjection(row.projection_json);
@@ -277,6 +302,8 @@ export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantReg
     coverState: row.cover_state,
     coverCount: (store.sqlite.prepare("SELECT COUNT(*) AS n FROM covers WHERE work_id = ?").get(workId) as { n: number }).n,
     resources,
+    // The other versions of this title; the owner's page offers them, an agent's view of the work has no use for them.
+    versions: grant.access === "owner" ? versionsOf(store, workId) : [],
   };
 }
 
@@ -320,6 +347,7 @@ function deleteWorkMutations(workId: string): Mutation[] {
     { sql: "DELETE FROM metadata_candidates WHERE work_id = ?", params: [workId] },
     { sql: "DELETE FROM work_links WHERE work_id = ?", params: [workId] },
     { sql: "DELETE FROM work_terms WHERE work_id = ?", params: [workId] },
+    { sql: "DELETE FROM dictionary_terms WHERE scope = 'work' AND work_id = ?", params: [workId] },
     { sql: "DELETE FROM covers WHERE work_id = ?", params: [workId] },
     { sql: "DELETE FROM subject_characters WHERE work_id = ?", params: [workId] },
     { sql: "DELETE FROM subject_persons WHERE work_id = ?", params: [workId] },
@@ -343,13 +371,23 @@ export function moveResource(store: DrizzleStore, envelope: CommandEnvelope, inp
     mutations.push({ sql: "INSERT INTO works(id,title,created_at,media_kind,updated_at) VALUES (?,?,?,?,?)", params: [target, input.newWorkTitle!, now, kind, now] });
   }
   if (target === from) return { resourceId: input.resourceId, workId: target, moved: false };
-  mutations.push({ sql: "UPDATE resources SET work_id = ? WHERE id = ?", params: [target, input.resourceId] });
+  mutations.push({ sql: "UPDATE resources SET work_id = ?, left_work_at = NULL WHERE id = ?", params: [target, input.resourceId] });
+  // What was made from the resource (screenshots, rough cuts, notes written beside it) belongs to the work it is in now.
+  mutations.push({ sql: "UPDATE work_files SET work_id = ? WHERE resource_id = ?", params: [target, input.resourceId] });
+  mutations.push({ sql: "UPDATE screenshots SET work_id = ? WHERE resource_id = ?", params: [target, input.resourceId] });
+  mutations.push({ sql: "UPDATE content_objects SET work_id = ? WHERE type = 'notes.document' AND json_extract(scope_json, '$.resourceId') = ?", params: [target, input.resourceId] });
   mutations.push(workKindMutation(target, now));
-  // The source work keeps its covers, links and overrides while it still has resources; an empty work disappears with them.
+  // The source work keeps its covers, links and overrides while it still has resources. When the last one leaves, a work that holds
+  // something the user wrote (terms, a dictionary, edited fields, notes, a conversation) stays as a work with no resource (A-67); one that
+  // holds only what the files and the online entry said goes, because nothing is lost with it.
   let removedWorkId: string | undefined;
+  let keptEmptyWorkId: string | undefined;
   if (from) {
     const remaining = (store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources WHERE work_id = ? AND id <> ?").get(from, input.resourceId) as { n: number }).n;
-    if (remaining === 0) {
+    if (remaining === 0 && workHoldsUserContent(store, from, input.resourceId)) {
+      mutations.push({ sql: "UPDATE works SET last_resource_id = NULL, updated_at = ? WHERE id = ?", params: [now, from] });
+      keptEmptyWorkId = from;
+    } else if (remaining === 0) {
       mutations.push(...deleteWorkMutations(from));
       removedWorkId = from;
     } else {
@@ -362,9 +400,9 @@ export function moveResource(store: DrizzleStore, envelope: CommandEnvelope, inp
     events: [{ type: "resource.moved", payload: { resourceId: input.resourceId, from, to: target } }],
     idempotencyKey: envelope.idempotencyKey,
     commandId: envelope.commandId,
-    result: { resourceId: input.resourceId, workId: target, removedWorkId },
+    result: { resourceId: input.resourceId, workId: target, removedWorkId, keptEmptyWorkId },
   });
-  return { resourceId: input.resourceId, workId: target, fromWorkId: from, removedWorkId, moved: true };
+  return { resourceId: input.resourceId, workId: target, fromWorkId: from, removedWorkId, keptEmptyWorkId, moved: true };
 }
 
 export function setOrdinal(store: DrizzleStore, envelope: CommandEnvelope, input: { resourceId: string; ordinal: Ordinal | null }): Record<string, unknown> {

@@ -1,0 +1,16 @@
+{
+  "manifest": {
+    "format": "manga-plugin-v1",
+    "id": "manga.acquisition-bt",
+    "name": "BitTorrent 获取",
+    "version": "1.0.0",
+    "publisher": { "id": "manga", "name": "MANGA" },
+    "description": "用磁力链接或种子文件下载资源：下载在独立的进程里进行，每个分片都对照种子的哈希校验。下载完成后由应用发布到资源库路径并入库。",
+    "host": { "min": "0.1.0" },
+    "permissions": ["network", "files"],
+    "entry": "main.mjs",
+    "provides": [{ "slot": "acquisition.engine", "id": "bittorrent" }],
+    "facets": ["acquisition"]
+  },
+  "bundle": { "entry": "src/main.mjs", "out": "main.mjs", "alias": { "webrtc-polyfill": "stubs/webrtc-polyfill.mjs", "utp-native": "stubs/utp-native.mjs" } }
+}

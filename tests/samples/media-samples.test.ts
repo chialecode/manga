@@ -12,13 +12,13 @@ beforeAll(() => {
   manifest = requireSamples();
 });
 
-describe.skipIf(mediaPrerequisitesAbsent)("M2 synthetic samples", () => {
+describe.skipIf(mediaPrerequisitesAbsent)("synthetic samples", () => {
   it("lists every required sample with an ID, a fingerprint and sub-features", () => {
     const required = [
       "comic-dir-natural", "comic-dir-sparse", "comic-dir-duplicates", "comic-dir-long-strip", "comic-dir-huge", "comic-dir-corrupt", "comic-dir-mixed",
       "cbz-basic", "cbz-comicinfo", "cbz-traversal", "cbz-bomb", "cbz-encrypted",
       "comic-pdf-images", "comic-epub-images", "comic-mobi-images", "cover-images", "epub-with-cover",
-      "video-mp4-h264-aac", "video-mkv-ass-fonts", "video-external-subs", "video-mkv-hevc-8bit", "video-mkv-hevc-10bit", "video-vfr", "video-nonzero-start", "video-ac3", "video-corrupt", "video-episodes",
+      "video-mp4-h264-aac", "video-mkv-ass-fonts", "video-external-subs", "video-subtitle-layout", "video-widescreen-subs", "video-mkv-srt-tracks", "video-mkv-hevc-8bit", "video-mkv-hevc-10bit", "video-vfr", "video-nonzero-start", "video-ac3", "video-corrupt", "video-episodes",
       "voice-recording-30min", "voice-no-speech", "voice-tts-clips",
     ];
     for (const id of required) {

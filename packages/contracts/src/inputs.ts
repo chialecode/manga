@@ -1,8 +1,20 @@
 import { z } from "zod";
 import { SourceLocatorSchema } from "./location.ts";
 import { AgentMediaContextSchema, MediaCommandInputs } from "./inputs-media.ts";
-import { ReworkCommandInputs } from "./inputs-rework.ts";
+import { WorkspaceCommandInputs } from "./inputs-workspace.ts";
+import { CanvasCommandInputs } from "./inputs-canvas.ts";
+import { CopyCommandInputs } from "./inputs-copy.ts";
+import { ResearchCommandInputs } from "./inputs-research.ts";
+import { SemanticCommandInputs } from "./inputs-semantic.ts";
+import { CreativeCommandInputs } from "./inputs-creative.ts";
+import { PluginCommandInputs } from "./inputs-plugins.ts";
+import { AcquisitionCommandInputs } from "./inputs-acquisition.ts";
+import { RoughcutCommandInputs } from "./inputs-roughcut.ts";
+import { WorkFileCommandInputs } from "./inputs-works.ts";
+import { DanmakuCommandInputs } from "./inputs-danmaku.ts";
+import { ModelInputs, ModelProfilePatchSchema } from "./inputs-models.ts";
 import { OrdinalSchema } from "./media.ts";
+import { PACKAGE_ROW_KINDS } from "./library-package.ts";
 import { LOCATION_PARTITIONS } from "./paths.ts";
 import { NoteBlockSchema, NOTE_TAG_MAX, ReadingStylePatchSchema, ShellPanelSchema } from "./reading.ts";
 
@@ -76,7 +88,6 @@ export const CommandInputs = {
   }).strict(),
   "notes.rename": z.object({ objectId: id, expectedRevision: z.number().int().positive(), title: z.string().max(512), tags: z.array(z.string().min(1).max(64)).max(NOTE_TAG_MAX).optional() }).strict(),
   "notes.asset": z.object({ resourceRevisionId: id, assetId: id }).strict(),
-  "capture.save": z.object({ bytes, mimeType: z.enum(["audio/webm", "audio/webm;codecs=opus"]), metadata: z.record(z.string(), z.unknown()) }).strict(),
   "progress.set": z.object({
     resourceId: id,
     resourceRevisionId: id,
@@ -127,20 +138,15 @@ export const CommandInputs = {
     pathHandle: id.optional(),
     sourceDir: z.string().min(1).optional(),
     strategy: z.enum(["skip", "replace", "duplicate"]),
-    decisions: z.array(z.object({ kind: z.enum(["work", "resource", "resource_revision", "object", "anchor", "ref", "progress", "capture", "bookmark"]), id: id, action: z.enum(["skip", "replace", "duplicate"]) }).strict()).max(5000).optional(),
+    decisions: z.array(z.object({ kind: z.enum(PACKAGE_ROW_KINDS), id: id, action: z.enum(["skip", "replace", "duplicate"]) }).strict()).max(5000).optional(),
   }).strict(),
   "workspace.sessions": z.object({ mode: z.enum(["enthusiast", "creator"]).optional() }).strict(),
+  /** Takes an opened resource, project or work-mode conversation off the left rail. Nothing is deleted; opening the same target again brings it back (A-74). */
+  "session.close": z.object({ sessionId: id }).strict(),
   "session.open": z.object({ kind: z.enum(["resource", "project", "note", "work"]), targetId: id, mode: z.enum(["enthusiast", "creator"]).optional(), sessionId: id.optional() }).strict(),
   "notes.embed": z.object({ objectId: id, expectedRevision: z.number().int().positive(), fromBlockId: id, targetId: id, targetKind: z.enum(["object", "anchor"]) }).strict(),
-  "capture.stat": z.object({ attachmentId: id }).strict(),
-  "capture.preparePlayback": z.object({ attachmentId: id }).strict(),
-  "capture.markPlayback": z.object({ attachmentId: id, positionMs: z.number().nonnegative().max(24 * 60 * 60 * 1000) }).strict(),
-  "metadata.confirm": z.object({ workId: id, providerId: id, externalId: id }).strict(),
   "reader.ui.present": z.object({}).strict(),
   "reader.resolveAnchor": z.object({ resourceRevisionId: id, locator: SourceLocatorSchema }).strict(),
-  "metadata.query": z.object({ title: id, mode: z.enum(["single", "fallback", "multi"]), workId: id }).strict(),
-  "metadata.override": z.object({ workId: id, fields: z.record(z.string(), z.unknown()), locked: z.array(id), cleared: z.array(id) }).strict(),
-  "acquisition.start": z.object({ url: z.string().url(), fileName: id, targetDir: z.string().min(1), quotaBytes: z.number().int().positive().max(64 * 1024 * 1024).optional(), previousEtag: z.string().optional(), injectDiskFull: z.boolean().optional() }).strict(),
   "library.find": z.object({
     text: z.string().max(512),
     readAllowlist: z.array(id).max(10000).optional(),
@@ -192,14 +198,18 @@ export const CommandInputs = {
     timeoutMs: z.number().int().positive().max(300_000).optional(),
     purpose: z.enum(["text", "transcription", "embedding", "vision"]),
     credentialHandle: id.optional(),
+    /** The numbers and switches of the model; what is left out keeps its value (or the default for a new connection). */
+    profile: ModelProfilePatchSchema.optional(),
   }).strict(),
   "connections.test": z.object({
     connectionId: id,
     capability: z.enum(["text", "tools", "streaming", "transcription", "embedding", "vision"]),
   }).strict(),
   "connections.delete": z.object({ connectionId: id }).strict(),
+  /** Brings an audio file into the folder of a work (A-79) and transcribes the copy; the original is left where it is. */
   "library.transcribeAudio": z.object({
     pathHandle: id,
+    workId: id,
     connectionId: id.optional(),
   }).strict(),
   "library.indexExternal": z.object({
@@ -234,14 +244,19 @@ export const CommandInputs = {
   "agent.retry": z.object({ runId: id }).strict(),
   "agent.getRun": z.object({ runId: id }).strict(),
   ...MediaCommandInputs,
-  ...ReworkCommandInputs,
+  ...WorkspaceCommandInputs,
+  ...CreativeCommandInputs,
+  ...CanvasCommandInputs,
+  ...CopyCommandInputs,
+  ...ResearchCommandInputs,
+  ...SemanticCommandInputs,
+  ...PluginCommandInputs,
+  ...AcquisitionCommandInputs,
+  ...RoughcutCommandInputs,
+  ...WorkFileCommandInputs,
+  ...DanmakuCommandInputs,
+  ...ModelInputs,
 };
-
-/**
- * Commands that only the M0 prototype under `experiments/m0` registers. They stay declared so its regression keeps
- * validating; the product does not register them and the registration test excludes them.
- */
-export const LEGACY_EXPERIMENT_COMMANDS = ["capture.save", "capture.stat", "capture.preparePlayback", "capture.markPlayback", "metadata.confirm", "metadata.query", "metadata.override", "acquisition.start"] as const;
 
 export function validateCommandInput(commandId: string, input: unknown): unknown {
   const schema = CommandInputs[commandId as keyof typeof CommandInputs];

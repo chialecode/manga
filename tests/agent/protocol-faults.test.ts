@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { startMockProvider, streamText, transcribeAudio, completeText } from "@manga/model-protocol";
 import { startApp, waitForRun } from "../helpers/app.ts";
 
-describe("P5 protocol faults", () => {
+describe("protocol faults", () => {
   it("rejects incomplete streamed tool JSON", async () => {
     const server = await startMockProvider({ mode: "malicious-json" });
     let args = "";

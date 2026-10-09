@@ -26,7 +26,7 @@ function sample(name: string): Uint8Array {
   return new Uint8Array(bytes);
 }
 
-describe("M1b independent reading samples", () => {
+describe("independent reading samples", () => {
   it("reads an EPUB written by an external zip writer", () => {
     const parsed = parseEpubBytes(sample("reading-sample.epub"));
     expect(parsed.format).toBe("epub");

@@ -9,14 +9,15 @@ import { describe, expect, it } from "vitest";
 import { completeText, startMockProvider, syntheticWav } from "@manga/model-protocol";
 import { MangaProductApp, TestVault } from "@manga/app-core";
 import { startApp, waitForRun, writeTempWav } from "../helpers/app.ts";
+import { seedVideo } from "../helpers/media-seed.ts";
 import { ownedFileFingerprint } from "../../packages/app-core/src/locations.ts";
 
 const crashChild = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../packages/app-core/src/crash-child.ts");
 
-describe("F-24 location ownership", () => {
+describe("location ownership", () => {
   it("rolls back only owned copying/committed files and keeps foreign files", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
-    const target = path.join(os.tmpdir(), `manga-m1a-owned-${process.pid}-${Date.now()}`);
+    const target = path.join(os.tmpdir(), `manga-owned-${process.pid}-${Date.now()}`);
     fs.mkdirSync(path.join(target, "resources"), { recursive: true });
     const keep = path.join(target, "resources", "foreign.txt");
     fs.writeFileSync(keep, "pre-existing");
@@ -39,7 +40,7 @@ describe("F-24 location ownership", () => {
     await app.call(actor, { commandId: "notes.create", idempotencyKey: "resume-note", input: { title: "keep-resume", text: "body" } }, grant.handle);
     const pointer = app.layout.pointerPath;
     app.close();
-    const target = fs.mkdtempSync(path.join(os.tmpdir(), "manga-m1a-resume-"));
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), "manga-resume-"));
     const crashed = spawnSync(process.execPath, ["--experimental-strip-types", crashChild, "--profile", profileRoot, "--crash-at", "location-copy", "--op", "locations.apply", "--target", target], {
       encoding: "utf8",
       timeout: 20_000,
@@ -60,11 +61,11 @@ describe("F-24 location ownership", () => {
   });
 });
 
-describe("F-25 write barrier after location switch", () => {
+describe("write barrier after location switch", () => {
   it("seals the old host and marks the target job succeeded before the pointer switch", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     await app.call(actor, { commandId: "notes.create", idempotencyKey: "seal-note", input: { title: "keep", text: "body" } }, grant.handle);
-    const moved = path.join(os.tmpdir(), `manga-m1a-sealed-${process.pid}-${Date.now()}`);
+    const moved = path.join(os.tmpdir(), `manga-sealed-${process.pid}-${Date.now()}`);
     const handle = app.registerPath("directory", moved);
     const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "seal-p", input: { pathHandle: handle } }, grant.handle);
     const applied = await app.call(actor, { commandId: "settings.applyLocations", idempotencyKey: "seal-a", input: { checkpointId: proposed.value?.checkpointId, pathHandle: handle } }, grant.handle);
@@ -92,7 +93,7 @@ describe("F-25 write barrier after location switch", () => {
     const { app, profileRoot } = await startApp();
     const pointer = app.layout.pointerPath;
     app.close();
-    const target = path.join(os.tmpdir(), `manga-m1a-switch-${process.pid}-${Date.now()}`);
+    const target = path.join(os.tmpdir(), `manga-switch-${process.pid}-${Date.now()}`);
     const result = spawnSync(process.execPath, ["--experimental-strip-types", crashChild, "--profile", profileRoot, "--crash-at", "location-switch", "--op", "locations.apply", "--target", target], {
       encoding: "utf8",
       timeout: 20_000,
@@ -106,7 +107,7 @@ describe("F-25 write barrier after location switch", () => {
   it("redirects an explicit old profile root to the published library", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     await app.call(actor, { commandId: "notes.create", idempotencyKey: "auth-note", input: { title: "authoritative", text: "body" } }, grant.handle);
-    const moved = fs.mkdtempSync(path.join(os.tmpdir(), "manga-m1a-auth-"));
+    const moved = fs.mkdtempSync(path.join(os.tmpdir(), "manga-auth-"));
     const handle = app.registerPath("directory", moved);
     const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "auth-p", input: { pathHandle: handle } }, grant.handle);
     const applied = await app.call(actor, { commandId: "settings.applyLocations", idempotencyKey: "auth-a", input: { checkpointId: proposed.value?.checkpointId, pathHandle: handle } }, grant.handle);
@@ -139,7 +140,7 @@ describe("F-25 write barrier after location switch", () => {
       const { app, actor, grant, profileRoot } = await startApp();
       await app.call(actor, { commandId: "notes.create", idempotencyKey: `crash-note-${stage}`, input: { title: `keep-${stage}`, text: "body" } }, grant.handle);
       app.close();
-      const target = fs.mkdtempSync(path.join(os.tmpdir(), `manga-m1a-${stage}-`));
+      const target = fs.mkdtempSync(path.join(os.tmpdir(), `manga-${stage}-`));
       const crashed = spawnSync(process.execPath, ["--experimental-strip-types", crashChild, "--profile", profileRoot, "--crash-at", stage, "--op", "locations.apply", "--target", target], {
         encoding: "utf8",
         timeout: 20_000,
@@ -161,7 +162,7 @@ describe("F-25 write barrier after location switch", () => {
   }, 120_000);
 });
 
-describe("F-26 actor-bound idempotency", () => {
+describe("actor-bound idempotency", () => {
   it("rejects replaying another actor's receipt", async () => {
     const { app, actor, grant } = await startApp();
     const created = await app.call(actor, { commandId: "notes.create", idempotencyKey: "shared-key", input: { title: "owner", text: "secret" } }, grant.handle);
@@ -187,7 +188,7 @@ describe("F-26 actor-bound idempotency", () => {
   });
 });
 
-describe("F-27 immediate run identity", () => {
+describe("immediate run identity", () => {
   it("returns a runId before the provider finishes", async () => {
     const server = await startMockProvider({ mode: "timeout" });
     const { app, actor, grant } = await startApp();
@@ -225,7 +226,7 @@ describe("F-27 immediate run identity", () => {
   });
 });
 
-describe("F-28 dual runtime freeze", () => {
+describe("dual runtime freeze", () => {
   it("stores the selected runtime on the run and ignores later settings changes", async () => {
     const server = await startMockProvider();
     const { app, actor, grant } = await startApp();
@@ -248,7 +249,7 @@ describe("F-28 dual runtime freeze", () => {
   });
 });
 
-describe("F-29 model purposes and file transcription", () => {
+describe("model purposes and file transcription", () => {
   it("probes embedding, clears old capabilities on upsert, and transcribes an authorized wav", async () => {
     const server = await startMockProvider();
     const { app, actor, grant, profileRoot } = await startApp();
@@ -265,9 +266,18 @@ describe("F-29 model purposes and file transcription", () => {
     const asr = await app.call(actor, { commandId: "connections.upsert", idempotencyKey: "asr-conn", input: { label: "asr", protocol: "openai-chat-completions", baseUrl: server.url, modelId: "whisper", purpose: "transcription", credentialHandle: asrSecret } }, grant.handle);
     const wav = writeTempWav(profileRoot);
     const handle = app.registerPath("file", wav);
-    const transcript = await app.call(actor, { commandId: "library.transcribeAudio", idempotencyKey: "asr-file", input: { pathHandle: handle, connectionId: asr.value?.id } }, grant.handle);
+    const work = seedVideo(app, { title: "转写的作品" });
+    const transcript = await app.call(actor, { commandId: "library.transcribeAudio", idempotencyKey: "asr-file", input: { pathHandle: handle, workId: work.workId, connectionId: asr.value?.id } }, grant.handle);
     expect(transcript.status).toBe("ok");
     expect(String(transcript.value?.text)).toContain("transcript");
+    // The audio was copied into the folder of the work first and the file that was picked stays where it was (A-79).
+    const imported = app.workFolders.files(work.workId);
+    expect(imported).toEqual([expect.objectContaining({ kind: "audio-import", subDir: "录音", fileName: path.basename(wav) })]);
+    expect(fs.readFileSync(app.workFolders.pathOf(imported[0]!.id)!).equals(fs.readFileSync(wav))).toBe(true);
+    expect(fs.existsSync(wav)).toBe(true);
+    const missing = await app.call(actor, { commandId: "library.transcribeAudio", idempotencyKey: "asr-nowork", input: { pathHandle: handle, workId: "work-none", connectionId: asr.value?.id } }, grant.handle);
+    expect(missing.error?.code).toBe("NOT_FOUND");
+    expect(app.workFolders.files(work.workId)).toHaveLength(1);
     expect(syntheticWav().byteLength).toBeGreaterThan(44);
     await server.close();
     app.close();
@@ -287,7 +297,7 @@ describe("F-29 model purposes and file transcription", () => {
   });
 });
 
-describe("F-30 settings and inventory", () => {
+describe("settings and inventory", () => {
   it("reports needsSetup from connections, not from an empty workspace object", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     const settings = await app.call(actor, { commandId: "settings.get", idempotencyKey: "need-1", input: {} }, grant.handle);
@@ -296,7 +306,7 @@ describe("F-30 settings and inventory", () => {
     await app.call(actor, { commandId: "library.importText", idempotencyKey: "need-imp", input: { title: "sized", bytes: [...Buffer.from("占用统计正文")] } }, grant.handle);
     const overview = await app.call(actor, { commandId: "inventory.overview", idempotencyKey: "need-ov", input: {} }, grant.handle);
     expect((overview.value?.totals as { resource: { bytes: number } }).resource.bytes).toBeGreaterThan(0);
-    const external = path.join(os.tmpdir(), `manga-m1a-indexed-${process.pid}-${Date.now()}`);
+    const external = path.join(os.tmpdir(), `manga-indexed-${process.pid}-${Date.now()}`);
     fs.mkdirSync(external, { recursive: true });
     fs.writeFileSync(path.join(external, "keep.bin"), "abc");
     const handle = app.registerPath("directory", external);
@@ -311,7 +321,7 @@ describe("F-30 settings and inventory", () => {
 
   it("persists a pointer location and cancels a batched scan", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
-    const pointerDir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-m1a-pointer-"));
+    const pointerDir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-pointer-"));
     const handle = app.registerPath("directory", pointerDir);
     const saved = await app.call(actor, { commandId: "settings.setLayout", idempotencyKey: "lay-pointer", input: { pointerPathHandle: handle } }, grant.handle);
     expect(saved.status).toBe("ok");
@@ -338,7 +348,7 @@ describe("F-30 settings and inventory", () => {
   });
 });
 
-describe("F-32 snapshot, retry and budgets", () => {
+describe("snapshot, retry and budgets", () => {
   it("keeps material revisions on retry and does not duplicate submitted tools", async () => {
     const server = await startMockProvider({
       streamToolName: "notes.create",
@@ -413,6 +423,9 @@ describe("F-32 snapshot, retry and budgets", () => {
       expect(first.value?.status).toBe("failed");
       const notesBefore = app.workspace().notes.length;
       expect(notesBefore).toBe(1);
+      // The window this is about: the note was committed, and the process stopped before the step that made it was checkpointed. (A step that did finish is not run again
+      // either, but there the model has seen the result and may ask for another note on purpose: that call runs.)
+      app.store.sqlite.prepare("UPDATE agent_runs SET checkpoint_json = ? WHERE id = ?").run(JSON.stringify({ step: 0 }), String(sent.value?.runId));
       const deadline = app.store.sqlite.prepare("SELECT deadline_at AS deadline FROM agent_runs WHERE id = ?").get(String(sent.value?.runId)) as { deadline: string | null };
       const retried = await app.call(actor, { commandId: "agent.retry", idempotencyKey: "disc-retry", input: { runId: sent.value?.runId } }, grant.handle);
       const final = await waitForRun(app, actor, grant.handle, String(sent.value?.runId));
@@ -428,13 +441,52 @@ describe("F-32 snapshot, retry and budgets", () => {
       await new Promise<void>((resolve) => { server.close(() => resolve()); });
     }
   });
+
+  it("runs a tool the model asks for again after a step that did finish, and a second call of the same command in one run is its own call", async () => {
+    let requests = 0;
+    const server = createServer(async (request, response) => {
+      for await (const _chunk of request) { /* drain */ }
+      requests += 1;
+      if (requests === 2) { response.destroy(); return; }
+      response.setHeader("content-type", "text/event-stream");
+      const title = requests === 1 ? "first note" : requests === 3 ? "second note" : null;
+      const delta = title
+        ? { tool_calls: [{ index: 0, id: `call_${requests}`, type: "function", function: { name: "notes.create", arguments: JSON.stringify({ title, text: "synthetic" }) } }] }
+        : { content: "done" };
+      response.write(`data: ${JSON.stringify({ choices: [{ delta, finish_reason: delta.tool_calls ? "tool_calls" : "stop" }] })}\n\n`);
+      response.end("data: [DONE]\n\n");
+    });
+    await new Promise<void>((resolve) => { server.listen(0, "127.0.0.1", () => resolve()); });
+    const { app, actor, grant } = await startApp();
+    try {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      await app.call(actor, { commandId: "connections.upsert", idempotencyKey: "again-conn", input: { label: "synthetic", protocol: "openai-chat-completions", baseUrl: `http://127.0.0.1:${port}/v1`, modelId: "synthetic", purpose: "text", credentialHandle: app.stashSecret("test-credential-value-for-vault") } }, grant.handle);
+      const session = await app.call(actor, { commandId: "agent.createSession", idempotencyKey: "again-ses", input: {} }, grant.handle);
+      const sent = await app.call(actor, { commandId: "agent.send", idempotencyKey: "again-send", input: { sessionId: session.value?.id, text: "make notes" } }, grant.handle);
+      const first = await waitForRun(app, actor, grant.handle, String(sent.value?.runId));
+      expect(first.value?.status).toBe("failed");
+      expect(app.workspace().notes).toHaveLength(1);
+      await app.call(actor, { commandId: "agent.retry", idempotencyKey: "again-retry", input: { runId: sent.value?.runId } }, grant.handle);
+      const final = await waitForRun(app, actor, grant.handle, String(sent.value?.runId));
+      expect(final.value?.status).toBe("succeeded");
+      // The first step finished before the connection dropped, so the model had its result; the second note is what it asked for next.
+      expect(app.workspace().notes.map((note) => note.title).sort()).toEqual(["first note", "second note"]);
+      const events = app.store.sqlite.prepare("SELECT command_id, status FROM agent_tool_events WHERE run_id = ? ORDER BY created_at, rowid").all(String(sent.value?.runId));
+      expect(events).toEqual([{ command_id: "notes.create", status: "executed" }, { command_id: "notes.create", status: "executed" }]);
+    } finally {
+      app.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => { server.close(() => resolve()); });
+    }
+  });
 });
 
-describe("F-24/25 reopen after migration", () => {
+describe("reopen after migration", () => {
   it("opens the copied library after a successful switch", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     await app.call(actor, { commandId: "notes.create", idempotencyKey: "reopen-n", input: { title: "moved", text: "ok" } }, grant.handle);
-    const moved = path.join(os.tmpdir(), `manga-m1a-reopen-${process.pid}-${Date.now()}`);
+    const moved = path.join(os.tmpdir(), `manga-reopen-${process.pid}-${Date.now()}`);
     const handle = app.registerPath("directory", moved);
     const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "reopen-p", input: { pathHandle: handle } }, grant.handle);
     const applied = await app.call(actor, { commandId: "settings.applyLocations", idempotencyKey: "reopen-a", input: { checkpointId: proposed.value?.checkpointId, pathHandle: handle } }, grant.handle);

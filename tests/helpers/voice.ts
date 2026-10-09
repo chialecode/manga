@@ -87,7 +87,7 @@ export class EnergyVad implements VadEngine {
 
 // ------------------------------------------------------------------ providers
 
-export type AsrCall = { fileName: string; bytes: number; prompt?: string; timestamps?: boolean; at: number };
+export type AsrCall = { fileName: string; bytes: number; prompt?: string; language?: string; timestamps?: boolean; at: number };
 
 /** A transcription provider whose answers and failures are scripted. */
 export class FakeAsr implements AsrPort {
@@ -119,7 +119,7 @@ export class FakeAsr implements AsrPort {
     const key = /^c(\d+)-(\d+)/.exec(request.fileName);
     const startMs = key ? Number(key[1]) : 0;
     const endMs = key ? Number(key[2]) : 0;
-    this.calls.push({ fileName: request.fileName, bytes: request.bytes.byteLength, prompt: request.prompt, timestamps: request.timestamps, at: Date.now() });
+    this.calls.push({ fileName: request.fileName, bytes: request.bytes.byteLength, prompt: request.prompt, language: request.language, timestamps: request.timestamps, at: Date.now() });
     if (this.blockOn) await (this.ignoreAbort ? this.blockOn : Promise.race([this.blockOn, new Promise<void>((_, reject) => request.signal.addEventListener("abort", () => reject(new MangaError("CANCELLED", "cancelled")), { once: true }))]));
     if (this.delayMs) await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(resolve, this.delayMs);

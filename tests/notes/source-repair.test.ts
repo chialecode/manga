@@ -4,17 +4,18 @@ import { describe, expect, it } from "vitest";
 import { NORMALIZATION_V1 } from "@manga/contracts";
 import { buildEpubFixture } from "@manga/app-core";
 import { startApp, tempProfile } from "../helpers/app.ts";
+import { inLibrary } from "../helpers/samples.ts";
 
 /**
  * Second rework pass: note→source repair, reference hygiene, progress window restore, per-row package
  * decisions, session isolation and the auditable frozen context. Synthetic data only.
  */
-describe("M1b rework: source repair and reader state", () => {
+describe("source repair and reader state", () => {
   it("re-points a note whose source revision is gone and keeps the link usable", async () => {
     const { app, actor, grant } = await startApp();
     const file = path.join(tempProfile(), "repair-source.txt");
     fs.writeFileSync(file, "修复前的正文，用于来源失效。");
-    const handle = app.registerPath("file", file);
+    const handle = app.registerPath("file", inLibrary(app, file));
     const imported = await app.call(actor, { commandId: "library.importDocument", idempotencyKey: "repair-import", input: { title: "待修来源", pathHandle: handle, format: "auto" } }, grant.handle);
     expect(imported.status).toBe("ok");
     const resourceId = String(imported.value?.resourceId);
@@ -166,7 +167,7 @@ describe("M1b rework: source repair and reader state", () => {
     const file = path.join(tempProfile(), "moved-source.txt");
     const text = "开头。源文件稍后会移动，笔记要保留自己的修订。";
     fs.writeFileSync(file, text);
-    const handle = app.registerPath("file", file);
+    const handle = app.registerPath("file", inLibrary(app, file));
     const imported = await app.call(actor, { commandId: "library.importDocument", idempotencyKey: "moved-import", input: { title: "移动来源", pathHandle: handle, format: "auto" } }, grant.handle);
     const resourceId = String(imported.value?.resourceId);
     const revisionId = String(imported.value?.revisionId);
@@ -186,14 +187,18 @@ describe("M1b rework: source repair and reader state", () => {
     // The original file moves away: the reader reports it and the card offers the repair entry.
     const moved = `${file}.moved`;
     fs.renameSync(file, moved);
+    // Opening is refused at the one check every way of opening goes through (A-86), and the answer says where the file was.
     const missing = await app.call(actor, { commandId: "library.read", idempotencyKey: "moved-read", input: { resourceId } }, grant.handle);
-    expect((missing.value as { source: { available: boolean; revisionFileMissing: boolean } }).source).toMatchObject({ available: false, revisionFileMissing: true });
+    expect(missing.status).toBe("error");
+    expect(missing.error).toMatchObject({ code: "LOCATION_UNAVAILABLE", details: { reason: "file-missing", relativePath: path.basename(file) } });
+    const asked = await app.call(actor, { commandId: "library.openable", idempotencyKey: "moved-openable", input: { resourceId } }, grant.handle);
+    expect(asked.value).toMatchObject({ resourceId, state: "missing", relativePath: path.basename(file) });
     const staleCard = await app.call(actor, { commandId: "notes.openSource", idempotencyKey: "moved-open", input: { objectId } }, grant.handle);
     expect((staleCard.value as { card: { available: boolean } }).card.available).toBe(false);
 
     // The user picks the moved file for the same resource; its text changed, so it becomes a new revision.
     fs.writeFileSync(moved, "重排后的新开头。\n" + text);
-    const repaired = await app.call(actor, { commandId: "library.repairSource", idempotencyKey: "moved-repair", input: { resourceId, pathHandle: app.registerPath("file", moved) } }, grant.handle);
+    const repaired = await app.call(actor, { commandId: "library.repairSource", idempotencyKey: "moved-repair", input: { resourceId, pathHandle: app.registerPath("file", inLibrary(app, moved)) } }, grant.handle);
     expect(repaired.status).toBe("ok");
     const newRevisionId = String(repaired.value?.revisionId);
     expect(newRevisionId).not.toBe(revisionId);
@@ -325,11 +330,17 @@ describe("M1b rework: source repair and reader state", () => {
     expect(listed.some((row) => row.sessionId === String(bookSession.value?.id))).toBe(true);
     expect(listed.some((row) => row.sessionId === String(creator.value?.id))).toBe(false);
     expect(listed.filter((row) => row.kind === "note")).toHaveLength(1);
-    const project = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project", input: { kind: "project", targetId: "proj-alpha", mode: "creator" } }, grant.handle);
-    const projectAgain = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-2", input: { kind: "project", targetId: "proj-alpha", mode: "creator" } }, grant.handle);
+    // A project session is bound to a project that exists (C1): the identity is one project, one mode, one session.
+    const ghost = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-ghost", input: { kind: "project", targetId: "proj-alpha", mode: "creator" } }, grant.handle);
+    expect(ghost.status).toBe("error");
+    expect(ghost.error?.code).toBe("NOT_FOUND");
+    const made = await app.call(actor, { commandId: "project.create", idempotencyKey: "iso-project-make", input: { name: "阿尔法" } }, grant.handle);
+    const projectId = String((made.value as { id: string }).id);
+    const project = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project", input: { kind: "project", targetId: projectId, mode: "creator" } }, grant.handle);
+    const projectAgain = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-2", input: { kind: "project", targetId: projectId, mode: "creator" } }, grant.handle);
     expect((projectAgain.value as { id: string; reused: boolean }).id).toBe((project.value as { id: string }).id);
     expect((projectAgain.value as { reused: boolean }).reused).toBe(true);
-    const projectOtherMode = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-mode", input: { kind: "project", targetId: "proj-alpha", mode: "enthusiast" } }, grant.handle);
+    const projectOtherMode = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-mode", input: { kind: "project", targetId: projectId, mode: "enthusiast" } }, grant.handle);
     expect((projectOtherMode.value as { id: string }).id).not.toBe((project.value as { id: string }).id);
     app.close();
   });

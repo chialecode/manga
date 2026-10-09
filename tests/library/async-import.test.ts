@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { planDirectory, planDirectoryAsync } from "../../packages/app-core/src/comic/scan.ts";
-import { startApp } from "../helpers/app.ts";
+import { libraryRoot, startApp } from "../helpers/app.ts";
 
 let counter = 0;
 const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), "manga-async-"));
@@ -92,6 +92,11 @@ describe("reading a folder without holding the main thread", () => {
     const ctx = await startApp();
     try {
       for (let i = 1; i <= 3; i += 1) touch(root, `书/第${i}卷.txt`, `第${i}卷\n${"正文".repeat(50)}`);
+      // A folder no library path holds is refused as a whole, naming the folder to add (A-80).
+      counter += 1;
+      const refused = await ctx.app.call(ctx.actor, { commandId: "works.importDirectory", idempotencyKey: `dir-${counter}`, input: { pathHandle: ctx.app.registerPath("directory", path.join(root, "书")), kind: "novel" } }, ctx.grant.handle);
+      expect(refused.error).toMatchObject({ code: "VALIDATION_ERROR", details: { reason: "outside-library", folder: path.join(root, "书") } });
+      libraryRoot(ctx.app, root);
       counter += 1;
       const imported = await ctx.app.call(ctx.actor, { commandId: "works.importDirectory", idempotencyKey: `dir-${counter}`, input: { pathHandle: ctx.app.registerPath("directory", path.join(root, "书")), kind: "novel" } }, ctx.grant.handle);
       expect(imported.status, JSON.stringify(imported)).toBe("ok");

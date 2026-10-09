@@ -24,6 +24,56 @@ export async function clickTestId(view: BrowserWindow, testId: string, timeoutMs
   })`) as Promise<boolean>;
 }
 
+/**
+ * A real mouse click at the element's centre: unlike a dispatched event it is trusted and carries user activation, which
+ * browser APIs such as `requestFullscreen()` insist on. The window must be shown and the element in view.
+ */
+export async function trustedClick(view: BrowserWindow, testId: string, timeoutMs = 4000): Promise<boolean> {
+  const point = await view.webContents.executeJavaScript(`new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      const el = document.querySelector('[data-testid="${testId}"]');
+      const box = el && !el.disabled ? el.getBoundingClientRect() : null;
+      if (box && box.width > 0 && box.height > 0) resolve({ x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) });
+      else if (Date.now() - started > ${timeoutMs}) resolve(null);
+      else setTimeout(tick, 50);
+    };
+    tick();
+  })`) as { x: number; y: number } | null;
+  if (!point) return false;
+  view.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
+  view.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  view.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  return true;
+}
+
+/**
+ * The novel reader's controls slide out of sight while the book is read. A pointer move near the reader's bottom edge (where the only bar is)
+ * brings them back; the move is waited out, so what is measured or clicked next is where the controls rest.
+ */
+export async function revealNovelControls(view: BrowserWindow): Promise<boolean> {
+  const shown = await view.webContents.executeJavaScript(`(() => {
+    const root = document.querySelector('[data-testid="reading-page"]');
+    if (!root) return false;
+    const box = root.getBoundingClientRect();
+    root.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: box.left + box.width / 2, clientY: box.bottom - 12 }));
+    return true;
+  })()`) as boolean;
+  if (shown) await sleep(260);
+  return shown;
+}
+
+/**
+ * A real key press (trusted, so it takes the same path as the keyboard): down, a pause while it is held, then up. A tap is a short hold;
+ * a hold longer than the page's hold time is what the arrows treat as "keep going". Modifiers are not used by the callers.
+ */
+export async function pressKey(view: BrowserWindow, keyCode: string, heldMs = 40): Promise<void> {
+  view.webContents.focus();
+  view.webContents.sendInputEvent({ type: "keyDown", keyCode });
+  await sleep(heldMs);
+  view.webContents.sendInputEvent({ type: "keyUp", keyCode });
+}
+
 /** Wait until a test id exists, optionally with an attribute equal to an expected value. */
 export async function waitForTestId(view: BrowserWindow, testId: string, attribute = "data-present", expected: string | null = null, timeoutMs = 15_000): Promise<boolean> {
   return view.webContents.executeJavaScript(`new Promise((resolve) => {
@@ -87,6 +137,22 @@ export async function setSelect(view: BrowserWindow, testId: string, value: stri
  */
 export async function openFromShelf(view: BrowserWindow, nav: string, resourceId: string, timeoutMs = 6000): Promise<boolean> {
   if (!(await clickTestId(view, nav, timeoutMs))) return false;
+  // A shelf of one medium draws only the rows in view (a virtual grid): a card further down is not in the page until the grid is scrolled to it,
+  // as a person scrolls to find it.
+  await view.webContents.executeJavaScript(`new Promise((resolve) => {
+    const started = Date.now();
+    let wrapped = false;
+    const tick = () => {
+      if (document.querySelector('[data-testid="open-${resourceId}"]')) return resolve(true);
+      const grid = document.querySelector('[data-testid="shelf-grid"]');
+      // The grid comes back where it was left, so the way down ends with one jump back to the top.
+      if (grid && grid.scrollTop + grid.clientHeight < grid.scrollHeight - 1) grid.scrollTop += Math.max(100, grid.clientHeight / 2);
+      else if (grid && !wrapped) { wrapped = true; grid.scrollTop = 0; }
+      if (Date.now() - started > ${timeoutMs}) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  })`);
   if (!(await clickTestId(view, `open-${resourceId}`, timeoutMs))) return false;
   if (!(await waitForTestId(view, "page-work", "data-present", null, timeoutMs))) return false;
   return clickTestId(view, "work-read", timeoutMs);

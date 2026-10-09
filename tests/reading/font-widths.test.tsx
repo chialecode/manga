@@ -37,7 +37,7 @@ function pdf(content: string, font?: string, extra: string[] = []): Uint8Array {
 const cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /Synthetic def /CMapType 2 def 1 begincodespacerange <0000> <FFFF> endcodespacerange 1 beginbfrange <0041> <0043> <0041> endbfrange endcmap CMapName currentdict /CMap defineresource pop end end";
 const cidFont = "<< /Type /Font /Subtype /Type0 /BaseFont /Custom /Encoding /Identity-H /ToUnicode 7 0 R /DescendantFonts [6 0 R] >>";
 
-describe("M1b b9 font widths and drawing consistency", () => {
+describe("font widths and drawing consistency", () => {
   it("treats an indirect /Widths array like a direct one", async () => {
     const parsed = await parsePdfBytes(pdf("BT /F1 10 Tf 1 0 0 1 50 320 Tm (AB) Tj (C) Tj ET",
       "<< /Type /Font /Subtype /Type1 /BaseFont /Custom /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 67 /Widths 6 0 R >>",
@@ -130,7 +130,7 @@ const noAdvanceDoc = {
 
 const baseStyle = { measurePx: 680, fontSizePx: 18, fontFamily: "sans" as const, lineHeight: 1.7, marginPx: 24, theme: "white" };
 
-describe("M1b b9 page view draws the modelled advance", () => {
+describe("page view draws the modelled advance", () => {
   afterEach(() => cleanup());
 
   it("scales the drawn glyphs to the run's recorded width", () => {
@@ -203,7 +203,7 @@ const VARIANTS: Variant[] = [
   ] },
 ];
 
-describe("M1b b9 package dependency matrix", () => {
+describe("package dependency matrix", () => {
   it.each(VARIANTS)("$name keeps every surviving source resolvable", async (variant) => {
     const ctx = await startApp();
     try {

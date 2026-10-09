@@ -4,6 +4,10 @@
  * dragged rectangle means in page space.
  */
 
+import { actionOf, chordOf, resolveKeys } from "@manga/contracts/keys";
+
+const DEFAULT_KEYS = resolveKeys(null);
+
 export type ComicDirection = "ltr" | "rtl";
 export type ComicLayout = "single" | "double" | "strip";
 export type ComicFit = "width" | "height" | "page" | "original";
@@ -138,33 +142,27 @@ export function evictFarthest(cached: readonly number[], wanted: readonly number
   return droppable.slice(0, cached.length - capacity);
 }
 
-export type ComicKeyAction = "next" | "prev" | "first" | "last" | "zoomIn" | "zoomOut" | "zoomReset" | "fullscreen" | "escape";
+export type ComicKeyAction = "next" | "prev" | "first" | "last" | "zoomIn" | "zoomOut" | "zoomReset" | "fullscreen" | "screenshot" | "escape";
+
+const COMIC_ACTIONS: Record<string, ComicKeyAction> = {
+  "comic.next": "next", "comic.prev": "prev", "comic.first": "first", "comic.last": "last",
+  "comic.zoomIn": "zoomIn", "comic.zoomOut": "zoomOut", "comic.zoomReset": "zoomReset",
+  "comic.fullscreen": "fullscreen", "comic.screenshot": "screenshot",
+};
+/** The actions that turn pages: a strip scrolls with the browser's own keys, so these are left to it there. */
+const TURNS = new Set<ComicKeyAction>(["next", "prev", "first", "last"]);
 
 /**
- * What a key does. Arrow keys follow the reading direction, so the key on the side the next page comes from goes next.
- * A strip scrolls with the browser's own keys, so only the keys that have no scroll meaning are taken there.
+ * What a key does, by the key table (`@manga/contracts/keys`). The two arrow keys follow the reading direction, so the key on the side the
+ * next page comes from goes next. A strip scrolls with the browser's own keys, so only the keys that have no scroll meaning are taken there.
  */
-export function comicKeyAction(event: { key: string; shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }, direction: ComicDirection, layout: ComicLayout): ComicKeyAction | null {
-  const modifier = event.ctrlKey || event.metaKey;
-  if (modifier) {
-    if (event.key === "+" || event.key === "=") return "zoomIn";
-    if (event.key === "-") return "zoomOut";
-    if (event.key === "0") return "zoomReset";
-    return null;
-  }
-  if (event.key === "f" || event.key === "F") return "fullscreen";
-  if (event.key === "Escape") return "escape";
-  if (layout === "strip") return null;
-  switch (event.key) {
-    case "ArrowRight": return direction === "rtl" ? "prev" : "next";
-    case "ArrowLeft": return direction === "rtl" ? "next" : "prev";
-    case "PageDown": return "next";
-    case "PageUp": return "prev";
-    case " ": return event.shiftKey ? "prev" : "next";
-    case "Home": return "first";
-    case "End": return "last";
-    default: return null;
-  }
+export function comicKeyAction(event: Parameters<typeof actionOf>[0], direction: ComicDirection, layout: ComicLayout, keys: Record<string, readonly string[]> = DEFAULT_KEYS): ComicKeyAction | null {
+  if (chordOf(event) === "Esc") return "escape";
+  const id = actionOf(event, keys, "comic");
+  if (!id) return null;
+  const found: ComicKeyAction | null = id === "comic.left" ? (direction === "rtl" ? "next" : "prev") : id === "comic.right" ? (direction === "rtl" ? "prev" : "next") : COMIC_ACTIONS[id] ?? null;
+  if (found === null) return null;
+  return layout === "strip" && (TURNS.has(found) || id === "comic.left" || id === "comic.right") ? null : found;
 }
 
 /** A click on the left or right third turns the page; the middle is left alone. Reading direction decides which is next. */

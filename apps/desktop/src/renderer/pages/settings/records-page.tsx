@@ -4,6 +4,7 @@ import type { MessageKey, Translator } from "@manga/i18n";
 import { CAPTURE_AUDIO_STATES, CAPTURE_STAGES } from "@manga/contracts/media";
 import { asArray, attempt } from "../../lib/api.ts";
 import { formatClock } from "../../readers/video-model.ts";
+import { ConversationRecords } from "./conversation-records.tsx";
 import { Pager, SettingsPage } from "./rows.tsx";
 
 type T = Translator["t"];
@@ -32,7 +33,7 @@ const KINDS = ["novel", "comic", "video"] as const;
 const STATES = [...CAPTURE_STAGES, ...CAPTURE_AUDIO_STATES.filter((state) => state !== "none")] as readonly string[];
 const RETRYABLE = ["awaiting_asr", "pending", "failed", "recorded"];
 
-type Filter = { type: "all" | "note" | "recording"; mediaKind: string; state: string; q: string; deleted: boolean; workId: string | null };
+type Filter = { type: "all" | "note" | "recording" | "conversation"; mediaKind: string; state: string; q: string; deleted: boolean; workId: string | null };
 
 /**
  * Every note and recording in one filterable, paged list (交互设计 3.5, "记录"). A note can be opened, deleted (it is only hidden:
@@ -59,7 +60,9 @@ export function RecordsPage(props: {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const latest = useRef(0);
 
+  const conversations = filter.type === "conversation";
   const load = useCallback(async () => {
+    if (filter.type === "conversation") return;
     const request = ++latest.current;
     const result = await attempt<{ items: RecordItem[]; total: number }>("records.list", {
       type: filter.type,
@@ -101,12 +104,13 @@ export function RecordsPage(props: {
   return (
     <SettingsPage id="records" title={t("settings.page.records")} hint={t("records.hint")} wide>
       <div className="records-filters" role="search" data-testid="records-filters">
-        <select aria-label={t("records.type")} data-testid="records-type" value={filter.type} onChange={(event) => patch({ type: event.target.value as Filter["type"], state: event.target.value === "note" ? "" : filter.state })}>
+        <select aria-label={t("records.type")} data-testid="records-type" value={filter.type} onChange={(event) => patch({ type: event.target.value as Filter["type"], state: event.target.value === "note" || event.target.value === "conversation" ? "" : filter.state })}>
           <option value="all">{t("records.typeAll")}</option>
           <option value="note">{t("records.typeNote")}</option>
           <option value="recording">{t("records.typeRecording")}</option>
+          <option value="conversation">{t("records.typeConversation")}</option>
         </select>
-        <select aria-label={t("records.kind")} data-testid="records-kind" value={filter.mediaKind} onChange={(event) => patch({ mediaKind: event.target.value })}>
+        {conversations ? null : <><select aria-label={t("records.kind")} data-testid="records-kind" value={filter.mediaKind} onChange={(event) => patch({ mediaKind: event.target.value })}>
           <option value="">{t("records.kindAll")}</option>
           {KINDS.map((kind) => <option key={kind} value={kind}>{t(`shelf.kind.${kind}`)}</option>)}
         </select>
@@ -116,8 +120,10 @@ export function RecordsPage(props: {
         </select>
         <input type="search" aria-label={t("records.search")} placeholder={t("records.search")} data-testid="records-search" value={text} onChange={(event) => setText(event.target.value)} />
         <label className="msettings-check"><input type="checkbox" data-testid="records-deleted" checked={filter.deleted} onChange={(event) => patch({ deleted: event.target.checked, type: event.target.checked ? "note" : filter.type })} />{t("records.deleted")}</label>
-        {filter.workId ? <button type="button" className="chip chip-button" data-testid="records-work-scope" onClick={() => patch({ workId: null })}>{t("records.workScope")} ×</button> : null}
+        {filter.workId ? <button type="button" className="chip chip-button" data-testid="records-work-scope" onClick={() => patch({ workId: null })}>{t("records.workScope")} ×</button> : null}</>}
       </div>
+
+      {conversations ? <ConversationRecords t={t} formatDate={props.formatDate} onError={props.onError} onNotice={props.onNotice} /> : <>
 
       {status === "loading" && !items.length ? <p role="status" className="detail-muted" data-testid="records-loading">{t("status.loading")}</p> : null}
       {status === "ready" && items.length === 0 ? <p className="detail-muted settings-empty" data-testid="records-empty">{filter.deleted ? t("records.emptyDeleted") : t("records.empty")}</p> : null}
@@ -166,6 +172,7 @@ export function RecordsPage(props: {
         })}
       </ul>
       <Pager testId="records-pager" offset={offset} limit={PAGE} total={total} onPage={setOffset} previous={t("pager.previous")} next={t("pager.next")} label={(from, to, count) => t("pager.range", { from, to, total: count })} />
+      </>}
     </SettingsPage>
   );
 }

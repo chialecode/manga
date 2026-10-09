@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTranslator } from "@manga/i18n";
 import { startApp } from "../helpers/app.ts";
 
-describe("P4 Chinese workspace flows", () => {
+describe("Chinese workspace flows", () => {
   it("shares one session between the agent page and copilot entry", async () => {
     const { app, actor, grant } = await startApp();
     const session = await app.call(actor, { commandId: "agent.createSession", idempotencyKey: "s1", input: { title: "共享" } }, grant.handle);
@@ -43,13 +43,12 @@ describe("P4 Chinese workspace flows", () => {
     expect(zh.t("nav.settings")).toBe("设置");
     expect(zh.t("app.channel.test")).toBe("测试通道");
     expect(testLocale.t("nav.settings")).toBe("[[设置]]");
-    expect(zh.t("error.validation", { message: "范围" })).toContain("范围");
-    expect(zh.t("library.import")).toBe("导入 TXT");
+    expect(zh.t("shelf.emptyKind", { name: "小说" })).toBe("还没有小说");
+    expect(zh.t("library.scan")).toBe("扫描资源");
     expect(zh.t("settings.saveConnection")).toBe("保存连接");
     expect(zh.t("agent.retry")).toBe("重试");
     expect(zh.t("settings.chooseDirectory")).toContain("数据目录");
     expect(zh.t("settings.purposeEmbedding")).toBe("向量");
-    expect(zh.t("library.transcribe")).toContain("转录");
     expect(zh.t("settings.recoveryResume")).toBe("恢复中断任务");
     expect(zh.t("library.repair")).toBe("修复位置");
   });

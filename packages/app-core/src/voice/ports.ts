@@ -26,7 +26,7 @@ export interface AsrPort {
   }): Promise<TranscriptionResult>;
 }
 
-export type LlmConnection = { id: string };
+export type LlmConnection = { id: string; /** The model the connection talks to, when the port knows it; kept with what it wrote. */ model?: string };
 
 /** Text-only model used to turn a transcript into a draft note. Audio is never sent through it. */
 export interface LlmPort {

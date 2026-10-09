@@ -1,0 +1,3210 @@
+{
+  "status": "passed",
+  "stage": "m3",
+  "sourceFingerprint": "2506f327124f0c868190a8ae78af9aca92b6d87c20867576b9cb7cb47c5c37e0",
+  "lockFingerprint": "fcd6e09084c6198efae2239314ac261e3cdc02c1c658285d0a35c5d5c46c9f9b",
+  "testScriptFingerprint": "a209ab047174ed037c7b44a3fd64472e2c6eca06f5eaea24d97bb18f85cec37c",
+  "buildScriptFingerprint": "264f448b1289b3210cd9e22ccd1ea9f9be25c59e0b8a2fbe79dd86997fabe40c",
+  "productAcceptance": "not-run",
+  "at": "2026-10-15T11:14:42.453Z",
+  "source": "packaged window walk and creative walk, phases window-walk and creative (synthetic samples, fresh Profile each)",
+  "windowSizes": {
+    "wide": [
+      1280,
+      840
+    ],
+    "narrow": [
+      360,
+      780
+    ],
+    "short": [
+      1100,
+      460
+    ]
+  },
+  "observations": [
+    {
+      "name": "starts-on-library-paths",
+      "status": "passed",
+      "detail": {
+        "startedOnPaths": true,
+        "emptyHint": true
+      }
+    },
+    {
+      "name": "library-paths-add-scan",
+      "status": "passed",
+      "detail": {
+        "added": [
+          "novel",
+          "comic",
+          "video"
+        ],
+        "total": 5,
+        "scanMs": 1110,
+        "settledScan": true,
+        "grouped": true,
+        "seen": {
+          "indicator": true,
+          "block": true
+        },
+        "kinds": {
+          "novel": 3,
+          "comic": 1,
+          "video": 1
+        }
+      }
+    },
+    {
+      "name": "work-home-open",
+      "status": "passed",
+      "detail": {
+        "homeShown": true,
+        "readEnabled": true,
+        "readerClosed": true,
+        "title": "合成长篇"
+      }
+    },
+    {
+      "name": "right-pane-note",
+      "status": "passed",
+      "detail": {
+        "pane": true,
+        "bubble": true,
+        "noteSaved": true
+      }
+    },
+    {
+      "name": "settings-pages-reachable",
+      "status": "passed",
+      "detail": {
+        "groups": 4,
+        "pages": 18,
+        "reached": 18,
+        "missing": []
+      }
+    },
+    {
+      "name": "comic-layout-wide-page",
+      "status": "passed",
+      "detail": {
+        "fit": "page",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              467,
+              701
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              584,
+              876
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              175
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              935,
+              1402
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              267,
+              711
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              351,
+              526
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              234,
+              351
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-wide-width",
+      "status": "passed",
+      "detail": {
+        "fit": "width",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              668,
+              1002
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              301
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              835,
+              1253
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              167,
+              562
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              1336,
+              2004
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              668,
+              1313
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              501,
+              752
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              51
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              334,
+              501
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-wide-height",
+      "status": "passed",
+      "detail": {
+        "fit": "height",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              467,
+              701
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              584,
+              876
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              175
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              935,
+              1402
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              267,
+              711
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              351,
+              526
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              234,
+              351
+            ],
+            "stage": [
+              694,
+              717
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-narrow-page",
+      "status": "passed",
+      "detail": {
+        "fit": "page",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              334,
+              501
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              417,
+              626
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              83,
+              35
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              668,
+              1002
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              334,
+              411
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              251,
+              376
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              167,
+              251
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-narrow-width",
+      "status": "passed",
+      "detail": {
+        "fit": "width",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              334,
+              501
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              417,
+              626
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              83,
+              35
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              668,
+              1002
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              334,
+              411
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              251,
+              376
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              167,
+              251
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-narrow-height",
+      "status": "passed",
+      "detail": {
+        "fit": "height",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              401,
+              601
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              67,
+              10
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              501,
+              751
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              167,
+              160
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              801,
+              1202
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              467,
+              611
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              301,
+              451
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              201,
+              301
+            ],
+            "stage": [
+              360,
+              617
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-short-page",
+      "status": "passed",
+      "detail": {
+        "fit": "page",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              241,
+              361
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              301,
+              451
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              90
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              481,
+              722
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              361
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              181,
+              271
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              121,
+              181
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-short-width",
+      "status": "passed",
+      "detail": {
+        "fit": "width",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              849,
+              1274
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              913
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              1061,
+              1592
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              212,
+              1241
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              1698,
+              2547
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              849,
+              2196
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              637,
+              955
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              594
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              425,
+              637
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              276
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "comic-layout-short-height",
+      "status": "passed",
+      "detail": {
+        "fit": "height",
+        "rows": [
+          {
+            "percent": 100,
+            "label": "100%",
+            "page": [
+              241,
+              361
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 125,
+            "label": "125%",
+            "page": [
+              301,
+              451
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              90
+            ]
+          },
+          {
+            "percent": 200,
+            "label": "200%",
+            "page": [
+              481,
+              722
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              361
+            ]
+          },
+          {
+            "percent": 75,
+            "label": "75%",
+            "page": [
+              181,
+              271
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          },
+          {
+            "percent": 50,
+            "label": "50%",
+            "page": [
+              121,
+              181
+            ],
+            "stage": [
+              875,
+              377
+            ],
+            "scroll": [
+              0,
+              0
+            ]
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "reader-controls-comic",
+      "status": "passed",
+      "detail": {
+        "topBar": {
+          "gone": [],
+          "bars": [],
+          "title": "合成漫画",
+          "named": true
+        },
+        "position": {
+          "total": 5,
+          "target": 3,
+          "opened": true,
+          "went": true
+        },
+        "escape": {
+          "stayed": true
+        },
+        "wheel": {
+          "start": 3,
+          "afterDown": 4,
+          "afterUp": 3,
+          "down": true,
+          "events": [
+            {
+              "dy": 120,
+              "ctrl": false
+            },
+            {
+              "dy": -120,
+              "ctrl": false
+            }
+          ]
+        },
+        "zoom": {
+          "zoom0": "100%",
+          "zoom1": "84%",
+          "pageBefore": 3,
+          "pageAfter": 3
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "overlays-comic",
+      "status": "passed",
+      "detail": {
+        "rows": 16,
+        "states": [
+          "ordinary",
+          "window",
+          "screen"
+        ],
+        "problems": [],
+        "sample": [
+          {
+            "state": "ordinary",
+            "step": "last-page prompt, bar shown",
+            "probes": [
+              {
+                "id": "comic-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "comic-end-back",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "ordinary",
+            "step": "last-page prompt, bar hidden",
+            "probes": [
+              {
+                "id": "comic-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "comic-end-back",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "window",
+            "step": "last-page prompt, bar shown",
+            "probes": [
+              {
+                "id": "comic-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "comic-end-back",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "window",
+            "step": "last-page prompt, bar hidden",
+            "probes": [
+              {
+                "id": "comic-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "comic-end-back",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "screen",
+            "step": "last-page prompt, bar shown",
+            "probes": [
+              {
+                "id": "comic-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "comic-end-back",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "screen",
+            "step": "last-page prompt, bar hidden",
+            "probes": [
+              {
+                "id": "comic-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "comic-end-back",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "player-controls-wide",
+      "status": "passed",
+      "detail": {
+        "controls": {
+          "x": 225,
+          "y": 771.3333740234375,
+          "w": 694,
+          "h": 68.66667175292969,
+          "r": 919,
+          "b": 840.0000457763672
+        },
+        "panel": {
+          "x": 347,
+          "y": 681.3333740234375,
+          "w": 560,
+          "h": 84.66667175292969,
+          "r": 907,
+          "b": 766.0000457763672
+        },
+        "viewport": {
+          "w": 1280,
+          "h": 840
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "player-controls-narrow",
+      "status": "passed",
+      "detail": {
+        "controls": {
+          "x": 0,
+          "y": 677.3333740234375,
+          "w": 360,
+          "h": 102.66667175292969,
+          "r": 360,
+          "b": 780.0000457763672
+        },
+        "panel": {
+          "x": 12,
+          "y": 561.3333740234375,
+          "w": 336,
+          "h": 110.66667175292969,
+          "r": 348,
+          "b": 672.0000457763672
+        },
+        "viewport": {
+          "w": 360,
+          "h": 780
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "player-controls-short",
+      "status": "passed",
+      "detail": {
+        "controls": {
+          "x": 225,
+          "y": 391.3333435058594,
+          "w": 875,
+          "h": 68.66667175292969,
+          "r": 1100,
+          "b": 460.00001525878906
+        },
+        "panel": {
+          "x": 528,
+          "y": 301.3333435058594,
+          "w": 560,
+          "h": 84.66667175292969,
+          "r": 1088,
+          "b": 386.00001525878906
+        },
+        "viewport": {
+          "w": 1100,
+          "h": 460
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "reader-controls-player",
+      "status": "passed",
+      "detail": {
+        "topBar": {
+          "gone": [],
+          "bars": [],
+          "title": "合成动画",
+          "named": true
+        },
+        "start": {
+          "time": 0,
+          "paused": true,
+          "rate": 1,
+          "duration": 24
+        },
+        "tap": {
+          "time": 5,
+          "paused": true,
+          "rate": 1,
+          "duration": 24
+        },
+        "tapBack": {
+          "time": 0,
+          "paused": true,
+          "rate": 1,
+          "duration": 24
+        },
+        "hold": {
+          "holding": {
+            "shown": true,
+            "rate": 2,
+            "paused": false
+          },
+          "released": {
+            "time": 0.642996,
+            "paused": true,
+            "rate": 1,
+            "duration": 24
+          }
+        },
+        "rewind": {
+          "at": 23.7,
+          "after": 20.5,
+          "rewinding": true
+        },
+        "rightButton": {
+          "during": {
+            "rate": 1,
+            "holding": false
+          },
+          "menu": true,
+          "rateBefore": 1,
+          "afterRate": 1
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "player-menus",
+      "status": "passed",
+      "detail": {
+        "video-subtitles": {
+          "items": 1,
+          "topLayer": true,
+          "box": {
+            "x": 369.66668701171875,
+            "y": 642.1666870117188,
+            "w": 160,
+            "h": 42.833335876464844
+          }
+        },
+        "video-audio": "absent",
+        "video-episodes": "absent",
+        "video-rate": {
+          "items": 7,
+          "topLayer": true,
+          "box": {
+            "x": 433.41668701171875,
+            "y": 441.16668701171875,
+            "w": 160,
+            "h": 243.83334350585938
+          }
+        },
+        "rate": 1.5,
+        "volume": {
+          "items": 2,
+          "topLayer": true,
+          "box": {
+            "x": 737,
+            "y": 596.6666870117188,
+            "w": 47.333335876464844,
+            "h": 199.33334350585938
+          }
+        },
+        "wheel": {
+          "before": 100,
+          "up": 100,
+          "down": 95
+        },
+        "context": {
+          "items": 8,
+          "box": {
+            "x": 572,
+            "y": 404,
+            "w": 140,
+            "h": 261.3333435058594
+          }
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "player-fullscreen-bar",
+      "status": "passed",
+      "detail": {
+        "picture": {
+          "viewport": {
+            "w": 2560,
+            "h": 1440
+          },
+          "shown": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "hidden": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "back": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "faded": true
+        },
+        "video-subtitles": {
+          "items": 1,
+          "topLayer": true,
+          "box": {
+            "x": 2099.3125,
+            "y": 1354.166748046875,
+            "w": 160,
+            "h": 42.833335876464844
+          }
+        },
+        "video-rate": {
+          "items": 7,
+          "topLayer": true,
+          "box": {
+            "x": 2154,
+            "y": 1153.166748046875,
+            "w": 160,
+            "h": 243.83334350585938
+          }
+        },
+        "volume": {
+          "items": 2,
+          "topLayer": true,
+          "box": {
+            "x": 2378,
+            "y": 1196.666748046875,
+            "w": 47.333335876464844,
+            "h": 199.33334350585938
+          }
+        },
+        "wheel": {
+          "before": 95,
+          "up": 100,
+          "down": 95
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "overlays-player",
+      "status": "passed",
+      "detail": {
+        "rows": 6,
+        "states": [
+          "ordinary",
+          "window",
+          "screen"
+        ],
+        "problems": [],
+        "sample": [
+          {
+            "state": "ordinary",
+            "step": "end prompt with the bar shown",
+            "probes": [
+              {
+                "id": "video-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "video-replay",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "video-controls",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "window",
+            "step": "end prompt with the bar shown",
+            "probes": [
+              {
+                "id": "video-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "video-replay",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "video-controls",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          },
+          {
+            "state": "screen",
+            "step": "end prompt with the bar shown",
+            "probes": [
+              {
+                "id": "video-end",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "video-replay",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              },
+              {
+                "id": "video-controls",
+                "hits": 5,
+                "points": 5,
+                "coveredBy": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "danmaku-layer",
+      "status": "passed",
+      "detail": {
+        "asked": true,
+        "panel": {
+          "items": 4,
+          "topLayer": true,
+          "box": {
+            "x": 353,
+            "y": 543.2708740234375,
+            "w": 380,
+            "h": 252.7291717529297
+          }
+        },
+        "searchMs": 338,
+        "layer": {
+          "layer": {
+            "x": 225,
+            "y": 209,
+            "w": 694,
+            "h": 195
+          },
+          "picture": {
+            "x": 225,
+            "y": 208.66668701171875,
+            "w": 694,
+            "h": 390
+          },
+          "canvas": {
+            "w": 1041,
+            "h": 292
+          },
+          "count": 5,
+          "visible": true
+        },
+        "ink": 2575,
+        "small": {
+          "layer": {
+            "x": 225,
+            "y": 91,
+            "w": 755,
+            "h": 213
+          },
+          "picture": {
+            "x": 225,
+            "y": 91.16668701171875,
+            "w": 755,
+            "h": 425
+          },
+          "canvas": {
+            "w": 1132,
+            "h": 319
+          },
+          "count": 5,
+          "visible": true
+        },
+        "fullscreen": {
+          "layer": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 720
+          },
+          "picture": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "canvas": {
+            "w": 3840,
+            "h": 1080
+          },
+          "count": 5,
+          "visible": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "danmaku-privacy",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "bridge": 17
+      }
+    },
+    {
+      "name": "screenshots-into-whiteboard",
+      "status": "passed",
+      "detail": {
+        "comic": {
+          "width": 600,
+          "height": 900,
+          "page": [
+            600,
+            900
+          ],
+          "text": {
+            "pageId": true,
+            "size": [
+              600,
+              900
+            ]
+          },
+          "thumb": true
+        },
+        "video": {
+          "width": 640,
+          "height": 360,
+          "frame": [
+            640,
+            360
+          ],
+          "text": {
+            "positionMs": 12000,
+            "work": true,
+            "size": [
+              640,
+              360
+            ]
+          },
+          "thumb": true,
+          "actions": [
+            "toast-action-folder",
+            "toast-action-note",
+            "toast-action-board"
+          ]
+        },
+        "folder": {
+          "relDir": "未分类/合成动画",
+          "inFolder": true
+        },
+        "cardsOnBoard": 2,
+        "problems": []
+      }
+    },
+    {
+      "name": "settings-round-trip",
+      "status": "passed",
+      "detail": {
+        "before": {
+          "time": 12,
+          "paused": true,
+          "marked": "kept",
+          "loads": 0,
+          "shown": true,
+          "text": "设置往返前还没发出的问题",
+          "back": false
+        },
+        "inSettings": {
+          "readerShown": false,
+          "paused": true
+        },
+        "after": {
+          "time": 12,
+          "paused": true,
+          "marked": "kept",
+          "loads": 0,
+          "shown": true,
+          "text": "设置往返前还没发出的问题",
+          "back": false
+        },
+        "rateAdded": true,
+        "offered": true,
+        "popupItems": 8,
+        "problems": []
+      }
+    },
+    {
+      "name": "modes-two-overviews",
+      "status": "passed",
+      "detail": {
+        "projectId": true,
+        "work": {
+          "gone": [],
+          "library": "项目总览",
+          "projects": true,
+          "recent": 2,
+          "readerShown": false,
+          "paused": true,
+          "back": true,
+          "text": "",
+          "shelf": false
+        },
+        "before": {
+          "time": 12,
+          "paused": true,
+          "marked": "kept",
+          "loads": 0,
+          "shown": true,
+          "text": "娱乐模式里的问题",
+          "back": false
+        },
+        "after": {
+          "time": 12,
+          "paused": true,
+          "marked": "kept",
+          "loads": 0,
+          "shown": true,
+          "text": "娱乐模式里的问题",
+          "back": false
+        },
+        "overview": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-controls-wide",
+      "status": "passed",
+      "detail": {
+        "foot": {
+          "x": 225,
+          "y": 788.5,
+          "w": 694,
+          "h": 51.5,
+          "r": 919,
+          "b": 840
+        },
+        "panel": {
+          "x": 567,
+          "y": 479.16668701171875,
+          "w": 340,
+          "h": 306,
+          "r": 907,
+          "b": 785.1666870117188
+        },
+        "viewport": {
+          "w": 1280,
+          "h": 840
+        },
+        "hidden": {
+          "state": "hidden",
+          "gap": 0,
+          "text": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-controls-narrow",
+      "status": "passed",
+      "detail": {
+        "foot": {
+          "x": 0,
+          "y": 692.5,
+          "w": 360,
+          "h": 87.5,
+          "r": 360,
+          "b": 780
+        },
+        "panel": {
+          "x": 12,
+          "y": 383.16668701171875,
+          "w": 336,
+          "h": 306,
+          "r": 348,
+          "b": 689.1666870117188
+        },
+        "viewport": {
+          "w": 360,
+          "h": 780
+        },
+        "hidden": {
+          "state": "hidden",
+          "gap": 0,
+          "text": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-controls-short",
+      "status": "passed",
+      "detail": {
+        "foot": {
+          "x": 225,
+          "y": 408.5,
+          "w": 875,
+          "h": 51.5,
+          "r": 1100,
+          "b": 460
+        },
+        "panel": {
+          "x": 748,
+          "y": 99.16667175292969,
+          "w": 340,
+          "h": 306,
+          "r": 1088,
+          "b": 405.1666717529297
+        },
+        "viewport": {
+          "w": 1100,
+          "h": 460
+        },
+        "hidden": {
+          "state": "hidden",
+          "gap": 0,
+          "text": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "reader-controls-novel",
+      "status": "passed",
+      "detail": {
+        "topBar": {
+          "gone": [],
+          "bars": [],
+          "title": "合成长篇 第一章",
+          "named": true
+        },
+        "footer": {
+          "inFooter": [
+            "reading-panel-toc",
+            "reading-panel-search",
+            "reading-panel-bookmarks",
+            "reading-bookmark-add",
+            "reading-fullscreen",
+            "reading-settings"
+          ],
+          "outside": []
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "overlays-novel",
+      "status": "passed",
+      "detail": {
+        "rows": 6,
+        "states": [
+          "ordinary",
+          "window",
+          "screen"
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "readers-fill-main-wide",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "reader": "comic",
+            "fills": true,
+            "root": {
+              "x": 225,
+              "y": 36,
+              "w": 694,
+              "h": 804,
+              "r": 919,
+              "b": 840
+            },
+            "panel": {
+              "x": 225,
+              "y": 36,
+              "w": 694,
+              "h": 804,
+              "r": 919,
+              "b": 840
+            }
+          },
+          {
+            "reader": "player",
+            "fills": true,
+            "root": {
+              "x": 225,
+              "y": 36,
+              "w": 694,
+              "h": 804,
+              "r": 919,
+              "b": 840
+            },
+            "panel": {
+              "x": 225,
+              "y": 36,
+              "w": 694,
+              "h": 804,
+              "r": 919,
+              "b": 840
+            }
+          },
+          {
+            "reader": "novel",
+            "fills": true,
+            "root": {
+              "x": 225,
+              "y": 36,
+              "w": 694,
+              "h": 804,
+              "r": 919,
+              "b": 840
+            },
+            "panel": {
+              "x": 225,
+              "y": 36,
+              "w": 694,
+              "h": 804,
+              "r": 919,
+              "b": 840
+            }
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "readers-fill-main-narrow",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "reader": "comic",
+            "fills": true,
+            "root": {
+              "x": 0,
+              "y": 36,
+              "w": 360,
+              "h": 744,
+              "r": 360,
+              "b": 780
+            },
+            "panel": {
+              "x": 0,
+              "y": 36,
+              "w": 360,
+              "h": 744,
+              "r": 360,
+              "b": 780
+            }
+          },
+          {
+            "reader": "player",
+            "fills": true,
+            "root": {
+              "x": 0,
+              "y": 36,
+              "w": 360,
+              "h": 744,
+              "r": 360,
+              "b": 780
+            },
+            "panel": {
+              "x": 0,
+              "y": 36,
+              "w": 360,
+              "h": 744,
+              "r": 360,
+              "b": 780
+            }
+          },
+          {
+            "reader": "novel",
+            "fills": true,
+            "root": {
+              "x": 0,
+              "y": 36,
+              "w": 360,
+              "h": 744,
+              "r": 360,
+              "b": 780
+            },
+            "panel": {
+              "x": 0,
+              "y": 36,
+              "w": 360,
+              "h": 744,
+              "r": 360,
+              "b": 780
+            }
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "readers-fill-main-short",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "reader": "comic",
+            "fills": true,
+            "root": {
+              "x": 225,
+              "y": 36,
+              "w": 875,
+              "h": 424,
+              "r": 1100,
+              "b": 460
+            },
+            "panel": {
+              "x": 225,
+              "y": 36,
+              "w": 875,
+              "h": 424,
+              "r": 1100,
+              "b": 460
+            }
+          },
+          {
+            "reader": "player",
+            "fills": true,
+            "root": {
+              "x": 225,
+              "y": 36,
+              "w": 875,
+              "h": 424,
+              "r": 1100,
+              "b": 460
+            },
+            "panel": {
+              "x": 225,
+              "y": 36,
+              "w": 875,
+              "h": 424,
+              "r": 1100,
+              "b": 460
+            }
+          },
+          {
+            "reader": "novel",
+            "fills": true,
+            "root": {
+              "x": 225,
+              "y": 36,
+              "w": 875,
+              "h": 424,
+              "r": 1100,
+              "b": 460
+            },
+            "panel": {
+              "x": 225,
+              "y": 36,
+              "w": 875,
+              "h": 424,
+              "r": 1100,
+              "b": 460
+            }
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "capsule-clear-of-controls",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "label": "comic-wide",
+            "shown": true,
+            "checked": 14,
+            "covered": []
+          },
+          {
+            "label": "comic-narrow",
+            "shown": true,
+            "checked": 14,
+            "covered": []
+          },
+          {
+            "label": "comic-short",
+            "shown": true,
+            "checked": 14,
+            "covered": []
+          },
+          {
+            "label": "player-wide",
+            "shown": true,
+            "checked": 12,
+            "covered": []
+          },
+          {
+            "label": "player-narrow",
+            "shown": true,
+            "checked": 10,
+            "covered": []
+          },
+          {
+            "label": "player-short",
+            "shown": true,
+            "checked": 12,
+            "covered": []
+          },
+          {
+            "label": "novel-wide",
+            "shown": true,
+            "checked": 9,
+            "covered": []
+          },
+          {
+            "label": "novel-narrow",
+            "shown": true,
+            "checked": 9,
+            "covered": []
+          },
+          {
+            "label": "novel-short",
+            "shown": true,
+            "checked": 9,
+            "covered": []
+          }
+        ],
+        "covering": []
+      }
+    },
+    {
+      "name": "frame-title-segments",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "rects": {
+          "leftTop": {
+            "x": 0,
+            "y": 0,
+            "w": 224,
+            "h": 36,
+            "r": 224,
+            "b": 36
+          },
+          "rail": {
+            "x": 0,
+            "y": 0,
+            "w": 224,
+            "h": 840,
+            "r": 224,
+            "b": 840
+          },
+          "mainTop": {
+            "x": 225,
+            "y": 0,
+            "w": 694,
+            "h": 36,
+            "r": 919,
+            "b": 36
+          },
+          "rightTop": {
+            "x": 920,
+            "y": 0,
+            "w": 360,
+            "h": 36,
+            "r": 1280,
+            "b": 36
+          },
+          "assistant": {
+            "x": 920,
+            "y": 0,
+            "w": 360,
+            "h": 840,
+            "r": 1280,
+            "b": 840
+          }
+        },
+        "folded": {
+          "ok": true,
+          "gap": 6,
+          "order": [
+            "shell-menu",
+            "shell-left-toggle",
+            "nav-back",
+            "nav-forward",
+            "shell-title"
+          ],
+          "menuModes": [
+            "shell-menu-mode-enthusiast:true",
+            "shell-menu-mode-creator:false"
+          ]
+        },
+        "rightHidden": {
+          "ok": true,
+          "inMain": true,
+          "clear": true
+        },
+        "frame": "rgb(243, 244, 247)"
+      }
+    },
+    {
+      "name": "frame-window-controls",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "mode": "page",
+        "geometry": {
+          "group": {
+            "x": 1142,
+            "y": 0,
+            "w": 138,
+            "h": 36,
+            "r": 1280,
+            "b": 36
+          },
+          "buttons": [
+            [
+              46,
+              36
+            ],
+            [
+              46,
+              36
+            ],
+            [
+              46,
+              36
+            ]
+          ]
+        },
+        "regions": {
+          "group": "no-drag",
+          "around": "drag",
+          "reach": [
+            true,
+            true,
+            true
+          ]
+        },
+        "paint": {
+          "rest": {
+            "minimize": "rgba(0, 0, 0, 0)",
+            "close": "rgba(0, 0, 0, 0)"
+          },
+          "hoverMinimize": "color(srgb 0.188235 0.211765 0.278431 / 0.1)",
+          "hoverClose": "rgb(180, 35, 24)",
+          "danger": "rgb(180, 35, 24)"
+        },
+        "maximize": {
+          "wasMaximized": false,
+          "labelBefore": "最大化",
+          "labelAfter": "还原",
+          "maximized": true,
+          "windowSays": true,
+          "restored": true,
+          "after": false
+        },
+        "minimize": {
+          "clicked": true,
+          "minimized": true,
+          "back": true
+        }
+      }
+    },
+    {
+      "name": "frame-flat-chrome",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "flat": {
+          "main": {
+            "border": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "radius": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "shadow": "none",
+            "padding": [
+              "0px",
+              "0px",
+              "0px",
+              "0px"
+            ]
+          },
+          "assistant": {
+            "border": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "radius": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "shadow": "none",
+            "padding": [
+              "0px",
+              "0px",
+              "0px",
+              "0px"
+            ]
+          },
+          "root": {
+            "border": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "radius": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "shadow": "none",
+            "padding": [
+              "0px",
+              "0px",
+              "0px",
+              "0px"
+            ]
+          },
+          "left": {
+            "border": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "radius": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "shadow": "none",
+            "padding": [
+              "0px",
+              "0px",
+              "0px",
+              "0px"
+            ]
+          },
+          "dividerLeft": {
+            "x": 224,
+            "y": 0,
+            "w": 1,
+            "h": 840,
+            "r": 225,
+            "b": 840
+          },
+          "dividerRight": {
+            "x": 919,
+            "y": 0,
+            "w": 1,
+            "h": 840,
+            "r": 920,
+            "b": 840
+          },
+          "gapLeft": 1,
+          "gapRight": 1
+        }
+      }
+    },
+    {
+      "name": "frame-history-menu",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "history": {
+          "start": "video",
+          "atEnd": {
+            "back": true,
+            "forward": false
+          },
+          "afterBack": "comic",
+          "afterBackState": {
+            "back": true,
+            "forward": true
+          },
+          "afterForward": "video",
+          "afterForwardState": {
+            "back": true,
+            "forward": false
+          }
+        },
+        "menuIds": [
+          "shell-menu-settings",
+          "shell-menu-scan",
+          "shell-menu-debug",
+          "shell-menu-about",
+          "shell-menu-quit"
+        ],
+        "aboutVersion": "0.1.0"
+      }
+    },
+    {
+      "name": "frame-resize",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "base": 224,
+        "rightBase": 360,
+        "saved": 284,
+        "savedRight": 440,
+        "narrowState": {
+          "left": null,
+          "resizeLeft": false,
+          "main": 360,
+          "viewport": 360
+        },
+        "restored": {
+          "left": 224,
+          "right": 360
+        }
+      }
+    },
+    {
+      "name": "frame-rail",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "scrolls": true,
+        "before": {
+          "rows": 6,
+          "settings": {
+            "x": 10,
+            "y": 413,
+            "w": 204,
+            "h": 39,
+            "r": 214,
+            "b": 452
+          },
+          "sessions": {
+            "x": 10,
+            "y": 304.5,
+            "w": 204,
+            "h": 99.83333587646484,
+            "r": 214,
+            "b": 404.33333587646484
+          }
+        },
+        "folding": {
+          "rows": 4,
+          "folded": 0,
+          "count": "4",
+          "kept": true,
+          "unfolded": 4
+        }
+      }
+    },
+    {
+      "name": "frame-scrollbar-stable",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "shortPage": {
+          "gutter": 10,
+          "overflowing": false,
+          "style": "stable",
+          "thin": "thin",
+          "track": "rgb(201, 206, 217) rgba(0, 0, 0, 0)",
+          "docOverflow": 0,
+          "content": 1045,
+          "scroller": "settings-view"
+        },
+        "longPage": {
+          "gutter": 10,
+          "overflowing": true,
+          "style": "stable",
+          "thin": "thin",
+          "track": "rgb(201, 206, 217) rgba(0, 0, 0, 0)",
+          "docOverflow": 0,
+          "content": 865,
+          "scroller": "settings-view"
+        }
+      }
+    },
+    {
+      "name": "frame-close-entry",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "placeBefore": "1/5",
+        "hoverShown": true,
+        "menuOpen": true,
+        "gone": true,
+        "reopened": {
+          "reopened": true,
+          "back": true,
+          "placeAfter": "1/5"
+        },
+        "buttonClosed": true
+      }
+    },
+    {
+      "name": "frame-fits-wide",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "viewport": {
+          "w": 1280,
+          "h": 840
+        },
+        "rects": {
+          "shell-menu": {
+            "x": 4,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 32,
+            "b": 32
+          },
+          "shell-left-toggle": {
+            "x": 34,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 62,
+            "b": 32
+          },
+          "nav-back": {
+            "x": 64,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 92,
+            "b": 32
+          },
+          "mode-switch": {
+            "x": 128,
+            "y": 3.3333334922790527,
+            "w": 63.333335876464844,
+            "h": 29.33333396911621,
+            "r": 191.33333587646484,
+            "b": 32.666667461395264
+          },
+          "shell-right-toggle": {
+            "x": 1108,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 1136,
+            "b": 32
+          },
+          "shell-title": {
+            "x": 239,
+            "y": 8,
+            "w": 54.10416793823242,
+            "h": 20,
+            "r": 293.1041679382324,
+            "b": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "frame-fits-narrow",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "viewport": {
+          "w": 360,
+          "h": 780
+        },
+        "rects": {
+          "shell-menu": {
+            "x": 4,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 32,
+            "b": 32
+          },
+          "shell-left-toggle": {
+            "x": 34,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 62,
+            "b": 32
+          },
+          "nav-back": {
+            "x": 64,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 92,
+            "b": 32
+          },
+          "mode-switch": null,
+          "shell-right-toggle": {
+            "x": 184,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 212,
+            "b": 32
+          },
+          "shell-title": {
+            "x": 98,
+            "y": 8,
+            "w": 34,
+            "h": 20,
+            "r": 132,
+            "b": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "frame-fits-short",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "viewport": {
+          "w": 1100,
+          "h": 460
+        },
+        "rects": {
+          "shell-menu": {
+            "x": 4,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 32,
+            "b": 32
+          },
+          "shell-left-toggle": {
+            "x": 34,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 62,
+            "b": 32
+          },
+          "nav-back": {
+            "x": 64,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 92,
+            "b": 32
+          },
+          "mode-switch": {
+            "x": 128,
+            "y": 3.3333334922790527,
+            "w": 63.333335876464844,
+            "h": 29.33333396911621,
+            "r": 191.33333587646484,
+            "b": 32.666667461395264
+          },
+          "shell-right-toggle": {
+            "x": 924,
+            "y": 4,
+            "w": 28,
+            "h": 28,
+            "r": 952,
+            "b": 32
+          },
+          "shell-title": {
+            "x": 239,
+            "y": 8,
+            "w": 54.10416793823242,
+            "h": 20,
+            "r": 293.1041679382324,
+            "b": 28
+          }
+        }
+      }
+    },
+    {
+      "name": "frame-window-fullscreen",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "entered": true,
+        "strip": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 8,
+            "r": 1280,
+            "b": 8
+          },
+          "hotzone": {
+            "x": 0,
+            "y": 8,
+            "w": 1280,
+            "h": 16,
+            "r": 1280,
+            "b": 24
+          },
+          "region": "drag",
+          "hit": "immersive-drag",
+          "hotRegion": "no-drag"
+        },
+        "controlsShown": {
+          "rect": {
+            "x": 1142,
+            "y": 0,
+            "w": 138,
+            "h": 36,
+            "r": 1280,
+            "b": 36
+          },
+          "closeReachable": true
+        },
+        "screenFullscreen": {
+          "clicked": true,
+          "screenOn": true,
+          "screenLeft": true,
+          "stillWindow": true
+        },
+        "keys": {
+          "leftByKey": true,
+          "enteredByKey": true,
+          "leftByEsc": true
+        }
+      }
+    },
+    {
+      "name": "manage-open-blocked",
+      "status": "passed",
+      "detail": {
+        "railBefore": "open",
+        "stateAfterRemoval": "outside",
+        "railAfter": "outside",
+        "railRowShown": false,
+        "fromOverview": {
+          "asked": true,
+          "state": "outside",
+          "reason": "这个资源的文件在所有资源库位置之外，所以不能打开。把它所在的文件夹加为资源库位置后就可以了。",
+          "place": false,
+          "folder": true,
+          "buttons": [
+            "open-blocked-add",
+            "open-blocked-content-view",
+            "open-blocked-close"
+          ],
+          "readers": [],
+          "pageBefore": "library",
+          "pageAfter": "library"
+        },
+        "fromWorkPage": {
+          "onPage": true,
+          "readDisabled": true,
+          "chip": "库外",
+          "button": "查看记录",
+          "readers": []
+        },
+        "folderAdded": true,
+        "noticeAfterAdd": true,
+        "stateAfterAdd": "open",
+        "railBack": "open",
+        "opensAgain": true,
+        "stateMissing": "missing",
+        "missing": {
+          "asked": true,
+          "state": "missing",
+          "place": true,
+          "buttons": [
+            "open-blocked-relocate",
+            "open-blocked-content-view",
+            "open-blocked-close"
+          ],
+          "readers": []
+        },
+        "located": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "manage-entry-delete",
+      "status": "passed",
+      "detail": {
+        "dialog": {
+          "keepIds": [
+            "resources",
+            "progress",
+            "notes",
+            "screenshots",
+            "conversations",
+            "files"
+          ],
+          "warning": "不能撤销；文件不会删除，仍在资源库里。"
+        },
+        "notice": "已删除条目「合成漫画」，1 个资源现在在“未归入作品”里",
+        "loose": 1,
+        "files": {
+          "under": "未分类",
+          "files": 2,
+          "onDisk": 2
+        },
+        "noteKept": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "manage-conversation-delete",
+      "status": "passed",
+      "detail": {
+        "total": 10,
+        "rowLayout": {
+          "order": true,
+          "oneLine": true
+        },
+        "after": 9,
+        "problems": []
+      }
+    },
+    {
+      "name": "manage-model-dialog",
+      "status": "passed",
+      "detail": {
+        "errors": {
+          "fields": [
+            "baseUrl",
+            "modelId",
+            "secret"
+          ],
+          "focus": "baseUrl",
+          "open": true
+        },
+        "row": {
+          "listed": true,
+          "raw": false
+        },
+        "test": {
+          "tested": true,
+          "state": "fail",
+          "category": "network"
+        },
+        "edit": {
+          "editing": true,
+          "hint": true,
+          "placeholder": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "manage-copy-titles",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "page": "overview",
+            "arrived": true,
+            "title": "总览",
+            "expected": "总览",
+            "leaks": [],
+            "missingExtra": []
+          },
+          {
+            "page": "novel",
+            "arrived": true,
+            "title": "小说",
+            "expected": "小说",
+            "leaks": [],
+            "missingExtra": []
+          },
+          {
+            "page": "comic",
+            "arrived": true,
+            "title": "漫画",
+            "expected": "漫画",
+            "leaks": [],
+            "missingExtra": []
+          },
+          {
+            "page": "video",
+            "arrived": true,
+            "title": "动漫",
+            "expected": "动漫",
+            "leaks": [],
+            "missingExtra": []
+          },
+          {
+            "page": "storage",
+            "arrived": true,
+            "title": "存储与备份",
+            "expected": "存储与备份",
+            "leaks": [],
+            "missingExtra": []
+          },
+          {
+            "page": "models",
+            "arrived": true,
+            "title": "模型",
+            "expected": "模型",
+            "leaks": [],
+            "missingExtra": []
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "danmaku-network",
+      "status": "passed",
+      "detail": {
+        "requests": 2,
+        "paths": [
+          "/api/v2/search/episodes",
+          "/api/v2/comment/900102"
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "creative-reach-projects",
+      "status": "passed",
+      "detail": {
+        "switched": true,
+        "onPage": true,
+        "made": true,
+        "inPage": true,
+        "projectId": true
+      }
+    },
+    {
+      "name": "creative-project-tabs",
+      "status": "passed",
+      "detail": {
+        "materials": true,
+        "whiteboard": true,
+        "mindmap": true,
+        "draft": true,
+        "excerpt": true,
+        "roughcut": true,
+        "terms": true,
+        "settings": true
+      }
+    },
+    {
+      "name": "creative-whiteboard",
+      "status": "passed",
+      "detail": {
+        "boardShown": true,
+        "two": true,
+        "moved": true,
+        "kept": true,
+        "again": true,
+        "undone": true,
+        "backWhereItWas": true
+      }
+    },
+    {
+      "name": "creative-mindmap",
+      "status": "passed",
+      "detail": {
+        "shown": true,
+        "child": true,
+        "texted": true,
+        "saved": true,
+        "folded": true,
+        "unfolded": true,
+        "exported": true,
+        "undone": true
+      }
+    },
+    {
+      "name": "creative-draft",
+      "status": "passed",
+      "detail": {
+        "surface": true,
+        "typed": true,
+        "savedState": true,
+        "stored": true,
+        "widths": {
+          "view": 424,
+          "editor": 424,
+          "side": 424,
+          "sideBelow": true
+        },
+        "editorWide": true
+      }
+    },
+    {
+      "name": "creative-research",
+      "status": "passed",
+      "detail": {
+        "reached": true,
+        "typed": true,
+        "go": true,
+        "hits": true
+      }
+    },
+    {
+      "name": "creative-embeds-in-note",
+      "status": "passed",
+      "detail": {
+        "drawn": true,
+        "titles": [
+          "待删除的白板",
+          "导图 1"
+        ],
+        "snapshotMarked": true,
+        "gone": true
+      }
+    },
+    {
+      "name": "creative-roughcut-export",
+      "status": "passed",
+      "detail": {
+        "stages": {
+          "toProjects": true,
+          "opened": true,
+          "inTab": true,
+          "picked": true,
+          "cutShown": true
+        },
+        "planText": "",
+        "verdict": true,
+        "state": "done",
+        "files": 1,
+        "sizeOk": true,
+        "check": {
+          "ok": true,
+          "expectedMs": 4750,
+          "actualMs": 4783,
+          "expectedFrames": 114,
+          "actualFrames": 114,
+          "streamsMatch": true
+        },
+        "untouched": true,
+        "overheadMs": 13
+      }
+    },
+    {
+      "name": "creative-project-package",
+      "status": "passed",
+      "detail": {
+        "written": true,
+        "files": 1,
+        "previewKeys": [
+          "format",
+          "formatVersion",
+          "createdAt",
+          "projectId",
+          "name",
+          "goal"
+        ],
+        "projects": 2
+      }
+    },
+    {
+      "name": "creative-semantic-extension",
+      "status": "passed",
+      "detail": {
+        "engine": "vec0",
+        "nearest": 1
+      }
+    },
+    {
+      "name": "creative-fit-wide",
+      "status": "passed",
+      "detail": [
+        {
+          "tab": "materials",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "whiteboard",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": 588,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "mindmap",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": 535,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "draft",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "excerpt",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "roughcut",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "terms",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "settings",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "creative-fit-narrow",
+      "status": "passed",
+      "detail": [
+        {
+          "tab": "materials",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "whiteboard",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": 360,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "mindmap",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": 360,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "draft",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "excerpt",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "roughcut",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "terms",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "settings",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "creative-fit-short",
+      "status": "passed",
+      "detail": [
+        {
+          "tab": "materials",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "whiteboard",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": 360,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "mindmap",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": 360,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "draft",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "excerpt",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "roughcut",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "terms",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        },
+        {
+          "tab": "settings",
+          "shown": true,
+          "overflowX": false,
+          "tabbar": true,
+          "canvas": null,
+          "body": true,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "agent-trace-timeline",
+      "status": "passed",
+      "detail": {
+        "entries": 3,
+        "first": {
+          "model": "模型 demo · openai-chat-completions · native",
+          "firstToken": true,
+          "duration": true
+        },
+        "copied": 55210,
+        "holdersChecked": 8,
+        "leaks": [],
+        "problems": []
+      }
+    }
+  ]
+}

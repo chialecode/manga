@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { makeThumbnail } from "../../packages/app-core/src/media/thumbnails.ts";
 import { cleanPdfInfo, comicInfoFields, decodeXml, isEmptyFields, parseOpf, videoTagFields } from "../../packages/app-core/src/metadata/local-file.ts";
 import { startApp } from "../helpers/app.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { inLibrary, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -21,7 +21,7 @@ function ok<T = Record<string, unknown>>(result: Awaited<ReturnType<typeof run>>
   return result.value as T;
 }
 
-const pick = (ctx: App, target: string) => ctx.app.registerPath("file", target);
+const pick = (ctx: App, target: string) => ctx.app.registerPath("file", inLibrary(ctx.app, target));
 
 type Work = {
   mediaKind: string;

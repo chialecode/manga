@@ -238,14 +238,22 @@ describe("pdf.js source and lifecycle", () => {
       const review = await command(ctx, "notes.openSource", { objectId: ambiguous.objectId, blockId: "quote" });
       expect(review.status).toBe("needs_review");
       const location = ctx.app.store.sqlite.prepare("SELECT relative_path FROM file_locations WHERE resource_revision_id = ?").get(book.revisionId) as { relative_path: string };
-      fs.rmSync(location.relative_path);
-      const original = await command(ctx, "library.readOriginal", { resourceId: book.resourceId, revisionId: book.revisionId });
-      expect(original.available).toBe(false);
+      fs.rmSync(path.join(ctx.app.store.managedLibraryDir, location.relative_path));
+      // A resource whose file is gone cannot be opened (A-86): the bytes and the text are refused with the reason, and what was written about it stays.
+      for (const commandId of ["library.readOriginal", "library.read"]) {
+        const refused = await ctx.app.call(ctx.actor, { commandId, idempotencyKey: `gone-${commandId}`, input: { resourceId: book.resourceId, revisionId: book.revisionId } }, ctx.grant.handle);
+        expect(refused.status, commandId).toBe("error");
+        expect(refused.error, commandId).toMatchObject({ code: "LOCATION_UNAVAILABLE", details: { reason: "file-missing", relativePath: location.relative_path } });
+      }
       const note = await command(ctx, "notes.get", { objectId: exact.objectId });
       expect(JSON.stringify(note)).toContain("REPEAT");
-      const read = await command(ctx, "library.read", { resourceId: book.resourceId, revisionId: book.revisionId });
-      expect(String((read.slice as { text?: string } | undefined)?.text ?? "")).toContain("REPEAT");
-      expect(read.revisionId).toBe(revisionBefore);
+      const content = await command(ctx, "library.resourceContent", { resourceId: book.resourceId });
+      expect((content.resource as { available: boolean }).available).toBe(false);
+      expect((content.notes as unknown[]).length).toBeGreaterThan(0);
+      const openable = await command(ctx, "library.openable", { resourceId: book.resourceId });
+      expect(openable).toMatchObject({ state: "missing", relativePath: location.relative_path });
+      const after = ctx.app.store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(book.resourceId) as { id: string };
+      expect(after.id).toBe(revisionBefore);
     } finally {
       ctx.app.close();
     }
@@ -286,7 +294,7 @@ describe("pdf.js source and lifecycle", () => {
       const generation = () => (ctx.app as unknown as { parseGeneration: number }).parseGeneration;
       const before = generation();
       await ctx.app.runtime.applyProfile({
-        profileId: "m1a",
+        profileId: "profile",
         revision: 2,
         enabledFeatures: ["settings"],
         disabledFeatures: ["library", "notes", "inventory", "agent"],
@@ -301,7 +309,7 @@ describe("pdf.js source and lifecycle", () => {
       expect(refused.status).toBe("error");
       expect(refused.error?.code).toBe("CAPABILITY_UNAVAILABLE");
       await ctx.app.runtime.applyProfile({
-        profileId: "m1a",
+        profileId: "profile",
         revision: 3,
         enabledFeatures: ["library", "notes", "settings", "inventory", "agent"],
         disabledFeatures: [],

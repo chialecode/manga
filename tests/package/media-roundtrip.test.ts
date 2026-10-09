@@ -13,7 +13,7 @@ const call = (ctx: Ctx, commandId: string, input: Record<string, unknown>) => {
   return ctx.app.call(ctx.actor, { commandId, idempotencyKey: `rt-${counter}`, input }, ctx.grant.handle);
 };
 
-/** A library holding every object kind M2 added, built from synthetic rows only. */
+/** A library holding every media object kind, built from synthetic rows only. */
 async function seedLibrary(ctx: Ctx) {
   const comic = seedComic(ctx.app, { title: "往返漫画", pageCount: 5 });
   const video = seedVideo(ctx.app, { title: "往返视频", durationMs: 120_000 });
@@ -40,7 +40,8 @@ async function seedLibrary(ctx: Ctx) {
     .run(comic.workId, "bangumi", "424242", '{"fields":{"title":"合成条目"}}', now, "https://api.bgm.tv/v0/subjects/424242", "v0", 0);
   db.prepare("INSERT INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)")
     .run("cand-1", comic.workId, "bangumi", '{"name":"候选"}', "99", "search-1", "open", now);
-  db.prepare("INSERT INTO work_terms(id, work_id, term, heard, created_at) VALUES (?,?,?,?,?)").run("trm-1", video.workId, "魔王城", "魔王成", now);
+  db.prepare("INSERT INTO dictionary_terms(id, scope, work_id, term, heard, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run("trm-1", "work", video.workId, "魔王城", "魔王成", "manual", now, now);
+  db.prepare("INSERT INTO dictionary_terms(id, scope, work_id, term, heard, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run("trm-2", "global", "", "勇者", null, "manual", now, now);
   db.prepare("INSERT INTO media_probes(resource_revision_id, probe_json, tool_version, created_at) VALUES (?,?,?,?)").run(video.revisionId, '{"durationMs":120000}', "ffprobe-test", now);
 
   // Notes with a page region and a time range, created through the normal command so anchors are real.
@@ -73,7 +74,7 @@ async function seedLibrary(ctx: Ctx) {
 
 const count = (ctx: Ctx, table: string) => (ctx.app.store.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
 
-describe("library package round trip with M2 objects", () => {
+describe("library package round trip with media objects", () => {
   it("exports every new object kind, leaves cache-only covers out, and restores them into an empty profile", async () => {
     const source = await startApp();
     const target = await startApp();
@@ -85,7 +86,8 @@ describe("library package round trip with M2 objects", () => {
       expect(manifest.captureEvents).toHaveLength(2);
       expect(manifest.transcriptSegments).toHaveLength(2);
       expect(manifest.captureDrafts).toHaveLength(1);
-      expect(manifest.workTerms).toHaveLength(1);
+      expect(manifest.dictionary).toHaveLength(2);
+      expect(manifest.workTerms).toBeUndefined();
       expect(manifest.mediaProbes).toHaveLength(1);
       expect(manifest.attachments.map((item) => item.id)).toEqual(expect.arrayContaining([seeded.coverName, seeded.audioName]));
 
@@ -94,7 +96,7 @@ describe("library package round trip with M2 objects", () => {
       expect(preview.conflicts).toEqual([]);
       importLibraryPackageResolved(target.app.store, dir, { strategy: "replace" });
 
-      for (const table of ["works", "resources", "resource_revisions", "anchors", "progress", "capture_sessions", "capture_events", "transcript_segments", "capture_drafts", "work_terms", "media_probes", "work_links", "metadata_snapshots", "metadata_candidates"]) {
+      for (const table of ["works", "resources", "resource_revisions", "anchors", "progress", "capture_sessions", "capture_events", "transcript_segments", "capture_drafts", "dictionary_terms", "media_probes", "work_links", "metadata_snapshots", "metadata_candidates"]) {
         expect(count(target, table), table).toBe(count(source, table));
       }
       expect(count(target, "covers")).toBe(1);
@@ -167,7 +169,9 @@ describe("library package round trip with M2 objects", () => {
       expect(copyComic.cover_id).not.toBe(seeded.coverId);
       expect(db.prepare("SELECT work_id FROM covers WHERE id = ?").get(copyComic.cover_id)).toEqual({ work_id: copyComic.id });
       expect(db.prepare("SELECT COUNT(*) AS n FROM work_links WHERE work_id = ?").get(copyComic.id)).toEqual({ n: 1 });
-      expect(db.prepare("SELECT term FROM work_terms WHERE work_id = ?").all(copySession.work_id)).toEqual([{ term: "魔王城" }]);
+      expect(db.prepare("SELECT term FROM dictionary_terms WHERE scope = 'work' AND work_id = ?").all(copySession.work_id)).toEqual([{ term: "魔王城" }]);
+      // A global term has no owner and is kept once, however many times the package is brought in.
+      expect(db.prepare("SELECT COUNT(*) AS n FROM dictionary_terms WHERE scope = 'global' AND term = '勇者'").get()).toEqual({ n: 1 });
       expect(db.prepare("SELECT COUNT(*) AS n FROM media_probes WHERE resource_revision_id = ?").get(copyVideoRevision.id)).toEqual({ n: 1 });
 
       // Importing the same package a second time stays consistent and never doubles a cover inside one work.
@@ -196,9 +200,9 @@ describe("library package round trip with M2 objects", () => {
       await seedLibrary(ctx);
       const dir = path.join(tempProfile(), "pkg");
       exportLibraryPackage(ctx.app.store, dir);
-      const before = ["works", "capture_sessions", "capture_events", "transcript_segments", "covers", "work_terms"].map((table) => count(ctx, table));
+      const before = ["works", "capture_sessions", "capture_events", "transcript_segments", "covers", "dictionary_terms"].map((table) => count(ctx, table));
       importLibraryPackageResolved(ctx.app.store, dir, { strategy: "skip" });
-      expect(["works", "capture_sessions", "capture_events", "transcript_segments", "covers", "work_terms"].map((table) => count(ctx, table))).toEqual(before);
+      expect(["works", "capture_sessions", "capture_events", "transcript_segments", "covers", "dictionary_terms"].map((table) => count(ctx, table))).toEqual(before);
     } finally { ctx.app.close(); }
   });
 
@@ -221,7 +225,7 @@ describe("library package round trip with M2 objects", () => {
     } finally { source.app.close(); target.app.close(); }
   });
 
-  it("rejects a package whose M2 rows point at nothing before it writes anything", async () => {
+  it("rejects a package whose media rows point at nothing before it writes anything", async () => {
     const source = await startApp();
     const target = await startApp();
     try {
@@ -238,7 +242,9 @@ describe("library package round trip with M2 objects", () => {
       const cases: Array<[string, (manifest: Record<string, any>) => void]> = [
         ["a transcript for a session that is not there", (manifest) => { manifest.transcriptSegments[0].session_id = "cap-ghost"; }],
         ["a cover for a work that is not there", (manifest) => { manifest.covers[0].work_id = "work-ghost"; }],
-        ["a term for a work that is not there", (manifest) => { manifest.workTerms[0].work_id = "work-ghost"; }],
+        ["a term for a work that is not there", (manifest) => { manifest.dictionary.find((row: { scope: string }) => row.scope === "work").work_id = "work-ghost"; }],
+        ["a global term that names a work", (manifest) => { manifest.dictionary.find((row: { scope: string }) => row.scope === "global").work_id = "work-ghost"; }],
+        ["a work term with no work", (manifest) => { manifest.dictionary.find((row: { scope: string }) => row.scope === "work").work_id = ""; }],
         ["a probe for a revision that is not there", (manifest) => { manifest.mediaProbes[0].resource_revision_id = "rev-ghost"; }],
         ["a duplicated transcript id", (manifest) => { manifest.transcriptSegments[1].id = manifest.transcriptSegments[0].id; }],
         ["a cover file name that escapes the folder", (manifest) => { manifest.covers[0].file_name = "../escape.jpg"; }],
@@ -256,7 +262,7 @@ describe("library package round trip with M2 objects", () => {
     } finally { source.app.close(); target.app.close(); }
   });
 
-  it("imports a package written before this stage without M2 columns", async () => {
+  it("imports a package written before the media columns existed", async () => {
     const source = await startApp();
     const target = await startApp();
     try {
@@ -266,7 +272,7 @@ describe("library package round trip with M2 objects", () => {
       exportLibraryPackage(source.app.store, dir);
       const manifestPath = path.join(dir, "manifest.json");
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-      for (const key of ["covers", "captureEvents", "transcriptSegments", "captureDrafts", "workTerms", "mediaProbes"]) delete manifest[key];
+      for (const key of ["covers", "captureEvents", "transcriptSegments", "captureDrafts", "dictionary", "workTerms", "mediaProbes"]) delete manifest[key];
       for (const row of manifest.works) for (const key of ["media_kind", "shelf_state", "author", "cover_id", "cover_state", "last_resource_id", "last_opened_at", "projection_json", "updated_at"]) delete row[key];
       for (const row of manifest.resources) for (const key of ["ordinal_label", "ordinal_number", "ordinal_type", "sort_key"]) delete row[key];
       for (const row of manifest.revisions) delete row.layout_json;
@@ -276,6 +282,24 @@ describe("library package round trip with M2 objects", () => {
       expect(target.app.store.sqlite.prepare("SELECT media_kind, shelf_state, cover_state FROM works").get()).toEqual({ media_kind: "novel", shelf_state: "none", cover_state: "auto" });
       const read = await call(target, "library.read", { resourceId: (book.value as { resourceId: string }).resourceId });
       expect(read.status).toBe("ok");
+    } finally { source.app.close(); target.app.close(); }
+  });
+
+  it("reads the work terms of a package written before the dictionary as the work's hand-written terms", async () => {
+    const source = await startApp();
+    const target = await startApp();
+    try {
+      await seedLibrary(source);
+      const dir = path.join(tempProfile(), "pkg");
+      exportLibraryPackage(source.app.store, dir);
+      const manifestPath = path.join(dir, "manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      const workTerm = manifest.dictionary.find((row: { scope: string }) => row.scope === "work");
+      manifest.workTerms = [{ id: workTerm.id, work_id: workTerm.work_id, term: workTerm.term, heard: workTerm.heard, created_at: workTerm.created_at }];
+      delete manifest.dictionary;
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      importLibraryPackageResolved(target.app.store, dir, { strategy: "replace" });
+      expect(target.app.store.sqlite.prepare("SELECT scope, term, heard, source FROM dictionary_terms").all()).toEqual([{ scope: "work", term: "魔王城", heard: "魔王成", source: "manual" }]);
     } finally { source.app.close(); target.app.close(); }
   });
 });

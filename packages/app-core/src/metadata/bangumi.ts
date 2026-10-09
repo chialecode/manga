@@ -345,6 +345,8 @@ export type NormalizedSubject = {
   rating: { score: number; total: number; rank: number | null; scale: "bangumi-10" } | null;
   images: { large: string; common: string; medium: string; small: string; grid: string };
   sourceUrl: string;
+  /** Other names of the entry (the infobox's 别名), for the voice dictionary. */
+  aliases: string[];
 };
 
 function infoboxValues(box: BangumiSubject["infobox"], keys: string[]): string[] {
@@ -389,5 +391,6 @@ export function normalizeSubject(subject: BangumiSubject, pageOrigin = BANGUMI_P
     rating: total > 0 || score > 0 ? { score, total, rank: subject.rating?.rank ? subject.rating.rank : null, scale: "bangumi-10" } : null,
     images,
     sourceUrl: `${pageOrigin}/subject/${subject.id}`,
+    aliases: [...new Set(infoboxValues(subject.infobox, ["别名"]).map((name) => name.slice(0, 128)).filter(Boolean))].slice(0, 12),
   };
 }

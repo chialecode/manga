@@ -53,7 +53,7 @@ export type ReaderEngine = {
 export function builtinReaderEngine(): ReaderEngine {
   return {
     engineId: "builtin-formats",
-    version: "m1b",
+    version: "1",
     async parse(bytes, options) {
       if (options?.signal?.aborted) throw new DOMException("aborted", "AbortError");
       const parsed = await parseDocument(bytes, { signal: options?.signal });

@@ -11,7 +11,7 @@ import { schemaSql } from "@manga/storage-drizzle";
  */
 export const TINY_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
-export function makeLegacyProfile(version: 6 | 7 = 6): { dir: string; ids: Record<string, string> } {
+export function makeLegacyProfile(version: 6 | 7 | 8 | 9 | 10 = 6): { dir: string; ids: Record<string, string> } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-legacy-"));
   const db = new Database(path.join(dir, "manga.sqlite"));
   db.pragma("journal_mode = WAL");
@@ -22,6 +22,15 @@ export function makeLegacyProfile(version: 6 | 7 = 6): { dir: string; ids: Recor
   db.exec(schemaSql.V5_SCHEMA_SQL);
   db.exec(schemaSql.V6_SCHEMA_SQL);
   if (version >= 7) db.exec(schemaSql.V7_SCHEMA_SQL);
+  if (version >= 8) db.exec(schemaSql.V8_SCHEMA_SQL);
+  if (version >= 9) {
+    db.exec(schemaSql.V9_SCHEMA_SQL);
+    db.exec(schemaSql.V9_CREATIVE_SQL);
+  }
+  if (version >= 10) {
+    db.exec(schemaSql.V10_SCHEMA_SQL);
+    db.exec(schemaSql.V10_TABLES_SQL);
+  }
   db.prepare("INSERT INTO schema_meta(key, value) VALUES ('schemaVersion', ?)").run(String(version));
   const ids = { work: "work-legacy", resource: "res-legacy", revision: "rev-legacy", anchor: "anc-legacy", capture: "cap-legacy", second: "res-legacy-2", secondWork: "work-legacy-2" };
   const now = "2026-09-01T00:00:00.000Z";
@@ -41,7 +50,7 @@ export function makeLegacyProfile(version: 6 | 7 = 6): { dir: string; ids: Recor
   db.prepare("INSERT INTO work_links(work_id, provider_id, external_id, snapshot_json, confirmed_at) VALUES (?,?,?,?,?)").run(ids.work, "bangumi", "12345", '{"name":"旧"}', now);
   db.prepare("INSERT INTO metadata_snapshots(work_id, provider_id, external_id, snapshot_json) VALUES (?,?,?,?)").run(ids.work, "bangumi", "12345", '{"fields":{"title":"旧"}}');
   db.prepare("INSERT INTO metadata_candidates(id, work_id, provider_id, payload_json) VALUES (?,?,?,?)").run("cand-legacy", ids.work, "bangumi", "{}");
-  if (version >= 7) {
+  if (version === 7) {
     // Three authoritative covers as a v7 library kept them: a file that is whole, one that went missing, and one whose bytes changed.
     const attachments = path.join(dir, "attachments");
     fs.mkdirSync(attachments, { recursive: true });
