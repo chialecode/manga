@@ -1,8 +1,12 @@
 import type { NoteBlock } from "@manga/contracts/reading";
+import type { ReactNode } from "react";
 import type { Translator } from "@manga/i18n";
 import { ArrowLeft } from "lucide-react";
 import { Input } from "../components/ui/input.tsx";
 import { NoteEditor } from "../note-editor.tsx";
+import { useNoteEmbeds } from "../embed/use-note-embeds.ts";
+import type { EmbedItem } from "../embed/embed-types.ts";
+import { attempt } from "../lib/api.ts";
 import type { NoteDoc, NoteRevision } from "../lib/types.ts";
 
 type I18n = Translator;
@@ -23,6 +27,12 @@ export type NotesPageProps = {
   epoch: number;
   focusBlock: string | null;
   onSave: (blocks: NoteBlock[], expectedRevision: number, title: string, tags: string[]) => Promise<number | void>;
+  /** Buttons beside the title that belong to other modules ("加入项目"). */
+  actions?: ReactNode;
+  /** Set when the embeds module is on: the note can hold whiteboards, mind maps and other notes. */
+  embeds?: { formatDate: (iso: string) => string; onOpen: (item: EmbedItem) => void; onEnable: (item: EmbedItem) => void; onError: (message: string) => void };
+  /** Set when screenshots can be put into the note and opened again at their source. */
+  screenshots?: { onOpen: (screenshotId: string) => void };
 };
 
 /**
@@ -32,6 +42,14 @@ export type NotesPageProps = {
 export function NotesPage(props: NotesPageProps) {
   const { i18n, doc } = props;
   const stale = Boolean(doc?.sourceStatus && doc.sourceStatus !== "linked" && doc.sourceStatus !== "none");
+  const embedded = useNoteEmbeds(doc?.objectId ?? null, Boolean(props.embeds));
+  const embeds = props.embeds;
+  async function refreshEmbed(slot: string) {
+    if (!doc) return;
+    const result = await attempt("embed.refresh", { sourceKind: "note", sourceId: doc.objectId, slot });
+    if (!result.ok) { embeds?.onError(result.error.message); return; }
+    await embedded.reload();
+  }
   return (
     <section data-testid="notes-page" className="page-pad">
       <div className="note-page-head">
@@ -42,6 +60,7 @@ export function NotesPage(props: NotesPageProps) {
           <div className="flex gap-2 items-center mb-2 text-sm flex-wrap">
             <h2 className="font-medium" data-testid="note-title">{doc.title}</h2>
             <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-rename" onClick={() => props.onRenaming(!props.renaming)}>{i18n.t("notes.rename")}</button>
+            {props.actions}
             <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-history" onClick={props.onHistory}>{i18n.t("notes.history")}</button>
             {doc.tags.length ? <span data-testid="note-tags">{doc.tags.join(",")}</span> : null}
           </div>
@@ -86,6 +105,8 @@ export function NotesPage(props: NotesPageProps) {
             tags={doc.tags}
             focusBlockId={props.focusBlock ?? undefined}
             sourceStale={stale}
+            embeds={embeds ? { t: i18n.t, formatDate: embeds.formatDate, items: embedded.items, onOpen: embeds.onOpen, onEnable: embeds.onEnable, onRefresh: (slot) => void refreshEmbed(slot) } : undefined}
+            screenshots={props.screenshots ? { t: i18n.t, onOpen: props.screenshots.onOpen } : undefined}
             onOpenSource={(blockId) => props.onOpenSource(doc.objectId, blockId)}
             saveLabel={i18n.t("notes.save")}
             savingLabel={i18n.t("notes.saving")}
@@ -119,7 +140,12 @@ export function NotesPage(props: NotesPageProps) {
               openSource: i18n.t("reading.sourceOpen"),
             }}
             onSourceStale={() => props.onOpenSource(doc.objectId)}
-            onSave={(blocks, expectedRevision) => props.onSave(blocks, expectedRevision, doc.title, doc.tags)}
+            // Saving is what registers the embeds of the blocks, so they are read again once it has gone through.
+            onSave={async (blocks, expectedRevision) => {
+              const saved = await props.onSave(blocks, expectedRevision, doc.title, doc.tags);
+              if (embeds) void embedded.reload();
+              return saved;
+            }}
           />
         </section>
       ) : <p>{i18n.t("status.empty")}</p>}

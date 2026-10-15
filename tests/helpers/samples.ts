@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadManifest, samplesRoot, verifyMediaSamples } from "../../scripts/samples/media-manifest.mjs";
+import { libraryRoot } from "./app.ts";
 import { mediaPrerequisitesAbsent } from "./prerequisites.ts";
 
 export type SampleEntry = {
@@ -56,3 +57,15 @@ export function isAvailable(id: string): boolean {
 }
 
 export { samplesRoot };
+
+/**
+ * Puts a file or folder under a library path of `app` and returns it unchanged, the way a user adds the folder before importing from it (A-80).
+ * The generated samples share one library path; any other folder is registered as it is.
+ */
+export function inLibrary(app: Parameters<typeof libraryRoot>[0], target: string, mediaKind: "novel" | "comic" | "video" = "novel"): string {
+  const abs = path.resolve(target);
+  if (!fs.existsSync(abs)) return target;
+  const sampled = abs.toLowerCase().startsWith(path.resolve(samplesRoot).toLowerCase() + path.sep);
+  libraryRoot(app, sampled ? samplesRoot : fs.statSync(abs).isDirectory() ? abs : path.dirname(abs), mediaKind);
+  return target;
+}

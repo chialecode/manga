@@ -3,17 +3,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { MangaProductApp, ElectronSafeStorageVault, resolveLaunchLayout, persistPointer } from "@manga/app-core";
-import { productWindow } from "./window-options.ts";
+import { parseWindowAction, productWindow, windowControlsDrawn, type WindowState } from "./window-options.ts";
 import { testHooks } from "./test-hooks.ts";
 import { handleMediaProtocol, registerMediaScheme } from "./media-protocol.ts";
 import { externalUrlAllowed, isAppPage, permissionAllowed } from "./permissions.ts";
 import { RecordingOverlay } from "./overlay.ts";
-import { verifyBundledAssets } from "./bundled-assets.ts";
+import { PACKAGED_PLUGIN_ASSETS, REQUIRED_ASSETS, verifyBundledAssets } from "./bundled-assets.ts";
 import { createNetFetch } from "./net-fetch.ts";
+import { builtInDanmakuCredentials, SMOKE_DANMAKU_CREDENTIALS } from "./danmaku-credentials.ts";
 import { createId, LOCATION_PARTITIONS } from "@manga/contracts";
 import { safeStorage } from "electron";
+import { utilitySpawner } from "./plugin-process.ts";
 
 const smoke = process.argv.includes("--manga-smoke");
+// A smoke window sits on the developer's own desktop. When other windows cover it, Chromium treats it as occluded: frames stop and the renderer is
+// throttled, so transitions never finish and timings stretch. Smoke runs keep the window rendering whatever else is on screen.
+if (smoke) {
+  app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+  app.commandLine.appendSwitch("disable-background-timer-throttling");
+}
 // The recording smoke uses Chromium's fake capture device, which plays a synthetic speech clip instead of a microphone.
 if (smoke && process.env.MANGA_SMOKE_PHASE === "voice" && process.env.MANGA_SMOKE_AUDIO) {
   app.commandLine.appendSwitch("use-fake-device-for-media-stream");
@@ -74,6 +84,12 @@ async function bootService(): Promise<void> {
     resourcesPath: process.resourcesPath,
     // Metadata requests go through Chromium's network stack, so the system proxy and certificates apply.
     netFetch: createNetFetch(net),
+    // Plugins run in utility processes; the packages that come with the application sit next to it and are offered for installation, never installed by themselves.
+    plugins: { spawn: utilitySpawner, bundledDir: app.isPackaged ? path.join(process.resourcesPath, "plugins") : process.env.MANGA_PLUGINS_DIR || path.join(process.resourcesPath, "plugins") },
+    // A packaged-window smoke that downloads keeps to the loopback address: no public DHT, no LAN discovery, no port mapping.
+    // Danmaku: a release signs with the credentials built in; a smoke run never does, and talks only to the local fake server named by the harness (or to nothing).
+    danmaku: smoke ? { credentials: SMOKE_DANMAKU_CREDENTIALS, origin: process.env.MANGA_SMOKE_DANDAN_ORIGIN || "http://127.0.0.1:9", client: { allowHttp: true } } : { credentials: builtInDanmakuCredentials() },
+    ...(smoke && process.env.MANGA_SMOKE_BT_LOOPBACK === "1" ? { acquisition: { network: { dht: false, lsd: false, natUpnp: false, natPmp: false } } } : {}),
     useParseWorker: true,
     parseWorkerPath: [
       path.join(process.resourcesPath, "parse-worker.cjs"),
@@ -93,7 +109,7 @@ async function bootService(): Promise<void> {
 /** A package that is missing a bundled tool stops here, saying which, instead of failing later in a recording or a video. */
 function assetProblems(): string[] {
   if (!app.isPackaged) return [];
-  return verifyBundledAssets(process.resourcesPath).problems;
+  return verifyBundledAssets(process.resourcesPath, { required: [...REQUIRED_ASSETS, ...PACKAGED_PLUGIN_ASSETS] }).problems;
 }
 
 app.whenReady().then(async () => {
@@ -134,7 +150,6 @@ app.whenReady().then(async () => {
     show: !smoke,
     backgroundColor: productWindow.backgroundColor,
     titleBarStyle: productWindow.titleBarStyle,
-    ...(process.platform === "win32" ? { titleBarOverlay: productWindow.titleBarOverlay } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -151,7 +166,7 @@ app.whenReady().then(async () => {
   const appUrl = rendererUrl();
   // The window stays on the app's own page; links open only through `manga:open-external`.
   window.webContents.on("will-navigate", (event, target) => { if (!isAppPage(target, appUrl)) event.preventDefault(); });
-  // Only the microphone (audio) and the font list are ever granted, and only to this window's own page.
+  // Only the microphone (audio), the font list and full screen are ever granted, and only to this window's own page.
   const isMainWindow = (contents: Electron.WebContents | null) => Boolean(contents && window && !window.isDestroyed() && contents === window.webContents);
   const permissions = window.webContents.session;
   permissions.setPermissionRequestHandler((contents, permission, callback, details) => {
@@ -203,7 +218,30 @@ app.whenReady().then(async () => {
       writable: layout.writable,
       vaultAvailable: safeStorage.isEncryptionAvailable(),
       packaged: app.isPackaged,
+      appVersion: app.getVersion(),
     };
+  });
+  // The window's own buttons are drawn by the page (A-91): it asks for one of three actions, and is told when the window is maximized or restored,
+  // whoever did it (the button, a double click on the top, Win+Up, dragging to the screen's edge).
+  const windowState = (): WindowState => ({ controls: windowControlsDrawn(process.platform), maximized: Boolean(window && !window.isDestroyed() && window.isMaximized()) });
+  const pushWindowState = () => { if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send("manga:window-state", windowState()); };
+  window.on("maximize", pushWindowState);
+  window.on("unmaximize", pushWindowState);
+  window.on("restore", pushWindowState);
+  ipcMain.handle("manga:window-state", (event) => { assertCaller(event); return windowState(); });
+  ipcMain.handle("manga:window-action", (event, requested: unknown) => {
+    assertCaller(event);
+    const action = parseWindowAction(requested);
+    if (!action || !window || window.isDestroyed()) return windowState();
+    if (action === "minimize") window.minimize();
+    else if (action === "close") window.close();
+    else if (window.isMaximized()) window.unmaximize();
+    else window.maximize();
+    return windowState();
+  });
+  ipcMain.handle("manga:quit", (event) => {
+    assertCaller(event);
+    app.quit();
   });
   ipcMain.handle("manga:choose-directory", async (event) => {
     assertCaller(event);
@@ -273,7 +311,7 @@ app.whenReady().then(async () => {
     return appService.registerPath("file", result.filePaths[0]);
   });
   /** A file or folder the user picked in the host dialog, returned as a path handle and a display name. */
-  ipcMain.handle("manga:pick", async (event, request: { mode: "file" | "directory"; filter?: "book" | "comic" | "video" | "subtitle" | "image" | "audio" | "package" | "any" }) => {
+  ipcMain.handle("manga:pick", async (event, request: { mode: "file" | "directory"; filter?: "book" | "comic" | "video" | "subtitle" | "image" | "audio" | "package" | "plugin" | "torrent" | "any"; defaultPath?: string }) => {
     assertCaller(event);
     if (!window || !appService) return null;
     const filters: Record<string, Electron.FileFilter[]> = {
@@ -283,12 +321,17 @@ app.whenReady().then(async () => {
       subtitle: [{ name: "Subtitle", extensions: ["ass", "ssa", "srt", "vtt"] }],
       image: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"] }],
       audio: [{ name: "Audio", extensions: ["wav", "mp3", "m4a", "ogg", "webm"] }],
+      package: [{ name: "MANGA project package", extensions: ["zip"] }],
+      plugin: [{ name: "MANGA plugin package", extensions: ["manga-plugin", "zip"] }],
+      torrent: [{ name: "Torrent", extensions: ["torrent"] }],
     };
     let chosen = testHooks.pick?.({ mode: request.mode });
     if (!chosen) {
+      // The dialog opens where the page says (a library path, a folder to add); an absolute folder that exists, nothing else.
+      const start = typeof request.defaultPath === "string" && path.isAbsolute(request.defaultPath) && fs.existsSync(request.defaultPath) ? request.defaultPath : undefined;
       const result = await dialog.showOpenDialog(window, request.mode === "directory"
-        ? { properties: ["openDirectory"] }
-        : { properties: ["openFile"], filters: request.filter ? filters[request.filter] : undefined });
+        ? { properties: ["openDirectory"], defaultPath: start }
+        : { properties: ["openFile"], filters: request.filter ? filters[request.filter] : undefined, defaultPath: start });
       if (result.canceled || !result.filePaths[0]) return null;
       chosen = result.filePaths[0];
     }

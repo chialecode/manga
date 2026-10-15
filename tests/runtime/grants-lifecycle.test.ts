@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { startApp } from "../helpers/app.ts";
 
-describe("P1 grants and lifecycle", () => {
+describe("grants and lifecycle", () => {
   it("rejects cross-resource reads when the allowlist is empty or enumerated", async () => {
     const { app, actor, grant } = await startApp();
     const imported = await app.call(actor, {
@@ -52,7 +52,7 @@ describe("P1 grants and lifecycle", () => {
     expect(app.uiFacets.has("agent")).toBe(true);
     expect(app.uiFacets.has("library")).toBe(true);
     await app.runtime.applyProfile({
-      profileId: "m1a",
+      profileId: "profile",
       revision: 2,
       enabledFeatures: ["library", "notes", "settings", "inventory"],
       disabledFeatures: ["agent"],
@@ -61,7 +61,7 @@ describe("P1 grants and lifecycle", () => {
     expect(app.uiFacets.has("agent")).toBe(false);
     expect(app.runtime.gateway.has("agent.send")).toBe(false);
     await app.runtime.applyProfile({
-      profileId: "m1a",
+      profileId: "profile",
       revision: 3,
       enabledFeatures: ["library", "notes", "settings", "inventory", "agent"],
       disabledFeatures: [],
@@ -75,7 +75,7 @@ describe("P1 grants and lifecycle", () => {
     const { app } = await startApp();
     for (let i = 0; i < 50; i += 1) {
       await app.runtime.applyProfile({
-        profileId: "m1a",
+        profileId: "profile",
         revision: i + 2,
         enabledFeatures: i % 2 === 0 ? ["library", "notes", "settings", "inventory"] : ["library", "notes", "settings", "inventory", "agent"],
         disabledFeatures: i % 2 === 0 ? ["agent"] : [],
@@ -97,7 +97,7 @@ describe("P1 grants and lifecycle", () => {
     expect(ui.value?.objectId).not.toBe(agent.value?.objectId);
     const created = await app.call(actor, { commandId: "notes.create", idempotencyKey: "late-note", input: { title: "late", text: "v1" } }, grant.handle);
     await app.runtime.applyProfile({
-      profileId: "m1a",
+      profileId: "profile",
       revision: 9,
       enabledFeatures: ["library", "settings", "inventory", "agent"],
       disabledFeatures: ["notes"],
@@ -144,7 +144,7 @@ describe("P1 grants and lifecycle", () => {
     const live = app as unknown as { parseWorker?: { pid(): number | undefined } };
     expect(live.parseWorker?.pid()).toBeGreaterThan(0);
     await app.runtime.applyProfile({
-      profileId: "m1a",
+      profileId: "profile",
       revision: 2,
       enabledFeatures: ["settings"],
       disabledFeatures: ["library", "notes", "inventory", "agent"],
@@ -152,7 +152,7 @@ describe("P1 grants and lifecycle", () => {
     });
     expect(live.parseWorker).toBeUndefined();
     await app.runtime.applyProfile({
-      profileId: "m1a",
+      profileId: "profile",
       revision: 3,
       enabledFeatures: ["library", "notes", "settings", "inventory", "agent"],
       disabledFeatures: [],

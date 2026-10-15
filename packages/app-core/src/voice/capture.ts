@@ -6,6 +6,7 @@ import type { DrizzleStore } from "@manga/storage-drizzle";
 import type { MediaServices } from "../media/services.ts";
 import { PCM_BYTES_PER_MS, PCM_SAMPLE_RATE, RETAINED_MEDIA_TYPE, pcmDurationMs, retainedName, stagingName } from "./audio-files.ts";
 import { VOICE_MODULE } from "./ids.ts";
+import { DictionaryService } from "./dictionary.ts";
 import { Organizer } from "./organize.ts";
 import { NO_ASR, NO_LLM, type AsrPort, type LlmPort } from "./ports.ts";
 import { mapInterval, type PositionEvent } from "./position-map.ts";
@@ -13,6 +14,7 @@ import { VoicePipeline } from "./transcribe.ts";
 import { VadSegmenter, type SpeechSegment, type VadConfig } from "./vad-segmenter.ts";
 import type { VadEngine, VadStream } from "./vad-client.ts";
 import { readRecordingSettings } from "./settings.ts";
+import { WorkFolders } from "../work-folders.ts";
 
 export { VOICE_MODULE };
 
@@ -51,6 +53,8 @@ export type SessionRow = {
   stopped_at: string | null;
   staging_name: string | null;
   opus_name: string | null;
+  /** The recording kept in the folder of its work (A-79); `opus_name` is a recording kept before the works had folders. */
+  audio_file_id: string | null;
   device_label: string | null;
   work_id: string | null;
   vad_json: string | null;
@@ -116,11 +120,16 @@ export class CaptureService {
   readonly deps: CaptureDeps;
   readonly pipeline: VoicePipeline;
   readonly organizer: Organizer;
+  readonly dictionary: DictionaryService;
+  /** The folders of the works: a recording that is kept goes into its work's `录音` folder. */
+  readonly files: WorkFolders;
   private active: Active | null = null;
   private current: () => boolean = () => true;
 
   constructor(deps: CaptureDeps) {
     this.deps = { ...deps, asr: deps.asr ?? NO_ASR, llm: deps.llm ?? NO_LLM };
+    this.dictionary = new DictionaryService(deps.store);
+    this.files = new WorkFolders(deps.store);
     this.pipeline = new VoicePipeline(this);
     this.organizer = new Organizer(this);
   }
@@ -166,7 +175,25 @@ export class CaptureService {
   }
 
   retainedPath(row: SessionRow): string | null {
+    if (row.audio_file_id) return this.files.pathOf(row.audio_file_id);
     return row.opus_name ? path.join(this.deps.store.attachmentsDir, row.opus_name) : null;
+  }
+
+  /** The work a recording belongs to: the one it was started for, or the one its first reading position was in. */
+  workOf(row: SessionRow): string | null {
+    if (row.work_id) return row.work_id;
+    const first = this.db.prepare("SELECT r.work_id AS workId FROM capture_events e JOIN resources r ON r.id = e.resource_id WHERE e.session_id = ? AND e.resource_id IS NOT NULL ORDER BY e.offset_ms, e.id LIMIT 1").get(row.id) as { workId: string | null } | undefined;
+    return first?.workId ?? null;
+  }
+
+  /** What a recording is kept for (A-88): the resource its first reading position was in, else the work it was started for; null when it is for neither. */
+  fileTarget(row: SessionRow): { workId: string | null; resourceId: string | null; label: string } | null {
+    const first = this.db.prepare("SELECT r.id AS id, r.title AS title, r.work_id AS workId FROM capture_events e JOIN resources r ON r.id = e.resource_id WHERE e.session_id = ? AND e.resource_id IS NOT NULL ORDER BY e.offset_ms, e.id LIMIT 1").get(row.id) as { id: string; title: string; workId: string | null } | undefined;
+    const workId = first ? first.workId : row.work_id;
+    const work = workId ? this.db.prepare("SELECT title FROM works WHERE id = ?").get(workId) as { title: string } | undefined : undefined;
+    if (first) return { workId: first.workId, resourceId: first.id, label: work?.title ?? first.title };
+    if (workId && work) return { workId, resourceId: null, label: work.title };
+    return null;
   }
 
   events(id: string): PositionEvent[] {
@@ -529,21 +556,19 @@ export class CaptureService {
 
   // ------------------------------------------------------------------ terms
 
+  /** The older per-work term commands, now over the dictionary: a term added here is a hand-written term of that work. */
   terms(workId: string): { terms: Array<{ term: string; heard: string | null }> } {
-    const rows = this.db.prepare("SELECT term, heard FROM work_terms WHERE work_id = ? ORDER BY created_at, rowid").all(workId) as Array<{ term: string; heard: string | null }>;
-    return { terms: rows };
+    return { terms: this.dictionary.workTerms(workId) };
   }
 
   addTerm(workId: string, term: string, heard?: string): { term: string; heard: string | null } {
-    if (!this.db.prepare("SELECT id FROM works WHERE id = ?").get(workId)) throw new MangaError("NOT_FOUND", "work not found");
-    const clean = term.trim();
-    if (!clean) throw new MangaError("VALIDATION_ERROR", "a term cannot be empty");
-    this.db.prepare("INSERT INTO work_terms(id, work_id, term, heard, created_at) VALUES (?,?,?,?,?) ON CONFLICT(work_id, term) DO UPDATE SET heard = excluded.heard").run(createId("trm"), workId, clean, heard?.trim() || null, new Date().toISOString());
-    return { term: clean, heard: heard?.trim() || null };
+    if (!term.trim()) throw new MangaError("VALIDATION_ERROR", "a term cannot be empty");
+    const added = this.dictionary.add({ scope: "work", workId, term, heard });
+    return { term: added.term, heard: added.heard };
   }
 
   removeTerm(workId: string, term: string): { removed: boolean } {
-    return { removed: this.db.prepare("DELETE FROM work_terms WHERE work_id = ? AND term = ?").run(workId, term.trim()).changes > 0 };
+    return { removed: this.dictionary.removeWorkTerm(workId, term) };
   }
 
   // ------------------------------------------------------------------ audio

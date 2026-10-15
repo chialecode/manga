@@ -2,7 +2,11 @@ import { MangaError } from "@manga/contracts";
 import {
   joinApiPath,
   mapHttpError,
+  networkError,
+  parseJsonAnswer,
+  protocolError,
   readSseLines,
+  requireMachineAnswer,
   type ChatMessage,
   type StreamEvent,
   type TextRequest,
@@ -36,6 +40,22 @@ function toolPayload(tools?: ToolDefinition[]) {
   }));
 }
 
+/** The limits of a Chat Completions request: how long the answer may be and how hard to think, only when they were asked for. */
+function chatLimits(request: TextRequest): Record<string, unknown> {
+  return {
+    ...(request.maxOutputTokens ? { [request.maxTokensField ?? "max_tokens"]: request.maxOutputTokens } : {}),
+    ...(request.reasoningEffort ? { reasoning_effort: request.reasoningEffort } : {}),
+  };
+}
+
+/** The same for Responses, which names them differently. */
+function responseLimits(request: TextRequest): Record<string, unknown> {
+  return {
+    ...(request.maxOutputTokens ? { max_output_tokens: request.maxOutputTokens } : {}),
+    ...(request.reasoningEffort ? { reasoning: { effort: request.reasoningEffort } } : {}),
+  };
+}
+
 function responseTools(tools?: ToolDefinition[]) {
   return tools?.length ? tools.map((tool) => ({ type: "function", ...tool })) : undefined;
 }
@@ -57,8 +77,17 @@ function responseInput(messages: ChatMessage[]): Array<Record<string, unknown>> 
   });
 }
 
+/**
+ * The messages as the strictest servers take them: one system message, and first. The chat templates of many open models (Qwen's among them) refuse a system
+ * message anywhere else, and a second one. The system messages that lead are joined into one; one later in the conversation (the material after earlier turns, a
+ * summary, what a vision model read) goes as a user message marked as the system's, the way the PI runtime sends every one.
+ */
 function chatMessages(messages: ChatMessage[]) {
-  return messages.map((message) => {
+  let lead = 0;
+  while (lead < messages.length && messages[lead]!.role === "system") lead += 1;
+  const system = messages.slice(0, lead).map((message) => message.content).join("\n\n");
+  return [...(lead ? [{ role: "system", content: system }] : []), ...messages.slice(lead).map((message) => {
+    if (message.role === "system") return { role: "user", content: `System: ${message.content}` };
     if (message.role === "assistant" && message.toolCalls?.length) {
       return {
         role: "assistant",
@@ -77,7 +106,7 @@ function chatMessages(messages: ChatMessage[]) {
       return { role: "user", content: [{ type: "text", text: message.content }, ...message.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.base64}` } }))] };
     }
     return { role: message.role, content: message.content };
-  });
+  })];
 }
 
 export async function* streamChatCompletions(baseUrl: string, apiKey: string, request: TextRequest): AsyncGenerator<StreamEvent> {
@@ -93,13 +122,12 @@ export async function* streamChatCompletions(baseUrl: string, apiKey: string, re
       messages: chatMessages(request.messages),
       tools: request.tools?.length ? toolPayload(request.tools) : undefined,
       stream: true,
+      ...chatLimits(request),
     }),
     signal: timeoutSignal(request.timeoutMs ?? 60_000, request.signal),
-  }).catch((error) => {
-    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    throw new MangaError("PROVIDER_UNAVAILABLE", error instanceof Error ? error.message : "network failure", { retryable: true });
-  });
+  }).catch((error) => { throw networkError(error, request.signal); });
   if (!response.ok) throw await readError(response);
+  requireMachineAnswer(response);
   if (!response.body) throw new MangaError("PROVIDER_UNAVAILABLE", "empty stream body");
   // Real streams carry the call id only in the first chunk of a tool call; later chunks identify it by index.
   const idByIndex = new Map<number, string>();
@@ -112,7 +140,8 @@ export async function* streamChatCompletions(baseUrl: string, apiKey: string, re
       yield { type: "completed", finishReason: "stop" };
       return;
     }
-    const json = JSON.parse(data) as {
+    const json = parseJsonAnswer<{
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
       choices?: Array<{
         delta?: {
           content?: string;
@@ -120,7 +149,7 @@ export async function* streamChatCompletions(baseUrl: string, apiKey: string, re
         };
         finish_reason?: string | null;
       }>;
-    };
+    }>(data, "a stream event");
     const delta = json.choices?.[0]?.delta;
     if (delta?.content) yield { type: "text-delta", text: delta.content };
     for (const call of delta?.tool_calls ?? []) {
@@ -134,7 +163,9 @@ export async function* streamChatCompletions(baseUrl: string, apiKey: string, re
       yield { type: "tool-call-delta", callId: id, name: current.name, argumentsDelta: call.function?.arguments ?? "" };
     }
     if (json.choices?.[0]?.finish_reason) {
-      yield { type: "completed", finishReason: json.choices[0].finish_reason };
+      // A service that states its token counts does so on the last chunks; one that does not leaves them out and the usage page says so.
+      const used = json.usage;
+      yield { type: "completed", finishReason: json.choices[0].finish_reason, ...(typeof used?.prompt_tokens === "number" || typeof used?.completion_tokens === "number" ? { usage: { inputTokens: used.prompt_tokens, outputTokens: used.completion_tokens } } : {}) };
       return;
     }
   }
@@ -153,22 +184,23 @@ export async function completeChatCompletions(baseUrl: string, apiKey: string, r
       messages: chatMessages(request.messages),
       tools: request.tools?.length ? toolPayload(request.tools) : undefined,
       stream: false,
+      ...chatLimits(request),
     }),
     signal: timeoutSignal(request.timeoutMs ?? 60_000, request.signal),
-  }).catch((error) => {
-    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    throw new MangaError("PROVIDER_UNAVAILABLE", error instanceof Error ? error.message : "network failure", { retryable: true });
-  });
+  }).catch((error) => { throw networkError(error, request.signal); });
   if (!response.ok) throw await readError(response);
-  const json = await response.json() as {
+  requireMachineAnswer(response);
+  const json = parseJsonAnswer<{
     choices?: Array<{
       message?: {
         content?: string;
         tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
       };
     }>;
-  };
-  const message = json.choices?.[0]?.message;
+  }>(await response.text().catch(() => ""), "JSON");
+  // A service that answers with JSON that has no choices is not speaking Chat Completions.
+  if (!Array.isArray(json.choices)) throw protocolError("no choices");
+  const message = json.choices[0]?.message;
   return {
     text: message?.content ?? "",
     toolCalls: (message?.tool_calls ?? []).map((call) => ({
@@ -193,13 +225,12 @@ export async function* streamResponses(baseUrl: string, apiKey: string, request:
       input,
       tools: responseTools(request.tools),
       stream: true,
+      ...responseLimits(request),
     }),
     signal: timeoutSignal(request.timeoutMs ?? 60_000, request.signal),
-  }).catch((error) => {
-    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    throw new MangaError("PROVIDER_UNAVAILABLE", error instanceof Error ? error.message : "network failure", { retryable: true });
-  });
+  }).catch((error) => { throw networkError(error, request.signal); });
   if (!response.ok) throw await readError(response);
+  requireMachineAnswer(response);
   if (!response.body) throw new MangaError("PROVIDER_UNAVAILABLE", "empty stream body");
   // Real Responses streams announce a function call (item_id, call_id, name) in output_item.added;
   // the argument deltas only carry item_id.
@@ -212,7 +243,7 @@ export async function* streamResponses(baseUrl: string, apiKey: string, request:
       yield { type: "completed", finishReason: "stop" };
       return;
     }
-    const json = JSON.parse(data) as {
+    const json = parseJsonAnswer<{
       type?: string;
       delta?: string;
       name?: string;
@@ -221,7 +252,7 @@ export async function* streamResponses(baseUrl: string, apiKey: string, request:
       arguments?: string;
       item?: { type?: string; id?: string; call_id?: string; name?: string };
       response?: { status?: string; usage?: { input_tokens?: number; output_tokens?: number } };
-    };
+    }>(data, "a stream event");
     if (json.type === "response.output_item.added" && json.item?.type === "function_call" && json.item.id) {
       items.set(json.item.id, { callId: json.item.call_id ?? json.item.id, name: json.item.name ?? "" });
     }
@@ -257,17 +288,17 @@ export async function completeResponses(baseUrl: string, apiKey: string, request
       input: responseInput(request.messages),
       tools: responseTools(request.tools),
       stream: false,
+      ...responseLimits(request),
     }),
     signal: timeoutSignal(request.timeoutMs ?? 60_000, request.signal),
-  }).catch((error) => {
-    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    throw new MangaError("PROVIDER_UNAVAILABLE", error instanceof Error ? error.message : "network failure", { retryable: true });
-  });
+  }).catch((error) => { throw networkError(error, request.signal); });
   if (!response.ok) throw await readError(response);
-  const json = await response.json() as {
+  requireMachineAnswer(response);
+  const json = parseJsonAnswer<{
     output_text?: string;
     output?: Array<{ type?: string; call_id?: string; name?: string; arguments?: string; content?: Array<{ text?: string }> }>;
-  };
+  }>(await response.text().catch(() => ""), "JSON");
+  if (typeof json.output_text !== "string" && !Array.isArray(json.output)) throw protocolError("no output");
   const toolCalls = (json.output ?? [])
     .filter((item) => item.type === "function_call")
     .map((item) => ({ id: item.call_id ?? "", name: item.name ?? "", arguments: item.arguments ?? "" }));

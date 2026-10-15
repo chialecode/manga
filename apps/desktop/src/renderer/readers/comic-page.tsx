@@ -91,7 +91,7 @@ export function ComicPageView(props: {
       {source?.state === "ready" && !props.failed && page.ok ? (
         source.kind === "pdf"
           ? <PdfCanvas url={source.url} pageNumber={source.pageNumber ?? page.index + 1} width={size.width} height={size.height} onError={() => props.onFail(page.id)} />
-          : <img src={source.url} alt={t("comic.pageAlt", { page: page.index + 1 })} draggable={false} className="comic-image" onError={() => props.onFail(page.id)} />
+          : <img src={source.url} crossOrigin="anonymous" alt={t("comic.pageAlt", { page: page.index + 1 })} draggable={false} className="comic-image" onError={() => props.onFail(page.id)} />
       ) : null}
       {missing ? (
         <div className="comic-placeholder" role="status" data-testid={`comic-page-missing-${page.index}`}>

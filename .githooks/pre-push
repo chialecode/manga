@@ -2,4 +2,4 @@
 set -eu
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-exec node scripts/verify.mjs
+exec node scripts/pre-push.mjs

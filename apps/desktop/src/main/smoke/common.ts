@@ -3,7 +3,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
-import { clickTestId, waitUntil } from "./driver.ts";
+import { clickTestId, sleep, trustedClick, waitUntil } from "./driver.ts";
 
 /** What every smoke flow shares: who calls, how a command is issued, how the evidence is written. */
 
@@ -73,4 +73,37 @@ export async function openSettingsPage(view: BrowserWindow, page: string): Promi
   if (!inSettings && !(await clickTestId(view, "nav-settings"))) return false;
   if (!(await clickTestId(view, `settings-nav-${page}`))) return false;
   return waitUntil(view, `document.querySelector('[data-testid="settings-page-${page}"]')`, 6000);
+}
+
+/**
+ * Full screen the way a person asks for it: a real click on the reader's button must put the page and the window into full
+ * screen, the reader must fill the screen, and Esc must bring everything back. `rootTestId` is the element that goes full screen.
+ */
+export async function fullscreenRoundTrip(view: BrowserWindow, input: { button: string; root: string; evidenceDir?: string; shot?: string }): Promise<FlowResult> {
+  const wasFull = view.isFullScreen();
+  const clicked = await trustedClick(view, input.button);
+  const entered = clicked && await waitUntil(view, `document.fullscreenElement !== null`, 4000);
+  await sleep(300);
+  const windowFull = view.isFullScreen();
+  const state = await js<{ element: string | null; rootBox: { width: number; height: number } | null; inner: { width: number; height: number }; pressed: string | null }>(view, `(() => {
+    const root = document.querySelector('[data-testid="${input.root}"]');
+    const box = root ? root.getBoundingClientRect() : null;
+    return {
+      element: document.fullscreenElement ? (document.fullscreenElement.getAttribute("data-testid") ?? document.fullscreenElement.tagName) : null,
+      rootBox: box ? { width: Math.round(box.width), height: Math.round(box.height) } : null,
+      inner: { width: window.innerWidth, height: window.innerHeight },
+      pressed: document.querySelector('[data-testid="${input.button}"]')?.getAttribute("aria-pressed") ?? null,
+    };
+  })()`);
+  if (input.shot) await capturePage(view, input.evidenceDir, input.shot);
+  // Within a pixel of the screen on both axes: the reader is the full-screen element, not a small box inside it.
+  const fills = Boolean(state.rootBox) && Math.abs(state.rootBox!.width - state.inner.width) <= 1 && Math.abs(state.rootBox!.height - state.inner.height) <= 1;
+  view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+  view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+  let left = await waitUntil(view, `document.fullscreenElement === null`, 3000);
+  let leftBy = "escape";
+  if (!left) { await trustedClick(view, input.button); left = await waitUntil(view, `document.fullscreenElement === null`, 3000); leftBy = "button"; }
+  await sleep(300);
+  const restored = left && view.isFullScreen() === wasFull;
+  return { ok: Boolean(entered) && windowFull && fills && restored, entered: Boolean(entered), windowFull, fills, restored, leftBy, state };
 }

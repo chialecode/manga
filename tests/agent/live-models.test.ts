@@ -106,7 +106,7 @@ describe.skipIf(!live)("live model probes from ignored local config", () => {
       app.close();
       // This synthetic profile temporarily holds encrypted test credentials.
       const resolved = path.resolve(profileRoot);
-      if (path.dirname(resolved) !== path.resolve(os.tmpdir()) || !path.basename(resolved).startsWith("manga-m1a-")) {
+      if (path.dirname(resolved) !== path.resolve(os.tmpdir()) || !path.basename(resolved).startsWith("manga-test-")) {
         throw new Error("refusing to clean a profile outside the test temporary directory");
       }
       fs.rmSync(resolved, { recursive: true, force: true });

@@ -1,16 +1,9 @@
 /* ---- reader frame shared by the novel, comic and video readers --------- */
 .reader { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; background: var(--color-surface); }
 .reader[data-fullscreen] { background: var(--color-surface); }
-.reader-top { position: relative; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--color-border); min-width: 0; flex-shrink: 0; }
-/* Clipped, not overlapped: in a narrow window the tools take the room and the heading (also shown in the title bar) gives way. */
-.reader-heading { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
-.reader-heading h1 { font-size: 15px; font-weight: 600; min-width: 0; padding: 0; }
-.reader-chapter { color: var(--color-subtle); font-size: 12px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.reader-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.reader-toolbar { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); font-size: 12px; flex-shrink: 0; }
 .reader-group { display: inline-flex; align-items: center; gap: 4px; }
-.reader-group select, .reader-more select, .reader-more input[type="number"], .comic-jump input { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
-.reader-more input[type="number"], .comic-jump input { width: 72px; }
+.reader-group select, .reader-more select, .reader-more input[type="number"] { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
+.reader-more input[type="number"] { width: 72px; }
 .reader-themes { gap: 6px; }
 .reader-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--color-border); font-size: 11px; line-height: 1; display: grid; place-items: center; padding: 0; }
 .reader-swatch[data-current="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent-soft); }
@@ -20,8 +13,9 @@
 .reader-range { display: inline-flex; align-items: center; gap: 6px; }
 .reader-ratio { padding: 3px 9px; font-size: 12px; }
 .reader-ratio[aria-pressed="true"] { color: var(--color-accent); background: var(--color-accent-soft); }
-/* The "…" menu of a reader: a panel under the header, capped to the window so it is never cut off in a short one. */
+/* The "…" menu of a reader: a panel over the bottom bar it belongs to, capped to the window so it is never cut off in a short one. */
 .reader-more.reader-more-pop { position: absolute; top: calc(100% + 4px); right: 12px; z-index: 20; flex-basis: auto; flex-direction: column; align-items: flex-start; width: min(340px, calc(100% - 24px)); max-height: calc(100vh - 140px); overflow: auto; padding: 12px 14px; gap: 10px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 8px 24px #30364733; }
+.reader-more.reader-more-up { top: auto; bottom: calc(100% + 4px); }
 .reader-more { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding-top: 6px; border-top: 1px dashed var(--color-border); }
 .reader-panel { padding: 10px 16px; border-bottom: 1px solid var(--color-border); max-height: 40%; overflow: auto; background: var(--color-muted); font-size: 13px; flex-shrink: 0; }
 .reader-panel input { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); }
@@ -38,6 +32,27 @@
 .reader-source blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--color-accent); }
 .reader-source-actions { display: flex; gap: 8px; margin-top: 6px; }
 .reader-notice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 16px 0; font-size: 12px; color: var(--color-subtle); flex-shrink: 0; }
+
+/* ---- novel reader -------------------------------------------------------
+   A regular reader: the text fills the panel and the bottom bar floats over it. The bar slides out of sight while the book is read and comes back
+   when the pointer goes to an edge, a key is pressed or focus enters it, so it never moves the text. The text keeps room for it (the scroll
+   area's padding), so nothing is covered when it is shown at the end of a window. The title is the title bar's; the bar holds everything else. */
+.reader-novel { position: relative; overflow: hidden; --reader-top-room: 16px; --reader-bottom-room: 64px; }
+.reader-foot { position: absolute; z-index: 20; left: 0; right: 0; background: var(--color-frame); transition: transform 160ms ease, opacity 160ms ease; }
+.reader-novel .reader-panel { max-height: min(50vh, 360px); border-bottom: 1px solid var(--color-border); margin: 0 -16px 8px; }
+.reader-foot { bottom: 0; display: flex; flex-direction: column; padding: 8px 16px; border-top: 1px solid var(--color-border); box-shadow: 0 -4px 14px #30364714; font-size: 12px; }
+.reader-foot-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.reader-novel[data-controls="hidden"] .reader-foot { transform: translateY(100%); opacity: 0; pointer-events: none; }
+.reader-novel .reader-scroll { padding-top: var(--reader-top-room); padding-bottom: var(--reader-bottom-room); }
+.reader-position { color: var(--color-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reader-chapter { max-width: 18em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-subtle); }
+.reader-selected { min-width: 0; max-width: 40%; color: var(--color-subtle); }
+.reader-continue { display: flex; justify-content: center; padding: 20px 0 8px; }
+.reading-settings { gap: 12px; }
+.reading-setting { display: flex; align-items: center; gap: 10px; width: 100%; font-size: 12px; }
+.reading-setting-name { flex: 0 0 52px; color: var(--color-subtle); }
+.reading-setting input[type="range"] { flex: 1; min-width: 0; }
+.reading-setting select { flex: 1; min-width: 0; }
 
 /* ---- comic reader ------------------------------------------------------ */
 .comic-reader { overflow: hidden; }
@@ -65,13 +80,18 @@
 .comic-strip-slot { position: absolute; left: 0; right: 0; }
 .comic-empty { margin: auto; }
 .comic-end { position: absolute; inset: auto 0 24px 0; margin: 0 auto; width: fit-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 8px 24px #30364722; font-size: 13px; }
-.comic-footer { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px 16px; border-top: 1px solid var(--color-border); flex-shrink: 0; font-size: 12px; }
-.comic-footer-title { max-width: 220px; color: var(--color-text); font-weight: 600; }
-.comic-footer-page { color: var(--color-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.comic-footer { position: relative; background: var(--color-frame); display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px 16px; border-top: 1px solid var(--color-border); flex-shrink: 0; font-size: 12px; }
 .comic-view { gap: 6px; }
 .comic-view select { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
 .comic-slider { flex: 1; min-width: 120px; }
-.comic-jump { display: inline-flex; align-items: center; gap: 6px; }
+.comic-pager { gap: 2px; }
+.comic-tools { margin-left: auto; }
+/* A position that is also a field (a page, a part): plain text until it is clicked, then a small box of the same width. */
+.editable-number { padding: 4px 8px; border-radius: 6px; color: var(--color-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+button.editable-number:hover:not(:disabled) { background: var(--color-muted); color: var(--color-text); }
+.editable-number-editing { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px; }
+.editable-number-input { width: auto; min-width: 3ch; padding: 3px 6px; border: 1px solid var(--color-accent); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font: inherit; text-align: center; }
+.editable-number-input[aria-invalid="true"] { border-color: var(--color-danger); }
 .comic-region-bar { gap: 8px; }
 
 @keyframes comic-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -80,6 +100,26 @@
 @keyframes comic-pulse { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
 
 @media (max-width: 600px) {
-  .reader-top, .reader-toolbar, .comic-footer { padding-left: 12px; padding-right: 12px; }
+  .comic-footer, .reader-foot { padding-left: 12px; padding-right: 12px; }
   .reader-source, .reader-notice { margin-left: 12px; margin-right: 12px; }
 }
+
+/* The window or the screen is filled with the reader: the bars float over the page as glass and take no room from it, so showing or hiding one never moves
+   the content. The comic's bar is seen when the pointer is on it (or focus is in it); the novel's own auto-hide stays. */
+.reader[data-immersive] { position: relative; }
+.reader[data-immersive] .reader-foot { background: var(--color-frame-glass); backdrop-filter: blur(14px); }
+.reader[data-immersive] .comic-footer { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; background: var(--color-frame-glass); backdrop-filter: blur(14px); border-top-color: transparent; opacity: 0; transition: opacity 160ms ease; }
+.reader[data-immersive] .comic-footer > * { pointer-events: none; }
+.reader[data-immersive] .comic-footer:hover, .reader[data-immersive] .comic-footer:focus-within { opacity: 1; }
+.reader[data-immersive] .comic-footer:hover > *, .reader[data-immersive] .comic-footer:focus-within > * { pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .reader[data-immersive] .comic-footer { transition: none; } }
+
+/* What lies over the page keeps clear of what floats over it, in the full window and in the full screen alike.
+   - The prompt at the last page rises above the bar, which is as high as `--comic-footer-h` says (the reader measures it) and has the higher layer.
+   - The tool that frames a region keeps its note and its button at the top, but floating and below the page's own top, so the page does not move
+     when the tool is switched on and the button is not under the top that comes down, nor under the strip that brings it down.
+   - A note at the top that stays (a source card, a missing original) starts below the page's own top when that floats over a full window. */
+.reader[data-immersive] .comic-end { z-index: 21; inset: auto 0 calc(24px + var(--comic-footer-h, 0px)) 0; }
+.reader[data-immersive] .comic-region-bar { position: absolute; z-index: 21; top: 8px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 12px; max-width: calc(100% - 32px); border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); box-shadow: 0 4px 16px #30364722; color: var(--color-text); }
+.reader[data-window-full] .comic-region-bar { top: calc(var(--column-top-h) + 8px); }
+.reader[data-window-full]:has(> .reader-source, > .reader-notice:not(.comic-region-bar)) { padding-top: var(--column-top-h); }

@@ -6,7 +6,7 @@ const json = z.string().refine(value => { try { JSON.parse(value); return true; 
 const created = { created_at: z.string() };
 const text = z.string().max(1_000_000);
 const rows = {
-  // M2 columns are optional so packages written by earlier stages still import.
+  // The media columns are optional so packages written before they existed still import.
   works: z.object({
     id, title:z.string(), ...created,
     media_kind: id.optional(), shelf_state: id.optional(), author: z.string().nullable().optional(), cover_id: id.nullable().optional(),
@@ -16,10 +16,12 @@ const rows = {
   resources: z.object({
     id, work_id:id.nullable(), kind:id, title:z.string(), aliases_json:json, ...created,
     ordinal_label: z.string().nullable().optional(), ordinal_number: z.number().nullable().optional(), ordinal_type: z.string().nullable().optional(), sort_key: z.string().optional(),
+    /** When the resource left its work (an entry was deleted). Optional so earlier packages still import. */ left_work_at: z.string().nullable().optional(),
   }),
+  removedWork: z.object({ id, title: z.string(), media_kind: id, removed_at: z.string() }),
   revisions: z.object({id, resource_id:id, fingerprint:id, parser_version:id, payload_json:json, ...created, layout_json: json.nullable().optional()}),
-  objects: z.object({id, type:id, owner_module_id:id, scope_json:json, schema_version:z.number().int().positive(), revision:z.number().int().positive(), title:z.string(), payload_json:json, attachment_ids_json:json, preview_json:json, ...created, updated_at:z.string(), deleted_at:z.string().nullable(), /** Note tags. Optional so packages written before M1b rework still import. */ tags_json: json.optional(),
-    /** The work a note belongs to (M2 rework). Optional so earlier packages still import. */ work_id: id.nullable().optional() }),
+  objects: z.object({id, type:id, owner_module_id:id, scope_json:json, schema_version:z.number().int().positive(), revision:z.number().int().positive(), title:z.string(), payload_json:json, attachment_ids_json:json, preview_json:json, ...created, updated_at:z.string(), deleted_at:z.string().nullable(), /** Note tags. Optional so packages written before note tags existed still import. */ tags_json: json.optional(),
+    /** The work a note belongs to. Optional so earlier packages still import. */ work_id: id.nullable().optional() }),
   objectRevisions: z.object({object_id:id, revision:z.number().int().positive(), payload_json:json, ...created}),
   anchors: z.object({id, resource_id:id, resource_revision_id:id, locator_json:json, preview_json:json.nullable(), ...created}),
   refs: z.object({id, from_object_id:id, from_block_id:id.nullable(), to_kind:id, to_id:id, mode:id, instance_layout_json:json.nullable(), ...created}),
@@ -28,7 +30,7 @@ const rows = {
     id, clock_json:json, status:id, attachment_id:PackageAttachmentNameSchema.nullable(), ...created,
     mode: id.nullable().optional(), retention: id.optional(), audio_state: id.optional(), stage: id.optional(), duration_ms: z.number().int().nonnegative().optional(),
     stopped_at: z.string().nullable().optional(), staging_name: PackageAttachmentNameSchema.nullable().optional(), opus_name: PackageAttachmentNameSchema.nullable().optional(),
-    device_label: z.string().nullable().optional(), work_id: id.nullable().optional(), vad_json: json.nullable().optional(), error_json: json.nullable().optional(), updated_at: z.string().nullable().optional(),
+    device_label: z.string().nullable().optional(), work_id: id.nullable().optional(), audio_file_id: id.nullable().optional(), vad_json: json.nullable().optional(), error_json: json.nullable().optional(), updated_at: z.string().nullable().optional(),
   }),
   metadataSnapshots: z.object({
     work_id:id, provider_id:id, external_id:id, snapshot_json:json,
@@ -49,6 +51,8 @@ export const LibraryPackageManifestSchema = z.object({
   createdAt: z.string(),
   works: z.array(rows.works.strict()).max(250000),
   resources: z.array(rows.resources.strict()).max(250000),
+  /** The titles that works had when their entry was deleted. Optional so earlier packages still import. */
+  removedWorks: z.array(rows.removedWork.strict()).max(250000).optional(),
   revisions: z.array(rows.revisions.strict()).max(250000),
   objects: z.array(rows.objects.strict()).max(250000),
   objectRevisions: z.array(rows.objectRevisions.strict()).max(250000),
@@ -62,7 +66,7 @@ export const LibraryPackageManifestSchema = z.object({
   workLinks: z.array(rows.workLinks.strict()).max(250000),
   noteScopes: z.array(z.object({ objectId: id, resourceId: id.nullable() }).strict()).max(250000).optional(),
   /**
-   * Covers whose original is kept (downloaded or user-chosen). Extracted covers are rebuilt from the file. Until the M2 rework the
+   * Covers whose original is kept (downloaded or user-chosen). Extracted covers are rebuilt from the file. Before the images table the
    * original was an attachment file (`area: "attachments"`); now it is a row of the images table and travels as an attachment named
    * `img-<hash>.bin` that import reads into the images table without publishing it as a file (`area: "images"`).
    */
@@ -98,9 +102,15 @@ export const LibraryPackageManifestSchema = z.object({
     id, session_id: id, state: id, text: text, edited_text: text.nullable(), note_object_id: z.string().nullable(), error_json: json.nullable(),
     created_at: z.string(), updated_at: z.string(),
   }).strict()).max(250000).optional(),
+  /** Written by older packages; its rows are read as hand-written terms of the work. */
   workTerms: z.array(z.object({ id, work_id: id, term: z.string().min(1).max(128), heard: z.string().max(128).nullable(), created_at: z.string() }).strict()).max(250000).optional(),
+  /** The voice dictionary: global terms (no work) and each work's terms, with where each one came from. */
+  dictionary: z.array(z.object({
+    id, scope: z.enum(["global", "work"]), work_id: z.string().max(256), term: z.string().min(1).max(128), heard: z.string().max(128).nullable(),
+    source: z.string().min(1).max(200), created_at: z.string(), updated_at: z.string(),
+  }).strict()).max(250000).optional(),
   mediaProbes: z.array(z.object({ resource_revision_id: id, probe_json: json, tool_version: z.string(), created_at: z.string() }).strict()).max(250000).optional(),
-  /** Reading bookmarks. Optional so packages written before M1b rework still import. */
+  /** Reading bookmarks. Optional so packages written before bookmarks existed still import. */
   bookmarks: z.array(z.object({
     id,
     resource_id: id,
@@ -109,7 +119,7 @@ export const LibraryPackageManifestSchema = z.object({
     locator_json: json,
     created_at: z.string(),
   }).strict()).max(250000).optional(),
-  /** Host-specific file locations. Optional so packages written before M1b rework still import. */
+  /** Host-specific file locations. Optional so packages written before they were recorded still import. */
   fileLocations: z.array(z.object({
     id,
     resource_revision_id: id,
@@ -130,6 +140,17 @@ export const LibraryPackageManifestSchema = z.object({
     bytes: z.number().int().nonnegative(),
     attachment: PackageAttachmentNameSchema,
   }).strict()).max(8192).optional(),
+  /**
+   * Projects and the pages and excerpts that belong to none (CRE-01). Rows are checked table by table when the package is read, with the same
+   * checks as a project package; here only the outline is fixed. Optional so packages written before projects existed still import.
+   */
+  creative: z.object({
+    projects: z.array(z.record(z.string(), z.unknown())).max(5000),
+    loose: z.object({
+      pages: z.array(z.record(z.string(), z.unknown())).max(100_000),
+      excerpts: z.array(z.record(z.string(), z.unknown())).max(100_000),
+    }).strict(),
+  }).strict().optional(),
   attachments: z.array(z.object({
     id: PackageAttachmentNameSchema,
     relativePath: z.string(),
@@ -143,7 +164,7 @@ export type LibraryPackageManifest = z.infer<typeof LibraryPackageManifestSchema
 export const PackageImportStrategySchema = z.enum(["skip", "replace", "duplicate"]);
 export type PackageImportStrategy = z.infer<typeof PackageImportStrategySchema>;
 
-export const PACKAGE_ROW_KINDS = ["work", "resource", "resource_revision", "object", "anchor", "ref", "progress", "capture", "bookmark"] as const;
+export const PACKAGE_ROW_KINDS = ["work", "resource", "resource_revision", "object", "anchor", "ref", "progress", "capture", "bookmark", "project"] as const;
 export type PackageRowKind = (typeof PACKAGE_ROW_KINDS)[number];
 
 export const PackageConflictSchema = z.object({
@@ -166,6 +187,8 @@ export const PackagePreviewSchema = z.object({
     refs: z.number().int().nonnegative(),
     progress: z.number().int().nonnegative(),
     attachments: z.number().int().nonnegative(),
+    /** Projects the package holds. Absent from a package that has none. */
+    projects: z.number().int().nonnegative().optional(),
   }).strict(),
   /** True when the target library holds no competing rows, so a plain import is lossless. */
   empty: z.boolean(),

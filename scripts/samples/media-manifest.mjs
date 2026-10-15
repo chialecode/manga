@@ -1,4 +1,4 @@
-// Sample manifest: where the M2 synthetic samples live, how their fingerprints are computed and how a test
+// Sample manifest: where the synthetic samples live, how their fingerprints are computed and how a test
 // decides they are present and unchanged. Samples are generated, not committed.
 import fs from "node:fs";
 import path from "node:path";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(here, "../..");
-export const samplesRoot = process.env.MANGA_SAMPLES_DIR ? path.resolve(process.env.MANGA_SAMPLES_DIR) : path.join(repoRoot, "dist/samples/m2");
+export const samplesRoot = process.env.MANGA_SAMPLES_DIR ? path.resolve(process.env.MANGA_SAMPLES_DIR) : path.join(repoRoot, "dist/samples/media");
 export const manifestFile = path.join(samplesRoot, "manifest.json");
 
 /** Files whose content decides what the generator produces; a change makes existing samples stale. */

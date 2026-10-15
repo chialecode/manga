@@ -7,6 +7,7 @@ import { MANIFEST_NAME, REQUIRED_ASSETS, verifyBundledAssets, type AssetManifest
 import { stageBundledAssets } from "../../scripts/desktop-assets.ts";
 import { VadWorkerClient, locateVadAssets } from "../../packages/app-core/src/voice/vad-client.ts";
 import { locateFfmpeg } from "../../packages/app-core/src/media/ffmpeg.ts";
+import { locateSubtitleFont } from "../../packages/app-core/src/media/subtitle-font.ts";
 import { join, quiet, tone } from "../helpers/voice.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
@@ -23,7 +24,7 @@ const write = (file: string, content: string | Buffer) => { fs.mkdirSync(path.di
 function fakeRoot(): string {
   const root = path.join(tmp, "root");
   fs.mkdirSync(path.join(root, "scripts", "tools"), { recursive: true });
-  for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json"]) fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(root, "scripts", "tools", name));
+  for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "subtitle-font.lock.json"]) fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(root, "scripts", "tools", name));
   const ffmpegLock = JSON.parse(fs.readFileSync(path.join(repo, "scripts", "tools", "ffmpeg.lock.json"), "utf8")) as { version: string };
   const home = path.join(root, "dist", "tools", "ffmpeg", ffmpegLock.version);
   for (const name of ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe", "avcodec-62.dll", "avutil-60.dll"]) write(path.join(home, "bin", name), `stand-in ${name}`);
@@ -33,6 +34,9 @@ function fakeRoot(): string {
     if (!fs.existsSync(path.join(silero, name))) throw new Error("the Silero model is not in the tool cache; run: node scripts/tools/fetch-silero-vad.mjs");
     write(path.join(root, "dist", "tools", "silero-vad", name), fs.readFileSync(path.join(silero, name)));
   }
+  // The subtitle font is eight megabytes: a stand-in file takes its place, the licence is the real one.
+  write(path.join(root, "dist", "tools", "subtitle-font", "NotoSansSC-Regular.otf"), "stand-in font");
+  write(path.join(root, "dist", "tools", "subtitle-font", "LICENSE"), "SIL OPEN FONT LICENSE Version 1.1\n");
   const ortFrom = path.join(repo, "node_modules", "onnxruntime-web");
   for (const name of ["ort.node.min.js", "ort-wasm-simd-threaded.wasm", "ort-wasm-simd-threaded.mjs"]) write(path.join(root, "node_modules", "onnxruntime-web", "dist", name), fs.readFileSync(path.join(ortFrom, "dist", name)));
   write(path.join(root, "node_modules", "onnxruntime-web", "package.json"), fs.readFileSync(path.join(ortFrom, "package.json")));
@@ -94,7 +98,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("what a package carries", () => {
   });
 
   it("lists third-party notices whose files are in the package", () => {
-    expect(manifest.notices.map((notice) => notice.name)).toEqual(["FFmpeg", "Silero VAD", "ONNX Runtime Web", "PDF.js"]);
+    expect(manifest.notices.map((notice) => notice.name)).toEqual(["FFmpeg", "Silero VAD", "ONNX Runtime Web", "Noto Sans SC", "PDF.js"]);
     for (const notice of manifest.notices) {
       expect(notice.license.length, notice.name).toBeGreaterThan(0);
       expect(notice.source, notice.name).toMatch(/^https:\/\//);
@@ -108,6 +112,18 @@ describe.skipIf(mediaPrerequisitesAbsent)("what a package carries", () => {
     expect(byId["jassub-wasm-modern"]!.path).toContain("jassub-worker-modern-BBB.wasm");
     // The big worker file, not the tiny one with the same prefix.
     expect(byId["jassub-worker"]!.path).toContain("worker-CCC.js");
+  });
+
+  it("carries the subtitle renderer's fallback font with its licence, and the app finds it where it looks in a packaged build (AT-84)", () => {
+    const byId = Object.fromEntries(manifest.assets.map((asset) => [asset.id, asset]));
+    expect(byId["subtitle-font"]!.path).toBe("subtitle-font/NotoSansSC-Regular.otf");
+    expect(byId["subtitle-font-license"]!.path).toBe("subtitle-font/LICENSE");
+    expect(fs.readFileSync(path.join(resources, "subtitle-font", "LICENSE"), "utf8")).toContain("OPEN FONT LICENSE");
+    const notice = manifest.notices.find((item) => item.name === "Noto Sans SC")!;
+    expect(notice.license).toBe("OFL-1.1");
+    expect(notice.source).toMatch(/^https:\/\/github\.com\/notofonts\/noto-cjk\/tree\/[0-9a-f]{40}$/);
+    const found = locateSubtitleFont({ env: {}, resourcesPath: resources, cwd: tmp });
+    expect(found?.path).toBe(path.join(resources, "subtitle-font", "NotoSansSC-Regular.otf"));
   });
 
   it("finds the tools where the app looks for them in a packaged build", () => {
@@ -191,7 +207,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("packaging stops when a tool is not in
   it("names the command that fetches FFmpeg, and the one that fetches the voice model", () => {
     const empty = path.join(tmp, "empty-root");
     fs.mkdirSync(path.join(empty, "scripts", "tools"), { recursive: true });
-    for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json"]) fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(empty, "scripts", "tools", name));
+    for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "subtitle-font.lock.json"]) fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(empty, "scripts", "tools", name));
     expect(() => stageBundledAssets(path.join(tmp, "out1"), { repoRoot: empty, rendererDir: renderer, buildDir: build })).toThrow(/fetch-ffmpeg\.mjs/);
     // FFmpeg present, model absent.
     const ffmpegLock = JSON.parse(fs.readFileSync(path.join(repo, "scripts", "tools", "ffmpeg.lock.json"), "utf8")) as { version: string };

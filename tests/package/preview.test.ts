@@ -4,7 +4,7 @@ import { startApp, tempProfile } from "../helpers/app.ts";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts";
 import { readShell } from "../../packages/app-core/src/reading-service.ts";
 
-describe("A recheck package preview", () => {
+describe("package preview", () => {
   it("keeps legacy reading preferences and persists a font change", async () => {
     const { app, actor, grant } = await startApp();
     try {

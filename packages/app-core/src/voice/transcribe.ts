@@ -9,11 +9,11 @@ import type { AsrConnection } from "./ports.ts";
 import { segmentRecording } from "./vad-segmenter.ts";
 import type { CaptureService, SessionRow } from "./capture.ts";
 import { VOICE_MODULE } from "./ids.ts";
-import { readRecordingSettings } from "./settings.ts";
+import { readRecordingSettings, promptLimitFor } from "./settings.ts";
+import { isPromptEcho } from "./dictionary.ts";
 
 const MAX_ATTEMPTS = 3;
 const MAX_CONSECUTIVE_FAILURES = 2;
-const MAX_PROMPT_CHARS = 600;
 const NO_TIMESTAMP_STATUS = new Set([400, 415, 422]);
 
 type Run = { id: string; controller: AbortController; promise: Promise<void> };
@@ -23,7 +23,11 @@ const baseKey = (key: string) => key.split("#")[0]!;
 const asMangaError = (error: unknown): MangaError =>
   error instanceof MangaError ? error : new MangaError("PROVIDER_UNAVAILABLE", error instanceof Error ? error.message : "transcription failed", { retryable: true });
 
-const publicError = (error: MangaError) => ({ code: error.code, message: error.message });
+const publicError = (error: MangaError) => ({ code: error.code, message: error.message, ...(typeof error.details.reason === "string" ? { reason: error.details.reason } : {}) });
+/** A block whose last answer only repeated the dictionary hint is sent again without it: the same hint would bring the same echo. */
+export const PROMPT_ECHO = "prompt-echo";
+/** A retry clears the failure, but not the note that the block must go out without the hint. */
+const KEEP_ECHO_MARK = `CASE WHEN json_extract(error_json, '$.reason') = '${PROMPT_ECHO}' THEN error_json ELSE NULL END`;
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.reject(new MangaError("CANCELLED", "cancelled"));
@@ -34,7 +38,7 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-type ChunkRow = { id: string; seq: number; chunk_key: string; start_ms: number; end_ms: number; state: string; attempts: number };
+type ChunkRow = { id: string; seq: number; chunk_key: string; start_ms: number; end_ms: number; state: string; attempts: number; error_json?: string | null };
 
 /**
  * Takes a stopped recording through filtering, block planning, transcription and clean-up, one step at a time and one
@@ -152,16 +156,11 @@ export class VoicePipeline {
 
   // ------------------------------------------------------------------ transcription
 
-  private promptFor(workId: string | null): string | undefined {
-    if (!workId) return undefined;
-    const rows = this.host.db.prepare("SELECT term FROM work_terms WHERE work_id = ? ORDER BY created_at, rowid").all(workId) as Array<{ term: string }>;
-    if (!rows.length) return undefined;
-    let out = "";
-    for (const { term } of rows) {
-      if (out.length + term.length + 2 > MAX_PROMPT_CHARS) break;
-      out += out ? `, ${term}` : term;
-    }
-    return out || undefined;
+  /** The hint for a block of audio: the dictionary, cut to the length this connection takes. */
+  private hintFor(workId: string | null, connectionId: string): { text: string; included: string[] } | undefined {
+    const limit = promptLimitFor(readRecordingSettings(this.host.deps.store), connectionId);
+    const built = this.host.dictionary.prompt(workId, limit);
+    return built.text ? { text: built.text, included: built.included } : undefined;
   }
 
   private async blockBytes(row: SessionRow, chunk: ChunkRow, signal: AbortSignal): Promise<Buffer> {
@@ -173,25 +172,33 @@ export class VoicePipeline {
   }
 
   private async request(connection: AsrConnection, row: SessionRow, chunk: ChunkRow, wav: Buffer, signal: AbortSignal): Promise<TranscriptionResult> {
-    const prompt = this.promptFor(row.work_id);
-    const send = (timestamps: boolean) => this.host.asr.transcribe(connection, { fileName: `${chunk.chunk_key}.wav`, bytes: wav, mimeType: "audio/wav", prompt, timestamps, signal });
-    if (this.plainText.has(connection.id)) return send(false);
-    try {
-      return await send(true);
-    } catch (error) {
-      const failure = asMangaError(error);
-      if (failure.code !== "CANCELLED" && NO_TIMESTAMP_STATUS.has(Number(failure.details.status))) {
-        // The provider does not know segment timestamps; plain text still locates the block.
-        this.plainText.add(connection.id);
-        return send(false);
+    const settings = readRecordingSettings(this.host.deps.store);
+    // A block that came back as nothing but the hint is asked again without it.
+    const echoedBefore = chunk.error_json ? (() => { try { return (JSON.parse(chunk.error_json) as { reason?: string }).reason === PROMPT_ECHO; } catch { return false; } })() : false;
+    const hint = echoedBefore ? undefined : this.hintFor(row.work_id, connection.id);
+    const send = (timestamps: boolean) => this.host.asr.transcribe(connection, { fileName: `${chunk.chunk_key}.wav`, bytes: wav, mimeType: "audio/wav", prompt: hint?.text, language: settings.language ?? undefined, timestamps, signal });
+    let result: TranscriptionResult;
+    if (this.plainText.has(connection.id)) result = await send(false);
+    else {
+      try {
+        result = await send(true);
+      } catch (error) {
+        const failure = asMangaError(error);
+        if (failure.code !== "CANCELLED" && NO_TIMESTAMP_STATUS.has(Number(failure.details.status))) {
+          // The provider does not know segment timestamps; plain text still locates the block.
+          this.plainText.add(connection.id);
+          result = await send(false);
+        } else throw failure;
       }
-      throw failure;
     }
+    // A dictionary raises the chance that a model with little to hear gives the hint back; that is not a transcript and is not written.
+    if (hint && isPromptEcho(result.text, hint.included)) throw new MangaError("PROVIDER_UNAVAILABLE", "the transcript only repeats the dictionary hint", { retryable: true, details: { reason: PROMPT_ECHO } });
+    return result;
   }
 
   private async asrStage(run: Run, signal: AbortSignal, connectionId: string | undefined, progress: (fraction: number) => void): Promise<void> {
     const { id } = run;
-    const pending = () => this.host.db.prepare("SELECT id, seq, chunk_key, start_ms, end_ms, state, attempts FROM transcript_segments WHERE session_id = ? AND state IN ('pending','uploaded') ORDER BY start_ms, seq").all(id) as ChunkRow[];
+    const pending = () => this.host.db.prepare("SELECT id, seq, chunk_key, start_ms, end_ms, state, attempts, error_json FROM transcript_segments WHERE session_id = ? AND state IN ('pending','uploaded') ORDER BY start_ms, seq").all(id) as ChunkRow[];
     const chunks = pending();
     if (!chunks.length) {
       this.settle(id);
@@ -225,6 +232,8 @@ export class VoicePipeline {
         } catch (error) {
           failure = asMangaError(error);
           if (failure.code === "CANCELLED" || !failure.retryable) break;
+          // The same hint would bring the same echo; the block is marked failed and goes out again without it when it is retried.
+          if (failure.details.reason === PROMPT_ECHO) break;
           if (attempt < MAX_ATTEMPTS - 1) {
             const asked = Number(failure.details.retryAfterMs);
             await delay(Number.isFinite(asked) && asked > 0 ? asked : base * 2 ** attempt, signal);
@@ -239,7 +248,8 @@ export class VoicePipeline {
       } else {
         const error = failure ?? new MangaError("PROVIDER_UNAVAILABLE", "transcription failed", { retryable: true });
         this.host.db.prepare("UPDATE transcript_segments SET state = 'failed', error_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(publicError(error)), new Date().toISOString(), chunk.id);
-        consecutiveFailures += 1;
+        // An echo says something about the audio, not about the provider, so it does not count towards stopping the run.
+        if (error.details.reason !== PROMPT_ECHO) consecutiveFailures += 1;
         if (!error.retryable) { fatal = error; break; }
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
       }
@@ -326,9 +336,9 @@ export class VoicePipeline {
       const row = db.prepare("SELECT chunk_key, session_id, state FROM transcript_segments WHERE id = ?").get(segmentId) as { chunk_key: string; session_id: string; state: string } | undefined;
       if (!row || row.session_id !== id) throw new MangaError("NOT_FOUND", "transcript segment not found");
       if (row.state !== "failed" && row.state !== "pending") throw new MangaError("VALIDATION_ERROR", "only a block that failed can be sent again", { details: { state: row.state } });
-      db.prepare("UPDATE transcript_segments SET state = 'pending', error_json = NULL WHERE id = ?").run(segmentId);
+      db.prepare(`UPDATE transcript_segments SET state = 'pending', error_json = ${KEEP_ECHO_MARK} WHERE id = ?`).run(segmentId);
     } else {
-      db.prepare("UPDATE transcript_segments SET state = 'pending', error_json = NULL WHERE session_id = ? AND state = 'failed'").run(id);
+      db.prepare(`UPDATE transcript_segments SET state = 'pending', error_json = ${KEEP_ECHO_MARK} WHERE session_id = ? AND state = 'failed'`).run(id);
     }
     return this.schedule(id, { connectionId });
   }
@@ -358,7 +368,15 @@ export class VoicePipeline {
     const target = path.join(this.host.deps.store.attachmentsDir, name);
     try {
       await encodeRetained(this.host.deps.media.ffmpeg, staged, target, signal);
-      this.host.patch(id, { opus_name: name, audio_state: "retained" });
+      const place = this.host.fileTarget(row);
+      if (place) {
+        // A recording is kept in the folder of what it was made for, named for the title and the time it began (A-88).
+        const stamp = row.created_at.replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
+        const put = this.host.files.put({ workId: place.workId, resourceId: place.resourceId }, { kind: "recording", fileName: `${place.label} 录音 ${stamp}.webm`, sourcePath: target, resourceId: place.resourceId, refKind: "capture", refId: id });
+        this.host.patch(id, { audio_file_id: put.fileId, audio_state: "retained" });
+      } else {
+        this.host.patch(id, { opus_name: name, audio_state: "retained" });
+      }
       this.host.deps.notify("capture.changed", { sessionId: id, audioState: "retained" });
     } catch (error) {
       if (asMangaError(error).code === "CANCELLED") throw error;
@@ -385,8 +403,9 @@ export class VoicePipeline {
       this.host.patch(id, { error_json: JSON.stringify({ code: "CLEANUP_PENDING", message: "the working audio could not be removed yet; it will be tried again" }) });
       return { ok: false };
     }
-    const keepsStored = !options.everything && row.opus_name;
-    this.host.patch(id, { staging_name: null, ...(options.everything ? { opus_name: null } : {}), audio_state: keepsStored ? "retained" : "cleaned" });
+    if (options.everything && row.audio_file_id) this.host.files.remove(row.audio_file_id, { deleteFile: false });
+    const keepsStored = !options.everything && (row.opus_name || row.audio_file_id);
+    this.host.patch(id, { staging_name: null, ...(options.everything ? { opus_name: null, audio_file_id: null } : {}), audio_state: keepsStored ? "retained" : "cleaned" });
     this.host.deps.notify("capture.changed", { sessionId: id, audioState: keepsStored ? "retained" : "cleaned" });
     return { ok: true };
   }

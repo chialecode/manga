@@ -91,7 +91,7 @@ const GLYPH_VARIANTS: Array<{ name: string; font?: string; extra?: string[]; joi
   },
 ];
 
-describe("M1b b9-rework glyph-level layout matrix", () => {
+describe("glyph-level layout matrix", () => {
   it.each(GLYPH_VARIANTS)("$name draws joined and split Tj sequences at identical glyph origins", async (variant) => {
     const bytes = pdf(
       `BT /F1 10 Tf 1 0 0 1 50 320 Tm ${variant.joined} 1 0 0 1 50 280 Tm ${variant.split} ET`,
@@ -179,7 +179,7 @@ const zeroWidthDoc = {
 
 const baseStyle = { measurePx: 680, fontSizePx: 18, fontFamily: "sans" as const, lineHeight: 1.7, marginPx: 24, theme: "white" };
 
-describe("M1b b9-rework page view draws per-glyph origins", () => {
+describe("page view draws per-glyph origins", () => {
   afterEach(() => cleanup());
   const renderPane = (document: ReadingDocument) => render(<ReadingPane
     resources={[]} document={document} style={baseStyle} hits={[]} bookmarks={[]} assets={{}}
@@ -220,7 +220,7 @@ const SKIP_VARIANTS: SkipVariant[] = [
   { name: "a second block row that follows the package", anchor: "replace", extraRefs: 1, expectKept: true },
 ];
 
-describe("M1b b9-rework explicit ref skip versus object replacement", () => {
+describe("explicit ref skip versus object replacement", () => {
   it.each(SKIP_VARIANTS)("$name keeps an explicitly skipped reference row intact when its note is replaced", async (variant) => {
     const ctx = await startApp();
     try {

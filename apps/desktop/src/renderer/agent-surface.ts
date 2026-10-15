@@ -25,6 +25,8 @@ export type SurfaceReading = { resourceId: string; revisionId: string; title: st
 export type SurfaceNote = { objectId: string; revision: number; title: string; resourceId?: string | null };
 /** A work's own page: the conversation there is about the work, not about one file of it. */
 export type SurfaceWork = { workId: string; title: string };
+/** A project's page: the conversation there is the project's own and reads only what the project refers to. */
+export type SurfaceProject = { projectId: string; name: string };
 
 export type AgentSurfaceInput = {
   page: string;
@@ -35,6 +37,7 @@ export type AgentSurfaceInput = {
   reading?: SurfaceReading | null;
   note?: SurfaceNote | null;
   work?: SurfaceWork | null;
+  project?: SurfaceProject | null;
   selection?: SurfaceSelection | null;
 };
 
@@ -43,7 +46,7 @@ export type AgentSurface = {
   sessionId?: string;
   /** Mode this surface's draft, run and session must belong to. */
   mode?: string;
-  open?: { kind: "resource" | "note" | "work"; targetId: string };
+  open?: { kind: "resource" | "note" | "work" | "project"; targetId: string };
   resourceId?: string;
   resourceRevisionId?: string;
   resourceTitle?: string;
@@ -96,6 +99,10 @@ function resolveAgentSurfaceBody(input: AgentSurfaceInput): AgentSurface {
     return { open: { kind: "work", targetId: input.work.workId }, selection: null, label: input.work.title };
   }
 
+  if (input.page === "projects" && input.project) {
+    return { open: { kind: "project", targetId: input.project.projectId }, selection: null, label: input.project.name };
+  }
+
   if (input.page === "agent") {
     const session = input.sessions.find((item) => item.sessionId === input.sessionId && (!input.mode || !item.mode || item.mode === input.mode));
     if (session?.kind === "note" && session.targetId) {
@@ -134,8 +141,10 @@ function resolveAgentSurfaceBody(input: AgentSurfaceInput): AgentSurface {
 
   if (MEDIA_PAGES.has(input.page) && reading) {
     const owned = noteForResource(note, reading.resourceId);
+    // In the work mode a resource opened from a project is talked about in the project's conversation, with the resource as what is being read.
+    const project = input.project ?? null;
     return {
-      open: { kind: "resource", targetId: reading.resourceId },
+      open: project ? { kind: "project", targetId: project.projectId } : { kind: "resource", targetId: reading.resourceId },
       resourceId: reading.resourceId,
       resourceRevisionId: reading.revisionId,
       resourceTitle: reading.title,
@@ -143,7 +152,7 @@ function resolveAgentSurfaceBody(input: AgentSurfaceInput): AgentSurface {
       noteRevision: owned?.revision,
       noteTitle: owned?.title,
       selection: selectionFor(input, reading.resourceId),
-      label: reading.title,
+      label: project ? `${project.name} · ${reading.title}` : reading.title,
     };
   }
 

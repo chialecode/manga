@@ -7,12 +7,10 @@ export const desktopPackageDir = path.join(desktopOutput, "packages");
 export const latestDesktopPackage = path.join(desktopOutput, "latest-package.json");
 export const evidenceRunsRoot = path.join(repoRoot, "dist/evidence-runs");
 
-/** Per-run output directory (ignored by git); only final results are copied to docs/evidence/<stage>/. */
-export function evidenceRunDir(stage: string, run: string): string {
-  return path.join(evidenceRunsRoot, stage, run);
+/** Per-run output directory (ignored by git); only the final gate results are copied to docs/evidence/gate/. */
+export function evidenceRunDir(run: string): string {
+  return path.join(evidenceRunsRoot, run);
 }
 
-/** Final, committed evidence directory for a stage. */
-export function stageEvidenceDir(stage: string): string {
-  return path.join(repoRoot, "docs/evidence", stage);
-}
+/** Final, committed evidence directory of the latest stage gate. */
+export const gateEvidenceDir = path.join(repoRoot, "docs/evidence/gate");

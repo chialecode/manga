@@ -7,6 +7,8 @@ import { useCovers } from "../lib/covers.ts";
 import { shelfMemory } from "../lib/shelf-memory.ts";
 import { usePagedWorks, type WorksQuery } from "../lib/use-works.ts";
 import { MEDIA_KINDS, SHELF_ORDER, type Facets, type ShelfState, type WorkMediaKind, type WorkSummary } from "../lib/works.ts";
+import { DeleteEntryDialog } from "./delete-entry-dialog.tsx";
+import { UnassignedGroup } from "./unassigned-group.tsx";
 import { KIND_ICON, WorkCard, type CardActions } from "./work-card.tsx";
 
 type T = Translator["t"];
@@ -42,10 +44,23 @@ export type ShelfProps = {
   onAddPath: () => void;
   onViewAll: (kind: WorkMediaKind) => void;
   onSetShelf: (workId: string, state: ShelfState) => void;
+  /** A resource that is in no work, opened from the group at the end of the shelf. */
+  onOpenResource?: (resourceId: string, kind: WorkMediaKind) => void;
+  /** A work was made for a loose resource; its page opens on the match. */
+  onMatchWork?: (workId: string, kind: WorkMediaKind) => void;
+  /** The library changed (an entry was deleted, a resource was put in a work). */
+  onChanged?: () => void;
+  onNotice?: (message: string) => void;
+  onError?: (message: string) => void;
 };
+
+/** What the views need to list the resources that are in no work, or null when a filter is on that they do not answer. */
+type Loose = { query: string } | null;
 
 const KIND_FACET: Record<WorkMediaKind, string | null> = { novel: null, comic: "comic", video: "video" };
 const kindName = (t: T, kind: WorkMediaKind) => t(`shelf.kind.${kind}` as "shelf.kind.novel");
+/** What a page is about, in its words: the medium, or "works" for the overview that holds all three. */
+const aboutName = (t: T, kind: WorkMediaKind | null) => t(`shelf.kind.${kind ?? "all"}` as "shelf.kind.all");
 
 /** The library page: one row per media kind on the overview, a full grid or list on a kind's own page. */
 export function Shelf(props: ShelfProps) {
@@ -62,6 +77,7 @@ export function Shelf(props: ShelfProps) {
   const [format, setFormat] = useState(remembered.format);
   const [filterOpen, setFilterOpen] = useState(false);
   const composing = useRef(false);
+  const [deleting, setDeleting] = useState<WorkSummary | null>(null);
 
   const setView = (next: "grid" | "list") => {
     setViewState(next);
@@ -93,11 +109,13 @@ export function Shelf(props: ShelfProps) {
     onDetail: (workId) => props.onDetail(workId),
     onCover: (workId) => props.onDetail(workId, "cover"),
     onShelf: props.onSetShelf,
+    onDelete: setDeleting,
   }), [props.onOpen, props.onContinue, props.onDetail, props.onSetShelf]);
 
-  const title = kind ? t(`shelf.title.${kind}` as "shelf.title.novel") : t("shelf.title.all");
+  const title = t(`shelf.title.${kind ?? "all"}` as "shelf.title.all");
   const filtersActive = linked !== "any" || notes !== "any" || Boolean(format);
   const sortItems: MenuItem[] = (["recent", "added", "title", "progress"] as Sort[]).map((id) => ({ id, label: t(`shelf.sort.${id}` as "shelf.sort.recent"), checked: sort === id, onSelect: () => setSort(id) }));
+  const loose: Loose = tab === "all" && !filtersActive ? { query: applied } : null;
   const moduleOff = kind && KIND_FACET[kind] && !props.facets.has(KIND_FACET[kind]!) ? kind : null;
 
   return (
@@ -110,8 +128,8 @@ export function Shelf(props: ShelfProps) {
             <input
               type="search"
               value={text}
-              placeholder={t("shelf.search")}
-              aria-label={t("shelf.search")}
+              placeholder={t(`shelf.search.${kind ?? "all"}` as "shelf.search.all")}
+              aria-label={t(`shelf.search.${kind ?? "all"}` as "shelf.search.all")}
               data-testid="shelf-search"
               onChange={(event) => setText(event.target.value)}
               onCompositionStart={() => { composing.current = true; }}
@@ -121,9 +139,9 @@ export function Shelf(props: ShelfProps) {
         </div>
       </header>
       <div className="shelf-bar">
-        <div role="tablist" aria-label={t("shelf.tabs")} className="shelf-tabs">
+        <div role="tablist" aria-label={t(`shelf.tabs.${kind ?? "all"}` as "shelf.tabs.all")} className="shelf-tabs">
           {(["all", ...SHELF_ORDER] as Tab[]).map((id) => (
-            <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`shelf-tab-${id}`} onClick={() => setTab(id)}>{t(`shelf.tab.${id}` as "shelf.tab.all")}</button>
+            <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`shelf-tab-${id}`} onClick={() => setTab(id)}>{kind === "video" && (id === "reading" || id === "wishlist" || id === "finished") ? t(`shelf.tab.${id}.video` as "shelf.tab.reading.video") : t(`shelf.tab.${id}` as "shelf.tab.all")}</button>
           ))}
         </div>
         <div className="shelf-options">
@@ -162,20 +180,31 @@ export function Shelf(props: ShelfProps) {
       </div>
       {moduleOff ? <p role="status" className="shelf-note" data-testid="shelf-module-off">{t("shelf.moduleOff", { name: kindName(t, moduleOff) })}</p> : null}
       {kind ? (
-        <KindView {...props} kind={kind} query={{ ...base, kind }} view={view} actions={actions} filtered={Boolean(applied) || tab !== "all" || filtersActive} />
+        <KindView {...props} kind={kind} query={{ ...base, kind }} view={view} actions={actions} loose={loose} filtered={Boolean(applied) || tab !== "all" || filtersActive} />
       ) : (
-        <OverviewView {...props} query={base} view={view} actions={actions} filtered={Boolean(applied) || tab !== "all" || filtersActive} />
+        <OverviewView {...props} query={base} view={view} actions={actions} loose={loose} filtered={Boolean(applied) || tab !== "all" || filtersActive} />
       )}
+      {deleting ? (
+        <DeleteEntryDialog
+          t={t}
+          workId={deleting.id}
+          title={deleting.title}
+          onClose={() => setDeleting(null)}
+          onError={(message) => props.onError?.(message)}
+          onDeleted={(result) => { setDeleting(null); props.onNotice?.(t("entry.delete.done", { title: result.title, count: result.resourceCount })); props.onChanged?.(); }}
+        />
+      ) : null}
     </section>
   );
 }
 
-function StatusLine(props: { t: T; status: "loading" | "ready" | "error"; error?: string; onRetry: () => void }) {
-  if (props.status === "loading") return <p role="status" className="shelf-note" data-testid="shelf-loading">{props.t("shelf.loading")}</p>;
+function StatusLine(props: { t: T; kind: WorkMediaKind | null; status: "loading" | "ready" | "error"; error?: string; onRetry: () => void }) {
+  const name = aboutName(props.t, props.kind);
+  if (props.status === "loading") return <p role="status" className="shelf-note" data-testid="shelf-loading">{props.t("shelf.loading", { name })}</p>;
   if (props.status === "error") {
     return (
       <p role="alert" className="shelf-note shelf-error" data-testid="shelf-error">
-        {props.t("shelf.error")}{props.error ? `：${props.error}` : ""}
+        {props.t("shelf.error", { name })}{props.error ? `：${props.error}` : ""}
         <button type="button" className="secondary-button" onClick={props.onRetry}>{props.t("shelf.retry")}</button>
       </p>
     );
@@ -187,12 +216,29 @@ function EmptyShelf(props: { t: T; filtered: boolean; kind: WorkMediaKind | null
   return (
     <div className="shelf-empty" data-testid={props.filtered ? "shelf-empty-filtered" : "shelf-empty"}>
       <p className="empty-title">{props.filtered ? props.t("shelf.emptyFiltered") : props.kind ? props.t("shelf.emptyKind", { name: kindName(props.t, props.kind) }) : props.t("shelf.empty")}</p>
-      {props.filtered ? null : <><p className="empty-hint">{props.t("shelf.emptyHint")}</p><button type="button" className="link-button" data-testid="shelf-add-path" onClick={props.onAddPath}>{props.t("shelf.addPath")}</button></>}
+      {props.filtered ? null : <><p className="empty-hint">{props.t("shelf.emptyHint", { name: props.t(`shelf.kind.${props.kind ?? "every"}` as "shelf.kind.every") })}</p><button type="button" className="link-button" data-testid="shelf-add-path" onClick={props.onAddPath}>{props.t("shelf.addPath")}</button></>}
     </div>
   );
 }
 
-function KindView(props: ShelfProps & { kind: WorkMediaKind; query: WorksQuery; view: "grid" | "list"; actions: CardActions; filtered: boolean }) {
+function LooseResources(props: ShelfProps & { kind: WorkMediaKind | null; loose: Loose }) {
+  if (!props.loose) return null;
+  return (
+    <UnassignedGroup
+      t={props.t}
+      kind={props.kind}
+      query={props.loose.query}
+      refreshKey={props.refreshKey}
+      onOpenResource={(resourceId, kind) => props.onOpenResource?.(resourceId, kind)}
+      onMatch={(workId, kind) => props.onMatchWork?.(workId, kind)}
+      onChanged={() => props.onChanged?.()}
+      onError={(message) => props.onError?.(message)}
+      onNotice={(message) => props.onNotice?.(message)}
+    />
+  );
+}
+
+function KindView(props: ShelfProps & { kind: WorkMediaKind; query: WorksQuery; view: "grid" | "list"; actions: CardActions; loose: Loose; filtered: boolean }) {
   const { t, kind } = props;
   const paged = usePagedWorks(props.query, props.refreshKey);
   const cover = useCovers(paged.items.map((item) => item.coverId), "grid");
@@ -203,7 +249,7 @@ function KindView(props: ShelfProps & { kind: WorkMediaKind; query: WorksQuery; 
   return (
     <div className="shelf-body" data-status={paged.status}>
       <p className="shelf-count" data-testid="shelf-count">{t("shelf.count", { count: paged.total, unit: t(`shelf.unit.${kind}` as "shelf.unit.novel") })}</p>
-      <StatusLine t={t} status={paged.status} error={paged.error} onRetry={paged.reload} />
+      <StatusLine t={t} kind={kind} status={paged.status} error={paged.error} onRetry={paged.reload} />
       {paged.status === "ready" && paged.items.length === 0 ? <EmptyShelf t={t} filtered={props.filtered} kind={kind} onAddPath={props.onAddPath} /> : null}
       {paged.items.length ? (
         <VirtualGrid
@@ -217,15 +263,16 @@ function KindView(props: ShelfProps & { kind: WorkMediaKind; query: WorksQuery; 
           testId="shelf-grid"
           getKey={(work) => work.id}
           renderItem={render}
-          footer={paged.loadingMore ? <p role="status" className="shelf-note">{t("shelf.loadingMore")}</p> : null}
+          footer={<>{paged.loadingMore ? <p role="status" className="shelf-note">{t("shelf.loadingMore")}</p> : null}{paged.nextCursor ? null : <LooseResources {...props} kind={kind} />}</>}
           scrollMemory={{ top: shelfMemory.get(kind).scrollTop, save: (top) => shelfMemory.patch(kind, { scrollTop: top }) }}
         />
       ) : null}
+      {paged.status === "ready" && paged.items.length === 0 ? <LooseResources {...props} kind={kind} /> : null}
     </div>
   );
 }
 
-function OverviewView(props: ShelfProps & { query: WorksQuery; view: "grid" | "list"; actions: CardActions; filtered: boolean }) {
+function OverviewView(props: ShelfProps & { query: WorksQuery; view: "grid" | "list"; actions: CardActions; loose: Loose; filtered: boolean }) {
   const [counts, setCounts] = useState<Record<string, number | undefined>>({});
   const report = useCallback((kind: WorkMediaKind, total: number | undefined) => setCounts((current) => current[kind] === total ? current : { ...current, [kind]: total }), []);
   const settled = MEDIA_KINDS.every((kind) => counts[kind] !== undefined);
@@ -242,6 +289,7 @@ function OverviewView(props: ShelfProps & { query: WorksQuery; view: "grid" | "l
     <div ref={body} className="shelf-body shelf-sections" onScroll={(event) => { if (restored.current) shelfMemory.patch("all", { scrollTop: event.currentTarget.scrollTop }); }}>
       {empty ? <EmptyShelf t={props.t} filtered={props.filtered} kind={null} onAddPath={props.onAddPath} /> : null}
       {MEDIA_KINDS.map((kind) => <ShelfSection key={kind} {...props} kind={kind} query={{ ...props.query, kind }} onCount={report} hideWhenEmpty={empty} />)}
+      <LooseResources {...props} kind={null} />
     </div>
   );
 }
@@ -261,7 +309,7 @@ function ShelfSection(props: ShelfProps & { kind: WorkMediaKind; query: WorksQue
         <h2><Icon size={18} aria-hidden="true" />{kindName(t, kind)}<span className="section-count" data-testid={`section-count-${kind}`}>{t("shelf.count", { count: paged.total, unit: t(`shelf.unit.${kind}` as "shelf.unit.novel") })}</span></h2>
         {paged.total > 0 ? <button type="button" className="link-button" data-testid={`section-all-${kind}`} onClick={() => props.onViewAll(kind)}>{t("shelf.viewAll")}<ChevronRight size={14} aria-hidden="true" /></button> : null}
       </header>
-      <StatusLine t={t} status={paged.status} error={paged.error} onRetry={paged.reload} />
+      <StatusLine t={t} kind={kind} status={paged.status} error={paged.error} onRetry={paged.reload} />
       {paged.status === "ready" && paged.items.length === 0 ? (
         <p className="shelf-note" data-testid={`section-empty-${kind}`}>{facet && !props.facets.has(facet) ? t("shelf.moduleOff", { name: kindName(t, kind) }) : t("shelf.sectionEmpty", { name: kindName(t, kind) })}</p>
       ) : null}

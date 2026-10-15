@@ -4,7 +4,7 @@ import path from "node:path";
 
 /**
  * What a packaged build carries besides its own code: the media tool, the voice-filter model and runtime, the PDF.js
- * assets, the subtitle renderer's WebAssembly, the worker bundles, and the licence texts that go with them. The build
+ * assets, the subtitle renderer's WebAssembly and its fallback font, the worker bundles, and the licence texts that go with them. The build
  * writes a manifest of these files with their sizes and hashes; the app checks it when it starts, so a package that is
  * missing a piece stops there with a plain message instead of failing half-way through a recording or a video.
  */
@@ -32,8 +32,11 @@ export const REQUIRED_ASSETS = [
   "ffmpeg", "ffprobe", "ffmpeg-license",
   "vad-model", "vad-worker", "ort-runtime", "ort-common", "ort-wasm", "ort-wasm-loader",
   "parse-worker", "pdfjs-main", "pdfjs-worker",
-  "jassub-wasm", "jassub-wasm-modern", "jassub-worker",
+  "jassub-wasm", "jassub-wasm-modern", "jassub-worker", "subtitle-font", "subtitle-font-license",
 ] as const;
+
+/** The plugin packages a packaged application carries; a development build offers the ones built into `dist/plugins`. */
+export const PACKAGED_PLUGIN_ASSETS = ["plugin:manga.acquisition-bt"] as const;
 
 export function sha256File(file: string): string {
   const hash = createHash("sha256");

@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.inventory` / 资源总览 / 开发者 |
-| 文档状态 / 实现状态 | M1a 总览含占用字节、分区/指针位置、缺失修复、可取消的逐批扫描和仅索引外部根；独立分区迁移仍拒绝。**M2 返工已实施并自检**：资源总览移入设置的“存储与备份”（A-49），见[M2 交付报告第 16 节](../evidence/m2-media-mvp-delivery.md#16-返工交付2026-10-06)；产品验收仍为 not-run |
+| 文档状态 / 实现状态 | 总览含占用字节、分区/指针位置、缺失修复、可取消的逐批扫描和仅索引外部根，位于设置的“存储与备份”（A-49）；独立分区迁移仍拒绝；产品验收为 not-run |
 | 需求 / 阶段 / 设计依据 | LIB-04、AT-51 |
 | 包与公开入口 | `packages/app-core`；`inventory.overview`、`inventory.scan`、`inventory.cancelScan`、`inventory.reveal`、`inventory.repair` |
 

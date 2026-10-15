@@ -225,6 +225,8 @@ export function PdfPageView(props: {
   highlightQuote?: string | null;
   scanLabel: string;
   missingLabel: string;
+  /** The names of the zoom buttons. */
+  zoomLabels: { out: string; in: string; fit: string };
   onSelection: (selection: PdfSelection | null, review: boolean) => void;
 }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -379,9 +381,9 @@ export function PdfPageView(props: {
   return (
     <div className="mx-auto mb-2" data-testid="reading-page-render" data-pdf-epoch={epoch} data-pdf-width={width} ref={frame}>
       <div className="flex gap-2 items-center mb-1 text-sm">
-        <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-out" onClick={() => setZoom((value) => Math.max(0.5, Math.round((value - 0.25) * 100) / 100))}>缩小</button>
-        <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-in" onClick={() => setZoom((value) => Math.min(4, Math.round((value + 0.25) * 100) / 100))}>放大</button>
-        <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-fit" onClick={() => setZoom(1)}>适宽</button>
+        <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-out" onClick={() => setZoom((value) => Math.max(0.5, Math.round((value - 0.25) * 100) / 100))}>{props.zoomLabels.out}</button>
+        <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-in" onClick={() => setZoom((value) => Math.min(4, Math.round((value + 0.25) * 100) / 100))}>{props.zoomLabels.in}</button>
+        <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-fit" onClick={() => setZoom(1)}>{props.zoomLabels.fit}</button>
         {/* Inline in the toolbar: a notice that appears mid-drag must not push the page under the pointer. */}
         {highlightReview || selectionReview ? <span role="status" data-testid="reading-pdf-needs-review">{props.missingLabel}</span> : null}
       </div>

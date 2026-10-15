@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CommandEnvelopeSchema, ProfileConfigSchema, UntrustedCommandSchema, validateCommandInput } from "@manga/contracts";
 import { createTranslator } from "@manga/i18n";
 
-describe("P0 contracts and i18n", () => {
+describe("contracts and i18n", () => {
   it("accepts previous Zod 3 command envelopes after Zod 4 upgrade", () => {
     const untrusted = UntrustedCommandSchema.parse({
       commandId: "notes.create",
@@ -31,7 +31,7 @@ describe("P0 contracts and i18n", () => {
 
   it("parses profile config records with string keys", () => {
     const profile = ProfileConfigSchema.parse({
-      profileId: "m1a",
+      profileId: "profile",
       revision: 1,
       enabledFeatures: ["library"],
       disabledFeatures: [],

@@ -14,6 +14,8 @@ export function Modal(props: {
   testId: string;
   /** `drawer` slides in from the right edge; `dialog` is centered. */
   variant?: "dialog" | "drawer";
+  /** An extra class on the panel, for a page that needs more room than the default. */
+  className?: string;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -23,7 +25,7 @@ export function Modal(props: {
       <Dialog.Portal>
         <Dialog.Overlay className="modal-overlay" />
         <Dialog.Content
-          className={drawer ? "modal-content modal-drawer" : "modal-content modal-dialog"}
+          className={`${drawer ? "modal-content modal-drawer" : "modal-content modal-dialog"}${props.className ? ` ${props.className}` : ""}`}
           data-testid={props.testId}
           onEscapeKeyDown={(event) => { if ((event as KeyboardEvent).isComposing) event.preventDefault(); }}
         >

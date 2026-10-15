@@ -4,7 +4,7 @@ import { SourceLocatorSchema } from "./location.ts";
 /** Visual shell preference. Distinct from storage-location layout (`settings.setLayout`). */
 export const ShellPanelSchema = z.object({
   visible: z.boolean(),
-  width: z.number().int().min(160).max(480),
+  width: z.number().int().min(160).max(720),
 }).strict();
 
 export const ShellModeLayoutSchema = z.object({
@@ -25,7 +25,7 @@ export const READING_PAGE_RATIOS = ["book", "free"] as const;
  */
 export const FontFamilySchema = z.string().min(1).max(64).regex(/^[^"'`\\;{}<>()\x00-\x1f]+$/, "a font family name has no quotes or markup");
 
-/** Reader typography (READ-01 and the M2 reader): old saved values stay valid because every added field has a default. */
+/** Reader typography (READ-01): old saved values stay valid because every added field has a default. */
 export const ReadingPreferenceSchema = z.object({
   measurePx: z.number().int().min(320).max(1200),
   fontSizePx: z.number().int().min(14).max(32),

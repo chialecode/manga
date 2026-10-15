@@ -3,7 +3,11 @@
  * which stretches count as watched, what a key does and which subtitle track to start with.
  */
 
+import { actionOf, chordOf, resolveKeys } from "@manga/contracts/keys";
+
 export type TimeRange = { startMs: number; endMs: number };
+
+const DEFAULT_KEYS = resolveKeys(null);
 
 // ---- time ------------------------------------------------------------------
 
@@ -18,18 +22,18 @@ export function formatClock(ms: number): string {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
-/** `h:mm:ss.mmm`, for the place where a frame boundary matters. */
-export function formatClockPrecise(ms: number): string {
-  const safe = Math.max(0, Number.isFinite(ms) ? ms : 0);
-  const whole = Math.floor(safe);
+/** `m:ss.mmm`, or `h:mm:ss.mmm` from an hour on: the time shown and edited in the player, down to the millisecond. */
+export function formatClockMs(ms: number): string {
+  const whole = Math.floor(Math.max(0, Number.isFinite(ms) ? ms : 0));
   const hours = Math.floor(whole / 3_600_000);
   const minutes = Math.floor((whole % 3_600_000) / 60_000);
   const seconds = Math.floor((whole % 60_000) / 1000);
-  return `${hours}:${pad(minutes)}:${pad(seconds)}.${pad(whole % 1000, 3)}`;
+  const fraction = pad(whole % 1000, 3);
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}.${fraction}` : `${minutes}:${pad(seconds)}.${fraction}`;
 }
 
 /**
- * A time typed by the user: seconds (`754`, `75.5`), `m:ss`, `h:mm:ss`, with optional fractions on the seconds.
+ * A time typed by the user: seconds (`754`, `75.5`), `m:ss`, `m:ss.mmm`, `h:mm:ss`, with optional fractions on the seconds.
  * Anything else is null, so a typo never seeks.
  */
 export function parseClock(text: string): number | null {
@@ -53,13 +57,18 @@ export function parseClock(text: string): number | null {
 
 // ---- rate ------------------------------------------------------------------
 
+/** The rates offered until the person edits the list in the settings. */
 export const RATE_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
+export const DEFAULT_CUSTOM_RATE = 1.5;
 export const RATE_MIN = 0.25;
 export const RATE_MAX = 4;
 /** Share of the volume that stays while a recording lowers the picture's sound (Q-05 default: 30%). */
 export const DUCK_FACTOR = 0.3;
-/** How long the right button must be held before the temporary rate starts. A shorter press is the menu. */
+/** How long → or ← must be down before it is a hold (the temporary rate, the rewind) and not a step. */
 export const HOLD_MS = 300;
+/** A held ← goes back this much every tick: about four seconds of the video for each second held. A video cannot play backward. */
+export const REWIND_TICK_MS = 100;
+export const REWIND_STEP_MS = 400;
 
 export function clampRate(rate: number): number {
   if (!Number.isFinite(rate)) return 1;
@@ -74,9 +83,20 @@ export function parseRate(text: string): number | null {
   return value >= RATE_MIN && value <= RATE_MAX ? Math.round(value * 100) / 100 : null;
 }
 
-/** The next preset above or below `rate`, for the step keys; it stops at the ends. */
-export function stepRate(rate: number, direction: 1 | -1): number {
-  const presets = [...RATE_PRESETS] as number[];
+/** The most rates the list holds. */
+export const RATE_LIST_MAX = 16;
+
+/** A rate typed into the list of the settings: 0.25–4 with at most two decimals, as written (`1.3`, `1.3x`); null otherwise. Unlike `parseRate` it does not round. */
+export function parseListRate(text: string): number | null {
+  const match = /^\s*(\d+(?:\.\d{1,2})?)\s*[x×]?\s*$/i.exec(text);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return value >= RATE_MIN && value <= RATE_MAX ? value : null;
+}
+
+/** The next rate of the list above or below `rate`, for the step keys; it stops at the ends. */
+export function stepRate(rate: number, direction: 1 | -1, rates: readonly number[] = RATE_PRESETS): number {
+  const presets = [...rates].sort((a, b) => a - b);
   if (direction > 0) return presets.find((preset) => preset > rate + 1e-9) ?? RATE_MAX;
   return [...presets].reverse().find((preset) => preset < rate - 1e-9) ?? RATE_MIN;
 }
@@ -102,15 +122,8 @@ export function frameLanded(mediaTimeSec: number, expectedPtsMs: number, toleran
   return Math.abs(mediaTimeSec * 1000 - expectedPtsMs) <= toleranceMs;
 }
 
-/** Frame numbers are shown from 1 and typed from 1; the index counts from 0. */
+/** Frame numbers are shown from 1; the index counts from 0. They are information only: a jump is by time. */
 export const displayFrame = (frame: number) => frame + 1;
-export function parseFrameInput(text: string, totalFrames: number): number | null {
-  const value = text.trim();
-  if (!/^\d+$/.test(value)) return null;
-  const number = Number(value);
-  if (number < 1 || (totalFrames > 0 && number > totalFrames)) return null;
-  return number - 1;
-}
 
 // ---- what counts as watched --------------------------------------------------
 
@@ -168,7 +181,7 @@ export const percentOf = (ms: number, durationMs: number): number => (durationMs
 
 export type VideoKeyAction =
   | { type: "toggle" }
-  | { type: "seek"; deltaMs: number }
+  | { type: "arrow"; side: -1 | 1 }
   | { type: "volume"; delta: number }
   | { type: "frame"; delta: 1 | -1 }
   | { type: "mute" }
@@ -177,49 +190,43 @@ export type VideoKeyAction =
   | { type: "markB" }
   | { type: "escape" }
   | { type: "rate"; direction: 1 | -1 }
-  | { type: "start" };
+  | { type: "customRate" }
+  | { type: "start" }
+  | { type: "time" }
+  | { type: "screenshot" }
+  | { type: "danmaku" };
 
-/** Default keys (Q-13): arrows seek and set volume, `,` and `.` step a frame. Anything with Ctrl, Alt or Meta is left to the system. */
-export function videoKeyAction(event: { key: string; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }, seekStepSeconds: number): VideoKeyAction | null {
-  if (event.ctrlKey || event.altKey || event.metaKey) return null;
-  switch (event.key) {
-    case " ":
-    case "k":
-    case "K": return { type: "toggle" };
-    case "ArrowLeft": return { type: "seek", deltaMs: -seekStepSeconds * 1000 };
-    case "ArrowRight": return { type: "seek", deltaMs: seekStepSeconds * 1000 };
-    case "ArrowUp": return { type: "volume", delta: 0.05 };
-    case "ArrowDown": return { type: "volume", delta: -0.05 };
-    case ",": return { type: "frame", delta: -1 };
-    case ".": return { type: "frame", delta: 1 };
-    case "m":
-    case "M": return { type: "mute" };
-    case "f":
-    case "F": return { type: "fullscreen" };
-    case "i":
-    case "I": return { type: "markA" };
-    case "o":
-    case "O": return { type: "markB" };
-    case "[": return { type: "rate", direction: -1 };
-    case "]": return { type: "rate", direction: 1 };
-    case "Home": return { type: "start" };
-    case "Escape": return { type: "escape" };
-    default: return null;
-  }
+const VIDEO_ACTIONS: Record<string, VideoKeyAction> = {
+  "video.toggle": { type: "toggle" },
+  "video.seekBack": { type: "arrow", side: -1 },
+  "video.seekForward": { type: "arrow", side: 1 },
+  "video.volumeUp": { type: "volume", delta: 0.05 },
+  "video.volumeDown": { type: "volume", delta: -0.05 },
+  "video.framePrev": { type: "frame", delta: -1 },
+  "video.frameNext": { type: "frame", delta: 1 },
+  "video.mute": { type: "mute" },
+  "video.fullscreen": { type: "fullscreen" },
+  "video.markA": { type: "markA" },
+  "video.markB": { type: "markB" },
+  "video.rateDown": { type: "rate", direction: -1 },
+  "video.rateUp": { type: "rate", direction: 1 },
+  "video.customRate": { type: "customRate" },
+  "video.start": { type: "start" },
+  "video.time": { type: "time" },
+  "video.screenshot": { type: "screenshot" },
+  "video.danmaku": { type: "danmaku" },
+};
+
+/**
+ * What a key does, by the key table (`@manga/contracts/keys`): the defaults are Q-13's and Q-26's, and the person's own keys replace them.
+ * ← and → step by the seek step when tapped, → held plays at the temporary rate and ← held rewinds (see `createArrowKeys`). A chord with
+ * Ctrl or Alt means something only where it is in the table, so the system's own shortcuts are left alone.
+ */
+export function videoKeyAction(event: Parameters<typeof actionOf>[0], keys: Record<string, readonly string[]> = DEFAULT_KEYS): VideoKeyAction | null {
+  if (chordOf(event) === "Esc") return { type: "escape" };
+  const id = actionOf(event, keys, "video");
+  return id ? VIDEO_ACTIONS[id] ?? null : null;
 }
-
-/** The keys the help list shows, in the order it shows them. */
-export const SHORTCUTS: Array<{ keys: string; label: string }> = [
-  { keys: "Space / K", label: "video.keyToggle" },
-  { keys: "← / →", label: "video.keySeek" },
-  { keys: "↑ / ↓", label: "video.keyVolume" },
-  { keys: ", / .", label: "video.keyFrame" },
-  { keys: "[ / ]", label: "video.keyRate" },
-  { keys: "I / O", label: "video.keyMark" },
-  { keys: "M", label: "video.keyMute" },
-  { keys: "F", label: "video.keyFullscreen" },
-  { keys: "Esc", label: "video.keyEscape" },
-];
 
 // ---- subtitle tracks ---------------------------------------------------------
 
@@ -228,7 +235,7 @@ export type SubtitleTrack = {
   source: "embedded" | "external";
   streamIndex: number | null;
   codec: string;
-  /** `ass` is drawn by the ASS renderer; `srt` and `vtt` become native text tracks; null cannot be drawn (picture subtitles). */
+  /** `ass` is drawn by the ASS renderer; `srt` and `vtt` are read into cues and laid out by the player's own subtitle layer; null cannot be drawn (picture subtitles). */
   format: "ass" | "srt" | "vtt" | null;
   language: string | null;
   title: string | null;
@@ -250,39 +257,7 @@ export function pickSubtitleTrack(tracks: readonly SubtitleTrack[], preferredId?
     ?? null;
 }
 
-export function subtitleRenderer(track: Pick<SubtitleTrack, "format">): "ass" | "native" | null {
+export function subtitleRenderer(track: Pick<SubtitleTrack, "format">): "ass" | "text" | null {
   if (track.format === "ass") return "ass";
-  return track.format === null ? null : "native";
-}
-
-// ---- WebVTT ------------------------------------------------------------------
-
-export type VttCue = { startMs: number; endMs: number; text: string };
-
-function vttTime(text: string): number | null {
-  const match = /^(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})$/.exec(text.trim());
-  if (!match) return null;
-  const [, hours, minutes, seconds, fraction] = match;
-  return (Number(hours ?? 0) * 3600 + Number(minutes) * 60 + Number(seconds)) * 1000 + Number(fraction!.padEnd(3, "0"));
-}
-
-/**
- * The cues of a WebVTT file. The player adds them to a text track itself, so no URL has to be loaded by the page.
- * A cue with no readable times is skipped rather than failing the whole file.
- */
-export function parseVtt(source: string): VttCue[] {
-  const cues: VttCue[] = [];
-  const blocks = source.replace(/^﻿/, "").replace(/\r\n?/g, "\n").split(/\n{2,}/);
-  for (const block of blocks) {
-    const lines = block.split("\n");
-    const at = lines.findIndex((line) => line.includes("-->"));
-    if (at < 0) continue;
-    const [from, rest] = lines[at]!.split("-->");
-    const start = vttTime(from ?? "");
-    const end = vttTime((rest ?? "").trim().split(/\s+/)[0] ?? "");
-    const text = lines.slice(at + 1).join("\n").trim();
-    if (start === null || end === null || end <= start || !text) continue;
-    cues.push({ startMs: start, endMs: end, text });
-  }
-  return cues;
+  return track.format === null ? null : "text";
 }

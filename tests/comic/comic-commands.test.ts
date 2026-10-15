@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { startApp } from "../helpers/app.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { inLibrary, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -17,7 +17,7 @@ async function run(ctx: App, commandId: string, input: Record<string, unknown>, 
 const FIXTURES = path.resolve(import.meta.dirname, "..", "fixtures");
 
 function pick(ctx: App, purpose: "file" | "directory" | "export", target: string): string {
-  return ctx.app.registerPath(purpose, target);
+  return ctx.app.registerPath(purpose, purpose === "export" ? target : inLibrary(ctx.app, target));
 }
 
 function scratch(prefix: string): string {

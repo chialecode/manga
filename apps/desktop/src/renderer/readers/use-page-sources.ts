@@ -38,7 +38,11 @@ export function usePageSources(target: { resourceId: string; revisionId: string;
   const targetRef = useRef(target);
   targetRef.current = target;
 
+  // The cache is dropped when the book changes, not when the page is shown again after being in the background.
+  const cachedFor = useRef(key);
   useEffect(() => {
+    if (cachedFor.current === key) return;
+    cachedFor.current = key;
     epoch.current += 1;
     inflight.current.clear();
     if (documentUrl.current) closePdfDocument(documentUrl.current);

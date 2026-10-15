@@ -39,7 +39,53 @@ const shelfProps = (overrides: Partial<Parameters<typeof Shelf>[0]> = {}): Param
 beforeEach(() => { resetCovers(); shelfMemory.reset(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-describe("M2 shelf", () => {
+describe("the anime shelf says watched, not read (Q-18)", () => {
+  const list = (items: WorkSummary[]) => installHost(({ input }) => {
+    const shown = items.filter((item) => !input.kind || item.mediaKind === input.kind);
+    return { status: "ok", value: { items: shown, total: shown.length, nextCursor: null } };
+  });
+  const tabs = () => ["all", "reading", "wishlist", "finished", "on_hold"].map((id) => screen.getByTestId(`shelf-tab-${id}`).textContent);
+
+  it("names the tabs of the anime shelf 在看, 想看 and 看过, and leaves the other shelves reading", async () => {
+    list([work("v1", "video")]);
+    render(<Shelf {...shelfProps({ kind: "video" })} />);
+    await waitFor(() => expect(screen.getByTestId("work-v1")).toBeTruthy());
+    expect(tabs()).toEqual(["全部", "在看", "想看", "看过", "搁置"]);
+    cleanup();
+    for (const kind of ["novel", "comic", null] as const) {
+      list([]);
+      render(<Shelf {...shelfProps({ kind })} />);
+      expect(tabs(), String(kind)).toEqual(["全部", "在读", "想读", "已读", "搁置"]);
+      cleanup();
+    }
+  });
+
+  it("shows 已看 and the percent on an anime card, and 已读 on a book or a comic", async () => {
+    list([work("v1", "video", { progress: 0.4 }), work("c1", "comic", { progress: 0.25 })]);
+    render(<Shelf {...shelfProps({ kind: null })} />);
+    await waitFor(() => expect(screen.getByTestId("work-progress-v1")).toBeTruthy());
+    expect(screen.getByTestId("work-progress-v1").textContent).toContain("已看 40%");
+    expect(screen.getByTestId("work-progress-c1").textContent).toContain("已读 25%");
+    expect(screen.getByTestId("work-progress-v1").textContent).not.toContain("已读");
+  });
+
+  it("labels the shelf state on an anime card and in its menu with the same words", async () => {
+    // The state is the card's tag while nothing has been watched or read yet.
+    list([work("v1", "video", { shelf: "finished", progress: 0 }), work("c1", "comic", { shelf: "finished", progress: 0 })]);
+    render(<Shelf {...shelfProps({ kind: null })} />);
+    await waitFor(() => expect(screen.getByTestId("work-v1")).toBeTruthy());
+    expect(within(screen.getByTestId("work-v1")).getByText("看过")).toBeTruthy();
+    expect(within(screen.getByTestId("work-c1")).getByText("已读")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("work-menu-v1"));
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByText("设置状态：看过")).toBeTruthy();
+    expect(within(menu).getByText("设置状态：在看")).toBeTruthy();
+    expect(within(menu).getByText("设置状态：想看")).toBeTruthy();
+    expect(within(menu).queryByText(/已读/)).toBeNull();
+  });
+});
+
+describe("shelf", () => {
   it("shows one row per media kind with counts, progress text and the open and view-all entries", async () => {
     installHost(({ commandId, input }) => {
       if (commandId === "works.list") {
@@ -174,7 +220,52 @@ describe("M2 shelf", () => {
   });
 });
 
-describe("M2 paged works", () => {
+describe("each page speaks of its own medium and is titled as the left column names it (AT-100)", () => {
+  const empty = () => installHost(() => ({ status: "ok", value: { items: [], total: 0, nextCursor: null } }));
+  const cases = [
+    { kind: null, title: "总览", search: "搜索作品名、作者或标签", tabs: "阅读与观看状态", about: "作品", every: "小说、漫画、动漫" },
+    { kind: "novel", title: "小说", search: "搜索书名、作者或标签", tabs: "阅读状态", about: "小说", every: "小说" },
+    { kind: "comic", title: "漫画", search: "搜索漫画名、作者或标签", tabs: "阅读状态", about: "漫画", every: "漫画" },
+    { kind: "video", title: "动漫", search: "搜索动漫名、制作方或标签", tabs: "观看状态", about: "动漫", every: "动漫" },
+  ] as const;
+
+  it("titles the overview and the three pages as the navigation does, with a search box and tabs that name what they hold", async () => {
+    for (const item of cases) {
+      empty();
+      render(<Shelf {...shelfProps({ kind: item.kind })} />);
+      expect(screen.getByTestId("shelf-title").textContent, String(item.kind)).toBe(item.title);
+      expect(screen.getByTestId("shelf-search").getAttribute("placeholder"), String(item.kind)).toBe(item.search);
+      expect(screen.getByRole("tablist").getAttribute("aria-label"), String(item.kind)).toBe(item.tabs);
+      await waitFor(() => expect(screen.getByTestId("shelf-empty")).toBeTruthy());
+      cleanup();
+    }
+    // The left column names the pages with the same words.
+    expect(["nav.overview", "nav.novel", "nav.comic", "nav.video"].map((key) => i18n.t(key as "nav.novel"))).toEqual(cases.map((item) => item.title));
+  });
+
+  it("says what is being read, what failed and what to add in the words of the page, and never calls a comic or an anime a book", async () => {
+    for (const item of cases) {
+      let fail = true;
+      installHost(() => (fail ? { status: "error", error: { code: "INTERNAL", message: "合成故障" } } : { status: "ok", value: { items: [], total: 0, nextCursor: null } }));
+      render(<Shelf {...shelfProps({ kind: item.kind })} />);
+      // The overview reads its three sections one by one, each in the words of its medium.
+      const named = item.kind ? [item.about] : ["小说", "漫画", "动漫"];
+      expect(screen.getAllByTestId("shelf-loading").map((node) => node.textContent), String(item.kind)).toEqual(named.map((name) => `正在读取${name}…`));
+      await waitFor(() => expect(screen.getAllByTestId("shelf-error")).toHaveLength(named.length));
+      screen.getAllByTestId("shelf-error").forEach((node, index) => expect(node.textContent, String(item.kind)).toContain(`${named[index]}暂时无法读取`));
+      fail = false;
+      for (const button of screen.getAllByTestId("shelf-error").map((node) => within(node).getByRole("button"))) fireEvent.click(button);
+      await waitFor(() => expect(screen.getByTestId("shelf-empty")).toBeTruthy());
+      expect(screen.getByTestId("shelf-empty").textContent, String(item.kind)).toContain(`添加放着${item.every}的资源库路径`);
+      const page = screen.getByTestId(item.kind ? `shelf-${item.kind}` : "shelf-all").textContent ?? "";
+      expect(page).not.toMatch(/书架|导入/);
+      if (item.kind && item.kind !== "novel") expect(page).not.toMatch(/书名|书籍/);
+      cleanup();
+    }
+  });
+});
+
+describe("paged works", () => {
   it("appends the next page without duplicates and keeps the total", async () => {
     const first = Array.from({ length: 60 }, (_, index) => work(`w${index}`, "novel"));
     const second = [work("w59", "novel"), ...Array.from({ length: 41 }, (_, index) => work(`w${60 + index}`, "novel"))];

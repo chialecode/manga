@@ -15,8 +15,8 @@ describe("schema v8 migration (A-50, A-51, A-52)", () => {
     const { dir, ids } = makeLegacyProfile(7);
     const store = new DrizzleStore({ profileDir: dir, hostId: "migrate-v8" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(8);
-      expect(store.getMeta("schemaVersion")).toBe("8");
+      expect(PRODUCT_SCHEMA_VERSION).toBe(11);
+      expect(store.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
       expect(fs.existsSync(path.join(dir, "manga.sqlite.premigrate-v7"))).toBe(true);
       // The backup is the v7 schema, untouched.
       const backup = new Database(path.join(dir, "manga.sqlite.premigrate-v7"), { readonly: true });
@@ -53,7 +53,7 @@ describe("schema v8 migration (A-50, A-51, A-52)", () => {
     }
   });
 
-  it("goes from v6 to v8 in one run with one backup, and a v6 note is tied to its work", () => {
+  it("goes from v6 to the current schema in one run with one backup, and a v6 note is tied to its work", () => {
     const { dir, ids } = makeLegacyProfile(6);
     const db = new Database(path.join(dir, "manga.sqlite"));
     db.prepare("INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -61,7 +61,7 @@ describe("schema v8 migration (A-50, A-51, A-52)", () => {
     db.close();
     const store = new DrizzleStore({ profileDir: dir, hostId: "migrate-v6-v8" });
     try {
-      expect(store.getMeta("schemaVersion")).toBe("8");
+      expect(store.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
       const backups = fs.readdirSync(dir).filter((name) => name.includes("premigrate"));
       expect(backups).toEqual(["manga.sqlite.premigrate-v6"]);
       expect(store.sqlite.prepare("SELECT work_id FROM content_objects WHERE id = 'note-legacy'").get()).toEqual({ work_id: ids.work });
@@ -118,7 +118,7 @@ describe("schema v8 migration (A-50, A-51, A-52)", () => {
     half.close();
     const retried = new DrizzleStore({ profileDir: dir, hostId: "retry-v8" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("8");
+      expect(retried.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
       expect(retried.sqlite.prepare("SELECT area FROM covers WHERE id = 'cov-whole'").get()).toEqual({ area: "images" });
     } finally {
       retried.close();

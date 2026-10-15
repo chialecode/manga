@@ -36,6 +36,7 @@ export type StoredSnapshot = {
   sourceUrl: string;
   apiVersion: string;
   subjectType: number;
+  aliases?: string[];
 };
 
 /** What the renderer sees of a hit: the remote picture address stays in the main process, which fetches the picture itself. */
@@ -78,7 +79,7 @@ const failureOf = (providerId: string, error: unknown) => {
 };
 
 function snapshotOf(detail: SubjectDetail): StoredSnapshot {
-  return { version: 1, fields: detail.fields, rating: detail.rating, images: detail.images, related: detail.related, episodes: detail.episodes, sourceUrl: detail.sourceUrl, apiVersion: detail.apiVersion, subjectType: detail.subjectType };
+  return { version: 1, fields: detail.fields, rating: detail.rating, images: detail.images, related: detail.related, episodes: detail.episodes, sourceUrl: detail.sourceUrl, apiVersion: detail.apiVersion, subjectType: detail.subjectType, ...(detail.aliases?.length ? { aliases: detail.aliases } : {}) };
 }
 
 export class MetadataService {

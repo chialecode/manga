@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderPlus, Play, Square, Trash2 } from "lucide-react";
+import { FolderInput, FolderPlus, Play, Square, Trash2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { attempt } from "../../lib/api.ts";
 import type { LibraryPath, ScanJob, ScanSchedule, ScanState } from "../../hooks/use-scan.ts";
@@ -26,7 +26,7 @@ function lastScanText(t: T, path: LibraryPath, formatDate: (value: string) => st
   return `${t("library.path.lastScan", { time: formatDate(path.lastScanAt) })} · ${counts}${status}`;
 }
 
-function PathRow(props: { t: T; path: LibraryPath; scan: ScanState; busy: boolean; formatDate: (value: string) => string; onRemove: (path: LibraryPath) => void; onChange: (path: LibraryPath, patch: { mediaKind?: Kind; autoScan?: boolean }) => void }) {
+function PathRow(props: { t: T; path: LibraryPath; scan: ScanState; busy: boolean; formatDate: (value: string) => string; onRemove: (path: LibraryPath) => void; onMove: (path: LibraryPath) => void; onChange: (path: LibraryPath, patch: { mediaKind?: Kind; autoScan?: boolean }) => void }) {
   const { t, path, scan } = props;
   const [confirming, setConfirming] = useState(false);
   const scanning = scan.running?.pathId === path.id || scan.queued.some((job) => job.pathId === path.id);
@@ -44,6 +44,7 @@ function PathRow(props: { t: T; path: LibraryPath; scan: ScanState; busy: boolea
         </select>
         <label className="msettings-check"><input type="checkbox" data-testid={`library-path-auto-${path.id}`} checked={path.autoScan} onChange={(event) => props.onChange(path, { autoScan: event.target.checked })} />{t("library.path.auto")}</label>
         <button type="button" className="secondary-button" data-testid={`library-path-scan-${path.id}`} disabled={scanning} onClick={() => void scan.start(path.id)}><Play size={14} aria-hidden="true" />{scanning ? t("library.scanning") : t("library.scanNow")}</button>
+        <button type="button" className="secondary-button" data-testid={`library-path-move-${path.id}`} disabled={props.busy || scanning} title={t("library.path.changeHint")} onClick={() => props.onMove(path)}><FolderInput size={14} aria-hidden="true" />{t("library.path.change")}</button>
         {confirming ? (
           <span className="library-path-confirm" role="group" aria-label={t("library.path.removeConfirm")}>
             <span className="detail-muted">{t("library.path.removeHint")}</span>
@@ -60,13 +61,13 @@ function PathRow(props: { t: T; path: LibraryPath; scan: ScanState; busy: boolea
 
 /**
  * Library paths and the background scan (A-50): the paths with their medium and last result, the schedule, the running scan with
- * its progress and a way to stop it, and the one-off import of a file or folder. Removing a path only stops scanning it.
+ * its progress and a way to stop it. The library is what these paths hold: there is no one-off import, and removing a path only stops
+ * scanning it (A-69).
  */
 export function LibraryPage(props: {
   t: T;
   scan: ScanState;
   formatDate: (value: string) => string;
-  onImport: () => void;
   onChanged: () => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
@@ -93,6 +94,26 @@ export function LibraryPage(props: {
     setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     await scan.reload();
+  }
+
+  /** The same files at another folder (the drive letter changed, the folder was moved): only the library path moves, and what rests on it stays. */
+  async function move(path: LibraryPath) {
+    const picked = window.manga.pick
+      ? await window.manga.pick({ mode: "directory", defaultPath: path.path })
+      : await window.manga.chooseDirectory().then((pathHandle) => (pathHandle ? { pathHandle } : null));
+    if (!picked) return;
+    setBusy(true);
+    const result = await attempt<{ checked: number }>("library.paths.update", { pathId: path.id, pathHandle: picked.pathHandle });
+    setBusy(false);
+    if (!result.ok) {
+      const details = result.error.details as { reason?: string; checked?: number; matched?: number } | undefined;
+      props.onError(details?.reason === "fingerprint-mismatch" ? t("library.path.moveMismatch", { checked: details.checked ?? 0, matched: details.matched ?? 0 })
+        : details?.reason === "overlap" ? t("library.path.moveOverlap") : result.error.message);
+      return;
+    }
+    props.onNotice(t("library.path.moved", { count: result.value.checked }));
+    await scan.reload();
+    props.onChanged();
   }
 
   async function remove(path: LibraryPath) {
@@ -146,14 +167,8 @@ export function LibraryPage(props: {
       >
         {scan.pathsLoaded && scan.paths.length === 0 ? <p className="detail-muted settings-empty" data-testid="library-paths-empty">{t("library.paths.empty")}</p> : null}
         <ul className="library-paths">
-          {scan.paths.map((path) => <PathRow key={path.id} t={t} path={path} scan={scan} busy={busy} formatDate={props.formatDate} onRemove={(item) => void remove(item)} onChange={(item, patch) => void change(item, patch)} />)}
+          {scan.paths.map((path) => <PathRow key={path.id} t={t} path={path} scan={scan} busy={busy} formatDate={props.formatDate} onRemove={(item) => void remove(item)} onMove={(item) => void move(item)} onChange={(item, patch) => void change(item, patch)} />)}
         </ul>
-      </SettingsSection>
-
-      <SettingsSection title={t("library.once")} hint={t("library.onceHint")} testId="library-once">
-        <SettingsRow label={t("library.onceRow")}>
-          <button type="button" className="secondary-button" data-testid="settings-import" onClick={props.onImport}>{t("library.onceButton")}</button>
-        </SettingsRow>
       </SettingsSection>
     </SettingsPage>
   );

@@ -94,14 +94,20 @@ let media: ReturnType<typeof installMediaElement>;
 const element = () => screen.getByTestId("video-element") as HTMLVideoElement;
 
 /** A card opens the work's own page; only "watch" opens the file. */
+/** The page history keeps a place the person stayed on for a moment; a test that goes back stays on each place for that moment. */
+const stay = () => new Promise<void>((resolve) => { setTimeout(resolve, 140); });
+
 async function openWork(nav: "nav-video" | "nav-comic", cardId: string) {
   render(<App />);
   await waitFor(() => expect(screen.getByTestId(nav)).toBeTruthy());
+  await stay();
   fireEvent.click(screen.getByTestId(nav));
   await waitFor(() => expect(screen.getByTestId(cardId)).toBeTruthy());
+  await stay();
   fireEvent.click(screen.getByTestId(cardId));
   await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
   await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
+  await stay();
 }
 
 async function openVideo() {
@@ -127,7 +133,13 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); media.restore(); vi.restoreAllMocks(); removeMatchMedia(); quoteTags.reset(); readerContext.reset(); });
 
-describe("M2 media pages in the app", () => {
+/** The title bar's back button: it is ready once the page the reader was opened from has settled into the history. */
+async function goBack() {
+  await waitFor(() => expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false));
+  fireEvent.click(screen.getByTestId("nav-back"));
+}
+
+describe("media pages in the app", () => {
   it("opens a video from its work's page at the saved position and gives the work's episodes", async () => {
     const host = installHost();
     await openWork("nav-video", "open-res_v1");
@@ -141,8 +153,10 @@ describe("M2 media pages in the app", () => {
     await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
     act(() => media.loaded(element(), 120));
     await waitFor(() => expect(screen.getByTestId("video-reader").getAttribute("data-ready")).toBe("true"));
-    expect(screen.getByTestId("video-title").textContent).toBe("合成动画");
-    expect(screen.getByTestId("video-episode").textContent).toBe("第 1 话 开场");
+    // The title and the episode are the title bar's now; the player has no bar of its own.
+    expect(screen.getByTestId("shell-title").textContent).toBe("合成动画 第 1 话 开场");
+    expect(screen.queryByTestId("video-title")).toBeNull();
+    expect(screen.queryByTestId("video-episode")).toBeNull();
     expect(media.state(element()).seeks).toContain(65);
     expect(media.state(element()).rate).toBe(1);
     expect(host.of("works.open")[0]!.input).toMatchObject({ resourceId: "res_v1" });
@@ -157,7 +171,9 @@ describe("M2 media pages in the app", () => {
     const host = installHost();
     await openVideo();
     act(() => media.advance(element(), 20));
-    fireEvent.click(screen.getByTestId("video-back"));
+    // Back from the player is the title bar's back button, which goes back through the pages that were visited.
+    expect(screen.queryByTestId("video-back")).toBeNull();
+    await goBack();
     await waitFor(() => expect(host.of("progress.setTime").length).toBeGreaterThan(0));
     expect(host.of("progress.setTime").at(-1)!.input).toMatchObject({ resourceId: "res_v1", resourceRevisionId: "rev_res_v1" });
     expect(host.of("progress.setTime").at(-1)!.input.timeMs).toBe(85_000);
@@ -166,6 +182,20 @@ describe("M2 media pages in the app", () => {
     expect(screen.getByTestId("nav-video").getAttribute("aria-current")).toBe("page");
     fireEvent.click(screen.getByTestId("work-back"));
     await waitFor(() => expect(screen.getByTestId("shelf-video")).toBeTruthy());
+  });
+
+  it("goes back from a reader that has only just opened to the page it was opened from, not to the one before that", async () => {
+    installHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
+    await openWork("nav-comic", "open-res_c1");
+    fireEvent.click(screen.getByTestId("work-read"));
+    await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
+    // No pause on the reader: it has not settled into the history, and back still starts from it.
+    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByTestId("nav-back"));
+    await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
+    expect(screen.queryByTestId("comic-reader")).toBeNull();
+    // And forward comes back to the reader.
+    expect(screen.getByTestId("nav-forward")).toHaveProperty("disabled", false);
   });
 
   it("switching episode saves the old one's position on the old one and opens the new one from its own", async () => {
@@ -178,7 +208,7 @@ describe("M2 media pages in the app", () => {
     fireEvent.click(screen.getByTestId("video-episodes"));
     fireEvent.click(screen.getByTestId("video-episodes-res_v2"));
     await waitFor(() => expect(host.of("video.probe").some((call) => call.input.resourceId === "res_v2")).toBe(true));
-    await waitFor(() => expect(screen.getByTestId("video-episode").textContent).toContain("第 2 话"));
+    await waitFor(() => expect(screen.getByTestId("shell-title").textContent).toContain("第 2 话"));
     const saved = host.of("progress.setTime");
     expect(saved.some((call) => call.input.resourceId === "res_v1" && call.input.timeMs === 75_000)).toBe(true);
     expect(saved.some((call) => call.input.resourceId === "res_v2" && call.input.timeMs === 75_000)).toBe(false);
@@ -242,12 +272,28 @@ describe("M2 media pages in the app", () => {
     expect(screen.getByTestId("work-read").textContent).toContain("继续阅读");
     fireEvent.click(screen.getByTestId("work-read"));
     await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
-    expect(screen.getByTestId("comic-title").textContent).toBe("合成漫画");
+    expect(screen.getByTestId("shell-title").textContent).toBe("合成漫画");
+    expect(screen.queryByTestId("comic-title")).toBeNull();
     expect(screen.getByTestId("comic-position").textContent).toContain("1 / 6");
-    fireEvent.click(screen.getByTestId("comic-back"));
+    expect(screen.queryByTestId("comic-back")).toBeNull();
+    await goBack();
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
     fireEvent.click(screen.getByTestId("work-back"));
     await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
+  });
+
+  it("words a work's page by its medium: the way back, the tab of its files and the episodes (AT-100)", async () => {
+    installHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
+    await openWork("nav-comic", "open-res_c1");
+    expect(screen.getByTestId("work-back").textContent).toBe("返回漫画");
+    expect(screen.getByTestId("page-work").textContent).not.toMatch(/书架|书籍/);
+    expect(within(screen.getByTestId("page-work")).getByRole("tab", { name: "卷与话" })).toBeTruthy();
+    cleanup();
+    installHost({});
+    await openWork("nav-video", "open-res_v1");
+    expect(screen.getByTestId("work-back").textContent).toBe("返回动漫");
+    expect(within(screen.getByTestId("page-work")).getByRole("tab", { name: "剧集" })).toBeTruthy();
+    expect(screen.getByTestId("page-work").textContent).not.toMatch(/书架|书籍/);
   });
 
   it("keeps the shelf as it was left when the user comes back from a work's page", async () => {
@@ -286,7 +332,7 @@ const voiceBubble = () => ({
   segments: { total: 1, done: 1, failed: 0, pending: 0 }, sources: [{ startMs: 61_000, locator: { kind: "temporal", startMs: 61_000, endMs: 64_000 }, resourceId: "res_v1" }], resourceId: "res_v1",
 });
 
-describe("M2 recording in the app", () => {
+describe("recording in the app", () => {
   it("has no microphone in the right pane, the player or the title bar while the voice module is off", async () => {
     installHost();
     await openVideo();

@@ -11,7 +11,7 @@ function sources(dir: string): string[] {
   });
 }
 
-describe("test hooks stay out of a normal start (C5)", () => {
+describe("test hooks stay out of a normal start", () => {
   const outside = sources(main).filter((file) => !file.startsWith(path.join(main, "smoke")));
   const smokeImport = /\bfrom\s+["']\.{1,2}\/(?:\.\.\/)*(?:main\/)?smoke(?:\/[^"']*)?["']|\bimport\s+["'][^"']*\/smoke\//;
 

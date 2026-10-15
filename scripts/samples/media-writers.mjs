@@ -1,4 +1,4 @@
-// Byte-level writers for the synthetic M2 samples: ZIP (including deliberately hostile entries), image-only PDF,
+// Byte-level writers for the synthetic samples: ZIP (including deliberately hostile entries), image-only PDF,
 // fixed-layout EPUB, bilevel PNG, WAV. They are independent of the product parsers so a bug in a reader cannot hide
 // in the sample that is meant to exercise it.
 import { crc32, createDeflate, deflateRawSync, constants } from "node:zlib";

@@ -6,7 +6,7 @@ import { BangumiClient, SUBJECT_TYPE, bangumiUserAgent, normalizeSubject } from 
 import { evidenceRunDir } from "../../scripts/desktop-paths.ts";
 
 /**
- * Contract check against the real Bangumi API (plan section 3.2). It runs only when MANGA_LIVE_BANGUMI=1 and never in CI.
+ * Contract check against the real Bangumi API. It runs only when MANGA_LIVE_BANGUMI=1 and never in CI.
  *
  * - read only, no credentials, at most 10 requests per run;
  * - it looks the entries up by a generic keyword and follows the first answer, so no title, summary or picture of any entry
@@ -25,7 +25,7 @@ describe.skipIf(!enabled)("Bangumi API contract (live, read only)", () => {
   it("search, entry, relations, episodes, characters, staff and a cover still have the shape MANGA depends on", async (context) => {
     const client = new BangumiClient({ fetch: (url, init) => fetch(url, init as RequestInit), userAgent: bangumiUserAgent("contract-test"), timeoutMs: 20_000, maxRetries: 1 });
     const steps: Step[] = [];
-    const out = path.join(evidenceRunDir("m2", "live-bangumi"), "summary.json");
+    const out = path.join(evidenceRunDir("live-bangumi"), "summary.json");
     const write = (status: "passed" | "blocked" | "failed", extra: Record<string, unknown> = {}) => {
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), status, requests: client.requests, budget: BUDGET, steps, ...extra }, null, 2));
