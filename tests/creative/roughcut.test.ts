@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startApp } from "../helpers/app.ts";
 import { all, ok, one, run } from "../helpers/creative-project.ts";
 import { seedComic, seedVideo } from "../helpers/media-seed.ts";
+import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
 type Clip = { id: string; resourceId: string; revisionId: string; title: string; label: string; inMs: number; outMs: number; sortKey: string; available: boolean; durationMs: number | null };
@@ -17,7 +18,7 @@ async function boot(restartOf?: App) {
   return ctx;
 }
 
-/** A project with a sequence and two videos that only exist as rows: editing never reads a file, so these tests do not need the media tool. */
+/** A project with a sequence and two videos that only exist as rows: editing never reads a file, so these tests do not need the media tool (exporting does). */
 async function setup(ctx: App) {
   const projectId = ok<{ id: string }>(await run(ctx, "project.create", { name: "粗剪项目" })).id;
   const cutId = ok<{ cut: { id: string } }>(await run(ctx, "roughcut.create", { projectId, title: "第一版" })).cut.id;
@@ -187,6 +188,14 @@ describe("rough cut sequences (AT-32)", () => {
     expect(plan.compatible).toBe(false);
     expect(plan.problems).toEqual([{ code: "source-missing", clipId: "c1" }, { code: "source-missing", clipId: "c2" }]);
     expect(plan.clips.map((clip) => [clip.clipId, clip.actualInMs, clip.startShiftMs])).toEqual([["c1", 0, 0], ["c2", 0, 0]]);
+  });
+
+  // Exporting asks for the media tool before it plans, so this half needs it, unlike the rest of this file.
+  it.skipIf(mediaPrerequisitesAbsent)("refuses to export a sequence whose video went, and starts nothing", async () => {
+    const ctx = await boot();
+    const { cutId, a, b } = await setup(ctx);
+    await edit(ctx, cutId, [{ type: "add", id: "c1", resourceId: a.resourceId, inMs: 0, outMs: 2000 }, { type: "add", id: "c2", resourceId: b.resourceId, inMs: 0, outMs: 2000 }]);
+    ctx.app.store.sqlite.prepare("DELETE FROM media_probes WHERE resource_revision_id = ?").run(b.revisionId);
     const exported = await run(ctx, "roughcut.export", { cutId, pathHandle: ctx.app.registerPath("directory", ctx.profileRoot) });
     expect(exported.error).toMatchObject({ code: "UNSUPPORTED_FORMAT", details: { reason: "incompatible" } });
     expect(all(ctx, "SELECT id FROM rough_cut_exports")).toEqual([]);

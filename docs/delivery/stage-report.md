@@ -1040,7 +1040,7 @@ A 按[计划第 16 节](stage-plan.md#review-rework-3)复核第 20 节：对照 
 | 检查 | 结果 |
 | --- | --- |
 | `verify` | passed（退出码 0）：类型检查（两个工程）、文档检查（70 份文档、81 个需求、109 条验收用例）、发布检查（873 个文件）、依赖边界、`git diff --check`，以及 Vitest 2420 个用例：2408 passed、12 skipped。比 `stage test` 多 2 个跳过，是只在阶段入口开启的大文件阅读用例。B 的源码在 A 修复之前也跑过一次，同样通过 |
-| `stage test` | passed：必需用例 143/143；Vitest 2420 个用例，2410 passed、0 failed、10 skipped（比第 20 节多 1 个，是 A 新增的竞态回归用例） |
+| `stage test` | passed：必需用例 143/143；Vitest 2420 个用例，2410 passed、0 failed、10 skipped（比第 20 节多 1 个，是 A 新增的竞态回归用例）。CI 修复之后是 2421 个用例、2411 passed，见 21.10 |
 | `stage package` | passed：Electron 44.5.1，14 个阶段；窗口观察 69 项全部通过（必需 66 个）。`creative-draft` 量得文稿页宽 424 px 时，编辑器占满整页，建议面板移到下方；弹幕搜索 338 ms 列出结果，在 8 s 之内 |
 | `stage bench` | passed：33 项门槛全部在目标内，例如导图折叠 p95 60.1 ms（目标 100 ms）、30 MiB EPUB 末尾 868 ms（2000 ms）、笔记文件写入 p95 4.4 ms（25 ms）。跑前确认机器空闲：CPU 约 3%，没有本任务遗留的进程；并把启动它的应用切到前台。运行约 2.5 分钟后，前台换成了另一个应用（每 15 s 记一次前台），后半段在后台跑完，仍一次通过。目标与测量方法都没有改 |
 | `stage report` | 退出码 0（`automationStatus: self-check-passed`，`engineeringReviewable: true`，错误列表为空）；证据已换入 `docs/evidence/gate/`，见 21.4 |
@@ -1079,7 +1079,7 @@ A 按[计划第 16 节](stage-plan.md#review-rework-3)复核第 20 节：对照 
 换入本次结果时：
 
 - `ui-walk-library-paths-wide.png` 与 `ui-walk-open-blocked-outside.png` 的路径行按 B 的同一位置重新涂黑，其余内容原样；其余截图和 JSON 里没有本机路径与用户名。
-- **大小：** B 交付时 `docs/evidence/gate/` 约 6.1 MB，已超过质量门禁要求的 5 MiB。A 把 PNG 无损重新压缩（逐像素核对不变），并移除 5 张没有任何文档引用的截图：全屏底栏、设置往返之后、倍速菜单、16:9 字幕与宽窗播放器。它们对应的观察仍在 `scenarios.json` 里，原图留在本机的运行目录。现在共 5,152,698 字节（4.91 MiB）。
+- **大小：** B 交付时 `docs/evidence/gate/` 约 6.1 MB，已超过质量门禁要求的 5 MiB。A 把 PNG 无损重新压缩（逐像素核对不变），并移除 5 张没有任何文档引用的截图：全屏底栏、设置往返之后、倍速菜单、16:9 字幕与宽窗播放器。它们对应的观察仍在 `scenarios.json` 里，原图留在本机的运行目录。CI 修复后换入的最终证据共 5,031,528 字节（4.80 MiB）。
 - 新换入的 `ui-walk-library-paths-wide.png` 已显示 21.3 改过的说明文字。
 
 复看 B 的证据时另发现，`ui-walk-work-home-wide.png` 拍到的也是读取中的一帧。对应的观察 `work-home-open` 在拍照之前已经读到作品标题，“阅读”也可以点，所以问题出在截图取到的画面没有更新，不是页面本身。A 重跑时这一张拍到了作品主页，所以是偶发的；`ui-creative-project-wide.png` 仍拍到总览。这与 LOOP-22 第（2）项是同一类问题，并入该项，不升级。
@@ -1123,4 +1123,18 @@ A 按[计划第 16 节](stage-plan.md#review-rework-3)复核第 20 节：对照 
 
 ### 21.9 下一步
 
-**首选：请用户授权 ACT-09**，即 push 阶段分支、创建到 `main` 的 PR，CI 通过后 squash 合并。人工检查与 Q-30—Q-32 的默认都不是前提（A-53）。本阶段在得到授权之前，不进行 push、PR 或合并。
+用户 2026-10-15 授权 ACT-09。阶段提交已 push，并创建了 [chialecode/manga#5](https://github.com/chialecode/manga/pull/5)；CI 第一次运行暴露的问题见 21.10，已用一个追加提交修复。CI 通过后 squash 合并，删除远端阶段分支，同步本地 `main`，再把结果写进执行状态。人工检查与 Q-30—Q-32 的默认都不是前提（A-53）。
+
+<a id="ci-fix"></a>
+### 21.10 推送后的 CI 修复（2026-10-15）
+
+- **现象：** PR 的第一次 `repository-quality` 失败，Vitest 1 个用例不通过：`tests/creative/roughcut.test.ts` 的“keeps a clip whose video went, marked as missing, and says so in the plan instead of shortening the sequence”。它期望导出被拒绝的原因是 `UNSUPPORTED_FORMAT`（`incompatible`），CI 上得到的却是 `CAPABILITY_UNAVAILABLE`。
+- **原因：** CI 的 Linux runner 没有媒体前置，工作流用 `MANGA_MEDIA_PREREQUISITES=absent` 声明。导出要先确认媒体工具在，再做计划，所以没有工具时先报“工具不可用”。这个文件开头说它的用例都不需要媒体工具，但这个用例最后两行调用了导出，并不成立。产品行为没有问题：媒体工具随包附带。本机有工具，所以本地门禁一直通过。
+- **改法：** 把这个用例拆成两个，断言一条不少。计划部分（片段标为缺失、计划里列出问题、时长不缩短）不需要工具，留在原用例里；“拒绝导出、不留下导出记录”放进新用例，只在声明没有媒体前置时跳过（`it.skipIf(mediaPrerequisitesAbsent)`），记为跳过，不算通过。必需用例 AT-32 的匹配式是整组前缀，两个用例都在里面。
+- **验证：** 本机直接运行这个文件，13 个用例全部通过；按 CI 声明没有媒体前置再运行，12 passed、1 skipped。测试文件改了，证据的测试指纹随之过期，所以在修复后的源码上重跑：
+  - `stage test`：必需用例 143/143，Vitest 2421 个用例，2411 passed、0 failed、10 skipped；
+  - `stage package`：窗口观察 69/69，弹幕搜索 348 ms；
+  - `stage bench`：33 项门槛全部在目标内，例如导图折叠 p95 39.6 ms、30 MiB EPUB 末尾 879 ms、笔记文件写入 p95 3.0 ms。用户让出机器后开跑：CPU 约 3%，启动它的应用在前台；整个运行期间前台只有它和基准自己的窗口；
+  - `stage report`：退出码 0；
+  - `verify`：类型、文档、发布与依赖检查都通过，Vitest 2421 个用例中 2409 passed、12 skipped。只有 `git diff --check` 失败过一次，原因是本报告末尾多了一个空行；改正后，推送前钩子会对提交完整重跑一遍。
+  - `docs/evidence/gate/` 已换成这一次的结果，处理方法与 21.4 相同。

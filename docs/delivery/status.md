@@ -2,7 +2,7 @@
 
 核对日期：2026-10-15。用例定义与需求追踪矩阵仅在[交付计划](roadmap-and-acceptance.md)维护；本页汇总实际状态并链接证据。本页不按阶段、不按轮次追加：只写已实现的能力、当前阶段在做什么、已知限制和后续 loop。以前阶段的过程文档不在工作树里，需要时用固定的 Git 链接回看（[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)）。
 
-开发顺序按 A-39：先贯通[全部基本功能 MVP](roadmap-and-acceptance.md#mvp-loop)，再根据反馈循环迭代。全部基本功能的 MVP 已在当前阶段分支上实现；用户 2026-10-09 第二轮试用的 20 条反馈已由 B 返工完成，A 同日复核收敛（直接修了两处局部缺口，并在最终源码上重跑全部门禁）；同日按用户授权做了真实模型与弹弹play 的契约测试，修了真实调用暴露的四个产品缺陷（[阶段报告第 19 节](stage-report.md#live-contracts)）；用户 2026-10-10 第三轮试用又提出 13 条反馈，A 写成返工计划（[阶段计划第 16 节](stage-plan.md#review-rework-3)），B 于 2026-10-15 连续完成 W18—W25（[阶段报告第 20 节](stage-report.md#rework-3)），A 同日复核收敛：直接修了一处后台重排的竞态与一处与 A-86 矛盾的文案，把文稿页编辑器过窄（LOOP-22 第（1）项）升级修复，并收紧 LOOP-21 放宽的等待，在最终源码上重跑全部门禁；同日按用户授权复测真实模型与弹弹play，并用最终源码重放了真实 Profile 的迁移（[第 21 节](stage-report.md#a-recheck-3)）；push、PR 与合并待用户授权 ACT-09；产品验收没有任何一项被自动标为通过。A 的计划覆盖整个阶段（A-46）。
+开发顺序按 A-39：先贯通[全部基本功能 MVP](roadmap-and-acceptance.md#mvp-loop)，再根据反馈循环迭代。全部基本功能的 MVP 已在当前阶段分支上实现；用户 2026-10-09 第二轮试用的 20 条反馈已由 B 返工完成，A 同日复核收敛（直接修了两处局部缺口，并在最终源码上重跑全部门禁）；同日按用户授权做了真实模型与弹弹play 的契约测试，修了真实调用暴露的四个产品缺陷（[阶段报告第 19 节](stage-report.md#live-contracts)）；用户 2026-10-10 第三轮试用又提出 13 条反馈，A 写成返工计划（[阶段计划第 16 节](stage-plan.md#review-rework-3)），B 于 2026-10-15 连续完成 W18—W25（[阶段报告第 20 节](stage-report.md#rework-3)），A 同日复核收敛：直接修了一处后台重排的竞态与一处与 A-86 矛盾的文案，把文稿页编辑器过窄（LOOP-22 第（1）项）升级修复，并收紧 LOOP-21 放宽的等待，在最终源码上重跑全部门禁；同日按用户授权复测真实模型与弹弹play，并用最终源码重放了真实 Profile 的迁移（[第 21 节](stage-report.md#a-recheck-3)）；用户同日授权 ACT-09：已 push 并创建 [chialecode/manga#5](https://github.com/chialecode/manga/pull/5)，CI 第一次运行暴露一个只在没有媒体前置时失败的用例，已用追加提交修复（[第 21.10 节](stage-report.md#ci-fix)），CI 通过后 squash 合并；产品验收没有任何一项被自动标为通过。A 的计划覆盖整个阶段（A-46）。
 
 本页是 Agent 侧的状态入口。用户需要做的事（待决定、人工检查、授权与外部配置）只在[用户待办](../../USER-ACTIONS.md)。两边互不等待：人工检查和非阻塞决定不绑定阶段，可以顺延（A-53）。
 
@@ -10,7 +10,7 @@
 
 | 阶段 | 状态 | 依据 |
 | --- | --- | --- |
-| M3 剩余全部 MVP | B 已交付；A 于 2026-10-07 集中审查，复跑 `stage test`、`stage package`、`verify` 全部通过，B 的自检属实。用户同日试用后提出 21 条问题与需求（A-67—A-72），A 另定 F-03 的 Agent 暴露范围（A-73），一起交回 B 返工（W1—W7）。B 于 2026-10-08 完成返工并在最终源码上重跑全部门禁；A 同日复核收敛：21 条反馈与 AT-77—AT-85 逐项按根因核对，复跑 `verify`、`stage test`、`stage package` 全部通过，LOOP-09 的路线定为 A-74。用户 2026-10-09 第二轮试用又提出 20 条反馈，A 同日核对根因并写成返工计划（W8—W17，A-75—A-84，AT-86—AT-98），按 A-75 并入本阶段，交给 B 返工；B 于 2026-10-09 连续完成 W8—W17；A 同日复核收敛：20 条反馈与 AT-86—AT-98 逐项按根因核对，补上选集与音轨菜单在真实窗口里的命中测试，修了弹幕评论按修订读取时的授权缺口，把测试进程的偶发崩溃定位到上游缺陷并缓解（LOOP-08），在最终源码上重跑 `verify`、`stage test`、`stage package`、`stage bench`、`stage report` 全部通过；随后按用户授权做真实模型（文本、看图、Embedding）与弹弹play 的契约测试，修了空白回答记为成功、无参数工具的空参数、多条 system 消息被拒、连接测试图片太小四个缺陷，并在最终源码上再次重跑全部门禁。用户 2026-10-10 第三轮试用提出 13 条反馈，A 同日核对根因并写成返工计划（W18—W25，A-85—A-93，AT-99—AT-109，schema v11），按 A-85 并入本阶段，交给 B 返工；B 于 2026-10-15 连续完成 W18—W25（13 条反馈逐项按根因修复，必需用例 143/143，必需窗口观察 66/66，基准 33 项），在最终源码上重跑 `verify`、`stage test`、`stage package`、`stage bench`、`stage report` 全部通过；A 同日复核收敛（13 条反馈与 AT-99—AT-109 逐项按根因核对；直接修了后台重排与命令之间的竞态、移除路径的文案，升级修复文稿页编辑器过窄，收紧弹幕搜索的等待；在最终源码上重跑全部门禁；真实模型与弹弹play 复测通过；真实 Profile 已在 v11，用最终源码重放迁移的结果一致），[ACT-09](../../USER-ACTIONS.md#act-09) 待用户授权。范围：创作工作区（项目、白板、导图、互嵌、文稿、材料搜寻、语义检索、项目包）、粗剪、插件包、BitTorrent 获取，用户 2026-10-06 提出的界面与功能问题（A-55—A-66），以及上述返工。C0 整理已执行，整理记录在阶段报告 | [当前阶段计划](stage-plan.md)（返工见[第 14 节](stage-plan.md#review-rework)，第二轮返工见[第 15 节](stage-plan.md#review-rework-2)，第三轮返工见[第 16 节](stage-plan.md#review-rework-3)）、[阶段报告](stage-report.md)（A 审查见[第 14 节](stage-report.md#a-review)，返工结果见[第 15 节](stage-report.md#rework)，A 复核见[第 16 节](stage-report.md#a-recheck)，第二轮返工结果见[第 17 节](stage-report.md#rework-2)，A 复核第二轮返工见[第 18 节](stage-report.md#a-recheck-2)，真实服务契约见[第 19 节](stage-report.md#live-contracts)，第三轮返工结果见[第 20 节](stage-report.md#rework-3)） |
+| M3 剩余全部 MVP | B 已交付；A 于 2026-10-07 集中审查，复跑 `stage test`、`stage package`、`verify` 全部通过，B 的自检属实。用户同日试用后提出 21 条问题与需求（A-67—A-72），A 另定 F-03 的 Agent 暴露范围（A-73），一起交回 B 返工（W1—W7）。B 于 2026-10-08 完成返工并在最终源码上重跑全部门禁；A 同日复核收敛：21 条反馈与 AT-77—AT-85 逐项按根因核对，复跑 `verify`、`stage test`、`stage package` 全部通过，LOOP-09 的路线定为 A-74。用户 2026-10-09 第二轮试用又提出 20 条反馈，A 同日核对根因并写成返工计划（W8—W17，A-75—A-84，AT-86—AT-98），按 A-75 并入本阶段，交给 B 返工；B 于 2026-10-09 连续完成 W8—W17；A 同日复核收敛：20 条反馈与 AT-86—AT-98 逐项按根因核对，补上选集与音轨菜单在真实窗口里的命中测试，修了弹幕评论按修订读取时的授权缺口，把测试进程的偶发崩溃定位到上游缺陷并缓解（LOOP-08），在最终源码上重跑 `verify`、`stage test`、`stage package`、`stage bench`、`stage report` 全部通过；随后按用户授权做真实模型（文本、看图、Embedding）与弹弹play 的契约测试，修了空白回答记为成功、无参数工具的空参数、多条 system 消息被拒、连接测试图片太小四个缺陷，并在最终源码上再次重跑全部门禁。用户 2026-10-10 第三轮试用提出 13 条反馈，A 同日核对根因并写成返工计划（W18—W25，A-85—A-93，AT-99—AT-109，schema v11），按 A-85 并入本阶段，交给 B 返工；B 于 2026-10-15 连续完成 W18—W25（13 条反馈逐项按根因修复，必需用例 143/143，必需窗口观察 66/66，基准 33 项），在最终源码上重跑 `verify`、`stage test`、`stage package`、`stage bench`、`stage report` 全部通过；A 同日复核收敛（13 条反馈与 AT-99—AT-109 逐项按根因核对；直接修了后台重排与命令之间的竞态、移除路径的文案，升级修复文稿页编辑器过窄，收紧弹幕搜索的等待；在最终源码上重跑全部门禁；真实模型与弹弹play 复测通过；真实 Profile 已在 v11，用最终源码重放迁移的结果一致），[ACT-09](../../USER-ACTIONS.md#act-09) 已授权并在执行：已 push、创建 PR #5，CI 修复见阶段报告 21.10，CI 通过后合并。范围：创作工作区（项目、白板、导图、互嵌、文稿、材料搜寻、语义检索、项目包）、粗剪、插件包、BitTorrent 获取，用户 2026-10-06 提出的界面与功能问题（A-55—A-66），以及上述返工。C0 整理已执行，整理记录在阶段报告 | [当前阶段计划](stage-plan.md)（返工见[第 14 节](stage-plan.md#review-rework)，第二轮返工见[第 15 节](stage-plan.md#review-rework-2)，第三轮返工见[第 16 节](stage-plan.md#review-rework-3)）、[阶段报告](stage-report.md)（A 审查见[第 14 节](stage-report.md#a-review)，返工结果见[第 15 节](stage-report.md#rework)，A 复核见[第 16 节](stage-report.md#a-recheck)，第二轮返工结果见[第 17 节](stage-report.md#rework-2)，A 复核第二轮返工见[第 18 节](stage-report.md#a-recheck-2)，真实服务契约见[第 19 节](stage-report.md#live-contracts)，第三轮返工结果见[第 20 节](stage-report.md#rework-3)） |
 
 ## 已实现的能力
 
@@ -48,15 +48,15 @@
 
 ## 验证基线
 
-最近一次完整门禁在 A 复核第三轮返工、做完直接修复之后，在本阶段分支的最终源码上取得（Windows 开发机，Node 24.19.0，不是基准参考机）；证据在 [`docs/evidence/gate/`](../evidence/gate/)，逐项映射见[阶段报告](stage-report.md)。
+最近一次完整门禁在 A 复核第三轮返工、做完直接修复与推送后的 CI 修复（[阶段报告 21.10](stage-report.md#ci-fix)）之后，在本阶段分支的最终源码上取得（Windows 开发机，Node 24.19.0，不是基准参考机）；证据在 [`docs/evidence/gate/`](../evidence/gate/)，逐项映射见[阶段报告](stage-report.md)。
 
 | 检查 | 结果 |
 | --- | --- |
-| `node scripts/stage.mjs test` | 必需用例 143/143 passed；Vitest 2420 个用例：2410 passed、0 failed、10 skipped（默认关闭的真实服务与真实样本探针） |
+| `node scripts/stage.mjs test` | 必需用例 143/143 passed；Vitest 2421 个用例：2411 passed、0 failed、10 skipped（默认关闭的真实服务与真实样本探针） |
 | `node scripts/stage.mjs package` | passed：Electron 44.5.1 未签名本地包，不访问外网，14 个阶段与缺资产负例；66 个必需窗口观察（共记录 69 项）；媒体阶段含选集与音轨菜单在窗口与屏幕全屏下的命中测试、带与不带字幕的截图的逐像素比较 |
 | `node scripts/stage.mjs bench` | passed：33 项门槛全部在目标内（启动基准的应用在前台、机器空闲时开跑，一次通过；A 复核时的这次运行后半段前台换成了另一个应用，仍全部在目标内；此前前台是另一个应用时连跑 3 次都超出，所有指标同时慢 2.5—3.7 倍，见 [LOOP-13](#loop-13)；目标与测量方法都没有改） |
 | `node scripts/stage.mjs report` | 退出码 0；`productAcceptance` 恒为 not-run |
-| `node scripts/verify.mjs` | passed：类型检查、文档检查（70 份文档、81 个需求、109 条验收用例）、发布检查、依赖边界与 Vitest 2420 个用例（2408 passed、12 skipped；比 `stage test` 多 2 个跳过，是默认关闭、只在 `stage test` 里打开的大文件阅读用例） |
+| `node scripts/verify.mjs` | passed：类型检查、文档检查（70 份文档、81 个需求、109 条验收用例）、发布检查、依赖边界与 Vitest 2421 个用例（2409 passed、12 skipped；比 `stage test` 多 2 个跳过，是默认关闭、只在 `stage test` 里打开的大文件阅读用例） |
 
 性能（p95，单位 ms；规模 Profile 为 1 万条元数据、5 万个检索块、10 MiB TXT 与 30 MiB EPUB 尾部，每次冷启动）：
 
@@ -242,4 +242,4 @@ AT-01 以来的验收用例不按一次技术报告或一次总体人工反馈�
 
 ## 当前推荐下一步
 
-**请用户授权 [ACT-09](../../USER-ACTIONS.md#act-09)。** 第三轮返工 A 已于 2026-10-15 复核收敛（[阶段报告第 21 节](stage-report.md#a-recheck-3)），全部门禁在最终源码上重跑通过；授权后 push 阶段分支、创建到 `main` 的 PR，CI 通过后 squash 合并，合并后把结果写回本页。人工检查（H-46—H-57 与标“需重测”的旧项）与 Q-30—Q-32 的默认都不是前提（A-53），可以在合并前后任何时候做。
+**等 PR #5 的 CI 通过后 squash 合并（ACT-09 已授权）。** 第三轮返工 A 已于 2026-10-15 复核收敛（[阶段报告第 21 节](stage-report.md#a-recheck-3)）。用户同日授权 ACT-09：阶段提交已 push，并创建了 [chialecode/manga#5](https://github.com/chialecode/manga/pull/5)；CI 第一次运行失败一个用例，已修复（[21.10](stage-report.md#ci-fix)）。CI 通过后 squash 合并、删除远端阶段分支、同步本地 `main`，再把结果写回本页。人工检查（H-46—H-57 与标“需重测”的旧项）与 Q-30—Q-32 的默认都不是前提（A-53）。

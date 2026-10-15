@@ -31,7 +31,7 @@
         "suggested": "comic",
         "decoded": true,
         "turned": 3,
-        "landed": "page-library",
+        "landed": "page-comic",
         "reopened": true,
         "restored": true,
         "position": "第 1 / 5 页",
@@ -46,7 +46,7 @@
         "suggested": "comic",
         "decoded": true,
         "turned": 2,
-        "landed": "page-library",
+        "landed": "page-comic",
         "reopened": true,
         "restored": true,
         "position": "第 1 / 6 页",
@@ -61,7 +61,7 @@
         "suggested": "comic",
         "decoded": true,
         "turned": 3,
-        "landed": "page-library",
+        "landed": "page-comic",
         "reopened": true,
         "restored": true,
         "position": "第 1 / 5 页",
@@ -102,7 +102,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.610898,
+        "playedTo": 0.608639,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -122,7 +122,7 @@
             "expectedMs": 1500,
             "landed": true,
             "verified": "true",
-            "ms": 33
+            "ms": 29
           },
           {
             "after": {
@@ -152,7 +152,7 @@
             "expectedMs": 14875,
             "landed": true,
             "verified": "true",
-            "ms": 28
+            "ms": 29
           }
         ],
         "subtitles": {
@@ -225,7 +225,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.616982,
+        "playedTo": 0.614957,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -260,7 +260,7 @@
             "expectedMs": 12000,
             "landed": true,
             "verified": "true",
-            "ms": 33
+            "ms": 29
           },
           {
             "after": {
@@ -275,7 +275,7 @@
             "expectedMs": 23875,
             "landed": true,
             "verified": "true",
-            "ms": 32
+            "ms": 30
           }
         ],
         "result": "passed"
@@ -316,7 +316,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.607226,
+        "playedTo": 0.612957,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -336,7 +336,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 29
           },
           {
             "after": {
@@ -351,7 +351,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 31
+            "ms": 30
           },
           {
             "after": {
@@ -366,7 +366,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 31
+            "ms": 28
           }
         ],
         "result": "passed"
@@ -407,7 +407,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.620786,
+        "playedTo": 0.617418,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -427,7 +427,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 30
           },
           {
             "after": {
@@ -457,7 +457,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 30
           }
         ],
         "result": "passed"
@@ -502,7 +502,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.607282,
+        "playedTo": 0.601982,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -522,7 +522,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 31
+            "ms": 30
           },
           {
             "after": {
@@ -537,7 +537,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 30
           },
           {
             "after": {
@@ -552,7 +552,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 32
           }
         ],
         "result": "passed"
@@ -591,7 +591,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.620609,
+        "playedTo": 0.620796,
         "picture": {
           "decodedFrames": 23,
           "droppedFrames": 0,
@@ -611,7 +611,7 @@
             "expectedMs": 1066.667,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 31
           },
           {
             "after": {
@@ -626,7 +626,7 @@
             "expectedMs": 5333.333,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 28
           },
           {
             "after": {
@@ -641,7 +641,7 @@
             "expectedMs": 15700,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 30
           }
         ],
         "result": "passed"
@@ -680,9 +680,9 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.601839,
+        "playedTo": 0.6247409999999998,
         "picture": {
-          "decodedFrames": 18,
+          "decodedFrames": 19,
           "droppedFrames": 0,
           "notice": false
         },
@@ -700,7 +700,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 31
+            "ms": 30
           },
           {
             "after": {
@@ -715,7 +715,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 28
+            "ms": 29
           },
           {
             "after": {
@@ -730,7 +730,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 30
           }
         ],
         "result": "passed"
@@ -1090,9 +1090,9 @@
           }
         },
         "episodes-picked": {
-          "from": "res_45bc214f-739a-45cc-afd6-b988e69256a1",
-          "to": "res_4f379747-6b9f-48bc-9ab5-86aa509fb9d4",
-          "now": "res_4f379747-6b9f-48bc-9ab5-86aa509fb9d4"
+          "from": "res_e26bc70e-3f56-46dc-98cb-b529b2929171",
+          "to": "res_880adf49-7bba-4e4f-bb70-bbf48a47a89d",
+          "now": "res_880adf49-7bba-4e4f-bb70-bbf48a47a89d"
         },
         "audio": {
           "items": 2,
@@ -1230,7 +1230,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.610898,
+      "playedTo": 0.608639,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1250,7 +1250,7 @@
           "expectedMs": 1500,
           "landed": true,
           "verified": "true",
-          "ms": 33
+          "ms": 29
         },
         {
           "after": {
@@ -1280,7 +1280,7 @@
           "expectedMs": 14875,
           "landed": true,
           "verified": "true",
-          "ms": 28
+          "ms": 29
         }
       ],
       "subtitles": {
@@ -1325,7 +1325,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.616982,
+      "playedTo": 0.614957,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1360,7 +1360,7 @@
           "expectedMs": 12000,
           "landed": true,
           "verified": "true",
-          "ms": 33
+          "ms": 29
         },
         {
           "after": {
@@ -1375,7 +1375,7 @@
           "expectedMs": 23875,
           "landed": true,
           "verified": "true",
-          "ms": 32
+          "ms": 30
         }
       ],
       "result": "passed"
@@ -1412,7 +1412,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.607226,
+      "playedTo": 0.612957,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1432,7 +1432,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 29
         },
         {
           "after": {
@@ -1447,7 +1447,7 @@
           "expectedMs": 5000,
           "landed": true,
           "verified": "true",
-          "ms": 31
+          "ms": 30
         },
         {
           "after": {
@@ -1462,7 +1462,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 31
+          "ms": 28
         }
       ],
       "result": "passed"
@@ -1499,7 +1499,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.620786,
+      "playedTo": 0.617418,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1519,7 +1519,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 30
         },
         {
           "after": {
@@ -1549,7 +1549,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 30
         }
       ],
       "result": "passed"
@@ -1590,7 +1590,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.607282,
+      "playedTo": 0.601982,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1610,7 +1610,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 31
+          "ms": 30
         },
         {
           "after": {
@@ -1625,7 +1625,7 @@
           "expectedMs": 5000,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 30
         },
         {
           "after": {
@@ -1640,7 +1640,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 32
         }
       ],
       "result": "passed"
@@ -1675,7 +1675,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.620609,
+      "playedTo": 0.620796,
       "picture": {
         "decodedFrames": 23,
         "droppedFrames": 0,
@@ -1695,7 +1695,7 @@
           "expectedMs": 1066.667,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 31
         },
         {
           "after": {
@@ -1710,7 +1710,7 @@
           "expectedMs": 5333.333,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 28
         },
         {
           "after": {
@@ -1725,7 +1725,7 @@
           "expectedMs": 15700,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 30
         }
       ],
       "result": "passed"
@@ -1760,9 +1760,9 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.601839,
+      "playedTo": 0.6247409999999998,
       "picture": {
-        "decodedFrames": 18,
+        "decodedFrames": 19,
         "droppedFrames": 0,
         "notice": false
       },
@@ -1780,7 +1780,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 31
+          "ms": 30
         },
         {
           "after": {
@@ -1795,7 +1795,7 @@
           "expectedMs": 5000,
           "landed": true,
           "verified": "true",
-          "ms": 28
+          "ms": 29
         },
         {
           "after": {
@@ -1810,7 +1810,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 30
         }
       ],
       "result": "passed"
@@ -1820,70 +1820,70 @@
     "comicPageTurnMs": {
       "n": 8,
       "p50": 27,
-      "p95": 30,
-      "max": 30,
+      "p95": 29,
+      "max": 29,
       "samples": [
-        30,
         28,
         28,
-        28,
+        29,
+        29,
         27,
         3,
-        5,
-        9
+        4,
+        2
       ]
     },
     "videoFirstFrameMs": {
       "n": 7,
-      "p50": 72,
-      "p95": 492,
-      "max": 492,
+      "p50": 75,
+      "p95": 483,
+      "max": 483,
       "samples": [
-        78,
-        72,
-        51,
-        45,
-        492,
+        182,
+        79,
         71,
-        94
+        44,
+        483,
+        75,
+        47
       ]
     },
     "videoFrameSeekMs": {
       "n": 21,
       "p50": 30,
-      "p95": 33,
-      "max": 33,
+      "p95": 32,
+      "max": 32,
       "samples": [
-        33,
         29,
+        29,
+        29,
+        32,
+        29,
+        30,
+        29,
+        30,
         28,
+        30,
+        30,
+        30,
+        30,
+        30,
         32,
-        33,
-        32,
-        30,
-        31,
-        31,
-        29,
-        30,
-        29,
-        31,
-        29,
-        29,
-        30,
-        30,
-        29,
         31,
         28,
-        29
+        30,
+        30,
+        29,
+        30
       ]
     },
     "copyBuildMs": {
       "n": 1,
-      "p50": 445,
-      "p95": 445,
-      "max": 445,
+      "p50": 439,
+      "p95": 439,
+      "max": 439,
       "samples": [
-        445
+        439
       ]
     }
   }
