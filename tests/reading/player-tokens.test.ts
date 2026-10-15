@@ -7,6 +7,9 @@ const video = read("styles-video.css");
 
 /** The channel value of `#RRGGBB` (the first six hex digits of a token). */
 function channels(name: string): [number, number, number] {
+  // A role may be an alias of another token (the bar is the window frame's color): the alias is followed to the hex colour.
+  const alias = new RegExp(`--${name}:\\s*var\\(--([a-z0-9-]+)\\)`).exec(tokens);
+  if (alias) return channels(alias[1]!);
   const match = new RegExp(`--${name}:\\s*#([0-9A-Fa-f]{6})`).exec(tokens);
   if (!match) throw new Error(`token --${name} is not defined as a hex colour`);
   const hex = match[1]!;
@@ -21,7 +24,7 @@ const contrast = (a: [number, number, number], b: [number, number, number]) => {
   return (hi! + 0.05) / (lo! + 0.05);
 };
 
-describe("M2 player light controls (A-47 W9)", () => {
+describe("player light controls", () => {
   it("defines the control bar as light roles: a white bar, gray icons, a pink progress and a pink selected state", () => {
     expect(luminance(channels("color-player-bar"))).toBeGreaterThan(0.95);
     const ink = channels("color-player-ink");
@@ -46,7 +49,7 @@ describe("M2 player light controls (A-47 W9)", () => {
   it("keeps the picture itself black, and the full-screen bar light", () => {
     expect(channels("color-player-stage")).toEqual([0, 0, 0]);
     expect(video).toMatch(/\.video-stage \{[^}]*background: var\(--color-player-stage\)/);
-    expect(video).toMatch(/\.video-shell:fullscreen \.video-controls \{[^}]*background: var\(--color-player-bar-overlay\)/);
+    expect(video).toMatch(/\.video-shell\[data-full\] \.video-controls \{[^}]*background: var\(--color-player-bar-overlay\)/);
     expect(luminance(channels("color-player-bar-overlay"))).toBeGreaterThan(0.95);
   });
 

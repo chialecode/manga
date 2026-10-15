@@ -11,6 +11,9 @@ export const BANGUMI_PAGE_HOSTS = ["bgm.tv", "bangumi.tv", "chii.in"] as const;
 
 const MAX_ID_DIGITS = 10;
 
+/** An address typed without its scheme: one of the sites, optionally with `www.`, followed by a path, query or nothing. */
+const BARE_HOST = new RegExp(`^(?:www\\.)?(?:${BANGUMI_PAGE_HOSTS.map((host) => host.replace(".", "\\.")).join("|")})(?:[/?#]|$)`, "i");
+
 function idOf(digits: string): string | null {
   const trimmed = digits.replace(/^0+/, "");
   return trimmed.length > 0 && trimmed.length <= MAX_ID_DIGITS ? trimmed : null;
@@ -40,7 +43,7 @@ export function parseBangumiRef(input: string): ParsedRef {
   }
   // A query or fragment after a path is ignored.
   const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text);
-  const bareHost = new RegExp(`^(?:www\\.)?(?:${BANGUMI_PAGE_HOSTS.map((host) => host.replace(".", "\\.")).join("|")})(?:[/?#]|$)`, "i").test(text);
+  const bareHost = BARE_HOST.test(text);
   if (hasScheme || bareHost) {
     let url: URL;
     try { url = new URL(hasScheme ? text : `https://${text}`); } catch { return { ok: false, reason: "not-a-subject" }; }
@@ -53,6 +56,34 @@ export function parseBangumiRef(input: string): ParsedRef {
   // Without a slash it is neither a number nor a path: there is nothing to take an entry number from.
   const path = text.replace(/[?#].*$/, "");
   return path.includes("/") ? parsePath(path) : { ok: false, reason: "not-a-subject" };
+}
+
+/**
+ * What one search box means (A-62). A name is searched by name. A bare number is both: the entry with that number and a search
+ * by that text, because a title can be a number. An entry path (`subject/<number>`) or the address of an entry page names the
+ * entry and nothing else. Anything that is plainly an address or an entry path but cannot be used says why instead of being
+ * searched as a title; a title that merely contains a slash (`A/B`) is still a title.
+ */
+export type SearchIntent =
+  | { type: "empty" }
+  | { type: "name"; query: string }
+  | { type: "number"; externalId: string; query: string }
+  | { type: "entry"; externalId: string }
+  | { type: "refused"; reason: RefFailure };
+
+export function classifySearchInput(input: string): SearchIntent {
+  const text = input.trim();
+  if (!text) return { type: "empty" };
+  if (/^\d+$/.test(text)) {
+    const externalId = idOf(text);
+    return externalId ? { type: "number", externalId, query: text } : { type: "name", query: text };
+  }
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text);
+  const bareHost = BARE_HOST.test(text);
+  const entryPath = /^\/?(?:subject|character|person)\/[^\s]*$/i.test(text.replace(/[?#].*$/, ""));
+  if (!hasScheme && !bareHost && !entryPath) return { type: "name", query: text };
+  const parsed = parseBangumiRef(text.replace(/^\/(?=(?:subject|character|person)\/)/i, ""));
+  return parsed.ok ? { type: "entry", externalId: parsed.externalId } : { type: "refused", reason: parsed.reason };
 }
 
 /** One short sentence for each way a reference can be wrong, in the interface's language. */

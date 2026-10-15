@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
+import { relinkNotice, relinkResource } from "../lib/relink.ts";
 import type { SourceCard } from "../lib/types.ts";
-import { nextResource, resourceLabel } from "../lib/works.ts";
 import type { Region } from "../readers/comic-model.ts";
 import type { ComicDoc, ComicFocus, ComicSettings } from "../readers/comic-reader.tsx";
 
 export type ComicDeps = {
   i18n: Translator;
   setError: (message?: string) => void;
-  setNotice: (message?: string) => void;
+  setNotice: (message?: string, action?: { label: string; onClick: () => void }) => void;
   setPage: (page: string) => void;
   viewRequest: MutableRefObject<number>;
   ensureBoundSession: (kind: "resource" | "project" | "note", targetId: string, request?: number) => Promise<string | undefined>;
@@ -27,8 +27,6 @@ type OpenOptions = {
   returnTo?: { objectId: string; blockId: string | null } | null;
 };
 
-type ResourceRow = { id: string; title: string; kind: string; ordinalLabel: string | null; available: boolean };
-
 /** The note-source facts a jump into a page needs. */
 export type ImageSource = {
   resourceId?: string;
@@ -40,7 +38,7 @@ export type ImageSource = {
 };
 
 /**
- * The comic reader's state: the open book, the reader settings, where to start, the next chapter, and the round trip
+ * The comic reader's state: the open book, the reader settings, where to start, and the round trip
  * to a note. Every await re-checks `viewRequest`, so an answer for a book the reader has already left is dropped.
  */
 export function useComic(deps: ComicDeps) {
@@ -57,7 +55,6 @@ export function useComic(deps: ComicDeps) {
     });
     return () => { cancelled = true; };
   }, []);
-  const [next, setNext] = useState<{ resourceId: string; title: string } | null>(null);
   const [focus, setFocus] = useState<ComicFocus | null>(null);
   const [sourceCard, setSourceCard] = useState<SourceCard | null>(null);
   const [returnTo, setReturnTo] = useState<{ objectId: string; blockId: string | null } | null>(null);
@@ -65,6 +62,8 @@ export function useComic(deps: ComicDeps) {
   const docRef = useRef<ComicDoc | null>(null);
   const nonce = useRef(0);
   const progressChain = useRef<Promise<void>>(Promise.resolve());
+  /** The last page the reader recorded: a reader mounted again starts there, not at the page the book was opened at. */
+  const reached = useRef<{ resourceId: string; pageId: string } | null>(null);
 
   async function open(resourceId: string, options: OpenOptions = {}) {
     const request = ++viewRequest.current;
@@ -102,6 +101,7 @@ export function useComic(deps: ComicDeps) {
     const resume = locator?.kind === "image" && locator.pageId && loaded.pages.some((page) => page.id === locator.pageId) ? locator.pageId : null;
     const finished = progress.ok && progress.value.completion === "completed" && resume === last;
     setStartPageId(options.focus ? options.focus.pageId : finished ? null : resume);
+    reached.current = null;
     workId.current = options.workId ?? (touched.ok ? touched.value.workId : null) ?? null;
     loaded.workId = workId.current;
     docRef.current = loaded;
@@ -111,18 +111,7 @@ export function useComic(deps: ComicDeps) {
     setFocus(options.focus ? { ...options.focus, nonce: ++nonce.current } : null);
     setStatus("ready");
     setPage("comic");
-    setNext(null);
-    void loadNext(loaded.resourceId, request);
     await ensureBoundSession("resource", loaded.resourceId, request);
-  }
-
-  /** The chapter after this one in its work, when there is one that can be opened. */
-  async function loadNext(resourceId: string, request: number) {
-    if (!workId.current) return;
-    const work = await attempt<{ resources?: ResourceRow[] }>("works.get", { workId: workId.current });
-    if (request !== viewRequest.current || !work.ok) return;
-    const following = nextResource(asArray<ResourceRow>(work.value.resources).filter((row) => row.kind === "comic"), resourceId);
-    setNext(following ? { resourceId: following.id, title: resourceLabel(following) } : null);
   }
 
   /** A note's source on a page: open that book at that page, with the region it framed. */
@@ -140,12 +129,17 @@ export function useComic(deps: ComicDeps) {
   function close() {
     viewRequest.current += 1;
     docRef.current = null;
+    reached.current = null;
     setDoc(null);
     setStatus("idle");
     setSourceCard(null);
     setReturnTo(null);
     setFocus(null);
-    setNext(null);
+  }
+
+  /** The reader went to the page a note pointed at; a reader mounted again must not go there a second time. */
+  function focusApplied(focusNonce: number) {
+    setFocus((current) => (current && current.nonce === focusNonce && !current.applied ? { ...current, applied: true } : current));
   }
 
   async function backToNote() {
@@ -160,11 +154,13 @@ export function useComic(deps: ComicDeps) {
   async function repair() {
     const current = docRef.current;
     if (!current) return;
-    const handle = await window.manga.choosePath();
-    if (!handle) return;
-    const result = await attempt<{ pointersKept?: number }>("library.repairSource", { resourceId: current.resourceId, pathHandle: handle });
-    if (!result.ok) { setError(result.error.message); return; }
-    setNotice(i18n.t("reading.sourceRepairDone"));
+    const outcome = await relinkResource(current.resourceId);
+    if (outcome.kind === "cancelled") return;
+    const shown = relinkNotice(i18n.t, outcome, () => void repair());
+    if (shown.error) { setError(shown.error); return; }
+    setNotice(shown.notice, shown.action);
+    // A folder that is no library path yet: nothing was changed, and the notice offers adding it.
+    if (outcome.kind !== "done") return;
     await open(current.resourceId, { revisionId: current.revisionId, card: sourceCard, returnTo, focus: focus ? { pageId: focus.pageId, region: focus.region } : undefined });
     await refresh();
   }
@@ -179,6 +175,7 @@ export function useComic(deps: ComicDeps) {
     const current = book ?? docRef.current;
     if (!current || !pageIds.length) return;
     const { resourceId, revisionId } = current;
+    reached.current = { resourceId, pageId: pageIds[pageIds.length - 1]! };
     progressChain.current = progressChain.current.then(async () => {
       for (const pageId of pageIds) {
         const result = await attempt("progress.setPage", { resourceId, resourceRevisionId: revisionId, pageId, consumed });
@@ -190,7 +187,9 @@ export function useComic(deps: ComicDeps) {
   /** Resolves once every position written so far is saved. */
   const settled = () => progressChain.current;
 
-  return { doc, status, startPageId, settings, next, focus, sourceCard, visible: doc !== null, open, openFromNote, close, backToNote, repair, changeSettings, recordPages, settled };
+  const resumePageId = reached.current && doc && reached.current.resourceId === doc.resourceId ? reached.current.pageId : startPageId;
+
+  return { doc, status, startPageId: resumePageId, focusApplied, settings, focus, sourceCard, visible: doc !== null, open, openFromNote, close, backToNote, repair, changeSettings, recordPages, settled };
 }
 
 export type Comic = ReturnType<typeof useComic>;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveKeys } from "@manga/contracts/keys";
 import {
   buildSpreads, comicKeyAction, effectiveAnimation, evictFarthest, fitScale, isWide, pageBoxes, prefetchPages, regionFromPoints, regionStyle, spreadIndexOf, spreadSize,
   stepSpread, stripLayout, tapAction, topPageOfStrip, visibleStripRange, visualOrder, type ComicPageInfo,
@@ -7,7 +8,7 @@ import {
 const page = (index: number, extra: Partial<ComicPageInfo> = {}): ComicPageInfo => ({ id: `p${index}`, index, name: `${index}.png`, width: 800, height: 1200, spread: false, ok: true, ...extra });
 const pages = (count: number, wide: number[] = []) => Array.from({ length: count }, (_, index) => page(index, wide.includes(index) ? { width: 1600, height: 1200 } : {}));
 
-describe("M2 comic spreads", () => {
+describe("comic spreads", () => {
   it("shows one page at a time in single and strip layouts", () => {
     expect(buildSpreads(pages(3), "single", true).map((spread) => spread.pages)).toEqual([[0], [1], [2]]);
     expect(buildSpreads(pages(3), "strip", true).map((spread) => spread.pages)).toEqual([[0], [1], [2]]);
@@ -43,7 +44,7 @@ describe("M2 comic spreads", () => {
   });
 });
 
-describe("M2 comic fit", () => {
+describe("comic fit", () => {
   const viewport = { width: 1000, height: 600 };
   it("scales a page by width, height, whole page or not at all, and multiplies by zoom", () => {
     const size = { width: 800, height: 1200 };
@@ -70,7 +71,7 @@ describe("M2 comic fit", () => {
   });
 });
 
-describe("M2 comic loading and keys", () => {
+describe("comic loading and keys", () => {
   it("prefetches the next pages first, then one behind, within the limit", () => {
     const spreads = buildSpreads(pages(20), "single", false);
     expect(prefetchPages(spreads, 5)).toEqual([6, 7, 4]);
@@ -118,7 +119,7 @@ describe("M2 comic loading and keys", () => {
   });
 });
 
-describe("M2 comic regions", () => {
+describe("comic regions", () => {
   const box = { width: 400, height: 600 };
   it("turns a drag into a fraction of the page whichever way it was dragged", () => {
     expect(regionFromPoints({ x: 40, y: 60 }, { x: 240, y: 360 }, box)).toEqual({ x: 0.1, y: 0.1, width: 0.5, height: 0.5 });
@@ -146,7 +147,7 @@ describe("M2 comic regions", () => {
   });
 });
 
-describe("M2 comic strip", () => {
+describe("comic strip", () => {
   it("lays pages out at the strip width with a gap and finds the page at the top of the view", () => {
     const strip = stripLayout([page(0), page(1, { width: 400, height: 400 }), page(2)], 400, 10);
     expect(strip.heights).toEqual([600, 400, 600]);
@@ -167,7 +168,7 @@ describe("M2 comic strip", () => {
   });
 });
 
-describe("M2 comic zoom and page size boundaries (A-47 W1)", () => {
+describe("comic zoom and page size boundaries", () => {
   const sizes = [{ width: 1000, height: 700 }, { width: 400, height: 300 }, { width: 1920, height: 1080 }];
   const zooms = [0.25, 0.5, 0.75, 1, 1.25, 2, 4];
 
@@ -215,5 +216,27 @@ describe("M2 comic zoom and page size boundaries (A-47 W1)", () => {
   it("gives the original fit the pixel size of the picture, times the zoom, whatever the window", () => {
     expect(pageBoxes("original", [page(0)], { width: 100, height: 100 }, 1)[0]).toEqual({ width: 800, height: 1200 });
     expect(pageBoxes("original", [page(0)], { width: 5000, height: 5000 }, 0.5)[0]).toEqual({ width: 400, height: 600 });
+  });
+});
+
+describe("the comic's keys come from the key table (AT-90)", () => {
+  it("answers to the person's own keys and not to the one they replaced", () => {
+    const own = resolveKeys({ "comic.next": ["N"], "comic.zoomIn": ["Z"] });
+    expect(comicKeyAction({ key: "n" }, "rtl", "single", own)).toBe("next");
+    expect(comicKeyAction({ key: " " }, "rtl", "single", own)).toBeNull();
+    expect(comicKeyAction({ key: "z" }, "rtl", "single", own)).toBe("zoomIn");
+    expect(comicKeyAction({ key: "=", ctrlKey: true }, "rtl", "single", own)).toBeNull();
+    // The arrows still follow the reading direction, and Esc is always Esc.
+    expect(comicKeyAction({ key: "ArrowLeft" }, "rtl", "single", own)).toBe("next");
+    expect(comicKeyAction({ key: "Escape" }, "ltr", "single", resolveKeys({}))).toBe("escape");
+  });
+
+  it("takes S for a picture and Ctrl with the zoom keys, by the table's defaults", () => {
+    expect(comicKeyAction({ key: "s" }, "rtl", "single")).toBe("screenshot");
+    expect(comicKeyAction({ key: "-", ctrlKey: true }, "rtl", "single")).toBe("zoomOut");
+    expect(comicKeyAction({ key: "0", metaKey: true }, "rtl", "single")).toBe("zoomReset");
+    // A strip leaves the page-turning keys to the browser's own scrolling.
+    expect(comicKeyAction({ key: "ArrowLeft" }, "rtl", "strip")).toBeNull();
+    expect(comicKeyAction({ key: " " }, "rtl", "strip")).toBeNull();
   });
 });

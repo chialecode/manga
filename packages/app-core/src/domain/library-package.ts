@@ -3,6 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { LibraryPackageManifestSchema, MangaError, PackageAttachmentNameSchema, createId, type LibraryPackageManifest, type PackageConflict, type PackageImportStrategy, type PackageRowKind } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
+import { applyCreative, checkCreative, collectCreative, creativeIsEmpty, type CreativeHooks, type CreativeSection } from "../creative/library-section.ts";
+import { placeInLibrary } from "../library-locations.ts";
+import { WorkFolders } from "../work-folders.ts";
 import { comparablePath, ownedFileFingerprint, pathsOverlap, copyOwnedFile, listCopyFiles, fingerprintTree } from "./file-ownership.ts";
 
 const FORMAT = "manga-library-package-v1";
@@ -102,6 +105,10 @@ function validateReferences(manifest: LibraryPackageManifest): void {
   for (const item of manifest.captureEvents ?? []) if (!sessions.has(item.session_id)) throw new MangaError("VALIDATION_ERROR", "package capture event owner missing");
   for (const item of [...(manifest.transcriptSegments ?? []), ...(manifest.captureDrafts ?? [])]) if (!sessions.has(item.session_id)) throw new MangaError("VALIDATION_ERROR", "package transcript owner missing");
   for (const item of manifest.workTerms ?? []) if (!works.has(item.work_id)) throw new MangaError("VALIDATION_ERROR", "package term owner missing");
+  for (const item of manifest.dictionary ?? []) {
+    if ((item.scope === "work") !== Boolean(item.work_id)) throw new MangaError("VALIDATION_ERROR", "package dictionary term scope does not match its owner");
+    if (item.scope === "work" && !works.has(item.work_id)) throw new MangaError("VALIDATION_ERROR", "package term owner missing");
+  }
   for (const item of manifest.mediaProbes ?? []) if (!revisions.has(item.resource_revision_id)) throw new MangaError("VALIDATION_ERROR", "package media probe owner missing");
   for (const item of manifest.fileLocations ?? []) {
     if (!revisions.has(item.resource_revision_id)) throw new MangaError("VALIDATION_ERROR", "package file location owner missing");
@@ -151,6 +158,22 @@ function* exportSteps(store: DrizzleStore, destDir: string, options: PackageExpo
       if (name.startsWith(".import-")) continue;
       PackageAttachmentNameSchema.parse(name);
       const source = checkedFile(store.attachmentsDir, name);
+      const dest = path.join(attachmentsDir, name);
+      fs.copyFileSync(source, dest, fs.constants.COPYFILE_EXCL);
+      const bytes = fs.statSync(dest).size;
+      total += bytes;
+      if (total > MAX_PACKAGE_BYTES) throw new MangaError("VALIDATION_ERROR", "package attachments exceed budget");
+      attachments.push({ id: name, hash: sha256File(dest), relativePath: `attachments/${name}`, bytes });
+    }
+  }
+  // What the application keeps in its own library path (pasted text, hosted copies) travels the same way; a name already taken by an older copy is not added twice.
+  if (fs.existsSync(store.managedLibraryDir)) {
+    const taken = new Set(attachments.map((item) => item.id));
+    for (const name of fs.readdirSync(store.managedLibraryDir)) {
+      yield;
+      if (name.endsWith(".part") || taken.has(name)) continue;
+      PackageAttachmentNameSchema.parse(name);
+      const source = checkedFile(store.managedLibraryDir, name);
       const dest = path.join(attachmentsDir, name);
       fs.copyFileSync(source, dest, fs.constants.COPYFILE_EXCL);
       const bytes = fs.statSync(dest).size;
@@ -229,18 +252,38 @@ function* exportSteps(store: DrizzleStore, destDir: string, options: PackageExpo
   yield;
   const persons = creditRows("subject_persons");
   yield;
+  yield;
+  // A recording kept in its work's folder travels as a package attachment, like the ones kept before the works had folders.
+  const folders = new WorkFolders(store);
+  const captureRows = (query("SELECT * FROM capture_sessions") as Array<Record<string, unknown> & { id: string; audio_file_id?: string | null; opus_name?: string | null; audio_state?: string | null }>).map((row) => {
+    if (!row.audio_file_id) return row;
+    const source = folders.pathOf(row.audio_file_id);
+    const { audio_file_id: _file, ...rest } = row;
+    if (!source) return { ...rest, opus_name: null, audio_state: "cleaned" };
+    const name = `rec-${row.id}${path.extname(source) || ".webm"}`;
+    const dest = path.join(attachmentsDir, name);
+    fs.copyFileSync(source, dest, fs.constants.COPYFILE_EXCL);
+    const bytes = fs.statSync(dest).size;
+    total += bytes;
+    if (total > MAX_PACKAGE_BYTES) throw new MangaError("VALIDATION_ERROR", "package attachments exceed budget");
+    attachments.push({ id: name, hash: sha256File(dest), relativePath: `attachments/${name}`, bytes });
+    return { ...rest, opus_name: name };
+  });
+  yield;
+  const creative = collectCreative(store);
   const manifest = LibraryPackageManifestSchema.parse({
     format: FORMAT,
     createdAt: new Date().toISOString(),
     works: query("SELECT * FROM works"),
     resources: query("SELECT * FROM resources"),
+    removedWorks: query("SELECT id, title, media_kind, removed_at FROM removed_works"),
     revisions: query("SELECT * FROM resource_revisions"),
     objects: query("SELECT * FROM content_objects"),
     objectRevisions: query("SELECT object_id, revision, payload_json, created_at FROM object_revisions"),
     anchors: query("SELECT * FROM anchors"),
     refs: query("SELECT * FROM refs"),
     progress: query("SELECT * FROM progress"),
-    captures: query("SELECT * FROM capture_sessions"),
+    captures: captureRows,
     metadataSnapshots: query("SELECT * FROM metadata_snapshots"),
     metadataOverrides: query("SELECT * FROM metadata_overrides"),
     metadataCandidates: query("SELECT * FROM metadata_candidates"),
@@ -251,12 +294,13 @@ function* exportSteps(store: DrizzleStore, destDir: string, options: PackageExpo
     captureEvents: query("SELECT session_id, offset_ms, reason, resource_id, resource_revision_id, payload_json FROM capture_events ORDER BY id"),
     transcriptSegments: query("SELECT id, session_id, seq, chunk_key, start_ms, end_ms, text, revised_text, state, precision, calibrated, anchors_json, attempts, error_json, created_at, updated_at FROM transcript_segments"),
     captureDrafts: query("SELECT id, session_id, state, text, edited_text, note_object_id, error_json, created_at, updated_at FROM capture_drafts"),
-    workTerms: query("SELECT id, work_id, term, heard, created_at FROM work_terms"),
+    dictionary: query("SELECT id, scope, work_id, term, heard, source, created_at, updated_at FROM dictionary_terms"),
     mediaProbes: query("SELECT resource_revision_id, probe_json, tool_version, created_at FROM media_probes"),
     noteScopes: query("SELECT object_id AS objectId, resource_id AS resourceId FROM text_fragments WHERE kind='note' AND object_id IS NOT NULL GROUP BY object_id, resource_id"),
     fileLocations: query("SELECT id, resource_revision_id, relative_path, fingerprint, available, hosted FROM file_locations"),
     // Reading bookmarks travel with the package so a restore keeps the reader's own marks.
     bookmarks: query("SELECT id, resource_id, resource_revision_id, label, locator_json, created_at FROM bookmarks"),
+    ...(creativeIsEmpty(creative) ? {} : { creative }),
     assets,
     attachments,
   });
@@ -313,6 +357,8 @@ export function readLibraryPackage(sourceDir: string): LibraryPackageManifest {
     if (sha256File(abs) !== attachment.hash) throw new MangaError("VALIDATION_ERROR", `package attachment hash mismatch: ${attachment.id}`);
   }
   validateReferences(manifest);
+  // Projects and their parts are checked row by row, so a bad one refuses the whole package before anything is written.
+  if (manifest.creative) checkCreative(manifest.creative);
   return manifest;
 }
 
@@ -322,6 +368,8 @@ export type PackageImportOptions = {
   receipt?: { key: string; commandId: string };
   strategy?: PackageImportStrategy;
   decisions?: PackageImportDecision[];
+  /** What the creative part of the package needs from the application; a package that holds projects cannot be imported without it. */
+  creative?: Omit<CreativeHooks, "mapTarget">;
 };
 
 /** Which rows in the target library already use an id the package also wants. */
@@ -351,7 +399,11 @@ export function planPackageImport(store: DrizzleStore, manifest: LibraryPackageM
   for (const row of manifest.bookmarks ?? []) {
     check("bookmark", row.id, row.label, "SELECT id FROM bookmarks WHERE id = ?", "bookmark id already exists");
   }
-  const presentTables = ["works", "resources", "resource_revisions", "content_objects", "anchors", "refs", "progress", "file_locations", "bookmarks", "capture_sessions", "covers", "work_links", "metadata_snapshots"];
+  for (const item of manifest.creative?.projects ?? []) {
+    const project = (item as { project?: { id?: unknown; name?: unknown } }).project;
+    if (typeof project?.id === "string") check("project", project.id, String(project.name ?? project.id), "SELECT id FROM projects WHERE id = ?", "project id already exists");
+  }
+  const presentTables = ["projects", "excerpt_pages", "works", "resources", "resource_revisions", "content_objects", "anchors", "refs", "progress", "file_locations", "bookmarks", "capture_sessions", "covers", "work_links", "metadata_snapshots"];
   const attachmentsPresent = fs.existsSync(store.attachmentsDir) ? fs.readdirSync(store.attachmentsDir).some((name) => !name.startsWith(".import-")) : false;
   // A profile that only holds progress, locations or bookmarks is not empty either.
   const empty = !presentTables.some((table) => Number((store.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n) > 0) && !attachmentsPresent;
@@ -374,6 +426,7 @@ export function planPackageImport(store: DrizzleStore, manifest: LibraryPackageM
       refs: manifest.refs.length,
       progress: manifest.progress.length,
       attachments: manifest.attachments.length,
+      ...(manifest.creative ? { projects: manifest.creative.projects.length } : {}),
     },
     empty,
     conflicts,
@@ -388,7 +441,7 @@ export function previewLibraryPackage(store: DrizzleStore, sourceDir: string): R
   return planPackageImport(store, manifest, sourceDir);
 }
 
-export function importLibraryPackage(store: DrizzleStore, sourceDir: string, options: { crashAt?: string; receipt?: { key: string; commandId: string } } = {}): LibraryPackageManifest {
+export function importLibraryPackage(store: DrizzleStore, sourceDir: string, options: { crashAt?: string; receipt?: { key: string; commandId: string }; creative?: PackageImportOptions["creative"] } = {}): LibraryPackageManifest {
   // A plain import keeps the historical empty-profile guarantee.
   const preview = previewLibraryPackage(store, sourceDir);
   if (!preview.empty) throw new MangaError("PUBLISH_CONFLICT", "import requires an empty profile; use the conflict preview instead");
@@ -401,6 +454,7 @@ export function importLibraryPackage(store: DrizzleStore, sourceDir: string, opt
  */
 export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: string, options: PackageImportOptions = {}): LibraryPackageManifest {
   const manifest = readLibraryPackage(sourceDir);
+  const creative: CreativeSection | undefined = manifest.creative ? checkCreative(manifest.creative) : undefined;
   const strategy: PackageImportStrategy = options.strategy ?? "duplicate";
   const decisions = new Map<string, PackageImportStrategy>();
   for (const decision of options.decisions ?? []) decisions.set(`${decision.kind}:${decision.id}`, decision.action);
@@ -420,10 +474,12 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
   const preview = planPackageImport(store, manifest, sourceDir);
   if (preview.orphanRefs > 0) throw new MangaError("VALIDATION_ERROR", "package contains references whose target is missing");
   const jobId = createId("pkg");
+  // Media the application keeps for the user goes to its own library path, not next to the recordings (A-80).
+  const managedNames = new Set((manifest.fileLocations ?? []).filter((row) => row.hosted === 1).map((row) => path.basename(row.relative_path)));
   const staging = path.join(store.attachmentsDir, `.import-${jobId}`);
   fs.mkdirSync(staging, { recursive: true });
   store.sqlite.prepare("INSERT INTO recovery_jobs(id, kind, stage, status, staging_path, payload_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(
-    jobId, "package-import", "copy", "running", staging, JSON.stringify({ sourceDir, attachments: manifest.attachments.map((item) => item.id) }), new Date().toISOString(), new Date().toISOString(),
+    jobId, "package-import", "copy", "running", staging, JSON.stringify({ sourceDir, attachments: manifest.attachments.map((item) => item.id), managed: [...managedNames] }), new Date().toISOString(), new Date().toISOString(),
   );
   const maybeCrash = (stage: string) => {
     store.sqlite.prepare("UPDATE recovery_jobs SET stage = ?, updated_at = ? WHERE id = ?").run(stage, new Date().toISOString(), jobId);
@@ -664,11 +720,12 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         const action = actionOr("resource", row.id);
         if (action === "skip" && hasRow(store, "resources", row.id)) { skippedResource.add(row.id); continue; }
         const workId = row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null;
-        const columns = "resources(id, work_id, kind, title, aliases_json, created_at, ordinal_label, ordinal_number, ordinal_type, sort_key) VALUES (?,?,?,?,?,?,?,?,?,?)";
-        const ordinal = [row.ordinal_label ?? null, row.ordinal_number ?? null, row.ordinal_type ?? null, row.sort_key ?? ""];
+        const columns = "resources(id, work_id, kind, title, aliases_json, created_at, ordinal_label, ordinal_number, ordinal_type, sort_key, left_work_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+        const ordinal = [row.ordinal_label ?? null, row.ordinal_number ?? null, row.ordinal_type ?? null, row.sort_key ?? "", row.left_work_at ?? null];
         if (action === "replace") run(`INSERT OR REPLACE INTO ${columns}`, row.id, workId, row.kind, row.title, row.aliases_json, row.created_at, ...ordinal);
         else run(`INSERT INTO ${columns}`, resourceIds.get(row.id), workId, row.kind, row.title, row.aliases_json, row.created_at, ...ordinal);
       }
+      for (const row of manifest.removedWorks ?? []) run("INSERT OR IGNORE INTO removed_works(id, title, media_kind, removed_at) VALUES (?,?,?,?)", row.id, row.title, row.media_kind, row.removed_at);
       for (const row of manifest.revisions) {
         if (!writtenRevisions.has(row.id)) continue;
         const resourceId = finalRevisionOwner.get(row.id) ?? row.resource_id;
@@ -823,9 +880,18 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         run("INSERT OR REPLACE INTO capture_drafts(id, session_id, state, text, edited_text, note_object_id, error_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
           target, targetSession(row.session_id), row.state, row.text, row.edited_text, row.note_object_id ? (objectIds.get(row.note_object_id) ?? row.note_object_id) : null, row.error_json, row.created_at, row.updated_at);
       }
+      // A term the dictionary already has (same scope, work and wording) is kept as it is; a package never overwrites the person's own wording.
+      const putTerm = (row: { id: string; scope: "global" | "work"; work_id: string; term: string; heard: string | null; source: string; created_at: string; updated_at: string }) => {
+        run("INSERT OR IGNORE INTO dictionary_terms(id, scope, work_id, term, heard, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+          hasRow(store, "dictionary_terms", row.id) ? createId("trm") : row.id, row.scope, row.scope === "work" ? (workIds.get(row.work_id) ?? row.work_id) : "", row.term, row.heard, row.source, row.created_at, row.updated_at);
+      };
       for (const row of manifest.workTerms ?? []) {
         if (skippedWork.has(row.work_id)) continue;
-        run("INSERT OR IGNORE INTO work_terms(id, work_id, term, heard, created_at) VALUES (?,?,?,?,?)", hasRow(store, "work_terms", row.id) ? createId("trm") : row.id, workIds.get(row.work_id) ?? row.work_id, row.term, row.heard, row.created_at);
+        putTerm({ id: row.id, scope: "work", work_id: row.work_id, term: row.term, heard: row.heard, source: "manual", created_at: row.created_at, updated_at: row.created_at });
+      }
+      for (const row of manifest.dictionary ?? []) {
+        if (row.scope === "work" && skippedWork.has(row.work_id)) continue;
+        putTerm(row);
       }
       for (const row of manifest.mediaProbes ?? []) {
         if (!writtenRevisions.has(row.resource_revision_id)) continue;
@@ -883,22 +949,32 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
       for (const row of manifest.metadataOverrides) run("INSERT OR REPLACE INTO metadata_overrides(work_id, fields_json, locked_json, cleared_json) VALUES (?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.fields_json, row.locked_json, row.cleared_json);
       for (const row of manifest.metadataCandidates) run("INSERT OR REPLACE INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)", row.id, row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null, row.provider_id, row.payload_json, row.external_id ?? null, row.search_id ?? null, row.state ?? "open", row.created_at ?? null);
       for (const row of manifest.workLinks) run("INSERT OR REPLACE INTO work_links(work_id, provider_id, external_id, snapshot_json, confirmed_at, namespace, subject_type, link_state, match_basis) VALUES (?,?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.confirmed_at, row.namespace ?? "", row.subject_type ?? null, row.link_state ?? "linked", row.match_basis ?? null);
-      // Managed media keeps a real location row so a hosted book stays readable after the round trip.
-      // Usability is judged from the verified staging copy, because durable files are published after
-      // these inserts; the target path is where the publish step will place them.
+      // Media the application keeps gets a real location row in its own library path, so a hosted book stays readable after the round trip.
+      // Usability is judged from the verified staging copy, because durable files are published after these inserts.
+      // A file of the user's own folders comes back as a location outside the library, unless an older package names a path that is
+      // still inside one of this machine's library paths (A-80): the folder is added as a library path and a scan finds it again.
       for (const row of manifest.fileLocations ?? []) {
         const packageResource = packageResourceOf(manifest, row.resource_revision_id);
         // Locations describe the package's copy of a revision, so a kept local revision does not gain them.
         if (skippedResource.has(packageResource) || !writtenRevisions.has(row.resource_revision_id)) continue;
         const revisionId = revisionIds.get(row.resource_revision_id) ?? row.resource_revision_id;
-        const hostedName = path.basename(row.relative_path);
-        const hostedPath = row.hosted === 1 ? path.join(store.attachmentsDir, hostedName) : row.relative_path;
-        const mediaMissing = row.hosted === 1 && missingMedia.has(hostedName);
-        const usable = mediaMissing ? false : row.hosted === 1
-          ? fs.existsSync(path.join(staging, hostedName))
-          : fs.existsSync(hostedPath);
-        run("INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,?)",
-          hasRow(store, "file_locations", row.id) ? createId("loc") : row.id, revisionId, usable ? hostedPath : row.relative_path, row.fingerprint, usable ? 1 : 0, row.hosted);
+        const locationId = hasRow(store, "file_locations", row.id) ? createId("loc") : row.id;
+        if (row.hosted === 1) {
+          const hostedName = path.basename(row.relative_path);
+          const usable = !missingMedia.has(hostedName) && fs.existsSync(path.join(staging, hostedName));
+          const managed = store.ensureManagedLibraryPath();
+          run("INSERT INTO file_locations(id, resource_revision_id, library_path_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,?,1)",
+            locationId, revisionId, managed.id, hostedName, row.fingerprint, usable ? 1 : 0);
+          continue;
+        }
+        const here = path.isAbsolute(row.relative_path) ? placeInLibrary(store, row.relative_path) : null;
+        if (here && !here.managed && fs.existsSync(row.relative_path)) {
+          run("INSERT INTO file_locations(id, resource_revision_id, library_path_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,1,0)",
+            locationId, revisionId, here.libraryPathId, here.relativePath, row.fingerprint);
+          continue;
+        }
+        run("INSERT INTO file_locations(id, resource_revision_id, library_path_id, relative_path, legacy_path, fingerprint, available, hosted) VALUES (?,?,NULL,?,?,?,0,0)",
+          locationId, revisionId, path.basename(row.relative_path.replace(/\\/g, "/")) || row.relative_path, path.isAbsolute(row.relative_path) ? null : row.relative_path, row.fingerprint);
       }
       for (const row of manifest.assets ?? []) {
         if (!writtenRevisions.has(row.resource_revision_id) || missingMedia.has(row.attachment)) continue;
@@ -955,16 +1031,24 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
           }
         }
       }
+      // Projects come last: everything they refer to is in the library by now, under the ids this import gave it.
+      if (creative && !creativeIsEmpty(creative)) {
+        if (!options.creative) throw new MangaError("VALIDATION_ERROR", "this package holds projects and the application gave no way to import them", { details: { reason: "creative" } });
+        const targets: Record<string, Map<string, string>> = { work: workIds, resource: resourceIds, revision: revisionIds, note: objectIds, anchor: anchorIds, recording: captureIds };
+        applyCreative(store, creative, { ...options.creative, mapTarget: (kind, id) => targets[kind]?.get(id) ?? id }, (projectId) => actionOr("project", projectId), strategy);
+      }
       // Publish durable files before the DB commit so committed rows never refer to missing copies.
       for (const attachment of manifest.attachments) {
         if (missingMedia.has(attachment.id)) continue;
         // Pictures of the images table were read into it above; they are not kept as files as well.
         if (attachment.id.startsWith(IMAGE_ATTACHMENT_PREFIX)) continue;
-        const target = path.join(store.attachmentsDir, attachment.id);
+        const home = managedNames.has(attachment.id) ? store.managedLibraryDir : store.attachmentsDir;
+        const target = path.join(home, attachment.id);
         if (fs.existsSync(target)) {
           if (sha256File(target) === attachment.hash) continue;
           throw new MangaError("PUBLISH_CONFLICT", `attachment already exists with different content: ${attachment.id}`);
         }
+        fs.mkdirSync(home, { recursive: true });
         fs.linkSync(path.join(staging, attachment.id), target);
         published.push(target);
         created.push(target);
@@ -1149,12 +1233,13 @@ export function recoverOrRollback(store: DrizzleStore, action: "recover" | "roll
       needsReview.push(job.id);
       continue;
     }
-    const payload = JSON.parse(job.payload_json) as { attachments?: string[] };
+    const payload = JSON.parse(job.payload_json) as { attachments?: string[]; managed?: string[] };
     if (job.kind === "package-import" && job.staging_path) {
       // The transaction never committed, so published hard links of staged files are orphans.
+      const managed = new Set(payload.managed ?? []);
       for (const name of payload.attachments ?? []) {
         const staged = path.join(job.staging_path, name);
-        const target = path.join(store.attachmentsDir, name);
+        const target = path.join(managed.has(name) ? store.managedLibraryDir : store.attachmentsDir, name);
         if (fs.existsSync(staged) && fs.existsSync(target) && sameFile(staged, target)) {
           fs.unlinkSync(target);
           removed.push(target);

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
-import { ArrowDown, MessageSquareQuote, Mic, Pause, Pencil, Play, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, MessageSquareQuote, Mic, Pause, Pencil, Play, RotateCcw, ScrollText, Sparkles, Trash2 } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { attempt } from "../../lib/api.ts";
 import { noteSourceLabel, voiceSourceLabel } from "../../lib/chat-model.ts";
@@ -26,6 +26,8 @@ export type BubbleActions = {
   onQuoteNote: (note: StreamNote) => void;
   onOpenRecording: (voice: StreamVoice) => void;
   onRetry: (runId: string) => void;
+  /** Open the trace of the task that made a reply (what it sent, what came back, in order). */
+  onOpenTrace?: (runId: string) => void;
 };
 
 function ScrollButton(props: { label: string }) {
@@ -34,8 +36,46 @@ function ScrollButton(props: { label: string }) {
   return <button type="button" className="chat-scroll-bottom" data-testid="chat-scroll-bottom" aria-label={props.label} title={props.label} onClick={() => { void scrollToBottom(); }}><ArrowDown size={16} /></button>;
 }
 
+/** Where each conversation was scrolled to, kept while another one is shown (the other mode's, a settings round trip) and put back when it returns. */
+const scrollMemory = new Map<string, { top: number; atBottom: boolean }>();
+const NEAR_BOTTOM_PX = 8;
+export const resetScrollMemory = (): void => scrollMemory.clear();
+
+/**
+ * Remembers where the conversation was scrolled to and puts it back when it is shown again. A conversation read from its newest message
+ * stays at the newest; one that was scrolled up to an old message comes back to that message and is not pulled to the bottom.
+ */
+function ScrollMemory(props: { memoryKey: string | undefined; ready: boolean }) {
+  const { scrollRef } = useStickToBottomContext();
+  const { memoryKey, ready } = props;
+  const readyNow = useRef(ready);
+  readyNow.current = ready;
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node || !memoryKey) return;
+    const onScroll = () => {
+      // The messages of another conversation sliding in or out are not this one's place; nor is the 0 a hidden pane reports.
+      if (!readyNow.current || (node.clientHeight === 0 && node.scrollHeight === 0)) return;
+      scrollMemory.set(memoryKey, { top: node.scrollTop, atBottom: node.scrollHeight - node.scrollTop - node.clientHeight <= NEAR_BOTTOM_PX });
+    };
+    node.addEventListener("scroll", onScroll, { passive: true });
+    return () => node.removeEventListener("scroll", onScroll);
+  }, [memoryKey, scrollRef]);
+  const restoredFor = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    // The messages of another conversation (or none yet) are not the place the saved position belongs to.
+    if (!memoryKey || !ready) { restoredFor.current = undefined; return; }
+    if (restoredFor.current === memoryKey) return;
+    restoredFor.current = memoryKey;
+    const saved = scrollMemory.get(memoryKey);
+    const node = scrollRef.current;
+    if (saved && !saved.atBottom && node) node.scrollTop = saved.top;
+  }, [memoryKey, ready, scrollRef]);
+  return null;
+}
+
 /** Open a bound resource and the pane is at the newest message; an old message is read by scrolling up and is not pulled away from. */
-export function MessageList(props: { t: T; items: StreamItem[]; hasMore: boolean; onOlder: () => void; actions: BubbleActions; empty: ReactNode; formatDate: (value: string) => string; limited?: boolean }) {
+export function MessageList(props: { t: T; items: StreamItem[]; hasMore: boolean; onOlder: () => void; actions: BubbleActions; empty: ReactNode; formatDate: (value: string) => string; limited?: boolean; memoryKey?: string; ready?: boolean }) {
   const { t } = props;
   return (
     <StickToBottom className="chat-log" initial="instant" resize="smooth" role="log" aria-label={t("chat.log")} data-testid="chat-log">
@@ -45,6 +85,7 @@ export function MessageList(props: { t: T; items: StreamItem[]; hasMore: boolean
         {props.items.map((item) => <Bubble key={item.id} t={t} item={item} actions={props.actions} formatDate={props.formatDate} />)}
       </StickToBottom.Content>
       <ScrollButton label={t("chat.toBottom")} />
+      <ScrollMemory memoryKey={props.memoryKey} ready={props.ready ?? props.items.length > 0} />
     </StickToBottom>
   );
 }
@@ -194,13 +235,17 @@ function UserBubble(props: { t: T; item: StreamUser }) {
 function AgentBubble(props: { t: T; item: StreamAgent; actions: BubbleActions }) {
   const { t, item } = props;
   const live = item.status === "running" || item.status === "queued" || item.status === "waiting_input";
+  const trace = props.actions.onOpenTrace;
   return (
     <article className="bubble bubble-agent" data-testid={`bubble-agent-${item.id}`} data-status={item.status} data-kind="agent">
       <header className="bubble-head"><span className="bubble-kind"><Sparkles size={12} />MANGA Agent</span></header>
       {item.text ? <div className="bubble-text bubble-markdown"><Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown></div> : live ? <p className="bubble-text detail-muted" role="status">{t("chat.agent.working")}</p> : null}
       {item.error ? <p className="bubble-error" role="alert" data-testid={`bubble-error-${item.id}`}>{item.error.code === "MODEL_CAPABILITY_MISSING" ? t("rp.missingVision", { reason: item.error.message }) : item.error.message}</p> : null}
-      {item.status === "failed" || item.status === "interrupted" ? (
-        <div className="bubble-actions"><button type="button" className="secondary-button" data-testid={`bubble-retry-${item.id}`} onClick={() => props.actions.onRetry(item.runId)}><RotateCcw size={13} />{t("agent.retry")}</button></div>
+      {item.status === "failed" || item.status === "interrupted" || (trace && !live) ? (
+        <div className="bubble-actions">
+          {item.status === "failed" || item.status === "interrupted" ? <button type="button" className="secondary-button" data-testid={`bubble-retry-${item.id}`} onClick={() => props.actions.onRetry(item.runId)}><RotateCcw size={13} />{t("agent.retry")}</button> : null}
+          {trace && !live ? <button type="button" className="link-button" data-testid={`bubble-trace-${item.id}`} onClick={() => trace(item.runId)}><ScrollText size={13} />{t("trace.open")}</button> : null}
+        </div>
       ) : null}
     </article>
   );

@@ -20,6 +20,8 @@ import {
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { findQuoteMatches, resolveTextLocator } from "./domain/anchors.ts";
 import { layoutFromPayload } from "./domain/revision-layout.ts";
+import { relinkByFingerprint } from "./domain/relink.ts";
+import { assertOpenable, insertLocation, keepInManagedLibrary, moveLocation, requireInLibrary, resolveLocation, resolveResourceLocations, type PlacedPath } from "./library-locations.ts";
 import { resolveMediaLocator } from "./domain/media-anchors.ts";
 import { ordinalLabel, sortKeyFor } from "./domain/ordinal.ts";
 import type { ParsedAsset, ParsedDocument, PdfTextRun } from "./domain/formats.ts";
@@ -248,10 +250,11 @@ export async function persistParsedDocument(store: DrizzleStore, input: {
       return insertRevision(store, { ...input, fingerprint, now, resourceId: input.resourceId });
     }
     if (existing.fingerprint === fingerprint) {
-      if (input.sourcePath) {
-        const updated = store.sqlite.prepare("UPDATE file_locations SET relative_path = ?, available = 1, fingerprint = ? WHERE resource_revision_id = ?").run(input.sourcePath, fingerprint, existing.id);
-        if (updated.changes === 0) {
-          store.sqlite.prepare("INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,1,?)").run(createId("loc"), existing.id, input.sourcePath, fingerprint, input.hosted ? 1 : 0);
+      if (input.sourcePath && !input.hosted) {
+        const placed = requireInLibrary(store, input.sourcePath);
+        if (!moveLocation(store, { revisionId: existing.id, placed, fingerprint })) {
+          const insert = insertLocation({ revisionId: existing.id, placed, fingerprint });
+          store.sqlite.prepare(insert.sql).run(...(insert.params ?? []));
         }
       }
       await ensureBodyIndex(store, { resourceId: input.resourceId, revisionId: existing.id, parts: input.parsed.parts });
@@ -261,13 +264,15 @@ export async function persistParsedDocument(store: DrizzleStore, input: {
     }
     return insertRevision(store, { ...input, fingerprint, now, resourceId: input.resourceId });
   }
-  if (input.sourcePath) {
+  if (input.sourcePath && !input.hosted) {
+    // A file is only ever read through a library path (A-80): one outside every library path is refused before anything is parsed into the library.
+    const placed = requireInLibrary(store, input.sourcePath);
     const existing = store.sqlite.prepare(`SELECT r.id AS resourceId, v.id AS revisionId, v.fingerprint AS fingerprint
       FROM file_locations fl
       JOIN resource_revisions v ON v.id = fl.resource_revision_id
       JOIN resources r ON r.id = v.resource_id
-      WHERE fl.relative_path = ?
-      ORDER BY v.created_at DESC LIMIT 1`).get(input.sourcePath) as { resourceId: string; revisionId: string; fingerprint: string } | undefined;
+      WHERE fl.library_path_id = ? AND fl.relative_path = ?
+      ORDER BY v.created_at DESC LIMIT 1`).get(placed.libraryPathId, placed.relativePath) as { resourceId: string; revisionId: string; fingerprint: string } | undefined;
     if (existing && existing.fingerprint === fingerprint) {
       await ensureBodyIndex(store, { resourceId: existing.resourceId, revisionId: existing.revisionId, parts: input.parsed.parts });
       const result = { resourceId: existing.resourceId, revisionId: existing.revisionId, replaced: false, duplicate: true, format: input.parsed.format };
@@ -275,6 +280,16 @@ export async function persistParsedDocument(store: DrizzleStore, input: {
       return result;
     }
     if (existing) return insertRevision(store, { ...input, fingerprint, now, resourceId: existing.resourceId });
+    // The same content as a resource whose file is gone: that resource's file, put back or moved (A-67).
+    {
+      const moved = relinkByFingerprint(store, { fingerprint, placed });
+      if (moved) {
+        await ensureBodyIndex(store, { resourceId: moved.resourceId, revisionId: moved.revisionId, parts: input.parsed.parts });
+        const result = { resourceId: moved.resourceId, revisionId: moved.revisionId, replaced: false, duplicate: true, relinked: true, format: input.parsed.format };
+        store.commit({ mutations: [], events: [], idempotencyKey: input.idempotencyKey, commandId: input.commandId, result });
+        return result;
+      }
+    }
   }
   return insertRevision(store, { ...input, fingerprint, now, resourceId: createId("res"), createWork: true });
 }
@@ -367,11 +382,9 @@ async function insertRevision(store: DrizzleStore, input: {
   const workId = input.workId ?? createId("work");
   const revisionId = createId("rev");
   const locationId = createId("loc");
-  let locationPath = input.sourcePath ?? "";
-  if (input.hosted) {
-    locationPath = path.join(store.attachmentsDir, `${revisionId}.bin`);
-    fs.writeFileSync(locationPath, input.bytes);
-  }
+  let placed: Pick<PlacedPath, "libraryPathId" | "relativePath" | "managed"> | undefined;
+  if (input.hosted) placed = keepInManagedLibrary(store, `${revisionId}.bin`, input.bytes);
+  else if (input.sourcePath) placed = requireInLibrary(store, input.sourcePath);
   const payload = {
     id: revisionId,
     format: input.parsed.format,
@@ -403,12 +416,7 @@ async function insertRevision(store: DrizzleStore, input: {
     sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at, layout_json) VALUES (?,?,?,?,?,?,?)",
     params: [revisionId, input.resourceId, input.fingerprint, input.parsed.parserId, JSON.stringify(payload), input.now, JSON.stringify(layoutFromPayload(payload))],
   });
-  if (locationPath) {
-    mutations.push({
-      sql: "INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,1,?)",
-      params: [locationId, revisionId, locationPath, input.fingerprint, input.hosted ? 1 : 0],
-    });
-  }
+  if (placed) mutations.push(insertLocation({ id: locationId, revisionId, placed, fingerprint: input.fingerprint }));
   if (input.createWork) mutations.push(...store.indexFragment({ id: createId("frag"), resourceId: input.resourceId, kind: "title", text: documentTitle(input.parsed, input.title) }));
   mutations.push(...assetMutations(store, { resourceId: input.resourceId, revisionId, now: input.now, assets: input.parsed.assets ?? [] }));
   // Reader pointers and notes left over from a revision nothing can resolve follow the new text.
@@ -455,13 +463,14 @@ function loadRevision(store: DrizzleStore, resourceId: string, revisionId?: stri
  * so a later revision cannot be shown in its place.
  */
 export function readOriginal(store: DrizzleStore, resourceId: string, revisionId?: string): { available: false; reason: string } | { available: true; bytes: Uint8Array; fingerprint: string; revisionId: string } {
+  assertOpenable(store, resourceId);
   const loaded = loadRevision(store, resourceId, revisionId);
   const revision = store.sqlite.prepare("SELECT fingerprint FROM resource_revisions WHERE id = ?").get(loaded.revisionId) as { fingerprint: string } | undefined;
-  const location = store.sqlite.prepare("SELECT relative_path, fingerprint, available FROM file_locations WHERE resource_revision_id = ? ORDER BY rowid DESC LIMIT 1").get(loaded.revisionId) as { relative_path: string; fingerprint: string; available: number } | undefined;
-  if (!revision || !location || location.available !== 1 || !location.relative_path || !fs.existsSync(location.relative_path)) {
+  const location = resolveLocation(store, loaded.revisionId);
+  if (!revision || !location || !location.available || location.path === null || !fs.existsSync(location.path)) {
     return { available: false, reason: "original is not available" };
   }
-  const bytes = new Uint8Array(fs.readFileSync(location.relative_path));
+  const bytes = new Uint8Array(fs.readFileSync(location.path));
   const fingerprint = createHash("sha256").update(bytes).digest("hex");
   if (fingerprint !== revision.fingerprint || fingerprint !== location.fingerprint) {
     return { available: false, reason: "original no longer matches this revision" };
@@ -473,19 +482,21 @@ export function readOriginal(store: DrizzleStore, resourceId: string, revisionId
  * Whether the resource still has a usable original file outside one revision. A superseded revision keeps
  * its stored text, so once the user re-picks the file for the resource the reader must stop asking for it.
  */
+/** Whether a location's file is there now: the stored flag says what the last scan found, and a file that moved since is not there (A-86). */
+function fileIsThere(location: { available: boolean; path: string | null }): boolean {
+  return location.available && location.path !== null && fs.existsSync(location.path);
+}
+
 function resourceFileElsewhere(store: DrizzleStore, resourceId: string, exceptRevisionId: string): boolean {
-  const rows = store.sqlite.prepare(`SELECT fl.relative_path AS path FROM file_locations fl
-    JOIN resource_revisions v ON v.id = fl.resource_revision_id
-    WHERE v.resource_id = ? AND v.id <> ? AND fl.available = 1`).all(resourceId, exceptRevisionId) as Array<{ path: string }>;
-  return rows.some((row) => row.path && fs.existsSync(row.path));
+  return resolveResourceLocations(store, resourceId).some((item) => item.revisionId !== exceptRevisionId && item.available && item.path !== null && fs.existsSync(item.path));
 }
 
 export function readDocument(store: DrizzleStore, resourceId: string, revisionId?: string): Record<string, unknown> {
   const loaded = loadRevision(store, resourceId, revisionId);
   const parts = payloadParts(loaded.payload);
-  const location = store.sqlite.prepare("SELECT relative_path, available, hosted FROM file_locations WHERE resource_revision_id = ? ORDER BY rowid DESC LIMIT 1").get(loaded.revisionId) as { relative_path: string; available: number; hosted: number } | undefined;
-  let available = location ? location.available === 1 : true;
-  if (location && !fs.existsSync(location.relative_path)) {
+  const location = resolveLocation(store, loaded.revisionId);
+  let available = location ? location.available : true;
+  if (location && (location.path === null || !fs.existsSync(location.path))) {
     available = false;
     store.sqlite.prepare("UPDATE file_locations SET available = 0 WHERE resource_revision_id = ?").run(loaded.revisionId);
   }
@@ -558,7 +569,7 @@ export function readDocument(store: DrizzleStore, resourceId: string, revisionId
     readRanges: progress?.consumed ?? [],
     assets,
     source: location
-      ? { path: location.relative_path, available: available || supersededFile, hosted: location.hosted === 1, revisionFileMissing, supersededFile }
+      ? { path: location.path ?? location.legacyPath ?? undefined, available: available || supersededFile, hosted: location.managed, outside: location.outside, revisionFileMissing, supersededFile }
       : { available: true, hosted: false, revisionFileMissing: false, supersededFile: false },
   };
 }
@@ -913,7 +924,7 @@ export function sourceCard(store: DrizzleStore, input: { resourceId: string; res
     ? store.sqlite.prepare("SELECT id, payload_json FROM resource_revisions WHERE id = ? AND resource_id = ?").get(input.resourceRevisionId, input.resourceId) as { id: string; payload_json: string } | undefined
     : store.sqlite.prepare("SELECT id, payload_json FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC LIMIT 1").get(input.resourceId) as { id: string; payload_json: string } | undefined;
   if (!revision) return { status: "missing_revision" as const, resourceId: input.resourceId, title: resource.title, anchorId: input.anchorId };
-  const location = store.sqlite.prepare("SELECT relative_path, available, hosted FROM file_locations WHERE resource_revision_id = ? ORDER BY rowid DESC LIMIT 1").get(revision.id) as { relative_path: string; available: number; hosted: number } | undefined;
+  const location = resolveLocation(store, revision.id);
   const parts = payloadParts(JSON.parse(revision.payload_json) as StoredPayload);
   const part = input.partId ? parts.find((item) => item.id === input.partId) : parts[0];
   const quote = part && input.start !== undefined && input.end !== undefined && part.kind === "text"
@@ -934,10 +945,11 @@ export function sourceCard(store: DrizzleStore, input: { resourceId: string; res
       kind: media.kind,
       media,
       locator: input.locator,
-      available: location ? location.available === 1 || resourceFileElsewhere(store, resource.id, revision.id) : true,
-      revisionAvailable: location ? location.available === 1 : true,
-      hosted: location ? location.hosted === 1 : false,
-      path: location?.relative_path,
+      available: location ? fileIsThere(location) || resourceFileElsewhere(store, resource.id, revision.id) : true,
+      revisionAvailable: location ? fileIsThere(location) : true,
+      hosted: location ? location.managed : false,
+      outside: location ? location.outside : false,
+      path: location ? (location.path ?? location.legacyPath ?? undefined) : undefined,
     };
   }
   return {
@@ -954,10 +966,11 @@ export function sourceCard(store: DrizzleStore, input: { resourceId: string; res
     quote,
     // A note whose own revision file is gone is still readable once the resource holds a picked file, so
     // the repair entry disappears instead of asking again for a file the user already supplied.
-    available: location ? location.available === 1 || resourceFileElsewhere(store, resource.id, revision.id) : true,
-    revisionAvailable: location ? location.available === 1 : true,
-    hosted: location ? location.hosted === 1 : false,
-    path: location?.relative_path,
+    available: location ? fileIsThere(location) || resourceFileElsewhere(store, resource.id, revision.id) : true,
+    revisionAvailable: location ? fileIsThere(location) : true,
+    hosted: location ? location.managed : false,
+    outside: location ? location.outside : false,
+    path: location ? (location.path ?? location.legacyPath ?? undefined) : undefined,
   };
 }
 
@@ -975,7 +988,7 @@ export function selectionQuote(store: DrizzleStore, input: { resourceId: string;
   return { resourceId: input.resourceId, resourceRevisionId: loaded.revisionId, partId: part.id, range: { start: input.start, end: input.end }, quote, locator };
 }
 
-function rangeConsumed(store: DrizzleStore, resourceId: string, revisionId: string, partId: string, start: number, end: number): boolean {
+export function rangeConsumed(store: DrizzleStore, resourceId: string, revisionId: string, partId: string, start: number, end: number): boolean {
   const row = store.sqlite.prepare("SELECT consumed_ranges_json FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revisionId) as { consumed_ranges_json: string } | undefined;
   if (!row) return false;
   const ranges = JSON.parse(row.consumed_ranges_json) as Array<{ partId?: string; start: number; end: number }>;

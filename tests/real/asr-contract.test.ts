@@ -4,9 +4,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { transcribeAudio } from "@manga/model-protocol";
 import { evidenceRunDir } from "../../scripts/desktop-paths.ts";
+import { readLocalEnv } from "../helpers/local-env.ts";
 
 /**
- * Contract check of the configured ASR service (plan section 7, item 3). It runs only when MANGA_LIVE_ASR=1 and never in CI.
+ * Contract check of the configured ASR service. It runs only when MANGA_LIVE_ASR=1 and never in CI.
  *
  * - the only audio sent is the synthetic text-to-speech clips from the sample generator, never a recording or a real work;
  * - at most BUDGET requests per run, counted at the network call, not trusted from the test's own loop;
@@ -17,22 +18,10 @@ import { evidenceRunDir } from "../../scripts/desktop-paths.ts";
 const enabled = process.env.MANGA_LIVE_ASR === "1" && !process.env.CI;
 const BUDGET = 10;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const clipsDir = path.join(root, "dist/samples/m2/voice/tts-clips");
+const clipsDir = path.join(root, "dist/samples/media/voice/tts-clips");
 
 function loadAsrConfig(): Record<string, string> {
-  const values: Record<string, string> = {};
-  const file = path.join(root, ".env.local");
-  if (fs.existsSync(file)) {
-    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-      const trimmed = line.trim();
-      const eq = trimmed.indexOf("=");
-      if (!trimmed || trimmed.startsWith("#") || eq < 0) continue;
-      const key = trimmed.slice(0, eq).trim();
-      if (key.startsWith("MANGA_TEST_ASR_")) values[key] = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-    }
-  }
-  for (const key of Object.keys(process.env)) if (key.startsWith("MANGA_TEST_ASR_") && process.env[key]) values[key] = process.env[key]!;
-  return values;
+  return readLocalEnv(["MANGA_TEST_ASR_API_BASE_URL", "MANGA_TEST_ASR_API_KEY", "MANGA_TEST_ASR_MODEL_ID"]);
 }
 
 function similarity(a: string, b: string): number {
@@ -53,7 +42,7 @@ type Step = { clip: string; options: string; outcome: "ok" | "failed"; similarit
 
 describe.skipIf(!enabled)("ASR contract (live, synthetic speech only)", () => {
   it("transcribes the synthetic clips, with segment timestamps and a term hint, inside the request budget", async (context) => {
-    const out = path.join(evidenceRunDir("m2", "live-asr"), "summary.json");
+    const out = path.join(evidenceRunDir("live-asr"), "summary.json");
     const steps: Step[] = [];
     let requests = 0;
     const write = (status: "passed" | "blocked" | "failed" | "not-run", extra: Record<string, unknown> = {}) => {

@@ -170,6 +170,19 @@ describe.skipIf(mediaPrerequisitesAbsent)("running tools safely", () => {
     expect(pid && alive(pid)).toBeFalsy();
   });
 
+  it("runs background work below normal priority and everything else at the normal one (AT-80)", async () => {
+    const priorities: Record<string, number> = {};
+    const sleeper = ["-e", "setTimeout(() => {}, 1500)"];
+    const watch = (label: string, options: { lowPriority?: boolean }) => runTool(process.execPath, sleeper, {
+      ...options,
+      timeoutMs: 20_000,
+      onSpawn: (pid) => { setTimeout(() => { if (pid !== undefined) priorities[label] = os.getPriority(pid); }, 500); },
+    });
+    await Promise.all([watch("normal", {}), watch("background", { lowPriority: true })]);
+    expect(priorities.background).toBeGreaterThan(priorities.normal!);
+    expect(priorities.background).toBe(os.constants.priority.PRIORITY_BELOW_NORMAL);
+  });
+
   it("maps a timeout to a retryable error and an unreadable stream to a typed one", async () => {
     await expect(service.run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=30", "-t", "600", "-f", "null", "-"], { timeoutMs: 300 })).rejects.toMatchObject({ code: "PROVIDER_UNAVAILABLE", retryable: true });
     await expect(service.run("ffmpeg", ["-v", "error", "-i", path.join(root, "absent.mkv"), "-f", "null", "-"])).rejects.toMatchObject({ code: "UNSUPPORTED_FORMAT" });

@@ -1,0 +1,11 @@
+{
+  "errors": [],
+  "automationStatus": "self-check-passed",
+  "engineeringReviewable": true,
+  "productAcceptance": "not-run",
+  "sourceFingerprint": "2506f327124f0c868190a8ae78af9aca92b6d87c20867576b9cb7cb47c5c37e0",
+  "lockFingerprint": "fcd6e09084c6198efae2239314ac261e3cdc02c1c658285d0a35c5d5c46c9f9b",
+  "testScriptFingerprint": "942b8fd517e608dd7e0b07fd979a284dbb1fdf12d605d269d917726576b9373e",
+  "buildScriptFingerprint": "264f448b1289b3210cd9e22ccd1ea9f9be25c59e0b8a2fbe79dd86997fabe40c",
+  "at": "2026-10-15T13:40:21.569Z"
+}

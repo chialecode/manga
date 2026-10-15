@@ -25,7 +25,7 @@ async function libraryWithNote(ctx: Ctx) {
   return { book, note };
 }
 
-describe("M1b b7 PDF page presentation", () => {
+describe("PDF page presentation", () => {
   it("renders a positioned page whose run offsets quote the normalized text exactly", async () => {
     const parsed = await parsePdfBytes(buildPdfFixture([{ text: "第一页标题" }, { text: "第二页正文" }]));
     expect(parsed.traits.pdfjsPageRendering).toBe(true);
@@ -85,7 +85,7 @@ describe("M1b b7 PDF page presentation", () => {
   });
 });
 
-describe("M1b b7 EPUB author layout", () => {
+describe("EPUB author layout", () => {
   it("renders a fixed page from its stored layout and a vector-only page from its shapes", () => {
     const parsed = parseEpubBytes(buildEpubFixture({
       title: "固定版式",
@@ -162,7 +162,7 @@ const renderDoc = {
   authorStyle: { color: "#123456", background: "#f0f0f0" },
 } as unknown as ReadingDocument;
 
-describe("M1b b7 page view", () => {
+describe("page view", () => {
   afterEach(() => cleanup());
 
   it("renders the positioned page by default and maps a run selection to text-layer offsets", () => {
@@ -194,7 +194,7 @@ describe("M1b b7 page view", () => {
   });
 });
 
-describe("M1b b7 whole-library paging", () => {
+describe("whole-library paging", () => {
   it("pages every resource, finds the oldest by title and opens it", async () => {
     const ctx = await startApp();
     try {
@@ -235,7 +235,7 @@ describe("M1b b7 whole-library paging", () => {
   });
 });
 
-describe("M1b b7 hybrid package decisions", () => {
+describe("hybrid package decisions", () => {
   it("keeps a skipped note's source anchor while the resource is duplicated", async () => {
     const ctx = await startApp();
     try {

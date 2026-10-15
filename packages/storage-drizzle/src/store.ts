@@ -4,7 +4,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createId, MangaError, type CommandResult, type SearchHit, type SearchQuery } from "@manga/contracts";
-import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL } from "./sql.ts";
+import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
 import { ngramsFor, matchQuery } from "./ngrams.ts";
 import * as schema from "./schema.ts";
 
@@ -13,6 +13,10 @@ export type DrizzleStoreOptions = {
   hostId: string;
   crashAt?: string;
   attachmentsDir?: string;
+  /** The partition the application-managed library path lives in; defaults to `resources` next to the database. */
+  resourcesDir?: string;
+  /** The partition the files made for works live in (A-79); defaults to `works` next to the database. */
+  worksDir?: string;
 };
 
 export type Mutation = {
@@ -35,10 +39,14 @@ export class DrizzleStore {
   readonly db: BetterSQLite3Database<typeof schema>;
   readonly dbPath: string;
   readonly attachmentsDir: string;
+  /** Root of the application-managed library path (files the application keeps for the user: pasted text, restored media). */
+  readonly managedLibraryDir: string;
+  /** Root of the works partition: `<medium>/<title>/{截图,录音,粗剪,导出}` (A-79). */
+  readonly worksDir: string;
   readonly crashAt?: string;
   readonly options: DrizzleStoreOptions;
   /** Set when this open moved the library to a newer schema; `from` is the version it had. */
-  migration: { from: number; to: number; coversImported: number } | null = null;
+  migration: { from: number; to: number; coversImported: number; locations?: { inLibrary: number; managed: number; outside: number } } | null = null;
   private closed = false;
   private listeners: Array<(event: { type: string; payload: Record<string, unknown>; seq: number }) => void> = [];
 
@@ -47,11 +55,14 @@ export class DrizzleStore {
     fs.mkdirSync(options.profileDir, { recursive: true });
     this.attachmentsDir = options.attachmentsDir ?? path.join(options.profileDir, "attachments");
     fs.mkdirSync(this.attachmentsDir, { recursive: true });
+    this.managedLibraryDir = path.join(options.resourcesDir ?? path.join(options.profileDir, "resources"), "library");
+    this.worksDir = options.worksDir ?? path.join(options.profileDir, "works");
     this.dbPath = path.join(options.profileDir, "manga.sqlite");
     this.crashAt = options.crashAt;
     this.sqlite = new Database(this.dbPath);
     this.sqlite.pragma("journal_mode = WAL");
     this.migrate();
+    this.finishFileMoves();
     this.db = drizzle(this.sqlite, { schema });
   }
 
@@ -67,7 +78,7 @@ export class DrizzleStore {
     if (existingVersion > 0 && existingVersion < PRODUCT_SCHEMA_VERSION) {
       this.sqlite.pragma("wal_checkpoint(FULL)");
       const backupPath = `${this.dbPath}.premigrate-v${existingVersion}`;
-      if (!fs.existsSync(backupPath)) fs.copyFileSync(this.dbPath, backupPath);
+      if (!fs.existsSync(backupPath)) this.copyForBackup(backupPath);
     }
     // DDL and version publication must recover together after process interruption.
     this.sqlite.transaction(() => {
@@ -83,11 +94,136 @@ export class DrizzleStore {
         this.sqlite.exec(V8_SCHEMA_SQL);
         coversImported = this.importCoverFiles().imported;
       }
+      if (existingVersion < 9) this.sqlite.exec(V9_SCHEMA_SQL);
+      this.sqlite.exec(V9_CREATIVE_SQL);
+      let locations: { inLibrary: number; managed: number; outside: number } | undefined;
+      if (existingVersion < 10) {
+        this.sqlite.exec(V10_SCHEMA_SQL);
+        this.sqlite.exec(V10_TABLES_SQL);
+        locations = this.convertLocations();
+      }
+      this.sqlite.exec(V10_TABLES_SQL);
+      if (existingVersion < 11) {
+        this.sqlite.exec(V11_SCHEMA_SQL);
+        // A library that already had files in the folders of its works has them put where the new rules say after the start (A-88); a new one has nothing to settle.
+        this.sqlite.prepare("INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('workLayout', ?)").run(existingVersion > 0 ? "pending" : "settled");
+      }
+      this.sqlite.exec(V11_TABLES_SQL);
       this.maybeCrash("migration-before-version");
       this.sqlite.prepare("INSERT OR IGNORE INTO schema_meta(key, value) VALUES (?, ?)").run("schemaVersion", String(PRODUCT_SCHEMA_VERSION));
       this.sqlite.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(String(PRODUCT_SCHEMA_VERSION));
-      if (existingVersion > 0 && existingVersion < PRODUCT_SCHEMA_VERSION) this.migration = { from: existingVersion, to: PRODUCT_SCHEMA_VERSION, coversImported };
+      if (existingVersion > 0 && existingVersion < PRODUCT_SCHEMA_VERSION) this.migration = { from: existingVersion, to: PRODUCT_SCHEMA_VERSION, coversImported, ...(locations ? { locations } : {}) };
     })();
+  }
+
+  /**
+   * The copy of the database made before a migration. The agent's call record stays out of it (A-83): it holds what was said to the models, it is the largest and
+   * least needed part of the database, and a backup is for the library. The copy is finished under another name and renamed, so an interrupted copy is never taken for a backup.
+   */
+  private copyForBackup(backupPath: string): void {
+    const partial = `${backupPath}.partial`;
+    fs.rmSync(partial, { force: true });
+    fs.copyFileSync(this.dbPath, partial);
+    const copy = new Database(partial);
+    try {
+      if (copy.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_requests'").get()) {
+        copy.exec("DELETE FROM agent_requests");
+        copy.exec("VACUUM");
+      }
+    } finally {
+      copy.close();
+    }
+    fs.renameSync(partial, backupPath);
+  }
+
+  /** The application-managed library path row (`managed = 1`); created the first time something is kept for the user. */
+  ensureManagedLibraryPath(): { id: string; path: string } {
+    const row = this.sqlite.prepare("SELECT id, path FROM library_paths WHERE managed = 1").get() as { id: string; path: string } | undefined;
+    if (row) {
+      if (row.path !== this.managedLibraryDir) this.sqlite.prepare("UPDATE library_paths SET path = ? WHERE id = ?").run(this.managedLibraryDir, row.id);
+      fs.mkdirSync(this.managedLibraryDir, { recursive: true });
+      return { id: row.id, path: this.managedLibraryDir };
+    }
+    const id = createId("lpath");
+    fs.mkdirSync(this.managedLibraryDir, { recursive: true });
+    this.sqlite.prepare("INSERT INTO library_paths(id, path, media_kind, auto_scan, created_at, managed) VALUES (?,?,?,0,?,1)").run(id, this.managedLibraryDir, "novel", new Date().toISOString());
+    return { id, path: this.managedLibraryDir };
+  }
+
+  /**
+   * v10: every file location becomes a library path plus a path inside it (A-80). A file under a library path keeps pointing at the same
+   * file; a copy the application kept in the attachments partition gets a place in the managed library path (the copy itself is made by
+   * `finishFileMoves`, and the old file is left where it is so the pre-migration backup still works); a file under no library path is
+   * outside the library and keeps its old path only as text.
+   */
+  private convertLocations(): { inLibrary: number; managed: number; outside: number } {
+    const caseless = process.platform === "win32";
+    const key = (value: string) => (caseless ? path.resolve(value).toLowerCase() : path.resolve(value));
+    const roots = (this.sqlite.prepare("SELECT id, path FROM library_paths WHERE managed = 0").all() as Array<{ id: string; path: string }>)
+      .map((row) => ({ id: row.id, root: path.resolve(row.path), key: key(row.path) }))
+      .sort((a, b) => b.key.length - a.key.length);
+    const rows = this.sqlite.prepare("SELECT id, relative_path, hosted FROM file_locations").all() as Array<{ id: string; relative_path: string; hosted: number }>;
+    const update = this.sqlite.prepare("UPDATE file_locations SET library_path_id = ?, relative_path = ?, legacy_path = ? WHERE id = ?");
+    const journal = this.sqlite.prepare("INSERT INTO file_moves(id, kind, from_path, to_path, state, created_at) VALUES (?,?,?,?,'pending',?)");
+    const now = new Date().toISOString();
+    const counts = { inLibrary: 0, managed: 0, outside: 0 };
+    let managedId: string | undefined;
+    for (const row of rows) {
+      const old = row.relative_path;
+      if (row.hosted === 1) {
+        managedId ??= this.ensureManagedLibraryPath().id;
+        const name = path.basename(old);
+        update.run(managedId, name, old, row.id);
+        journal.run(createId("mv"), "managed-copy", old, path.join(this.managedLibraryDir, name), now);
+        counts.managed += 1;
+        continue;
+      }
+      const at = key(old);
+      const root = roots.find((item) => at === item.key || at.startsWith(item.key.endsWith(path.sep) ? item.key : item.key + path.sep));
+      if (root) {
+        const rel = path.relative(root.root, path.resolve(old)).split(path.sep).join("/") || ".";
+        update.run(root.id, rel, null, row.id);
+        counts.inLibrary += 1;
+      } else {
+        update.run(null, path.basename(old) || old, old, row.id);
+        counts.outside += 1;
+      }
+    }
+    return counts;
+  }
+
+  /**
+   * Finish the copies the journal still holds. A copy is verified by size before the row is marked done, a half-written copy is replaced,
+   * and one that cannot be made stays pending with the reason, so the next start tries again. Originals are never removed here.
+   */
+  finishFileMoves(): { done: number; pending: number } {
+    const rows = this.sqlite.prepare("SELECT id, from_path, to_path FROM file_moves WHERE state = 'pending' AND kind = 'managed-copy' ORDER BY created_at, rowid").all() as Array<{ id: string; from_path: string; to_path: string }>;
+    let done = 0;
+    for (const row of rows) {
+      try {
+        const source = fs.statSync(row.from_path, { throwIfNoEntry: false });
+        const target = fs.statSync(row.to_path, { throwIfNoEntry: false });
+        if (!source && target) {
+          this.sqlite.prepare("UPDATE file_moves SET state = 'done', done_at = ? WHERE id = ?").run(new Date().toISOString(), row.id);
+          done += 1;
+          continue;
+        }
+        if (!source) throw new Error("the file to copy is missing");
+        if (!target || target.size !== source.size) {
+          fs.mkdirSync(path.dirname(row.to_path), { recursive: true });
+          const part = `${row.to_path}.part`;
+          fs.copyFileSync(row.from_path, part);
+          if (fs.statSync(part).size !== source.size) throw new Error("the copy is not the size of the original");
+          fs.renameSync(part, row.to_path);
+        }
+        this.sqlite.prepare("UPDATE file_moves SET state = 'done', done_at = ?, error = NULL WHERE id = ?").run(new Date().toISOString(), row.id);
+        done += 1;
+      } catch (error) {
+        this.sqlite.prepare("UPDATE file_moves SET error = ? WHERE id = ?").run(error instanceof Error ? error.message : String(error), row.id);
+      }
+      this.maybeCrash("after-file-copy");
+    }
+    return { done, pending: rows.length - done };
   }
 
   /**

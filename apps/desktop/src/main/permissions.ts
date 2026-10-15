@@ -31,12 +31,16 @@ export function isAppPage(url: string, appUrl: string): boolean {
 }
 
 /**
- * The microphone (audio only) and the list of installed fonts (for subtitle styles) are allowed, and only for the app's own
- * window. Camera, screen capture, notifications, geolocation and everything else are refused.
+ * The microphone (audio only), the list of installed fonts (for subtitle styles), full screen (the readers and the
+ * player) and writing text to the clipboard (the "copy" buttons of the record of a task and of the debug panel) are
+ * allowed, and only for the app's own window. Reading the clipboard, camera, screen capture, notifications,
+ * geolocation and everything else are refused. Full screen is a permission request in Electron: without it
+ * `requestFullscreen()` is silently refused and the reader buttons do nothing; likewise `navigator.clipboard.writeText()`
+ * fails with "Write permission denied" and the copy buttons only say that the copy failed.
  */
 export function permissionAllowed(facts: PermissionFacts): boolean {
   if (!facts.fromAppWindow || !isAppPage(facts.requestingUrl, facts.appUrl)) return false;
-  if (facts.permission === "local-fonts") return true;
+  if (facts.permission === "local-fonts" || facts.permission === "fullscreen" || facts.permission === "clipboard-sanitized-write") return true;
   if (facts.permission === "media") {
     const types = facts.mediaTypes ?? [];
     // A request that does not say what it wants is a request for everything: refuse it.

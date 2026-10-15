@@ -8,11 +8,16 @@ import { clickTestId, viewport } from "./driver.ts";
 import { actor, capturePage, openSettingsPage, toRail } from "./common.ts";
 import { runAgentSmoke } from "./agent.ts";
 import { measurePaneBench, measureScaleWindowBench, measureWindowBench, type ScaleSpec } from "./bench-window.ts";
-import { runClosureSmoke } from "./closure.ts";
+import { measureCanvasBench, type CanvasSpec } from "./bench-canvas.ts";
+import { measureDanmakuBench, measureMemoryBench, type DanmakuBenchSpec, type MemoryBenchSpec } from "./bench-reader.ts";
+import { runReadingLoopSmoke } from "./reading-loop.ts";
 import { runFormatsSmoke } from "./formats.ts";
 import { runMediaSmoke } from "./media.ts";
-import { runReworkSmoke } from "./rework.ts";
+import { runWindowWalkSmoke } from "./window-walk.ts";
+import { runCreativeSmoke } from "./creative-walk.ts";
+import { runPluginsSmoke } from "./plugins-walk.ts";
 import { runVoiceSmoke } from "./voice.ts";
+import { runTraceSmoke } from "./trace-walk.ts";
 
 /**
  * Packaged-window smoke and benchmark harness. Loaded only when the app starts with --manga-smoke
@@ -69,16 +74,22 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       reportExtras.readingNav = opened;
       reportExtras.viewports = { wide, narrow };
       markerRestored = opened;
-    } else if (phaseName === "closure" || phaseName === "closure-restart") {
-      merge(await runClosureSmoke(appService, ownerGrant, window, phaseName));
+    } else if (phaseName === "reading-loop" || phaseName === "reading-loop-restart") {
+      merge(await runReadingLoopSmoke(appService, ownerGrant, window, phaseName));
     } else if (phaseName === "media") {
       merge(await runMediaSmoke({ appService, grant: ownerGrant, view: window, evidenceDir }));
     } else if (phaseName === "voice") {
       merge(await runVoiceSmoke({ appService, grant: ownerGrant, view: window, evidenceDir }));
     } else if (phaseName === "formats") {
       merge(await runFormatsSmoke(appService, ownerGrant, window, layout.partitions.logs));
-    } else if (phaseName === "rework") {
-      merge(await runReworkSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "window-walk") {
+      merge(await runWindowWalkSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "creative") {
+      merge(await runCreativeSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "trace") {
+      merge(await runTraceSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "plugins") {
+      merge(await runPluginsSmoke({ appService, grant: ownerGrant, view: window, logsDir: layout.partitions.logs }));
     } else if (phaseName === "bench-scale") {
       const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_SCALE_SPEC), "utf8")) as ScaleSpec;
       const measured = await measureScaleWindowBench(appService, ownerGrant, window, spec);
@@ -86,6 +97,21 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       markerRestored = measured.ok === true;
       fs.mkdirSync(layout.partitions.logs, { recursive: true });
       fs.writeFileSync(path.join(layout.partitions.logs, "bench-scale-window.json"), `${JSON.stringify(measured, null, 2)}\n`);
+    } else if (phaseName === "bench-canvas") {
+      const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_CANVAS_SPEC), "utf8")) as CanvasSpec;
+      const measured = await measureCanvasBench(appService, ownerGrant, window, spec);
+      reportExtras.canvasOk = measured.ok;
+      markerRestored = measured.ok === true;
+      fs.mkdirSync(layout.partitions.logs, { recursive: true });
+      fs.writeFileSync(path.join(layout.partitions.logs, "bench-canvas-window.json"), `${JSON.stringify(measured, null, 2)}\n`);
+    } else if (phaseName === "bench-danmaku" || phaseName === "bench-memory") {
+      const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_READER_SPEC), "utf8")) as DanmakuBenchSpec & MemoryBenchSpec;
+      const measured = phaseName === "bench-danmaku" ? await measureDanmakuBench(appService, ownerGrant, window, spec) : await measureMemoryBench(appService, ownerGrant, window, spec);
+      reportExtras.readerOk = measured.ok;
+      markerRestored = measured.ok === true;
+      fs.mkdirSync(layout.partitions.logs, { recursive: true });
+      fs.writeFileSync(path.join(layout.partitions.logs, `${phaseName}-window.json`), `${JSON.stringify(measured, null, 2)}
+`);
     } else if (phaseName === "bench-pane") {
       const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_PANE_SPEC), "utf8")) as { resourceId: string; notes: number };
       await toRail(window);
@@ -135,7 +161,7 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       await new Promise((resolve) => setTimeout(resolve, 250));
       await capturePage(window, evidenceDir, `ui-smoke-${phaseName}-agent.png`);
     }
-    if (phaseName === "closure" || phaseName === "closure-restart") {
+    if (phaseName === "reading-loop" || phaseName === "reading-loop-restart") {
       if (await toRail(window) && await clickTestId(window, "nav-reading")) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         await capturePage(window, evidenceDir, `ui-smoke-${phaseName}-reading.png`);

@@ -40,7 +40,7 @@ function installHost(options: { missing?: string[] } = {}) {
 type Props = Partial<Parameters<typeof ComicReader>[0]>;
 
 function mount(doc: ComicDoc, props: Props = {}) {
-  const handlers = { onSettings: vi.fn(), onBack: vi.fn(), onNext: vi.fn(), onPage: vi.fn(), onBackToNote: vi.fn(), onRepair: vi.fn() };
+  const handlers = { onSettings: vi.fn(), onBack: vi.fn(), onPage: vi.fn(), onBackToNote: vi.fn(), onRepair: vi.fn() };
   const result = render(<ComicReader t={i18n.t} doc={doc} settings={settings} {...handlers} {...props} />);
   return { ...result, handlers, rerenderWith: (next: Props) => result.rerender(<ComicReader t={i18n.t} doc={doc} settings={settings} {...handlers} {...props} {...next} />) };
 }
@@ -52,11 +52,10 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); removeMat
 
 const openMore = () => fireEvent.click(screen.getByTestId("comic-more-settings"));
 
-describe("M2 comic reader", () => {
-  it("shows the book, the position and a way back, and loads the shown page then the ones ahead", async () => {
+describe("comic reader", () => {
+  it("shows the position, and loads the shown page then the ones ahead", async () => {
     const calls = installHost();
-    const { handlers } = mount(makeDoc(10));
-    expect(screen.getByTestId("comic-title").textContent).toBe("合成漫画");
+    mount(makeDoc(10));
     expect(screen.getByTestId("comic-position").textContent).toContain("1 / 10");
     expect(screen.getByTestId("comic-reader").getAttribute("data-direction")).toBe("rtl");
     await waitFor(() => expect(screen.getByTestId("comic-page-0").getAttribute("data-state")).toBe("ready"));
@@ -64,8 +63,6 @@ describe("M2 comic reader", () => {
     const asked = calls.filter((call) => call.commandId === "comic.pageHandles").map((call) => call.input.pageIds as string[]);
     expect(asked[0]).toEqual(["page-0"]);
     expect(asked.flat().length).toBeLessThanOrEqual(4);
-    fireEvent.click(screen.getByTestId("comic-back"));
-    expect(handlers.onBack).toHaveBeenCalled();
   });
 
   it("turns pages with the arrow that points the way the book reads, in both directions", async () => {
@@ -92,15 +89,20 @@ describe("M2 comic reader", () => {
     expect(shownPages()).toEqual(["page-6"]);
   });
 
-  it("jumps with the slider and with a typed page number, and a typed key does not turn the page", () => {
+  it("jumps with the slider, and with a page number typed into the position itself; a typed key does not turn the page", () => {
     mount(makeDoc(30));
     fireEvent.change(screen.getByTestId("comic-slider"), { target: { value: "12" } });
     expect(screen.getByTestId("comic-position").textContent).toContain("12 / 30");
+    // The position is text until it is clicked; then it is a field that starts with the page on screen.
+    expect(screen.queryByTestId("comic-page-input")).toBeNull();
+    fireEvent.click(screen.getByTestId("comic-position"));
     const input = screen.getByTestId("comic-page-input") as HTMLInputElement;
+    expect(input.value).toBe("12");
     fireEvent.change(input, { target: { value: "25" } });
     fireEvent.keyDown(input, { key: "ArrowLeft" });
-    expect(screen.getByTestId("comic-position").textContent).toContain("12 / 30");
-    fireEvent.click(screen.getByTestId("comic-page-go"));
+    expect(input.value).toBe("25");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.queryByTestId("comic-page-input")).toBeNull();
     expect(screen.getByTestId("comic-position").textContent).toContain("25 / 30");
   });
 
@@ -190,24 +192,20 @@ describe("M2 comic reader", () => {
     expect(handlers.onPage).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the end of the book, offers the next chapter, and goes there on the next key", () => {
-    const { handlers } = mount(makeDoc(2), { next: { resourceId: "res_next", title: "第 2 话" } });
-    fireEvent.keyDown(window, { key: "ArrowLeft" });
-    fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(screen.getByTestId("comic-end")).toBeTruthy();
-    expect(screen.getByTestId("comic-end-next").textContent).toContain("第 2 话");
-    fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(handlers.onNext).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByTestId("comic-end-next"));
-    expect(handlers.onNext).toHaveBeenCalledTimes(2);
-  });
-
-  it("says the book ended when there is no next chapter, and a key back leaves the end card", () => {
-    mount(makeDoc(2));
+  it("says the book ended and offers only the way back: keys and taps past the last page never go on to another chapter", () => {
+    const { handlers } = mount(makeDoc(2));
     fireEvent.keyDown(window, { key: "ArrowLeft" });
     fireEvent.keyDown(window, { key: "ArrowLeft" });
     expect(screen.getByTestId("comic-end")).toBeTruthy();
     expect(screen.queryByTestId("comic-end-next")).toBeNull();
+    expect(screen.queryByTestId("comic-next-chapter")).toBeNull();
+    // Another key and a tap on the page's open side at the end only keep the card; nothing opens another book.
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    fireEvent.click(screen.getByTestId("comic-stage"), { clientX: 1, clientY: 5 });
+    expect(handlers.onBack).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("comic-end-back"));
+    expect(handlers.onBack).toHaveBeenCalledTimes(1);
+    // A key back leaves the end card.
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.queryByTestId("comic-end")).toBeNull();
   });
@@ -303,7 +301,177 @@ describe("M2 comic reader", () => {
   });
 });
 
-describe("M2 comic strip layout", () => {
+const stageOf = () => screen.getByTestId("comic-stage");
+/** A page that is bigger than the window: the stage has room to scroll, and says how far it is scrolled. */
+function scrollable(stage: HTMLElement, state: { top: number; height?: number; client?: number }) {
+  Object.defineProperty(stage, "scrollHeight", { configurable: true, get: () => state.height ?? 2000 });
+  Object.defineProperty(stage, "clientHeight", { configurable: true, get: () => state.client ?? 700 });
+  Object.defineProperty(stage, "scrollTop", { configurable: true, get: () => state.top, set: (value: number) => { state.top = value; } });
+}
+
+describe("comic reader controls (AT-83)", () => {
+  it("has no bar at the top: the title and the way back are the title bar's, and everything else is in the bottom bar", () => {
+    const { container } = mount(makeDoc(10), { onMatch: vi.fn() });
+    expect(container.querySelector(".reader-top")).toBeNull();
+    for (const gone of ["comic-back", "comic-title", "comic-footer-title", "comic-footer-page", "comic-page-go"]) expect(screen.queryByTestId(gone), gone).toBeNull();
+    const footer = screen.getByTestId("comic-footer");
+    for (const id of ["comic-prev", "comic-next", "comic-position", "comic-slider", "comic-fit", "comic-zoom-out", "comic-zoom-value", "comic-zoom-in", "comic-region-tool", "comic-fullscreen", "comic-more-settings"]) {
+      expect(footer.contains(screen.getByTestId(id)), id).toBe(true);
+    }
+    // The "…" panel is part of the bottom bar and opens upward from it; the match with an online entry is in it.
+    expect(screen.queryByTestId("reader-match")).toBeNull();
+    openMore();
+    const panel = screen.getByTestId("comic-more-panel");
+    expect(footer.contains(panel)).toBe(true);
+    expect(panel.className).toContain("reader-more-up");
+    expect(panel.contains(screen.getByTestId("reader-match"))).toBe(true);
+  });
+
+  it("does not offer the match when the work is linked", () => {
+    mount(makeDoc(3));
+    openMore();
+    expect(screen.queryByTestId("reader-match")).toBeNull();
+  });
+
+  it("turns a typed page number that is out of range into a refusal that keeps the field, and Escape leaves it as it was", () => {
+    mount(makeDoc(10), { startPageId: "page-2" });
+    fireEvent.click(screen.getByTestId("comic-position"));
+    const input = screen.getByTestId("comic-page-input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "99" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByTestId("comic-page-input").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByTestId("comic-position").textContent).not.toContain("99");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByTestId("comic-page-input")).toBeNull();
+    expect(screen.getByTestId("comic-position").textContent).toContain("3 / 10");
+    // Leaving the field without Enter also keeps the page.
+    fireEvent.click(screen.getByTestId("comic-position"));
+    fireEvent.change(screen.getByTestId("comic-page-input"), { target: { value: "7" } });
+    fireEvent.blur(screen.getByTestId("comic-page-input"));
+    expect(screen.getByTestId("comic-position").textContent).toContain("3 / 10");
+  });
+
+  describe("the wheel", () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+
+    it("turns one page for a gesture, forward on the way down and back on the way up, however many events the gesture sends", () => {
+      mount(makeDoc(10));
+      // Right to left: down is forward in the reading order, which is the next page.
+      expect(fireEvent.wheel(stageOf(), { deltaY: 100 })).toBe(false);
+      expect(screen.getByTestId("comic-position").textContent).toContain("2 / 10");
+      // Events that follow within the same gesture (a spin, a glide) are taken and do nothing.
+      act(() => { vi.advanceTimersByTime(60); });
+      fireEvent.wheel(stageOf(), { deltaY: 100 });
+      act(() => { vi.advanceTimersByTime(60); });
+      fireEvent.wheel(stageOf(), { deltaY: 40 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("2 / 10");
+      // A new gesture turns the next page, and up goes back.
+      act(() => { vi.advanceTimersByTime(400); });
+      fireEvent.wheel(stageOf(), { deltaY: 100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("3 / 10");
+      act(() => { vi.advanceTimersByTime(400); });
+      fireEvent.wheel(stageOf(), { deltaY: -100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("2 / 10");
+    });
+
+    it("turns the same way in a double layout, and does nothing before the first page", () => {
+      mount(makeDoc(6), { settings: { ...settings, layout: "double" } });
+      fireEvent.wheel(stageOf(), { deltaY: 100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("2–3 / 6");
+      act(() => { vi.advanceTimersByTime(400); });
+      fireEvent.wheel(stageOf(), { deltaY: -100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 6");
+      act(() => { vi.advanceTimersByTime(400); });
+      fireEvent.wheel(stageOf(), { deltaY: -100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 6");
+    });
+
+    it("scrolls a page that is bigger than the window first, and turns it only for a new gesture at the edge", () => {
+      mount(makeDoc(10));
+      const where = { top: 0 };
+      scrollable(stageOf(), where);
+      // Room below: the browser scrolls (the event is not taken) and the page stays.
+      expect(fireEvent.wheel(stageOf(), { deltaY: 100 })).toBe(true);
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 10");
+      // The page glides to its bottom edge and the same gesture goes on: it does not turn the page by itself.
+      where.top = 1300;
+      act(() => { vi.advanceTimersByTime(60); });
+      fireEvent.wheel(stageOf(), { deltaY: 100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 10");
+      // A new gesture at the edge turns it.
+      act(() => { vi.advanceTimersByTime(400); });
+      fireEvent.wheel(stageOf(), { deltaY: 100 });
+      expect(screen.getByTestId("comic-position").textContent).toContain("2 / 10");
+      // Up at the top edge goes to the previous page; up with room above scrolls instead.
+      act(() => { vi.advanceTimersByTime(400); });
+      where.top = 500;
+      expect(fireEvent.wheel(stageOf(), { deltaY: -100 })).toBe(true);
+      expect(screen.getByTestId("comic-position").textContent).toContain("2 / 10");
+    });
+
+    it("leaves the wheel to plain scrolling in a strip, and while a region is being chosen", () => {
+      mount(makeDoc(10), { settings: { ...settings, layout: "strip" } });
+      expect(fireEvent.wheel(stageOf(), { deltaY: 100 })).toBe(true);
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 10");
+      cleanup();
+      mount(makeDoc(10));
+      fireEvent.click(screen.getByTestId("comic-region-tool"));
+      expect(fireEvent.wheel(stageOf(), { deltaY: 100 })).toBe(true);
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 10");
+    });
+
+    it("changes the size with Ctrl and the wheel at once, saves it once it has rested, and keeps it inside 25% to 400%", () => {
+      const { handlers } = mount(makeDoc(4));
+      expect(screen.getByTestId("comic-zoom-value").textContent).toContain("100");
+      expect(fireEvent.wheel(stageOf(), { deltaY: -100, ctrlKey: true, clientX: 200, clientY: 120 })).toBe(false);
+      const grown = Number(/(\d+)%/.exec(screen.getByTestId("comic-zoom-value").textContent ?? "")?.[1]);
+      expect(grown).toBeGreaterThan(100);
+      expect(grown).toBeLessThan(125);
+      // The page did not turn, and nothing is saved while the wheel is still going.
+      expect(screen.getByTestId("comic-position").textContent).toContain("1 / 4");
+      act(() => { vi.advanceTimersByTime(100); });
+      fireEvent.wheel(stageOf(), { deltaY: -100, ctrlKey: true, clientX: 200, clientY: 120 });
+      expect(handlers.onSettings).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(handlers.onSettings).toHaveBeenCalledTimes(1);
+      const saved = handlers.onSettings.mock.calls[0]![0] as { zoom: number };
+      expect(saved.zoom).toBeGreaterThan(1.2);
+      // Far more than the range is held at its ends.
+      for (let count = 0; count < 40; count += 1) fireEvent.wheel(stageOf(), { deltaY: -500, ctrlKey: true, clientX: 200, clientY: 120 });
+      expect(screen.getByTestId("comic-zoom-value").textContent).toContain("400");
+      for (let count = 0; count < 80; count += 1) fireEvent.wheel(stageOf(), { deltaY: 500, ctrlKey: true, clientX: 200, clientY: 120 });
+      expect(screen.getByTestId("comic-zoom-value").textContent).toContain("25");
+    });
+
+    it("keeps the point under the pointer where it is while the size changes", () => {
+      mount(makeDoc(3));
+      const where = { top: 300 };
+      scrollable(stageOf(), where);
+      // The content is 1000 px tall at 100% and grows with the size; the window shows 500 px of it.
+      const percent = () => Number(/(\d+)%/.exec(screen.getByTestId("comic-zoom-value").textContent ?? "")?.[1]) / 100;
+      Object.defineProperty(stageOf(), "scrollHeight", { configurable: true, get: () => 1000 * percent() });
+      Object.defineProperty(stageOf(), "scrollWidth", { configurable: true, get: () => 800 * percent() });
+      const horizontal = { left: 0 };
+      Object.defineProperty(stageOf(), "scrollLeft", { configurable: true, get: () => horizontal.left, set: (value: number) => { horizontal.left = value; } });
+      vi.spyOn(stageOf(), "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 800, height: 500, right: 800, bottom: 500, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+      // The content half way down (300 scrolled + 200 into the window = 500 of 1000) is still under the pointer at 200 once it has grown.
+      fireEvent.wheel(stageOf(), { deltaY: -100, ctrlKey: true, clientX: 0, clientY: 200 });
+      const grown = percent();
+      expect(grown).toBeGreaterThan(1);
+      expect(where.top).toBeCloseTo(0.5 * 1000 * grown - 200, 0);
+    });
+
+    it("saves a size from the wheel at once when the reader is left before it has rested", () => {
+      const { handlers, unmount } = mount(makeDoc(4));
+      fireEvent.wheel(stageOf(), { deltaY: -100, ctrlKey: true });
+      expect(handlers.onSettings).not.toHaveBeenCalled();
+      unmount();
+      expect(handlers.onSettings).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe("comic strip layout", () => {
   it("renders only the pages near the view of a long strip and follows the scroll", () => {
     mount(makeDoc(300), { settings: { ...settings, layout: "strip" } });
     const strip = screen.getByTestId("comic-strip");
@@ -328,7 +496,7 @@ describe("M2 comic strip layout", () => {
   });
 });
 
-describe("M2 comic region note", () => {
+describe("comic region note", () => {
   function selectLayerBox(width: number, height: number) {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       return this.dataset.testid?.startsWith("comic-select-layer") ? ({ left: 100, top: 50, width, height, right: 100 + width, bottom: 50 + height, x: 100, y: 50, toJSON: () => ({}) } as DOMRect) : ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
@@ -380,7 +548,7 @@ describe("M2 comic region note", () => {
   });
 });
 
-describe("M2 comic page size follows the frame, not its own content (A-47 W1, AT-68 model)", () => {
+describe("comic page size follows the frame, not its own content (AT-68 model)", () => {
   // jsdom has no layout: the frame's measured size is set here, and a resize is a call to the observer the reader registered.
   const frameSize = { width: 1016, height: 716 };
   // The room a classic scrollbar takes from the stage (kept whether or not one is shown): the stage's offset width less its client width.
@@ -393,7 +561,12 @@ describe("M2 comic page size follows the frame, not its own content (A-47 W1, AT
     Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get(this: HTMLElement) { return this.dataset.testid === "comic-frame" ? frameSize.width : this.dataset.testid === "comic-stage" ? frameSize.width - gutter.px : 0; } });
     Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get(this: HTMLElement) { return this.dataset.testid === "comic-stage" ? frameSize.width : 0; } });
     Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get(this: HTMLElement) { return this.dataset.testid === "comic-frame" ? frameSize.height : 0; } });
-    vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { resize = callback; } observe() { observed += 1; } disconnect() { /* nothing */ } });
+    // Only the frame the page is fitted to counts: the footer is watched as well (its height lifts the end prompt, AT-108), and that is not what is measured here.
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(private readonly callback: () => void) { /* kept until a node is observed */ }
+      observe(node: HTMLElement) { if (node.dataset.testid === "comic-frame") { resize = this.callback; observed += 1; } }
+      disconnect() { /* nothing */ }
+    });
   });
   afterEach(() => {
     Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");

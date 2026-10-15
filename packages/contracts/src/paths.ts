@@ -6,6 +6,7 @@ export type Channel = (typeof CHANNELS)[number];
 export const LOCATION_PARTITIONS = [
   "data",
   "resources",
+  "works",
   "projects",
   "attachments",
   "downloads",

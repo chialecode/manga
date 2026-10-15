@@ -47,7 +47,7 @@ function setup(options: { mic?: ReturnType<typeof fakeMic>; openError?: unknown;
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe("M2 recorder", () => {
+describe("recorder", () => {
   it("opens the microphone first, then the session, and counts the time from the audio received", async () => {
     const { recorder, mic, of, calls } = setup();
     expect(await recorder.start({ mode: "toggle", resourceId: "res_1", resourceRevisionId: "rev_1" })).toBe(true);

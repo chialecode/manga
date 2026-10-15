@@ -6,7 +6,7 @@ import type { OnlineProvider, SearchHit, SubjectDetail } from "../../packages/ap
 import { MangaError } from "@manga/contracts";
 import { startApp } from "../helpers/app.ts";
 import { startFakeBangumi, picture, type FakeBangumi } from "../helpers/fake-bangumi.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { inLibrary, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -24,7 +24,7 @@ function ok<T = Record<string, unknown>>(result: Call): T {
 }
 
 const USER_AGENT = "chialecode/manga/9.9.9 (https://github.com/chialecode/manga)";
-const pick = (ctx: App, target: string) => ctx.app.registerPath("file", target);
+const pick = (ctx: App, target: string) => ctx.app.registerPath("file", inLibrary(ctx.app, target));
 const request = (url: string, headers: Record<string, string> = {}) => ({ url, method: "GET", headers: { get: (name: string) => headers[name.toLowerCase()] ?? null } });
 const serve = (ctx: App, url: string) => serveMedia({ handles: ctx.app.media.handles, zips: ctx.app.media.zips }, request(url));
 
@@ -130,7 +130,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("searching, picking and linking an ent
       expect(ok<{ candidates: unknown[] }>(await run(ctx, "metadata.candidates", { workId: imported.workId })).candidates).toHaveLength(0);
       const covers = ok<{ covers: Array<{ source: string; selected: boolean }> }>(await run(ctx, "covers.list", { workId: imported.workId }));
       expect(covers.covers.filter((item) => item.selected).map((item) => item.source)).toEqual(["bangumi"]);
-      // Pictures from Bangumi are the user's data (backed up with the library, stored in the images table since the M2 rework); pictures from files are cache.
+      // Pictures from Bangumi are the user's data (backed up with the library, stored in the images table); pictures from files are cache.
       const areas = ctx.app.store.sqlite.prepare("SELECT source, area FROM covers WHERE work_id = ? ORDER BY source").all(imported.workId) as Array<{ source: string; area: string }>;
       expect(areas).toEqual([{ source: "bangumi", area: "images" }, { source: "file", area: "cache" }]);
       const stored = ctx.app.store.sqlite.prepare("SELECT c.image_hash AS hash, i.bytes AS bytes FROM covers c JOIN images i ON i.hash = c.image_hash WHERE c.work_id = ? AND c.area = 'images'").all(imported.workId) as Array<{ hash: string; bytes: number }>;
@@ -143,7 +143,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("searching, picking and linking an ent
     const ctx = await boot();
     try {
       const dir = samplePath("video-episodes");
-      const imported = ok<{ workId: string }>(await run(ctx, "works.importDirectory", { pathHandle: ctx.app.registerPath("directory", dir), kind: "video" }));
+      const imported = ok<{ workId: string }>(await run(ctx, "works.importDirectory", { pathHandle: ctx.app.registerPath("directory", inLibrary(ctx.app, dir)), kind: "video" }));
       await ctx.app.media.jobs.idle();
       const detail = await work(ctx, imported.workId);
       expect(detail.suggestedQuery).toBe("Sample Anime");

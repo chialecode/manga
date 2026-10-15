@@ -11,7 +11,7 @@ import { startApp, tempProfile, waitForRun } from "../helpers/app.ts";
 
 const crashChild = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../packages/app-core/src/crash-child.ts");
 
-describe("A review: P1 grants", () => {
+describe("grants", () => {
   it("issues agent grants without resource write rights and lets the agent edit only its own notes", async () => {
     const { app, actor, grant } = await startApp();
     const imported = await app.call(actor, { commandId: "library.importText", idempotencyKey: "w-imp", input: { title: "r", bytes: [...Buffer.from("正文")] } }, grant.handle);
@@ -41,7 +41,7 @@ describe("A review: P1 grants", () => {
   });
 });
 
-describe("A review: P2 package and locations", () => {
+describe("package and locations", () => {
   it("round-trips a package into an empty profile and restores search scope and attachments", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     const imported = await app.call(actor, { commandId: "library.importText", idempotencyKey: "rt-src", input: { title: "往返", bytes: [...Buffer.from("往返正文内容")] } }, grant.handle);
@@ -111,7 +111,7 @@ describe("A review: P2 package and locations", () => {
   it("verifies copied partitions and excludes host lock files from the migrated root", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     await app.call(actor, { commandId: "notes.create", idempotencyKey: "mig-note", input: { title: "mig", text: "moved with me" } }, grant.handle);
-    const moved = path.join(os.tmpdir(), `manga-m1a-verified-${process.pid}-${Date.now()}`);
+    const moved = path.join(os.tmpdir(), `manga-verified-${process.pid}-${Date.now()}`);
     const handle = app.registerPath("directory", moved);
     const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "mig-p", input: { pathHandle: handle } }, grant.handle);
     expect(proposed.status).toBe("ok");
@@ -132,7 +132,7 @@ describe("A review: P2 package and locations", () => {
   });
 });
 
-describe("A review: P4 inventory", () => {
+describe("inventory", () => {
   it("reports a scan as cancelled when cancel arrives while it runs", async () => {
     const { app, actor, grant } = await startApp();
     const scan = app.call(actor, { commandId: "inventory.scan", idempotencyKey: "scan-c", input: {} }, grant.handle);
@@ -147,7 +147,7 @@ describe("A review: P4 inventory", () => {
   });
 });
 
-describe("A review: P3/P5 agent loop", () => {
+describe("agent loop", () => {
   it("does not execute a tool when the stream drops before completion", async () => {
     const server = await startMockProvider({ mode: "truncated-stream" });
     const { app, actor, grant } = await startApp();
@@ -188,7 +188,7 @@ describe("A review: P3/P5 agent loop", () => {
   });
 });
 
-describe("A review: connections", () => {
+describe("connections", () => {
   it("deleting a connection also removes its stored credential ciphertext", async () => {
     const { app, actor, grant } = await startApp();
     const secret = app.stashSecret("test-credential-value-for-vault");
@@ -201,7 +201,7 @@ describe("A review: connections", () => {
   });
 });
 
-describe("A review: streaming tool-call reassembly", () => {
+describe("streaming tool-call reassembly", () => {
   it("keeps call id and name across real-shape chunks for both protocols", async () => {
     const server = await startMockProvider({ streamToolName: "library.find", streamToolArguments: '{"text":"中文 检索"}' });
     for (const protocol of ["openai-chat-completions", "openai-responses"] as const) {

@@ -61,6 +61,14 @@ export type TextRequest = {
   stream?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** The most tokens the model may answer with; left out, the service decides. */
+  maxOutputTokens?: number;
+  /** Chat Completions names the limit `max_tokens`, or `max_completion_tokens` for models that reason. */
+  maxTokensField?: "max_tokens" | "max_completion_tokens";
+  /** How hard a reasoning model thinks: `reasoning_effort` for Chat Completions, `reasoning.effort` for Responses. Left out when the model does not reason. */
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
+  /** The model's window, for runtimes that need to know it. */
+  contextWindow?: number;
 };
 
 export type TranscriptionRequest = {
@@ -81,13 +89,62 @@ export type TranscriptionRequest = {
 export type TranscriptionSegment = { start: number; end: number; text: string };
 export type TranscriptionResult = { text: string; segments?: TranscriptionSegment[]; duration?: number; language?: string };
 
-export function mapHttpError(status: number, _body: string): MangaError {
-  if (status === 401) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status } });
-  if (status === 429) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details: { status } });
-  // A provider can reflect request text or authorization into its error body.
-  // Public command errors are persisted and displayed, so retain only the status.
-  if (status === 404) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details: { status } });
-  return new MangaError("PROVIDER_UNAVAILABLE", `provider HTTP ${status}`, { retryable: status >= 500, details: { status } });
+/**
+ * Why an answer with an error status is an error, in one word: the request is longer than the model takes, the model is not there, the path is not there, or none is known. Only the word is kept, never the
+ * body: a provider can reflect request text or authorization into its error body, and public command errors are persisted and displayed.
+ */
+const CONTEXT_TOO_LONG = /context[ _-]?(length|window)|maximum context|too many tokens|token limit|prompt is too long|input is too long|reduce the length|exceeds? the (model'?s )?(maximum|limit)|string too long/i;
+
+function reasonOf(status: number, body: string): "model" | "path" | "context" | undefined {
+  if ((status === 400 || status === 413 || status === 422) && CONTEXT_TOO_LONG.test(body)) return "context";
+  const names = /model/i.test(body) && /(not[ _-]?found|does ?n[o']t exist|not exist|unknown|invalid|no such|unsupported|not available|not_found)/i.test(body);
+  if (status === 404) return names ? "model" : "path";
+  if ((status === 400 || status === 422) && names) return "model";
+  return undefined;
+}
+
+export function mapHttpError(status: number, body: string): MangaError {
+  const kind = reasonOf(status, body);
+  const details = { status, ...(kind ? { kind } : {}) };
+  if (status === 401) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details });
+  if (status === 429) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details });
+  if (status === 404) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details });
+  return new MangaError("PROVIDER_UNAVAILABLE", `provider HTTP ${status}`, { retryable: status >= 500, details });
+}
+
+/**
+ * A request that never got an answer: cancelled by the caller, out of time, an address that is not there or refuses, or a connection that broke. The kind goes in
+ * the details so a test of a connection can tell the person which; the text stays the system's own.
+ */
+export function networkError(error: unknown, signal?: AbortSignal): MangaError {
+  if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true });
+  const failure = error as { name?: string; code?: string; message?: string; cause?: { code?: string; message?: string } } | undefined;
+  const code = failure?.cause?.code ?? failure?.code;
+  let kind = "network";
+  if (failure?.name === "AbortError" || failure?.name === "TimeoutError") kind = "timeout";
+  else if (code === "ENOTFOUND" || code === "EAI_AGAIN" || code === "ECONNREFUSED" || code === "ERR_INVALID_URL" || code === "EHOSTUNREACH" || code === "ENETUNREACH") kind = "address";
+  else if (typeof code === "string" && /CERT|SSL|TLS/i.test(code)) kind = "tls";
+  return new MangaError("PROVIDER_UNAVAILABLE", failure?.message ?? "network failure", { retryable: true, details: { kind, ...(typeof code === "string" ? { code } : {}) } });
+}
+
+/** An answer that is not what the protocol says it should be: a page of HTML where JSON should be, a body that does not parse, a shape nobody speaks. */
+export function protocolError(what: string): MangaError {
+  return new MangaError("PROVIDER_UNAVAILABLE", `provider answered in an unexpected form: ${what}`, { retryable: false, details: { kind: "protocol" } });
+}
+
+/** A successful answer must look like what was asked for; a web page at the address (a login page, a proxy's notice) never does. */
+export function requireMachineAnswer(response: Response): void {
+  const type = response.headers.get("content-type") ?? "";
+  if (/text\/html/i.test(type)) throw protocolError("a web page");
+}
+
+/** Parse the JSON of an answer, or say the answer is not in the protocol. */
+export function parseJsonAnswer<T>(text: string, what = "JSON"): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw protocolError(`not ${what}`);
+  }
 }
 
 export async function* readSseLines(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<string> {

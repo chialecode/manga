@@ -15,22 +15,12 @@ const rules = [
   {
     dir: "packages/plugin-sdk/src",
     allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/],
-    forbid: [/^@manga\/kernel/, /^@manga\/storage-sqlite/, /^electron$/],
+    forbid: [/^@manga\/kernel/, /^electron$/],
   },
   {
     dir: "packages/kernel/src",
     allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/],
-    forbid: [/^@manga\/storage-sqlite/, /^electron$/],
-  },
-  {
-    dir: "packages/storage-sqlite/src",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/],
-    forbid: [/^@manga\/kernel/, /^electron$/],
-  },
-  {
-    dir: "experiments/m0/src/domain",
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^fflate$/, /^parse5$/],
-    forbid: [/^@manga\/kernel/, /^@manga\/storage-sqlite/, /^electron$/],
+    forbid: [/^electron$/],
   },
   {
     dir: "packages/i18n/src",
@@ -49,9 +39,16 @@ const rules = [
   },
   {
     dir: "packages/app-core/src",
-    // sharp, yauzl and anitomy serve the comic and media services; zod validates what the Bangumi client receives.
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/, /^sharp$/, /^yauzl$/, /^anitomy$/, /^zod$/],
+    // sharp, yauzl and anitomy serve the comic and media services; zod validates what the Bangumi client receives; readability and linkedom read a fetched
+    // page as text; fflate writes and reads project packages; mdast-util-to-markdown writes a note's blocks as the Markdown file kept in its work's folder.
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/, /^sharp$/, /^yauzl$/, /^anitomy$/, /^zod$/, /^@mozilla\/readability$/, /^linkedom$/, /^fflate$/, /^mdast-util-to-markdown$/],
     forbid: [/^electron$/],
+  },
+  {
+    // A first-party plugin is a package of its own: it reaches the product only through the wire protocol, never by importing it.
+    dir: "plugins/acquisition-bt",
+    allow: [/^node:/, /^\.\//, /^webtorrent$/, /^parse-torrent$/],
+    forbid: [/^@manga\//, /^electron$/],
   },
 ];
 
@@ -60,7 +57,8 @@ function walk(dir, acc = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full, acc);
-    else if (entry.name.endsWith(".ts")) acc.push(full);
+    else if (entry.name === "node_modules") continue;
+    else if (entry.name.endsWith(".ts") || entry.name.endsWith(".mjs")) acc.push(full);
   }
   return acc;
 }
@@ -92,10 +90,14 @@ export function checkTree(base = root) {
 
 function selfTest() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-dep-"));
-  fs.mkdirSync(path.join(dir, "experiments/m0/src/domain"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "experiments/m0/src/domain/bad.ts"), 'import electron from "electron";\n');
-  fs.writeFileSync(path.join(dir, "experiments/m0/src/domain/up.ts"), 'import { x } from "../../../../other/outside.ts";\n');
-  fs.writeFileSync(path.join(dir, "experiments/m0/src/domain/ok.ts"), 'import { y } from "./bad.ts";\n');
+  fs.mkdirSync(path.join(dir, "packages/contracts/src"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "plugins/acquisition-bt/src"), { recursive: true });
+  const put = (file, lines) => fs.writeFileSync(path.join(dir, file), lines.join("\n") + "\n");
+  put("packages/contracts/src/bad.ts", ['import electron from "electron";']);
+  put("packages/contracts/src/up.ts", ['import { x } from "../../../other/outside.ts";']);
+  put("packages/contracts/src/ok.ts", ['import { y } from "./bad.ts";']);
+  put("plugins/acquisition-bt/src/reach.mjs", ['import { run } from "@manga/app-core";']);
+  put("plugins/acquisition-bt/src/fine.mjs", ['import WebTorrent from "webtorrent";', 'import { connect } from "./link.mjs";']);
   const errors = checkTree(dir);
   fs.rmSync(dir, { recursive: true, force: true });
   if (!errors.some((item) => item.includes("electron"))) {
@@ -103,6 +105,12 @@ function selfTest() {
   }
   if (!errors.some((item) => item.includes("outside.ts"))) {
     throw new Error("dependency gate self-test did not fail on a relative import that leaves the package");
+  }
+  if (!errors.some((item) => item.includes("reach.mjs"))) {
+    throw new Error("dependency gate self-test did not fail on a plugin that imports the product");
+  }
+  if (errors.some((item) => item.includes("fine.mjs"))) {
+    throw new Error("dependency gate self-test rejected a plugin's own dependency");
   }
   if (errors.some((item) => item.includes("ok.ts"))) {
     throw new Error("dependency gate self-test rejected a relative import inside the package");

@@ -56,7 +56,7 @@ function cidPdf(withToUnicode: boolean): Uint8Array {
   ]);
 }
 
-describe("M1b b6 PDF text layer", () => {
+describe("PDF text layer", () => {
   it("decodes two-byte CID codes through ToUnicode bfchar and both bfrange forms", async () => {
     const parsed = await parsePdfBytes(cidPdf(true));
     expect(parsed.parts[0]?.normalized).toContain("中文");
@@ -147,7 +147,7 @@ function danglingNoteAnchors(store: DrizzleStore): string[] {
   return ids.filter((id) => !store.sqlite.prepare("SELECT 1 FROM anchors WHERE id = ?").get(id));
 }
 
-describe("M1b b6 package dependency plan", () => {
+describe("package dependency plan", () => {
   it("skipping an existing resource while duplicating its note keeps every note source resolvable", async () => {
     const ctx = await startApp();
     try {
@@ -291,7 +291,7 @@ importLibraryPackageResolved(store, ${JSON.stringify(dir)}, { strategy: "replace
   });
 });
 
-describe("M1b b6 scale library", () => {
+describe("scale library", () => {
   it("indexes a text tail past the first search window", async () => {
     const ctx = await startApp();
     try {

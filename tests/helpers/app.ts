@@ -53,3 +53,19 @@ export function writeTempWav(dir: string, name = "probe.wav"): string {
   writeFileSync(file, syntheticWav());
   return file;
 }
+
+/**
+ * Makes `dir` a library path without starting a scan, so the files imported from it have a place to be read from (A-80). A folder that already
+ * lies inside a library path is left alone.
+ */
+export function libraryRoot(app: Pick<MangaProductApp, "store">, dir: string, mediaKind: "novel" | "comic" | "video" = "novel"): string {
+  const abs = path.resolve(dir);
+  const same = (a: string, b: string) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const inside = (root: string, target: string) => same(root, target) || (process.platform === "win32" ? target.toLowerCase() : target).startsWith((process.platform === "win32" ? root.toLowerCase() : root) + path.sep);
+  const rows = app.store.sqlite.prepare("SELECT id, path FROM library_paths WHERE managed = 0").all() as Array<{ id: string; path: string }>;
+  if (rows.some((row) => inside(path.resolve(row.path), abs))) return abs;
+  // Library paths never overlap: a folder that contains one that is already there has to be registered first.
+  for (const row of rows) if (inside(abs, path.resolve(row.path))) throw new Error(`${abs} contains the library path ${row.path}; register the larger folder first`);
+  app.store.sqlite.prepare("INSERT INTO library_paths(id, path, media_kind, auto_scan, created_at) VALUES (?,?,?,0,?)").run(`lpath_test_${seq++}`, abs, mediaKind, new Date().toISOString());
+  return abs;
+}

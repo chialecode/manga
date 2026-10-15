@@ -17,7 +17,7 @@ type Store = {
 
 Element.prototype.scrollIntoView = () => {};
 
-function installHost(store: Store) {
+function installHost(store: Store, extra: Record<string, (input: Record<string, unknown>) => unknown> = {}) {
   const work = { id: "w1", title: "合成作品", author: "合成作者", mediaKind: "comic", shelf: "reading", coverId: null, lastResource: null, progress: 0, finishedCount: 0, resourceCount: 0, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null };
   window.manga = {
     async state() {
@@ -29,6 +29,7 @@ function installHost(store: Store) {
     },
     async command(payload: unknown) {
       const body = payload as CommandPayload;
+      if (extra[body.commandId]) return { status: "ok" as const, value: extra[body.commandId]!(body.input ?? {}) };
       if (body.commandId === "workspace.get") {
         return {
           status: "ok" as const,
@@ -99,7 +100,7 @@ function installHost(store: Store) {
 beforeEach(() => { quoteTags.reset(); readerContext.reset(); try { window.localStorage.clear(); } catch { /* none */ } });
 afterEach(() => { cleanup(); quoteTags.reset(); readerContext.reset(); });
 
-describe("F-27 App restore", () => {
+describe("App restore", () => {
   it("sends from the chat page, shows the history in the side pane, stops, and restores after remount", async () => {
     // A wide window keeps the right pane docked next to every page except the chat page itself.
     window.innerWidth = 1600;
@@ -130,6 +131,35 @@ describe("F-27 App restore", () => {
     render(<App />);
     await waitFor(() => expect(within(screen.getByTestId("shell-right")).getByTestId("bubble-user-u-run-1").textContent).toContain("slow-smoke-prompt"));
     expect(within(screen.getByTestId("shell-right")).getByTestId("bubble-agent-a-run-1").getAttribute("data-status")).toBe("cancelled");
+  });
+
+  it("shows the current conversation on the chat page, starts a new one from its top, and continues one from the history (AT-75)", async () => {
+    window.innerWidth = 1600;
+    const store: Store = { sessionId: "ses-1", run: null, runs: [], sent: [] };
+    const asked: string[] = [];
+    let current = "ses-1";
+    installHost(store, {
+      "conversation.current": () => ({ conversation: { sessionId: current, title: "对话 2026-10-05 09:00" } }),
+      "conversation.new": () => { asked.push("new"); current = "ses-2"; store.sessionId = "ses-2"; return { sessionId: "ses-2", reused: false }; },
+      "conversation.history": () => ({ current, items: [{ sessionId: "ses-1", title: "对话 2026-10-01 10:00", excerpt: "第一句话", runCount: 2, updatedAt: "2026-10-01T10:00:00.000Z" }] }),
+      "conversation.resume": (input) => { asked.push(`resume:${String(input.sessionId)}`); current = String(input.sessionId); store.sessionId = current; return { conversation: { sessionId: current, title: "对话 2026-10-01 10:00" } }; },
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("nav-agent")).toBeTruthy());
+    await user.click(screen.getByTestId("nav-agent"));
+    await waitFor(() => expect(screen.getByTestId("conversation-bar")).toBeTruthy());
+    // The rail is not a list of conversations: the page has its own new button and history.
+    expect(screen.queryByTestId("chat-list")).toBeNull();
+    expect(screen.queryByTestId("chat-new")).toBeNull();
+    await user.click(screen.getByTestId("conversation-new"));
+    await waitFor(() => expect(asked).toEqual(["new"]));
+    await waitFor(() => expect(document.body.textContent).toContain("已开启新对话"));
+    await user.click(screen.getByTestId("conversation-history"));
+    await waitFor(() => expect(screen.getByTestId("conversation-item-ses-1")).toBeTruthy());
+    await user.click(screen.getByTestId("conversation-item-ses-1"));
+    await waitFor(() => expect(asked).toEqual(["new", "resume:ses-1"]));
+    await waitFor(() => expect(screen.queryByTestId("conversation-panel")).toBeNull());
   });
 
   it("starts on the library paths page when the library is empty, and on the shelf when it has works", async () => {

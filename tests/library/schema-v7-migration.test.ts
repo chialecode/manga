@@ -10,14 +10,14 @@ const columnsOf = (db: Database.Database, table: string) => (db.prepare(`PRAGMA 
 
 describe("schema v7 migration (a v6 library, now carried on to the current version)", () => {
   it("is the version of this stage", () => {
-    expect(PRODUCT_SCHEMA_VERSION).toBe(8);
+    expect(PRODUCT_SCHEMA_VERSION).toBe(11);
   });
 
   it("migrates a synthetic v6 library without losing a row or an anchor, and backs it up first", () => {
     const { dir, ids } = makeLegacyProfile();
     const store = new DrizzleStore({ profileDir: dir, hostId: "migrate-v7" });
     try {
-      expect(store.getMeta("schemaVersion")).toBe("8");
+      expect(store.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
       expect(fs.existsSync(path.join(dir, "manga.sqlite.premigrate-v6"))).toBe(true);
       // The backup is the old schema, untouched.
       const backup = new Database(path.join(dir, "manga.sqlite.premigrate-v6"), { readonly: true });
@@ -83,14 +83,14 @@ describe("schema v7 migration (a v6 library, now carried on to the current versi
 
     const retried = new DrizzleStore({ profileDir: dir, hostId: "retry" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("8");
+      expect(retried.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
       expect((retried.sqlite.prepare("SELECT title FROM works WHERE id = ?").get(ids.work) as { title: string }).title).toBe("旧库作品");
     } finally {
       retried.close();
     }
     // Opening again is a no-op: nothing is added twice and no second backup replaces the first.
     const again = new DrizzleStore({ profileDir: dir, hostId: "again" });
-    expect(again.getMeta("schemaVersion")).toBe("8");
+    expect(again.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
     again.close();
   });
 

@@ -7,8 +7,8 @@ import { startMockProvider } from "@manga/model-protocol";
 import { startApp, waitForRun } from "../helpers/app.ts";
 import { copyOwnedFile } from "../../packages/app-core/src/locations.ts";
 
-describe("A independent failure boundaries", () => {
-  it("F-24 preserves an unproven copy and a replaced committed file", async () => {
+describe("failure boundaries", () => {
+  it("preserves an unproven copy and a replaced committed file", async () => {
     const { app, actor, grant, profileRoot } = await startApp();
     const target = fs.mkdtempSync(path.join(os.tmpdir(), "manga-review-owned-"));
     try {
@@ -32,7 +32,7 @@ describe("A independent failure boundaries", () => {
     } finally { app.close(); }
   });
 
-  it("F-24 never overwrites a copy destination that appeared after planning", async () => {
+  it("never overwrites a copy destination that appeared after planning", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-review-exclusive-"));
     const source = path.join(dir, "source");
     const dest = path.join(dir, "dest");
@@ -42,7 +42,7 @@ describe("A independent failure boundaries", () => {
     expect(fs.readFileSync(dest, "utf8")).toBe("foreign");
   });
 
-  it("F-26 refuses an unbound legacy receipt and a different task on the same actor", async () => {
+  it("refuses an unbound legacy receipt and a different task on the same actor", async () => {
     const { app, actor, grant } = await startApp();
     try {
       const request = { commandId: "notes.create", idempotencyKey: "legacy", input: { title: "private", text: "synthetic" } };
@@ -57,7 +57,7 @@ describe("A independent failure boundaries", () => {
     } finally { app.close(); }
   });
 
-  it("F-26 re-evaluates inventory after its authorization shrinks", async () => {
+  it("re-evaluates inventory after its authorization shrinks", async () => {
     const { app, actor, grant } = await startApp();
     try {
       const note = await app.call(actor, { commandId: "notes.create", idempotencyKey: "note", input: { title: "hidden", text: "synthetic" } }, grant.handle);
@@ -74,7 +74,7 @@ describe("A independent failure boundaries", () => {
     } finally { app.close(); }
   });
 
-  it("F-26 checks pending task binding and narrowed or revoked object receipts", async () => {
+  it("checks pending task binding and narrowed or revoked object receipts", async () => {
     const { app, actor, grant } = await startApp();
     try {
       const otherTask = app.grants.issue({ ...grant, handle: undefined, sessionId: "other-task" });
@@ -94,7 +94,7 @@ describe("A independent failure boundaries", () => {
     } finally { app.close(); }
   });
 
-  it("F-29 does not verify an embedding capability from an empty vector list", async () => {
+  it("does not verify an embedding capability from an empty vector list", async () => {
     const server = createServer(async (request, response) => {
       for await (const _chunk of request) { /* drain */ }
       response.setHeader("content-type", "application/json");
@@ -111,7 +111,7 @@ describe("A independent failure boundaries", () => {
     } finally { app.close(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
   });
 
-  it("F-32 rejects text streams without a terminal provider event", async () => {
+  it("rejects text streams without a terminal provider event", async () => {
     const server = await startMockProvider({ mode: "truncated-stream" });
     const { app, actor, grant } = await startApp();
     try {

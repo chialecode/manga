@@ -61,7 +61,6 @@ export function StoragePage(props: {
   pkg: PackageFlow;
   onScan: () => void;
   onCancelScan: () => void;
-  onTranscribe: () => void;
   onReveal: (id: string) => void;
   onRepair: (id: string) => void;
   onOpenCategory: (category: "comic" | "video") => void;
@@ -95,7 +94,6 @@ export function StoragePage(props: {
           inventory={props.inventory}
           onScan={props.onScan}
           onCancel={props.onCancelScan}
-          onTranscribe={props.onTranscribe}
           onReveal={props.onReveal}
           onRepair={props.onRepair}
           onOpenCategory={props.onOpenCategory}

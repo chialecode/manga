@@ -65,7 +65,7 @@ describe.skipIf(!hasFont)("combining marks in a PDF drawn with a real embedded f
     const advancePx = (embeddedAdvance("e") / 1000) * SIZE * SCALE;
     const expected = accentOffsetEm([...letter.ink, ...mark.ink.map(([x, y]): [number, number] => [x + advancePx, y])]);
     expect(raw.accentOffsetEm).toBeCloseTo(expected, 1);
-    // ...and giving the mark a zero advance (the change made in M1b) does not move where it is drawn.
+    // ...and giving the mark a zero advance (the current behavior) does not move where it is drawn.
     expect(rawZero.accentOffsetEm).toBeCloseTo(raw.accentOffsetEm, 2);
 
     // The three drawings side by side, for the delivery evidence.
@@ -77,7 +77,7 @@ describe.skipIf(!hasFont)("combining marks in a PDF drawn with a real embedded f
     [precomposed, raw, placed].forEach((item, index) => {
       out.drawImage((item.ctx as unknown as { canvas: ReturnType<typeof createCanvas> }).canvas, crop.x, crop.y, crop.w, crop.h, index * (crop.w + 10), 0, crop.w, crop.h);
     });
-    const dir = evidenceRunDir("m2", "l1-combining-marks");
+    const dir = evidenceRunDir("l1-combining-marks");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "comparison.png"), sheet.toBuffer("image/png"));
     fs.writeFileSync(path.join(dir, "measurements.json"), JSON.stringify({

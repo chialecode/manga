@@ -3,6 +3,8 @@ import { Copy, X } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { attempt } from "../lib/api.ts";
 import { redactForDebug } from "../lib/debug-redact.ts";
+import type { NovelDebug } from "../lib/reader-context.ts";
+import type { VideoFacts } from "../readers/video-health.ts";
 
 type T = Translator["t"];
 
@@ -69,6 +71,10 @@ export function DebugPanel(props: {
   scope: { sessionId?: string; resourceId?: string; workId?: string; page: string };
   /** What the window itself knows about the next send: the live position, the picked tags, the composer's choices. */
   live: Record<string, unknown>;
+  /** What the novel reader knows about where it is: where the position was restored from, the read ranges, the source file of the part. */
+  reading?: NovelDebug | null;
+  /** What the open player knows about its picture and its subtitles: how the file plays, the element's counters, the renderer and its fonts. */
+  video?: VideoFacts | null;
   events: NoticeEntry[];
   version: number;
   onNotice: (message: string) => void;
@@ -135,6 +141,26 @@ export function DebugPanel(props: {
         {error ? <p role="alert" className="chat-error">{error}</p> : null}
         {view.tab === "current" ? (
           <dl className="debug-list">
+            {props.reading ? (
+              <div data-testid="debug-reading" data-restored={props.reading.restoredFrom} data-offset={String(props.reading.restoredOffset)}>
+                <dt>{t("debug.reading")}</dt>
+                <dd>
+                  <span data-testid="debug-reading-restored">{props.reading.restoredFrom === "progress" ? `${t("reading.restored")} · ${t("reading.restoredOffset", { offset: props.reading.restoredOffset })}` : t("reading.restoredStart")}</span>
+                  {" · "}<span data-testid="debug-reading-ranges">{props.reading.readRanges ? t("reading.rangeRead", { count: props.reading.readRanges }) : t("reading.rangeNone")}</span>
+                  {props.reading.partSourceHref ? <>{" · "}<span data-testid="debug-reading-part">{t("reading.partSource", { href: props.reading.partSourceHref })}</span></> : null}
+                </dd>
+              </div>
+            ) : null}
+            {props.video ? (
+              <div data-testid="debug-video" data-health={props.video.health} data-ready-state={String(props.video.readyState)} data-decoded={String(props.video.decodedFrames)}>
+                <dt>{t("debug.video")}</dt>
+                <dd>
+                  <span data-testid="debug-video-playing">{t("debug.video.playing")}：{props.video.playing === "play_copy" ? t("video.copyBadge") : props.video.playing === "original" ? t("debug.video.original") : "-"} · {props.video.decision}{props.video.reasons.length ? ` (${props.video.reasons.join(", ")})` : ""}</span>
+                  {" · "}<span data-testid="debug-video-element">{t("debug.video.element")}：readyState {props.video.readyState} · networkState {props.video.networkState} · {t("debug.video.frames", { decoded: props.video.decodedFrames, dropped: props.video.droppedFrames })} · {props.video.width}×{props.video.height} · {t(`debug.video.health.${props.video.health}` as never)}</span>
+                  {" · "}<span data-testid="debug-video-subtitles">{t("debug.video.subtitles")}：{props.video.subtitleRenderer} ({props.video.subtitleStatus}) · {t("debug.video.defaultFont")} {props.video.defaultFont} · {t("debug.video.missingFonts")} {props.video.missingFonts.length ? props.video.missingFonts.join("、") : t("debug.none")}</span>
+                </dd>
+              </div>
+            ) : null}
             {Object.entries(redactForDebug(props.live)).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{typeof value === "string" ? value : JSON.stringify(value)}</dd></div>)}
             {report?.scope ? <div><dt>{t("debug.scope")}</dt><dd>{JSON.stringify(report.scope)}</dd></div> : null}
             {report?.model ? <div><dt>{t("debug.model")}</dt><dd data-testid="debug-model">{JSON.stringify(report.model)}</dd></div> : <div><dt>{t("debug.model")}</dt><dd>{t("debug.none")}</dd></div>}

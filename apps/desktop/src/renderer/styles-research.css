@@ -1,0 +1,43 @@
+/* Finding material, fetching pages and keeping excerpts */
+.research-tab { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.research-side, .research-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.research-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); font-size: 13px; }
+.research-panel h3, .research-panel h4, .research-reader h3 { margin: 0; font-size: 14px; }
+.research-panel p, .research-reader p { margin: 0; }
+.research-form { display: flex; gap: 6px; }
+.research-form input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; background: var(--color-surface); }
+.research-scopes { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0; padding: 0; border: 0; }
+.chip-check { display: inline-flex; align-items: center; gap: 4px; }
+.research-modes { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.research-results, .research-pages, .research-excerpts ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.research-results li, .research-excerpts li { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 10px; }
+.research-excerpts li.is-current { border-color: var(--color-accent); }
+.research-result-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.research-result-head strong { overflow-wrap: anywhere; }
+.research-snippet { color: var(--color-subtle); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.research-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.research-pages li { display: flex; align-items: center; gap: 4px; border: 1px solid var(--color-border); border-radius: 10px; }
+.research-pages li.is-current { border-color: var(--color-accent); }
+.research-page-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 10px; text-align: left; border: 0; background: transparent; }
+.research-page-open span { overflow-wrap: anywhere; }
+.research-page-open small { color: var(--color-subtle); overflow-wrap: anywhere; }
+.research-reader { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.research-reader-head { display: flex; flex-direction: column; gap: 4px; }
+.research-reader-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.research-versions { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.research-versions select { padding: 4px 6px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
+.research-outdated { padding: 6px 10px; border: 1px solid var(--color-danger); border-radius: 10px; color: var(--color-danger); overflow-wrap: anywhere; }
+.research-body { max-height: min(60vh, 520px); overflow: auto; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: 10px; font-size: 15px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.research-body:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.research-body mark { background: var(--color-accent-soft); color: inherit; border-radius: 3px; }
+.research-body mark.is-focused { outline: 2px solid var(--color-accent); }
+.research-keep { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.research-keep label, .research-edit label { display: flex; flex-direction: column; gap: 3px; }
+.research-keep input, .research-edit input { padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; background: var(--color-surface); min-width: 0; }
+.research-edit { display: flex; flex-direction: column; gap: 6px; }
+.research-quote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--color-border); background: var(--color-muted); color: var(--color-subtle); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }
+.research-note { overflow-wrap: anywhere; }
+.research-empty { padding: 20px 4px; }
+@media (max-width: 900px) {
+  .research-tab { grid-template-columns: 1fr; }
+}

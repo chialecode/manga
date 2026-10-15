@@ -2,20 +2,21 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
-import { loadStage, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
+import { currentStage, loadGate, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
 import { writeReport } from "./report.mjs";
 
-/** node scripts/stage.mjs <stage> test: every Vitest case plus the script self-tests, matched to the required cases. */
-export function runStageTest(stage, { withReport = false } = {}) {
-  const config = loadStage(stage);
+/** node scripts/stage.mjs test: every Vitest case plus the script self-tests, matched to the required cases. */
+export function runStageTest({ withReport = false } = {}) {
+  const stage = currentStage();
+  const config = loadGate();
   const root = repoRoot;
   const vitest = path.join(root, "node_modules/vitest/vitest.mjs");
   if (!fs.existsSync(vitest)) {
-    console.error(`FAILED ${stage} tests: vitest is not installed`);
+    console.error("FAILED stage tests: vitest is not installed");
     return 1;
   }
-  const evidence = runDir(stage);
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), `manga-${stage}-vitest-`));
+  const evidence = runDir();
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "manga-vitest-"));
   const reporterFile = path.join(scratch, "vitest.json");
   // Stage evidence runs every test: the large files on, and never the CI switch that skips tests needing the media tools.
   const env = { ...process.env, MANGA_LARGE_FILES: "1" };
@@ -75,23 +76,23 @@ export function runStageTest(stage, { withReport = false } = {}) {
     cases,
   }, null, 2)}\n`);
   if (testRun.status !== "passed") {
-    console.error(JSON.stringify({ status: "failed", check: `${stage}-test`, cases: cases.filter((entry) => entry.status !== "passed").map((entry) => entry.caseId) }));
+    console.error(JSON.stringify({ status: "failed", check: "stage-test", cases: cases.filter((entry) => entry.status !== "passed").map((entry) => entry.caseId) }));
     return 1;
   }
-  if (withReport) return runStageReport(stage);
-  console.log(JSON.stringify({ status: "passed", check: `${stage}-test`, evidence: path.relative(root, evidence).replaceAll("\\", "/"), productAcceptance: "not-run" }));
+  if (withReport) return runStageReport();
+  console.log(JSON.stringify({ status: "passed", check: "stage-test", evidence: path.relative(root, evidence).replaceAll("\\", "/"), productAcceptance: "not-run" }));
   return 0;
 }
 
-/** node scripts/stage.mjs <stage> report: evaluate the run directory; non-zero for any missing, stale or failed item. */
-export function runStageReport(stage) {
-  const config = loadStage(stage);
-  const evidence = runDir(stage);
+/** node scripts/stage.mjs report: evaluate the run directory; non-zero for any missing, stale or failed item. */
+export function runStageReport() {
+  const config = loadGate();
+  const evidence = runDir();
   const report = writeReport(evidence, stageFingerprints(repoRoot, config), config);
   if (!report.engineeringReviewable) {
-    console.error(JSON.stringify({ status: "failed", check: `${stage}-report`, errors: report.errors }, null, 2));
+    console.error(JSON.stringify({ status: "failed", check: "stage-report", errors: report.errors }, null, 2));
     return 1;
   }
-  console.log(JSON.stringify({ status: "passed", check: `${stage}-report`, evidence: path.relative(repoRoot, evidence).replaceAll("\\", "/"), productAcceptance: "not-run" }));
+  console.log(JSON.stringify({ status: "passed", check: "stage-report", evidence: path.relative(repoRoot, evidence).replaceAll("\\", "/"), productAcceptance: "not-run" }));
   return 0;
 }

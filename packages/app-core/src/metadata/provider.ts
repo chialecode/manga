@@ -49,6 +49,8 @@ export type SubjectDetail = {
   rating: NormalizedSubject["rating"];
   images: NormalizedSubject["images"];
   sourceUrl: string;
+  /** Other names the source lists for the entry. */
+  aliases?: string[];
   related: RelatedItem[];
   episodes: EpisodeItem[];
   apiVersion: string;
@@ -178,6 +180,7 @@ export class BangumiProvider implements OnlineProvider {
       rating: normalized.rating,
       images: normalized.images,
       sourceUrl: normalized.sourceUrl,
+      ...(normalized.aliases.length ? { aliases: normalized.aliases } : {}),
       related: related.map((item) => ({
         relation: item.relation, externalId: String(item.id), title: item.name_cn.trim() || item.name, ...(item.name_cn.trim() && item.name !== item.name_cn ? { titleOriginal: item.name } : {}),
         subjectType: item.type, ...(item.images?.common || item.images?.small ? { imageUrl: item.images.common || item.images.small } : {}),

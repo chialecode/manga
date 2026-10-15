@@ -32,7 +32,6 @@
   "scripts": {
     "dev": "node scripts/dev-desktop.mjs",
     "verify": "node scripts/verify.mjs",
-    "m0": "node scripts/m0.mjs",
     "stage": "node scripts/stage.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/desktop/tsconfig.json",
     "test": "vitest run --config vitest.config.ts"

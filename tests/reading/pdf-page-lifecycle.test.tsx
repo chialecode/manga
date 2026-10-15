@@ -53,7 +53,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it("discards late pdf text content after moving to another page", async () => {
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
-  const shared = { bytes: new Uint8Array([1]), sliceStart: 0, highlight: null, scanLabel: "scan", missingLabel: "review", onSelection: vi.fn() };
+  const shared = { bytes: new Uint8Array([1]), sliceStart: 0, highlight: null, scanLabel: "scan", missingLabel: "review", zoomLabels: { out: "out", in: "in", fit: "fit" }, onSelection: vi.fn() };
   const view = render(<PdfPageView {...shared} pageNumber={1} storedText="FIRST LINE" />);
   await waitFor(() => expect(fake.requested).toHaveBeenCalledWith(1));
   view.rerender(<PdfPageView {...shared} pageNumber={2} storedText="PAGE TWO" />);
@@ -68,7 +68,7 @@ it("paints a page once at its opening width and again only after the width has h
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => width);
   let changed: () => void = () => undefined;
   vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { changed = callback; } observe() {} disconnect() {} });
-  const shared = { bytes: new Uint8Array([1]), sliceStart: 0, highlight: null, scanLabel: "scan", missingLabel: "review", onSelection: vi.fn() };
+  const shared = { bytes: new Uint8Array([1]), sliceStart: 0, highlight: null, scanLabel: "scan", missingLabel: "review", zoomLabels: { out: "out", in: "in", fit: "fit" }, onSelection: vi.fn() };
   render(<PdfPageView {...shared} pageNumber={2} storedText="PAGE TWO" />);
   const epoch = () => Number(screen.getByTestId("reading-page-render").getAttribute("data-pdf-epoch"));
   await waitFor(() => expect(epoch()).toBe(1));

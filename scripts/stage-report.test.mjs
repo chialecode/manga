@@ -4,10 +4,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { evaluateStageEvidence } from "./stage/report.mjs";
-import { hashTree, loadStage, p95, p99 } from "./stage/lib.mjs";
+import { hashTree, loadGate, p95, p99 } from "./stage/lib.mjs";
 
 // Counterexamples for the stage gate: each mutation of an otherwise complete run must be rejected.
-const config = loadStage("m2");
+const config = loadGate();
 const { targets, scale: requiredScale, scaleWindowSamples } = config.bench;
 const fingerprints = {
   sourceFingerprint: "current",
@@ -27,6 +27,18 @@ const evaluate = (dir) => evaluateStageEvidence(dir, fingerprints, config);
 // The required patterns are anchored regular expressions; a synthetic name is the text they match.
 const literal = (pattern) => pattern.replace(/^\^/, "").replace(/\$$/, "").replace(/\\(.)/g, "$1");
 
+/** One creative measurement that meets what the gate asks of it: enough samples, at the size named, from the engine named. */
+function creativeEntry(wanted) {
+  const unverified = wanted.metric === "btUnverifiedPieces";
+  // A figure that must be none (pieces left unchecked, whole-file reads made by an import) is none in the passing fixture.
+  const none = unverified || targets[wanted.metric] === 0;
+  const entry = { kind: unverified ? "loopback-bt-download" : wanted.scale?.cards || wanted.scale?.nodes ? "electron-canvas" : wanted.scale?.comments || wanted.scale?.runs ? "electron-reader" : wanted.scale?.videos ? "service-video-import" : "service-semantic-search", scale: { ...wanted.scale }, raw: Array.from({ length: wanted.minSamples }, () => (none ? 0 : 1)) };
+  if (wanted.engine) entry.engine = wanted.engine;
+  if (unverified) entry.detail = { pieces: Math.ceil(wanted.scale.bytes / 262144), pieceLength: 262144, verifiedPieces: Math.ceil(wanted.scale.bytes / 262144), unverifiedPieces: 0, sha256Matches: true, stagingLeft: false, counts: { failed: 0, published: 1 } };
+  if (entry.kind === "electron-canvas" || entry.kind === "electron-reader") entry.detail = { ok: true };
+  return entry;
+}
+
 function passing() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-stage-report-"));
   const cases = config.cases.map((def) => ({
@@ -42,8 +54,9 @@ function passing() {
     status: "passed",
     productAcceptance: "not-run",
     targets,
-    metrics: Object.fromEntries(Object.keys(targets).map((key) => [key, 1])),
-    rework: {
+    metrics: Object.fromEntries(Object.keys(targets).map((key) => [key, targets[key] === 0 ? 0 : 1])),
+    creative: Object.fromEntries(Object.entries(config.bench.creative ?? {}).map(([id, wanted]) => [id, creativeEntry(wanted)])),
+    scanPane: {
       ok: true,
       scan: {
         files: Array.from({ length: config.bench.scan.runs }, () => config.bench.scan.files),
@@ -87,9 +100,12 @@ function passing() {
     viewports: { wide: { innerWidth: 1280 }, narrow: { innerWidth: 720 } },
     loop06: { settled: { stable: true }, tagged: true, repainted: false, atEnd: { nodeConnected: true } },
     agent: { runningShown: true, stoppedShown: true, conversationShown: true },
-    rework: { ok: true, observations: config.scenarios.length },
+    windowWalk: { ok: true, observations: config.scenarios.length },
+    creative: { ok: true, observations: 13 },
+    trace: { ok: true, observations: 1 },
+    plugins: { ok: true, steps: (config.package.pluginSteps ?? []).map((id) => ({ id, ok: true })) },
     assets: Object.fromEntries((config.package.assets ?? []).map((name) => [name, true])),
-    closure: {
+    readingLoop: {
       readLastChapter: true,
       recordedNote: true,
       sourceCardOk: true,
@@ -128,16 +144,16 @@ test("report does not treat a complete self-check as product acceptance", () => 
   assert.equal(report.productAcceptance, "not-run");
 });
 
-test("report rejects a package whose closure smoke did not really run", () => {
+test("report rejects a package whose reading-loop smoke did not really run", () => {
   const dir = passing();
   const pack = read(dir, "package.json");
-  pack.closure.recordedNote = false;
-  pack.smoke = pack.smoke.filter((phase) => phase !== "closure-restart");
+  pack.readingLoop.recordedNote = false;
+  pack.smoke = pack.smoke.filter((phase) => phase !== "reading-loop-restart");
   write(dir, "package.json", pack);
   const report = evaluate(dir);
   assert.equal(report.engineeringReviewable, false);
-  assert.ok(report.errors.some((error) => error.includes("closure-restart smoke missing")));
-  assert.ok(report.errors.some((error) => error.includes("closure recordedNote")));
+  assert.ok(report.errors.some((error) => error.includes("reading-loop-restart smoke missing")));
+  assert.ok(report.errors.some((error) => error.includes("reading-loop recordedNote")));
 });
 
 test("report rejects a package without a runtime version or without a required packaged asset", () => {
@@ -220,19 +236,19 @@ test("report rejects a missing, undersized or inconsistent same-scale window run
 
 test("report rejects a 5000-file scan that fell short, or a gated figure that does not follow from its samples", () => {
   const variants = [
-    (bench) => { bench.rework.ok = false; },
-    (bench) => { bench.rework.scan.files[0] = 100; },
-    (bench) => { bench.rework.scan.added[1] = 100; },
-    (bench) => { bench.rework.scan.files = [config.bench.scan.files]; bench.rework.scan.added = [config.bench.scan.files]; },
-    (bench) => { bench.rework.scan.loopLag.raw = [1, 1, 1]; },
-    (bench) => { bench.rework.scan.loopLag.raw[0] = -1; },
+    (bench) => { bench.scanPane.ok = false; },
+    (bench) => { bench.scanPane.scan.files[0] = 100; },
+    (bench) => { bench.scanPane.scan.added[1] = 100; },
+    (bench) => { bench.scanPane.scan.files = [config.bench.scan.files]; bench.scanPane.scan.added = [config.bench.scan.files]; },
+    (bench) => { bench.scanPane.scan.loopLag.raw = [1, 1, 1]; },
+    (bench) => { bench.scanPane.scan.loopLag.raw[0] = -1; },
     // One long stall among many short delays moves the p99 only when the samples say so; the metric has to follow them.
-    (bench) => { bench.rework.scan.loopLag.raw = bench.rework.scan.loopLag.raw.map((_, index) => (index % 50 === 0 ? 400 : 1)); bench.metrics.scanEventLoopP99Ms = 1; },
-    (bench) => { bench.rework.scan.interaction.raw = bench.rework.scan.interaction.raw.map((_, index) => (index % 10 === 0 ? 300 : 1)); bench.metrics.scanInteractionP95Ms = 1; },
-    (bench) => { bench.rework.scan.interaction.raw = [1, 1, 1]; },
+    (bench) => { bench.scanPane.scan.loopLag.raw = bench.scanPane.scan.loopLag.raw.map((_, index) => (index % 50 === 0 ? 400 : 1)); bench.metrics.scanEventLoopP99Ms = 1; },
+    (bench) => { bench.scanPane.scan.interaction.raw = bench.scanPane.scan.interaction.raw.map((_, index) => (index % 10 === 0 ? 300 : 1)); bench.metrics.scanInteractionP95Ms = 1; },
+    (bench) => { bench.scanPane.scan.interaction.raw = [1, 1, 1]; },
     (bench) => { bench.metrics.scanEventLoopP99Ms = targets.scanEventLoopP99Ms + 1; },
-    (bench) => { bench.rework.pane.loaded = [1000, 999, 1000]; },
-    (bench) => { bench.rework.pane.kind = "service"; },
+    (bench) => { bench.scanPane.pane.loaded = [1000, 999, 1000]; },
+    (bench) => { bench.scanPane.pane.kind = "service"; },
   ];
   for (const [index, mutate] of variants.entries()) {
     const dir = passing();
@@ -244,15 +260,15 @@ test("report rejects a 5000-file scan that fell short, or a gated figure that do
   // The two gated figures are exactly the p99 / p95 of the raw samples.
   const dir = passing();
   const bench = read(dir, "bench.json");
-  bench.rework.scan.loopLag.raw = bench.rework.scan.loopLag.raw.map((_, index) => (index % 200 === 0 ? 40 : 2));
-  bench.rework.scan.interaction.raw = bench.rework.scan.interaction.raw.map((_, index) => (index % 20 === 0 ? 30 : 3));
-  bench.metrics.scanEventLoopP99Ms = p99(bench.rework.scan.loopLag.raw);
-  bench.metrics.scanInteractionP95Ms = p95(bench.rework.scan.interaction.raw);
+  bench.scanPane.scan.loopLag.raw = bench.scanPane.scan.loopLag.raw.map((_, index) => (index % 200 === 0 ? 40 : 2));
+  bench.scanPane.scan.interaction.raw = bench.scanPane.scan.interaction.raw.map((_, index) => (index % 20 === 0 ? 30 : 3));
+  bench.metrics.scanEventLoopP99Ms = p99(bench.scanPane.scan.loopLag.raw);
+  bench.metrics.scanInteractionP95Ms = p95(bench.scanPane.scan.interaction.raw);
   write(dir, "bench.json", bench);
   assert.deepEqual(evaluate(dir).errors, []);
 });
 
-test("report rejects a package run that lost the PDF selection, the agent controls or the rework walk", () => {
+test("report rejects a package run that lost the PDF selection, the agent controls or the window walk", () => {
   const variants = [
     (pack) => { pack.loop06.repainted = true; },
     (pack) => { pack.loop06.tagged = false; },
@@ -261,9 +277,18 @@ test("report rejects a package run that lost the PDF selection, the agent contro
     (pack) => { delete pack.loop06; },
     (pack) => { pack.agent.stoppedShown = false; },
     (pack) => { pack.agent.conversationShown = false; },
-    (pack) => { pack.rework.ok = false; },
-    (pack) => { pack.rework.observations = 3; },
-    (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "rework"); },
+    (pack) => { pack.windowWalk.ok = false; },
+    (pack) => { pack.windowWalk.observations = 3; },
+    (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "window-walk"); },
+    (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "creative"); },
+    (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "plugins"); },
+    (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "trace"); },
+    (pack) => { pack.creative.ok = false; },
+    (pack) => { pack.trace.ok = false; },
+    (pack) => { delete pack.trace; },
+    (pack) => { pack.plugins.ok = false; },
+    (pack) => { pack.plugins.steps = pack.plugins.steps.filter((step) => step.id !== "magnet-secret-never-shown-or-logged"); },
+    (pack) => { pack.plugins.steps[0].ok = false; },
     (pack) => { delete pack.viewports.narrow; },
   ];
   for (const [index, mutate] of variants.entries()) {
@@ -271,6 +296,30 @@ test("report rejects a package run that lost the PDF selection, the agent contro
     const pack = read(dir, "package.json");
     mutate(pack);
     write(dir, "package.json", pack);
+    assert.equal(evaluate(dir).engineeringReviewable, false, `variant ${index}`);
+  }
+});
+
+test("report rejects a creative figure that is short of samples, size or engine, or does not follow from its samples", () => {
+  const variants = [];
+  for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
+    variants.push((bench) => { delete bench.creative[id]; });
+    variants.push((bench) => { bench.creative[id].raw = bench.creative[id].raw.slice(1); if (wanted.minSamples === 1) bench.creative[id].raw = []; });
+    variants.push((bench) => { bench.creative[id].raw[0] = -1; });
+    for (const name of Object.keys(wanted.scale ?? {})) variants.push((bench) => { bench.creative[id].scale[name] = 1; });
+    if (wanted.engine) variants.push((bench) => { bench.creative[id].engine = "other"; });
+    if (wanted.stat === "p95") variants.push((bench) => { bench.creative[id].raw = bench.creative[id].raw.map(() => 5000); });
+    if (wanted.stat === "max" && targets[wanted.metric] !== 0) variants.push((bench) => { bench.creative[id].raw[0] = 5000; });
+    if (wanted.scale?.videos && targets[wanted.metric] === 0) variants.push((bench) => { bench.creative[id].raw[0] = 1; bench.metrics[wanted.metric] = 1; });
+    if (id === "btLoopback") variants.push((bench) => { bench.creative[id].detail.unverifiedPieces = 1; });
+    if (id === "btLoopback") variants.push((bench) => { bench.creative[id].detail.stagingLeft = true; });
+    if (wanted.scale?.cards || wanted.scale?.nodes || wanted.scale?.comments || wanted.scale?.runs) variants.push((bench) => { bench.creative[id].detail.ok = false; });
+  }
+  for (const [index, mutate] of variants.entries()) {
+    const dir = passing();
+    const bench = read(dir, "bench.json");
+    mutate(bench);
+    write(dir, "bench.json", bench);
     assert.equal(evaluate(dir).engineeringReviewable, false, `variant ${index}`);
   }
 });
@@ -294,7 +343,7 @@ test("report requires every measurement-only figure to carry its raw samples", (
 
 test("report accepts declared blocked and not-run limits only with an owner and a retest entry", () => {
   const dir = passing();
-  write(dir, "limits.json", { entries: [{ id: "bangumi-live", status: "blocked", owner: "user", retest: "BANGUMI_LIVE=1 node scripts/stage.mjs m2 test" }] });
+  write(dir, "limits.json", { entries: [{ id: "bangumi-live", status: "blocked", owner: "user", retest: "BANGUMI_LIVE=1 node scripts/stage.mjs test" }] });
   assert.equal(evaluate(dir).engineeringReviewable, true);
   write(dir, "limits.json", { entries: [{ id: "bangumi-live", status: "blocked" }] });
   assert.equal(evaluate(dir).engineeringReviewable, false);

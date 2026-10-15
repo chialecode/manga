@@ -6,6 +6,7 @@ import type { ComposerProps } from "./composer.tsx";
 import { ChatPane } from "./chat-pane.tsx";
 import { Capsule } from "./capsule.tsx";
 import { MaterialsDialog } from "./materials-dialog.tsx";
+import { TraceDialog } from "../trace-dialog.tsx";
 
 export type ChatViewProps = ChatDeps & {
   formatDate: (value: string) => string;
@@ -39,6 +40,7 @@ export function useChatView(props: ChatViewProps) {
   const t = i18n.t;
   const chat = useChat(props);
   const [materials, setMaterials] = useState(false);
+  const [traceRun, setTraceRun] = useState<string | null>(null);
   const context = chat.context;
 
   const mic: ComposerProps["mic"] = recorder
@@ -86,6 +88,7 @@ export function useChatView(props: ChatViewProps) {
     <>
       <ChatPane
         t={t}
+        memoryKey={props.target.sessionId}
         stream={chat.stream}
         formatDate={props.formatDate}
         wide={props.wide}
@@ -100,6 +103,7 @@ export function useChatView(props: ChatViewProps) {
           onQuoteNote: (note) => chat.quoteNote(note),
           onOpenRecording: props.onOpenRecording,
           onRetry: props.onRetry,
+          onOpenTrace: setTraceRun,
         }}
       />
       {materials ? (
@@ -117,6 +121,7 @@ export function useChatView(props: ChatViewProps) {
           onClose={() => setMaterials(false)}
         />
       ) : null}
+      {traceRun ? <TraceDialog t={t} runId={traceRun} formatNumber={i18n.formatNumber} onNotice={props.setNotice} onClose={() => setTraceRun(null)} /> : null}
     </>
   );
 

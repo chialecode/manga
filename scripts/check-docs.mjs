@@ -13,22 +13,93 @@ const kinds = new Set([
   'status', 'decision', 'research', 'evidence', 'template',
 ]);
 
-// Stage order for the retirement rule: a document marked retireAfter must be gone once the current stage is later.
-export const stageOrder = ['m0', 'm1a', 'm1b', 'm2', 'm3', 'm4'];
+// Stage names are "m" plus a number and an optional letter (m2, m1b). They are compared by number, not looked up in a list,
+// so a new stage needs no change here.
+export function parseStage(name) {
+  const match = typeof name === 'string' ? /^m(\d+)([a-z]?)$/.exec(name) : null;
+  return match ? [Number(match[1]), match[2]] : null;
+}
 
+export function compareStages(a, b) {
+  const [left, right] = [parseStage(a), parseStage(b)];
+  if (!left || !right) return NaN;
+  return left[0] - right[0] || (left[1] < right[1] ? -1 : left[1] > right[1] ? 1 : 0);
+}
+
+// A document marked retireAfter must be gone once the current stage is later.
 export function retiredDocumentErrors(registry, exists) {
   const errors = [];
-  const current = stageOrder.indexOf(registry.currentStage);
+  const current = parseStage(registry.currentStage);
   const marked = registry.documents.filter((doc) => doc && typeof doc === 'object' && doc.retireAfter !== undefined);
-  if (marked.length && current < 0) errors.push('Registry: currentStage must name a known stage when documents declare retireAfter');
-  if (registry.currentStage !== undefined && current < 0) errors.push(`Registry: unknown currentStage ${registry.currentStage}`);
+  if (marked.length && !current) errors.push('Registry: currentStage must name a known stage when documents declare retireAfter');
+  if (registry.currentStage !== undefined && !current) errors.push(`Registry: unknown currentStage ${registry.currentStage}`);
   for (const doc of marked) {
-    const retire = stageOrder.indexOf(doc.retireAfter);
-    if (retire < 0) errors.push(`${doc.path}: unknown retireAfter ${doc.retireAfter}`);
-    else if (current > retire && exists(doc.path)) {
+    if (!parseStage(doc.retireAfter)) errors.push(`${doc.path}: unknown retireAfter ${doc.retireAfter}`);
+    else if (current && compareStages(registry.currentStage, doc.retireAfter) > 0 && exists(doc.path)) {
       errors.push(`${doc.path}: stage ${registry.currentStage} is past retireAfter ${doc.retireAfter}; extract it into the stage summary and delete it`);
     }
   }
+  return errors;
+}
+
+// Stage labels (documentation policy 8.3): documents and code say what is implemented and what is next, not which stage it came from.
+// Only the current stage's name may appear. The lookarounds keep file formats (m4a, m4v), m3u8 and the like out of the match.
+const stageLabel = /(?<![A-Za-z0-9])[Mm](\d+)([a-z]?)(?![A-Za-z0-9])/g;
+const formatNames = new Set(['m4a', 'm4b', 'm4p', 'm4r', 'm4v']);
+// Fixed archive links (documentation policy 8.2) point at paths of files that only exist in history, so their paths may carry labels.
+const archiveLink = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:tree|blob)\/[0-9a-f]{7,40}\/[^\s)>\]]*/g;
+
+/** Labels of stages other than the current one, with their line numbers. */
+export function stageLabels(text, currentStage) {
+  const found = [];
+  text.split(/\r?\n/).forEach((line, index) => {
+    // SVG path data (d="M13 5H9...") starts with an M command that only looks like a stage label.
+    for (const match of line.replace(archiveLink, '').replace(/(?<![A-Za-z0-9])d="[^"]*"/g, '').matchAll(stageLabel)) {
+      const label = match[0].toLowerCase();
+      if (label === currentStage || formatNames.has(label)) continue;
+      found.push({ label: match[0], line: index + 1 });
+    }
+  });
+  return found;
+}
+
+export function stageLabelErrors(registry, markdown) {
+  const errors = [];
+  const exempt = new Set(registry.documents.filter((doc) => doc && doc.retireAfter !== undefined && doc.retireAfter === registry.currentStage).map((doc) => doc.path));
+  for (const [relative, content] of markdown) {
+    if (exempt.has(relative)) continue;
+    for (const { label, line } of stageLabels(content, registry.currentStage)) errors.push(`${relative}:${line}: stage label ${label} (documentation policy 8.3)`);
+  }
+  for (const doc of registry.documents) {
+    if (!doc || typeof doc !== 'object' || exempt.has(doc.path)) continue;
+    for (const key of ['path', 'scope', 'basis', 'owner']) {
+      for (const { label } of stageLabels(String(doc[key] ?? ''), registry.currentStage)) errors.push(`document-registry.json ${doc.path}: ${key} carries stage label ${label}`);
+    }
+  }
+  return errors;
+}
+
+// The same rule for comments, test names, configuration and scripts. The checker and its counterexamples have to spell labels out.
+const codeRoots = ['apps', 'packages', 'tests', 'scripts', '.github', '.githooks'];
+const codeFiles = /\.(?:ts|tsx|mjs|cjs|js|css|yml|yaml|json|py|sh)$/i;
+const codeIgnored = new Set(['node_modules', 'dist', 'out', '.vite', 'coverage']);
+const labelCheckers = new Set(['scripts/check-docs.mjs', 'scripts/check-docs.test.mjs']);
+
+export function stageLabelCodeErrors(root, currentStage) {
+  const errors = [];
+  const visit = (relative) => {
+    const file = path.join(root, relative);
+    if (!fs.existsSync(file)) return;
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink()) return;
+    if (stat.isDirectory()) {
+      for (const name of fs.readdirSync(file)) if (!codeIgnored.has(name)) visit(`${relative}/${name}`);
+    } else if (codeFiles.test(relative) && !labelCheckers.has(relative) && stat.size < 2_000_000) {
+      for (const { label, line } of stageLabels(fs.readFileSync(file, 'utf8'), currentStage)) errors.push(`${relative}:${line}: stage label ${label} (documentation policy 8.3)`);
+    }
+  };
+  for (const entry of codeRoots) visit(entry);
+  for (const name of fs.readdirSync(root)) if (codeFiles.test(name) && fs.statSync(path.join(root, name)).isFile()) visit(name);
   return errors;
 }
 
@@ -148,6 +219,8 @@ export function validateRepository(directory) {
     if (!registered.has(relative)) errors.push(`Unregistered Markdown: ${relative}`);
   }
   errors.push(...retiredDocumentErrors(registry, (file) => markdown.has(file) || fs.existsSync(path.join(root, file))));
+  errors.push(...stageLabelErrors(registry, markdown));
+  errors.push(...stageLabelCodeErrors(root, registry.currentStage));
   if ((markdown.get('CLAUDE.md') ?? '').trim() !== '@AGENTS.md') {
     errors.push('CLAUDE.md must contain only @AGENTS.md');
   }
@@ -196,7 +269,7 @@ export function validateRepository(directory) {
   const requirementIds = tableIds(requirements, '[A-Z]+-\\d+');
   const acceptance = section(roadmap, '## 5. 验收用例', '## 6. 需求追踪矩阵', errors, 'Acceptance definitions');
   const traceability = section(roadmap, '## 6. 需求追踪矩阵', '## 7. 质量检查', errors, 'Traceability matrix');
-  const proof = section(roadmap, '## 3. M0 验证任务', '### 3.1 ', errors, 'POC definitions');
+  const proof = section(roadmap, '## 3. 验证任务（POC）', '### 3.1 ', errors, 'POC definitions');
   const acceptanceIds = tableIds(acceptance, 'AT-\\d+');
   const proofIds = tableIds(proof, 'POC-\\d+');
   const tracedIds = tableIds(traceability, '[A-Z]+-\\d+');

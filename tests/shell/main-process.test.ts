@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { externalUrlAllowed, isAppPage, permissionAllowed } from "../../apps/desktop/src/main/permissions.ts";
 import { OVERLAY_MARGIN, overlayDocument, parseOverlayState, placeOverlay } from "../../apps/desktop/src/main/overlay-model.ts";
-import { productWindow } from "../../apps/desktop/src/main/window-options.ts";
+import { WINDOW_ACTIONS, parseWindowAction, productWindow, windowControlsDrawn } from "../../apps/desktop/src/main/window-options.ts";
 
 // Built from parts: the publication check refuses literal drive paths in a public file.
 const DRIVE = ["C", ":"].join("");
@@ -22,9 +22,35 @@ describe("permissions of the app window", () => {
 
   it("allows the font list for subtitle styles, and refuses every other permission", () => {
     expect(permissionAllowed(facts({ permission: "local-fonts", mediaTypes: undefined }))).toBe(true);
-    for (const permission of ["geolocation", "notifications", "clipboard-read", "display-capture", "midi", "usb", "fullscreen", "openExternal", "camera"]) {
+    for (const permission of ["geolocation", "notifications", "clipboard-read", "display-capture", "midi", "usb", "openExternal", "camera"]) {
       expect(permissionAllowed(facts({ permission, mediaTypes: undefined })), permission).toBe(false);
     }
+  });
+
+  // Regression: `requestFullscreen()` in all three readers was refused here, so the full-screen buttons did nothing.
+  it("allows full screen for the app's own window, so the reader and player full-screen buttons work", () => {
+    expect(permissionAllowed(facts({ permission: "fullscreen", mediaTypes: undefined }))).toBe(true);
+    expect(permissionAllowed(facts({ permission: "fullscreen", mediaTypes: undefined, requestingUrl: `${FILE_APP}#/reader` }))).toBe(true);
+    expect(permissionAllowed(facts({ permission: "fullscreen", mediaTypes: undefined, appUrl: DEV_APP, requestingUrl: DEV_APP }))).toBe(true);
+  });
+
+  // Regression (AT-97): "copy as JSON" and the debug panel's copy said that the copy failed in the real window: the page's write to the clipboard was refused here.
+  it("allows the app's own page to write text to the clipboard, and never to read it", () => {
+    expect(permissionAllowed(facts({ permission: "clipboard-sanitized-write", mediaTypes: undefined }))).toBe(true);
+    expect(permissionAllowed(facts({ permission: "clipboard-sanitized-write", mediaTypes: undefined, appUrl: DEV_APP, requestingUrl: DEV_APP }))).toBe(true);
+    for (const permission of ["clipboard-read", "clipboard-write"]) expect(permissionAllowed(facts({ permission, mediaTypes: undefined })), permission).toBe(false);
+  });
+
+  it("refuses the clipboard to another window or another page", () => {
+    expect(permissionAllowed(facts({ permission: "clipboard-sanitized-write", mediaTypes: undefined, fromAppWindow: false }))).toBe(false);
+    expect(permissionAllowed(facts({ permission: "clipboard-sanitized-write", mediaTypes: undefined, requestingUrl: "https://example.com/" }))).toBe(false);
+    expect(permissionAllowed(facts({ permission: "clipboard-sanitized-write", mediaTypes: undefined, requestingUrl: "" }))).toBe(false);
+  });
+
+  it("refuses full screen for another window or another page", () => {
+    expect(permissionAllowed(facts({ permission: "fullscreen", mediaTypes: undefined, fromAppWindow: false }))).toBe(false);
+    expect(permissionAllowed(facts({ permission: "fullscreen", mediaTypes: undefined, requestingUrl: "https://example.com/" }))).toBe(false);
+    expect(permissionAllowed(facts({ permission: "fullscreen", mediaTypes: undefined, requestingUrl: "" }))).toBe(false);
   });
 
   it("refuses another window or another page, even for the microphone", () => {
@@ -120,11 +146,52 @@ describe("the floating recording box", () => {
 });
 
 describe("window colors", () => {
-  it("the window and its caption buttons use the page colors of the app", () => {
+  it("the window uses the page color of the app, and the system draws no buttons over the page", () => {
     const css = readFileSync(new URL("../../apps/desktop/src/renderer/styles.css", import.meta.url), "utf8");
-    const token = (name: string) => new RegExp(`--color-${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(css)![1]!.toUpperCase();
+    const token = (name: string) => new RegExp(String.raw`--color-${name}:\s*(#[0-9A-Fa-f]{6})`).exec(css)![1]!.toUpperCase();
     expect(productWindow.backgroundColor.toUpperCase()).toBe(token("bg"));
-    expect(productWindow.titleBarOverlay.color.toUpperCase()).toBe(token("bg"));
-    expect(productWindow.titleBarOverlay.symbolColor.toUpperCase()).toBe(token("text"));
+    // AT-105: the window's own buttons are the page's (A-91); the overlay the system would draw over the page is gone from the window's options and the main process.
+    expect(productWindow).not.toHaveProperty("titleBarOverlay");
+    expect(productWindow).not.toHaveProperty("captionReservePx");
+    const main = readFileSync(new URL("../../apps/desktop/src/main/index.ts", import.meta.url), "utf8");
+    expect(main).not.toMatch(/titleBarOverlay|setTitleBarOverlay|manga:window-chrome/);
+    expect(main).toContain("titleBarStyle: productWindow.titleBarStyle");
+  });
+
+  it("the buttons are as high as the tops of the columns", () => {
+    const shell = readFileSync(new URL("../../apps/desktop/src/renderer/shell.tsx", import.meta.url), "utf8");
+    expect(Number(/const COLUMN_TOP = (\d+);/.exec(shell)![1])).toBe(productWindow.topHeightPx);
+    const css = readFileSync(new URL("../../apps/desktop/src/renderer/styles.css", import.meta.url), "utf8");
+    // One variable carries the height; the top, and everything that sits under it in window full screen, read it.
+    expect(css).toMatch(new RegExp(String.raw`--column-top-h: *${productWindow.topHeightPx}px`));
+    expect(css).toMatch(/\.column-top \{[^}]*height: var\(--column-top-h\)/);
+  });
+});
+
+describe("AT-105 what the page may ask of the window", () => {
+  it("accepts the three actions of the window's buttons and nothing else", () => {
+    expect([...WINDOW_ACTIONS]).toEqual(["minimize", "toggle-maximize", "close"]);
+    for (const action of WINDOW_ACTIONS) expect(parseWindowAction(action)).toBe(action);
+    for (const bad of [undefined, null, 5, {}, [], "", "maximize", "unmaximize", "setBounds", "hide", "destroy", "quit", "Minimize", "minimize ", { action: "close" }, ["close"]]) {
+      expect(parseWindowAction(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("draws the buttons everywhere but on macOS, which keeps its traffic lights", () => {
+    expect(windowControlsDrawn("win32")).toBe(true);
+    expect(windowControlsDrawn("linux")).toBe(true);
+    expect(windowControlsDrawn("darwin")).toBe(false);
+  });
+
+  it("is told to the page through channels only the page's own window may use", () => {
+    const main = readFileSync(new URL("../../apps/desktop/src/main/index.ts", import.meta.url), "utf8");
+    for (const channel of ["manga:window-state", "manga:window-action"]) expect(main).toContain(channel);
+    // Both handlers check who is asking, and the state is pushed on every change of the window's size state.
+    expect(main).toMatch(/ipcMain\.handle\("manga:window-action", \(event, requested: unknown\) => \{\s*assertCaller\(event\);/);
+    expect(main).toMatch(/ipcMain\.handle\("manga:window-state", \(event\) => \{ assertCaller\(event\);/);
+    for (const event of ["maximize", "unmaximize", "restore"]) expect(main).toContain(`window.on("${event}", pushWindowState)`);
+    const preload = readFileSync(new URL("../../apps/desktop/src/preload/preload.ts", import.meta.url), "utf8");
+    expect(preload).not.toContain("windowChrome");
+    for (const name of ["windowState", "windowAction", "onWindowState"]) expect(preload).toContain(name);
   });
 });

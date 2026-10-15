@@ -9,12 +9,16 @@ import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap } from "@codemirror/commands";
 import { type NoteBlock, type NoteDocument, NOTE_BLOCK_TYPES } from "@manga/contracts/reading";
 import { uniqueBlockIds } from "../../../../packages/app-core/src/domain/note-document.ts";
+import { EmbedHostContext, MangaEmbed } from "./embed/embed-node.tsx";
+import { EmbedPicker } from "./embed/embed-picker.tsx";
+import { MangaScreenshot, ScreenshotHostContext, ScreenshotPicker, type ScreenshotHost } from "./embed/screenshot-node.tsx";
+import type { EmbedAttr, EmbedHost, EmbedItem } from "./embed/embed-types.ts";
 
 /** How long consecutive keystrokes collapse into one undo step. */
 const COALESCE_MS = 700;
 
 const MangaDoc = Document.extend({
-  content: "mangaBlock+",
+  content: "(mangaBlock|mangaEmbed|mangaScreenshot)+",
   addProseMirrorPlugins() {
     return [new Plugin({
       appendTransaction(transactions, _old, state) {
@@ -64,20 +68,40 @@ const MangaBlock = Node.create({
   },
 });
 
+/** An embed block carries what it points at in `attrs.embed`; a block of type `embed` without it is an ordinary (empty) block. */
+const embedOf = (block: NoteBlock): EmbedAttr | null => block.type === "embed" && block.attrs && typeof block.attrs.embed === "object" && block.attrs.embed ? block.attrs.embed as EmbedAttr : null;
+
+/** A screenshot block carries the id of the screenshot in `attrs.screenshotId`; the picture stays in the folder of its work. */
+const screenshotOf = (block: NoteBlock): string | null => block.type === "screenshot" && block.attrs && typeof block.attrs.screenshotId === "string" && block.attrs.screenshotId ? block.attrs.screenshotId : null;
+
 export function contentFrom(blocks: NoteBlock[]) {
   return {
     type: "doc",
-    content: blocks.map((block) => ({
+    content: blocks.map((block) => screenshotOf(block) ? {
+      type: "mangaScreenshot",
+      attrs: { blockId: block.id, anchorId: block.anchorId ?? null, screenshotId: screenshotOf(block) },
+    } : embedOf(block) ? {
+      type: "mangaEmbed",
+      attrs: { blockId: block.id, anchorId: block.anchorId ?? null, embed: embedOf(block) },
+    } : {
       type: "mangaBlock",
       attrs: { blockId: block.id, blockType: block.type, level: block.level, ordered: block.ordered, anchorId: block.anchorId, noteAttrs: block.attrs ?? null },
       content: block.text ? [{ type: "text", text: block.text }] : [],
-    })),
+    }),
   };
 }
 
 export function blocksFromEditor(editor: NonNullable<ReturnType<typeof useEditor>>): NoteBlock[] {
   const raw: NoteBlock[] = [];
   editor.state.doc.forEach((node) => {
+    if (node.type.name === "mangaScreenshot") {
+      raw.push({ id: String(node.attrs.blockId ?? ""), type: "screenshot", text: "", ...(node.attrs.anchorId != null ? { anchorId: node.attrs.anchorId } : {}), attrs: { screenshotId: String(node.attrs.screenshotId ?? "") } });
+      return;
+    }
+    if (node.type.name === "mangaEmbed") {
+      raw.push({ id: String(node.attrs.blockId ?? ""), type: "embed", text: "", ...(node.attrs.anchorId != null ? { anchorId: node.attrs.anchorId } : {}), attrs: { embed: node.attrs.embed as EmbedAttr } });
+      return;
+    }
     if (node.type.name !== "mangaBlock") return;
     raw.push({
       id: String(node.attrs.blockId ?? ""),
@@ -189,6 +213,17 @@ export function NoteEditor(props: {
     openSource?: string;
   };
   drafts?: DraftStore;
+  /** Present when the embeds module is on: what this note's embed blocks show, and how to open or switch on what they point at. */
+  embeds?: {
+    t: EmbedHost["t"];
+    formatDate: EmbedHost["formatDate"];
+    items: Record<string, EmbedItem>;
+    onOpen: EmbedHost["onOpen"];
+    onEnable: EmbedHost["onEnable"];
+    onRefresh: EmbedHost["onRefresh"];
+  };
+  /** Present when the library is on: the note can hold screenshots, which open the video or the page they were taken from. */
+  screenshots?: { t: ScreenshotHost["t"]; onOpen: ScreenshotHost["onOpen"] };
   /** Set when the note's stored source no longer resolves, so the UI can offer the repair entry. */
   sourceStale?: boolean;
   /** Block the reader returned to, so the editor scrolls it into view instead of opening at the top. */
@@ -207,6 +242,8 @@ export function NoteEditor(props: {
   const [selectedId, setSelectedId] = useState<string | null>(props.document.blocks[0]?.id ?? null);
   const [draftNotice, setDraftNotice] = useState<{ blocks: NoteBlock[]; savedAt: string } | null>(null);
   const [conflict, setConflict] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [pickingShot, setPickingShot] = useState(false);
   const [historyDepth, setHistoryDepth] = useState({ past: 0, future: 0 });
   const composing = useRef(false);
   const applying = useRef(false);
@@ -237,7 +274,7 @@ export function NoteEditor(props: {
 
   const editor = useEditor({
     // History is kept at document level so both views share one stack; see pushHistory/undo/redo.
-    extensions: [MangaDoc, MangaBlock, Text],
+    extensions: [MangaDoc, MangaBlock, MangaEmbed, MangaScreenshot, Text],
     content: contentFrom(props.document.blocks),
     editorProps: { attributes: { "data-testid": "note-surface" } },
     onUpdate: ({ editor: instance }) => {
@@ -440,6 +477,41 @@ export function NoteEditor(props: {
     record(next);
   }
 
+  /** An embed block is put in, taken out or changed whole; it has no text to type into, split or merge. */
+  const isEmbedAt = (index: number) => blocks[index]?.type === "embed" || blocks[index]?.type === "screenshot";
+
+  function insertScreenshot(screenshotId: string) {
+    const index = activeIndex();
+    const next = [...blocks];
+    const created: NoteBlock = { id: `b_${crypto.randomUUID().slice(0, 8)}`, type: "screenshot", text: "", attrs: { screenshotId } };
+    next.splice(index + 1, 0, created);
+    setPickingShot(false);
+    record(next);
+    setSelectedId(created.id);
+  }
+
+  function insertEmbed(embed: EmbedAttr) {
+    const index = activeIndex();
+    const next = [...blocks];
+    const created: NoteBlock = { id: `b_${crypto.randomUUID().slice(0, 8)}`, type: "embed", text: "", attrs: { embed } };
+    next.splice(index + 1, 0, created);
+    setPicking(false);
+    record(next);
+    setSelectedId(created.id);
+  }
+
+  function removeEmbed(blockId: string) {
+    const next = current.current.filter((block) => block.id !== blockId);
+    // A note always keeps at least one block to type into.
+    record(next.length ? next : [{ id: `b_${crypto.randomUUID().slice(0, 8)}`, type: "paragraph", text: "" }]);
+  }
+
+  /** The target is gone: what the embed showed stays as an ordinary quote block, and the embed itself is dropped. */
+  function keepSnapshot(blockId: string, item: EmbedItem) {
+    const text = item.summary ? `${item.title}：${item.summary}` : item.title;
+    record(current.current.map((block) => block.id === blockId ? { id: block.id, type: "quote", text } : block));
+  }
+
   function removeBlock() {
     if (blocks.length <= 1) return;
     const index = activeIndex();
@@ -454,7 +526,7 @@ export function NoteEditor(props: {
     const index = activeIndex();
     const following = blocks[index + 1];
     const block = blocks[index];
-    if (!block || !following) return;
+    if (!block || !following || isEmbedAt(index) || isEmbedAt(index + 1)) return;
     const next = blocks
       .map((item, position) => position === index ? { ...item, text: item.text + following.text } : item)
       .filter((_, position) => position !== index + 1);
@@ -484,6 +556,7 @@ export function NoteEditor(props: {
 
   function setBlockType(type: string) {
     const index = activeIndex();
+    if (isEmbedAt(index)) return;
     const next = blocks.map((block, position) => {
       if (position !== index) return block;
       const updated: NoteBlock = { ...block, type };
@@ -511,6 +584,12 @@ export function NoteEditor(props: {
     setDraftNotice(null);
   }
 
+  const screenshotHost: ScreenshotHost | null = props.screenshots ? { t: props.screenshots.t, onOpen: props.screenshots.onOpen, onRemove: removeEmbed } : null;
+  const embedHost: EmbedHost | null = props.embeds ? {
+    t: props.embeds.t, formatDate: props.embeds.formatDate, items: props.embeds.items,
+    onOpen: props.embeds.onOpen, onEnable: props.embeds.onEnable, onRefresh: props.embeds.onRefresh,
+    onRemove: removeEmbed, onKeepSnapshot: keepSnapshot,
+  } : null;
   const source = blocks.find((block) => block.id === sourceId);
   const blockLabel = (type: string) => type === "heading" ? props.labels.typeHeading
     : type === "list" ? props.labels.typeList
@@ -542,7 +621,7 @@ export function NoteEditor(props: {
         <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-block-up" onMouseDown={(event) => event.preventDefault()} onClick={() => moveBlock(-1)}>{props.labels.blockMoveUp}</button>
         <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-block-down" onMouseDown={(event) => event.preventDefault()} onClick={() => moveBlock(1)}>{props.labels.blockMoveDown}</button>
         <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-block-copy" onMouseDown={(event) => event.preventDefault()} onClick={copyBlock}>{props.labels.blockCopy}</button>
-        <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-source-toggle" onMouseDown={(event) => event.preventDefault()} onClick={() => setSourceId(sourceId ? null : blocks[activeIndex()]?.id ?? null)}>{props.labels.sourceEdit}</button>
+        <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-source-toggle" onMouseDown={(event) => event.preventDefault()} onClick={() => setSourceId(sourceId || isEmbedAt(activeIndex()) ? null : blocks[activeIndex()]?.id ?? null)}>{props.labels.sourceEdit}</button>
         {state === "error" ? <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-retry-save" onClick={() => void flush()}>{props.saveLabel}</button> : null}
       </div>
       {conflict ? <p role="alert" className="text-sm mb-2" data-testid="note-conflict">{props.labels.conflict}</p> : null}
@@ -569,12 +648,20 @@ export function NoteEditor(props: {
         {NOTE_BLOCK_TYPES.map((type) => (
           <button key={type} type="button" className="border px-2 py-0.5 rounded" data-testid={`note-insert-${type}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(type)}>{blockLabel(type)}</button>
         ))}
+        {props.embeds ? <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-insert-embed" onMouseDown={(event) => event.preventDefault()} onClick={() => setPicking(true)}>{props.embeds.t("embed.insert")}</button> : null}
+        {props.screenshots ? <button type="button" className="border px-2 py-0.5 rounded" data-testid="note-insert-screenshot" onMouseDown={(event) => event.preventDefault()} onClick={() => setPickingShot(true)}>{props.screenshots.t("screenshot.block.insert")}</button> : null}
         <span className="mx-1" />
         {NOTE_BLOCK_TYPES.map((type) => (
           <button key={`set-${type}`} type="button" className="border px-2 py-0.5 rounded" data-testid={`note-set-${type}`} onMouseDown={(event) => event.preventDefault()} onClick={() => setBlockType(type)}>{`→${blockLabel(type)}`}</button>
         ))}
       </div>
-      <EditorContent editor={editor} />
+      <EmbedHostContext.Provider value={embedHost}>
+        <ScreenshotHostContext.Provider value={screenshotHost}>
+          <EditorContent editor={editor} />
+        </ScreenshotHostContext.Provider>
+      </EmbedHostContext.Provider>
+      {pickingShot && props.screenshots ? <ScreenshotPicker t={props.screenshots.t} onPick={insertScreenshot} onClose={() => setPickingShot(false)} /> : null}
+      {picking && props.embeds ? <EmbedPicker t={props.embeds.t} noteId={props.objectId} onPick={insertEmbed} onClose={() => setPicking(false)} /> : null}
       {props.onOpenSource ? (
         <ul className="mt-2 flex flex-wrap gap-2 text-sm">
           {blocks.filter((block) => block.anchorId).map((block) => (

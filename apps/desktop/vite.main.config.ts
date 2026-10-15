@@ -3,6 +3,7 @@ import { builtinModules } from "node:module";
 import path from "node:path";
 import { defineConfig } from "vite";
 import esbuild from "esbuild";
+import { danmakuDefine } from "./danmaku-define.ts";
 
 /** Native modules stay outside the bundles; the package copies them next to the app (see forge.config.ts). */
 const NATIVE = ["better-sqlite3", "sharp", "@napi-rs/canvas"];
@@ -24,20 +25,29 @@ async function bundleWorker(entry: string, name: string): Promise<void> {
   if (!existsSync(outfile)) throw new Error(`${name} was not emitted`);
 }
 
-export default defineConfig({
+/** The build of the main process without the worker step, so a test can build it into a folder of its own. */
+export const mainBuild = {
+  // The DanDanPlay application credentials are built into the main process and nowhere else (the renderer and preload configs have no such entry).
+  define: danmakuDefine(process.env, path.resolve(process.cwd(), "../..")),
   build: {
     emptyOutDir: false,
     lib: {
       entry: "src/main/index.ts",
-      formats: ["cjs"],
+      formats: ["cjs" as const],
       fileName: () => "main.cjs",
     },
     rollupOptions: {
       external: ["electron", ...NATIVE, /^@napi-rs\/canvas/, ...nodeBuiltins],
+      // The main process is one file: a module the entry and a lazily loaded part both use (the credentials among them) must not be split into a chunk of its own.
+      output: { inlineDynamicImports: true },
     },
     sourcemap: true,
     outDir: ".vite/build",
   },
+};
+
+export default defineConfig({
+  ...mainBuild,
   plugins: [
     {
       name: "bundle-workers",

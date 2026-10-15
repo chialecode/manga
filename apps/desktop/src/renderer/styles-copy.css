@@ -1,0 +1,47 @@
+/* Drafts and their suggestions */
+/* The editor and the panel of suggestions and versions side by side, measured against the view itself (not the window): with both side columns open
+   the view can be narrow while the window is wide, and the panel, which has a fixed width, would squeeze the editor to a sliver. Narrow, it goes under. */
+.draft-view { container-type: inline-size; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; height: 100%; }
+.draft-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 12px; flex: 1; min-height: 0; }
+@container (max-width: 680px) {
+  .draft-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(240px, 1fr) auto; overflow: auto; }
+}
+.draft-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.draft-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.draft-head h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.draft-editor { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.draft-surface { min-height: 100%; box-sizing: border-box; padding: 14px 18px; outline: none; font-size: 15px; line-height: 1.75; }
+.draft-surface p { margin: 0 0 0.6em; min-height: 1.75em; overflow-wrap: anywhere; }
+.draft-editor:focus-within { border-color: var(--color-focus); box-shadow: 0 0 0 2px var(--color-accent-soft); }
+.draft-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: auto; }
+.draft-tabs { display: flex; gap: 6px; }
+.draft-tabs [aria-selected="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.draft-suggest, .draft-suggestions, .draft-detail, .draft-versions { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); font-size: 13px; }
+.draft-suggest h3, .draft-suggestions h3, .draft-detail h3, .draft-versions h3, .draft-detail h4 { margin: 0; font-size: 14px; }
+.draft-suggest label { display: flex; flex-direction: column; gap: 4px; }
+.draft-suggest input[type="text"], .draft-suggest input:not([type]), .draft-suggest select, .draft-checkpoint input { padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; background: var(--color-surface); min-width: 0; }
+.draft-check { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.draft-sources { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--color-border); border-radius: 10px; padding: 6px 10px; max-height: 180px; overflow: auto; }
+.draft-suggestions ul, .draft-versions ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.draft-suggestions li > button, .draft-versions li > button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.draft-versions li.is-current > button { border-color: var(--color-accent); }
+.draft-s-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.draft-s-preview { overflow-wrap: anywhere; color: var(--color-subtle); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.draft-warn { border-color: var(--color-danger); color: var(--color-danger); }
+.draft-warn-text { margin: 0; color: var(--color-danger); }
+.draft-stale { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--color-danger); border-radius: 10px; }
+.draft-stale p { margin: 0; }
+.draft-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.draft-quote { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.draft-quote blockquote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--color-border); background: var(--color-muted); color: var(--color-subtle); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }
+.draft-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.draft-compare p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft-compare .draft-diff { grid-column: 1 / -1; }
+.draft-generated-text { padding: 8px 10px; border-left: 3px solid var(--color-accent); background: var(--color-accent-soft); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
+.draft-generated-tag { border-color: var(--color-accent); color: var(--color-accent); }
+.draft-diff { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; max-height: 260px; overflow: auto; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; }
+.draft-diff ins { background: color-mix(in srgb, #2e9d57 22%, transparent); text-decoration: none; }
+.draft-diff del { background: color-mix(in srgb, #d14343 22%, transparent); }
+.draft-checkpoint { display: flex; gap: 6px; }
+.draft-checkpoint input { flex: 1; }
+.draft-version-open { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 0; }

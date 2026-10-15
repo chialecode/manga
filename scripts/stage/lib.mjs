@@ -7,17 +7,22 @@ export { repoRoot };
 
 const SKIP = new Set(["node_modules", "dist", "out", ".vite", ".cache", "coverage"]);
 
-export function loadStage(stage) {
-  const file = path.join(repoRoot, "scripts/stages", `${stage}.json`);
-  if (!fs.existsSync(file)) throw new Error(`unknown stage "${stage}": ${path.relative(repoRoot, file)} does not exist`);
-  const config = JSON.parse(fs.readFileSync(file, "utf8"));
-  if (config.stage !== stage) throw new Error(`${path.relative(repoRoot, file)} declares stage "${config.stage}"`);
-  return config;
+/** The stage being developed, from the document registry. */
+export function currentStage() {
+  const registry = JSON.parse(fs.readFileSync(path.join(repoRoot, "docs/governance/document-registry.json"), "utf8"));
+  if (typeof registry.currentStage !== "string" || !registry.currentStage) throw new Error("document-registry.json declares no currentStage");
+  return registry.currentStage;
 }
 
-/** One run directory per stage, shared by test, bench, package and report. STAGE_RUN selects another one. */
-export function runDir(stage) {
-  const dir = evidenceRunDir(stage, process.env.STAGE_RUN ?? "current");
+/** The stage gate: required cases, scenarios, bench targets and fingerprinted inputs. One file, rewritten for each stage. */
+export function loadGate() {
+  const file = path.join(repoRoot, "scripts/stage/gate.json");
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+/** One run directory shared by test, bench, package and report. STAGE_RUN selects another one. */
+export function runDir() {
+  const dir = evidenceRunDir(process.env.STAGE_RUN ?? "current");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

@@ -65,7 +65,7 @@ describe("reading, notes and index", () => {
     db.prepare("INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('schemaVersion', '4')").run();
     db.prepare("INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, attachment_ids_json, preview_json, created_at, updated_at) VALUES ('obj_old','notes.document','manga.notes','{}',1,1,'旧笔记',?,'[]','{}','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')").run(JSON.stringify({ blocks: [{ id: "b1", text: "旧笔记正文" }] }));
     db.close();
-    const store = new DrizzleStore({ profileDir: dir, hostId: "m1b-migrate" });
+    const store = new DrizzleStore({ profileDir: dir, hostId: "migrate" });
     expect(store.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
     expect(fs.existsSync(`${path.join(dir, "manga.sqlite")}.premigrate-v4`)).toBe(true);
     const row = store.sqlite.prepare("SELECT payload_json, schema_version FROM content_objects WHERE id = 'obj_old'").get() as { payload_json: string; schema_version: number };

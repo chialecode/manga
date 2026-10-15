@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Synthetic sample generator for M2: comic pages and archives, videos, recordings, covers.
-// Output: dist/samples/m2/ (git-ignored) plus manifest.json with an ID, fingerprint and sub-features per sample.
+// Synthetic sample generator: comic pages and archives, videos, recordings, covers.
+// Output: dist/samples/media/ (git-ignored) plus manifest.json with an ID, fingerprint and sub-features per sample.
 //
 //   node scripts/samples/generate-media-samples.mjs            generate what is missing or stale
 //   node scripts/samples/generate-media-samples.mjs --force    regenerate everything
@@ -372,6 +372,40 @@ await define("video-mkv-ass-fonts", { kind: "video", rel: "video/mkv-ass-fonts.m
   return { ...summarizeProbe(file), subtitleEvents: 4, styleFont: "Arial", attachedFont: path.basename(fontFile), chapterTitles: ["Opening", "Main part"] };
 });
 
+// ASS whose style fonts are neither attached nor installed anywhere, with Chinese and Japanese text: the case that drew boxes (the renderer's own
+// default font has Western letters only). The first line is ten different Chinese characters, which a window check can tell apart one by one.
+const ASS_MISSING_FONT = [
+  "[Script Info]",
+  "Title: Synthetic subtitles with a missing font",
+  "ScriptType: v4.00+",
+  "PlayResX: 640",
+  "PlayResY: 360",
+  "WrapStyle: 0",
+  "",
+  "[V4+ Styles]",
+  "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+  "Style: Default,ZZ Manga Missing Sans,40,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,1,2,20,20,20,1",
+  "Style: Note,ZZ Manga Missing Serif,32,&H0000FFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,1,8,20,20,20,1",
+  "",
+  "[Events]",
+  "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+  "Dialogue: 0,0:00:01.00,0:00:06.00,Default,,0,0,0,,汉字显示风景都很美丽",
+  "Dialogue: 0,0:00:01.00,0:00:06.00,Note,,0,0,0,,こんにちは世界",
+  "Dialogue: 0,0:00:07.00,0:00:09.00,Default,,0,0,0,,Latin letters stay readable",
+  "",
+].join("\n");
+
+await define("video-mkv-ass-missing-font", { kind: "video", rel: "video/mkv-ass-missing-font.mkv", features: ["mkv", "embedded-ass", "style-font-missing", "chinese-and-japanese-text"] }, async (file) => {
+  const ass = path.join(scratch, "missing-font.ass");
+  fs.writeFileSync(ass, ASS_MISSING_FONT);
+  ff([
+    ...source("testsrc", 10), ...tone(440, 10), "-i", ass,
+    "-map", "0:v", "-map", "1:a", "-map", "2:s", ...h264, "-c:a", "aac", "-b:a", "96k", "-c:s", "ass",
+    "-metadata:s:s:0", "language=chi", "-metadata:s:s:0", "title=Chinese (ASS, font missing)", file,
+  ]);
+  return { ...summarizeProbe(file), subtitleEvents: 3, styleFonts: ["ZZ Manga Missing Sans", "ZZ Manga Missing Serif"], firstLine: "汉字显示风景都很美丽" };
+});
+
 await define("video-external-subs", { kind: "video-dir", rel: "video/external-subs", features: ["external-ass", "external-srt", "language-suffix-sidecar"] }, async (dir) => {
   fs.mkdirSync(dir, { recursive: true });
   ff([...source("testsrc", 14), ...tone(523, 14), ...h264, "-c:a", "aac", "-shortest", path.join(dir, "episode.mp4")]);
@@ -380,6 +414,58 @@ await define("video-external-subs", { kind: "video-dir", rel: "video/external-su
   write(path.join(dir, "episode.zh-CN.srt"), SRT_ZH);
   write(path.join(dir, "other-episode.srt"), SRT);
   return { video: "episode.mp4", sidecars: ["episode.ass", "episode.en.srt", "episode.zh-CN.srt"], unrelated: ["other-episode.srt"], ...{ probe: summarizeProbe(path.join(dir, "episode.mp4")) } };
+});
+
+// Subtitles by the standard (A-59): files that put each kind of cue where the player's own layer has to place it. Times are inside the 12 s of the video.
+const SRT_LAYOUT_ZH = [
+  "1", "00:00:01,000 --> 00:00:03,500", "第一句台词", "",
+  "2", "00:00:04,000 --> 00:00:06,500", "- 你要去哪里？", "- 回家。", "",
+  "3", "00:00:07,000 --> 00:00:09,500", "第三句比较长的台词，用来看一行的宽度是不是不超过画面的百分之九十", "",
+  "",
+].join("\n");
+const SRT_LAYOUT_EN = ["1", "00:00:01,000 --> 00:00:03,500", "The first line", "", "2", "00:00:04,000 --> 00:00:06,500", "- Where are you going?", "- Home.", "", ""].join("\n");
+const SRT_LAYOUT_BILINGUAL = [
+  "1", "00:00:01,000 --> 00:00:03,500", "第一句台词", "The first line", "",
+  "2", "00:00:04,000 --> 00:00:06,500", "Where are you going?", "你要去哪里？", "",
+  "",
+].join("\n");
+// A sign marked for the top of the picture, and a line of dialogue at the same time.
+const SRT_LAYOUT_SIGNS = ["1", "00:00:01,000 --> 00:00:03,500", "{\\an8}区役所", "", "2", "00:00:01,000 --> 00:00:03,500", "第一句台词", "", ""].join("\n");
+const VTT_LAYOUT_TOP = ["WEBVTT", "", "00:01.000 --> 00:03.500 line:10%", "屏幕上方的说明", "", "00:04.000 --> 00:06.500", "底部的台词", "", ""].join("\n");
+
+await define("video-subtitle-layout", { kind: "video-dir", rel: "video/subtitle-layout", features: ["16x9", "sidecar-srt-plain", "two-speaker-cue", "bilingual-cue", "top-caption-an8", "webvtt-line-top"] }, async (dir) => {
+  fs.mkdirSync(dir, { recursive: true });
+  ff([...source("testsrc", 12), ...tone(523, 12), ...h264, "-c:a", "aac", "-shortest", path.join(dir, "episode.mp4")]);
+  write(path.join(dir, "episode.zh-CN.srt"), SRT_LAYOUT_ZH);
+  write(path.join(dir, "episode.en.srt"), SRT_LAYOUT_EN);
+  write(path.join(dir, "episode.bilingual.srt"), SRT_LAYOUT_BILINGUAL);
+  write(path.join(dir, "episode.signs.srt"), SRT_LAYOUT_SIGNS);
+  write(path.join(dir, "episode.top.vtt"), VTT_LAYOUT_TOP);
+  return { video: "episode.mp4", picture: [640, 360], sidecars: ["episode.bilingual.srt", "episode.en.srt", "episode.signs.srt", "episode.top.vtt", "episode.zh-CN.srt"], ...{ probe: summarizeProbe(path.join(dir, "episode.mp4")) } };
+});
+
+await define("video-widescreen-subs", { kind: "video-dir", rel: "video/widescreen-subs", features: ["2.39-to-1", "sidecar-srt-plain", "top-caption-an8"] }, async (dir) => {
+  fs.mkdirSync(dir, { recursive: true });
+  ff([...source("testsrc", 12, "1024x428"), ...tone(523, 12), ...h264, "-c:a", "aac", "-shortest", path.join(dir, "episode.mp4")]);
+  write(path.join(dir, "episode.zh-CN.srt"), SRT_LAYOUT_ZH);
+  write(path.join(dir, "episode.signs.srt"), SRT_LAYOUT_SIGNS);
+  return { video: "episode.mp4", picture: [1024, 428], ratio: 1024 / 428, sidecars: ["episode.signs.srt", "episode.zh-CN.srt"], ...{ probe: summarizeProbe(path.join(dir, "episode.mp4")) } };
+});
+
+await define("video-mkv-srt-tracks", { kind: "video", rel: "video/mkv-srt-tracks.mkv", features: ["mkv", "embedded-srt", "two-text-tracks", "top-caption-an8"] }, async (file) => {
+  const zh = path.join(scratch, "embedded.zh.srt");
+  const en = path.join(scratch, "embedded.en.srt");
+  fs.writeFileSync(zh, ["1", "00:00:01,000 --> 00:00:03,500", "{\\an8}区役所", "", "2", "00:00:01,000 --> 00:00:03,500", "第一句台词", "", "3", "00:00:04,000 --> 00:00:06,500", "第二句台词", "", ""].join("\n"));
+  fs.writeFileSync(en, ["1", "00:00:01,000 --> 00:00:03,500", "The first line", "", "2", "00:00:04,000 --> 00:00:06,500", "The second line", "", ""].join("\n"));
+  ff([
+    ...source("testsrc", 12), ...tone(440, 12), "-i", zh, "-i", en,
+    "-map", "0:v", "-map", "1:a", "-map", "2:s", "-map", "3:s",
+    ...h264, "-c:a", "aac", "-b:a", "96k", "-c:s", "srt",
+    "-metadata:s:s:0", "language=chi", "-metadata:s:s:0", "title=Chinese",
+    "-metadata:s:s:1", "language=eng", "-metadata:s:s:1", "title=English",
+    file,
+  ]);
+  return { ...summarizeProbe(file), subtitleTracks: ["chi", "eng"], topCaptionTrack: "chi" };
 });
 
 await define("video-mkv-hevc-8bit", { kind: "video", rel: "video/hevc-8bit.mkv", features: ["mkv", "hevc", "8-bit"] }, async (file) => {
@@ -403,6 +489,26 @@ await define("video-nonzero-start", { kind: "video", rel: "video/nonzero-start.m
   const summary = summarizeProbe(file);
   if (!(summary.startTime > 2)) throw new Error(`start time was not offset: ${summary.startTime}`);
   return { ...summary, expectedStartTime: 2.5 };
+});
+
+// Rough-cut material (CLIP-01/02): one picture size, codec, frame rate and audio setting with a keyframe every second, in several clips, and a set that
+// differs from the first in exactly one way each (size, audio setting, time base, frame rate, container, codec, no audio track).
+await define("video-roughcut", { kind: "video-dir", rel: "video/roughcut", features: ["keyframe-every-1s", "compatible-pair", "different-resolution", "different-audio", "different-time-base", "different-frame-rate", "different-container", "different-codec", "no-audio-track"] }, async (dir) => {
+  fs.mkdirSync(dir, { recursive: true });
+  const base = (kind, size = "640x360", rate = 24) => [...source(kind, 12, size, rate), ...tone(440, 12)];
+  const encode = ["-c:v", "libopenh264", "-g", String(24), "-b:v", "600k", "-pix_fmt", "yuv420p"];
+  const aac = (extra = []) => ["-c:a", "aac", "-b:a", "96k", ...extra, "-shortest"];
+  ff([...base("testsrc"), ...encode, ...aac(), "-video_track_timescale", "12288", path.join(dir, "a.mp4")]);
+  ff([...base("testsrc2"), ...encode, ...aac(), "-video_track_timescale", "12288", path.join(dir, "b.mp4")]);
+  ff([...base("testsrc", "480x270"), ...encode, ...aac(), "-video_track_timescale", "12288", path.join(dir, "c-resolution.mp4")]);
+  ff([...base("testsrc"), ...encode, ...aac(["-ar", "44100", "-ac", "2"]), "-video_track_timescale", "12288", path.join(dir, "d-audio.mp4")]);
+  ff([...base("testsrc"), ...encode, ...aac(), "-video_track_timescale", "90000", path.join(dir, "e-timebase.mp4")]);
+  ff([...base("testsrc", "640x360", 30), ...encode, "-g", "30", ...aac(), "-video_track_timescale", "30000", path.join(dir, "f-rate.mp4")]);
+  ff([...base("testsrc"), ...encode, ...aac(), path.join(dir, "g-container.mkv")]);
+  ff([...base("testsrc"), "-c:v", "mpeg4", "-g", "24", "-b:v", "800k", ...aac(), path.join(dir, "h-codec.mp4")]);
+  ff([...source("testsrc", 12, "640x360", 24), ...encode, "-an", "-video_track_timescale", "12288", path.join(dir, "i-no-audio.mp4")]);
+  const files = fs.readdirSync(dir).sort();
+  return { keyframeIntervalSeconds: 1, durationSeconds: 12, files, probes: Object.fromEntries(files.map((name) => [name, summarizeProbe(path.join(dir, name))])) };
 });
 
 await define("video-ac3", { kind: "video", rel: "video/ac3.mkv", features: ["ac3-audio", "mkv", "audio-transcode-needed"] }, async (file) => {
@@ -663,8 +769,7 @@ const order = ["comic", "cbz", "pdf", "epub", "mobi", "cover", "video", "recordi
 manifestSamples.sort((a, b) => order.findIndex((p) => a.kind.startsWith(p) || a.id.startsWith(p)) - order.findIndex((p) => b.kind.startsWith(p) || b.id.startsWith(p)) || a.id.localeCompare(b.id));
 const manifest = {
   schema: 1,
-  stage: "m2",
-  note: "Synthetic samples for M2. Generated, git-ignored; no real content. Regenerate with node scripts/samples/generate-media-samples.mjs.",
+  note: "Synthetic samples. Generated, git-ignored; no real content. Regenerate with node scripts/samples/generate-media-samples.mjs.",
   generator: {
     path: "scripts/samples/generate-media-samples.mjs",
     fingerprint: generatorFingerprint(),

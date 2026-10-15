@@ -9,7 +9,7 @@ import { DrizzleStore } from "@manga/storage-drizzle";
 import { MangaProductApp, TestVault, exportLibraryPackage } from "@manga/app-core";
 import { startApp, tempProfile } from "../helpers/app.ts";
 
-describe("P2 storage, locations and recovery", () => {
+describe("storage, locations and recovery", () => {
   it("opens a legacy schema v1 database and keeps identities", async () => {
     const dir = tempProfile();
     const dbPath = path.join(dir, "manga.sqlite");
@@ -77,7 +77,7 @@ describe("P2 storage, locations and recovery", () => {
     const pointer = app.layout.pointerPath;
     const before = fs.readFileSync(pointer, "utf8");
     app.close();
-    const target = path.join(os.tmpdir(), `manga-m1a-moved-${process.pid}-${Date.now()}`);
+    const target = path.join(os.tmpdir(), `manga-moved-${process.pid}-${Date.now()}`);
     const child = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../packages/app-core/src/crash-child.ts");
     const result = spawnSync(process.execPath, ["--experimental-strip-types", child, "--profile", profileRoot, "--crash-at", "location-copy", "--op", "locations.apply", "--target", target], {
       encoding: "utf8",
@@ -100,7 +100,7 @@ describe("P2 storage, locations and recovery", () => {
     const raw = await app.call(actor, { commandId: "library.exportPackage", idempotencyKey: "exp-raw", input: { targetDir: dest } }, grant.handle);
     expect(raw.status).toBe("error");
     expect(raw.error?.code).toBe("FORBIDDEN");
-    const moved = path.join(os.tmpdir(), `manga-m1a-handle-${process.pid}-${Date.now()}`);
+    const moved = path.join(os.tmpdir(), `manga-handle-${process.pid}-${Date.now()}`);
     fs.mkdirSync(moved, { recursive: true });
     const locationHandle = app.registerPath("directory", moved);
     const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "loc-p", input: { pathHandle: locationHandle } }, grant.handle);
@@ -119,7 +119,7 @@ describe("P2 storage, locations and recovery", () => {
 
   it("isolates test profiles from Documents and rejects a second write host", async () => {
     const { app, profileRoot } = await startApp();
-    expect(profileRoot.startsWith(os.tmpdir()) || profileRoot.includes("manga-m1a")).toBe(true);
+    expect(profileRoot.startsWith(os.tmpdir()) || profileRoot.includes("manga-")).toBe(true);
     expect(app.layout.pointerPath.startsWith(profileRoot)).toBe(true);
     expect(app.layout.documentsRoot.startsWith(profileRoot)).toBe(true);
     expect(() => new MangaProductApp({

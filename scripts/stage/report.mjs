@@ -102,13 +102,13 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
     if (!Array.isArray(scale?.raw?.samplesWhileParsing) || scale.raw.samplesWhileParsing.some((count) => !(count >= 2))) errors.push("bench.json: scale window did not sample the UI while parsing");
     if (bench.samples?.contentAvailableMs?.kind !== "operation-to-content") errors.push("bench.json: content availability is not an operation-level sample");
     if (bench.samples?.saveReceiptMs?.kind !== "operation-to-commit-receipt") errors.push("bench.json: save is not measured to a commit receipt");
-    // The rework's 5000-file scan: every run reached the full file count, and both gated figures follow from their raw samples.
-    const rework = bench.rework;
+    // The 5000-file scan: every run reached the full file count, and both gated figures follow from their raw samples.
+    const scanPane = bench.scanPane;
     const wanted = config.bench.scan;
     if (wanted) {
-      const scan = rework?.scan;
+      const scan = scanPane?.scan;
       const each = (values) => Array.isArray(values) && values.length >= wanted.runs;
-      if (rework?.ok !== true || !scan || !each(scan.files) || scan.files.some((count) => count < wanted.files) || !each(scan.added) || scan.added.some((count, index) => count < scan.files[index])) {
+      if (scanPane?.ok !== true || !scan || !each(scan.files) || scan.files.some((count) => count < wanted.files) || !each(scan.added) || scan.added.some((count, index) => count < scan.files[index])) {
         errors.push("bench.json: the 5000-file scan did not run to the full file count in every run");
       }
       const lag = scan?.loopLag?.raw;
@@ -117,7 +117,29 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
       const answers = scan?.interaction?.raw;
       if (!Array.isArray(answers) || answers.length < wanted.minAnswerSamples || answers.some((value) => !Number.isFinite(value) || value < 0)) errors.push("bench.json: scan interaction samples invalid");
       else if (bench.metrics?.scanInteractionP95Ms !== p95(answers)) errors.push("bench.json: scanInteractionP95Ms does not match its raw samples");
-      if (rework?.pane?.kind !== "electron-pane-1000" || !Array.isArray(rework.pane.loaded) || rework.pane.loaded.some((count) => count < 1000)) errors.push("bench.json: the right pane was not measured with 1000 messages in the window");
+      if (scanPane?.pane?.kind !== "electron-pane-1000" || !Array.isArray(scanPane.pane.loaded) || scanPane.pane.loaded.some((count) => count < 1000)) errors.push("bench.json: the right pane was not measured with 1000 messages in the window");
+    }
+    // The creative workspace: each gated figure follows from its raw samples, at no less than the data size the gate names, with the engine named.
+    for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
+      const entry = bench.creative?.[id];
+      const values = entry?.raw;
+      if (!entry || !Array.isArray(values) || values.length < wanted.minSamples || values.some((value) => !Number.isFinite(value) || value < 0)) {
+        errors.push(`bench.json: creative ${id} raw samples missing`);
+        continue;
+      }
+      for (const [name, least] of Object.entries(wanted.scale ?? {})) {
+        if (!(entry.scale?.[name] >= least)) errors.push(`bench.json: creative ${id} ran on less than ${least} ${name}`);
+      }
+      if (wanted.engine && entry.engine !== wanted.engine) errors.push(`bench.json: creative ${id} used ${entry.engine}, not ${wanted.engine}`);
+      if (entry.kind === "loopback-bt-download") {
+        const d = entry.detail;
+        if (!d || d.pieces < Math.ceil(wanted.scale.bytes / d.pieceLength) || d.verifiedPieces !== d.pieces || d.unverifiedPieces !== 0 || d.sha256Matches !== true || d.stagingLeft !== false || d.counts?.failed !== 0 || d.counts?.published < 1) {
+          errors.push(`bench.json: creative ${id} did not read back every piece of the download as the torrent lists it`);
+        }
+      }
+      if ((entry.kind === "electron-canvas" || entry.kind === "electron-reader") && entry.detail?.ok !== true) errors.push(`bench.json: creative ${id} was not measured completely in the window`);
+      const figure = wanted.stat === "max" ? Math.max(...values) : p95(values);
+      if (bench.metrics?.[wanted.metric] !== figure) errors.push(`bench.json: ${wanted.metric} does not match its raw samples`);
     }
     // Measurement-only figures: the raw samples and their p95 must exist; they are not pass/fail limits.
     for (const item of config.bench.measurements ?? []) {
@@ -141,21 +163,31 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
     if (pack.formats?.pages !== true || pack.formats?.modes !== true || pack.formats?.failureVisible !== true) errors.push("package.json: formats smoke did not cover pages, modes and the failed import");
     if (!pack.output) errors.push("package.json: output missing");
     if (typeof pack.electron !== "string" || !/^\d+\.\d+\.\d+/.test(pack.electron)) errors.push("package.json: Electron version missing");
-    // The closure run must prove the reading→record→source loop and restart recovery really ran.
-    const closure = pack.closure;
-    if (!closure) errors.push("package.json: closure smoke result missing");
+    // The reading-loop run must prove the reading→record→source loop and restart recovery really ran.
+    const readingLoop = pack.readingLoop;
+    if (!readingLoop) errors.push("package.json: reading-loop smoke result missing");
     for (const key of ["readLastChapter", "recordedNote", "sourceCardOk", "restoredProgress"]) {
-      if (closure?.[key] !== true) errors.push(`package.json: closure ${key} is not true`);
+      if (readingLoop?.[key] !== true) errors.push(`package.json: reading-loop ${key} is not true`);
     }
-    const timings = closure?.timings ?? {};
+    const timings = readingLoop?.timings ?? {};
     for (const key of ["importMs", "tailMs", "noteMs", "selectionMs"]) {
-      if (!Number.isFinite(timings[key]) || timings[key] < 0) errors.push(`package.json: closure timing ${key} missing`);
+      if (!Number.isFinite(timings[key]) || timings[key] < 0) errors.push(`package.json: reading-loop timing ${key} missing`);
     }
     // LOOP-06: the PDF page is painted once at its opening width and not again after the width has held still, with the selection kept.
     const loop = pack.loop06;
     if (loop?.settled?.stable !== true || loop?.tagged !== true || loop?.repainted !== false || loop?.atEnd?.nodeConnected !== true) errors.push("package.json: the PDF selection was not kept through the settled page (LOOP-06)");
     if (pack.agent?.runningShown !== true || pack.agent?.stoppedShown !== true || pack.agent?.conversationShown !== true) errors.push("package.json: agent smoke did not show the stop control, the send control after it, and the conversation after a restart");
-    if (pack.rework?.ok !== true || !(pack.rework?.observations >= (config.scenarios ?? []).length)) errors.push("package.json: the rework walk did not run to its end");
+    if (pack.windowWalk?.ok !== true || !(pack.windowWalk?.observations >= (config.scenarios ?? []).length)) errors.push("package.json: the window walk did not run to its end");
+    // The creative walk and the plugin walk: every step of the plugin walk is named by the gate and passed.
+    if (pack.creative?.ok !== true || !(pack.creative?.observations > 0)) errors.push("package.json: the creative walk did not run to its end");
+    if (pack.trace?.ok !== true || !(pack.trace?.observations > 0)) errors.push("package.json: the trace walk did not run to its end");
+    const planned = config.package.pluginSteps ?? [];
+    const stepsSeen = new Map((pack.plugins?.steps ?? []).map((step) => [step.id, step]));
+    if (pack.plugins?.ok !== true) errors.push("package.json: the plugin walk did not run to its end");
+    for (const id of planned) {
+      if (!stepsSeen.has(id)) errors.push(`package.json: plugin walk step ${id} missing`);
+      else if (stepsSeen.get(id).ok !== true) errors.push(`package.json: plugin walk step ${id} failed`);
+    }
     for (const size of ["wide", "narrow"]) {
       if (!(pack.viewports?.[size]?.innerWidth > 0)) errors.push(`package.json: ${size} viewport missing`);
     }

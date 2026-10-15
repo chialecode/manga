@@ -5,6 +5,7 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { desktopPackageDir } from "../../scripts/desktop-paths.ts";
 import { stageBundledAssets } from "../../scripts/desktop-assets.ts";
+import { stageBundledPlugins } from "../../scripts/desktop-plugins.ts";
 
 const desktopRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(desktopRoot, "../..");
@@ -24,7 +25,7 @@ function copyRuntimeNative(buildPath: string): void {
 /**
  * Native modules the main process loads at run time and the bundle leaves outside: each is copied with the packages it
  * depends on (only those installed for this platform). `sharp` makes thumbnails and `@napi-rs/canvas` paints PDF pages
- * to images; their binaries and the libraries beside them are unpacked from the app archive (see `unpack` below).
+ * to images; `sqlite-vec` brings the vector search extension of the semantic index. Their binaries and the libraries beside them are unpacked from the app archive (see `unpack` below).
  */
 function copyModules(buildPath: string, roots: string[]): void {
   const seen = new Set<string>();
@@ -61,7 +62,7 @@ export default {
   hooks: {
     packageAfterCopy: async (_config: unknown, buildPath: string) => {
       copyRuntimeNative(buildPath);
-      copyModules(buildPath, ["sharp", "@napi-rs/canvas"]);
+      copyModules(buildPath, ["sharp", "@napi-rs/canvas", "sqlite-vec"]);
       for (const name of ["parse-worker.cjs", "vad-worker.cjs"]) {
         const worker = path.join(desktopRoot, ".vite/build", name);
         if (!existsSync(worker)) throw new Error(`${name} missing after Vite build`);
@@ -73,7 +74,10 @@ export default {
     postPackage: async (_config: unknown, result: { outputPaths: string[] }) => {
       // Everything a package carries besides its code goes next to the app archive with a manifest the app checks at start.
       for (const output of result.outputPaths) {
-        stageBundledAssets(path.join(output, "resources"), { rendererDir: path.join(desktopRoot, ".vite/renderer/main_window"), buildDir: path.join(desktopRoot, ".vite/build") });
+        const resources = path.join(output, "resources");
+        stageBundledAssets(resources, { rendererDir: path.join(desktopRoot, ".vite/renderer/main_window"), buildDir: path.join(desktopRoot, ".vite/build") });
+        // The plugins that come with the application are signed with the first party's key at this point; without the key the package is not made.
+        await stageBundledPlugins(resources);
       }
     },
   },

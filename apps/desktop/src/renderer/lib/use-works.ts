@@ -12,6 +12,9 @@ export type WorksQuery = {
   sort?: "recent" | "added" | "title" | "progress";
 };
 
+/** A shelf lists a title once (A-68): works of one medium linked to the same Bangumi entry are listed as the version opened last. */
+const GROUPED = { group: true } as const;
+
 export type PagedWorks = {
   items: WorkSummary[];
   total: number;
@@ -63,7 +66,7 @@ export function usePagedWorks(query: WorksQuery | null, refreshKey: number, page
     const mine = ++token.current;
     const kept = cache?.get(cacheKey);
     setState((current) => current.queryKey === queryKey ? { ...current, status: current.items.length ? "ready" : "loading" } : kept?.items.length ? { queryKey, ...kept, status: "ready" } : { queryKey, items: [], total: 0, nextCursor: null, status: "loading" });
-    void attempt<WorkPage>("works.list", { ...query, limit: pageSize }).then((result) => {
+    void attempt<WorkPage>("works.list", { ...query, ...GROUPED, limit: pageSize }).then((result) => {
       if (mine !== token.current) return;
       if (!result.ok) { setState((current) => ({ ...current, queryKey, status: "error", error: messageOf(result.error) })); return; }
       const page = normalizePage(result.value);
@@ -84,7 +87,7 @@ export function usePagedWorks(query: WorksQuery | null, refreshKey: number, page
     if (!query || !nextCursor || busy) return;
     const mine = token.current;
     setLoadingMore(true);
-    void attempt<WorkPage>("works.list", { ...query, cursor: nextCursor, limit: pageSize }).then((result) => {
+    void attempt<WorkPage>("works.list", { ...query, ...GROUPED, cursor: nextCursor, limit: pageSize }).then((result) => {
       if (mine !== token.current) return;
       setLoadingMore(false);
       if (!result.ok) { setState((current) => current.queryKey === key ? { ...current, status: "error", error: messageOf(result.error) } : current); return; }

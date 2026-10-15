@@ -353,14 +353,47 @@ describe("keeping and cleaning audio", () => {
     const { id } = await recordTwoSentences(h, { retention: "keep" });
     await h.settle(id);
     const row = h.service.row(id);
-    expect(row).toMatchObject({ stage: "done", audio_state: "retained", staging_name: null });
-    const retained = path.join(h.store.attachmentsDir, row.opus_name!);
+    // The recording is kept in the folder the rule gives it (A-88: the work is not linked to an entry, so under 未分类); nothing of it is left in the attachments.
+    expect(row).toMatchObject({ stage: "done", audio_state: "retained", staging_name: null, opus_name: null });
+    expect(row.audio_file_id).toBeTruthy();
+    const retained = h.service.retainedPath(row)!;
+    expect(path.relative(h.store.worksDir, retained).split(path.sep).slice(0, 3)).toEqual(["未分类", "测试作品", "录音"]);
+    expect(path.basename(retained)).toMatch(/^测试作品 录音 \d{8}-\d{6}\.webm$/);
+    expect(fs.readdirSync(h.store.attachmentsDir).filter((name) => name.startsWith("capture-"))).toEqual([]);
+    expect(h.store.sqlite.prepare("SELECT kind, ref_kind AS refKind, ref_id AS refId FROM work_files WHERE id = ?").get(row.audio_file_id)).toEqual({ kind: "recording", refKind: "capture", refId: id });
     expect(fs.statSync(retained).size).toBeGreaterThan(1000);
     expect(fs.readFileSync(retained).subarray(0, 4).toString("hex")).toBe("1a45dfa3");
     const handle = h.service.audioHandle(id);
     expect(handle.url).toMatch(/^manga-media:\/\/media\/h/);
     expect(handle.mediaType).toContain("opus");
     expect(handle.durationMs).toBe(12_000);
+  });
+
+  it.skipIf(mediaPrerequisitesAbsent)("keeps a recording that belongs to no work with the application's own files, and removes both copies when discarded", async () => {
+    const h = make();
+    const { sessionId } = h.service.start({ mode: "toggle", retention: "keep" });
+    feed(h.service, sessionId, twoSentences());
+    await h.service.stop({ sessionId, durationMs: 12_000 });
+    await h.settle(sessionId);
+    const row = h.service.row(sessionId);
+    expect(row).toMatchObject({ audio_state: "retained", audio_file_id: null });
+    expect(path.dirname(h.service.retainedPath(row)!)).toBe(h.store.attachmentsDir);
+    expect(fs.existsSync(h.service.retainedPath(row)!)).toBe(true);
+    await h.service.retain(sessionId, "discard");
+    expect(fs.readdirSync(h.store.attachmentsDir).filter((name) => name.startsWith("capture-"))).toEqual([]);
+  });
+
+  it.skipIf(mediaPrerequisitesAbsent)("removes the recording from the folder of its work, and the record of it, when the user discards the audio", async () => {
+    const h = make();
+    const { id } = await recordTwoSentences(h, { retention: "keep" });
+    await h.settle(id);
+    const kept = h.service.retainedPath(h.service.row(id))!;
+    expect(fs.existsSync(kept)).toBe(true);
+    const discarded = await h.service.retain(id, "discard");
+    expect(discarded.audioState).toBe("cleaned");
+    expect(fs.existsSync(kept)).toBe(false);
+    expect(h.service.row(id)).toMatchObject({ audio_file_id: null, opus_name: null });
+    expect(h.store.sqlite.prepare("SELECT COUNT(*) AS n FROM work_files WHERE ref_kind = 'capture'").get()).toEqual({ n: 0 });
   });
 
   it("keeps the working audio while a failed recording waits, and says so", async () => {

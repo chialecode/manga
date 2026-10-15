@@ -1,6 +1,6 @@
 # MANGA 开发与贡献指南
 
-MANGA 当前处于需求、设计与 M0 验证阶段。先读 [AGENTS.md](AGENTS.md) 和 [文档导航](docs/README.md)，再按任务进入专题。首次定位项目请查 [仓库地图](docs/dev-rules/repo-map.md)。
+MANGA 已有可运行的桌面应用，产品验收尚未完成。先读 [AGENTS.md](AGENTS.md) 和 [文档导航](docs/README.md)，再按任务进入专题。首次定位项目请查 [仓库地图](docs/dev-rules/repo-map.md)。
 
 ## 完成一次变更
 
@@ -16,19 +16,18 @@ MANGA 当前处于需求、设计与 M0 验证阶段。先读 [AGENTS.md](AGENTS
 
 ## 环境与命令
 
-前置：使用 `.node-version` 指定的 Node.js 24.19+，在仓库根执行 `pnpm install`。没有发行安装包。开发宿主：`pnpm --filter @manga/desktop start`。
+前置：使用 `.node-version` 指定的 Node.js 24.19+，在仓库根执行 `pnpm install`。没有发行安装包。开发宿主：`pnpm dev`。
 
 | 命令 | 作用 |
 | --- | --- |
-| `node scripts/verify.mjs` | 文档、公开内容、依赖方向、类型检查、M1a Vitest 及必要回归 |
-| `node scripts/m1a.mjs test` | M1a 自动测试 |
-| `node scripts/m1a.mjs package` | Windows 未签名本地包与烟测 |
-| `node scripts/m1a.mjs bench` | 新栈服务侧检索/保存抽样 |
-| `pnpm --filter @manga/desktop start` | 启动 M1a Electron 宿主（开发） |
-| `node scripts/verify-m0.mjs` | 本机可自动的完整 M0 验证 |
+| `pnpm dev` | 以独立开发 Profile 启动 Electron 宿主 |
+| `node scripts/verify.mjs` | 脚本语法、文档、公开内容、依赖方向、类型检查、全部 Vitest 及必要回归 |
+| `node scripts/stage.mjs test` | 阶段门禁：全部 Vitest 与必需用例核对 |
+| `node scripts/stage.mjs package` | Windows 未签名本地包与打包烟测 |
+| `node scripts/stage.mjs bench` | 服务层与打包窗口的性能基准 |
+| `node scripts/stage.mjs report` | 核对上述证据，缺项或失败非零退出 |
 | `node scripts/check-docs.mjs` | 仅文档检查 |
 | `node scripts/check-publication.mjs` | 工作树与暂存内容的路径、凭据和私有文件检查 |
-| `node scripts/m0.mjs desktop` | 人工窗口；缺 electron 时在 `experiments/m0-desktop` 单独安装 |
 
 详细入口与阻塞项见 [仓库地图](docs/dev-rules/repo-map.md)、[质量门禁](docs/dev-rules/quality-gates.md)。
 
