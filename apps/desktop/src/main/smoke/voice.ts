@@ -5,7 +5,7 @@ import { BrowserWindow } from "electron";
 import { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
 import { clickTestId, openFromShelf, sleep, waitForTestId } from "./driver.ts";
-import { ensureRightPane } from "./common.ts";
+import { ensureDock } from "./common.ts";
 
 /**
  * Recording (started from the right pane's microphone) through the real packaged window with a synthetic speech clip as the microphone (Chromium's fake capture
@@ -69,10 +69,10 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     const imported = await call("library.importDocument", { title: "录音烟测书", format: "txt", bytes: [...Buffer.from(body)] });
     const resourceId = String((imported.value as { resourceId?: string } | undefined)?.resourceId ?? "");
     await view.webContents.reload();
-    await waitForTestId(view, "nav-reading");
-    const opened = await openFromShelf(view, "nav-reading", resourceId, 10_000);
+    await waitForTestId(view, "nav-home");
+    const opened = await openFromShelf(view, "novel", resourceId, 10_000);
     await waitForTestId(view, "reading-body");
-    const pane = await ensureRightPane(view);
+    const pane = await ensureDock(view);
     record("open-reader", opened && pane);
 
     // Start from the microphone in the right pane (there is none in the title bar or the reader), the way a person does.

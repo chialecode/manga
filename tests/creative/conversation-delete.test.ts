@@ -39,9 +39,9 @@ const say = async (ctx: App, sessionId: string, text: string) => {
   return sent.runId;
 };
 const count = (ctx: App, sql: string, ...params: unknown[]) => (ctx.app.store.sqlite.prepare(sql).get(...params) as { n: number }).n;
-type Record_ = { sessionId: string; title: string; kind: string; mode: string; ownerTitle: string | null; runCount: number; lastAt: string; current: boolean; running: boolean; excerpt: string };
+type Record_ = { sessionId: string; title: string; kind: string; contextId: string | null; contextName: string; ownerTitle: string | null; runCount: number; lastAt: string; current: boolean; running: boolean; excerpt: string };
 const list = async (ctx: App, filter: Record<string, unknown> = {}) => ok<{ items: Record_[]; total: number }>(await run(ctx, "conversation.list", filter));
-type Removal = { removed: string[]; skipped: Array<{ sessionId: string; reason: string }>; counts: Record<string, number>; replaced: Record<string, { sessionId: string; runCount: number }> };
+type Removal = { removed: string[]; skipped: Array<{ sessionId: string; reason: string }>; counts: Record<string, number>; replaced: { recent?: { sessionId: string; runCount: number } } };
 
 /** The rows that belong to a run, in every table that keeps any; a synthetic row stands where a plain mock run leaves none. */
 function leftFor(ctx: App, runId: string) {
@@ -68,15 +68,14 @@ function seedExtras(ctx: App, runId: string) {
 }
 
 describe("deleting a conversation takes the whole of it and only it (AT-103)", () => {
-  it("removes the session, its runs, messages, tool events, call record, checkpoints, frozen material, authorization and the mark that it was closed", async () => {
+  it("removes the session, its runs, messages, tool events, call record, checkpoints, frozen material and authorization", async () => {
     const ctx = await boot();
-    const doomed = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
+    const doomed = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
     const runA = await say(ctx, doomed, "要被删掉的第一句");
     const runB = await say(ctx, doomed, "要被删掉的第二句");
-    const kept = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
+    const kept = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
     const runC = await say(ctx, kept, "留下来的话");
     for (const runId of [runA, runB, runC]) seedExtras(ctx, runId);
-    ctx.app.store.sqlite.prepare("INSERT OR REPLACE INTO closed_sessions(session_id, closed_at) VALUES (?, ?)").run(doomed, new Date().toISOString());
     // What the agent wrote into the library is not a part of the conversation.
     const note = ok<{ objectId: string }>(await run(ctx, "notes.create", { title: "留着的笔记", text: "评论" }));
     const library = { objects: count(ctx, "SELECT COUNT(*) AS n FROM content_objects"), works: count(ctx, "SELECT COUNT(*) AS n FROM works") };
@@ -91,7 +90,6 @@ describe("deleting a conversation takes the whole of it and only it (AT-103)", (
     expect(removal.replaced).toEqual({});
 
     expect(count(ctx, "SELECT COUNT(*) AS n FROM agent_sessions WHERE id = ?", doomed)).toBe(0);
-    expect(count(ctx, "SELECT COUNT(*) AS n FROM closed_sessions WHERE session_id = ?", doomed)).toBe(0);
     for (const runId of [runA, runB]) expect(leftFor(ctx, runId)).toEqual({ run: 0, messages: 0, toolEvents: 0, trace: 0, grants: 0, receipts: 0, snapshot: 0 });
     // The other conversation is as it was.
     for (const [table, n] of Object.entries(leftFor(ctx, runC))) expect(n, table).toBeGreaterThan(0);
@@ -99,32 +97,37 @@ describe("deleting a conversation takes the whole of it and only it (AT-103)", (
     // The library is untouched, and the owner's own authorization still works.
     expect({ objects: count(ctx, "SELECT COUNT(*) AS n FROM content_objects"), works: count(ctx, "SELECT COUNT(*) AS n FROM works") }).toEqual(library);
     expect(count(ctx, "SELECT COUNT(*) AS n FROM content_objects WHERE id = ?", note.objectId)).toBe(1);
-    expect(ok<{ items: Array<{ sessionId: string }> }>(await run(ctx, "conversation.history", { mode: "enthusiast" })).items).toEqual([]);
-    expect(ok<{ conversation: { sessionId: string } }>(await run(ctx, "conversation.current", { mode: "enthusiast" })).conversation.sessionId).toBe(kept);
+    expect(ok<{ items: Array<{ sessionId: string }> }>(await run(ctx, "conversation.history", { contextId: null })).items).toEqual([]);
+    expect(ok<{ conversation: { sessionId: string } }>(await run(ctx, "conversation.current", { contextId: null })).conversation.sessionId).toBe(kept);
   }, 60_000);
 
-  it("puts a new conversation in the place of the current one that was deleted, and leaves the other mode alone", async () => {
+  it("puts a new conversation in the place of the current one of 最近 that was deleted, and leaves a project's alone", async () => {
     const ctx = await boot();
-    const fun = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
-    await say(ctx, fun, "娱乐模式的话");
-    const work = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "creator" })).sessionId;
-    await say(ctx, work, "工作模式的话");
+    const project = ok<{ id: string }>(await run(ctx, "project.create", { name: "不受影响的项目" }));
+    const fun = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
+    await say(ctx, fun, "最近里的话");
+    const work = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: project.id })).sessionId;
+    await say(ctx, work, "项目里的话");
 
     const removal = ok<Removal>(await run(ctx, "conversation.delete", { sessionIds: [fun] }));
-    expect(removal.replaced.enthusiast).toMatchObject({ runCount: 0 });
-    expect(removal.replaced.enthusiast!.sessionId).not.toBe(fun);
-    expect(removal.replaced.creator).toBeUndefined();
-    const now = ok<{ conversation: { sessionId: string; runCount: number } }>(await run(ctx, "conversation.current", { mode: "enthusiast" })).conversation;
-    expect(now).toMatchObject({ sessionId: removal.replaced.enthusiast!.sessionId, runCount: 0 });
-    expect(ok<{ conversation: { sessionId: string } }>(await run(ctx, "conversation.current", { mode: "creator" })).conversation.sessionId).toBe(work);
+    expect(removal.replaced.recent).toMatchObject({ runCount: 0 });
+    expect(removal.replaced.recent!.sessionId).not.toBe(fun);
+    expect(Object.keys(removal.replaced)).toEqual(["recent"]);
+    const now = ok<{ conversation: { sessionId: string; runCount: number } }>(await run(ctx, "conversation.current", { contextId: null })).conversation;
+    expect(now).toMatchObject({ sessionId: removal.replaced.recent!.sessionId, runCount: 0 });
+    expect(ok<{ conversation: { sessionId: string } }>(await run(ctx, "conversation.current", { contextId: project.id })).conversation.sessionId).toBe(work);
     // The new conversation can be spoken in at once.
     await say(ctx, now.sessionId, "新对话里的话");
     expect(count(ctx, "SELECT COUNT(*) AS n FROM agent_runs WHERE session_id = ?", now.sessionId)).toBe(1);
+    // A project that loses its current conversation is not given a new one: it has none to show until one is begun.
+    const removed = ok<Removal>(await run(ctx, "conversation.delete", { sessionIds: [work] }));
+    expect(removed.replaced).toEqual({});
+    expect(ok<{ conversation: unknown }>(await run(ctx, "conversation.current", { contextId: project.id })).conversation).toBeNull();
   }, 60_000);
 
   it("keeps a conversation whose task is still running, says so, and deletes it once the task is stopped", async () => {
     const ctx = await boot("timeout");
-    const busy = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
+    const busy = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
     const sent = ok<{ runId: string }>(await run(ctx, "agent.send", { sessionId: busy, text: "一直在等的任务" }));
     await new Promise((resolve) => setTimeout(resolve, 150));
     const shown = await list(ctx);
@@ -146,7 +149,7 @@ describe("deleting a conversation takes the whole of it and only it (AT-103)", (
 
   it("is the owner's: a task cannot list or delete conversations, and the commands are not in the agent's table", async () => {
     const ctx = await boot();
-    const session = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
+    const session = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
     const agent = { kind: "agent" as const, id: "tester-agent" };
     const grant = ctx.app.grants.issue({
       actor: agent, allowedCommands: ["conversation.list", "conversation.delete", "conversation.deleteAll"], access: "scoped",
@@ -172,13 +175,15 @@ describe("the list of conversations (AT-103)", () => {
     const video = seedVideo(ctx.app, { title: "合成视频 第一集" });
     sqlite.prepare("UPDATE works SET title = ? WHERE id = ?").run("合成动画", video.workId);
     const project = ok<{ id: string }>(await run(ctx, "project.create", { name: "合成项目" }));
-    const global = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
+    const global = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
     await say(ctx, global, "全局里问的第一句");
-    const resource = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: video.resourceId, mode: "enthusiast" })).id;
+    const resource = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: video.resourceId, contextId: null })).id;
     await say(ctx, resource, "资源里问的");
-    const work = ok<{ id: string }>(await run(ctx, "session.open", { kind: "work", targetId: video.workId, mode: "enthusiast" })).id;
-    const projectSession = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, mode: "creator" })).id;
-    const creatorGlobal = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "creator" })).sessionId;
+    const work = ok<{ id: string }>(await run(ctx, "session.open", { kind: "work", targetId: video.workId, contextId: null })).id;
+    // A project keeps as many conversations as it needs: the first becomes history once a new one is begun.
+    const projectSession = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, contextId: project.id })).id;
+    await say(ctx, projectSession, "项目里问的");
+    const projectCurrent = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: project.id })).sessionId;
     // Spread the last activity over time.
     const day = 86_400_000;
     const at = (daysAgo: number) => new Date(Date.now() - daysAgo * day).toISOString();
@@ -187,9 +192,10 @@ describe("the list of conversations (AT-103)", () => {
     sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(at(1), global);
     sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(at(45), resource);
     sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(at(10), work);
+    sqlite.prepare("UPDATE agent_runs SET updated_at = ? WHERE session_id = ?").run(at(3), projectSession);
     sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(at(3), projectSession);
-    sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(at(2), creatorGlobal);
-    return { video, project, global, resource, work, projectSession, creatorGlobal, at };
+    sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(at(2), projectCurrent);
+    return { video, project, global, resource, work, projectSession, projectCurrent, at };
   }
 
   it("lists every kind with its title, what it is about, the number of rounds and the last time, newest first", async () => {
@@ -197,29 +203,30 @@ describe("the list of conversations (AT-103)", () => {
     const s = await populate(ctx);
     const all = await list(ctx);
     expect(all.total).toBe(5);
-    expect(all.items.map((item) => item.sessionId)).toEqual([s.global, s.creatorGlobal, s.projectSession, s.work, s.resource]);
+    expect(all.items.map((item) => item.sessionId)).toEqual([s.global, s.projectCurrent, s.projectSession, s.work, s.resource]);
     const by = Object.fromEntries(all.items.map((item) => [item.sessionId, item]));
-    expect(by[s.global]).toMatchObject({ kind: "shared", mode: "enthusiast", runCount: 1, current: true, ownerTitle: null });
+    expect(by[s.global]).toMatchObject({ kind: "shared", contextId: null, contextName: "最近", runCount: 1, current: true, ownerTitle: null });
     expect(by[s.global]!.excerpt.startsWith("全局里问的第一句")).toBe(true);
     expect(by[s.resource]).toMatchObject({ kind: "resource", ownerTitle: "合成视频 第一集", runCount: 1, current: false });
     expect(by[s.work]).toMatchObject({ kind: "work", ownerTitle: "合成动画", runCount: 0 });
-    expect(by[s.projectSession]).toMatchObject({ kind: "project", mode: "creator", ownerTitle: "合成项目" });
-    expect(by[s.creatorGlobal]).toMatchObject({ kind: "shared", mode: "creator", current: true });
+    expect(by[s.projectSession]).toMatchObject({ kind: "project", contextId: s.project.id, contextName: "合成项目", ownerTitle: "合成项目", runCount: 1, current: false });
+    expect(by[s.projectCurrent]).toMatchObject({ kind: "project", contextId: s.project.id, contextName: "合成项目", ownerTitle: "合成项目", runCount: 0, current: true });
   }, 60_000);
 
-  it("filters by mode, kind, time and title, pages, and agrees with what \"delete all\" deletes", async () => {
+  it("filters by context, kind, time and title, pages, and agrees with what \"delete all\" deletes", async () => {
     const ctx = await boot();
     const s = await populate(ctx);
     const ids = async (filter: Record<string, unknown>) => (await list(ctx, filter)).items.map((item) => item.sessionId);
-    expect(await ids({ mode: "creator" })).toEqual([s.creatorGlobal, s.projectSession]);
+    expect(await ids({ contextId: s.project.id })).toEqual([s.projectCurrent, s.projectSession]);
+    expect(await ids({ contextId: null })).toEqual([s.global, s.work, s.resource]);
     expect(await ids({ kind: "resource" })).toEqual([s.resource]);
-    expect(await ids({ kind: "shared", mode: "enthusiast" })).toEqual([s.global]);
-    expect(await ids({ after: s.at(7) })).toEqual([s.global, s.creatorGlobal, s.projectSession]);
+    expect(await ids({ kind: "shared", contextId: null })).toEqual([s.global]);
+    expect(await ids({ after: s.at(7) })).toEqual([s.global, s.projectCurrent, s.projectSession]);
     expect(await ids({ before: s.at(30) })).toEqual([s.resource]);
     // Title search covers the conversation's own title and the title of what it is about.
     expect(await ids({ q: "合成动画" })).toEqual([s.work]);
     expect(await ids({ q: "合成视频" })).toEqual([s.resource]);
-    expect(await ids({ q: "合成项目" })).toEqual([s.projectSession]);
+    expect(await ids({ q: "合成项目" })).toEqual([s.projectCurrent, s.projectSession]);
     expect(await ids({ q: "没有这个" })).toEqual([]);
     // 100% of a percent sign is a literal one, not a wildcard.
     expect(await ids({ q: "%" })).toEqual([]);
@@ -233,11 +240,12 @@ describe("the list of conversations (AT-103)", () => {
     expect(removal.removed).toEqual([s.resource]);
     expect((await list(ctx)).total).toBe(4);
     const everything = ok<Removal>(await run(ctx, "conversation.deleteAll", {}));
-    expect(everything.removed.sort()).toEqual([s.global, s.creatorGlobal, s.projectSession, s.work].sort());
-    // Each mode is left with a new, empty conversation to speak in.
-    expect(Object.keys(everything.replaced).sort()).toEqual(["creator", "enthusiast"]);
+    expect(everything.removed.sort()).toEqual([s.global, s.projectCurrent, s.projectSession, s.work].sort());
+    // 最近 is left with a new, empty conversation to speak in; the project has none until one is begun.
+    expect(Object.keys(everything.replaced)).toEqual(["recent"]);
     const left = await list(ctx);
-    expect(left.items.map((item) => item.runCount)).toEqual([0, 0]);
+    expect(left.items.map((item) => item.runCount)).toEqual([0]);
+    expect(ok<{ conversation: unknown }>(await run(ctx, "conversation.current", { contextId: s.project.id })).conversation).toBeNull();
     expect(count(ctx, "SELECT COUNT(*) AS n FROM agent_runs")).toBe(0);
     expect(count(ctx, "SELECT COUNT(*) AS n FROM agent_messages")).toBe(0);
     expect(count(ctx, "SELECT COUNT(*) AS n FROM works")).toBe(1);
@@ -257,11 +265,11 @@ describe("the list of conversations (AT-103)", () => {
     const ctx = await boot();
     const notices: Array<{ topic: string; payload: Record<string, any> }> = [];
     ctx.app.onNotice((notice) => { if (notice.topic === "conversation.deleted") notices.push(notice as never); });
-    const session = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "enthusiast" })).sessionId;
+    const session = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null })).sessionId;
     ok(await run(ctx, "conversation.delete", { sessionIds: [session] }));
     expect(notices).toHaveLength(1);
     expect(notices[0]!.payload.sessionIds).toEqual([session]);
-    expect(notices[0]!.payload.replaced.enthusiast.sessionId).toEqual(expect.any(String));
+    expect(notices[0]!.payload.replaced.recent.sessionId).toEqual(expect.any(String));
     const logged = ctx.app.store.sqlite.prepare("SELECT action, category FROM operation_log WHERE action = 'conversation.delete'").all();
     expect(logged).toEqual([{ action: "conversation.delete", category: "agent" }]);
   });

@@ -342,7 +342,7 @@ describe.each([{ name: "vec0 extension", vec: true }, { name: "JavaScript fallba
     // Only what has been read: nothing at first, then the part that was marked.
     expect((await h.ask("手风琴的声音在雨夜的桥上", { withinProgress: true, kinds: ["body"] })).results).toEqual([]);
     const top = (await h.ask("手风琴的声音在雨夜的桥上", { kinds: ["body"] })).results[0]!;
-    await h.ok("progress.set", { resourceId: book.resourceId, resourceRevisionId: book.revisionId, consumed: true, locator: { kind: "text", partId: "body", representationId: book.revisionId, normalizationVersion: NORMALIZATION_V1, range: top.locator!.range, quote: { exact: top.text } } });
+    await h.ok("progress.set", { contextId: null, resourceId: book.resourceId, resourceRevisionId: book.revisionId, consumed: true, locator: { kind: "text", partId: "body", representationId: book.revisionId, normalizationVersion: NORMALIZATION_V1, range: top.locator!.range, quote: { exact: top.text } } });
     const read = await h.ask("手风琴的声音在雨夜的桥上", { withinProgress: true, kinds: ["body"], limit: 20 });
     expect(read.results).toHaveLength(1);
     expect(read.results[0]!.locator!.range).toEqual(top.locator!.range);

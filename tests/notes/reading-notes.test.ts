@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { NORMALIZATION_V1 } from "@manga/contracts";
 import { DrizzleStore } from "@manga/storage-drizzle";
 import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL } from "../../packages/storage-drizzle/src/sql.ts";
-import { applyNoteOp, buildEpubFixture, deriveShell, reduceHover, initialHover, resolveTextLocator } from "@manga/app-core";
+import { applyNoteOp, buildEpubFixture, deriveShell, defaultShell, RAIL_WIDTH, reduceHover, initialHover, resolveTextLocator } from "@manga/app-core";
 import { startApp, tempProfile } from "../helpers/app.ts";
 
 const actorAgent = { kind: "agent" as const, id: "agent-1" };
@@ -98,14 +98,14 @@ describe("reading, notes and index", () => {
     await app.call(actor, {
       commandId: "progress.set",
       idempotencyKey: "jump",
-      input: { resourceId, resourceRevisionId: revisionId, locator: { kind: "text", partId: locator?.partId, representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: locator?.range, quote: { exact: "末尾检索甲" } } },
+      input: { contextId: null, resourceId, resourceRevisionId: revisionId, locator: { kind: "text", partId: locator?.partId, representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: locator?.range, quote: { exact: "末尾检索甲" } } },
     }, grant.handle);
     const stillHidden = await app.call(actor, { commandId: "library.find", idempotencyKey: "find-jump", input: { text: "末尾检索甲", resourceId, withinProgress: true } }, grant.handle);
     expect((stillHidden.value as unknown[]).length).toBe(0);
     await app.call(actor, {
       commandId: "progress.set",
       idempotencyKey: "read",
-      input: { resourceId, resourceRevisionId: revisionId, consumed: true, locator: { kind: "text", partId: locator?.partId, representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: locator?.range, quote: { exact: "末尾检索甲" } } },
+      input: { contextId: null, resourceId, resourceRevisionId: revisionId, consumed: true, locator: { kind: "text", partId: locator?.partId, representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: locator?.range, quote: { exact: "末尾检索甲" } } },
     }, grant.handle);
     const visible = await app.call(actor, { commandId: "library.find", idempotencyKey: "find-read", input: { text: "末尾检索甲", resourceId, withinProgress: true } }, grant.handle);
     expect((visible.value as unknown[]).length).toBeGreaterThan(0);
@@ -207,28 +207,27 @@ describe("reading, notes and index", () => {
   });
 
   it("keeps shell measure independent of the dock and delays overlay close", () => {
-    const preference = {
-      version: 1 as const,
-      mode: "enthusiast" as const,
-      spoilerGuard: false,
-      layouts: {
-        enthusiast: { focus: false, left: { visible: true, width: 224 }, right: { visible: true, width: 360 } },
-        creator: { focus: false, left: { visible: true, width: 224 }, right: { visible: true, width: 360 } },
-      },
-      reading: { measurePx: 680, fontSizePx: 18, lineHeight: 1.7, theme: "paper" as const },
-    };
-    const wide = deriveShell({ viewport: { width: 1600, height: 900 }, preference, hasRight: true, overlay: null });
-    expect(wide.left).toBe("dock");
+    const preference = defaultShell();
+    const wide = deriveShell({ viewport: { width: 1600, height: 900 }, preference, hasDock: true, overlay: null });
+    expect(wide.sidebar).toBe("dock");
+    expect(wide.dock).toBe("dock");
     expect(wide.mainWidth).toBeGreaterThanOrEqual(640);
     expect(wide.measurePx).toBe(680);
-    const narrow = deriveShell({ viewport: { width: 800, height: 500 }, preference, hasRight: true, overlay: null });
-    expect(narrow.left).toBe("hidden");
+    const narrow = deriveShell({ viewport: { width: 800, height: 500 }, preference, hasDock: true, overlay: null });
+    expect(narrow.sidebar).toBe("hidden");
+    expect(narrow.dock).toBe("hidden");
     expect(narrow.compact).toBe(true);
-    expect(narrow.mainWidth).toBe(800);
-    const opened = reduceHover(initialHover(), { type: "enter", side: "left", now: 0 });
+    // The icon rail stays; the columns are the part that folds.
+    expect(narrow.mainWidth).toBe(800 - RAIL_WIDTH);
+    // A window that fits one column beside the main area folds the dock first and keeps the sidebar.
+    const middle = deriveShell({ viewport: { width: 1100, height: 900 }, preference, hasDock: true, overlay: null });
+    expect([middle.sidebar, middle.dock]).toEqual(["dock", "hidden"]);
+    expect(middle.mainWidth).toBeGreaterThanOrEqual(560);
+    expect(deriveShell({ viewport: { width: 1100, height: 900 }, preference, hasDock: true, overlay: "dock" }).dock).toBe("overlay");
+    const opened = reduceHover(initialHover(), { type: "enter", side: "sidebar", now: 0 });
     const leaving = reduceHover(opened, { type: "leave", now: 10 });
-    expect(reduceHover(leaving, { type: "tick", now: 100 }).overlay).toBe("left");
-    expect(reduceHover(reduceHover(leaving, { type: "enter", side: "left", now: 20 }), { type: "tick", now: 400 }).overlay).toBe("left");
+    expect(reduceHover(leaving, { type: "tick", now: 100 }).overlay).toBe("sidebar");
+    expect(reduceHover(reduceHover(leaving, { type: "enter", side: "sidebar", now: 20 }), { type: "tick", now: 400 }).overlay).toBe("sidebar");
     expect(reduceHover(leaving, { type: "tick", now: 200 }).overlay).toBe(null);
     const split = applyNoteOp({ schemaVersion: 2, blocks: [{ id: "b1", type: "paragraph", text: "甲乙丙丁" }] }, { type: "split", blockId: "b1", offset: 2 }, () => "b2");
     expect(split.blocks.map((block) => block.id)).toEqual(["b1", "b2"]);

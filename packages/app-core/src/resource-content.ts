@@ -4,6 +4,7 @@ import { MangaError } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { listBookmarks, listNotes } from "./reading-service.ts";
 import { outsideSql } from "./works-versions.ts";
+import { contextName } from "./progress-service.ts";
 import { libraryRoots, resolveLocation } from "./library-locations.ts";
 
 export type ResourceContent = {
@@ -25,7 +26,8 @@ export type ResourceContent = {
     /** For a file outside the library: the folder to add as a library path to bring it back (A-80). */
     folderToAdd: string | null;
   };
-  progress: { percent: number; completion: string; locator: unknown | null };
+  /** The latest position in any context and the context it is from (A-96); the reader opens at the position of its own context instead. */
+  progress: { percent: number; completion: string; locator: unknown | null; contextId: string | null; contextName: string | null };
   notes: Array<{ objectId: string; title: string; preview: string; updatedAt: string }>;
   bookmarks: Array<{ id: string; label: string; locator: unknown; createdAt: string }>;
   recordings: unknown[];
@@ -46,7 +48,8 @@ export function resourceContent(store: DrizzleStore, resourceId: string, recordi
   const revision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(resourceId) as { id: string } | undefined;
   const location = revision ? resolveLocation(store, revision.id) ?? undefined : undefined;
   const root = location?.libraryPathId ? libraryRoots(store).find((item) => item.id === location.libraryPathId) : undefined;
-  const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state AS completion, last_locator_json AS locator FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revision.id) as { percent: number; completion: string; locator: string | null } | undefined : undefined;
+  // The latest position in any context, with the context it is from (A-96).
+  const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state AS completion, last_locator_json AS locator, context_id AS contextId FROM progress_latest WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revision.id) as { percent: number; completion: string; locator: string | null; contextId: string } | undefined : undefined;
   const conversation = store.sqlite.prepare(`SELECT s.id AS sessionId, s.updated_at AS updatedAt, (SELECT COUNT(*) FROM agent_runs run WHERE run.session_id = s.id) AS runs
     FROM agent_sessions s WHERE s.kind = 'resource' AND s.target_id = ? ORDER BY s.updated_at DESC LIMIT 1`).get(resourceId) as { sessionId: string; updatedAt: string; runs: number } | undefined;
   return {
@@ -60,7 +63,7 @@ export function resourceContent(store: DrizzleStore, resourceId: string, recordi
       libraryRoot: root && !root.managed ? root.root : null,
       folderToAdd: location?.outside && location.legacyPath ? path.dirname(location.legacyPath) : null,
     },
-    progress: { percent: progress?.percent ?? 0, completion: progress?.completion ?? "new", locator: progress?.locator ? JSON.parse(progress.locator) : null },
+    progress: { percent: progress?.percent ?? 0, completion: progress?.completion ?? "new", locator: progress?.locator ? JSON.parse(progress.locator) : null, contextId: progress ? progress.contextId || null : null, contextName: progress ? contextName(store, progress.contextId) : null },
     notes: listNotes(store, { resourceId, limit: 100 }).map((note) => ({ objectId: String(note.objectId), title: String(note.title ?? ""), preview: String(note.preview ?? ""), updatedAt: String(note.updatedAt) })),
     bookmarks: listBookmarks(store, resourceId).map((mark) => ({ id: String(mark.id), label: String(mark.label ?? ""), locator: mark.locator, createdAt: String(mark.createdAt) })),
     recordings: recordings(),

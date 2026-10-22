@@ -7,13 +7,14 @@ type T = Translator["t"];
 export type HistoryItem = { sessionId: string; title: string; excerpt: string; runCount: number; updatedAt: string };
 
 /**
- * The top of the conversation page (AT-75): which conversation this is, "开启新对话" and "历史". The history lists the other conversations
- * of the mode, newest first, with the start of what was said; opening one shows it and makes it the current one, where it can be
+ * The top of the dock and of a conversation tab (AT-75): which conversation this is, "开启新对话" and "历史". The history lists the other conversations
+ * of the context, newest first, with the start of what was said; opening one shows it and makes it the current one, where it can be
  * continued. Nothing is deleted by starting a new conversation.
  */
 export function ConversationBar(props: {
   t: T;
-  mode: "enthusiast" | "creator";
+  /** The context whose history the panel lists: a project id, null for "最近". */
+  contextId: string | null;
   title: string;
   /** Changes whenever the conversations may have changed (a new one, a task that ended), so an open panel reads them again. */
   version: number;
@@ -30,14 +31,14 @@ export function ConversationBar(props: {
   useEffect(() => {
     if (!open) return;
     let live = true;
-    void attempt<{ items: HistoryItem[] }>("conversation.history", { mode: props.mode, limit: 50 }).then((result) => {
+    void attempt<{ items: HistoryItem[] }>("conversation.history", { contextId: props.contextId, limit: 50 }).then((result) => {
       if (!live) return;
       if (result.ok) setItems(asArray<HistoryItem>(result.value.items));
       else props.onError(result.error.message);
     });
     return () => { live = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, props.mode, props.version]);
+  }, [open, props.contextId, props.version]);
 
   useEffect(() => {
     if (!open) return;

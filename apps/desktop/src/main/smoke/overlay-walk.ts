@@ -147,7 +147,7 @@ export async function walkComicOverlays(view: BrowserWindow, observe: Observe, s
           view.webContents.sendInputEvent({ type: "mouseMove", x: 400, y: 4 });
           await sleep(120);
           view.webContents.sendInputEvent({ type: "mouseMove", x: 400, y: 11 });
-          await waitUntil(view, `document.querySelector('[data-testid="shell-main-column"]')?.getAttribute("data-revealed") === "true"`, 1500);
+          await waitUntil(view, `document.querySelector('[data-testid="shell-top"]')?.getAttribute("data-revealed") === "true"`, 1500);
           await sleep(300);
           await walk.expectReached(state, "region tool, page's top down", ["comic-region-bar", "comic-region-cancel"]);
           await walk.shotAs("overlays-comic-window-region");

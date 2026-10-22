@@ -34,6 +34,7 @@ describe("the stylesheets keep what lies over a reader clear of what floats over
   const video = read("styles-video.css");
   const reader = read("styles-reader.css");
   const base = read("styles.css");
+  const frame = read("styles-frame.css");
 
   it("puts the player's prompts above the bar, and lifts the one at the bottom by the bar's height", () => {
     const bar = zOf(rule(video, ".video-shell[data-full] .video-controls"));
@@ -50,7 +51,7 @@ describe("the stylesheets keep what lies over a reader clear of what floats over
     expect(rule(video, ".video-reader[data-window-full] .video-stage")).toMatch(/--player-top:\s*var\(--column-top-h\)/);
     // The one number: the column's top is that high, and so is the room kept for it.
     expect(base).toMatch(/--column-top-h: *36px/);
-    expect(rule(base, ".column-top")).toMatch(/height:\s*var\(--column-top-h\)/);
+    expect(rule(frame, ".shell-top")).toMatch(/height:\s*var\(--column-top-h\)/);
   });
 
   it("raises the comic's last-page prompt above its bar and floats the region tool's note below the page's top", () => {
@@ -68,8 +69,8 @@ describe("the stylesheets keep what lies over a reader clear of what floats over
   });
 
   it("keeps the strip that brings the page's top down and the zone under it thinner than the top, so they never cover a prompt that lies below it", () => {
-    const strip = Number(/height:\s*(\d+)px/.exec(rule(base, ".immersive-drag"))?.[1]);
-    const zone = rule(base, ".immersive-hotzone");
+    const strip = Number(/height:\s*(\d+)px/.exec(rule(frame, ".immersive-drag"))?.[1]);
+    const zone = rule(frame, ".immersive-hotzone");
     const reach = Number(/top:\s*(\d+)px/.exec(zone)?.[1]) + Number(/height:\s*(\d+)px/.exec(zone)?.[1]);
     expect(strip).toBeGreaterThan(0);
     expect(reach).toBeLessThan(36);

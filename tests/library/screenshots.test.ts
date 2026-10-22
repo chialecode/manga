@@ -207,9 +207,9 @@ describe("a task reads what a screenshot says, within its scope and the spoiler 
       const read = ok<{ screenshot: Shot }>(await run(ctx, "screenshot.save", { resourceId: comic.resourceId, data: await png(40, 60), comic: { pageId: comic.pageIds[1], pageIndex: 1 } })).screenshot;
       const ahead = ok<{ screenshot: Shot }>(await run(ctx, "screenshot.save", { resourceId: comic.resourceId, data: await png(40, 60), comic: { pageId: comic.pageIds[5], pageIndex: 5 } })).screenshot;
       ok(await run(ctx, "screenshot.save", { resourceId: other.resourceId, data: await png(64, 36), video: { positionMs: 1000 } }));
-      ok(await run(ctx, "progress.setTime", { resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: 8000, played: [{ startMs: 0, endMs: 8000 }] }));
-      ok(await run(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[2], consumed: true }));
-      ok(await run(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[1], consumed: true }));
+      ok(await run(ctx, "progress.setTime", { contextId: null, resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: 8000, played: [{ startMs: 0, endMs: 8000 }] }));
+      ok(await run(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[2], consumed: true }));
+      ok(await run(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[1], consumed: true }));
       ok(await run(ctx, "settings.setShell", { spoilerGuard: true }));
 
       const agent = { kind: "agent" as const, id: "agent-shots" };

@@ -59,7 +59,10 @@ export function ProjectPage(props: {
   focus: { kind: string; id: string } | null;
   onFocus: (focus: { kind: string; id: string } | null) => void;
   onTab: (tab: ProjectTab) => void;
-  onBack: () => void;
+  /** Back to the list of projects; a project that is a tab of its own has no list to go back to and asks for none. */
+  onBack?: () => void;
+  /** The page shows this one tab of the project and nothing else — no name, no strip of tabs: a board, a map, a draft or a cut that stands as a tab of its own. */
+  only?: ProjectTab;
   onChanged: () => void;
   onOpenMaterial: (material: Pick<Material, "kind" | "targetId" | "label" | "opens">) => void;
   onOpenHit?: (hit: SemanticHitView) => void;
@@ -88,12 +91,12 @@ export function ProjectPage(props: {
   useEffect(() => { if (detail) onLoaded?.({ id: detail.project.id, name: detail.project.name }); }, [detail?.project.id, detail?.project.name, onLoaded]);
   const reload = () => { void load(); props.onChanged(); };
   const tabs = PROJECT_TABS.filter((item) => !item.facet || props.facets.has(item.facet));
-  const tab = tabs.some((item) => item.id === props.tab) ? props.tab : "materials";
+  const tab = props.only ?? (tabs.some((item) => item.id === props.tab) ? props.tab : "materials");
 
   if (missing) {
     return (
       <section className="project-page" data-testid="page-project">
-        <button type="button" className="link-button" data-testid="project-back" onClick={props.onBack}><ArrowLeft size={15} aria-hidden="true" /> {t("projects.back")}</button>
+        {props.onBack ? <button type="button" className="link-button" data-testid="project-back" onClick={props.onBack}><ArrowLeft size={15} aria-hidden="true" /> {t("projects.back")}</button> : null}
         <p className="detail-muted" data-testid="project-missing">{t("projects.missing")}</p>
       </section>
     );
@@ -114,10 +117,17 @@ export function ProjectPage(props: {
         : props.renderTab?.(tab, context) ?? null;
   const wide = tab === "whiteboard" || tab === "mindmap";
 
+  if (props.only) {
+    return (
+      <section className={`project-page project-page-only${wide ? " project-page-wide" : ""}`} data-testid="page-project" data-project={detail.project.id} data-tab={tab}>
+        <div className="project-body" data-testid="project-body">{body}</div>
+      </section>
+    );
+  }
   return (
     <section className={`project-page${wide ? " project-page-wide" : ""}`} data-testid="page-project" data-project={detail.project.id} data-tab={tab} aria-labelledby="project-title">
       <header className="project-head">
-        <button type="button" className="link-button" data-testid="project-back" onClick={props.onBack}><ArrowLeft size={15} aria-hidden="true" /> {t("projects.back")}</button>
+        {props.onBack ? <button type="button" className="link-button" data-testid="project-back" onClick={props.onBack}><ArrowLeft size={15} aria-hidden="true" /> {t("projects.back")}</button> : null}
         <h2 id="project-title" data-testid="project-title">{detail.project.name}</h2>
         {detail.project.status === "archived" ? <span className="chip">{t("projects.archived")}</span> : null}
         {detail.project.goal ? <p className="detail-muted project-goal" data-testid="project-goal-text">{detail.project.goal}</p> : null}

@@ -10,11 +10,12 @@ import { RecordsPage } from "../../apps/desktop/src/renderer/pages/settings/reco
 import { quoteTags } from "../../apps/desktop/src/renderer/lib/quote-tags.ts";
 import { readerContext } from "../../apps/desktop/src/renderer/lib/reader-context.ts";
 import { installMatchMedia, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
+import { contextHandlers } from "../helpers/app-host.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
 /**
- * Deleting conversations from "设置 › 记录" (A-89, AT-103): the list with its filters, the question before anything is deleted and what it says goes and
+ * Deleting conversations from the conversations' management tab (A-89, A-101, AT-103, AT-119; it was the conversations category of "设置 › 记录"): the list with its filters, the question before anything is deleted and what it says goes and
  * stays, one / several / all, what is said when a task kept a conversation, and the right pane taking a new conversation when its own was deleted.
  */
 const i18n = createTranslator("zh-CN");
@@ -31,8 +32,7 @@ function installHost(handlers: Record<string, Handler> = {}) {
     "records.list": () => ({ items: [], total: 0 }),
     "notes.list": () => [],
     "works.list": () => ({ items: [{ id: "w1", title: "合成作品", author: "", mediaKind: "comic", shelf: "reading", coverId: null, lastResource: null, progress: 0, finishedCount: 0, resourceCount: 0, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null }], total: 1, nextCursor: null }),
-    "workspace.get": () => ({ uiFacets: ["agent", "library", "settings"], sessions: [], runs: [], notes: [], resources: [] }),
-    "workspace.sessions": () => [],
+    ...contextHandlers({ facets: ["agent", "library", "settings"], projects: [{ id: "prj_1", name: "合成项目" }] }).handlers,
     "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
     "inventory.overview": () => ({ items: [], totals: {} }),
     "quickTasks.list": () => ({ tasks: [] }),
@@ -61,15 +61,16 @@ function installHost(handlers: Record<string, Handler> = {}) {
 beforeEach(() => { window.innerWidth = 1600; installMatchMedia({ reducedMotion: true }); installPointerEvent(); quoteTags.reset(); readerContext.reset(); try { window.localStorage.clear(); } catch { /* none */ } });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); removeMatchMedia(); });
 
-type Row = { sessionId: string; title: string; kind: string; mode: "enthusiast" | "creator"; targetId: string | null; ownerTitle: string | null; runCount: number; createdAt: string; lastAt: string; excerpt: string; current: boolean; running: boolean };
-const row = (id: string, extra: Partial<Row> = {}): Row => ({ sessionId: id, title: `对话 ${id}`, kind: "shared", mode: "enthusiast", targetId: null, ownerTitle: null, runCount: 2, createdAt: "2026-10-01T10:00:00.000Z", lastAt: "2026-10-02T10:00:00.000Z", excerpt: `${id} 的第一句`, current: false, running: false, ...extra });
+type Row = { sessionId: string; title: string; kind: string; contextId: string | null; contextName: string | null; targetId: string | null; ownerTitle: string | null; runCount: number; createdAt: string; lastAt: string; excerpt: string; current: boolean; running: boolean };
+const row = (id: string, extra: Partial<Row> = {}): Row => ({ sessionId: id, title: `对话 ${id}`, kind: "shared", contextId: null, contextName: null, targetId: null, ownerTitle: null, runCount: 2, createdAt: "2026-10-01T10:00:00.000Z", lastAt: "2026-10-02T10:00:00.000Z", excerpt: `${id} 的第一句`, current: false, running: false, ...extra });
 
 function page(overrides: Partial<Parameters<typeof RecordsPage>[0]> = {}) {
   const handlers = { onOpenNote: vi.fn(), onOpenNoteSource: vi.fn(), onOpenRecording: vi.fn(), onError: vi.fn(), onNotice: vi.fn() };
-  render(<RecordsPage t={t} formatDate={(value) => value.slice(0, 10)} {...handlers} {...overrides} />);
+  render(<RecordsPage t={t} formatDate={(value) => value.slice(0, 10)} scope="conversation" {...handlers} {...overrides} />);
   return handlers;
 }
-const openConversations = async () => { await userEvent.selectOptions(screen.getByTestId("records-type"), "conversation"); await screen.findByTestId("conv-filters"); };
+/** The tab of the conversations is the conversations' list from the start: there is no type to choose. */
+const openConversations = async () => { await screen.findByTestId("conv-filters"); expect(screen.queryByTestId("records-type")).toBeNull(); };
 
 describe("the conversations category in the records page", () => {
   it("lists every kind with its owner, rounds and last time, marks the one in use and the one at work, and hides the note filters", async () => {
@@ -79,24 +80,38 @@ describe("the conversations category in the records page", () => {
         items: [
           row("a", { current: true, title: "全局对话甲" }),
           row("b", { kind: "resource", ownerTitle: "合成视频 第一集", runCount: 0, excerpt: "" }),
-          row("c", { kind: "project", mode: "creator", ownerTitle: "合成项目", running: true }),
+          row("c", { kind: "project", contextId: "prj_1", contextName: "合成项目", ownerTitle: "合成项目", running: true }),
         ],
       }),
     });
     page();
-    expect(screen.getByTestId("settings-page-records").textContent).toContain(t("records.hint"));
+    expect(screen.getByTestId("settings-page-records").textContent).toContain(t("records.hintConversation"));
+    expect(screen.getByTestId("settings-page-records").textContent).toContain(t("sidebar.manage.conversation"));
     await openConversations();
     await screen.findByTestId("conv-a");
     expect(host.of("conversation.list")[0]!.input).toEqual({ limit: 30, offset: 0 });
     expect(screen.queryByTestId("records-kind")).toBeNull();
     expect(screen.queryByTestId("records-deleted")).toBeNull();
-    expect(screen.getByTestId("conv-meta-a").textContent).toBe(`${t("records.conv.kind.shared")} · ${t("records.conv.mode.enthusiast")} · ${t("records.conv.rounds", { count: 2 })} · 2026-10-02`);
+    expect(screen.getByTestId("conv-meta-a").textContent).toBe(`${t("records.conv.kind.shared")} · ${t("sidebar.recent")} · ${t("records.conv.rounds", { count: 2 })} · 2026-10-02`);
     expect(screen.getByTestId("conv-meta-b").textContent).toContain("合成视频 第一集");
+    expect(screen.getByTestId("conv-meta-b").textContent).toContain(t("sidebar.recent"));
     expect(screen.getByTestId("conv-meta-b").textContent).toContain(t("records.conv.noRounds"));
     expect(screen.getByTestId("conv-meta-c").textContent).toContain(t("records.conv.kind.project"));
+    expect(screen.getByTestId("conv-meta-c").textContent).toContain("合成项目");
     expect(screen.getByTestId("conv-current-a")).toBeTruthy();
     expect(screen.getByTestId("conv-running-c")).toBeTruthy();
     expect(screen.queryByTestId("conv-current-b")).toBeNull();
+  });
+
+  it("filters by project: all projects, 最近 and every project, archived ones included", async () => {
+    const host = installHost({ "conversation.list": () => ({ items: [row("a")], total: 1 }) });
+    page();
+    await openConversations();
+    await screen.findByTestId("conv-a");
+    await waitFor(() => expect(within(screen.getByTestId("conv-project")).getAllByRole("option").map((node) => node.textContent)).toEqual([t("records.conv.projectAll"), t("sidebar.recent"), "合成项目"]));
+    expect(host.of("workspace.contexts")[0]!.input).toEqual({ includeArchived: true });
+    // The mode filter is gone with the modes.
+    expect(screen.queryByTestId("conv-mode")).toBeNull();
   });
 
   it("says what stays in the backup copies the application keeps, and that packages hold no conversations", async () => {
@@ -175,9 +190,12 @@ describe("the conversations category in the records page", () => {
     await screen.findByTestId("conv-a");
     expect(screen.getByTestId("conv-delete-all").textContent).toBe(t("records.conv.deleteAll", { count: 7 }));
     await userEvent.selectOptions(screen.getByTestId("conv-kind"), "resource");
-    await userEvent.selectOptions(screen.getByTestId("conv-mode"), "enthusiast");
+    // The filter by project: "最近" is the conversations outside every project, and it is asked as a null context.
+    await userEvent.selectOptions(screen.getByTestId("conv-project"), "recent");
+    await waitFor(() => expect(host.of("conversation.list").at(-1)!.input).toMatchObject({ kind: "resource", contextId: null }));
+    await userEvent.selectOptions(screen.getByTestId("conv-project"), "prj_1");
     await userEvent.selectOptions(screen.getByTestId("conv-time"), "week");
-    await waitFor(() => expect(host.of("conversation.list").at(-1)!.input).toMatchObject({ kind: "resource", mode: "enthusiast", after: expect.any(String), limit: 30, offset: 0 }));
+    await waitFor(() => expect(host.of("conversation.list").at(-1)!.input).toMatchObject({ kind: "resource", contextId: "prj_1", after: expect.any(String), limit: 30, offset: 0 }));
     expect(screen.getByTestId("conv-delete-all").textContent).toBe(t("records.conv.deleteFiltered", { count: 7 }));
     await userEvent.click(screen.getByTestId("conv-delete-all"));
     expect(screen.getByTestId("conv-confirm").textContent).toContain(t("records.conv.confirm.title", { count: 7 }));
@@ -186,7 +204,7 @@ describe("the conversations category in the records page", () => {
     await waitFor(() => expect(host.of("conversation.deleteAll")).toHaveLength(1));
     // The list asked and the deletion asked with the same filter (the time window is "the last 7 days" counted from the moment of asking).
     const asked = host.of("conversation.deleteAll")[0]!.input as { after: string };
-    expect(asked).toEqual({ kind: "resource", mode: "enthusiast", after: expect.any(String) });
+    expect(asked).toEqual({ kind: "resource", contextId: "prj_1", after: expect.any(String) });
     expect(Math.abs(Date.parse(asked.after) - (Date.now() - 7 * 86_400_000))).toBeLessThan(60_000);
     expect(handlers.onNotice).toHaveBeenCalledWith(t("records.conv.done", { count: 7 }));
   });
@@ -254,30 +272,30 @@ describe("the conversations category in the records page", () => {
   });
 });
 
-describe("the right pane after its conversation was deleted", () => {
+describe("the dock after its conversation was deleted", () => {
   it("takes the new conversation the main process made, so the next question is asked there", async () => {
     let current = "ses-old";
     const sent: Array<Record<string, unknown>> = [];
     const host = installHost({
       "conversation.current": () => ({ conversation: { sessionId: current, title: "对话" } }),
       "conversation.history": () => ({ current, items: [] }),
-      "workspace.sessions": () => [{ sessionId: current, title: "对话", kind: "shared", targetId: null, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null }],
+      "workspace.sessions": () => [{ sessionId: current, title: "对话", kind: "shared", targetId: null, contextId: null, runCount: 0, activeRunId: null, activeRunStatus: null }],
       "session.stream": () => ({ items: [], hasMore: false, session: { id: current, kind: "shared", targetId: null, workId: null, resourceId: null } }),
       "agent.send": (input) => { sent.push(input); return { runId: "run-1", id: "run-1", status: "running", sessionId: input.sessionId, grantHandle: "g" }; },
       "agent.getRun": () => ({ status: "running" }),
     });
     render(<App />);
-    await userEvent.click(await screen.findByTestId("nav-agent"));
     await screen.findByTestId("conversation-bar");
-    const before = host.of("workspace.sessions").length;
+    await waitFor(() => expect(host.of("conversation.current").length).toBeGreaterThan(0));
+    const before = host.of("conversation.current").length;
 
     current = "ses-new";
-    host.notify({ topic: "conversation.deleted", payload: { sessionIds: ["ses-old"], replaced: { enthusiast: { sessionId: "ses-new" } } } });
-    await waitFor(() => expect(host.of("workspace.sessions").length).toBeGreaterThan(before));
+    host.notify({ topic: "conversation.deleted", payload: { sessionIds: ["ses-old"], replaced: { "": { sessionId: "ses-new" } } } });
+    await waitFor(() => expect(host.of("conversation.current").length).toBeGreaterThan(before));
 
-    const composer = within(screen.getByTestId("page-agent")).getByTestId("agent-composer");
+    const composer = within(screen.getByTestId("shell-dock")).getByTestId("agent-composer");
     await userEvent.type(composer, "删除之后的第一句");
-    await userEvent.click(within(screen.getByTestId("page-agent")).getByTestId("agent-send"));
+    await userEvent.click(within(screen.getByTestId("shell-dock")).getByTestId("agent-send"));
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toMatchObject({ sessionId: "ses-new", text: "删除之后的第一句" });
   });

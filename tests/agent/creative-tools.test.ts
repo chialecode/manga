@@ -31,7 +31,7 @@ async function boot() {
   const excerptB = ok<{ excerpt: { id: string } }>(await run(ctx, "excerpt.create", { pageId: "pgv-b", start: 0, end: 4, title: "乙的摘录", projectId: b })).excerpt.id;
   const noteC = ok<{ objectId: string }>(await run(ctx, "notes.create", { title: "乙的笔记", text: "乙项目才有的话：蓝鲸。" })).objectId;
   ok(await run(ctx, "project.addMaterial", { projectId: b, kind: "note", targetId: noteC }));
-  const opened = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: a.projectId, mode: "creator" }));
+  const opened = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: a.projectId, contextId: a.projectId }));
   const grant = ctx.app.issueAgentGrant(ctx.grant, agent, { sessionId: opened.id, runId: "run-at85", readResourceIds: [a.book.resourceId], projectId: a.projectId });
   return { ctx, a, b, boardB, mapB, draftB, excerptB, noteC, sessionId: opened.id, grant };
 }
@@ -235,6 +235,12 @@ describe("AT-85 agent creative tools: writes the person can take back", () => {
     // The log names the agent; the note itself stays where it was made.
     expect(ctx.app.log.query({ limit: 30 }).entries.find((entry) => entry.action === "project.addMaterial")).toMatchObject({ actorKind: "agent" });
     ok(await asAgent(world, "project.addMaterial", { projectId: a.projectId, kind: "resource", targetId: a.book.resourceId }));
+    // What the agent adds is its own addition, never one that looks automatic.
+    expect(one<{ origin: string }>(ctx, "SELECT origin FROM project_materials WHERE project_id = ? AND kind = 'resource' AND target_id = ?", a.projectId, a.book.resourceId).origin).toBe("manual");
+    for (const origin of ["auto", "manual"]) {
+      expect(failure(await asAgent(world, "project.addMaterial", { projectId: a.projectId, kind: "note", targetId: note.objectId, origin })).code, origin).toBe("FORBIDDEN");
+    }
+    expect(one<{ n: number }>(ctx, "SELECT COUNT(*) AS n FROM project_materials WHERE project_id = ? AND target_id = ?", a.projectId, note.objectId).n).toBe(0);
     // A note of the owner's that the project does not hold, a resource the task was not given, and kinds that reach for more are refused.
     for (const input of [
       { kind: "note", targetId: a.noteB }, { kind: "note", targetId: world.noteC }, { kind: "resource", targetId: "res-not-given" },
@@ -350,6 +356,8 @@ describe("AT-85 agent creative tools: in a task of a project, through the model 
     expect(Object.keys(suggest.properties ?? {})).not.toEqual(expect.arrayContaining(["connectionId"]));
     expect(Object.keys(suggest.properties ?? {})).not.toContain("sources");
     expect(suggest.required).toEqual(expect.arrayContaining(["draftId", "kind", "text"]));
+    const addMaterial = requests[0]!.tools!.find((tool) => tool.function?.name === "project.addMaterial")!.function!.parameters;
+    expect(Object.keys(addMaterial.properties ?? {})).not.toContain("origin");
   });
 
   it("gives a conversation that is not a project's the plain tools only", async () => {
@@ -359,7 +367,7 @@ describe("AT-85 agent creative tools: in a task of a project, through the model 
     const world = await boot();
     const { ctx } = world;
     ok(await run(ctx, "connections.upsert", { label: "文本", protocol: "openai-chat-completions", baseUrl: server.url, modelId: "m", purpose: "text", credentialHandle: ctx.app.stashSecret("credential-at85-plain") }));
-    const shared = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { mode: "creator" }));
+    const shared = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null }));
     const sent = ok<{ runId: string }>(await run(ctx, "agent.send", { sessionId: shared.sessionId, text: "你好" }));
     await waitForRun(ctx.app, ctx.actor, ctx.grant.handle, sent.runId, 20_000);
     const names = (requests[0]?.tools ?? []).map((tool) => tool.function?.name);

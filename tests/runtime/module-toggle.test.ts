@@ -104,7 +104,7 @@ describe("switching modules from settings", () => {
     expect(works.items.map((item) => item.mediaKind).sort()).toEqual(expect.arrayContaining(["comic", "video"]));
     expect((await run(ctx, "inventory.overview")).status).toBe("ok");
     // Progress already stored is still readable, and a note about a time is still creatable.
-    expect((await run(ctx, "progress.get", { resourceId: video.resourceId })).status).toBe("ok");
+    expect((await run(ctx, "progress.get", { contextId: null, resourceId: video.resourceId })).status).toBe("ok");
     const note = await run(ctx, "notes.create", { title: "停用期间的笔记", text: "这一幕的节奏", resourceId: video.resourceId, resourceRevisionId: video.revisionId, locator: { kind: "temporal", startMs: 1000, endMs: 2000 }, quoteText: "0:01 – 0:02" });
     expect(note.status, JSON.stringify(note)).toBe("ok");
     expect(comic.resourceId).toBeTruthy();
@@ -119,7 +119,7 @@ describe("switching modules from settings", () => {
     const video = seedVideo(ctx.app, { title: "合成动画" });
     const comic = seedComic(ctx.app, { title: "合成漫画" });
     ok(await run(ctx, "notes.create", { title: "时间笔记", text: "片头", resourceId: video.resourceId, resourceRevisionId: video.revisionId, locator: { kind: "temporal", startMs: 1000, endMs: 2000 }, quoteText: "0:01 – 0:02" }));
-    ok(await run(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[1] }));
+    ok(await run(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[1] }));
     for (const feature of ["video", "comic", "voice", "metadata"]) ok(await run(ctx, "settings.setModule", { featureId: feature, enabled: false }));
     expect(ctx.app.runtime.gateway.has("video.probe")).toBe(false);
     const dir = path.join(tempProfile(), "off-export");

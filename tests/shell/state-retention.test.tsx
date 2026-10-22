@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { useRef } from "react";
 import { App } from "../../apps/desktop/src/renderer/App.tsx";
 import { useVideo } from "../../apps/desktop/src/renderer/hooks/use-video.ts";
@@ -12,30 +13,28 @@ import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts
 import { resetVideoSupport } from "../../apps/desktop/src/renderer/readers/video-support.ts";
 import { createTranslator } from "@manga/i18n";
 import { installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
-import { installHost, stay } from "../helpers/app-host.ts";
+import { installHost } from "../helpers/app-host.ts";
+import { activeHost, closeFocusedTab, focusedTitle, openShelf, openWorkPage, showTab, tabNamed, tabTitles } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
 let media: ReturnType<typeof installMediaElement>;
-const element = () => screen.getByTestId("video-element") as HTMLVideoElement;
-/** Whether the browser would draw the node: an `Activity` that is hidden puts `display: none` on its children. */
-const shown = (node: Element) => { for (let at: Element | null = node; at; at = at.parentElement) if (getComputedStyle(at).display === "none") return false; return true; };
-
-async function openWork(nav: "nav-video" | "nav-comic", cardId: string) {
-  render(<App />);
-  await waitFor(() => expect(screen.getByTestId(nav)).toBeTruthy());
-  await stay();
-  fireEvent.click(screen.getByTestId(nav));
-  await waitFor(() => expect(screen.getByTestId(cardId)).toBeTruthy());
-  await stay();
-  fireEvent.click(screen.getByTestId(cardId));
-  await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
-  await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
-  await stay();
-}
+const READER = "合成动画 第 1 话 开场";
+const here = () => within(activeHost()!);
+const element = () => here().getByTestId("video-element") as HTMLVideoElement;
+/**
+ * Whether the browser would draw the node: a tab that is out of sight is hidden by the dock (`visibility`), a context that is out of sight by `hidden`, and
+ * the whole workspace behind the settings by `.workspace-area[data-suspended="true"]` (the rule is in `styles-frame.css`; jsdom loads no stylesheet, so the
+ * attribute stands for it, and the last test of this file reads the rule).
+ */
+const shown = (node: Element) => { for (let at: Element | null = node; at; at = at.parentElement) { const style = getComputedStyle(at); if (style.display === "none" || style.visibility === "hidden" || at.getAttribute("data-suspended") === "true") return false; } return true; };
+/** The icons of the rail, in order, whatever context is on screen. */
+const railViews = () => [...document.querySelectorAll("[data-rail-view]")].map((node) => node.getAttribute("data-rail-view"));
 
 async function openVideo() {
-  await openWork("nav-video", "open-res_v1");
+  render(<App />);
+  await openShelf("video");
+  await openWorkPage("open-res_v1");
   fireEvent.click(screen.getByTestId("work-read"));
   await waitFor(() => expect(screen.getByTestId("video-reader")).toBeTruthy());
   await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
@@ -57,7 +56,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); media.restore(); vi.restoreAllMocks(); removeMatchMedia(); quoteTags.reset(); readerContext.reset(); });
 
-describe("AT-88 the page left for settings stays in the background", () => {
+describe("AT-88 AT-122 the workspace under the settings stays where it is", () => {
   it("returns to the same player, paused at the same place, without loading it again", async () => {
     const host = installHost();
     await openVideo();
@@ -71,15 +70,24 @@ describe("AT-88 the page left for settings stays in the background", () => {
     const loads = { handle: host.of("video.handle").length, plan: host.of("video.playbackPlan").length, probe: host.of("video.probe").length };
     expect(loads).toEqual({ handle: 1, plan: 1, probe: 1 });
 
-    // Settings is a page of its own: the player and the right pane are out of sight, not gone.
+    // The settings are a view over the workspace, not a tab: the player is out of sight, not gone, and no tab was added for them.
+    const tabsBefore = tabTitles();
+    const loadedBefore = host.of("workspace.loadContext").length;
     fireEvent.click(screen.getByTestId("nav-settings"));
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
-    expect(shown(screen.getByTestId("video-reader"))).toBe(false);
-    expect(shown(screen.getByTestId("chat-log"))).toBe(false);
+    await waitFor(() => expect(shown(screen.getByTestId("video-reader"))).toBe(false));
     expect(media.state(player).paused).toBe(true);
+    expect(screen.getByTestId("workspace-area").getAttribute("data-suspended")).toBe("true");
+    expect(screen.getByTestId("shell-root").getAttribute("data-settings")).toBe("true");
+    expect(tabTitles()).toEqual(tabsBefore);
+    expect(tabTitles()).not.toContain("设置");
 
-    fireEvent.click(screen.getByTestId("settings-back"));
+    // Leaving them (an icon of the rail) shows the workspace as it was.
+    fireEvent.click(screen.getByTestId("nav-home"));
+    await waitFor(() => expect(screen.queryByTestId("settings-area")).toBeNull());
     await waitFor(() => expect(shown(screen.getByTestId("video-reader"))).toBe(true));
+    expect(screen.getByTestId("workspace-area").getAttribute("data-suspended")).toBe("false");
+    expect(host.of("workspace.loadContext")).toHaveLength(loadedBefore);
 
     // The same element is playing the same source at the same place, paused, and nothing was asked for again.
     expect(element()).toBe(player);
@@ -106,13 +114,31 @@ describe("AT-88 the page left for settings stays in the background", () => {
 
     fireEvent.click(screen.getByTestId("nav-settings"));
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
-    expect(media.state(player).paused).toBe(true);
+    await waitFor(() => expect(media.state(player).paused).toBe(true));
     await waitFor(() => expect(host.state.times.get("res_v1")).toBe(30_000));
 
-    fireEvent.click(screen.getByTestId("settings-back"));
+    fireEvent.click(screen.getByTestId("nav-home"));
     await waitFor(() => expect(shown(screen.getByTestId("video-reader"))).toBe(true));
     expect(media.state(player).paused).toBe(true);
     expect(media.state(player).time).toBe(30);
+  });
+
+  it("hands the keyboard to the tab's content once its title has been pressed, so the player hears the space bar (A-94)", async () => {
+    installHost();
+    await openVideo();
+    const player = element();
+    // The title holds the focus the way it does after a press; the strip itself answers Space and Enter.
+    const strip = tabNamed(READER)!.closest<HTMLElement>(".dv-tab")!;
+    act(() => strip.focus());
+    expect(document.activeElement).toBe(strip);
+    await showTab(READER);
+    await waitFor(() => expect(document.activeElement?.getAttribute("data-testid")).toBe("tab-panel"));
+    expect(document.activeElement?.getAttribute("data-focused")).toBe("true");
+    // A key that is pressed there reaches the player.
+    act(() => { void player.play(); });
+    expect(media.state(player).paused).toBe(false);
+    fireEvent.keyDown(document.activeElement!, { key: " " });
+    await waitFor(() => expect(media.state(player).paused).toBe(true));
   });
 
   it("closing the resource and opening it again goes back to where the viewer was (AT-82)", async () => {
@@ -122,11 +148,9 @@ describe("AT-88 the page left for settings stays in the background", () => {
     act(() => { element().dispatchEvent(new Event("pause")); });
     await waitFor(() => expect(host.state.times.get("res_v1")).toBe(77_000));
 
-    // Leaving through the navigation closes the player; the way back reads the saved place.
-    fireEvent.click(screen.getByTestId("nav-video"));
+    // Leaving is closing the player's tab; the way back reads the saved place.
+    closeFocusedTab();
     await waitFor(() => expect(screen.queryByTestId("video-reader")).toBeNull());
-    await stay();
-    fireEvent.click(screen.getByTestId("open-res_v1"));
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
     await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByTestId("work-read"));
@@ -187,120 +211,142 @@ describe("a reader mounted again starts where the viewer is, not where the resou
   });
 });
 
-describe("AT-87 the two modes are two workspaces", () => {
+describe("AT-87 AT-112 two contexts are two workspaces", () => {
   const counts = { materials: 1, terms: 0, sessions: 1, whiteboards: 2, mindmaps: 1, drafts: 3, excerpts: 0, roughCuts: 1 };
   const prj = { id: "prj_1", name: "合集解说", goal: "做一期合集解说", status: "active", modelConnectionId: null, createdAt: "2026-10-01T10:00:00.000Z", updatedAt: "2026-10-02T10:00:00.000Z", counts };
   const material = { id: "mat_v1", kind: "resource", targetId: "res_v1", label: "开场", state: "ok", addedAt: "2026-10-01T00:00:00.000Z", opens: { resourceId: "res_v1", mediaKind: "video", workId: "wv" } };
   const other = { id: "mat_v2", kind: "resource", targetId: "res_v2", label: "后续", state: "ok", addedAt: "2026-10-01T00:00:00.000Z", opens: { resourceId: "res_v2", mediaKind: "video", workId: "wv" } };
   const creatorHost = () => installHost({
     facets: ["agent", "library", "settings", "comic", "video", "notes", "projects", "acquisition"],
+    projects: [{ id: "prj_1", name: "合集解说" }],
     overrides: {
-      "project.overview": () => ({
-        recent: [prj],
-        objects: [{ kind: "whiteboard", id: "wb_1", title: "分镜白板", projectId: "prj_1", projectName: "合集解说", updatedAt: "2026-10-02T09:00:00.000Z" }],
-        suggestions: [{ id: "sug_1", draftId: "dr_1", draftTitle: "解说稿", projectId: "prj_1", projectName: "合集解说", kind: "polish", createdAt: "2026-10-02T08:00:00.000Z" }],
-        totals: { active: 1, archived: 0 },
-      }),
+      "project.overview": () => ({ recent: [prj], objects: [], suggestions: [], totals: { active: 1, archived: 0 } }),
       "project.list": () => ({ projects: [prj] }),
       "project.get": () => ({ project: prj, materials: [material, other], terms: [], sessions: [] }),
     },
   });
+  const goTo = async (id: string) => {
+    fireEvent.click(screen.getByTestId(`context-open-${id}`));
+    await waitFor(() => expect(screen.getByTestId(`context-${id}`).getAttribute("data-current")).toBe("true"));
+  };
 
-  it("the work mode has its own navigation and a project overview, and the entertainment mode comes back as it was", async () => {
+  it("a project has its own tabs and conversation, and 最近 comes back as it was: the same player at the same place, the same draft", async () => {
     const host = creatorHost();
     await openVideo();
     const player = element();
     act(() => media.advance(player, 50));
     act(() => { player.dispatchEvent(new Event("pause")); });
-    fireEvent.change(screen.getByTestId("agent-composer"), { target: { value: "娱乐模式里的问题" } });
-    await waitFor(() => expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false));
-    const rail = screen.getByTestId("shell-sessions").textContent;
-    expect(rail).toContain("res_v1");
+    fireEvent.change(screen.getByTestId("agent-composer"), { target: { value: "最近里的问题" } });
+    await waitFor(() => expect(tabTitles()).toEqual(["合成动画", READER]));
+    const railBefore = railViews();
+    expect(railBefore.length).toBeGreaterThan(3);
 
-    // The work mode: no shelves, a project overview in their place, and a rail of its own.
-    fireEvent.click(screen.getByTestId("mode-creator"));
-    await waitFor(() => expect(screen.getByTestId("page-project-overview")).toBeTruthy());
-    for (const gone of ["nav-reading", "nav-comic", "nav-video", "nav-downloads", "nav-agent"]) expect(screen.queryByTestId(gone), gone).toBeNull();
-    expect(screen.getByTestId("nav-library").textContent).toContain("项目总览");
-    expect(screen.getByTestId("nav-projects")).toBeTruthy();
-    await waitFor(() => expect(screen.getByTestId("overview-open-prj_1")).toBeTruthy());
-    expect(screen.getByTestId("overview-object-wb_1").textContent).toContain("分镜白板");
-    expect(screen.getByTestId("overview-suggestion-sug_1").textContent).toContain("解说稿");
-    expect(screen.queryByTestId("page-library")).toBeNull();
-    expect(shown(screen.getByTestId("video-reader"))).toBe(false);
+    // The project: the tabs of its own (its home), no library page of 最近 among them, and the player of 最近 is out of sight.
+    await goTo("prj_1");
+    await waitFor(() => expect(here().getByTestId("page-project")).toBeTruthy());
+    expect(here().queryByTestId("page-library")).toBeNull();
+    expect(here().queryByTestId("video-reader")).toBeNull();
+    expect(shown(player)).toBe(false);
     expect(media.state(player).paused).toBe(true);
-    expect(screen.getByTestId("shell-sessions").textContent).not.toContain("res_v1");
-    // Its history is its own: nothing was visited here yet, and the other mode's draft is not here.
-    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", true);
     expect((screen.getByTestId("agent-composer") as HTMLTextAreaElement).value).toBe("");
+    // The rail is the application's, not a context's: the same icons in both, and the sidebar stays on its view.
+    expect(railViews()).toEqual(railBefore);
+    expect(screen.getByTestId("nav-home")).toBeTruthy();
+    expect(screen.getByTestId("sidebar").getAttribute("data-view")).toBe("home");
 
-    // A resource opened from a project's materials opens in the work mode, and the conversation beside it is the project's.
-    fireEvent.click(screen.getByTestId("overview-open-prj_1"));
-    await waitFor(() => expect(screen.getByTestId("material-open-mat_v1")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("material-open-mat_v1"));
+    // A resource opened from a project's materials opens in the project, and the conversation beside it is that resource's in the project.
+    await waitFor(() => expect(here().getByTestId("material-open-mat_v1")).toBeTruthy());
+    fireEvent.click(here().getByTestId("material-open-mat_v1"));
     await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
     act(() => media.loaded(element(), 120));
-    await waitFor(() => expect(shown(screen.getByTestId("video-reader"))).toBe(true));
-    await waitFor(() => expect(screen.getByTestId("chat-context").textContent).toContain("合集解说"));
-    expect(screen.getByTestId("chat-context").textContent).toContain("合成动画");
-    const opened = host.of("session.open").filter((call) => call.input.mode === "creator");
-    expect(opened.map((call) => call.input.kind)).not.toContain("resource");
-    expect(opened.map((call) => call.input.kind)).toContain("project");
-    // The progress is the one both modes share: the resource opens where the other mode left it.
+    await waitFor(() => expect(shown(element())).toBe(true));
+    await waitFor(() => expect(screen.getByTestId("conversation-title").textContent).toContain("合成动画"));
+    const opened = host.of("session.open").filter((call) => call.input.contextId === "prj_1");
+    expect(opened.map((call) => call.input.kind)).toContain("resource");
+    // The project's own page has the project's conversation beside it.
+    await showTab("合集解说");
+    await waitFor(() => expect(screen.getByTestId("conversation-title").textContent).toContain("合集解说"));
+    expect(host.of("session.open").filter((call) => call.input.contextId === "prj_1").map((call) => call.input.kind)).toContain("project");
+    // The progress is the one the resource has: it opens where 最近 left it.
     const mine = element();
+    expect(mine).not.toBe(player);
     await waitFor(() => expect(media.state(mine).seeks).toContain(50));
 
-    // Back in the entertainment mode: its page, its player, its draft and its history.
-    fireEvent.click(screen.getByTestId("mode-enthusiast"));
-    await waitFor(() => expect(screen.getByTestId("nav-video")).toBeTruthy());
-    expect(shown(screen.getByTestId("video-reader"))).toBe(true);
-    // The reader holds the resource that page had open, so it is shown as it is, not loaded again.
-    expect(element()).toBe(mine);
+    // Back in 最近: its tabs, its player, its draft.
+    await goTo("recent");
+    await waitFor(() => expect(shown(player)).toBe(true));
+    expect(element()).toBe(player);
+    expect(shown(mine)).toBe(false);
     expect(media.state(mine).paused).toBe(true);
-    expect(media.state(mine).time).toBe(50);
-    expect((screen.getByTestId("agent-composer") as HTMLTextAreaElement).value).toBe("娱乐模式里的问题");
-    expect(screen.queryByTestId("page-project-overview")).toBeNull();
-    expect(screen.getByTestId("chat-context").textContent).not.toContain("合集解说");
-    await waitFor(() => expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false));
+    expect(media.state(player).paused).toBe(true);
+    expect(media.state(player).time).toBe(50);
+    expect((screen.getByTestId("agent-composer") as HTMLTextAreaElement).value).toBe("最近里的问题");
+    expect(here().queryByTestId("page-project")).toBeNull();
+    expect(screen.getByTestId("conversation-title").textContent).not.toContain("合集解说");
+    expect(tabTitles()).toEqual(["合成动画", READER]);
   });
 
-  it("a resource the other mode took the reader for is opened again at its saved place", async () => {
+  it("the same resource open in a project and in 最近 is two players, each at its own place, and the saved place is the latest of either", async () => {
     const host = creatorHost();
     await openVideo();
-    act(() => media.advance(element(), 64));
-    act(() => { element().dispatchEvent(new Event("pause")); });
+    const first = element();
+    act(() => media.advance(first, 64));
+    act(() => { first.dispatchEvent(new Event("pause")); });
     await waitFor(() => expect(host.state.times.get("res_v1")).toBe(64_000));
 
-    fireEvent.click(screen.getByTestId("mode-creator"));
-    await waitFor(() => expect(screen.getByTestId("overview-open-prj_1")).toBeTruthy());
-    // The work mode opens another resource: the reader's place is taken, as opening one resource releases the one before it.
-    fireEvent.click(screen.getByTestId("overview-open-prj_1"));
-    await waitFor(() => expect(screen.getByTestId("material-open-mat_v2")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("material-open-mat_v2"));
-    await waitFor(() => expect(host.of("video.probe").map((call) => call.input.resourceId)).toContain("res_v2"));
+    await goTo("prj_1");
+    await waitFor(() => expect(here().getByTestId("material-open-mat_v1")).toBeTruthy());
+    fireEvent.click(here().getByTestId("material-open-mat_v1"));
     await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
-    act(() => media.loaded(element(), 120));
+    const second = element();
+    act(() => media.loaded(second, 120));
+    await waitFor(() => expect(media.state(second).seeks).toContain(64));
+    act(() => media.advance(second, 26));
+    act(() => { second.dispatchEvent(new Event("pause")); });
+    await waitFor(() => expect(host.state.times.get("res_v1")).toBe(90_000));
 
-    const probes = host.of("video.probe").length;
-    fireEvent.click(screen.getByTestId("mode-enthusiast"));
-    // Its page was the first resource: it is opened again, at the place it was left.
-    await waitFor(() => expect(host.of("video.probe").length).toBeGreaterThan(probes));
-    expect(host.of("video.probe").at(-1)!.input.resourceId).toBe("res_v1");
-    await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
-    act(() => media.loaded(element(), 120));
-    await waitFor(() => expect(media.state(element()).seeks).toContain(64));
-    expect(screen.getByTestId("chat-context").textContent).not.toContain("合集解说");
+    // 最近 is not moved by what happened in the project: its player stands where it was left.
+    await goTo("recent");
+    await waitFor(() => expect(shown(first)).toBe(true));
+    expect(media.state(first).time).toBe(64);
+    expect(media.state(first).paused).toBe(true);
+    expect(screen.getByTestId("conversation-title").textContent).not.toContain("合集解说");
   });
 
-  it("the choice made in settings stays in settings and puts the other mode's page behind it", async () => {
-    creatorHost();
+  it("the settings belong to no context: opened from either, they add no tab to it, and leaving them finds each context as it was", async () => {
+    const host = creatorHost();
     await openVideo();
+    const before = tabTitles();
     fireEvent.click(screen.getByTestId("nav-settings"));
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("mode-creator"));
-    // Still in settings; the work mode's overview is what it returns to.
+    expect(tabTitles()).toEqual(before);
+    expect(focusedTitle()).toBe(READER);
+    // The settings directory stands where the sidebar was: there is no way to another context from it, and the page is kept for the next time.
+    expect(screen.queryByTestId("context-open-prj_1")).toBeNull();
+    await waitFor(() => expect(host.state.rail.settingsPage).toBeTruthy());
+    fireEvent.click(screen.getByTestId("nav-home"));
+    await waitFor(() => expect(screen.queryByTestId("settings-nav")).toBeNull());
+    await goTo("prj_1");
+    await waitFor(() => expect(here().getByTestId("page-project")).toBeTruthy());
+    expect(tabTitles()).not.toContain("设置");
+    // From the project too, the settings are over the workspace and add nothing to it.
+    await waitFor(() => expect(tabTitles()).toContain("合集解说"));
+    const projectTabs = tabTitles();
+    fireEvent.click(screen.getByTestId("nav-settings"));
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("settings-back"));
-    await waitFor(() => expect(screen.getByTestId("page-project-overview")).toBeTruthy());
+    expect(tabTitles()).toEqual(projectTabs);
+    fireEvent.click(screen.getByTestId("nav-home"));
+    await waitFor(() => expect(screen.queryByTestId("settings-nav")).toBeNull());
+    await goTo("recent");
+    expect(focusedTitle()).toBe(READER);
+    await waitFor(() => expect(shown(element())).toBe(true));
+    expect(tabTitles()).toEqual(before);
+  });
+
+  it("hides the whole workspace behind the settings with a rule of the stylesheet, and keeps it in the page", () => {
+    const css = readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8");
+    expect(css).toMatch(/\.workspace-area\[data-suspended="true"\] \{[^}]*visibility: hidden/);
+    expect(css).toMatch(/\.workspace-area\[data-suspended="true"\] \{[^}]*pointer-events: none/);
+    expect(css).not.toMatch(/\.workspace-area\[data-suspended="true"\] \{[^}]*display: none/);
   });
 });

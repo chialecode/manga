@@ -3,7 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, setField, setSelect, sleep, viaSidebar, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -69,7 +69,7 @@ export async function runPluginsSmoke(input: { appService: MangaProductApp; gran
   const pathId = added.value?.path?.id ?? "";
   record("library-path", added.status === "ok" && Boolean(pathId));
   await toRail(view);
-  const onDownloads = await clickTestId(view, "nav-downloads", 8000) && await waitForTestId(view, "page-downloads", "data-testid", "page-downloads", 8000);
+  const onDownloads = await viaSidebar(view, "downloads", "sidebar-manage", 8000) && await waitForTestId(view, "page-downloads", "data-testid", "page-downloads", 8000);
   const engineRunning = onDownloads && await waitForTestId(view, "downloads-engine", "data-running", "yes", 20_000);
   record("downloads-page-engine-running", Boolean(engineRunning));
 

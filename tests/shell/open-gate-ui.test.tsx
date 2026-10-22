@@ -10,6 +10,8 @@ import { readerContext } from "../../apps/desktop/src/renderer/lib/reader-contex
 import { resetCovers } from "../../apps/desktop/src/renderer/lib/covers.ts";
 import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts";
 import { installMatchMedia, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
+import { contextHandlers, type SessionRow } from "../helpers/app-host.ts";
+import { focusedTitle, tabTitles } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
@@ -35,12 +37,13 @@ type Notice = { topic: string; payload: Record<string, unknown> };
 
 function installHost(handlers: Record<string, Handler> = {}, extra: Record<string, unknown> = {}) {
   const calls: Call[] = [];
+  /** The conversations the synthetic sidebar lists; a test pushes its own. */
+  const sessions: SessionRow[] = [{ sessionId: "ses_shared", title: "会话 1", kind: "shared", targetId: null, contextId: null, runCount: 0, activeRunId: null, activeRunStatus: null }];
   const listeners = new Set<(notice: Notice) => void>();
   const base: Record<string, Handler> = {
     "notes.list": () => [],
     "works.list": (input) => { const items = input.kind && input.kind !== "comic" ? [] : [WORK]; return { items, total: items.length, nextCursor: null }; },
-    "workspace.get": () => ({ uiFacets: ["agent", "library", "comic", "video", "settings"], sessions: [], runs: [], notes: [], resources: [] }),
-    "workspace.sessions": () => [],
+    ...contextHandlers({ facets: ["agent", "library", "comic", "video", "settings"], sessions }).handlers,
     "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
     "inventory.overview": () => ({ items: [], totals: {} }),
     "quickTasks.list": () => ({ tasks: [] }),
@@ -68,6 +71,7 @@ function installHost(handlers: Record<string, Handler> = {}, extra: Record<strin
   };
   return {
     calls,
+    sessions,
     of: (id: string) => calls.filter((call) => call.commandId === id),
     notify: (notice: Notice) => act(() => { for (const listener of listeners) listener(notice); }),
   };
@@ -184,7 +188,8 @@ describe("what was made on the resource can be looked at without its file", () =
 describe("the application asks before it opens (AT-99)", () => {
   const loose = (id: string, kind: string, title: string) => ({ resourceId: id, kind, title, ordinalLabel: null, leftWorkAt: null, lastOpenedAt: null, outside: false });
   const openable = (state: "open" | "outside" | "missing", extra: Record<string, unknown> = {}) => (input: Record<string, unknown>) => ({ resourceId: input.resourceId, mediaKind: "video", title: "合成视频", workId: null, state, ...(state === "outside" ? { folder: "synthetic-folder" } : state === "missing" ? { libraryPathId: "lp1", libraryPath: "library-folder", relativePath: "合成视频.mp4", rootReachable: true } : { path: "x" }), ...extra });
-  const page = () => screen.getByTestId("shell-root").getAttribute("data-page");
+  /** Where the person is: the tabs there are and the one in front. */
+  const place = () => ({ tabs: tabTitles(), front: focusedTitle() });
 
   it("shows the question for a file outside, does not leave the page, and does not ask the main process to open anything", async () => {
     const host = installHost({
@@ -193,17 +198,17 @@ describe("the application asks before it opens (AT-99)", () => {
     });
     render(<App />);
     const open = await screen.findByTestId("unassigned-open-res_out");
-    const before = page();
+    const before = place();
     await userEvent.click(open);
     const asked = await screen.findByTestId("open-blocked");
     expect(within(asked).getByTestId("open-blocked-reason").textContent).toBe(t("open.outside.body"));
-    expect(page()).toBe(before);
+    expect(place()).toEqual(before);
     expect(host.of("library.openable")[0]!.input).toEqual({ resourceId: "res_out" });
     expect(host.calls.filter((call) => /^(video|comic)\./.test(call.commandId) || call.commandId === "library.read")).toEqual([]);
     // Closing it leaves everything as it was.
     await userEvent.click(within(asked).getAllByTestId("open-blocked-close")[0]!);
     expect(screen.queryByTestId("open-blocked")).toBeNull();
-    expect(page()).toBe(before);
+    expect(place()).toEqual(before);
   });
 
   it("shows the other question for a file that is not there", async () => {
@@ -225,7 +230,7 @@ describe("the application asks before it opens (AT-99)", () => {
     });
     render(<App />);
     await userEvent.click(await screen.findByTestId("unassigned-open-res_ok"));
-    await waitFor(() => expect(page()).toBe("reading"));
+    await waitFor(() => expect(focusedTitle()).toBe("合成小说"));
     expect(screen.queryByTestId("open-blocked")).toBeNull();
     expect(host.of("library.openable")).toHaveLength(1);
     await waitFor(() => expect(host.of("library.read")).toHaveLength(1));
@@ -238,17 +243,16 @@ describe("the application asks before it opens (AT-99)", () => {
     });
     render(<App />);
     await userEvent.click(await screen.findByTestId("unassigned-open-res_x"));
-    await waitFor(() => expect(page()).toBe("reading"));
+    await waitFor(() => expect(focusedTitle()).toBe("合成小说"));
     expect(screen.queryByTestId("open-blocked")).toBeNull();
   });
 
-  it("lists a session of a resource that cannot be opened nowhere in the rail, and the others as before", async () => {
-    installHost({
-      "workspace.sessions": () => [
-        { sessionId: "s_out", title: "外面的", kind: "resource", targetId: "res_out", mode: "enthusiast", mediaKind: "video", openState: "outside", runCount: 0 },
-        { sessionId: "s_in", title: "里面的", kind: "resource", targetId: "res_in", mode: "enthusiast", mediaKind: "video", openState: "open", runCount: 0 },
-      ],
-    });
+  it("lists a session of a resource that cannot be opened nowhere in the sidebar, and the others as before", async () => {
+    const host = installHost();
+    host.sessions.push(
+      { sessionId: "s_out", title: "外面的", kind: "resource", targetId: "res_out", contextId: null, mediaKind: "video", openState: "outside", runCount: 1 },
+      { sessionId: "s_in", title: "里面的", kind: "resource", targetId: "res_in", contextId: null, mediaKind: "video", openState: "open", runCount: 1 },
+    );
     render(<App />);
     await waitFor(() => expect(screen.getAllByText("里面的").length).toBeGreaterThan(0));
     expect(screen.queryByText("外面的")).toBeNull();
@@ -261,28 +265,29 @@ describe("the application asks before it opens (AT-99)", () => {
     });
     render(<App />);
     await userEvent.click(await screen.findByTestId("unassigned-open-res_ok"));
-    await waitFor(() => expect(page()).toBe("reading"));
+    await waitFor(() => expect(focusedTitle()).toBe("合成小说"));
     await waitFor(() => expect(host.of("library.read")).toHaveLength(1));
-    await waitFor(() => expect(screen.queryByTestId("page-novel")).toBeNull());
+    expect(tabTitles()).toContain("合成小说");
 
     // A path that held some other resource changes nothing here.
     host.notify({ topic: "library.pathRemoved", payload: { pathId: "lp0", resourceIds: ["res_other"] } });
-    expect(screen.queryByTestId("page-novel")).toBeNull();
+    expect(tabTitles()).toContain("合成小说");
 
     host.notify({ topic: "library.pathRemoved", payload: { pathId: "lp1", resourceIds: ["res_ok"] } });
-    // The shelf of the medium is back in place of the reader.
-    await screen.findByTestId("page-novel");
+    // The reader's tab is closed, and the library tab under it is what is in front.
+    await waitFor(() => expect(tabTitles()).not.toContain("合成小说"));
+    expect(focusedTitle()).toBe("资源库");
     expect(await screen.findByText(t("open.removedNotice", { title: "合成小说" }))).toBeTruthy();
   });
 
-  it("refreshes the rail and the shelf when a library path is removed", async () => {
+  it("refreshes the sidebar and the shelf when a library path is removed", async () => {
     const host = installHost({ "works.unassigned": () => ({ items: [], total: 0 }) });
     render(<App />);
     await screen.findByTestId("shell-root");
-    await waitFor(() => expect(host.of("workspace.sessions").length).toBeGreaterThan(0));
-    const before = host.of("workspace.sessions").length;
+    await waitFor(() => expect(host.of("workspace.sidebar").length).toBeGreaterThan(0));
+    const before = host.of("workspace.sidebar").length;
     host.notify({ topic: "library.pathRemoved", payload: { pathId: "lp1", resourceIds: ["res_a"] } });
-    await waitFor(() => expect(host.of("workspace.sessions").length).toBeGreaterThan(before));
+    await waitFor(() => expect(host.of("workspace.sidebar").length).toBeGreaterThan(before));
   });
 });
 

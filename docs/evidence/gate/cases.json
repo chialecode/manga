@@ -1,10 +1,10 @@
 {
   "status": "passed",
-  "at": "2026-10-15T13:08:22.845Z",
-  "sourceFingerprint": "2506f327124f0c868190a8ae78af9aca92b6d87c20867576b9cb7cb47c5c37e0",
-  "lockFingerprint": "fcd6e09084c6198efae2239314ac261e3cdc02c1c658285d0a35c5d5c46c9f9b",
-  "testScriptFingerprint": "942b8fd517e608dd7e0b07fd979a284dbb1fdf12d605d269d917726576b9373e",
-  "buildScriptFingerprint": "264f448b1289b3210cd9e22ccd1ea9f9be25c59e0b8a2fbe79dd86997fabe40c",
+  "at": "2026-10-24T04:42:54.265Z",
+  "sourceFingerprint": "154b65590a277e6396496d96771f441466bcbfaacf52244d2504e206a17f72dd",
+  "lockFingerprint": "f4c9a5ebe492c4162531407f4c9f4a4b080e020a6f342edbfde4d8c5b2a0f0a4",
+  "testScriptFingerprint": "3e1306fc8a2ad2cff3cdda1ae103125b7190911f54ba96b5f5da82000565575f",
+  "buildScriptFingerprint": "ce748e107ee92e4f8c2a5eba2a17784490b7a6bb9821a95ca619b4a0c23a9e90",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -186,7 +186,7 @@
         },
         {
           "file": "tests/shell/app-restore.test.tsx",
-          "name": "App restore sends from the chat page, shows the history in the side pane, stops, and restores after remount",
+          "name": "App restore sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount",
           "status": "passed"
         },
         {
@@ -655,7 +655,7 @@
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell does not autosave a note while composition is active and keeps split ids",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell does not autosave a note while composition is active and keeps split ids",
           "status": "passed"
         },
         {
@@ -737,7 +737,7 @@
         },
         {
           "file": "tests/notes/source-repair.test.ts",
-          "name": "source repair and reader state keeps a note session apart from the book session and from the other work mode",
+          "name": "source repair and reader state keeps a note session apart from the book session and the sessions of one context apart from those of another",
           "status": "passed"
         },
         {
@@ -1052,7 +1052,7 @@
       "tests": [
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell opens one overlay from hover and restores focus with Escape",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell opens one overlay from hover and restores focus with Escape",
           "status": "passed"
         },
         {
@@ -1062,7 +1062,7 @@
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell restores docking after a user hides the sidebar and closes pinned narrow panels",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell restores docking after a user hides the sidebar and closes pinned narrow panels",
           "status": "passed"
         }
       ]
@@ -1073,13 +1073,18 @@
       "status": "passed",
       "tests": [
         {
-          "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell reflects the saved mode and moves between the modes with the arrow keys",
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar switches the context from a project's name: its own tabs and conversation, and the last context is kept for the next start",
           "status": "passed"
         },
         {
-          "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell shows the opened resource sessions under the left navigation, grouped by medium, with where each one is",
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces a project has its own tabs and conversation, and 最近 comes back as it was: the same player at the same place, the same draft",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar opens and folds a project's things without leaving the context on screen, and keeps what was left open for the next start",
           "status": "passed"
         }
       ]
@@ -1091,7 +1096,7 @@
       "tests": [
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell docks sidebars on a wide window and keeps the reading measure",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell docks the columns on a wide window and keeps the reading measure",
           "status": "passed"
         },
         {
@@ -1163,7 +1168,7 @@
         },
         {
           "file": "tests/shell/media-flows.test.tsx",
-          "name": "media pages in the app records the position on the video that was playing when the user goes back, then shows the work's page and then the shelf",
+          "name": "media pages in the app records the position on the video that was playing when its tab is closed, then shows the work's page and then the shelf",
           "status": "passed"
         },
         {
@@ -2698,12 +2703,12 @@
         },
         {
           "file": "tests/agent/surface-binding.test.ts",
-          "name": "agent surface binding binds the Agent to the resource open in a comic or video reader",
+          "name": "agent surface binding binds the dock to the resource open in a comic or video reader, and to the context's own conversation on a page with no resource",
           "status": "passed"
         },
         {
           "file": "tests/agent/surface-binding.test.ts",
-          "name": "agent surface binding does not reuse another mode's session or draft key",
+          "name": "agent surface binding keeps the conversations of two contexts apart: no session or draft key is shared between 最近 and a project",
           "status": "passed"
         },
         {
@@ -2877,7 +2882,7 @@
         },
         {
           "file": "tests/shell/media-flows.test.tsx",
-          "name": "recording in the app has no microphone in the right pane, the player or the title bar while the voice module is off",
+          "name": "recording in the app has no microphone in the dock, the player or the top row while the voice module is off",
           "status": "passed"
         }
       ]
@@ -2889,12 +2894,12 @@
       "tests": [
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell docks sidebars on a wide window and keeps the reading measure",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell docks the columns on a wide window and keeps the reading measure",
           "status": "passed"
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell does not autosave a note while composition is active and keeps split ids",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell does not autosave a note while composition is active and keeps split ids",
           "status": "passed"
         },
         {
@@ -6084,13 +6089,13 @@
           "status": "passed"
         },
         {
-          "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell shows the opened resource sessions under the left navigation, grouped by medium, with where each one is",
+          "file": "tests/shell/media-flows.test.tsx",
+          "name": "media pages in the app keeps the page a reader was opened from in its own tab: the reader's history starts with the reader, and the library tab walks back and forth by itself",
           "status": "passed"
         },
         {
-          "file": "tests/shell/workspace-flows.test.tsx",
-          "name": "the left rail follows the place a resource was left (A-47) shows the page a comic was left at once the reader closes, even when the last page was written as it closed",
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is closing the resource and opening it again goes back to where the viewer was (AT-82)",
           "status": "passed"
         }
       ]
@@ -6456,7 +6461,7 @@
         },
         {
           "file": "tests/shell/media-flows.test.tsx",
-          "name": "media pages in the app turns a marked interval into a tag in the right pane, and a note typed there into a time-located note, without leaving the player",
+          "name": "media pages in the app turns a marked interval into a tag in the dock, and a note typed there into a time-located note, without leaving the player",
           "status": "passed"
         }
       ]
@@ -6515,7 +6520,7 @@
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell shows the floating capsule only while the right pane is folded away, and neither the pane nor the capsule where there is no right pane",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock",
           "status": "passed"
         }
       ]
@@ -6579,7 +6584,7 @@
         },
         {
           "file": "tests/shell/workspace-flows.test.tsx",
-          "name": "settings pages inside the app (A-49, A-52) leaves the pages that need a module out of the navigation, and keeps modules, records and logs reachable",
+          "name": "settings pages inside the app (A-49, A-52) leaves the pages that need a module out of the navigation, keeps modules and logs reachable, and has no records page among the settings",
           "status": "passed"
         },
         {
@@ -6589,7 +6594,12 @@
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell replaces the navigation with the settings navigation, and keeps the title bar's own actions and a panel under the page",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell keeps the top row's own actions and a panel under the page, and the settings navigation is not the frame's",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces the settings belong to no context: opened from either, they add no tab to it, and leaving them finds each context as it was",
           "status": "passed"
         },
         {
@@ -6614,7 +6624,7 @@
         },
         {
           "file": "tests/shell/settings-media.test.tsx",
-          "name": "settings for media, recording and metadata leaves a page out of the settings navigation only when its module is off, and keeps the others reachable",
+          "name": "settings for media, recording and metadata leaves a page out of the settings navigation only when its module is off, and keeps the others reachable; the records are no page of it (A-101)",
           "status": "passed"
         },
         {
@@ -6819,17 +6829,17 @@
       "tests": [
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell keeps the rail on the opened resources on the chat page: the entertainment mode's conversation is the page itself, not a list",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no dock where a conversation tab is in front: the same conversation is not shown twice, and the conversation is the page",
           "status": "passed"
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell shows the floating capsule only while the right pane is folded away, and neither the pane nor the capsule where there is no right pane",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock",
           "status": "passed"
         },
         {
           "file": "tests/shell/app-restore.test.tsx",
-          "name": "App restore sends from the chat page, shows the history in the side pane, stops, and restores after remount",
+          "name": "App restore sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount",
           "status": "passed"
         }
       ]
@@ -7030,7 +7040,7 @@
         },
         {
           "file": "tests/shell/media-flows.test.tsx",
-          "name": "recording in the app puts the microphone in the right pane, not in the player or the title bar, and shows a recording as a bubble that opens its review",
+          "name": "recording in the app puts the microphone in the dock, not in the player or the top row, and shows a recording as a bubble that opens its review",
           "status": "passed"
         },
         {
@@ -7149,7 +7159,7 @@
         },
         {
           "file": "tests/shell/workspace-flows.test.tsx",
-          "name": "settings pages inside the app (A-49, A-52) leaves the pages that need a module out of the navigation, and keeps modules, records and logs reachable",
+          "name": "settings pages inside the app (A-49, A-52) leaves the pages that need a module out of the navigation, keeps modules and logs reachable, and has no records page among the settings",
           "status": "passed"
         },
         {
@@ -7377,7 +7387,7 @@
         },
         {
           "file": "tests/creative/projects.test.ts",
-          "name": "projects (AT-25) keeps a conversation for each project and each mode, and a deleted project leaves its conversation behind",
+          "name": "projects (AT-25) keeps a conversation for each project, and a deleted project leaves its conversation behind",
           "status": "passed"
         },
         {
@@ -7393,6 +7403,11 @@
         {
           "file": "tests/creative/library-package-creative.test.ts",
           "name": "projects in a library package (AT-25, AT-28, DATA-01) restores everything into an empty profile, and the project is whole there: its references resolve, so nothing is missing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/creative/library-package-creative.test.ts",
+          "name": "projects in a library package (AT-25, AT-28, DATA-01) restores the position of 最近 with the library and the positions and tabs of a project with the project",
           "status": "passed"
         },
         {
@@ -7949,6 +7964,11 @@
         {
           "file": "tests/creative/library-package-creative.test.ts",
           "name": "projects in a library package (AT-25, AT-28, DATA-01) restores everything into an empty profile, and the project is whole there: its references resolve, so nothing is missing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/creative/library-package-creative.test.ts",
+          "name": "projects in a library package (AT-25, AT-28, DATA-01) restores the position of 最近 with the library and the positions and tabs of a project with the project",
           "status": "passed"
         },
         {
@@ -10565,18 +10585,28 @@
       ]
     },
     {
-      "caseId": "AT-74-mode-buttons",
+      "caseId": "AT-74-top-row-without-modes",
       "kind": "automated",
       "status": "passed",
       "tests": [
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell switches mode from two icon buttons in the title bar, not from the left sidebar",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch",
           "status": "passed"
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell reflects the saved mode and moves between the modes with the arrow keys",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell reflects the saved preference: a hidden sidebar stays hidden until its switch is pressed, and the switch is a plain button",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the shell preference is version 2: a sidebar and a dock, the context to come back to, and no mode",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) converts a v11 library: positions to 最近, the older of two conversations of one target to a general conversation, tabs from what was open, the shell preference to the new shape",
           "status": "passed"
         }
       ]
@@ -10588,42 +10618,42 @@
       "tests": [
         {
           "file": "tests/creative/conversations.test.ts",
-          "name": "the entertainment mode's one global conversation (AT-75) has one current conversation; a new one moves the old into the history, where it can be read and continued",
+          "name": "the general conversation of 最近 (AT-75) has one current conversation; a new one moves the old into the history, where it can be read and continued",
           "status": "passed"
         },
         {
           "file": "tests/creative/conversations.test.ts",
-          "name": "the entertainment mode's one global conversation (AT-75) keeps the two modes' conversations apart, and leaves resource, note and project sessions out of the history",
+          "name": "the general conversation of 最近 (AT-75) keeps the conversations of 最近 and of a project apart, and leaves resource, note and project-bound sessions out of the history",
           "status": "passed"
         },
         {
           "file": "tests/creative/conversations.test.ts",
-          "name": "the entertainment mode's one global conversation (AT-75) makes the most recent conversation of an older profile the current one and lists the rest as history, deleting nothing",
+          "name": "the general conversation of 最近 (AT-75) makes the most recent conversation of an older profile the current one and lists the rest as history, deleting nothing",
           "status": "passed"
         },
         {
           "file": "tests/shell/projects-ui.test.tsx",
-          "name": "the entertainment mode's conversation bar (AT-75) names the current conversation and starts a new one",
+          "name": "the conversation bar at the top of the dock (AT-75) names the current conversation and starts a new one",
           "status": "passed"
         },
         {
           "file": "tests/shell/projects-ui.test.tsx",
-          "name": "the entertainment mode's conversation bar (AT-75) lists the history with title, time and the start of what was said, continues one, and closes with Escape",
+          "name": "the conversation bar at the top of the dock (AT-75) lists the history with title, time and the start of what was said, continues one, and closes with Escape",
           "status": "passed"
         },
         {
           "file": "tests/shell/projects-ui.test.tsx",
-          "name": "the entertainment mode's conversation bar (AT-75) says the history is empty before a second conversation exists, and reads it again when the conversations change",
+          "name": "the conversation bar at the top of the dock (AT-75) says the history is empty before a second conversation exists, and reads it again when the conversations change",
           "status": "passed"
         },
         {
-          "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell keeps the rail on the opened resources on the chat page: the entertainment mode's conversation is the page itself, not a list",
+          "file": "tests/shell/app-restore.test.tsx",
+          "name": "App restore shows the current conversation in the dock, starts a new one from its top into a tab, and continues one from the history (AT-75)",
           "status": "passed"
         },
         {
-          "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell lists the work mode's project sessions first, and its conversations that belong to no project last",
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
           "status": "passed"
         }
       ]
@@ -10950,67 +10980,77 @@
       "tests": [
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns gives every column its own top, with no title bar row across the window, and names no channel",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns puts the menu, sidebar, back, forward and the title at the start of the main top when the left column is not docked",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns keeps the same top row in a window too narrow for the columns, and opens them over the page from their buttons",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns brings the page up to the window's edges in the window-fullscreen state: no columns, and a main top that floats",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns folds the dock and then the sidebar into overlays as the main area would drop below its floor, and a layout of several columns asks for more",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns walks the page history from the back and forward buttons, and disables a button with nowhere to go",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns brings the page up to the window's edges in the window-fullscreen state: no rail, no columns, and a top that floats",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns opens the title bar's menu and runs the command that is picked",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns walks the tab's history from the back and forward buttons, and disables a button with nowhere to go",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns drags a divider to resize its column inside the limits, and puts the default back on a double click",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns has four menus in the top row, opens one and runs the command that is picked",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns moves a divider with the keyboard, so the widths do not need a pointer",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns drags a divider to resize its column inside the limits, and puts the default back on a double click",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns shows a saved width, and keeps the stored widths inside what a column can be",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns moves a divider with the keyboard, so the widths do not need a pointer",
           "status": "passed"
         },
         {
-          "file": "tests/shell/nav-history.test.ts",
-          "name": "AT-81 page history: what the title bar's back and forward walk through starts empty, and has nowhere to go until a second place is visited",
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns shows a saved width, and keeps the stored widths inside what a column can be",
           "status": "passed"
         },
         {
-          "file": "tests/shell/nav-history.test.ts",
-          "name": "AT-81 page history: what the title bar's back and forward walk through goes back and forward along the places visited, and a new place drops what was ahead",
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns hides a column from its switch and shows it again, and has no dock, switch or capsule where nothing is shown there",
           "status": "passed"
         },
         {
-          "file": "tests/shell/nav-history.test.ts",
-          "name": "AT-81 page history: what the title bar's back and forward walk through does not repeat the same place, and takes the fresher description of it",
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns opens the columns from their keys, and the sidebar key hides a docked sidebar",
           "status": "passed"
         },
         {
-          "file": "tests/shell/nav-history.test.ts",
-          "name": "AT-81 page history: what the title bar's back and forward walk through keeps the latest places when it grows past its limit",
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "a tab's own back and forward (AT-110) goes to a place, drops the places ahead of the one it was on, and steps back and forward over what is kept",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "a tab's own back and forward (AT-110) keeps no more than 50 places, the oldest going first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "a tab's own back and forward (AT-110) renames and re-targets the place it is on without making a new one",
           "status": "passed"
         },
         {
           "file": "tests/shell/shell-ui.test.tsx",
-          "name": "AT-60 AT-61 AT-62 shell switches mode from two icon buttons in the title bar, not from the left sidebar",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch",
           "status": "passed"
         }
       ]
@@ -11022,52 +11062,42 @@
       "tests": [
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-82 window frame: the left rail has no heading over the opened list, a divider above it, and the settings button outside the scrolling list",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail has no heading, names every button, marks the view the sidebar is on, and keeps settings at the bottom outside the other buttons",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-82 window frame: the left rail folds a group down to its count, unfolds it again, and remembers the choice",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail marks the settings and no view while the settings are on, and shows the settings directory where the sidebar stands",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-82 window frame: the left rail closes an entry from its own button without opening it, and keeps the others",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail puts the stop control in the top row only while a task runs",
           "status": "passed"
         },
         {
-          "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-82 window frame: the left rail offers 关闭 on a right click, and Escape or a click elsewhere dismisses it",
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) takes a reader tab out of the saved state and keeps the session, the place in the file, and a way back by opening it again",
           "status": "passed"
         },
         {
-          "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-82 window frame: the left rail has no close button or menu where the host does not close entries",
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) keeps a project's conversation and a plain conversation when their tabs are closed, and each comes back when it is opened or resumed",
           "status": "passed"
         },
         {
-          "file": "tests/library/rail-close.test.ts",
-          "name": "closing an entry of the left rail (AT-82) takes an opened resource off the list and keeps it: the session, the place in the file, and a way back by opening it again",
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) lists a conversation as soon as the person talks in it, and has no closed state to hide it",
           "status": "passed"
         },
         {
-          "file": "tests/library/rail-close.test.ts",
-          "name": "closing an entry of the left rail (AT-82) closes a project's conversation and a work-mode conversation, and each comes back when it is opened or resumed",
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) offers no command to close a session, and lists a work page's session and a plain conversation like any other",
           "status": "passed"
         },
         {
-          "file": "tests/library/rail-close.test.ts",
-          "name": "closing an entry of the left rail (AT-82) lists a closed conversation again when the person talks in it",
-          "status": "passed"
-        },
-        {
-          "file": "tests/library/rail-close.test.ts",
-          "name": "closing an entry of the left rail (AT-82) closes only what the rail lists, and says so for anything else",
-          "status": "passed"
-        },
-        {
-          "file": "tests/library/rail-close.test.ts",
-          "name": "closing an entry of the left rail (AT-82) is refused to an Agent, which cannot take things off the person's rail",
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) is refused to an Agent, which cannot read or change the tabs of the person's workspace",
           "status": "passed"
         }
       ]
@@ -11470,17 +11500,17 @@
       "tests": [
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns gives every column its own top, with no title bar row across the window, and names no channel",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns puts the menu, sidebar, back, forward and the title at the start of the main top when the left column is not docked",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns keeps the same top row in a window too narrow for the columns, and opens them over the page from their buttons",
           "status": "passed"
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
-          "name": "AT-81 window frame: title bar and columns brings the page up to the window's edges in the window-fullscreen state: no columns, and a main top that floats",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns brings the page up to the window's edges in the window-fullscreen state: no rail, no columns, and a top that floats",
           "status": "passed"
         },
         {
@@ -11495,7 +11525,7 @@
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "window colors the buttons are as high as the tops of the columns",
+          "name": "window colors the buttons are as high as the top row",
           "status": "passed"
         }
       ]
@@ -11507,17 +11537,22 @@
       "tests": [
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-87 the two modes are two workspaces the work mode has its own navigation and a project overview, and the entertainment mode comes back as it was",
+          "name": "AT-87 AT-112 two contexts are two workspaces a project has its own tabs and conversation, and 最近 comes back as it was: the same player at the same place, the same draft",
           "status": "passed"
         },
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-87 the two modes are two workspaces a resource the other mode took the reader for is opened again at its saved place",
+          "name": "AT-87 AT-112 two contexts are two workspaces the same resource open in a project and in 最近 is two players, each at its own place, and the saved place is the latest of either",
           "status": "passed"
         },
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-87 the two modes are two workspaces the choice made in settings stays in settings and puts the other mode's page behind it",
+          "name": "AT-87 AT-112 two contexts are two workspaces the settings belong to no context: opened from either, they add no tab to it, and leaving them finds each context as it was",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces hides the whole workspace behind the settings with a rule of the stylesheet, and keeps it in the page",
           "status": "passed"
         },
         {
@@ -11539,17 +11574,22 @@
       "tests": [
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-88 the page left for settings stays in the background returns to the same player, paused at the same place, without loading it again",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is returns to the same player, paused at the same place, without loading it again",
           "status": "passed"
         },
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-88 the page left for settings stays in the background a video that was playing when settings opened is paused and its place is saved",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is a video that was playing when settings opened is paused and its place is saved",
           "status": "passed"
         },
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-88 the page left for settings stays in the background closing the resource and opening it again goes back to where the viewer was (AT-82)",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is hands the keyboard to the tab's content once its title has been pressed, so the player hears the space bar (A-94)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is closing the resource and opening it again goes back to where the viewer was (AT-82)",
           "status": "passed"
         },
         {
@@ -11669,6 +11709,11 @@
         {
           "file": "tests/reading/key-bindings.test.ts",
           "name": "the key table (AT-90) has the defaults of Q-26: R switches the custom rate, S takes a picture, W fills the window; and no comic or novel key is R or W",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/key-bindings.test.ts",
+          "name": "the key table (AT-90) has the workspace keys of Q-33 as global actions: tabs, columns, the side columns, conversations and projects, none of them a reader's key",
           "status": "passed"
         },
         {
@@ -13424,7 +13469,7 @@
         },
         {
           "file": "tests/shell/open-gate-ui.test.tsx",
-          "name": "the application asks before it opens (AT-99) lists a session of a resource that cannot be opened nowhere in the rail, and the others as before",
+          "name": "the application asks before it opens (AT-99) lists a session of a resource that cannot be opened nowhere in the sidebar, and the others as before",
           "status": "passed"
         },
         {
@@ -13434,7 +13479,7 @@
         },
         {
           "file": "tests/shell/open-gate-ui.test.tsx",
-          "name": "the application asks before it opens (AT-99) refreshes the rail and the shelf when a library path is removed",
+          "name": "the application asks before it opens (AT-99) refreshes the sidebar and the shelf when a library path is removed",
           "status": "passed"
         }
       ]
@@ -13737,12 +13782,12 @@
       "tests": [
         {
           "file": "tests/creative/conversation-delete.test.ts",
-          "name": "deleting a conversation takes the whole of it and only it (AT-103) removes the session, its runs, messages, tool events, call record, checkpoints, frozen material, authorization and the mark that it was closed",
+          "name": "deleting a conversation takes the whole of it and only it (AT-103) removes the session, its runs, messages, tool events, call record, checkpoints, frozen material and authorization",
           "status": "passed"
         },
         {
           "file": "tests/creative/conversation-delete.test.ts",
-          "name": "deleting a conversation takes the whole of it and only it (AT-103) puts a new conversation in the place of the current one that was deleted, and leaves the other mode alone",
+          "name": "deleting a conversation takes the whole of it and only it (AT-103) puts a new conversation in the place of the current one of 最近 that was deleted, and leaves a project's alone",
           "status": "passed"
         },
         {
@@ -13762,7 +13807,7 @@
         },
         {
           "file": "tests/creative/conversation-delete.test.ts",
-          "name": "the list of conversations (AT-103) filters by mode, kind, time and title, pages, and agrees with what \"delete all\" deletes",
+          "name": "the list of conversations (AT-103) filters by context, kind, time and title, pages, and agrees with what \"delete all\" deletes",
           "status": "passed"
         },
         {
@@ -13778,6 +13823,11 @@
         {
           "file": "tests/shell/conversation-records-ui.test.tsx",
           "name": "the conversations category in the records page lists every kind with its owner, rounds and last time, marks the one in use and the one at work, and hides the note filters",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/conversation-records-ui.test.tsx",
+          "name": "the conversations category in the records page filters by project: all projects, 最近 and every project, archived ones included",
           "status": "passed"
         },
         {
@@ -13822,7 +13872,7 @@
         },
         {
           "file": "tests/shell/conversation-records-ui.test.tsx",
-          "name": "the right pane after its conversation was deleted takes the new conversation the main process made, so the next question is asked there",
+          "name": "the dock after its conversation was deleted takes the new conversation the main process made, so the next question is asked there",
           "status": "passed"
         }
       ]
@@ -14360,6 +14410,1622 @@
         {
           "file": "tests/shell/settings-media.test.tsx",
           "name": "settings for media, recording and metadata keeps the subtitles in a screenshot unless the person turns that off, and a reset of the style leaves it alone (AT-109)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-110-single-workspace",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) opens a tab in the context on screen, and switches to the tab that already shows the same thing instead of opening another",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) opens a tab behind the one in front without taking the focus, unless there was no focus",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) asks the tab's content to do something once more when the same thing is opened with a launch, and hands the request over only once",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) keeps no more than 100 tabs of a context and says so",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) closes a tab, focuses the last that is left, and brings the closed ones back last-closed first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) closes the last tab and leaves a context with none",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) closes the tabs of something that is gone, without keeping them for 'reopen'",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) walks back and forward inside one tab without touching the others, and says whether it can",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) names a tab by what it shows once the content knows, and records facts that were not known when it opened without a new place",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) tells the listeners of every change, and nobody after they unsubscribe",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) gives every kind of tab this version opens a picture of its own, and the question mark only to a kind it does not open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "a tab's own back and forward (AT-110) goes to a place, drops the places ahead of the one it was on, and steps back and forward over what is kept",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "a tab's own back and forward (AT-110) keeps no more than 50 places, the oldest going first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "a tab's own back and forward (AT-110) renames and re-targets the place it is on without making a new one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "the tabs that were closed (AT-110) puts the last closed first, never twice, and keeps the last ten",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "commands that work in a context does not accept the mode any more, on any command",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "commands that work in a context has no command to close a session, and no list of the sessions that were closed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) converts a v11 library: positions to 最近, the older of two conversations of one target to a general conversation, tabs from what was open, the shell preference to the new shape",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-111-frame-and-sidebar",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns keeps the same top row in a window too narrow for the columns, and opens them over the page from their buttons",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns folds the dock and then the sidebar into overlays as the main area would drop below its floor, and a layout of several columns asks for more",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns brings the page up to the window's edges in the window-fullscreen state: no rail, no columns, and a top that floats",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns walks the tab's history from the back and forward buttons, and disables a button with nowhere to go",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns has four menus in the top row, opens one and runs the command that is picked",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns drags a divider to resize its column inside the limits, and puts the default back on a double click",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns moves a divider with the keyboard, so the widths do not need a pointer",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns shows a saved width, and keeps the stored widths inside what a column can be",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns hides a column from its switch and shows it again, and has no dock, switch or capsule where nothing is shown there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns opens the columns from their keys, and the sidebar key hides a docked sidebar",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail has no heading, names every button, marks the view the sidebar is on, and keeps settings at the bottom outside the other buttons",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail marks the settings and no view while the settings are on, and shows the settings directory where the sidebar stands",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail puts the stop control in the top row only while a task runs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-111 the frame in a short window marks a window shorter than the compact height, and keeps every part of the frame",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell docks the columns on a wide window and keeps the reading measure",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell opens one overlay from hover and restores focus with Escape",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell keeps a stop control and the full-size layout",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell reflects the saved preference: a hidden sidebar stays hidden until its switch is pressed, and the switch is a plain button",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell restores docking after a user hides the sidebar and closes pinned narrow panels",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell does not autosave a note while composition is active and keeps split ids",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no dock where a conversation tab is in front: the same conversation is not shown twice, and the conversation is the page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell keeps the top row's own actions and a panel under the page, and the settings navigation is not the frame's",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell marks the view the sidebar is on in the rail, and puts settings apart from the others",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar opens and folds a project's things without leaving the context on screen, and keeps what was left open for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar switches the context from a project's name: its own tabs and conversation, and the last context is kept for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar hides the project group and the new-project button while the projects module is off, and the new-conversation button while the agent is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind shows five conversations of a context and the rest behind a button that says how many, and takes the rest a page at a time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind lists the one kind of the view by project, names the view and its management entry, and keeps the view for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind opens a thing of a project in that project's context, and leaves the sidebar on its view",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind opens the management tab of a kind from its entry, in the context on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind shows the downloads as one list that is not kept in a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind reads its list again, once for a burst, when a change is made outside it, and not for a position saved inside a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind asks again when the host answers wrongly, instead of drawing nothing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 the sidebar's own menus opens a general conversation as the context's current one, and renames, moves and deletes from the right-click menu",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 the sidebar's own menus offers a project's home, a new name and archiving from its right-click menu, and no move or delete there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 the sidebar's own menus offers to open a thing behind the page and to take a material out of its project, and keeps the rows' text as they were named",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "the side columns fold before the columns of the split have to (AT-111) docks both columns when the main area keeps the default floor, and the dock folds first when it does not",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "the side columns fold before the columns of the split have to (AT-111) asks the main area for the room of the columns of a layout, so the side columns fold earlier for several columns",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "the side columns fold before the columns of the split have to (AT-111) limits a drag so the main area keeps its floor, and never below the column's own minimum",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) saves the arrangement a moment after the last change, as one save for a run of changes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) saves a tab's position in what it shows with the layout, and not when nothing changed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) saves at once on flush, and saves of one context go one after the other",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) reports a save the host refused, and goes on",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) puts back what was saved, the focus included, and writes back the fields of a newer version unchanged",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) focuses the first tab when the saved focus names a tab that is not there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) opens a context with no saved tabs with the tabs the application seeds, and only once",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) does not seed a context that was saved with its tabs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) does not make a project that does not exist the context, and changes nothing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) forgets the arrangement of a project that was deleted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) keeps what was asked to open before any context was on screen, and opens it once there is one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) keeps the last 3 contexts on screen, saving and letting go of the readers of the one pushed out",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the shell preference is version 2: a sidebar and a dock, the context to come back to, and no mode",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the shell preference converts version 1 once: the columns of the entertainment mode, widths held inside the new limits",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-112-tabs-open-restore",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "what makes two tabs the same tab (AT-112) keys a reader by its resource, a note by its object, a project's pages by the project and the object, a conversation by its session",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "what makes two tabs the same tab (AT-112) gives a library tab and a kind this version does not know no key, so there can be several",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "what makes two tabs the same tab (AT-112) finds the tab that already shows the same thing, and no other",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "what makes two tabs the same tab (AT-112) makes a tab with a short name and a history of one place",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) opens a tab in the context on screen, and switches to the tab that already shows the same thing instead of opening another",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) opens a tab behind the one in front without taking the focus, unless there was no focus",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) asks the tab's content to do something once more when the same thing is opened with a launch, and hands the request over only once",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) keeps no more than 100 tabs of a context and says so",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) closes a tab, focuses the last that is left, and brings the closed ones back last-closed first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) closes the last tab and leaves a context with none",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) closes the tabs of something that is gone, without keeping them for 'reopen'",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) walks back and forward inside one tab without touching the others, and says whether it can",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) names a tab by what it shows once the content knows, and records facts that were not known when it opened without a new place",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) tells the listeners of every change, and nobody after they unsubscribe",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "opening and closing tabs (AT-110, AT-112) gives every kind of tab this version opens a picture of its own, and the question mark only to a kind it does not open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces a project has its own tabs and conversation, and 最近 comes back as it was: the same player at the same place, the same draft",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces the same resource open in a project and in 最近 is two players, each at its own place, and the saved place is the latest of either",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces the settings belong to no context: opened from either, they add no tab to it, and leaving them finds each context as it was",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces hides the whole workspace behind the settings with a rule of the stylesheet, and keeps it in the page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the saved state of a context reads back what a newer version added: another kind of tab, fields it does not know, and the order of the tabs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the saved state of a context refuses a state of another version, of a preset it does not know, and one that is too large to be one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the saved state of a context cuts a state that is too large the way the profile keeps it: closed tabs first, then the view of the tabs that are not focused, then the layout",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/media-flows.test.tsx",
+          "name": "media pages in the app keeps the page a reader was opened from in its own tab: the reader's history starts with the reader, and the library tab walks back and forth by itself",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/media-flows.test.tsx",
+          "name": "media pages in the app opens a new tab at the library's overview and leaves the first library tab where it was, on the work's page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) takes a reader tab out of the saved state and keeps the session, the place in the file, and a way back by opening it again",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) keeps a project's conversation and a plain conversation when their tabs are closed, and each comes back when it is opened or resumed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) lists a conversation as soon as the person talks in it, and has no closed state to hide it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) offers no command to close a session, and lists a work page's session and a plain conversation like any other",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) is refused to an Agent, which cannot read or change the tabs of the person's workspace",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-113-split-layout",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "how tabs are dealt over the columns (AT-113) fills the first columns with the remainder and leaves the last empty when there are fewer tabs than columns",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "how tabs are dealt over the columns (AT-113) reads the columns of a layout in reading order, and each column's tabs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-model.test.ts",
+          "name": "how tabs are dealt over the columns (AT-113) calls a number of columns by the preset it is, and makes a column only of a drop on an edge or on the side of one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) saves the arrangement a moment after the last change, as one save for a run of changes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) saves a tab's position in what it shows with the layout, and not when nothing changed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) saves at once on flush, and saves of one context go one after the other",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) reports a save the host refused, and goes on",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) puts back what was saved, the focus included, and writes back the fields of a newer version unchanged",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what is saved, and when (AT-111, AT-113) focuses the first tab when the saved focus names a tab that is not there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "the readers kept loaded out of sight (A-95, AT-113) lets a reader out of sight stay loaded only among the last 2 used, and never lets go of the one in front",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "the readers kept loaded out of sight (A-95, AT-113) does not let go of a tab that is not a reader",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what a tab shows besides its name (A-95) holds a mark per kind, tells the listeners only when it changes, and drops the marks of a tab that is closed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "what a tab shows besides its name (A-95) forgets the marks of a tab closed through the controller",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "how a thing was asked for (A-95) reads a Ctrl click or a ⌘ click as 'behind', and a plain click as not",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "how a thing was asked for (A-95) lets the ask go stale after a moment",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "how a thing was asked for (A-95) turns the middle button on anything that opens something into a Ctrl click on it, and ignores everything else",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "how a thing was asked for (A-95) keeps the browser from scrolling by drag on a middle press over something that opens",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns folds the dock and then the sidebar into overlays as the main area would drop below its floor, and a layout of several columns asks for more",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-fullscreen.test.tsx",
+          "name": "AT-89 window full screen: the reader fills the application window hides the columns and the tops' room, keeps the same player playing in place, and brings everything back",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-fullscreen.test.tsx",
+          "name": "AT-89 window full screen: the reader fills the application window is toggled by W where a reader is in front, and never by a W typed into a field",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-fullscreen.test.tsx",
+          "name": "AT-89 window full screen: the reader fills the application window leaves with Esc only after screen full screen, and not with the Esc that left screen full screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-fullscreen.test.tsx",
+          "name": "AT-89 window full screen: the reader fills the application window lets an open menu take the Esc first, and ends when the reader is left",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-114-contexts-and-materials",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar opens and folds a project's things without leaving the context on screen, and keeps what was left open for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar switches the context from a project's name: its own tabs and conversation, and the last context is kept for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar hides the project group and the new-project button while the projects module is off, and the new-conversation button while the agent is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind shows five conversations of a context and the rest behind a button that says how many, and takes the rest a page at a time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind lists the one kind of the view by project, names the view and its management entry, and keeps the view for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind opens a thing of a project in that project's context, and leaves the sidebar on its view",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind opens the management tab of a kind from its entry, in the context on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind shows the downloads as one list that is not kept in a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind reads its list again, once for a burst, when a change is made outside it, and not for a position saved inside a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind asks again when the host answers wrongly, instead of drawing nothing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 the sidebar's own menus opens a general conversation as the context's current one, and renames, moves and deletes from the right-click menu",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 the sidebar's own menus offers a project's home, a new name and archiving from its right-click menu, and no move or delete there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 the sidebar's own menus offers to open a thing behind the page and to take a material out of its project, and keeps the rows' text as they were named",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "loading and saving the tabs of a context answers a context that was never saved with the empty state, and gives back exactly what was saved",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "loading and saving the tabs of a context keeps a context apart from the others: 最近 and each project have their own tabs, and saving one leaves the others as they were",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "loading and saving the tabs of a context cuts a state that is too large instead of refusing it, and says so",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "loading and saving the tabs of a context answers a row that cannot be read with the empty state and says so, leaves it where it is, and replaces it at the next save",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "loading and saving the tabs of a context refuses a state that is not one, and a project that does not exist, and writes nothing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "the contexts of the sidebar lists 最近 first and then the projects, newest activity first, with what each holds; archived projects only when asked for",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/workspace-state.test.ts",
+          "name": "the contexts of the sidebar remembers the context the person left in, and forgets one that does not exist",
+          "status": "passed"
+        },
+        {
+          "file": "tests/creative/project-materials-origin.test.ts",
+          "name": "references that opening something adds to a project (Q-33) adds a reference with origin auto, once, and leaves a reference that is already there as it is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/creative/project-materials-origin.test.ts",
+          "name": "references that opening something adds to a project (Q-33) does not bring back what the person took out, until they add it by hand",
+          "status": "passed"
+        },
+        {
+          "file": "tests/creative/project-materials-origin.test.ts",
+          "name": "references that opening something adds to a project (Q-33) forgets the marks with the project, and refuses what does not exist",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) takes a reader tab out of the saved state and keeps the session, the place in the file, and a way back by opening it again",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) keeps a project's conversation and a plain conversation when their tabs are closed, and each comes back when it is opened or resumed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) lists a conversation as soon as the person talks in it, and has no closed state to hide it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) offers no command to close a session, and lists a work page's session and a plain conversation like any other",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/context-sessions.test.ts",
+          "name": "closing a tab keeps what it showed (AT-82, AT-111) is refused to an Agent, which cannot read or change the tabs of the person's workspace",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces a project has its own tabs and conversation, and 最近 comes back as it was: the same player at the same place, the same draft",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-115-progress-per-context",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "a position is the position in one context (A-96) keeps one position per context for the same revision, and each context restores its own",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "a position is the position in one context (A-96) does not make a context the latest one by saying again the position it already has",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "a position is the position in one context (A-96) offers the latest position of another context to a context that has none, and nothing to one that has its own",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "a position is the position in one context (A-96) restores a position through library.read for the context it is asked in, and for 最近 when none is named",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "the three readings of progress (plan 4.7) shows the latest position in any context on the work card, and says which context it is from",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "the three readings of progress (plan 4.7) lets what has been read in any context through the spoiler guard, and shows the agent the same union",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "the three readings of progress (plan 4.7) keeps the subtitle window of a video behind the furthest watched point of any context",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/progress-contexts.test.ts",
+          "name": "the three readings of progress (plan 4.7) deletes a project's positions with the project, and leaves 最近 and the other projects as they were",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/elsewhere-bar.test.tsx",
+          "name": "the line over a reader that another context has already started says where the resource was seen, and going there or putting the line away is the person's choice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/elsewhere-bar.test.tsx",
+          "name": "the line over a reader that another context has already started keeps the percentage inside 0–100 and rounds it to a whole number",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces the same resource open in a project and in 最近 is two players, each at its own place, and the saved place is the latest of either",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-116-dock-follows-focus",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding shares the draft across tabs of one target in one context, and not across another target or another context",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding keeps the book left in memory off a reader of another book: only the reader's own resource is frozen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding includes the note of a note tab and the book the note belongs to, and not a different book that is still open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding follows the named conversation on a conversation tab, which has no dock",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding binds the dock to the resource open in a comic or video reader, and to the context's own conversation on a page with no resource",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding opens a work's own conversation from the work's page, and a project's from any tab of the project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/surface-binding.test.ts",
+          "name": "agent surface binding keeps the conversations of two contexts apart: no session or draft key is shared between 最近 and a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/context-binding.test.ts",
+          "name": "a task knows the context it runs in records the context of a project conversation and of 最近 in what the task was given",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/context-binding.test.ts",
+          "name": "a task knows the context it runs in gives a command that takes a context the conversation's own, whatever the model wrote, and does not ask the model for it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/context-binding.test.ts",
+          "name": "a task knows the context it runs in refuses to run a command that takes a context without one, outside the task",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-ui.test.tsx",
+          "name": "AT-60 AT-61 AT-62 AT-111 shell has no dock where a conversation tab is in front: the same conversation is not shown twice, and the conversation is the page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/app-restore.test.tsx",
+          "name": "App restore shows the current conversation in the dock, starts a new one from its top into a tab, and continues one from the history (AT-75)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/app-restore.test.tsx",
+          "name": "App restore sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/conversation-records-ui.test.tsx",
+          "name": "the dock after its conversation was deleted takes the new conversation the main process made, so the next question is asked there",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-117-schema-v12-migration",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) converts a v11 library: positions to 最近, the older of two conversations of one target to a general conversation, tabs from what was open, the shell preference to the new shape",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) turns the conversation of a project deleted before v12 into a general conversation of 最近 instead of leaving it under a project that is gone",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) is a no-op the second time: no second backup, nothing converted again, the same rows",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) stops before the version is published: the library is still v11 with its old shape and rows, and the retry finishes with one backup and the same result",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) goes back by restoring the backup, and the same migration runs again from there with the same result",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) refuses a library whose schema is newer than this application, and leaves it alone",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) goes v10 → v12 in one start with one backup of what was there, and starts a new library at v12 with nothing to convert",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v12-migration.test.ts",
+          "name": "schema v12 migration (one workspace: conversations, positions, tabs and the shell preference are kept per context) opens in the application: the contexts, the tabs, the conversations and the positions are where the new shell looks for them",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the shell preference converts version 1 once: the columns of the entertainment mode, widths held inside the new limits",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the saved state of a context reads back what a newer version added: another kind of tab, fields it does not know, and the order of the tabs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the saved state of a context refuses a state of another version, of a preset it does not know, and one that is too large to be one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the saved state of a context cuts a state that is too large the way the profile keeps it: closed tabs first, then the view of the tabs that are not focused, then the layout",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-118-workspace-resources",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "the readers kept loaded out of sight (A-95, AT-113) lets a reader out of sight stay loaded only among the last 2 used, and never lets go of the one in front",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "the readers kept loaded out of sight (A-95, AT-113) does not let go of a tab that is not a reader",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) keeps the last 3 contexts on screen, saving and letting go of the readers of the one pushed out",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is returns to the same player, paused at the same place, without loading it again",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is a video that was playing when settings opened is paused and its place is saved",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is hands the keyboard to the tab's content once its title has been pressed, so the player hears the space bar (A-94)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is closing the resource and opening it again goes back to where the viewer was (AT-82)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-119-rail-views",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail has no heading, names every button, marks the view the sidebar is on, and keeps settings at the bottom outside the other buttons",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail marks the settings and no view while the settings are on, and shows the settings directory where the sidebar stands",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-82 AT-111 AT-119 window frame: the icon rail puts the stop control in the top row only while a task runs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar opens and folds a project's things without leaving the context on screen, and keeps what was left open for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar switches the context from a project's name: its own tabs and conversation, and the last context is kept for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar hides the project group and the new-project button while the projects module is off, and the new-conversation button while the agent is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind shows five conversations of a context and the rest behind a button that says how many, and takes the rest a page at a time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind lists the one kind of the view by project, names the view and its management entry, and keeps the view for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind opens a thing of a project in that project's context, and leaves the sidebar on its view",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind opens the management tab of a kind from its entry, in the context on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind shows the downloads as one list that is not kept in a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind reads its list again, once for a burst, when a change is made outside it, and not for a position saved inside a project",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind asks again when the host answers wrongly, instead of drawing nothing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "the home: every project and what it holds, by kind lists 最近 and each project with the kinds that have something in them, five to a kind, and the count of the rest",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "the home: every project and what it holds, by kind answers a group that was not asked for with its counts only, and every group in full when none is named",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "a view of one kind conversations: every project is listed, even without one; a conversation about a book is listed once something was asked in it and its file can be opened",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "a view of one kind novels, comics and videos: the works and resources a project holds, and in 最近 the resources opened there, newest first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "a view of one kind notes: the notes in a project's materials, and in 最近 the ones that are in no project, newest first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "a view of one kind whiteboards, maps, drafts and cuts: the objects of each project, and nothing under 最近, which has none",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "a view of one kind downloads are not kept in a project: running tasks first, then the finished, and the cancelled are not listed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "the lists follow the data drops what was removed, deleted or archived at once, and does not fail for a project with nothing in it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "the lists follow the data pages a long list by a cursor, in order and without a gap or a repeat, and asks for the kind on the home",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "the lists follow the data passes over the rows of a page that are not offered, so a page is full and the next one starts after them",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "the objects of every project in a list of their own lists them newest first with their project, narrows by name, pages, and says which projects are archived",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the rail has the home and the ten kinds a person may take out, and every kind a list holds has its own view",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the rail is kept whole with its defaults, and changed by a patch that names only what changes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the commands the sidebar and the search ask fill in how many to list, and refuse a page that is empty or larger than the limit",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the commands the sidebar and the search ask ask the home for the kind of the list, give a view of one kind only its own, and the downloads none",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-120-rail-hide-card-color",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 which icons the rail shows for a window's height shows every view in a tall window and has no \"…\" when nothing is out",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 which icons the rail shows for a window's height puts the ones the person took out behind \"…\" in the rail's order, and never the home",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 which icons the rail shows for a window's height moves the icons that do not fit behind \"…\", last ones first, and the \"…\" takes the slot of the one it replaces",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 which icons the rail shows for a window's height marks what is behind \"…\" by why it is there, and gives the settings their slot first",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 which icons the rail shows for a window's height lays out only the views it is given: a window without a module has no icon for it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 the card that comes out of an icon comes out only after the pointer stays, and not for one that passes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 the card that comes out of an icon opens at once for the sidebar's own switch (a wait of 0)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 the card that comes out of an icon goes after a short wait once the pointer has left, and stays when the pointer comes back to the icon or onto the card",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 the card that comes out of an icon changes to the card of another icon sooner than it came, and never has two",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-layout.test.ts",
+          "name": "AT-120 the card that comes out of an icon is held by a pin (the key or the sidebar's switch) against the pointer leaving, and a second pin or Esc lets it go",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the rail's icons: taking one out, \"…\" and the pin takes an icon out from its right-click menu, and offers no menu on the home",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the rail's icons: taking one out, \"…\" and the pin has no \"…\" while every icon is in, and lists the ones taken out behind it, each with a pin that puts it back",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the rail's icons: taking one out, \"…\" and the pin marks \"…\" while the view of the sidebar is one of the icons behind it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the rail's icons: taking one out, \"…\" and the pin moves in the list with the arrow keys, reaches a pin from its name and back, and closes with Escape to the \"…\" button",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the rail's icons: taking one out, \"…\" and the pin puts the icons that do not fit a short window behind \"…\" with no pin, and shows them again in a taller one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away comes out after the pointer rests on an icon, shows that view the way a card does, and goes when the pointer leaves",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away brings out nothing for a pointer that passes over an icon",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away stays while the pointer goes from the icon onto the card, can be worked in, and changes to the next icon's view",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away keeps the sidebar folded when an icon is clicked: the view is chosen, the card follows it, and nothing is docked",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away closes the card when something in it was opened, and tells the content so",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away opens from the keyboard with Enter or Space on an icon, takes the focus, and Escape gives it back to the icon",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away leaves a card that was opened by a key when the page outside it is pressed, and not when something of the rail or the card is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away opens the card of the current view from the sidebar's switch at once, without docking the sidebar",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away is also what a window too narrow for the sidebar shows, and nothing comes out in the window-fullscreen state",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away shows the settings directory in a docked sidebar while the settings are on, even when the sidebar was folded away, and leaves it there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color is lighter than the frame and darker than the page (or the other way round in the dark theme: between them), in the light theme",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color keeps the text, the pictures and the border readable on it in the light theme",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color is lighter than the frame and darker than the page (or the other way round in the dark theme: between them), in the dark theme",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color keeps the text, the pictures and the border readable on it in the dark theme",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color is told apart from the frame and from the page by at least a visible step in each theme",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color is what the docked sidebar, the card and the settings directory use, and nothing draws it with a color of its own",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "what the shell keeps of the rail starts from the home with every icon shown, and keeps what the person changed, a part at a time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "what the shell keeps of the rail reads a version 2 record saved before the rail was kept, with the defaults, and writes it back whole",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-121-search-box",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window has a class of its own: the shelf's search field keeps its rules and the box takes none of them, and no class has its base rule in two stylesheets",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window opens from the key over the workspace without making a tab, holds the typing focus, and closes with Escape to where the focus was",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window closes with the key that opened it, with its close button, and by pressing outside it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window lists, as the text is typed, the projects, conversations, works, notes and objects whose name has it, by kind, and says so when none does",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window drops an answer that arrives after a newer question",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window opens from a view of the rail with that view as its scope, which Backspace on an empty box or its button takes off",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 the search box is a floating box over the window opens from the home and from the downloads with no scope, and from the settings with none either",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box moves over the rows with the arrow keys, opens the chosen one in the context it belongs to, and closes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box wraps from the last row to the first and back, and opens a row with a click",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box opens behind the tab in front with Ctrl and Enter, and leaves the box closed and the tab in front as it was",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box searches the texts with Enter when no row is chosen, lists what is found, and asks nothing of the texts until then",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box asks only for what the scope has: the notes' scope shows the hits in notes, and a scope without texts has no line for them",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box leaves the settings when something found is opened: the box is over the settings, and what opens is in the workspace",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/search-box-ui.test.tsx",
+          "name": "AT-121 choosing in the search box does not act on a key while an input method is composing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-121 the search box is a state of the window opens with the scope of the view on screen, and none from the home or from the settings",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-121 the search box is a state of the window is a new box each time it is opened, and closing it keeps the settings as they are",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "finding things by name lists the things whose name has the text, by kind, a few of each, and where each one opens",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "finding things by name does not offer a conversation, work or resource that cannot be opened",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "only the person's own interface asks is refused to an agent, whichever of the four it asks",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "tabs of the kinds that are gone are not given back when a context is loaded, and nothing else about the state changes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the tabs of the kinds the workspace no longer has keep the kinds that are lists and views of an object, and leave out the search, the settings, the plug-ins and the keys",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the tabs of the kinds the workspace no longer has are dropped from the tabs and from the closed ones, and the focus goes to the first tab that is left",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-122-settings-view",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace comes up from the rail's button and from its key, over the main area and in the sidebar's place, with the directory in groups",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace leaves the workspace mounted behind it, adds no tab, and keeps the dock out of the way without taking its content down",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace goes from page to page, and back and forward walk the pages that were visited, then back from the first page leaves",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace narrows the pages by name and by keyword, says when none match, and clears with its button or Escape",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace shows no page of a module that is off, opens on the page used last, and falls back to the first when that page has gone",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace leaves the settings from an icon of the rail and shows that view, and from anything that opens in the workspace",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace ignores what acts on the tabs while it is on: closing the tab in front, the next tab, and a split",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-view-ui.test.tsx",
+          "name": "AT-122 the settings view over the workspace shows the directory as the card of the sidebar's switch in a window too narrow for the sidebar, and a choice closes it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-122 the settings view is a state of the window comes up on the page named, else the one used last, else the first, and tells the workspace it is out of sight once",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-122 the settings view is a state of the window walks the pages that were visited with back and forward, drops what was ahead when a new page is chosen, and does not repeat a page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-122 the settings view is a state of the window leaves to the workspace from the first page with back, keeps the page it was on for the next time, and does nothing when it is not up",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-122 the settings view is a state of the window keeps the trail from growing without bound",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/shell-state.test.ts",
+          "name": "AT-122 the settings view is a state of the window tells whoever listens, and gives a new snapshot for each change",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is returns to the same player, paused at the same place, without loading it again",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is a video that was playing when settings opened is paused and its place is saved",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is hands the keyboard to the tab's content once its title has been pressed, so the player hears the space bar (A-94)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-88 AT-122 the workspace under the settings stays where it is closing the resource and opening it again goes back to where the viewer was (AT-82)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/sidebar-lists.test.ts",
+          "name": "tabs of the kinds that are gone are not given back when a context is loaded, and nothing else about the state changes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the tabs of the kinds the workspace no longer has keep the kinds that are lists and views of an object, and leave out the search, the settings, the plug-ins and the keys",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the tabs of the kinds the workspace no longer has are dropped from the tabs and from the closed ones, and the focus goes to the first tab that is left",
           "status": "passed"
         }
       ]

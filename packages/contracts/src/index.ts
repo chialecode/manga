@@ -34,3 +34,5 @@ export * from "./model.ts";
 export * from "./agent.ts";
 export * from "./inventory.ts";
 export * from "./reading.ts";
+export * from "./workspace-state.ts";
+export * from "./sidebar.ts";

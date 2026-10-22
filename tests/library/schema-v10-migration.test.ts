@@ -60,9 +60,9 @@ describe("schema v10 migration (a file location is a library path and a path ins
     const seeded = seedV9();
     const store = new DrizzleStore({ profileDir: seeded.dir, hostId: "migrate-v10" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(11);
-      expect(store.getMeta("schemaVersion")).toBe("11");
-      expect(store.migration).toMatchObject({ from: 9, to: 11, locations: { inLibrary: 1, managed: 2, outside: 1 } });
+      expect(PRODUCT_SCHEMA_VERSION).toBe(12);
+      expect(store.getMeta("schemaVersion")).toBe("12");
+      expect(store.migration).toMatchObject({ from: 9, to: 12, locations: { inLibrary: 1, managed: 2, outside: 1 } });
       expect(fs.readdirSync(seeded.dir).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v9"]);
 
       // The backup is the v9 library, untouched: no managed flag, locations still hold paths.
@@ -133,7 +133,7 @@ describe("schema v10 migration (a file location is a library path and a path ins
 
     const retried = new DrizzleStore({ profileDir: seeded.dir, hostId: "retry-v10" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("11");
+      expect(retried.getMeta("schemaVersion")).toBe("12");
       expect(rowsOf(retried).map((row) => row.lib === null ? "outside" : row.hosted === 1 ? "managed" : "library").sort()).toEqual(["library", "managed", "managed", "outside"]);
       expect(retried.sqlite.prepare("SELECT COUNT(*) AS n FROM library_paths WHERE managed = 1").get()).toEqual({ n: 1 });
     } finally {
@@ -148,7 +148,7 @@ describe("schema v10 migration (a file location is a library path and a path ins
     const child = crashChild(seeded.dir, "after-file-copy");
     expect(child.status, child.stderr).toBe(99);
     const half = new Database(path.join(seeded.dir, "manga.sqlite"));
-    expect(half.prepare("SELECT value FROM schema_meta WHERE key = 'schemaVersion'").get()).toEqual({ value: "11" });
+    expect(half.prepare("SELECT value FROM schema_meta WHERE key = 'schemaVersion'").get()).toEqual({ value: "12" });
     expect(half.prepare("SELECT state, COUNT(*) AS n FROM file_moves GROUP BY state ORDER BY state").all()).toEqual([{ state: "done", n: 1 }, { state: "pending", n: 1 }]);
     const pending = half.prepare("SELECT to_path FROM file_moves WHERE state = 'pending'").get() as { to_path: string };
     half.close();
@@ -209,7 +209,7 @@ describe("schema v10 migration (a file location is a library path and a path ins
     old.close();
     const again = new DrizzleStore({ profileDir: seeded.dir, hostId: "again-forward-v10" });
     try {
-      expect(again.migration).toMatchObject({ from: 9, to: 11 });
+      expect(again.migration).toMatchObject({ from: 9, to: 12 });
       expect(rowsOf(again).map((row) => ({ ...row, lib: row.lib === "lp-main" ? row.lib : row.lib === null ? null : "managed" }))).toEqual(forward);
       expect(again.sqlite.prepare("SELECT COUNT(*) AS n FROM library_paths WHERE managed = 1").get()).toEqual({ n: 1 });
     } finally {
@@ -229,7 +229,7 @@ describe("schema v10 migration (a file location is a library path and a path ins
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-v10-fresh-"));
     const store = new DrizzleStore({ profileDir: dir, hostId: "fresh-v10" });
     try {
-      expect(store.getMeta("schemaVersion")).toBe("11");
+      expect(store.getMeta("schemaVersion")).toBe("12");
       expect(store.migration).toBeNull();
       expect(store.sqlite.prepare("SELECT COUNT(*) AS n FROM library_paths").get()).toEqual({ n: 0 });
       const managed = store.ensureManagedLibraryPath();

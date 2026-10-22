@@ -53,7 +53,7 @@ describe("format candidates", () => {
   it("extracts pdf text, keeps scan pages without OCR, and rejects encryption", async () => {
     const parsed = await parsePdfBytes(buildPdfFixture([{ text: "页面文字" }, { scan: true }, { utf16: "日文" }]));
     expect(parsed.traits.accepted).toBe(true);
-    expect(parsed.parserId).toBe("pdfjs-dist@6.3.289");
+    expect(parsed.parserId).toBe("pdfjs-dist@6.4.299");
     expect(parsed.parts[0]?.normalized).toContain("页面文字");
     expect(parsed.parts.some((part) => part.kind === "image")).toBe(true);
     expect(parsed.warnings.join(" ")).toMatch(/OCR/);

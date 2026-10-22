@@ -73,6 +73,7 @@ async function seedScaleProfile(dir) {
     const last = read.parts[read.parts.length - 1];
     const range = { start: last.length - [...marker].length, end: last.length };
     await call(app, actor, grant, "progress.set", {
+      contextId: null,
       resourceId: book.resourceId,
       resourceRevisionId: book.revisionId,
       consumed: false,
@@ -140,6 +141,9 @@ export async function runScaleWindowBench({ launch }) {
     raw: {
       coldStartToLibraryMs: runs.map((run) => run.coldStartToLibraryMs),
       uiFeedbackMs: merge("uiFeedbackMs"),
+      railSwitchMs: merge("railSwitchMs"),
+      searchNamesMs: merge("searchNamesMs"),
+      settingsMs: merge("settingsMs"),
       largeTxtTailMs: merge("largeTxtTailMs"),
       largeEpubTailMs: merge("largeEpubTailMs"),
       saveReceiptMs: merge("saveReceiptMs"),

@@ -37,7 +37,7 @@ export type RelatedProvider = { relation: string; externalId: string; title: str
 export type RelatedSimilar = { workId: string; title: string; mediaKind: string; sharedTags: string[]; score: number };
 export type RelatedWorks = { workId: string; source: { providerId: string; fetchedAt: string | null; detached: boolean } | null; relations: RelatedProvider[]; similar: RelatedSimilar[] };
 
-export type Facets = Set<string>;
+export type Facets = ReadonlySet<string>;
 
 /** The shell page that reads each kind. The novel reader keeps its earlier page id. */
 export const PAGE_FOR_KIND: Record<WorkMediaKind, string> = { novel: "reading", comic: "comic", video: "video" };

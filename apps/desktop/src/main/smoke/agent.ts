@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, setField, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, ensureSidebar, railTo, setField, viaSidebar, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, clickFirst, js, toRail, type FlowResult } from "./common.ts";
 
 /**
- * The Agent through the real window: a task is sent from the chat page, shows as running, is stopped by the user, and a module switch
+ * The Agent through the real window: a task is sent from a conversation tab, shows as running, is stopped by the user, and a module switch
  * revokes the command. Against a local server that never answers, so nothing leaves the machine and the task stays running until stopped.
  */
 
@@ -19,8 +19,9 @@ export async function runAgentSmoke(appService: MangaProductApp, grant: string, 
     const restored = runs.find((run) => run.inputText === PROMPT) ?? runs[0];
     const detail = restored ? await call("agent.getRun", { runId: restored.id }) : { status: "error" as const, value: undefined };
     const detailValue = detail.status === "ok" ? detail.value as { inputText?: string; status?: string } | undefined : undefined;
-    const agentPage = await toRail(view) && await clickTestId(view, "nav-agent");
-    // The chat page opens on the current conversation, the one that was left (A-65).
+    // The conversation that was left comes back as the tab it was in; if the tab was not kept, its row in the conversation view of the sidebar opens it again (A-65).
+    const reopened = async () => await railTo(view, "conversation") && await ensureSidebar(view) && await clickFirst(view, "session-open-", 6000) && await waitDrawn(view, "page-agent", 6000);
+    const agentPage = await toRail(view) && (await waitDrawn(view, "page-agent", 6000) || await reopened());
     const shown = agentPage && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
     // "开启新对话" empties the page and moves that conversation into the history, from where it is continued.
     const started = shown && await clickTestId(view, "conversation-new");
@@ -30,7 +31,10 @@ export async function runAgentSmoke(appService: MangaProductApp, grant: string, 
     const continued = listed && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
     const inputText = String(detailValue?.inputText ?? restored?.inputText ?? "");
     const ok = Boolean(restored) && inputText.includes(PROMPT) && agentPage && Boolean(shown) && Boolean(emptied) && Boolean(continued);
-    return { ok, restoredStatus: restored?.status ?? detailValue?.status, agentVisible: agentPage, conversationShown: Boolean(shown), newConversationEmptied: Boolean(emptied), historyContinued: Boolean(continued), inputText };
+    // What the context kept, so that a conversation which did not come back says where it was lost.
+    const kept = (await call("workspace.loadContext", { contextId: null })).value as { state?: { tabs?: Array<{ kind: string; target?: unknown }> } } | undefined;
+    const sessions = ((await call("workspace.sessions", { contextId: null })).value as Array<{ sessionId: string; kind: string }> | undefined) ?? [];
+    return { ok, restoredStatus: restored?.status ?? detailValue?.status, agentVisible: agentPage, conversationShown: Boolean(shown), newConversationEmptied: Boolean(emptied), historyContinued: Boolean(continued), inputText, keptTabs: (kept?.state?.tabs ?? []).map((tab) => tab.kind), keptSessions: sessions.map((session) => session.kind) };
   }
 
   const slow = createServer((request) => { request.resume(); });
@@ -42,8 +46,9 @@ export async function runAgentSmoke(appService: MangaProductApp, grant: string, 
     await call("connections.upsert", { label: "slow", protocol: "openai-chat-completions", baseUrl: `http://127.0.0.1:${port}/v1`, modelId: "demo", purpose: "text", credentialHandle: secret }, "smoke-conn");
     // The window learns of the connection when it reads its settings again.
     await view.webContents.reload();
-    const agentPage = await toRail(view) && await clickTestId(view, "nav-agent");
-    const pageShown = agentPage && await waitForTestId(view, "page-agent", "data-present", null, 8000);
+    // The home view of the rail has "新对话"; the sidebar is shown first if the window folded it.
+    const agentPage = await toRail(view) && await viaSidebar(view, "home", "sidebar-new-conversation", 10_000);
+    const pageShown = agentPage && await waitDrawn(view, "page-agent", 8000);
     await clickTestId(view, "chat-mode-ask");
     await setField(view, "agent-composer", PROMPT);
     const sending = await clickTestId(view, "agent-send");

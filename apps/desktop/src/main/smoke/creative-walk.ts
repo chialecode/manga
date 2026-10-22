@@ -4,13 +4,13 @@ import { createHash } from "node:crypto";
 import type { BrowserWindow } from "electron";
 import { loadVecExtension, type MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
-import { clickTestId, setField, sleep, waitForTestId, waitUntil } from "./driver.ts";
-import { capturePage, caller, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
+import { clickTestId, closeTabs, openProjectsPage, openRecords, setField, showTab, sleep, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
+import { capturePage, caller, js, toRail, type FlowResult } from "./common.ts";
 import { WINDOW_SIZES, type Observation } from "./window-walk.ts";
 
 /**
- * The creative workspace in the real window and the packaged build, with synthetic content only: the creator mode and the projects page; a
- * project's tabs; a whiteboard (a card added, dragged with the mouse, the drop kept across a reload, undone); a mind map (a topic added with the
+ * The creative workspace in the real window and the packaged build, with synthetic content only: the projects tab and a project made in it, which
+ * becomes the context of the window; a project's tabs; a whiteboard (a card added, dragged with the mouse, the drop kept across a reload, undone); a mind map (a topic added with the
  * keyboard, folded, exported as text, undone); a draft; the research tab; a rough cut exported with the media tool that comes in the package, from
  * two copies of a synthetic video, and checked against the originals; a note holding embeds; a project package written and read back; the semantic
  * index's vector extension loaded by the packaged build; and every tab at three window sizes without a control cut off. Each observation is named,
@@ -61,7 +61,7 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     if (!entry || entry.status !== "generated") throw new Error(`sample ${id} is not available`);
     return path.join(root, entry.path);
   };
-  const shot = (name: string) => capturePage(view, evidenceDir, `ui-creative-${name}.png`);
+  const shot = (name: string, mark?: string) => capturePage(view, evidenceDir, `ui-creative-${name}.png`, mark);
   const dir = path.join(logsDir, "walk-creative");
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
@@ -83,10 +83,9 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
   const videos: Array<{ resourceId: string }> = [];
   for (const file of copies) videos.push(await value<{ resourceId: string }>("library.importDocument", { title: path.parse(file).name, kind: "video", pathHandle: appService.registerPath("file", file) }));
 
-  // ---- 1. the creator mode, and a project made on the projects page ----
-  await toRail(view);
-  const switched = await clickTestId(view, "mode-creator") && await waitUntil(view, present("nav-projects"), 8000);
-  const onPage = switched && await clickTestId(view, "nav-projects") && await waitForTestId(view, "page-projects");
+  // ---- 1. the projects tab, and a project made in it (it becomes the context of the window) ----
+  const switched = await toRail(view) && await waitUntil(view, present("nav-home"), 8000);
+  const onPage = switched && await openProjectsPage(view) && await waitDrawn(view, "page-projects");
   const opened = onPage && await clickTestId(view, "projects-new") && await waitForTestId(view, "project-name");
   const named = opened && await setField(view, "project-name", "窗口创作项目");
   const made = named && await clickTestId(view, "project-create-submit");
@@ -94,11 +93,13 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
   const inPage = made && await waitUntil(view, `document.querySelector('[data-testid="page-project"]')?.getAttribute("data-project")`, 10_000);
   const projectId = inPage ? await js<string>(view, `document.querySelector('[data-testid="page-project"]').getAttribute("data-project")`) : "";
   observe("creative-reach-projects", Boolean(switched && onPage && made && inPage), { switched, onPage, made, inPage, projectId: projectId.length > 0 });
-  await shot("project-wide");
+  await shot("project-wide", "page-project");
 
   const openTab = async (tab: (typeof TABS)[number]) => {
+    // The project's home is a tab of its own, named after the project; the tabs inside it are measured while it is in front.
+    await showTab(view, { kind: "project", title: "窗口创作项目" });
     if (!await waitForTestId(view, "page-project", "data-project", projectId, 3000)) {
-      await clickTestId(view, "nav-projects");
+      await openProjectsPage(view);
       await clickTestId(view, `project-open-${projectId}`);
       await waitForTestId(view, "page-project", "data-project", projectId, 8000);
     }
@@ -254,7 +255,8 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     ];
     await value("notes.replace", { objectId: note.objectId, expectedRevision: got.revision, blocks });
     await toRail(view);
-    const listedNote = await openSettingsPage(view, "records");
+    await closeTabs(view, ["note"]);
+    const listedNote = await openRecords(view, "note");
     const openedNote = listedNote && await clickTestId(view, `record-open-${note.objectId}`, 8000) && await waitForTestId(view, "note-editor");
     const drawn = openedNote && await waitUntil(view, `document.querySelector('[data-testid="embed-e1"]')?.getAttribute("data-embed-state") === "valid" && document.querySelector('[data-testid="embed-e2"]')?.getAttribute("data-embed-state") === "valid"`, 10_000);
     const titles = drawn ? await js<string[]>(view, `["embed-title-e1", "embed-title-e2"].map((id) => document.querySelector('[data-testid="' + id + '"]')?.textContent ?? "")`) : [];
@@ -262,7 +264,8 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     // The board goes; the embed stays in the note and says what happened.
     await value("whiteboard.delete", { boardId: boards.boards[0]!.id });
     await toRail(view);
-    await openSettingsPage(view, "records");
+    await closeTabs(view, ["note"]);
+    await openRecords(view, "note");
     const reopened = await clickTestId(view, `record-open-${note.objectId}`, 8000) && await waitForTestId(view, "note-editor");
     const gone = reopened && await waitUntil(view, `document.querySelector('[data-testid="embed-e1"]')?.getAttribute("data-embed-state") === "deleted"`, 10_000);
     embedDetail = { drawn, titles, snapshotMarked, gone };
@@ -282,8 +285,8 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
       { type: "add", resourceId: videos[1]!.resourceId, inMs: 2000, outMs: 4300 },
     ] });
     await toRail(view);
-    // The shell keeps the project open when the rail goes back to projects; only a list needs the open button.
-    const toProjects = await clickTestId(view, "nav-projects");
+    // The project is the window's context, and its home is a tab of it: the home's projects entry opens the list beside it, and the list's button focuses the home.
+    const toProjects = await openProjectsPage(view);
     const alreadyIn = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="page-project"]'))`);
     const opened = toProjects && (alreadyIn || await clickTestId(view, `project-open-${projectId}`));
     const inTab = opened && await openTab("roughcut");

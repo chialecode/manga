@@ -110,7 +110,7 @@ export async function runRealVideoTrial(input: TrialInput): Promise<TrialResult 
   for (const episode of episodes) {
     await toRail(view);
     const started = Date.now();
-    if (!await openFromShelf(view, "nav-video", episode, 15_000)) { result.noPicture += 1; result.episodes += 1; continue; }
+    if (!await openFromShelf(view, "video", episode, 15_000)) { result.noPicture += 1; result.episodes += 1; continue; }
     const playing = await until<boolean>(`(() => { const v = document.querySelector('[data-testid="video-element"]'); return Boolean(v && v.readyState >= 2 && v.getVideoPlaybackQuality().totalVideoFrames > 0); })()`, 40_000);
     result.episodes += 1;
     if (!playing) { result.noPicture += 1; continue; }

@@ -119,7 +119,7 @@ export function counterpart(store: DrizzleStore, input: { resourceId: string; to
   let fraction = input.fraction;
   if (fraction === undefined) {
     const fromRevision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(from.id) as { id: string } | undefined;
-    const saved = fromRevision ? store.sqlite.prepare("SELECT percent, completion_state AS completion FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(from.id, fromRevision.id) as { percent: number; completion: string } | undefined : undefined;
+    const saved = fromRevision ? store.sqlite.prepare("SELECT percent, completion_state AS completion FROM progress_latest WHERE resource_id = ? AND resource_revision_id = ?").get(from.id, fromRevision.id) as { percent: number; completion: string } | undefined : undefined;
     // A finished episode is not carried over: the other version starts at its beginning, as any finished one does.
     fraction = saved && saved.completion !== "completed" ? saved.percent : 0;
   }
