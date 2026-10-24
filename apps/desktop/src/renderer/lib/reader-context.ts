@@ -27,9 +27,18 @@ export function novelDebugOf(progress: { restoredFrom?: string; restoredRange?: 
 
 type Listener = () => void;
 
-let exact: ReaderContext | null = null;
-let shown: ReaderContext | null = null;
+/**
+ * Every open reader tab keeps its own place under its own owner (the tab's id); the one the Agent sees is the focused tab's (A-94). A caller that does
+ * not name an owner is the single reader of a window without tabs.
+ */
+const DEFAULT_OWNER = "";
+const exactBy = new Map<string, ReaderContext>();
+const shownBy = new Map<string, ReaderContext>();
+/** The owner whose place is current: the focused tab; until one is named, the reader that spoke last. */
+let focusOwner: string | null = null;
+let lastOwner: string = DEFAULT_OWNER;
 const listeners = new Set<Listener>();
+const currentOwner = (): string => focusOwner ?? lastOwner;
 
 /** What a screen needs to redraw: the page, or the second, not every tick of the clock. */
 function sameForDisplay(a: ReaderContext | null, b: ReaderContext | null): boolean {
@@ -47,36 +56,49 @@ function sameForDisplay(a: ReaderContext | null, b: ReaderContext | null): boole
   return false;
 }
 
+const notify = () => { for (const listener of [...listeners]) listener(); };
+
 export const readerContext = {
-  /** The exact latest position, for a send. */
-  get(): ReaderContext | null {
-    return exact;
+  /** The exact latest position of the focused tab's reader (or of the only one), for a send. */
+  get(owner?: string): ReaderContext | null {
+    return exactBy.get(owner ?? currentOwner()) ?? null;
   },
-  set(next: ReaderContext): void {
-    exact = next;
-    if (sameForDisplay(shown, next)) return;
-    shown = next;
-    for (const listener of [...listeners]) listener();
+  set(next: ReaderContext, owner: string = DEFAULT_OWNER): void {
+    exactBy.set(owner, next);
+    lastOwner = owner;
+    const before = shownBy.get(owner) ?? null;
+    if (sameForDisplay(before, next)) return;
+    shownBy.set(owner, next);
+    if (owner === currentOwner()) notify();
   },
   /** The reader closed. Only the reader that set it clears it, so a newer reader's place is not wiped by the older one leaving. */
-  clear(resourceId?: string): void {
-    if (resourceId && exact?.resourceId !== resourceId) return;
-    exact = null;
-    if (shown === null) return;
-    shown = null;
-    for (const listener of [...listeners]) listener();
+  clear(resourceId?: string, owner: string = DEFAULT_OWNER): void {
+    const held = exactBy.get(owner);
+    if (!held || (resourceId && held.resourceId !== resourceId)) return;
+    exactBy.delete(owner);
+    const wasShown = shownBy.delete(owner);
+    if (wasShown && owner === currentOwner()) notify();
+  },
+  /** The tab whose reader the Agent follows; null leaves it to the reader that spoke last. */
+  focus(owner: string | null): void {
+    if (focusOwner === owner) return;
+    const before = shownBy.get(currentOwner()) ?? null;
+    focusOwner = owner;
+    if ((shownBy.get(currentOwner()) ?? null) !== before) notify();
   },
   subscribe(listener: Listener): () => void {
     listeners.add(listener);
     return () => { listeners.delete(listener); };
   },
   snapshot(): ReaderContext | null {
-    return shown;
+    return shownBy.get(currentOwner()) ?? null;
   },
   /** For tests. */
   reset(): void {
-    exact = null;
-    shown = null;
+    exactBy.clear();
+    shownBy.clear();
+    focusOwner = null;
+    lastOwner = DEFAULT_OWNER;
     listeners.clear();
   },
 };

@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, openFromShelf, revealNovelControls, selectText, setField, sleep, waitForTestId, waitUntil } from "./driver.ts";
-import { caller, ensureRightPane, fullscreenRoundTrip, js, openSettingsPage, type FlowResult } from "./common.ts";
+import { clickTestId, openFromShelf, openRecords, revealNovelControls, selectText, setField, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { caller, ensureDock, fullscreenRoundTrip, js, type FlowResult } from "./common.ts";
 
 /**
  * End-to-end reading loop smoke through the real renderer: import a synthetic book, read to the last chapter, select text, record a note
@@ -64,7 +64,7 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
     }
     let uiRestoredTail = false;
     let debugOnly = false;
-    if (restoredResource && await openFromShelf(view, "nav-reading", restoredResource.id)) {
+    if (restoredResource && await openFromShelf(view, "novel", restoredResource.id)) {
       // Where the position came from is a debug fact: the reading area does not show it, the context debug panel does. The panel is kept per page
       // and per bound session, so it is opened once the reader is up: opening a resource first asks whether it can be opened (A-86), and the panel
       // that was open on the shelf is replaced by the one of the reader's session.
@@ -78,10 +78,12 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
       })()`, 8000);
       debugOnly = await readingAreaHasNoDebugFacts(view);
     }
+    // The reader's tab is in front a moment after the reader is there; what the person sees is what `innerText` reports.
+    const tailOnScreen = await waitUntil(view, `document.querySelector('[data-testid="reading-body"]')?.innerText.includes("chi-close-tail") === true`, 8000);
     const bodyText = await js<string>(view, `document.body ? document.body.innerText : ""`);
     // The restart must restore the note, the resource, the tail position on screen and the frozen materials.
-    const ok = Boolean(restoredNote) && Boolean(restoredResource) && restoredProgress && restoredSource && restoredMaterials && uiRestoredTail && debugOnly && bodyText.includes("chi-close-tail");
-    return { ok, restoredNote: Boolean(restoredNote), restoredResource: Boolean(restoredResource), restoredProgress, restoredSource, restoredMaterials, uiRestoredTail, debugOnly, readingWithNote: bodyText.includes("闭合样本") };
+    const ok = Boolean(restoredNote) && Boolean(restoredResource) && restoredProgress && restoredSource && restoredMaterials && uiRestoredTail && debugOnly && tailOnScreen && bodyText.includes("chi-close-tail");
+    return { ok, restoredNote: Boolean(restoredNote), restoredResource: Boolean(restoredResource), restoredProgress, restoredSource, restoredMaterials, uiRestoredTail, debugOnly, tailOnScreen, readingWithNote: bodyText.includes("闭合样本") };
   }
 
   await call("settings.skipAi", {});
@@ -104,15 +106,15 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
 
   // The renderer is reloaded because the import happened through the service, so its workspace cache is stale.
   await view.webContents.reload();
-  await waitForTestId(view, "nav-reading");
+  await waitForTestId(view, "nav-home");
   // A work is opened from its card: the work's page first, then reading.
-  const openedResource = await openFromShelf(view, "nav-reading", resourceId);
+  const openedResource = await openFromShelf(view, "novel", resourceId);
   await waitForTestId(view, "reading-body");
   // Full screen first, from a real click: the reader goes full screen, fills it, and Esc brings the window back.
   view.showInactive();
   await revealNovelControls(view);
   const fullscreen = await fullscreenRoundTrip(view, { button: "reading-fullscreen", root: "reading-page", evidenceDir: process.env.MANGA_SMOKE_EVIDENCE_DIR, shot: "ui-fullscreen-novel.png" });
-  const rightPane = await ensureRightPane(view);
+  const rightPane = await ensureDock(view);
   // Select a range that sits mid-line, so a reader that hands over the whole window would fail the accuracy check below.
   const selection = await selectText(view, '[data-testid="reading-body"]', 8, 21);
   const selectMs = selection.ms;
@@ -165,7 +167,7 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   // Jump from the note to its source and back: the records list is where notes are found now.
   let sourceCardOk = false;
   if (recorded) {
-    const listed = await openSettingsPage(view, "records");
+    const listed = await openRecords(view, "note");
     const openSource = listed && await clickTestId(view, `record-source-${recorded.id}`, 10_000);
     if (openSource) sourceCardOk = await waitForTestId(view, "reading-source-card", "data-present", null, 15_000);
     if (sourceCardOk) {
@@ -175,7 +177,7 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   }
 
   // Reader style controls must be reachable and persist, and a bookmark must keep a real range.
-  await openFromShelf(view, "nav-reading", resourceId);
+  await openFromShelf(view, "novel", resourceId);
   await waitForTestId(view, "reading-body");
   // The settings are one panel, opened from the header; a change shows at once and is saved.
   await revealNovelControls(view);
@@ -231,7 +233,7 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   })()`);
   askTagShown = picked && await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 8000);
   if (askTagShown && recorded) {
-    await ensureRightPane(view);
+    await ensureDock(view);
     await clickTestId(view, "chat-plus");
     if (await clickTestId(view, "chat-plus-materials")) {
       await clickTestId(view, `note-material-${recorded.id}`, 8000);

@@ -75,7 +75,12 @@ export function measureProgress(layout: RevisionLayout, locator: SourceLocator, 
   return { percent, completion: previous === "completed" || finished ? "completed" : "reading" };
 }
 
+/** The key of a context in the progress table: a project id, or the empty string for "最近". */
+export const contextKeyOf = (contextId: string | null | undefined): string => contextId ?? "";
+
 export type ProgressWrite = {
+  /** The context the person is reading in (A-96): the position in a project is not the position in "最近". */
+  contextId: string;
   resourceId: string;
   revisionId: string;
   locator: SourceLocator;
@@ -97,21 +102,25 @@ export function touchWorkMutation(resourceId: string, now: string): Mutation {
 export function progressMutations(store: DrizzleStore, input: ProgressWrite): { mutations: Mutation[]; consumed: ConsumedRange[]; snapshot: ProgressSnapshot } {
   const revision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE id = ? AND resource_id = ?").get(input.revisionId, input.resourceId);
   if (!revision) throw new MangaError("NOT_FOUND", "resource revision does not belong to this resource");
-  const existing = store.sqlite.prepare("SELECT consumed_ranges_json, completion_state FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(input.resourceId, input.revisionId) as { consumed_ranges_json: string; completion_state: string } | undefined;
+  const existing = store.sqlite.prepare("SELECT last_locator_json, consumed_ranges_json, completion_state, last_interaction_at FROM progress WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?").get(input.contextId, input.resourceId, input.revisionId) as { last_locator_json: string | null; consumed_ranges_json: string; completion_state: string; last_interaction_at: string } | undefined;
   const merged = mergeConsumedRanges([...(existing ? JSON.parse(existing.consumed_ranges_json) as ConsumedRange[] : []), ...(input.consume ?? [])]);
   const layout = readLayout(store, input.revisionId);
   const snapshot = layout ? measureProgress(layout, input.locator, merged, existing?.completion_state) : { percent: 0, completion: "reading" as const };
   const now = input.now ?? new Date().toISOString();
+  const locatorJson = JSON.stringify(input.locator);
+  const mergedJson = JSON.stringify(merged);
+  // A reader that comes back to the screen says the position it already has; that is not a newer position, so the context does not become the latest one for it.
+  const unchanged = existing !== undefined && existing.last_locator_json === locatorJson && existing.consumed_ranges_json === mergedJson && existing.completion_state === snapshot.completion;
   return {
     consumed: merged,
     snapshot,
     mutations: [
       {
-        sql: `INSERT INTO progress(resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent)
-          VALUES (?,?,?,?,?,?,?)
-          ON CONFLICT(resource_id, resource_revision_id) DO UPDATE SET last_locator_json = excluded.last_locator_json, consumed_ranges_json = excluded.consumed_ranges_json,
+        sql: `INSERT INTO progress(context_id, resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent)
+          VALUES (?,?,?,?,?,?,?,?)
+          ON CONFLICT(context_id, resource_id, resource_revision_id) DO UPDATE SET last_locator_json = excluded.last_locator_json, consumed_ranges_json = excluded.consumed_ranges_json,
             completion_state = excluded.completion_state, last_interaction_at = excluded.last_interaction_at, percent = excluded.percent`,
-        params: [input.resourceId, input.revisionId, JSON.stringify(input.locator), JSON.stringify(merged), snapshot.completion, now, snapshot.percent],
+        params: [input.contextId, input.resourceId, input.revisionId, locatorJson, mergedJson, snapshot.completion, unchanged ? existing.last_interaction_at : now, snapshot.percent],
       },
       touchWorkMutation(input.resourceId, now),
     ],
@@ -120,10 +129,10 @@ export function progressMutations(store: DrizzleStore, input: ProgressWrite): { 
 
 function commitProgress(store: DrizzleStore, envelope: CommandEnvelope, input: ProgressWrite): Record<string, unknown> {
   const built = progressMutations(store, input);
-  const result = { resourceId: input.resourceId, resourceRevisionId: input.revisionId, percent: built.snapshot.percent, completion: built.snapshot.completion };
+  const result = { contextId: input.contextId || null, resourceId: input.resourceId, resourceRevisionId: input.revisionId, percent: built.snapshot.percent, completion: built.snapshot.completion };
   store.commit({
     mutations: built.mutations,
-    events: [{ type: "progress.updated", payload: { resourceId: input.resourceId, resourceRevisionId: input.revisionId } }],
+    events: [{ type: "progress.updated", payload: { contextId: input.contextId || null, resourceId: input.resourceId, resourceRevisionId: input.revisionId } }],
     idempotencyKey: envelope.idempotencyKey,
     commandId: envelope.commandId,
     result,
@@ -137,7 +146,7 @@ function assertReadable(grants: GrantRegistry, grant: ScopeGrant, resourceId: st
 
 /** `progress.set`: any locator kind. Text keeps its "mark read here" semantics; page and time have their own commands. */
 export function setProgress(store: DrizzleStore, envelope: CommandEnvelope, grant: ScopeGrant, grants: GrantRegistry): Record<string, unknown> {
-  const input = envelope.input as { resourceId: string; resourceRevisionId: string; locator: SourceLocator; consumed?: boolean };
+  const input = envelope.input as { contextId: string | null; resourceId: string; resourceRevisionId: string; locator: SourceLocator; consumed?: boolean };
   assertReadable(grants, grant, input.resourceId);
   const consume: ConsumedRange[] = [];
   if (input.consumed) {
@@ -148,19 +157,19 @@ export function setProgress(store: DrizzleStore, envelope: CommandEnvelope, gran
       if (index >= 0) consume.push({ partId: PAGES_RANGE, start: index, end: index + 1 });
     }
   }
-  return commitProgress(store, envelope, { resourceId: input.resourceId, revisionId: input.resourceRevisionId, locator: input.locator, consume });
+  return commitProgress(store, envelope, { contextId: contextKeyOf(input.contextId), resourceId: input.resourceId, revisionId: input.resourceRevisionId, locator: input.locator, consume });
 }
 
 /** `progress.setPage`: the reader is on this page. A page counts as read only when the reader says so. */
 export function setPageProgress(store: DrizzleStore, envelope: CommandEnvelope, grant: ScopeGrant, grants: GrantRegistry): Record<string, unknown> {
-  const input = envelope.input as { resourceId: string; resourceRevisionId: string; pageId: string; consumed?: boolean };
+  const input = envelope.input as { contextId: string | null; resourceId: string; resourceRevisionId: string; pageId: string; consumed?: boolean };
   assertReadable(grants, grant, input.resourceId);
   const pages = readLayout(store, input.resourceRevisionId)?.pages;
   if (!pages) throw new MangaError("VALIDATION_ERROR", "this revision has no pages");
   const index = pages.indexOf(input.pageId);
   if (index < 0) throw new MangaError("NOT_FOUND", "page does not belong to this revision");
   const consume = input.consumed === false ? [] : [{ partId: PAGES_RANGE, start: index, end: index + 1 }];
-  return commitProgress(store, envelope, { resourceId: input.resourceId, revisionId: input.resourceRevisionId, locator: { kind: "image", pageId: input.pageId }, consume });
+  return commitProgress(store, envelope, { contextId: contextKeyOf(input.contextId), resourceId: input.resourceId, revisionId: input.resourceRevisionId, locator: { kind: "image", pageId: input.pageId }, consume });
 }
 
 /**
@@ -168,27 +177,80 @@ export function setPageProgress(store: DrizzleStore, envelope: CommandEnvelope, 
  * Seeking over a part of the video never adds it to the consumed set.
  */
 export function setTimeProgress(store: DrizzleStore, envelope: CommandEnvelope, grant: ScopeGrant, grants: GrantRegistry): Record<string, unknown> {
-  const input = envelope.input as { resourceId: string; resourceRevisionId: string; timeMs: number; played?: Array<{ startMs: number; endMs: number }> };
+  const input = envelope.input as { contextId: string | null; resourceId: string; resourceRevisionId: string; timeMs: number; played?: Array<{ startMs: number; endMs: number }> };
   assertReadable(grants, grant, input.resourceId);
   const layout = readLayout(store, input.resourceRevisionId);
   if (!layout || layout.unit !== "ms") throw new MangaError("VALIDATION_ERROR", "this revision is not a video");
   const consume = (input.played ?? []).filter((range) => range.endMs > range.startMs).map((range) => ({ partId: TIME_RANGE, start: Math.min(range.startMs, layout.total), end: Math.min(range.endMs, layout.total) }));
-  return commitProgress(store, envelope, { resourceId: input.resourceId, revisionId: input.resourceRevisionId, locator: { kind: "temporal", startMs: input.timeMs }, consume });
+  return commitProgress(store, envelope, { contextId: contextKeyOf(input.contextId), resourceId: input.resourceId, revisionId: input.resourceRevisionId, locator: { kind: "temporal", startMs: input.timeMs }, consume });
 }
 
-export function getProgress(store: DrizzleStore, input: { resourceId: string; resourceRevisionId?: string }): Record<string, unknown> {
-  const revisionId = input.resourceRevisionId
-    ?? (store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(input.resourceId) as { id: string } | undefined)?.id;
+type ProgressRow = {
+  context_id: string;
+  last_locator_json: string | null;
+  consumed_ranges_json: string;
+  completion_state: string;
+  percent: number;
+  last_interaction_at: string;
+};
+
+const PROGRESS_COLUMNS = "context_id, last_locator_json, consumed_ranges_json, completion_state, percent, last_interaction_at";
+
+function latestRevisionId(store: DrizzleStore, resourceId: string): string | undefined {
+  return (store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(resourceId) as { id: string } | undefined)?.id;
+}
+
+/** The name of a context for a sentence such as "在「<名字>」看到 …": the project's name, or "最近". */
+export function contextName(store: DrizzleStore, contextKey: string): string {
+  if (!contextKey) return "最近";
+  return (store.sqlite.prepare("SELECT name FROM projects WHERE id = ?").get(contextKey) as { name: string } | undefined)?.name ?? "最近";
+}
+
+/** The latest position of a resource's revision in a context other than this one, for "在「…」看到 …，跳过去"; null when there is none or when this context has its own. */
+export function elsewhereProgress(store: DrizzleStore, contextId: string, resourceId: string, revisionId: string): { contextId: string | null; contextName: string; locator: unknown; percent: number; completion: string; lastInteractionAt: string } | null {
+  if (store.sqlite.prepare("SELECT 1 FROM progress WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?").get(contextId, resourceId, revisionId)) return null;
+  const other = store.sqlite.prepare(`SELECT ${PROGRESS_COLUMNS} FROM progress WHERE context_id <> ? AND resource_id = ? AND resource_revision_id = ? AND last_locator_json IS NOT NULL
+    ORDER BY last_interaction_at DESC, context_id LIMIT 1`).get(contextId, resourceId, revisionId) as ProgressRow | undefined;
+  return other
+    ? { contextId: other.context_id || null, contextName: contextName(store, other.context_id), locator: JSON.parse(other.last_locator_json!), percent: other.percent, completion: other.completion_state, lastInteractionAt: other.last_interaction_at }
+    : null;
+}
+
+/**
+ * Where the resource has been taken furthest in any context (A-96, Q-33 item 4): the consumed ranges of all contexts joined, and the position of the
+ * row with the highest percent. The spoiler guard, the agent's "seen" range and the subtitle window use this and nothing else; what the reader
+ * restores is the current context's own position.
+ */
+export function frontierProgress(store: DrizzleStore, resourceId: string, revisionId: string): { locator: unknown; percent: number; consumed: ConsumedRange[]; contextId: string | null } | null {
+  const rows = store.sqlite.prepare(`SELECT ${PROGRESS_COLUMNS} FROM progress WHERE resource_id = ? AND resource_revision_id = ?`).all(resourceId, revisionId) as ProgressRow[];
+  if (!rows.length) return null;
+  const far = [...rows].sort((a, b) => b.percent - a.percent || b.last_interaction_at.localeCompare(a.last_interaction_at))[0]!;
+  return {
+    locator: far.last_locator_json ? JSON.parse(far.last_locator_json) : null,
+    percent: far.percent,
+    consumed: mergeConsumedRanges(rows.flatMap((row) => JSON.parse(row.consumed_ranges_json) as ConsumedRange[])),
+    contextId: far.context_id || null,
+  };
+}
+
+/** The consumed ranges of all contexts joined; empty when nothing was read anywhere. */
+export function frontierConsumed(store: DrizzleStore, resourceId: string, revisionId: string): ConsumedRange[] {
+  return frontierProgress(store, resourceId, revisionId)?.consumed ?? [];
+}
+
+/**
+ * `progress.get`: the position in the context asked for, with where the resource has been taken furthest anywhere (for the spoiler guard) and, when
+ * this context has no position yet, the latest position in another context so the reader can offer to jump there (Q-33 item 3).
+ */
+export function getProgress(store: DrizzleStore, input: { contextId: string | null; resourceId: string; resourceRevisionId?: string }): Record<string, unknown> {
+  const contextId = contextKeyOf(input.contextId);
+  const revisionId = input.resourceRevisionId ?? latestRevisionId(store, input.resourceId);
   if (!revisionId) throw new MangaError("NOT_FOUND", "resource has no revision");
-  const row = store.sqlite.prepare("SELECT last_locator_json, consumed_ranges_json, completion_state, percent, last_interaction_at FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(input.resourceId, revisionId) as {
-    last_locator_json: string | null;
-    consumed_ranges_json: string;
-    completion_state: string;
-    percent: number;
-    last_interaction_at: string;
-  } | undefined;
+  const row = store.sqlite.prepare(`SELECT ${PROGRESS_COLUMNS} FROM progress WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?`).get(contextId, input.resourceId, revisionId) as ProgressRow | undefined;
+  const frontier = frontierProgress(store, input.resourceId, revisionId);
   const layout = readLayout(store, revisionId);
   return {
+    contextId: input.contextId ?? null,
     resourceId: input.resourceId,
     resourceRevisionId: revisionId,
     locator: row?.last_locator_json ? JSON.parse(row.last_locator_json) : null,
@@ -198,5 +260,7 @@ export function getProgress(store: DrizzleStore, input: { resourceId: string; re
     lastInteractionAt: row?.last_interaction_at ?? null,
     unit: layout?.unit ?? null,
     total: layout?.total ?? 0,
+    farthest: frontier ? { locator: frontier.locator, percent: frontier.percent, consumed: frontier.consumed } : null,
+    elsewhere: elsewhereProgress(store, contextId, input.resourceId, revisionId),
   };
 }

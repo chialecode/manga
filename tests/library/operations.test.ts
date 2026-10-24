@@ -358,7 +358,7 @@ describe("the message stream of a session", () => {
       const comic = seedComic(ctx.app, { title: "消息漫画", pageCount: 5 });
       const first = ok<{ objectId: string }>(await run(ctx, "notes.create", { title: "第三页", text: "这一页的想法", resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, locator: { kind: "image", pageId: comic.pageIds[2] }, quoteText: "第 3 页" }));
       await new Promise((resolve) => setTimeout(resolve, 5));
-      const session = ok<{ id: string; reused: boolean }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId }));
+      const session = ok<{ id: string; reused: boolean }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId, contextId: null }));
       const sent = ok<{ runId: string }>(await run(ctx, "agent.send", { sessionId: session.id, text: "这页讲了什么", quickTask: { id: null, name: "解释这一页" } }));
       await waitForRun(ctx.app, ctx.actor, ctx.grant.handle, sent.runId);
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -387,7 +387,7 @@ describe("the message stream of a session", () => {
       // Each note has a time of its own, so paging by time never meets two notes at one instant.
       const update = sql(ctx).prepare("UPDATE content_objects SET created_at = ? WHERE id = ?");
       sql(ctx).transaction(() => { ids.forEach((id, index) => update.run(new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(), id)); })();
-      const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId }));
+      const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId, contextId: null }));
       type Page = { items: Array<{ id: string; at: string }>; hasMore: boolean };
       const seen: string[] = [];
       const more: boolean[] = [];
@@ -417,12 +417,12 @@ describe("the message stream of a session", () => {
       ok(await run(ctx, "notes.create", { title: "乙", text: "第二卷的笔记", resourceId: two.resourceId }));
       ok(await run(ctx, "notes.create", { title: "丙", text: "在作品主页写的笔记", workId: one.workId }));
       ok(await run(ctx, "notes.create", { title: "丁", text: "另一部的笔记", resourceId: other.resourceId }));
-      const session = ok<{ id: string; kind: string }>(await run(ctx, "session.open", { kind: "work", targetId: one.workId }));
+      const session = ok<{ id: string; kind: string }>(await run(ctx, "session.open", { kind: "work", targetId: one.workId, contextId: null }));
       expect(session.kind).toBe("work");
-      expect(ok<{ id: string; reused: boolean }>(await run(ctx, "session.open", { kind: "work", targetId: one.workId })).id).toBe(session.id);
+      expect(ok<{ id: string; reused: boolean }>(await run(ctx, "session.open", { kind: "work", targetId: one.workId, contextId: null })).id).toBe(session.id);
       const stream = ok<{ items: Array<{ kind: string; text: string }> }>(await run(ctx, "session.stream", { sessionId: session.id }));
       expect(stream.items.map((item) => item.text).sort()).toEqual(["第一卷的笔记", "第二卷的笔记", "在作品主页写的笔记"].sort());
-      expect((await run(ctx, "session.open", { kind: "work", targetId: "work-none" })).error?.code).toBe("NOT_FOUND");
+      expect((await run(ctx, "session.open", { kind: "work", targetId: "work-none", contextId: null })).error?.code).toBe("NOT_FOUND");
     } finally { ctx.app.close(); }
   });
 });
@@ -435,7 +435,7 @@ describe("context debug panel", () => {
       const secret = ctx.app.stashSecret("debug-test-credential-value-123456");
       ok(await run(ctx, "connections.upsert", { label: "mock", protocol: "openai-chat-completions", baseUrl: server.url, modelId: "debug-model", purpose: "text", credentialHandle: secret }));
       const comic = seedComic(ctx.app, { title: "调试漫画", pageCount: 2 });
-      const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId }));
+      const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId, contextId: null }));
       const fakeKey = ["sk", "proj", "abcdefghijklmnopqrstuvwxyz0123"].join("-");
       const fakePath = ["C", ":", "\\", "Users", "someone", "secret-folder", "book.cbz"].join("");
       const sent = ok<{ runId: string }>(await run(ctx, "agent.send", { sessionId: session.id, text: `看看这个 ${fakeKey} 与 ${fakePath}`, readResourceIds: [comic.resourceId] }));
@@ -477,10 +477,10 @@ describe("the session rows of the left rail", () => {
     try {
       const comic = seedComic(ctx.app, { title: "左栏漫画", pageCount: 5 });
       const cover = await ctx.app.covers.add(comic.workId, { bytes: await (await import("../helpers/fake-bangumi.ts")).picture("red", [200, 300]), source: "user", select: "user" });
-      ok(await run(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[2] }));
-      const resourceSession = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId }));
-      const workSession = ok<{ id: string }>(await run(ctx, "session.open", { kind: "work", targetId: comic.workId }));
-      const rows = ok<Array<Record<string, any>>>(await run(ctx, "workspace.sessions", {}) as never);
+      ok(await run(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[2] }));
+      const resourceSession = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId, contextId: null }));
+      const workSession = ok<{ id: string }>(await run(ctx, "session.open", { kind: "work", targetId: comic.workId, contextId: null }));
+      const rows = ok<Array<Record<string, any>>>(await run(ctx, "workspace.sessions", { contextId: null }) as never);
       const resourceRow = rows.find((row) => row.sessionId === resourceSession.id)!;
       expect(resourceRow).toMatchObject({ kind: "resource", title: "左栏漫画", workId: comic.workId, workTitle: "左栏漫画", mediaKind: "comic", coverId: cover.cover.id });
       expect(resourceRow.progress).toMatchObject({ unit: "pages", total: 5, locator: { kind: "image", pageId: comic.pageIds[2] } });

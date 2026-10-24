@@ -7,8 +7,8 @@ import { startApp, tempProfile } from "../helpers/app.ts";
 import { inLibrary } from "../helpers/samples.ts";
 
 /**
- * Second rework pass: note→source repair, reference hygiene, progress window restore, per-row package
- * decisions, session isolation and the auditable frozen context. Synthetic data only.
+ * Note→source repair, reference hygiene, progress window restore, per-row package decisions, session isolation
+ * and the auditable frozen context. Synthetic data only.
  */
 describe("source repair and reader state", () => {
   it("re-points a note whose source revision is gone and keeps the link usable", async () => {
@@ -244,11 +244,11 @@ describe("source repair and reader state", () => {
     const revisionId = String(book.value?.revisionId);
     const locator = { kind: "text" as const, partId: "body", representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: { start: 900, end: 904 }, quote: { exact: "定位锚点" } };
     // Overlapping and adjacent marks must collapse instead of inflating the read range count.
-    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set-4", input: { resourceId, resourceRevisionId: revisionId, locator: { ...locator, range: { start: 40, end: 60 } }, consumed: true } }, grant.handle);
-    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set-2", input: { resourceId, resourceRevisionId: revisionId, locator: { ...locator, range: { start: 902, end: 910 } }, consumed: true } }, grant.handle);
-    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set-3", input: { resourceId, resourceRevisionId: revisionId, locator: { ...locator, range: { start: 910, end: 930 } }, consumed: true } }, grant.handle);
+    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set-4", input: { contextId: null, resourceId, resourceRevisionId: revisionId, locator: { ...locator, range: { start: 40, end: 60 } }, consumed: true } }, grant.handle);
+    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set-2", input: { contextId: null, resourceId, resourceRevisionId: revisionId, locator: { ...locator, range: { start: 902, end: 910 } }, consumed: true } }, grant.handle);
+    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set-3", input: { contextId: null, resourceId, resourceRevisionId: revisionId, locator: { ...locator, range: { start: 910, end: 930 } }, consumed: true } }, grant.handle);
     // The last position the reader left is the one the library reopens at.
-    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set", input: { resourceId, resourceRevisionId: revisionId, locator, consumed: true } }, grant.handle);
+    await app.call(actor, { commandId: "progress.set", idempotencyKey: "win-set", input: { contextId: null, resourceId, resourceRevisionId: revisionId, locator, consumed: true } }, grant.handle);
 
     const reopened = await app.call(actor, { commandId: "library.read", idempotencyKey: "win-read", input: { resourceId } }, grant.handle);
     const value = reopened.value as { slice: { start: number; text: string }; readRanges: Array<{ partId?: string; start: number; end: number }>; progress: { restoredFrom: string; restoredRange: { start: number; end: number } | null } };
@@ -274,7 +274,7 @@ describe("source repair and reader state", () => {
     const book = await app.call(actor, { commandId: "library.importDocument", idempotencyKey: "ctx-book", input: { title: "上下文书", format: "epub", bytes: [...buildEpubFixture({ title: "上下文书", chapters: [{ id: "c1", title: "章", html: "<p>甲乙丙丁戊己庚辛</p>" }] })] } }, grant.handle);
     const resourceId = String(book.value?.resourceId);
     const revisionId = String(book.value?.revisionId);
-    await app.call(actor, { commandId: "progress.set", idempotencyKey: "ctx-progress", input: { resourceId, resourceRevisionId: revisionId, consumed: true, locator: { kind: "text", partId: "c1", representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: { start: 0, end: 20 }, quote: { exact: "甲乙丙丁戊己庚辛" } } } }, grant.handle);
+    await app.call(actor, { commandId: "progress.set", idempotencyKey: "ctx-progress", input: { contextId: null, resourceId, resourceRevisionId: revisionId, consumed: true, locator: { kind: "text", partId: "c1", representationId: revisionId, normalizationVersion: NORMALIZATION_V1, range: { start: 0, end: 20 }, quote: { exact: "甲乙丙丁戊己庚辛" } } } }, grant.handle);
     const note = await app.call(actor, { commandId: "notes.create", idempotencyKey: "ctx-note", input: { title: "上下文笔记", text: "笔记正文甲乙" } }, grant.handle);
     const objectId = String(note.value?.objectId);
     const session = await app.call(actor, { commandId: "agent.createSession", idempotencyKey: "ctx-session", input: { title: "上下文会话" } }, grant.handle);
@@ -306,42 +306,45 @@ describe("source repair and reader state", () => {
     app.close();
   });
 
-  it("keeps a note session apart from the book session and from the other work mode", async () => {
+  it("keeps a note session apart from the book session and the sessions of one context apart from those of another", async () => {
     const { app, actor, grant } = await startApp();
     const book = await app.call(actor, { commandId: "library.importDocument", idempotencyKey: "iso-book", input: { title: "隔离书", format: "epub", bytes: [...buildEpubFixture({ title: "隔离书", chapters: [{ id: "c1", title: "章", html: "<p>正文</p>" }] })] } }, grant.handle);
     const resourceId = String(book.value?.resourceId);
     const note = await app.call(actor, { commandId: "notes.create", idempotencyKey: "iso-note", input: { title: "隔离笔记", text: "正文" } }, grant.handle);
     const objectId = String(note.value?.objectId);
 
-    const bookSession = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-book", input: { kind: "resource", targetId: resourceId, mode: "enthusiast" } }, grant.handle);
-    const noteSession = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-note", input: { kind: "note", targetId: objectId, mode: "enthusiast" } }, grant.handle);
+    const bookSession = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-book", input: { kind: "resource", targetId: resourceId, contextId: null } }, grant.handle);
+    const noteSession = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-note", input: { kind: "note", targetId: objectId, contextId: null } }, grant.handle);
     // A note session keeps its own kind, so the rail can reopen the note instead of reading it as a book.
     expect((noteSession.value as { kind: string }).kind).toBe("note");
     expect((noteSession.value as { id: string }).id).not.toBe((bookSession.value as { id: string }).id);
 
-    const again = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-note-2", input: { kind: "note", targetId: objectId } }, grant.handle);
+    const again = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-note-2", input: { kind: "note", targetId: objectId, contextId: null } }, grant.handle);
     expect((again.value as { id: string }).id).toBe((noteSession.value as { id: string }).id);
 
-    // Creator mode is a different working context, so it must not share the enthusiast session.
-    const creator = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-creator", input: { kind: "resource", targetId: resourceId, mode: "creator" } }, grant.handle);
-    expect((creator.value as { id: string }).id).not.toBe((bookSession.value as { id: string }).id);
-    const enthusiastList = await app.call(actor, { commandId: "workspace.sessions", idempotencyKey: "iso-list", input: { mode: "enthusiast" } }, grant.handle);
-    const listed = enthusiastList.value as unknown as Array<{ sessionId: string; kind: string }>;
-    expect(listed.some((row) => row.sessionId === String(bookSession.value?.id))).toBe(true);
-    expect(listed.some((row) => row.sessionId === String(creator.value?.id))).toBe(false);
-    expect(listed.filter((row) => row.kind === "note")).toHaveLength(1);
-    // A project session is bound to a project that exists (C1): the identity is one project, one mode, one session.
-    const ghost = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-ghost", input: { kind: "project", targetId: "proj-alpha", mode: "creator" } }, grant.handle);
-    expect(ghost.status).toBe("error");
-    expect(ghost.error?.code).toBe("NOT_FOUND");
+    // A project is a different working context, so the same book there has a conversation of its own and does not share the one of 最近.
     const made = await app.call(actor, { commandId: "project.create", idempotencyKey: "iso-project-make", input: { name: "阿尔法" } }, grant.handle);
     const projectId = String((made.value as { id: string }).id);
-    const project = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project", input: { kind: "project", targetId: projectId, mode: "creator" } }, grant.handle);
-    const projectAgain = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-2", input: { kind: "project", targetId: projectId, mode: "creator" } }, grant.handle);
+    const inProject = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-open-in-project", input: { kind: "resource", targetId: resourceId, contextId: projectId } }, grant.handle);
+    expect((inProject.value as { id: string }).id).not.toBe((bookSession.value as { id: string }).id);
+    const recentList = await app.call(actor, { commandId: "workspace.sessions", idempotencyKey: "iso-list", input: { contextId: null } }, grant.handle);
+    const listed = recentList.value as unknown as Array<{ sessionId: string; kind: string }>;
+    expect(listed.some((row) => row.sessionId === String(bookSession.value?.id))).toBe(true);
+    expect(listed.some((row) => row.sessionId === String(inProject.value?.id))).toBe(false);
+    expect(listed.filter((row) => row.kind === "note")).toHaveLength(1);
+    const projectList = (await app.call(actor, { commandId: "workspace.sessions", idempotencyKey: "iso-list-project", input: { contextId: projectId } }, grant.handle)).value as unknown as Array<{ sessionId: string }>;
+    expect(projectList.map((row) => row.sessionId)).toEqual([String(inProject.value?.id)]);
+    // A project session is bound to a project that exists (C1): the identity is one project, one session, which is the project's current conversation.
+    const ghost = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-ghost", input: { kind: "project", targetId: "proj-alpha", contextId: "proj-alpha" } }, grant.handle);
+    expect(ghost.status).toBe("error");
+    expect(ghost.error?.code).toBe("NOT_FOUND");
+    const project = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project", input: { kind: "project", targetId: projectId, contextId: projectId } }, grant.handle);
+    const projectAgain = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-2", input: { kind: "project", targetId: projectId, contextId: projectId } }, grant.handle);
     expect((projectAgain.value as { id: string; reused: boolean }).id).toBe((project.value as { id: string }).id);
     expect((projectAgain.value as { reused: boolean }).reused).toBe(true);
-    const projectOtherMode = await app.call(actor, { commandId: "session.open", idempotencyKey: "iso-project-mode", input: { kind: "project", targetId: projectId, mode: "enthusiast" } }, grant.handle);
-    expect((projectOtherMode.value as { id: string }).id).not.toBe((project.value as { id: string }).id);
+    // The project's conversation is not the book's.
+    expect((project.value as { id: string }).id).not.toBe((inProject.value as { id: string }).id);
+    expect((project.value as { contextId: string }).contextId).toBe(projectId);
     app.close();
   });
 

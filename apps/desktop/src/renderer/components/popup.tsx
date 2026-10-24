@@ -14,8 +14,8 @@ export function popupOpen(): boolean {
 export function Popup(props: {
   anchor: RefObject<HTMLElement | null>;
   onClose: () => void;
-  /** Which side of the anchor it opens on; it turns over to the other side when there is no room. */
-  placement?: "below" | "above";
+  /** Which side of the anchor it opens on; it turns over to the other side when there is no room. `right` is for an anchor in a narrow column (the icon rail). */
+  placement?: "below" | "above" | "right";
   /** `start` lines its left edge up with the anchor's, `end` its right edge. */
   align?: "start" | "end";
   role?: string;

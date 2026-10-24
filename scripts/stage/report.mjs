@@ -137,7 +137,7 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
           errors.push(`bench.json: creative ${id} did not read back every piece of the download as the torrent lists it`);
         }
       }
-      if ((entry.kind === "electron-canvas" || entry.kind === "electron-reader") && entry.detail?.ok !== true) errors.push(`bench.json: creative ${id} was not measured completely in the window`);
+      if ((entry.kind === "electron-canvas" || entry.kind === "electron-reader" || entry.kind === "electron-workspace") && entry.detail?.ok !== true) errors.push(`bench.json: creative ${id} was not measured completely in the window`);
       const figure = wanted.stat === "max" ? Math.max(...values) : p95(values);
       if (bench.metrics?.[wanted.metric] !== figure) errors.push(`bench.json: ${wanted.metric} does not match its raw samples`);
     }
@@ -160,7 +160,7 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
     for (const phase of config.package.smoke) {
       if (!(pack.smoke ?? []).includes(phase)) errors.push(`package.json: ${phase} smoke missing`);
     }
-    if (pack.formats?.pages !== true || pack.formats?.modes !== true || pack.formats?.failureVisible !== true) errors.push("package.json: formats smoke did not cover pages, modes and the failed import");
+    if (pack.formats?.pages !== true || pack.formats?.contexts !== true || pack.formats?.failureVisible !== true) errors.push("package.json: formats smoke did not cover pages, contexts and the failed import");
     if (!pack.output) errors.push("package.json: output missing");
     if (typeof pack.electron !== "string" || !/^\d+\.\d+\.\d+/.test(pack.electron)) errors.push("package.json: Electron version missing");
     // The reading-loop run must prove the reading→record→source loop and restart recovery really ran.

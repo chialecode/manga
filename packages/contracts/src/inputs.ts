@@ -17,6 +17,8 @@ import { OrdinalSchema } from "./media.ts";
 import { PACKAGE_ROW_KINDS } from "./library-package.ts";
 import { LOCATION_PARTITIONS } from "./paths.ts";
 import { NoteBlockSchema, NOTE_TAG_MAX, ReadingStylePatchSchema, ShellPanelSchema } from "./reading.ts";
+import { RailPatchSchema } from "./sidebar.ts";
+import { ContextIdSchema } from "./workspace-state.ts";
 
 const bytes = z.array(z.number().int().min(0).max(255)).min(1).max(16 * 1024 * 1024);
 const text = z.string().max(2 * 1024 * 1024);
@@ -40,7 +42,8 @@ export const CommandInputs = {
   }).strict().refine((value) => Boolean(value.bytes?.length) !== Boolean(value.pathHandle), {
     message: "provide either file bytes or a path handle",
   }),
-  "library.read": z.object({ resourceId: id, revisionId: id.optional() }).strict(),
+  /** `contextId`: the context the position and read ranges are restored for; left out, it is "最近". */
+  "library.read": z.object({ resourceId: id, revisionId: id.optional(), contextId: ContextIdSchema.optional() }).strict(),
   "library.readOriginal": z.object({ resourceId: id, revisionId: id.optional() }).strict(),
   "library.readSlice": z.object({
     resourceId: id,
@@ -89,6 +92,7 @@ export const CommandInputs = {
   "notes.rename": z.object({ objectId: id, expectedRevision: z.number().int().positive(), title: z.string().max(512), tags: z.array(z.string().min(1).max(64)).max(NOTE_TAG_MAX).optional() }).strict(),
   "notes.asset": z.object({ resourceRevisionId: id, assetId: id }).strict(),
   "progress.set": z.object({
+    contextId: ContextIdSchema,
     resourceId: id,
     resourceRevisionId: id,
     locator: SourceLocatorSchema,
@@ -140,10 +144,10 @@ export const CommandInputs = {
     strategy: z.enum(["skip", "replace", "duplicate"]),
     decisions: z.array(z.object({ kind: z.enum(PACKAGE_ROW_KINDS), id: id, action: z.enum(["skip", "replace", "duplicate"]) }).strict()).max(5000).optional(),
   }).strict(),
-  "workspace.sessions": z.object({ mode: z.enum(["enthusiast", "creator"]).optional() }).strict(),
-  /** Takes an opened resource, project or work-mode conversation off the left rail. Nothing is deleted; opening the same target again brings it back (A-74). */
-  "session.close": z.object({ sessionId: id }).strict(),
-  "session.open": z.object({ kind: z.enum(["resource", "project", "note", "work"]), targetId: id, mode: z.enum(["enthusiast", "creator"]).optional(), sessionId: id.optional() }).strict(),
+  /** The conversations of one context, most recent first (the sidebar lists them under their project or under "最近"). */
+  "workspace.sessions": z.object({ contextId: ContextIdSchema }).strict(),
+  /** Opens the conversation of a resource, project, note or work in a context, or takes the one that is there; `sessionId` brings back a conversation from the history. */
+  "session.open": z.object({ kind: z.enum(["resource", "project", "note", "work"]), targetId: id, contextId: ContextIdSchema, sessionId: id.optional() }).strict(),
   "notes.embed": z.object({ objectId: id, expectedRevision: z.number().int().positive(), fromBlockId: id, targetId: id, targetKind: z.enum(["object", "anchor"]) }).strict(),
   "reader.ui.present": z.object({}).strict(),
   "reader.resolveAnchor": z.object({ resourceRevisionId: id, locator: SourceLocatorSchema }).strict(),
@@ -180,11 +184,11 @@ export const CommandInputs = {
   }).strict(),
   "settings.getShell": z.object({}).strict(),
   "settings.setShell": z.object({
-    mode: z.enum(["enthusiast", "creator"]).optional(),
     spoilerGuard: z.boolean().optional(),
-    focus: z.boolean().optional(),
-    left: ShellPanelSchema.partial().optional(),
-    right: ShellPanelSchema.partial().optional(),
+    sidebar: ShellPanelSchema.partial().optional(),
+    dock: ShellPanelSchema.partial().optional(),
+    /** What is named is replaced; a view named in `open` takes the list it is given. */
+    rail: RailPatchSchema.optional(),
     reading: ReadingStylePatchSchema.optional(),
   }).strict(),
   "connections.list": z.object({}).strict(),
@@ -216,7 +220,7 @@ export const CommandInputs = {
     pathHandle: id,
     kind: z.enum(["novel", "comic", "video", "audio", "file"]).optional(),
   }).strict(),
-  "agent.createSession": z.object({ title: id.optional(), kind: z.enum(["shared", "resource", "project", "work"]).optional(), targetId: id.optional(), mode: z.enum(["enthusiast", "creator"]).optional() }).strict(),
+  "agent.createSession": z.object({ title: id.optional(), kind: z.enum(["shared", "resource", "project", "work"]).optional(), targetId: id.optional(), /** The context the conversation belongs to; left out, it is "最近". */ contextId: ContextIdSchema.optional() }).strict(),
   "agent.send": z.object({
     sessionId: id,
     text: z.string().max(32 * 1024),

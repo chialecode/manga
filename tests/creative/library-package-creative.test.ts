@@ -91,6 +91,33 @@ describe("projects in a library package (AT-25, AT-28, DATA-01)", () => {
     expect(plain(readLibraryPackage(again).creative as unknown as CreativeSection)).toEqual(plain(readLibraryPackage(dir).creative as unknown as CreativeSection));
   });
 
+  it("restores the position of 最近 with the library and the positions and tabs of a project with the project", async () => {
+    const source = await boot();
+    const made = await seed(source);
+    const mark = (start: number, exact: string) => ({ kind: "text", partId: "body", representationId: made.book.revisionId, normalizationVersion: "text-nfc-lf-v1", range: { start, end: start + exact.length }, quote: { exact } });
+    ok(await run(source, "progress.set", { contextId: null, resourceId: made.book.resourceId, resourceRevisionId: made.book.revisionId, locator: mark(0, "雨夜里"), consumed: true }));
+    ok(await run(source, "progress.set", { contextId: made.projectId, resourceId: made.book.resourceId, resourceRevisionId: made.book.revisionId, locator: mark(4, "撑着伞走"), consumed: true }));
+    const state = { version: 1, preset: "two", layout: null, focusedTab: "t-draft", closed: [], tabs: [{ id: "t-draft", kind: "draft", target: { projectId: made.projectId, objectId: made.draftId }, title: "解说词", view: {} }] };
+    ok(await run(source, "workspace.saveContext", { contextId: made.projectId, state }));
+    const dir = await exportTo(source);
+    const manifest = readLibraryPackage(dir);
+    // The library part holds the position of 最近 only; the project holds its own.
+    expect(manifest.progress.map((row) => row.context_id ?? "")).toEqual([""]);
+    const bundle = manifest.creative!.projects[0] as unknown as { tables: Record<string, Array<Record<string, unknown>>> };
+    expect(bundle.tables.project_progress).toHaveLength(1);
+    expect(bundle.tables.project_workspace).toHaveLength(1);
+
+    const target = await boot();
+    ok(await run(target, "library.importPackage", { pathHandle: target.app.registerPath("import", dir) }));
+    const position = async (contextId: string | null) => ok<{ locator: { range: { start: number } } }>(await run(target, "progress.get", { contextId, resourceId: made.book.resourceId })).locator.range.start;
+    expect(await position(null)).toBe(0);
+    expect(await position(made.projectId)).toBe(4);
+    const restored = ok<{ state: { tabs: Array<{ id: string; target: Record<string, unknown> }>; preset: string } }>(await run(target, "workspace.loadContext", { contextId: made.projectId })).state;
+    expect(restored.preset).toBe("two");
+    expect(restored.tabs).toEqual([expect.objectContaining({ id: "t-draft", target: { projectId: made.projectId, objectId: made.draftId } })]);
+    expect(one<{ n: number }>(target, "SELECT COUNT(*) AS n FROM progress").n).toBe(2);
+  });
+
   it("names a project that the profile already has as a conflict, and the default is then not to overwrite it", async () => {
     const ctx = await boot();
     const made = await seed(ctx);

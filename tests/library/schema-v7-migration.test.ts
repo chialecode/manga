@@ -10,7 +10,7 @@ const columnsOf = (db: Database.Database, table: string) => (db.prepare(`PRAGMA 
 
 describe("schema v7 migration (a v6 library, now carried on to the current version)", () => {
   it("is the version of this stage", () => {
-    expect(PRODUCT_SCHEMA_VERSION).toBe(11);
+    expect(PRODUCT_SCHEMA_VERSION).toBe(12);
   });
 
   it("migrates a synthetic v6 library without losing a row or an anchor, and backs it up first", () => {

@@ -361,6 +361,9 @@ describe("novel reader controls get out of the way while reading (A-63)", () => 
     vi.useFakeTimers();
     pane({});
     sized();
+    // jsdom answers :focus-visible with a browser's own guess about the last input; this test is about what the controls do with keyboard focus, so it is told yes.
+    const matches = Element.prototype.matches;
+    const focusVisible = vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, selector: string) { return selector === ":focus-visible" ? true : matches.call(this, selector); });
     fireEvent.click(screen.getByTestId("reading-settings"));
     later(AUTO_HIDE_MS * 3);
     expect(shown()).toBe("shown");
@@ -387,6 +390,7 @@ describe("novel reader controls get out of the way while reading (A-63)", () => 
     act(() => screen.getByTestId("reading-panel-search").blur());
     later(AUTO_HIDE_MS + 50);
     expect(shown()).toBe("hidden");
+    focusVisible.mockRestore();
   });
 
   it("stays while the pointer rests on the controls", () => {

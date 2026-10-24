@@ -7,13 +7,14 @@ import { WorksCacheContext, normalizePage, usePagedWorks, type WorksCache } from
 import { resetCovers } from "../../apps/desktop/src/renderer/lib/covers.ts";
 import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts";
 import type { WorkSummary } from "@manga/contracts/media";
+import { libraryTitle } from "../../apps/desktop/src/renderer/workspace/openers.ts";
 
 const i18n = createTranslator("zh-CN");
 
 const work = (id: string, kind: WorkSummary["mediaKind"], extra: Partial<WorkSummary> = {}): WorkSummary => ({
   id, title: `作品 ${id}`, author: "合成作者", mediaKind: kind, shelf: "reading", coverId: null,
   lastResource: { id: `res_${id}`, title: `作品 ${id}`, ordinalLabel: null, revisionId: `rev_${id}` },
-  progress: 0.25, finishedCount: 0, resourceCount: 1, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null, ...extra,
+  progress: 0.25, progressContext: null, finishedCount: 0, resourceCount: 1, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null, ...extra,
 });
 
 type Call = { commandId: string; input: Record<string, unknown> };
@@ -67,6 +68,29 @@ describe("the anime shelf says watched, not read (Q-18)", () => {
     expect(screen.getByTestId("work-progress-v1").textContent).toContain("已看 40%");
     expect(screen.getByTestId("work-progress-c1").textContent).toContain("已读 25%");
     expect(screen.getByTestId("work-progress-v1").textContent).not.toContain("已读");
+  });
+
+  it("notes which context a position comes from, and says nothing about the current context's own (A-96)", async () => {
+    list([
+      work("a", "comic", { progress: 0.4, progressContext: { contextId: "proj-a", name: "项目甲" } }),
+      work("b", "comic", { progress: 0.5, progressContext: { contextId: null, name: "最近" } }),
+      work("c", "comic", { progress: 0.6, progressContext: { contextId: "proj-a", name: "项目甲" } }),
+      work("d", "comic", { progress: 0, progressContext: null }),
+    ]);
+    // The shelf is in 最近: a position from the project is noted, the shelf's own is not.
+    const { rerender } = render(<Shelf {...shelfProps({ kind: null })} context={null} />);
+    await waitFor(() => expect(screen.getByTestId("work-progress-a")).toBeTruthy());
+    expect(screen.getByTestId("work-origin-a").textContent).toBe("来自“项目甲”");
+    expect(screen.queryByTestId("work-origin-b")).toBeNull();
+    expect(screen.getByTestId("work-origin-c").textContent).toBe("来自“项目甲”");
+    expect(screen.queryByTestId("work-origin-d")).toBeNull();
+    // In the project the same cards swap: its own position is silent, the one from 最近 is noted.
+    rerender(<Shelf {...shelfProps({ kind: null })} context="proj-a" />);
+    await waitFor(() => expect(screen.queryByTestId("work-origin-a")).toBeNull());
+    expect(screen.getByTestId("work-origin-b").textContent).toBe("来自“最近”");
+    // A shelf that is told no context notes nothing.
+    rerender(<Shelf {...shelfProps({ kind: null })} />);
+    await waitFor(() => expect(screen.queryByTestId("work-origin-b")).toBeNull());
   });
 
   it("labels the shelf state on an anime card and in its menu with the same words", async () => {
@@ -239,8 +263,9 @@ describe("each page speaks of its own medium and is titled as the left column na
       await waitFor(() => expect(screen.getByTestId("shelf-empty")).toBeTruthy());
       cleanup();
     }
-    // The left column names the pages with the same words.
-    expect(["nav.overview", "nav.novel", "nav.comic", "nav.video"].map((key) => i18n.t(key as "nav.novel"))).toEqual(cases.map((item) => item.title));
+    // The library tab names the three pages with the same words when it shows them; the overview is the library itself.
+    expect(["novel", "comic", "video"].map((page) => libraryTitle(i18n.t, page))).toEqual(cases.slice(1).map((item) => item.title));
+    expect(libraryTitle(i18n.t, "overview")).toBe(i18n.t("tab.library"));
   });
 
   it("says what is being read, what failed and what to add in the words of the page, and never calls a comic or an anime a book", async () => {

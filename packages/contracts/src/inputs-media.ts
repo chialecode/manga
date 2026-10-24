@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SourceLocatorSchema } from "./location.ts";
 import { PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } from "./inputs-creative.ts";
+import { ContextIdSchema } from "./workspace-state.ts";
 import {
   CAPTURE_EVENT_REASONS,
   CAPTURE_MODES,
@@ -199,19 +200,22 @@ export const MediaCommandInputs = {
   "video.subtitleHandle": z.object({ resourceId: id, revisionId: id, trackId: id }).strict(),
   "video.fonts": z.object({ resourceId: id, revisionId: id }).strict(),
 
+  /** Progress is kept per context (A-96): the position in a project is not the position in "最近". `contextId` is a project id, or null for "最近". */
   "progress.setPage": z.object({
+    contextId: ContextIdSchema,
     resourceId: id,
     resourceRevisionId: id,
     pageId: id,
     consumed: z.boolean().optional(),
   }).strict(),
   "progress.setTime": z.object({
+    contextId: ContextIdSchema,
     resourceId: id,
     resourceRevisionId: id,
     timeMs: nonNegativeMs,
     played: z.array(z.object({ startMs: nonNegativeMs, endMs: nonNegativeMs }).strict().refine((range) => range.endMs >= range.startMs, { message: "range must not end before it starts" })).max(64).optional(),
   }).strict(),
-  "progress.get": z.object({ resourceId: id, resourceRevisionId: optionalRevision }).strict(),
+  "progress.get": z.object({ contextId: ContextIdSchema, resourceId: id, resourceRevisionId: optionalRevision }).strict(),
 
   "settings.getRecording": z.object({}).strict(),
   "settings.setRecording": z.object({

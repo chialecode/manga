@@ -237,7 +237,7 @@ describe("taking a library path away withdraws what was issued for its files", (
     const other = seedVideo(ctx.app, { title: "别的视频", file: (() => { const f = path.join(scratch("other"), "别的.mp4"); fs.writeFileSync(f, "synthetic"); return f; })() });
     const mine = ok<{ handle: string }>(await run(ctx, "video.handle", { resourceId: v.resourceId, revisionId: v.revisionId, source: "original" }));
     const theirs = ok<{ handle: string }>(await run(ctx, "video.handle", { resourceId: other.resourceId, revisionId: other.revisionId, source: "original" }));
-    const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: v.resourceId }));
+    const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: v.resourceId, contextId: null }));
 
     const notices: Array<{ topic: string; payload: Record<string, any> }> = [];
     ctx.app.onNotice((notice) => { if (notice.topic === "library.pathRemoved") notices.push(notice as unknown as { topic: string; payload: Record<string, any> }); });
@@ -249,7 +249,7 @@ describe("taking a library path away withdraws what was issued for its files", (
     expect(notices).toHaveLength(1);
     expect(notices[0]!.payload).toMatchObject({ pathId, resourceIds: [v.resourceId] });
     // The session stays and says the resource is not to be opened; the others are still open.
-    const listed = ok<Array<{ sessionId: string; openState: string; targetId: string | null }>>(await run(ctx, "workspace.sessions", {}));
+    const listed = ok<Array<{ sessionId: string; openState: string; targetId: string | null }>>(await run(ctx, "workspace.sessions", { contextId: null }));
     expect(listed.find((item) => item.sessionId === session.id)).toMatchObject({ openState: "outside", targetId: v.resourceId });
     expect(listed.find((item) => item.targetId === other.resourceId)?.openState ?? "open").toBe("open");
     expect(rows("SELECT id FROM resources")).toHaveLength(2);

@@ -6,6 +6,7 @@ import {
   MangaError,
   NOTE_TAG_MAX,
   ShellPreferenceSchema,
+  applyRailPatch,
   createId,
   type CommandEnvelope,
   type NoteDocument,
@@ -13,6 +14,7 @@ import {
   type WorkMediaKind,
   type ScopeGrant,
   type SearchHit,
+  type RailPatch,
   type ShellPreference,
   type SourceLocator,
   type TextLocator,
@@ -26,6 +28,7 @@ import { resolveMediaLocator } from "./domain/media-anchors.ts";
 import { ordinalLabel, sortKeyFor } from "./domain/ordinal.ts";
 import type { ParsedAsset, ParsedDocument, PdfTextRun } from "./domain/formats.ts";
 import { documentLength, slicePart } from "./domain/formats.ts";
+import { elsewhereProgress, frontierConsumed } from "./progress-service.ts";
 import { applyNoteOp, coerceNoteDocument, notePlainText, type NoteOp } from "./domain/note-document.ts";
 import { codePointLength, createTextLocator, sliceCodePoints } from "./domain/text.ts";
 import type { GrantRegistry } from "./grants.ts";
@@ -40,28 +43,22 @@ export function readShell(store: DrizzleStore): ShellPreference {
 }
 
 export function writeShell(store: DrizzleStore, current: ShellPreference, patch: {
-  mode?: ShellPreference["mode"];
   spoilerGuard?: boolean;
-  focus?: boolean;
-  left?: { visible?: boolean; width?: number };
-  right?: { visible?: boolean; width?: number };
+  sidebar?: { visible?: boolean; width?: number };
+  dock?: { visible?: boolean; width?: number };
+  lastContext?: string | null;
+  rail?: RailPatch;
   reading?: Partial<ShellPreference["reading"]>;
 }, envelope: CommandEnvelope): ShellPreference {
-  const mode = patch.mode ?? current.mode;
-  const layout = current.layouts[mode];
+  const rail = patch.rail;
   const next = ShellPreferenceSchema.parse({
     ...current,
-    mode,
     spoilerGuard: patch.spoilerGuard ?? current.spoilerGuard,
+    sidebar: { ...current.sidebar, ...patch.sidebar },
+    dock: { ...current.dock, ...patch.dock },
+    lastContext: patch.lastContext === undefined ? current.lastContext : patch.lastContext,
+    rail: applyRailPatch(current.rail, rail),
     reading: { ...current.reading, ...patch.reading },
-    layouts: {
-      ...current.layouts,
-      [mode]: {
-        focus: patch.focus ?? layout.focus,
-        left: { ...layout.left, ...patch.left },
-        right: { ...layout.right, ...patch.right },
-      },
-    },
   });
   const row = store.sqlite.prepare("SELECT revision FROM config WHERE key = 'shell.layout'").get() as { revision: number } | undefined;
   store.commit({
@@ -69,7 +66,7 @@ export function writeShell(store: DrizzleStore, current: ShellPreference, patch:
       sql: "INSERT INTO config(key, revision, value_json) VALUES ('shell.layout', 1, ?) ON CONFLICT(key) DO UPDATE SET revision = revision + 1, value_json = excluded.value_json",
       params: [JSON.stringify(next)],
     }],
-    events: [{ type: "shell.updated", payload: { mode: next.mode, revision: (row?.revision ?? 0) + 1 } }],
+    events: [{ type: "shell.updated", payload: { revision: (row?.revision ?? 0) + 1 } }],
     idempotencyKey: envelope.idempotencyKey,
     commandId: envelope.commandId,
     result: next,
@@ -347,14 +344,14 @@ function relocationMutations(store: DrizzleStore, input: { resourceId: string; r
       mutations.push({ sql: `UPDATE ${table} SET resource_revision_id = ?, locator_json = ? WHERE id = ?`, params: [input.revisionId, JSON.stringify(next), row.id] });
     }
   }
-  const progress = store.sqlite.prepare(`SELECT resource_revision_id AS revisionId, last_locator_json AS locator FROM progress WHERE resource_id = ? AND resource_revision_id IN (${placeholders})`).all(input.resourceId, ...orphans) as Array<{ revisionId: string; locator: string | null }>;
+  const progress = store.sqlite.prepare(`SELECT context_id AS contextId, resource_revision_id AS revisionId, last_locator_json AS locator FROM progress WHERE resource_id = ? AND resource_revision_id IN (${placeholders})`).all(input.resourceId, ...orphans) as Array<{ contextId: string; revisionId: string; locator: string | null }>;
   for (const row of progress) {
     const next = row.locator ? move(JSON.parse(row.locator) as SourceLocator) : null;
     if (row.locator && !next) { kept += 1; continue; }
     moved += 1;
     mutations.push({
-      sql: "UPDATE progress SET resource_revision_id = ?, last_locator_json = ? WHERE resource_id = ? AND resource_revision_id = ?",
-      params: [input.revisionId, next ? JSON.stringify(next) : null, input.resourceId, row.revisionId],
+      sql: "UPDATE progress SET resource_revision_id = ?, last_locator_json = ? WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?",
+      params: [input.revisionId, next ? JSON.stringify(next) : null, row.contextId, input.resourceId, row.revisionId],
     });
   }
   return { mutations, moved, kept };
@@ -491,7 +488,11 @@ function resourceFileElsewhere(store: DrizzleStore, resourceId: string, exceptRe
   return resolveResourceLocations(store, resourceId).some((item) => item.revisionId !== exceptRevisionId && item.available && item.path !== null && fs.existsSync(item.path));
 }
 
-export function readDocument(store: DrizzleStore, resourceId: string, revisionId?: string): Record<string, unknown> {
+/**
+ * The text of a revision with the place to open it at. `contextId` is the context the person is reading in (A-96): the position and the read ranges
+ * restored are that context's own, and `elsewhere` says where another context has been when this one has not started.
+ */
+export function readDocument(store: DrizzleStore, resourceId: string, revisionId?: string, contextId = ""): Record<string, unknown> {
   const loaded = loadRevision(store, resourceId, revisionId);
   const parts = payloadParts(loaded.payload);
   const location = resolveLocation(store, loaded.revisionId);
@@ -504,7 +505,7 @@ export function readDocument(store: DrizzleStore, resourceId: string, revisionId
   // another revision holds a file the user already picked.
   const revisionFileMissing = !available && location !== undefined;
   const supersededFile = revisionFileMissing && resourceFileElsewhere(store, resourceId, loaded.revisionId);
-  const progressRow = store.sqlite.prepare("SELECT last_locator_json, consumed_ranges_json, completion_state FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, loaded.revisionId) as { last_locator_json: string | null; consumed_ranges_json: string; completion_state: string } | undefined;
+  const progressRow = store.sqlite.prepare("SELECT last_locator_json, consumed_ranges_json, completion_state FROM progress WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?").get(contextId, resourceId, loaded.revisionId) as { last_locator_json: string | null; consumed_ranges_json: string; completion_state: string } | undefined;
   const progress = progressRow
     ? { locator: progressRow.last_locator_json ? JSON.parse(progressRow.last_locator_json) as Record<string, unknown> : null, consumed: JSON.parse(progressRow.consumed_ranges_json), completion: progressRow.completion_state }
     : null;
@@ -567,6 +568,8 @@ export function readDocument(store: DrizzleStore, resourceId: string, revisionId
       : { locator: null, consumed: [], completion: "new", restoredPartId: first?.id ?? null, restoredFrom: "start", restoredRange: null },
     // The read range the reader may show without widening consumed progress.
     readRanges: progress?.consumed ?? [],
+    // Where another context has been, when this one has not started: the reader offers to jump there (Q-33 item 3).
+    elsewhere: elsewhereProgress(store, contextId, resourceId, loaded.revisionId),
     assets,
     source: location
       ? { path: location.path ?? location.legacyPath ?? undefined, available: available || supersededFile, hosted: location.managed, outside: location.outside, revisionFileMissing, supersededFile }
@@ -989,9 +992,8 @@ export function selectionQuote(store: DrizzleStore, input: { resourceId: string;
 }
 
 export function rangeConsumed(store: DrizzleStore, resourceId: string, revisionId: string, partId: string, start: number, end: number): boolean {
-  const row = store.sqlite.prepare("SELECT consumed_ranges_json FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revisionId) as { consumed_ranges_json: string } | undefined;
-  if (!row) return false;
-  const ranges = JSON.parse(row.consumed_ranges_json) as Array<{ partId?: string; start: number; end: number }>;
+  // What the spoiler guard lets through is what has been read in any context (A-96, Q-33 item 4).
+  const ranges = frontierConsumed(store, resourceId, revisionId);
   return ranges.some((range) => (range.partId ?? partId) === partId && start >= range.start && end <= range.end);
 }
 

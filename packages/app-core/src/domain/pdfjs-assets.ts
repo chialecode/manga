@@ -7,10 +7,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const PDFJS_VERSION = "6.3.289";
+export const PDFJS_VERSION = "6.4.299";
 export const PDFJS_ENGINE_ID = "pdfjs-dist";
 export const PDFJS_REPRESENTATION = "pdfjs-text-layer-v1";
-export const PDFJS_PARSER_ID = "pdfjs-dist@6.3.289";
+export const PDFJS_PARSER_ID = "pdfjs-dist@6.4.299";
 
 function hasModule(dir: string): boolean {
   return fs.existsSync(path.join(dir, "legacy", "build", "pdf.mjs"));

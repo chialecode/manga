@@ -1,13 +1,13 @@
 import { z } from "zod";
+import { ContextIdSchema, MATERIAL_ORIGINS } from "./workspace-state.ts";
 
 const id = z.string().min(1).max(256);
-const mode = z.enum(["enthusiast", "creator"]);
-/** What a conversation is about: the one global conversation of a mode, or one bound to a resource, a work, a project or a note. */
+/** What a conversation is about: the general conversation of "最近", or one bound to a resource, a work, a project or a note. */
 export const CONVERSATION_KINDS = ["shared", "resource", "work", "project", "note"] as const;
 export type ConversationKind = (typeof CONVERSATION_KINDS)[number];
-/** The filter the conversation list and "delete all" share, so what is deleted is what the list shows (A-89). */
+/** The filter the conversation list and "delete all" share, so what is deleted is what the list shows (A-89). `contextId`: a project, null for "最近", left out for all. */
 const conversationFilter = {
-  mode: mode.optional(),
+  contextId: ContextIdSchema.optional(),
   kind: z.enum(CONVERSATION_KINDS).optional(),
   /** Last activity at or after / before these instants. */
   after: z.string().max(40).optional(),
@@ -26,7 +26,7 @@ export const PROMPT_LIMIT_MAX = 2000;
 export const PROMPT_LIMIT_DEFAULT = 600;
 
 /**
- * Input schemas for the creative workspace and its neighbours: projects, the one global conversation of the entertainment mode, and the voice
+ * Input schemas for the creative workspace and its neighbours: projects, the general conversation of a context, and the voice
  * dictionary. The boards, maps, drafts, excerpts, search index, rough cuts, plugins and acquisition add their own groups below.
  */
 export const CreativeCommandInputs = {
@@ -43,7 +43,8 @@ export const CreativeCommandInputs = {
     modelConnectionId: id.nullable().optional(),
   }).strict(),
   "project.delete": z.object({ projectId: id }).strict(),
-  "project.addMaterial": z.object({ projectId: id, kind: z.enum(PROJECT_MATERIAL_KINDS), targetId: id, label: z.string().max(200).optional() }).strict(),
+  /** `origin` is "auto" when the thing was added because it was opened or made inside the project (Q-33); a thing the person removed is not added that way again. */
+  "project.addMaterial": z.object({ projectId: id, kind: z.enum(PROJECT_MATERIAL_KINDS), targetId: id, label: z.string().max(200).optional(), origin: z.enum(MATERIAL_ORIGINS).optional() }).strict(),
   "project.objects": z.object({ projectId: id }).strict(),
   "project.removeMaterial": z.object({ projectId: id, materialId: id }).strict(),
   "project.terms": z.object({ projectId: id }).strict(),
@@ -57,11 +58,16 @@ export const CreativeCommandInputs = {
   "project.packagePreview": z.object({ pathHandle: id }).strict(),
   "project.importPackage": z.object({ pathHandle: id }).strict(),
 
-  "conversation.current": z.object({ mode }).strict(),
-  "conversation.new": z.object({ mode }).strict(),
-  "conversation.history": z.object({ mode, limit: z.number().int().positive().max(100).optional() }).strict(),
+  /** The current general conversation of a context: "最近" has a shared one, a project has its current project conversation. */
+  "conversation.current": z.object({ contextId: ContextIdSchema }).strict(),
+  "conversation.new": z.object({ contextId: ContextIdSchema }).strict(),
+  "conversation.history": z.object({ contextId: ContextIdSchema, limit: z.number().int().positive().max(100).optional() }).strict(),
   "conversation.resume": z.object({ sessionId: id }).strict(),
-  /** Every conversation of every kind, for "设置 › 记录" (A-89). Owner only. */
+  /** A new name for a conversation (the sidebar). */
+  "conversation.rename": z.object({ sessionId: id, title: z.string().min(1).max(200) }).strict(),
+  /** Moves a general conversation to a project, or to "最近" (`contextId` null). A conversation bound to a resource, work or note is not moved. */
+  "conversation.move": z.object({ sessionId: id, contextId: ContextIdSchema }).strict(),
+  /** Every conversation of every kind, for the records tab ("对话管理", A-89). Owner only. */
   "conversation.list": z.object({ ...conversationFilter, limit: z.number().int().positive().max(100).optional(), offset: z.number().int().nonnegative().optional() }).strict(),
   /** Deletes the conversations named, with what belongs to them. A conversation with a task in progress is not deleted. */
   "conversation.delete": z.object({ sessionIds: z.array(id).min(1).max(500) }).strict(),

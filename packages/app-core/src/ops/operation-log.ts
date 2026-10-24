@@ -70,7 +70,7 @@ export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "inventory.repair": "backup", "inventory.scan": "backup",
   "video.playCopy": "library",
   "project.create": "projects", "project.update": "projects", "project.delete": "projects", "project.addMaterial": "projects", "project.removeMaterial": "projects", "project.importTerms": "projects", "project.exportPackage": "projects", "project.importPackage": "projects",
-  "conversation.new": "agent", "conversation.resume": "agent", "conversation.delete": "agent", "conversation.deleteAll": "agent",
+  "conversation.new": "agent", "conversation.resume": "agent", "conversation.rename": "agent", "conversation.move": "agent", "conversation.delete": "agent", "conversation.deleteAll": "agent",
   "whiteboard.create": "canvas", "whiteboard.rename": "canvas", "whiteboard.delete": "canvas",
   "mindmap.create": "canvas", "mindmap.rename": "canvas", "mindmap.delete": "canvas", "mindmap.setTheme": "canvas", "mindmap.export": "canvas",
   "draft.create": "copy", "draft.rename": "copy", "draft.delete": "copy", "draft.restore": "copy",

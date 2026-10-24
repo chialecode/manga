@@ -14,7 +14,8 @@ type T = Translator["t"];
  */
 export function SemanticPanel(props: {
   t: T;
-  projectId: string;
+  /** The project the search can be narrowed to; none in "最近", where the search covers all of the person's material. */
+  projectId: string | null;
   onOpen: (hit: SemanticHitView) => void;
   onOpenSettings?: () => void;
   onError: (message: string) => void;
@@ -22,7 +23,7 @@ export function SemanticPanel(props: {
   const { t } = props;
   const [text, setText] = useState("");
   const [kinds, setKinds] = useState<ReadonlySet<SemanticKind>>(new Set(SEMANTIC_KINDS));
-  const [inProject, setInProject] = useState(true);
+  const [inProject, setInProject] = useState(Boolean(props.projectId));
   const [readOnly, setReadOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<{ text: string; search: SemanticSearchView } | null>(null);
@@ -37,7 +38,7 @@ export function SemanticPanel(props: {
     const mine = latest.current;
     const result = await attempt<SemanticSearchView>("semantic.search", {
       text: query,
-      ...(inProject ? { projectId: props.projectId } : {}),
+      ...(inProject && props.projectId ? { projectId: props.projectId } : {}),
       ...(kinds.size < SEMANTIC_KINDS.length ? { kinds: SEMANTIC_KINDS.filter((kind) => kinds.has(kind)) } : {}),
       ...(readOnly ? { withinProgress: true } : {}),
     });
@@ -73,10 +74,12 @@ export function SemanticPanel(props: {
             <span>{t(`semantic.kind.${kind}` as MessageKey)}</span>
           </label>
         ))}
-        <label className="chip-check">
-          <input type="checkbox" data-testid="semantic-in-project" checked={inProject} onChange={(event) => setInProject(event.target.checked)} />
-          <span>{t("semantic.search.inProject")}</span>
-        </label>
+        {props.projectId ? (
+          <label className="chip-check">
+            <input type="checkbox" data-testid="semantic-in-project" checked={inProject} onChange={(event) => setInProject(event.target.checked)} />
+            <span>{t("semantic.search.inProject")}</span>
+          </label>
+        ) : null}
         <label className="chip-check">
           <input type="checkbox" data-testid="semantic-progress" checked={readOnly} onChange={(event) => setReadOnly(event.target.checked)} />
           <span>{t("semantic.search.progress")}</span>

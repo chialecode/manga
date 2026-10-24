@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
 import { Modal } from "./modal.tsx";
 
 type T = Translator["t"];
@@ -17,6 +18,8 @@ export function ScreenshotTargetDialog(props: {
   t: T;
   shot: ShotRef;
   target: "note" | "board";
+  /** The context the picture was taken in: a note made for it there becomes a material of the project. */
+  contextId?: string | null;
   onDone: (message: string) => void;
   onError: (message: string) => void;
   onClose: () => void;
@@ -56,6 +59,7 @@ export function ScreenshotTargetDialog(props: {
   async function newNote() {
     const created = await attempt<{ objectId: string }>("notes.create", { title: shot.title, text: "" });
     if (!created.ok) { props.onError(created.error.message); return; }
+    void autoAddMaterial(props.contextId ?? null, "note", created.value.objectId);
     await intoNote(created.value.objectId, shot.title);
   }
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
-import { clickTestId, sleep, trustedClick, waitUntil } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, sleep, trustedClick, waitUntil } from "./driver.ts";
 
 /** What every smoke flow shares: who calls, how a command is issued, how the evidence is written. */
 
@@ -21,10 +21,15 @@ export const js = <T>(view: BrowserWindow, code: string): Promise<T> => view.web
 /**
  * A screenshot is evidence, not a pass condition: a hidden window only yields frames with stayAwake (Electron 44 rejects a plain
  * capture with UnknownVizError), so it is retried and then given up on, and the process always exits.
+ *
+ * A picture is only the page the walk is about when that page is on screen and has been painted: `mark` is the test id of the page's own element,
+ * waited for as the observation waited for it, and two animation frames go by before the capture, so the picture is not the frame before the page.
  */
-export async function capturePage(view: BrowserWindow, evidenceDir: string | undefined, name: string): Promise<void> {
+export async function capturePage(view: BrowserWindow, evidenceDir: string | undefined, name: string, mark?: string): Promise<void> {
   if (!evidenceDir) return;
   fs.mkdirSync(evidenceDir, { recursive: true });
+  if (mark) await waitUntil(view, `${DRAWN}(${PICK}(${JSON.stringify(mark)}))`, 4000);
+  await view.webContents.executeJavaScript("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))").catch(() => undefined);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const png = await view.webContents.capturePage(undefined, { stayAwake: true });
@@ -37,11 +42,12 @@ export async function capturePage(view: BrowserWindow, evidenceDir: string | und
   }
 }
 
-/** The right pane is part of the reading and work pages; it is shown when the layout has it folded away. */
-export async function ensureRightPane(view: BrowserWindow): Promise<boolean> {
-  if (await waitUntil(view, `document.querySelector('[data-testid="chat-composer"]')`, 1500)) return true;
-  await clickTestId(view, "shell-right-toggle", 1500);
-  return waitUntil(view, `document.querySelector('[data-testid="chat-composer"]')`, 4000);
+/** The dock (the Agent's column) is shown, or the window is too narrow for it and its button brings it as an overlay: the composer is drawn when this answers true. */
+export async function ensureDock(view: BrowserWindow): Promise<boolean> {
+  const composerDrawn = `${DRAWN}(document.querySelector('[data-testid="shell-dock"] [data-testid="agent-composer"]'))`;
+  if (await waitUntil(view, composerDrawn, 1500)) return true;
+  await clickTestId(view, "shell-dock-toggle", 1500);
+  return waitUntil(view, composerDrawn, 4000);
 }
 
 /** The first element whose test id starts with a prefix gets a click (a list row whose id is not known to the smoke). */
@@ -55,24 +61,31 @@ export async function clickFirst(view: BrowserWindow, prefix: string, timeoutMs 
   })()`, timeoutMs);
 }
 
-/**
- * The window starts on the library paths page when the library is empty, and the rail is replaced by the settings navigation while
- * settings is open. A flow that wants the rail waits for that start-up decision to land, then leaves settings by its own "back".
- */
+/** The rail is there once the window has read its settings; a short wait lets the first tab of the context settle. */
 export async function toRail(view: BrowserWindow): Promise<boolean> {
-  await waitUntil(view, `document.querySelector('[data-testid="nav-library"]') || document.querySelector('[data-testid="settings-back"]')`, 10_000);
-  // The start-up decision reads the library once; give it the moment it needs before looking at where the window is.
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  if (await waitUntil(view, `document.querySelector('[data-testid="settings-back"]')`, 200)) await clickTestId(view, "settings-back");
-  return waitUntil(view, `document.querySelector('[data-testid="nav-library"]')`, 6000);
+  await waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 10_000);
+  await sleep(500);
+  return waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 6000);
 }
 
-/** Open a settings page the way a person does: the rail's settings entry, then the page's own entry in the settings navigation. */
+/**
+ * Open a settings page the way a person does: the rail's settings entry (the settings view takes the window's place, the workspace stays mounted under it),
+ * then the page's own entry in the view's directory.
+ */
 export async function openSettingsPage(view: BrowserWindow, page: string): Promise<boolean> {
-  const inSettings = await waitUntil(view, `document.querySelector('[data-testid="settings-nav-${page}"]')`, 300);
-  if (!inSettings && !(await clickTestId(view, "nav-settings"))) return false;
+  if (!(await clickTestId(view, "nav-settings"))) return false;
   if (!(await clickTestId(view, `settings-nav-${page}`))) return false;
-  return waitUntil(view, `document.querySelector('[data-testid="settings-page-${page}"]')`, 6000);
+  return waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="settings-page-${page}"]'))`, 6000);
+}
+
+/** Back to the workspace from the settings view, with the title bar's back arrow (it walks the pages visited, and the first page leaves); true once the settings view is gone. */
+export async function leaveSettings(view: BrowserWindow): Promise<boolean> {
+  for (let step = 0; step < 14; step += 1) {
+    if (!(await waitUntil(view, `document.querySelector('[data-testid="settings-area"]')`, 300))) return true;
+    await clickTestId(view, "nav-back", 1000);
+    await sleep(80);
+  }
+  return waitUntil(view, `!document.querySelector('[data-testid="settings-area"]')`, 3000);
 }
 
 /**

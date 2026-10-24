@@ -12,6 +12,7 @@ import { useAutoHide } from "./reader/use-auto-hide.ts";
 import { EditableNumber } from "./readers/editable-number.tsx";
 import { useWindowFullscreen } from "./readers/window-fullscreen.tsx";
 import { useKeyTable } from "./lib/key-table.tsx";
+import { useTab } from "./workspace/tab-context.tsx";
 import { MatchLink } from "./readers/match-link.tsx";
 import { SourceBanner } from "./readers/source-banner.tsx";
 
@@ -290,6 +291,7 @@ export function ReadingPane(props: {
   const [panel, setPanel] = useState<"toc" | "search" | "bookmarks" | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const windowFull = useWindowFullscreen();
+  const tab = useTab();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const settingsPanel = useRef<HTMLDivElement>(null);
@@ -375,7 +377,8 @@ export function ReadingPane(props: {
 
   const keys = useKeyTable();
   useEffect(() => {
-    if (!double) return;
+    // Only the focused tab answers the keys (A-94).
+    if (!double || !tab.focused) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.isComposing || typingTarget(event.target)) return;
       const action = actionOf(event, keys, "novel");

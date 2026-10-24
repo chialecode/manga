@@ -4,8 +4,9 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createId, MangaError, type CommandResult, type SearchHit, type SearchQuery } from "@manga/contracts";
-import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
+import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V12_SCHEMA_SQL, V12_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
 import { ngramsFor, matchQuery } from "./ngrams.ts";
+import { migrateWorkspace, type WorkspaceMigration } from "./migrate-workspace.ts";
 import * as schema from "./schema.ts";
 
 export type DrizzleStoreOptions = {
@@ -46,7 +47,7 @@ export class DrizzleStore {
   readonly crashAt?: string;
   readonly options: DrizzleStoreOptions;
   /** Set when this open moved the library to a newer schema; `from` is the version it had. */
-  migration: { from: number; to: number; coversImported: number; locations?: { inLibrary: number; managed: number; outside: number } } | null = null;
+  migration: { from: number; to: number; coversImported: number; locations?: { inLibrary: number; managed: number; outside: number }; workspace?: WorkspaceMigration } | null = null;
   private closed = false;
   private listeners: Array<(event: { type: string; payload: Record<string, unknown>; seq: number }) => void> = [];
 
@@ -109,10 +110,14 @@ export class DrizzleStore {
         this.sqlite.prepare("INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('workLayout', ?)").run(existingVersion > 0 ? "pending" : "settled");
       }
       this.sqlite.exec(V11_TABLES_SQL);
+      // The progress table is rebuilt before the view over it exists; the saved tabs and the conversations are converted once the new tables are there.
+      if (existingVersion < 12) this.sqlite.exec(V12_SCHEMA_SQL);
+      this.sqlite.exec(V12_TABLES_SQL);
+      const workspace = existingVersion < 12 ? migrateWorkspace(this.sqlite) : undefined;
       this.maybeCrash("migration-before-version");
       this.sqlite.prepare("INSERT OR IGNORE INTO schema_meta(key, value) VALUES (?, ?)").run("schemaVersion", String(PRODUCT_SCHEMA_VERSION));
       this.sqlite.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(String(PRODUCT_SCHEMA_VERSION));
-      if (existingVersion > 0 && existingVersion < PRODUCT_SCHEMA_VERSION) this.migration = { from: existingVersion, to: PRODUCT_SCHEMA_VERSION, coversImported, ...(locations ? { locations } : {}) };
+      if (existingVersion > 0 && existingVersion < PRODUCT_SCHEMA_VERSION) this.migration = { from: existingVersion, to: PRODUCT_SCHEMA_VERSION, coversImported, ...(locations ? { locations } : {}), ...(workspace ? { workspace } : {}) };
     })();
   }
 

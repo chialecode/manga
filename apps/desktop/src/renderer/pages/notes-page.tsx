@@ -13,8 +13,8 @@ type I18n = Translator;
 
 export type NotesPageProps = {
   i18n: I18n;
-  /** Back to where the note was opened from: the records page in settings, or a reader. */
-  onBack: () => void;
+  /** Leaves the note; a note that is a tab of its own has the tab to close and asks for none. */
+  onBack?: () => void;
   onOpenSource: (objectId: string, blockId?: string) => void;
   doc: NoteDoc | null;
   renaming: boolean;
@@ -53,7 +53,7 @@ export function NotesPage(props: NotesPageProps) {
   return (
     <section data-testid="notes-page" className="page-pad">
       <div className="note-page-head">
-        <button type="button" className="link-button" data-testid="note-back" onClick={props.onBack}><ArrowLeft size={15} aria-hidden="true" />{i18n.t("notes.back")}</button>
+        {props.onBack ? <button type="button" className="link-button" data-testid="note-back" onClick={props.onBack}><ArrowLeft size={15} aria-hidden="true" />{i18n.t("notes.back")}</button> : null}
       </div>
       {doc ? (
         <section data-testid="note-panel">

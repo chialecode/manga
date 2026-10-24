@@ -165,7 +165,7 @@ describe("the draft tab (CRE-05, AT-29)", () => {
 
   it("shows a suggestion an agent wrote as the agent's own, waiting beside the draft; no model was asked, and adopting it is the person's step (AT-85)", async () => {
     const { ctx, run, llm, projectId, draftId } = await boot();
-    const session = await run("session.open", { kind: "project", targetId: projectId, mode: "creator" });
+    const session = await run("session.open", { kind: "project", targetId: projectId, contextId: projectId });
     const grant = ctx.app.issueAgentGrant(ctx.grant, { kind: "agent", id: "agent:ui-85" }, { sessionId: session.id as string, runId: "run-ui-85", readResourceIds: [], projectId });
     const made = await ctx.app.call({ kind: "agent", id: "agent:ui-85" }, { commandId: "draft.suggest", idempotencyKey: "ui85-suggest", input: { draftId, kind: "polish", range: { start: 0, end: 4 }, text: "首段。" } }, grant.handle);
     expect(made.status, JSON.stringify(made)).toBe("ok");

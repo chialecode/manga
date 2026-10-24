@@ -5,6 +5,7 @@ import os from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { startSwarm } from "../../tests/helpers/bt-swarm.ts";
 import { FakeDandan } from "../../tests/helpers/fake-dandan.ts";
+import { seedV11 } from "../../tests/helpers/legacy-v11.ts";
 import { desktopPackageDir, latestDesktopPackage } from "../desktop-paths.ts";
 import { currentStage, loadGate, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
 
@@ -13,22 +14,31 @@ const config = loadGate();
 if (process.platform !== "win32") throw new Error("package verification targets Windows x64");
 const sqlite = spawnSync(process.execPath, ["scripts/verify-electron-sqlite.mjs"], { cwd: root, stdio: "inherit" });
 if (sqlite.status !== 0) process.exit(sqlite.status ?? 1);
-const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform", "win32", "--arch", "x64"], {
-  cwd: path.join(root, "apps/desktop"),
-  stdio: "inherit",
-  shell: true,
-});
-if (pnpm.status !== 0) process.exit(pnpm.status ?? 1);
+// Iterating on one walk: MANGA_PACKAGE_PHASES=window-walk,workspace-restart runs only those phases (in the order of the gate) and writes no evidence;
+// MANGA_PACKAGE_REUSE_BUILD=1 also skips building the package again when nothing under src changed. Neither is used for the gate's run.
+const onlyPhases = process.env.MANGA_PACKAGE_PHASES ? process.env.MANGA_PACKAGE_PHASES.split(",").map((name) => name.trim()).filter(Boolean) : null;
+if (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases) {
+  const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform", "win32", "--arch", "x64"], {
+    cwd: path.join(root, "apps/desktop"),
+    stdio: "inherit",
+    shell: true,
+  });
+  if (pnpm.status !== 0) process.exit(pnpm.status ?? 1);
+}
 const outDir = desktopPackageDir;
 const built = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((name) => name.startsWith("MANGA")) : undefined;
 if (!built) throw new Error("electron-forge package output missing");
 const appPath = path.join(outDir, built);
 const evidence = runDir();
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-"));
-const phases = config.package.smoke;
+const phases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
 // The window walk starts from an empty library (the app must open on the library paths), so it gets a Profile of its own; the creative walk and
 // the plugin walk make their own projects, library path and plugin, and do not share a Profile with the phases before them.
-const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace"]);
+const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated"]);
+// The restart of the workspace is the next start of the Profile the window walk used (it left two contexts in a known shape); the upgrade check starts on a
+// synthetic v11 library made here, before the application has seen it.
+const SAME_PROFILE_AS = { "workspace-restart": "window-walk" };
+const homes = {};
 // The media and recording phases drive the real window with synthetic samples; they have to exist for the gate to mean anything.
 const samplesRoot = path.join(root, "dist/samples/media");
 const speechClip = path.join(samplesRoot, "voice/tts-clips/zh-CN-1.wav");
@@ -82,7 +92,11 @@ function dandanTraffic(fake) {
   return { status: problems.length === 0 ? "passed" : "failed", detail: { requests: all.length, paths: [...new Set(all.map((request) => request.path))], problems } };
 }
 async function smoke(phase) {
-  const home = OWN_PROFILE.has(phase) ? fs.mkdtempSync(path.join(os.tmpdir(), `manga-package-${phase}-`)) : profile;
+  const sameAs = SAME_PROFILE_AS[phase];
+  if (sameAs && !homes[sameAs]) throw new Error(`smoke ${phase} needs the Profile of ${sameAs}, which was not a phase of this run`);
+  const home = sameAs ? homes[sameAs] : OWN_PROFILE.has(phase) ? fs.mkdtempSync(path.join(os.tmpdir(), `manga-package-${phase}-`)) : profile;
+  homes[phase] = home;
+  if (phase === "workspace-migrated") seedV11(path.join(home, "root"));
   const bt = phase === "plugins" ? await prepareBt(home) : null;
   // The window walk's danmaku step talks to a stand-in for the DanDanPlay service on the loopback address; it accepts only the credentials a smoke run uses.
   const dandan = phase === "window-walk" ? await new FakeDandan().start() : null;
@@ -106,7 +120,7 @@ async function smoke(phase) {
         ...(bt?.env ?? {}),
         ...(dandan ? { MANGA_SMOKE_DANDAN_ORIGIN: dandan.origin } : {}),
       },
-      timeout: phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" || phase === "creative" ? 300_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
+      timeout: phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
     });
   } finally {
     await bt?.swarm.close();
@@ -157,7 +171,7 @@ async function smoke(phase) {
     if (report.ok !== true) throw new Error(`voice smoke steps failed: ${(report.failed ?? []).join(", ")}`);
   }
   if (phase === "formats") {
-    if (report.pages !== true || report.modes !== true || report.failureVisible !== true) throw new Error("formats smoke did not show four format pages, the mode switch and the failed import");
+    if (report.pages !== true || report.contexts !== true || report.failureVisible !== true) throw new Error("formats smoke did not show four format pages, the switch of context and the failed import");
     // LOOP-06: the PDF page is painted once at its opening width and not again once the width has held still; the selection survives.
     const loop = report.loop06 ?? {};
     if (loop.settled?.stable !== true || loop.tagged !== true || loop.repainted !== false || loop.atEnd?.nodeConnected !== true) throw new Error(`formats smoke lost the PDF selection to a repaint: ${JSON.stringify(loop)}`);
@@ -165,6 +179,10 @@ async function smoke(phase) {
   if (phase === "window-walk") {
     if (report.notRun) throw new Error("window-walk smoke did not run");
     if (report.ok !== true) throw new Error(`window-walk smoke failed: ${(report.failed ?? []).concat(report.missing ?? []).join(", ")}`);
+  }
+  if (phase === "workspace-restart" || phase === "workspace-migrated") {
+    if (report.notRun) throw new Error(`${phase} smoke did not run`);
+    if (report.ok !== true) throw new Error(`${phase} smoke failed: ${(report.observations ?? []).filter((row) => row.status !== "passed").map((row) => row.name).join(", ")}`);
   }
   if (phase === "creative") {
     if (report.notRun) throw new Error("creative smoke did not run");
@@ -188,6 +206,11 @@ async function smoke(phase) {
 }
 const smokeReports = {};
 for (const phase of phases) smokeReports[phase] = await smoke(phase);
+if (onlyPhases) {
+  const rows = Object.values(smokeReports).flatMap((report) => report?.observations ?? []);
+  console.log(JSON.stringify({ status: "partial", phases, observations: rows.length, failed: rows.filter((row) => row.status !== "passed").map((row) => row.name) }));
+  process.exit(0);
+}
 
 // Each observation of the window walk (library paths, work home, right pane, settings, comic zoom at three window sizes, player and
 // reader controls) is written on its own so the report can require every one of them by name.
@@ -196,6 +219,8 @@ const danmakuNetwork = smokeReports["window-walk"]?.danmakuNetwork;
 const observations = [
   ...(smokeReports["window-walk"]?.observations ?? []),
   ...(danmakuNetwork ? [{ name: "danmaku-network", status: danmakuNetwork.status, detail: danmakuNetwork.detail }] : []),
+  ...(smokeReports["workspace-restart"]?.observations ?? []),
+  ...(smokeReports["workspace-migrated"]?.observations ?? []),
   ...(smokeReports.creative?.observations ?? []),
   ...(smokeReports.trace?.observations ?? []),
 ];
@@ -231,7 +256,7 @@ fs.writeFileSync(path.join(evidence, "scenarios.json"), `${JSON.stringify({
   ...stageFingerprints(root, config),
   productAcceptance: "not-run",
   at: new Date().toISOString(),
-  source: "packaged window walk and creative walk, phases window-walk and creative (synthetic samples, fresh Profile each)",
+  source: "packaged window walk, restart of its Profile, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   windowSizes: smokeReports["window-walk"]?.windowSizes ?? null,
   observations: observations.map((row) => ({ name: row.name, status: row.status, detail: row.detail ?? null })),
 }, null, 2)}\n`);
@@ -248,7 +273,7 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   smoke: phases,
   formats: {
     pages: smokeReports.formats?.pages ?? false,
-    modes: smokeReports.formats?.modes ?? false,
+    contexts: smokeReports.formats?.contexts ?? false,
     failureVisible: smokeReports.formats?.failureVisible ?? false,
     opened: smokeReports.formats?.opened ?? null,
   },
@@ -257,6 +282,8 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   loop06: smokeReports.formats?.loop06 ?? null,
   agent: { runningShown: smokeReports.agent?.runningShown ?? false, stoppedShown: smokeReports.agent?.stoppedShown ?? false, conversationShown: smokeReports["agent-restart"]?.conversationShown ?? false },
   windowWalk: { ok: smokeReports["window-walk"]?.ok ?? false, observations: observations.length },
+  // The workspace over a restart of the window walk's Profile, and on a synthetic v11 library of the two-mode shell started on for the first time (plan 4.8).
+  workspace: { restart: smokeReports["workspace-restart"]?.ok ?? false, migrated: smokeReports["workspace-migrated"]?.ok ?? false },
   creative: { ok: smokeReports.creative?.ok ?? false, observations: (smokeReports.creative?.observations ?? []).length },
   // AT-97 in the window: a task against a stand-in model, its record opened from the reply, and no secret anywhere it could be read.
   trace: { ok: smokeReports.trace?.ok ?? false, observations: (smokeReports.trace?.observations ?? []).length },

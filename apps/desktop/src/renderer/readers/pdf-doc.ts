@@ -27,7 +27,7 @@ function assetBase(): string {
   return new URL("./pdfjs/", window.location.href).href;
 }
 
-const EXPECTED_VERSION = "6.3.289";
+const EXPECTED_VERSION = "6.4.299";
 const MAX_OPEN = 2;
 const open = new Map<string, { task: PdfTask; doc: Promise<PdfDocumentProxy> }>();
 

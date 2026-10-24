@@ -19,7 +19,7 @@ import type { GrantRegistry } from "./grants.ts";
 import { ordinalLabel, sortKeyFor } from "./domain/ordinal.ts";
 import { parseOverride, projectWork, projectedValue, type FieldOverride, type ProjectionSource, type WorkProjection } from "./domain/metadata-projection.ts";
 import { readLayout } from "./domain/revision-layout.ts";
-import { touchWorkMutation } from "./progress-service.ts";
+import { contextName, touchWorkMutation } from "./progress-service.ts";
 import { workKindMutation } from "./reading-service.ts";
 import { resolveLocation } from "./library-locations.ts";
 import { groupKeySql, outsideCount, outsideSql, userContentSql, versionCount, versionsOf, workHoldsUserContent } from "./works-versions.ts";
@@ -195,7 +195,7 @@ export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit
   const total = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${from} ${clause()}`).get(...fromParams, ...params) as { n: number }).n;
   // Progress of the resource the card shows (the last opened one, else the first), on its newest revision.
   const shown = "COALESCE(w.last_resource_id, (SELECT sr.id FROM resources sr WHERE sr.work_id = w.id ORDER BY sr.sort_key, sr.created_at, sr.id LIMIT 1))";
-  const progressExpr = `COALESCE((SELECT sp.percent FROM progress sp WHERE sp.resource_id = ${shown} AND sp.resource_revision_id = (SELECT sv.id FROM resource_revisions sv WHERE sv.resource_id = ${shown} ORDER BY sv.created_at DESC, sv.rowid DESC LIMIT 1)), 0)`;
+  const progressExpr = `COALESCE((SELECT sp.percent FROM progress_latest sp WHERE sp.resource_id = ${shown} AND sp.resource_revision_id = (SELECT sv.id FROM resource_revisions sv WHERE sv.resource_id = ${shown} ORDER BY sv.created_at DESC, sv.rowid DESC LIMIT 1)), 0)`;
   const keyExpr = sort === "recent" ? "COALESCE(w.last_opened_at, '')" : sort === "added" ? "w.created_at" : sort === "progress" ? progressExpr : "LOWER(w.title)";
   const secondExpr = sort === "recent" ? "w.created_at" : undefined;
   const direction = sort === "title" ? "ASC" : "DESC";
@@ -225,15 +225,17 @@ export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit
 function summarize(store: DrizzleStore, row: WorkRow): WorkSummary {
   const resourceCount = (store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources WHERE work_id = ?").get(row.id) as { n: number }).n;
   const finished = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND EXISTS (
-      SELECT 1 FROM progress p WHERE p.resource_id = r.id AND p.completion_state = 'completed')`).get(row.id) as { n: number }).n;
+      SELECT 1 FROM progress_latest p WHERE p.resource_id = r.id AND p.completion_state = 'completed')`).get(row.id) as { n: number }).n;
   const lastId = row.last_resource_id
     ?? (store.sqlite.prepare("SELECT id FROM resources WHERE work_id = ? ORDER BY sort_key, created_at, id LIMIT 1").get(row.id) as { id: string } | undefined)?.id;
   const last = lastId
     ? store.sqlite.prepare(`SELECT r.id, r.title, r.ordinal_label AS ordinalLabel, (SELECT v.id FROM resource_revisions v WHERE v.resource_id = r.id ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1) AS revisionId FROM resources r WHERE r.id = ?`).get(lastId) as { id: string; title: string; ordinalLabel: string | null; revisionId: string | null } | undefined
     : undefined;
-  const progress = last?.revisionId
-    ? (store.sqlite.prepare("SELECT percent FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(last.id, last.revisionId) as { percent: number } | undefined)?.percent ?? 0
-    : 0;
+  // The card shows the latest position in any context and says which one it is from (A-96).
+  const latest = last?.revisionId
+    ? store.sqlite.prepare("SELECT percent, context_id AS contextId FROM progress_latest WHERE resource_id = ? AND resource_revision_id = ?").get(last.id, last.revisionId) as { percent: number; contextId: string } | undefined
+    : undefined;
+  const progress = latest?.percent ?? 0;
   const linked = Boolean(store.sqlite.prepare("SELECT 1 FROM work_links WHERE work_id = ? AND link_state = 'linked'").get(row.id));
   const projection = parseProjection(row.projection_json);
   const author = projectedValue(projection, "author");
@@ -246,6 +248,7 @@ function summarize(store: DrizzleStore, row: WorkRow): WorkSummary {
     coverId: row.cover_id,
     lastResource: last ? { id: last.id, title: last.title, ordinalLabel: last.ordinalLabel, revisionId: last.revisionId } : null,
     progress,
+    progressContext: latest ? { contextId: latest.contextId || null, name: contextName(store, latest.contextId) } : null,
     finishedCount: finished,
     resourceCount,
     versionCount: versionCount(store, row.id),
@@ -265,7 +268,7 @@ export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantReg
   }>;
   const resources: WorkResourceRow[] = resourceRows.filter((item) => readable.has(item.id)).map((item) => {
     const revision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(item.id) as { id: string } | undefined;
-    const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state, last_locator_json, last_interaction_at FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(item.id, revision.id) as { percent: number; completion_state: string; last_locator_json: string | null; last_interaction_at: string } | undefined : undefined;
+    const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state, last_locator_json, last_interaction_at, context_id FROM progress_latest WHERE resource_id = ? AND resource_revision_id = ?").get(item.id, revision.id) as { percent: number; completion_state: string; last_locator_json: string | null; last_interaction_at: string; context_id: string } | undefined : undefined;
     const layout = revision ? readLayout(store, revision.id) : undefined;
     const location = revision ? resolveLocation(store, revision.id) ?? undefined : undefined;
     return {
@@ -281,6 +284,8 @@ export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantReg
         completion: progress?.completion_state ?? "new",
         locator: progress?.last_locator_json ? JSON.parse(progress.last_locator_json) : null,
         lastInteractionAt: progress?.last_interaction_at ?? null,
+        contextId: progress ? progress.context_id || null : null,
+        contextName: progress ? contextName(store, progress.context_id) : null,
       },
       unit: layout?.unit ?? null,
       total: layout?.total ?? 0,

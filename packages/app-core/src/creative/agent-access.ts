@@ -27,7 +27,9 @@ export const AGENT_EDIT_LABEL = "Agent：";
 export const AGENT_RESULT_CHARS = 8000;
 
 /** What the model is not told about: a suggestion by an agent is its own text, with no model asked and no quoted sources. */
-const HIDDEN_PARAMETERS: Record<string, string[]> = { "draft.suggest": ["connectionId", "redoOf", "sources"] };
+const HIDDEN_PARAMETERS: Record<string, string[]> = { "draft.suggest": ["connectionId", "redoOf", "sources"], "project.addMaterial": ["origin"] };
+/** What the task supplies for every command that takes it: the context the conversation runs in. The model never has to say it, and what it says is replaced. */
+const TASK_PARAMETERS = ["contextId"];
 const REQUIRED_PARAMETERS: Record<string, string[]> = { "draft.suggest": ["text"] };
 
 /**
@@ -35,12 +37,18 @@ const REQUIRED_PARAMETERS: Record<string, string[]> = { "draft.suggest": ["text"
  * command that has options an agent may not use does not list them.
  */
 export function agentToolSchema(commandId: string, schema: Record<string, unknown>): Record<string, unknown> {
-  if (!AGENT_PROJECT_COMMANDS.includes(commandId)) return schema;
-  const hidden = new Set(["projectId", ...(HIDDEN_PARAMETERS[commandId] ?? [])]);
+  const project = AGENT_PROJECT_COMMANDS.includes(commandId);
+  if (!project && !takesContext(schema)) return schema;
+  const hidden = new Set([...TASK_PARAMETERS, ...(project ? ["projectId", ...(HIDDEN_PARAMETERS[commandId] ?? [])] : [])]);
   const properties = Object.fromEntries(Object.entries((schema.properties ?? {}) as Record<string, unknown>).filter(([key]) => !hidden.has(key)));
-  const required = [...new Set([...((schema.required as string[] | undefined) ?? []).filter((key) => !hidden.has(key)), ...(REQUIRED_PARAMETERS[commandId] ?? [])])];
+  const required = [...new Set([...((schema.required as string[] | undefined) ?? []).filter((key) => !hidden.has(key)), ...(project ? REQUIRED_PARAMETERS[commandId] ?? [] : [])])];
   const { required: _all, ...rest } = schema;
   return { ...rest, properties, ...(required.length ? { required } : {}) };
+}
+
+/** Whether a command takes the context of the conversation (a project or "最近"), from its own input schema. */
+export function takesContext(schema: Record<string, unknown> | undefined): boolean {
+  return Boolean(schema && typeof schema.properties === "object" && schema.properties && "contextId" in schema.properties);
 }
 
 /** Whether a command takes a project at all, from its own input schema. */
@@ -83,7 +91,14 @@ export class AgentProjectAccess {
       "project.get": same,
       "project.objects": same,
       "project.terms": same,
-      "project.addMaterial": { check: (envelope, projectId, grant) => { this.same(envelope, projectId); this.material(this.input(envelope), projectId, grant); } },
+      "project.addMaterial": {
+        check: (envelope, projectId, grant) => {
+          this.same(envelope, projectId);
+          // What an agent adds is its own addition; only opening or making something in the project adds automatically.
+          if (this.input(envelope).origin !== undefined) throw new MangaError("FORBIDDEN", "a material added by an agent does not take origin", { details: { reason: "agent-option" } });
+          this.material(this.input(envelope), projectId, grant);
+        },
+      },
       "project.addTerm": {
         check: (envelope, projectId) => {
           this.same(envelope, projectId);
@@ -171,6 +186,12 @@ export class AgentProjectAccess {
     const row = grant.sessionId ? this.store.sqlite.prepare("SELECT project_id AS projectId FROM agent_sessions WHERE id = ?").get(grant.sessionId) as { projectId: string | null } | undefined : undefined;
     if (!row?.projectId || !this.projects.exists(row.projectId)) throw denied("this task does not belong to a project", "no-project");
     return row.projectId;
+  }
+
+  /** The context a task runs in: the project its conversation belongs to, or null for "最近". */
+  contextOf(grant: ScopeGrant): string | null {
+    const row = grant.sessionId ? this.store.sqlite.prepare("SELECT project_id AS projectId FROM agent_sessions WHERE id = ?").get(grant.sessionId) as { projectId: string | null } | undefined : undefined;
+    return row?.projectId && this.projects.exists(row.projectId) ? row.projectId : null;
   }
 
   /** The reply, cut to what the model can be given: long text is shortened and long lists lose their tail, each saying so. */

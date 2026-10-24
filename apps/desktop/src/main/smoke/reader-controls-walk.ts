@@ -4,7 +4,7 @@ import { js } from "./common.ts";
 import { PLAYER_MENU_OBSERVATIONS } from "./player-menus-walk.ts";
 
 /**
- * AT-83 in the real window: the three readers have no bar of their own at the top (the title bar names the work and goes back), a position
+ * AT-83 in the real window: the three readers have no bar of their own at the top (the reader's tab names the work), a position
  * is typed into where it is shown, the comic turns its pages with the wheel and zooms with Ctrl and the wheel, and the player's arrows step
  * on a tap and keep going while they are held. Inputs go through the window's own input path (trusted keys, mouse buttons and wheel).
  */
@@ -23,12 +23,12 @@ async function centreOf(view: BrowserWindow, testId: string): Promise<Point | nu
   })()`);
 }
 
-/** What the reader has in the place a top bar used to be: nothing but the stage, and the work's name in the title bar. */
+/** What the reader has in the place a top bar used to be: nothing but the stage, and the work's name on its tab. */
 const noTopBar = (reader: string, ids: string[], name: string) => `(() => {
   const root = document.querySelector('[data-testid="${reader}"]');
   const gone = ${JSON.stringify(ids)}.filter((id) => document.querySelector('[data-testid="' + id + '"]'));
   const bars = root ? [...root.querySelectorAll("header, .reader-top, .reader-chrome, .comic-header, .video-top")].map((el) => el.className || el.tagName) : ["no reader"];
-  const title = document.querySelector('[data-testid="shell-title"]')?.textContent ?? "";
+  const title = document.querySelector('[data-testid="tab"][data-focused="true"] .tab-title')?.textContent ?? "";
   return { gone, bars, title, named: title.includes(${JSON.stringify(name)}) };
 })()`;
 
@@ -43,7 +43,7 @@ export async function walkComicControls(view: BrowserWindow, observe: Observe, n
   const bars = await js<{ gone: string[]; bars: string[]; title: string; named: boolean }>(view, noTopBar("comic-reader", ["comic-back", "comic-title", "comic-header"], name));
   detail.topBar = bars;
   if (bars.gone.length || bars.bars.length) problems.push(`the reader still has a bar of its own (${[...bars.gone, ...bars.bars].join(", ")})`);
-  if (!bars.named) problems.push("the title bar does not name the comic");
+  if (!bars.named) problems.push("the tab does not name the comic");
 
   // The position is typed where it is shown.
   const total = await js<number>(view, String.raw`Number((document.querySelector('[data-testid="comic-position"]')?.textContent ?? "").match(/\d+\D+(\d+)/)?.[1] ?? 0)`);
@@ -108,7 +108,7 @@ export async function walkPlayerControls(view: BrowserWindow, observe: Observe, 
   const bars = await js<{ gone: string[]; bars: string[]; title: string; named: boolean }>(view, noTopBar("video-reader", ["video-back", "video-title", "video-episode", "video-next", "video-end-next"], name));
   detail.topBar = bars;
   if (bars.gone.length || bars.bars.length) problems.push(`the player still has a bar of its own (${[...bars.gone, ...bars.bars].join(", ")})`);
-  if (!bars.named) problems.push("the title bar does not name the video");
+  if (!bars.named) problems.push("the tab does not name the video");
 
   const stateOf = () => js<{ time: number; paused: boolean; rate: number; duration: number }>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return { time: v.currentTime, paused: v.paused, rate: v.playbackRate, duration: v.duration }; })()`);
   // Start still, at the beginning.
@@ -189,7 +189,7 @@ export async function walkNovelControls(view: BrowserWindow, observe: Observe, n
   const bars = await js<{ gone: string[]; bars: string[]; title: string; named: boolean }>(view, noTopBar("reading-page", ["reading-title", "reading-back", "reading-chrome", "reading-prev", "reading-next"], name));
   detail.topBar = bars;
   if (bars.gone.length || bars.bars.length) problems.push(`the reader still has a bar of its own (${[...bars.gone, ...bars.bars].join(", ")})`);
-  if (!bars.named) problems.push("the title bar does not name the book");
+  if (!bars.named) problems.push("the tab does not name the book");
   const foot = await js<{ inFooter: string[]; outside: string[] }>(view, `(() => {
     const footer = document.querySelector('[data-testid="reading-footer"]');
     const wanted = ["reading-panel-toc", "reading-panel-search", "reading-panel-bookmarks", "reading-bookmark-add", "reading-fullscreen", "reading-settings"];

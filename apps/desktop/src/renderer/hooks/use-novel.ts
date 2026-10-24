@@ -1,25 +1,30 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NORMALIZATION_V1 } from "@manga/contracts/location";
 import type { ReadingStyle } from "../reading.tsx";
 import type { ReadingAsset, ReadingDocument } from "../reading.tsx";
 import type { Translator } from "@manga/i18n";
 import { asArray, call, messageOf, uid as id, type CommandResult } from "../lib/api.ts";
+import { announceCommand } from "../lib/lists-changed.ts";
 import { relinkNotice, relinkResource } from "../lib/relink.ts";
 import type { AgentSelection, Bookmark, SourceCard } from "../lib/types.ts";
 import { captureBus } from "../voice/capture-bus.ts";
 import { quoteTags } from "../lib/quote-tags.ts";
 import { novelDebugOf, readerContext } from "../lib/reader-context.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
 
 export type NovelDeps = {
   i18n: Translator;
   setError: (message?: string) => void;
   setNotice: (message?: string, action?: { label: string; onClick: () => void }) => void;
-  setPage: (page: string) => void;
-  /** Shared with the Agent pane so a stale answer for a book that is no longer open is dropped by both. */
-  viewRequest: MutableRefObject<number>;
-  ensureBoundSession: (kind: "resource" | "project" | "note", targetId: string, request?: number) => Promise<string | undefined>;
-  openNote: (objectId: string, focusBlockId?: string) => Promise<void>;
+  /** The context the book is read in: its position, read ranges and materials are that context's (A-96). */
+  contextId: string | null;
+  /** The tab the reader is in: the Agent and the recorder hear it under this name. */
+  tabId: string;
+  /** A note is opened in its own tab. */
+  openNote: (objectId: string, focusBlockId?: string) => void | Promise<void>;
   refresh: () => Promise<void>;
+  /** The reader knows more about what it shows (its work, its title) than the tab was opened with. */
+  onFacts?: (facts: { workId: string | null; heading: string }) => void;
 };
 
 /** What the title bar says while a book is open: the work's name, and the file's own name after it when the work has several (a folder of chapters). */
@@ -31,11 +36,12 @@ export function readerHeading(book: string, work: { title: string; many: boolean
 const run = (commandId: string, input: unknown): Promise<CommandResult> => window.manga.command({ commandId, idempotencyKey: id(), input });
 
 /**
- * The novel reader's state: the open book, its slice, highlights, bookmarks, assets and the note-source round trip.
- * Every await re-checks `viewRequest`, so an answer for a book the reader has already left never lands on screen.
+ * The novel reader's state in one tab: the open book, its slice, highlights, bookmarks, assets and the note-source round trip.
+ * Every await re-checks the request counter, so an answer for a book the reader has already left never lands on screen.
  */
 export function useNovel(deps: NovelDeps) {
-  const { i18n, setError, setNotice, setPage, viewRequest, ensureBoundSession, openNote, refresh } = deps;
+  const { i18n, setError, setNotice, contextId, tabId, openNote, refresh } = deps;
+  const viewRequest = useRef(0);
   const [reading, setReading] = useState<ReadingDocument | null>(null);
   const [hits, setHits] = useState<Array<{ text: string; fragmentId?: string; locator?: { partId: string; range: { start: number; end: number } } }>>([]);
   const [searched, setSearched] = useState(false);
@@ -46,7 +52,6 @@ export function useNovel(deps: NovelDeps) {
   const [sourceCard, setSourceCard] = useState<SourceCard | null>(null);
   const [returnTo, setReturnTo] = useState<{ objectId: string; blockId: string | null } | null>(null);
   const [agentSelection, setAgentSelection] = useState<AgentSelection | null>(null);
-  const [visible, setVisible] = useState(false);
   /** The work the open book belongs to, when it has one: the reader's back goes to its page. */
   const [workId, setWorkId] = useState<string | null>(null);
   /** The work's own name, and whether it has more than one resource: the title bar names the work, not a chapter file. */
@@ -59,7 +64,7 @@ export function useNovel(deps: NovelDeps) {
   const sliceKey = reading?.slice ? `${reading.slice.partId}:${reading.slice.start}:${reading.slice.end}` : "";
   useEffect(() => {
     if (!reading?.slice) {
-      if (!reading && announced.current) { captureBus.clear(announced.current); announced.current = null; }
+      if (!reading && announced.current) { captureBus.clear(announced.current, tabId); announced.current = null; }
       return;
     }
     const locator = {
@@ -68,7 +73,7 @@ export function useNovel(deps: NovelDeps) {
     };
     const changed = announced.current !== reading.resourceId;
     announced.current = reading.resourceId;
-    captureBus.emit({ reason: changed ? "resource_change" : "position", resourceId: reading.resourceId, resourceRevisionId: reading.revisionId, locator });
+    captureBus.emit({ reason: changed ? "resource_change" : "position", resourceId: reading.resourceId, resourceRevisionId: reading.revisionId, locator }, tabId);
   }, [reading?.resourceId, reading?.revisionId, sliceKey]);
   // The right pane's conversation reads where the book is: the part, the window and the opening lines of it.
   useEffect(() => {
@@ -80,11 +85,11 @@ export function useNovel(deps: NovelDeps) {
       partId: slice.partId, partTitle: part?.title ?? reading.toc.find((item) => item.partId === slice.partId)?.label ?? "",
       start: slice.start, end: Math.max(slice.end, slice.start), excerpt: [...slice.text].slice(0, 200).join(""),
       debug: novelDebugOf(reading.progress, reading.readRanges, part),
-    });
+    }, tabId);
   }, [reading?.resourceId, reading?.revisionId, sliceKey, workId, reading?.progress?.restoredFrom, reading?.progress?.restoredRange?.start, reading?.readRanges?.length]);
   useEffect(() => {
     const resourceId = reading?.resourceId;
-    return () => { if (resourceId) { readerContext.clear(resourceId); quoteTags.clearFor(resourceId); } };
+    return () => { if (resourceId) { readerContext.clear(resourceId, tabId); quoteTags.clearFor(resourceId); } };
   }, [reading?.resourceId]);
   useEffect(() => {
     if (!agentSelection?.partId) return;
@@ -94,20 +99,23 @@ export function useNovel(deps: NovelDeps) {
         kind: "text", partId: agentSelection.partId, representationId: agentSelection.resourceRevisionId, normalizationVersion: NORMALIZATION_V1,
         range: { start: agentSelection.start, end: Math.max(agentSelection.end, agentSelection.start) }, quote: { exact: agentSelection.quote.slice(0, 200) },
       },
-    });
+    }, tabId);
   }, [agentSelection]);
+
+  // The tab is let go (a reader out of sight beyond the last ones used): the pictures it held are released with it.
+  useEffect(() => () => {
+    for (const url of Object.values(assetUrlsRef.current)) URL.revokeObjectURL(url);
+    assetUrlsRef.current = {};
+  }, []);
 
   function publishReading(next: ReadingDocument | null) {
     readingRef.current = next;
     setReading(next);
-    // An opened book is shown in the reader, whichever route opened it.
-    if (next) setVisible(true);
   }
-
 
   async function openResource(resourceId: string) {
     const request = ++viewRequest.current;
-    const result = await run("library.read", { resourceId });
+    const result = await run("library.read", { resourceId, contextId });
     if (request !== viewRequest.current) return;
     if (result.status === "error") { setError(result.error?.message); return; }
     const document = (result.value ?? null) as ReadingDocument | null;
@@ -122,19 +130,19 @@ export function useNovel(deps: NovelDeps) {
     setAgentSelection(null);
     const touched = await run("works.open", { resourceId });
     if (request !== viewRequest.current) return;
-    const owner = touched.status === "ok" ? ((touched.value as { workId?: string | null } | undefined)?.workId ?? null) : null;
-    setWorkId(owner);
-    const named = owner ? await run("works.get", { workId: owner }) : null;
+    const ownerWork = touched.status === "ok" ? ((touched.value as { workId?: string | null } | undefined)?.workId ?? null) : null;
+    setWorkId(ownerWork);
+    const named = ownerWork ? await run("works.get", { workId: ownerWork }) : null;
     if (request !== viewRequest.current) return;
     const info = named?.status === "ok" ? (named.value as { title?: string; resources?: unknown[] } | undefined) : undefined;
     setWork(info?.title ? { title: info.title, many: asArray(info.resources).length > 1 } : null);
+    if (document) deps.onFacts?.({ workId: ownerWork, heading: readerHeading(document.title, info?.title ? { title: info.title, many: asArray(info.resources).length > 1 } : null) });
+    void autoAddMaterial(contextId, "resource", resourceId);
     await loadBookmarks(resourceId);
     if (request !== viewRequest.current) return;
     if (document) await loadAssets(document, request);
     if (request !== viewRequest.current) return;
     if (document?.format === "pdf") await loadOriginal(document.resourceId, document.revisionId, request);
-    if (request !== viewRequest.current) return;
-    if (document?.resourceId) await ensureBoundSession("resource", document.resourceId, request);
   }
 
   async function loadAssets(document: ReadingDocument, request: number) {
@@ -219,6 +227,7 @@ export function useNovel(deps: NovelDeps) {
     if (!options.highlight) {
       const progress = await window.manga.command({
         commandId: "progress.set", idempotencyKey: id(), input: {
+          contextId,
           resourceId: next.resourceId,
           resourceRevisionId: revisionId,
           consumed: false,
@@ -230,6 +239,8 @@ export function useNovel(deps: NovelDeps) {
       });
       if (request !== viewRequest.current) return;
       if (progress.status === "error") setError(progress.error?.message);
+      // A book read in "最近" goes to the top of the novels' list there.
+      else announceCommand("progress.set", { contextId, resourceId: next.resourceId });
     }
     if (request !== viewRequest.current) return;
     await loadAssets(next, request);
@@ -242,6 +253,7 @@ export function useNovel(deps: NovelDeps) {
       commandId: "progress.set",
       idempotencyKey: id(),
       input: {
+        contextId,
         resourceId: reading.resourceId,
         resourceRevisionId: reading.revisionId,
         consumed: true,
@@ -292,9 +304,7 @@ export function useNovel(deps: NovelDeps) {
     const card = value?.card ?? { status: value?.status ?? "unresolved" };
     setHighlight(null);
     if (value?.resourceId) {
-      await ensureBoundSession("resource", value.resourceId, request);
-      if (request !== viewRequest.current) return;
-      const read = await run("library.read", { resourceId: value.resourceId, revisionId: value.resourceRevisionId });
+      const read = await run("library.read", { resourceId: value.resourceId, revisionId: value.resourceRevisionId, contextId });
       if (request !== viewRequest.current) return;
       if (read.status === "error") {
         // A source whose resource is gone must say so instead of leaving the previous book on screen.
@@ -346,14 +356,12 @@ export function useNovel(deps: NovelDeps) {
     if (request !== viewRequest.current) return;
     // A jump that cannot be placed must not keep an unrelated card on screen.
     setSourceCard(card);
-    setPage("reading");
   }
 
   async function backToNote() {
     if (returnTo?.objectId) await openNote(returnTo.objectId, returnTo.blockId ?? undefined);
     setSourceCard(null);
     setReturnTo(null);
-    setPage("notes");
   }
 
   /** Re-point a stale note source at the file the user picks, using the existing resource identity. */
@@ -432,7 +440,6 @@ export function useNovel(deps: NovelDeps) {
     setBookmarks([]);
     setWorkId(null);
     setWork(null);
-    setVisible(false);
   }
 
   async function search(text: string) {
@@ -452,8 +459,8 @@ export function useNovel(deps: NovelDeps) {
   }
 
   return {
-    reading, hits, searched, bookmarks, assetUrls, highlight, originalBytes, sourceCard, returnTo, agentSelection, visible, workId, work,
-    setAgentSelection, setVisible,
+    reading, hits, searched, bookmarks, assetUrls, highlight, originalBytes, sourceCard, returnTo, agentSelection, workId, work,
+    setAgentSelection,
     openResource, openSlice, markProgress, selectText, openNoteSource, backToNote, repairNoteSource,
     addBookmark, removeBookmark, openBookmark, closeReader, search, saveStyle,
   };

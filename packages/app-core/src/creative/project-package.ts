@@ -15,7 +15,7 @@ import { writeExportFile } from "./export-file.ts";
 export const PROJECT_PACKAGE_FORMAT = "manga-project-package-v1";
 export const PROJECT_PACKAGE_VERSION = 1;
 /** The version of the rows a package carries; a package from a newer data version is not read. */
-export const PROJECT_PACKAGE_DATA_VERSION = 9;
+export const PROJECT_PACKAGE_DATA_VERSION = 12;
 export const PROJECT_PACKAGE_EXTENSION = "manga-project.zip";
 
 export const PACKAGE_LIMITS = { fileBytes: 128 * 1024 * 1024, entryBytes: 32 * 1024 * 1024, totalBytes: 128 * 1024 * 1024, entries: 5000 } as const;

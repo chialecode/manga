@@ -15,7 +15,7 @@ describe("schema v8 migration (A-50, A-51, A-52)", () => {
     const { dir, ids } = makeLegacyProfile(7);
     const store = new DrizzleStore({ profileDir: dir, hostId: "migrate-v8" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(11);
+      expect(PRODUCT_SCHEMA_VERSION).toBe(12);
       expect(store.getMeta("schemaVersion")).toBe(String(PRODUCT_SCHEMA_VERSION));
       expect(fs.existsSync(path.join(dir, "manga.sqlite.premigrate-v7"))).toBe(true);
       // The backup is the v7 schema, untouched.

@@ -30,7 +30,7 @@
 .video-holding { left: 50%; transform: translateX(-50%); }
 .video-subtitle-notice { right: 12px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .video-end { position: absolute; z-index: 4; inset: auto 0 calc(24px + var(--player-lift, 0px)) 0; margin: 0 auto; width: fit-content; max-width: calc(100% - 32px); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: 12px; background: var(--color-player-shade); font-size: 13px; }
-.video-context { position: fixed; z-index: 60; min-width: 140px; padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px var(--color-player-pop-shadow); }
+.video-context { position: fixed; inset: auto; margin: 0; z-index: 60; min-width: 140px; padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px var(--color-player-pop-shadow); }
 .video-context > button { text-align: left; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
 .video-context > button:hover { background: var(--color-accent-soft); }
 .video-context > button[aria-checked="true"]::before { content: "✓ "; }

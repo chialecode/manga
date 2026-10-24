@@ -4,21 +4,24 @@ import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
 import { productWindow } from "../window-options.ts";
-import { clickTestId, openFromShelf, revealNovelControls, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, closeTabs, openFromShelf, openShelf, revealNovelControls, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
 import { READER_CONTROL_OBSERVATIONS, walkComicControls, walkNovelControls, walkPlayerControls } from "./reader-controls-walk.ts";
 import { PLAYER_MENU_OBSERVATIONS, walkPlayerFullscreen, walkPlayerMenus } from "./player-menus-walk.ts";
 import { DANMAKU_OBSERVATIONS, walkDanmaku } from "./danmaku-walk.ts";
 import { OVERLAY_OBSERVATIONS, walkComicOverlays, walkNovelOverlays, walkPlayerOverlays } from "./overlay-walk.ts";
-import { REWORK_OBSERVATIONS, screenshotWalk, walkModes, walkSettingsRoundTrip } from "./rework-walk.ts";
-import { capturePage, caller, clickFirst, ensureRightPane, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
+import { RETENTION_OBSERVATIONS, screenshotWalk, walkSettingsRoundTrip } from "./retention-walk.ts";
+import { capturePage, caller, clickFirst, ensureDock, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 import { FRAME_OBSERVATIONS, runFrameWalk } from "./frame-walk.ts";
 import { MANAGEMENT_OBSERVATIONS, runManagementWalk } from "./management-walk.ts";
+import { RAIL_OBSERVATIONS, runRailWalk } from "./rail-walk.ts";
+import { WORKSPACE_OBSERVATIONS, runWorkspaceWalk } from "./workspace-walk.ts";
+import { prepareRestart } from "./workspace-restart.ts";
 
 /**
  * The main flows end to end in the real window, with synthetic folders and samples only: the window starts on the library paths page
  * of an empty library; three library paths (novel, comic, video) are added and scanned in the background; a work opens from its card to
- * its own page; a note goes from the right pane; every settings page is reachable; and the comic, player and novel controls are checked
- * at three window sizes (AT-68), and the floating capsule is checked not to cover any of them. Each observation is named; the package stage requires every one of them to pass.
+ * its own page; a note goes from the dock; every settings page is reachable; and the comic, player and novel controls are checked
+ * at three window sizes (AT-68), and the floating capsule is checked not to cover any of them. The tabs, the split and the contexts are walked after them. Each observation is named; the package stage requires every one of them to pass.
  */
 
 export type Observation = { name: string; status: "passed" | "failed"; detail: unknown };
@@ -40,9 +43,11 @@ export const REQUIRED_OBSERVATIONS = [
   ...READER_CONTROL_OBSERVATIONS,
   ...DANMAKU_OBSERVATIONS,
   ...OVERLAY_OBSERVATIONS,
-  ...REWORK_OBSERVATIONS,
+  ...RETENTION_OBSERVATIONS,
   ...FRAME_OBSERVATIONS,
+  ...WORKSPACE_OBSERVATIONS,
   ...MANAGEMENT_OBSERVATIONS,
+  ...RAIL_OBSERVATIONS,
 ] as const;
 
 type Rect = { x: number; y: number; w: number; h: number; r: number; b: number };
@@ -70,18 +75,16 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   };
   // A hidden window presents no frames, so transitions (the reader controls sliding away) never run in it; the person's keyboard is left alone.
   view.showInactive();
-  const shot = (name: string) => capturePage(view, evidenceDir, `ui-walk-${name}.png`);
-  // A reader fills the main panel: its root is the panel's content area (inside the panel's border) to within a pixel on every side (A-63).
+  const shot = (name: string, mark?: string) => capturePage(view, evidenceDir, `ui-walk-${name}.png`, mark);
+  // A reader fills its tab: its root is the tab panel in front, the room the dock leaves under the strip, to within a pixel on every side (A-63).
   const fillRows: Record<SizeName, Array<{ reader: string; fills: boolean; root: Rect | null; panel: Rect | null }>> = { wide: [], narrow: [], short: [] };
   const checkFill = async (size: SizeName, reader: string, rootTestId: string) => {
     const got = await js<{ root: Rect | null; panel: Rect | null }>(view, `(() => {
       const rect = ${RECT};
       const root = document.querySelector('[data-testid="${rootTestId}"]');
-      const main = document.querySelector('[data-testid="shell-main"]');
-      if (!root || !main) return { root: root ? rect(root) : null, panel: null };
-      const box = main.getBoundingClientRect();
-      const x = box.x + main.clientLeft, y = box.y + main.clientTop;
-      return { root: rect(root), panel: { x, y, w: main.clientWidth, h: main.clientHeight, r: x + main.clientWidth, b: y + main.clientHeight } };
+      const panel = document.querySelector('[data-testid="tab-panel"][data-focused="true"]');
+      if (!root || !panel) return { root: root ? rect(root) : null, panel: null };
+      return { root: rect(root), panel: rect(panel) };
     })()`);
     const fills = Boolean(got.root && got.panel) && near(got.root!.x, got.panel!.x) && near(got.root!.y, got.panel!.y) && near(got.root!.r, got.panel!.r) && near(got.root!.b, got.panel!.b);
     fillRows[size].push({ reader, fills, root: got.root, panel: got.panel });
@@ -91,13 +94,13 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     view.setContentSize(width, height);
     await sleep(450);
   };
-  // The floating capsule (microphone and quick note) shows while the right pane is folded. On a page with a bar of controls it must not sit on
-  // any of them, with its note box open or closed: the pane is folded for the check when it is open, then put back as it was.
+  // The floating capsule (microphone and quick note) shows while the dock is folded. On a page with a bar of controls it must not sit on
+  // any of them, with its note box open or closed: the dock is folded for the check when it is open, then put back as it was.
   const capsuleRows: Array<Record<string, unknown>> = [];
   const capsuleCheck = async (label: string, selectors: string[]) => {
     const paneWasOpen = !(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="chat-capsule"]'))`));
     if (paneWasOpen) {
-      await clickTestId(view, "shell-right-toggle", 1500);
+      await clickTestId(view, "shell-dock-toggle", 1500);
       await waitUntil(view, `document.querySelector('[data-testid="chat-capsule"]')`, 2500);
     }
     const shown = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="chat-capsule"]'))`);
@@ -133,7 +136,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     const open = await measure();
     await clickTestId(view, "capsule-note");
     capsuleRows.push({ label, shown: true, checked: closed.checked, covered: [...closed.covered, ...open.covered.map((item) => `note-open:${item}`)] });
-    if (paneWasOpen) { await clickTestId(view, "shell-right-toggle", 1500); await sleep(250); }
+    if (paneWasOpen) { await clickTestId(view, "shell-dock-toggle", 1500); await sleep(250); }
   };
   await call("settings.skipAi", {});
 
@@ -189,7 +192,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
 
   // ---- 3. a card opens the work's own page; reading starts from there -----------------------------------------------------
   const rail = await toRail(view);
-  const novelHome = rail && await clickTestId(view, "nav-reading");
+  const novelHome = rail && await openShelf(view, "novel");
   const cardOpened = novelHome && await clickFirst(view, "open-", 8000);
   const homeShown = cardOpened && await waitForTestId(view, "page-work", "data-present", null, 8000);
   const readEnabled = homeShown && await waitUntil(view, `(() => { const b = document.querySelector('[data-testid="work-read"]'); return b && !b.disabled; })()`, 8000);
@@ -197,17 +200,17 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   // Opening a card must not open the file: the reader is not on screen until "read" is pressed.
   const readerClosed = await js<boolean>(view, `!document.querySelector('[data-testid="reading-body"]')`);
   observe("work-home-open", Boolean(homeShown) && Boolean(readEnabled) && readerClosed && title.length > 0, { homeShown, readEnabled, readerClosed, title });
-  await shot("work-home-wide");
+  await shot("work-home-wide", "page-work");
 
-  // ---- 4. a note from the right pane, on the work's page ---------------------------------------------------------------------
-  const pane = await ensureRightPane(view);
+  // ---- 4. a note from the dock, on the work's page ---------------------------------------------------------------------
+  const pane = await ensureDock(view);
   await clickTestId(view, "chat-mode-note");
-  await setField(view, "agent-composer", "返工烟测作品笔记");
+  await setField(view, "agent-composer", "作品页笔记");
   await sleep(100);
   const sent = pane && await clickTestId(view, "agent-send");
-  const bubble = sent && await waitUntil(view, `[...document.querySelectorAll('[data-testid^="bubble-note-"]')].some((el) => (el.textContent || "").includes("返工烟测作品笔记")) || (document.querySelector('[data-testid="chat-log"]')?.textContent ?? "").includes("返工烟测作品笔记")`, 15_000);
+  const bubble = sent && await waitUntil(view, `[...document.querySelectorAll('[data-testid^="bubble-note-"]')].some((el) => (el.textContent || "").includes("作品页笔记")) || (document.querySelector('[data-testid="chat-log"]')?.textContent ?? "").includes("作品页笔记")`, 15_000);
   const workspace = await call("workspace.get", {});
-  const noteRow = (((workspace.value as { notes?: Array<{ id: string; title: string }> } | undefined)?.notes) ?? []).find((note) => note.title.includes("返工烟测作品笔记"));
+  const noteRow = (((workspace.value as { notes?: Array<{ id: string; title: string }> } | undefined)?.notes) ?? []).find((note) => note.title.includes("作品页笔记"));
   observe("right-pane-note", Boolean(bubble) && Boolean(noteRow), { pane, bubble: Boolean(bubble), noteSaved: Boolean(noteRow) });
 
   // ---- 5. every settings page is reachable ---------------------------------------------------------------------------------------
@@ -218,7 +221,9 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   for (const page of pages) {
     if ((await clickTestId(view, `settings-nav-${page}`, 3000)) && await waitForTestId(view, `settings-page-${page}`, "data-present", null, 6000)) reached.push(page);
   }
-  observe("settings-pages-reachable", pages.length >= 12 && groups === 4 && reached.length === pages.length, { groups, pages: pages.length, reached: reached.length, missing: pages.filter((page) => !reached.includes(page)) });
+  // The directory has three groups now (basic, agent, logs): the records are not a settings page any more (A-101), and each page is a row with its picture.
+  const withPicture = await js<number>(view, `[...document.querySelectorAll('[data-testid^="settings-nav-"]')].filter((el) => el.querySelector("svg")).length`);
+  observe("settings-pages-reachable", pages.length >= 12 && groups === 3 && reached.length === pages.length && !pages.includes("records") && withPicture === pages.length, { groups, pages: pages.length, reached: reached.length, withPicture, missing: pages.filter((page) => !reached.includes(page)) });
   await shot("settings-wide");
 
   // ---- 6. comic, player and novel controls at three window sizes (AT-68) ------------------------------------------------------------
@@ -242,7 +247,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   await toRail(view);
 
   // Comic: one reader stays open while the window changes size, so "the page follows the frame, not its own content" is what is tested.
-  const comicOpen = comicId ? await openFromShelf(view, "nav-comic", comicId, 8000) : false;
+  const comicOpen = comicId ? await openFromShelf(view, "comic", comicId, 8000) : false;
   const comicReady = comicOpen && await waitUntil(view, `document.querySelector('.comic-page[data-state="ready"]')`, 20_000);
   const measureComic = () => js<{ stage: Rect; page: Rect | null; client: { w: number; h: number }; scrollX: number; scrollY: number; percent: string; docOverflow: number; viewport: { w: number; h: number } } | null>(view, `(() => {
     const rect = ${RECT};
@@ -328,12 +333,12 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   if (comicReady) await walkComicOverlays(view, observe, shot);
   else observe("overlays-comic", false, { reason: "the comic did not open" });
   if (comicReady && boardId) await screenshots.comic();
-  if (comicOpen) await clickTestId(view, "nav-back");
+  if (comicOpen) await closeTabs(view, ["reader"]);
 
   // Player: the controls that stay on screen are inside the window, and the "…" panel is not cut off.
   await resize("wide");
   await toRail(view);
-  const videoOpen = videoId ? await openFromShelf(view, "nav-video", videoId, 8000) : false;
+  const videoOpen = videoId ? await openFromShelf(view, "video", videoId, 8000) : false;
   const videoReady = videoOpen && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 40_000);
   for (const size of Object.keys(WINDOW_SIZES) as SizeName[]) {
     await resize(size);
@@ -369,21 +374,20 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     await walkPlayerFullscreen(view, observe, shot);
     await walkPlayerOverlays(view, observe, shot);
     await walkDanmaku(view, observe, shot);
-    // The pictures of the two readers go onto the board; then the page is left for settings and the mode for the other one, and both come back (AT-87, AT-88).
+    // The pictures of the two readers go onto the board; then the page is left for settings, and comes back as it was (AT-88).
     if (boardId) await screenshots.video();
     await screenshots.finish();
     await walkSettingsRoundTrip(view, observe, shot);
-    await walkModes(view, call, observe, shot);
   } else {
     observe("reader-controls-player", false, { reason: "the video did not become ready" });
-    for (const name of [...PLAYER_MENU_OBSERVATIONS, "overlays-player", ...DANMAKU_OBSERVATIONS, ...REWORK_OBSERVATIONS]) observe(name, false, { reason: "the video did not become ready" });
+    for (const name of [...PLAYER_MENU_OBSERVATIONS, "overlays-player", ...DANMAKU_OBSERVATIONS, ...RETENTION_OBSERVATIONS]) observe(name, false, { reason: "the video did not become ready" });
   }
-  if (videoOpen) await clickTestId(view, "nav-back");
+  if (videoOpen) await closeTabs(view, ["reader"]);
 
   // Novel: the only bar is at the bottom; its controls come back at the bottom edge, stay in the window, and the settings panel is not cut off.
   await resize("wide");
   await toRail(view);
-  const novelOpen = novelId ? await openFromShelf(view, "nav-reading", novelId, 8000) : false;
+  const novelOpen = novelId ? await openFromShelf(view, "novel", novelId, 8000) : false;
   const novelReady = novelOpen && await waitForTestId(view, "reading-body", "data-present", null, 10_000);
   for (const size of Object.keys(WINDOW_SIZES) as SizeName[]) {
     await resize(size);
@@ -435,16 +439,27 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   const checkedRows = capsuleRows.filter((row) => row.shown === true && Number(row.checked) > 0);
   observe("capsule-clear-of-controls", checkedRows.length >= 4 && covering.length === 0, { rows: capsuleRows, covering });
 
-  // ---- 7. the window frame (AT-81, AT-82): title bar, dividers, history, rail, scrollbars, closing an entry -------------------------------------------------
-  const resourceIds: string[] = [];
-  for (const work of works) {
-    const got = (await call("works.get", { workId: work.id })).value as { resources?: Array<{ id: string }> } | undefined;
-    for (const item of got?.resources ?? []) resourceIds.push(item.id);
-  }
-  await runFrameWalk({ view, call, observe, shot, resize, comicId, videoId, resourceIds });
+  // ---- 7. the window frame (AT-81, AT-82, AT-105): the window's buttons, regions, history, dividers, rail, scrollbars, window full screen ------------------------
+  await runFrameWalk({ view, call, observe, shot, resize, comicId, projectId });
 
-  // ---- 8. what the third round added to managing the library: opening what cannot be opened, deleting an entry or a conversation, the model dialog, the new words ----
+  // ---- 8. the workspace (AT-110 — AT-118): tabs, the split, the contexts, the same file in three of them, the dock that follows the tab in front ------------------
+  await runWorkspaceWalk({
+    view, call, observe, shot, resize, comicId, videoId, novelId,
+    titles: { comic: titleOf("comic"), video: titleOf("video"), novel: titleOf("novel") },
+    projectId, boardId,
+  });
+
+  // ---- 9. managing the library: opening what cannot be opened, deleting an entry or a conversation, the model dialog, the new words ----
   await runManagementWalk({ view, appService, call, observe, shot, resize, folders, works, comicId, videoId });
+
+  // ---- 10. the icon rail, the sidebar and its cards, the search box, the settings view, a saved layout with tabs that are gone (AT-119 — AT-122) ----
+  await runRailWalk({
+    view, appService, call, observe, shot, resize, projectId, boardId, videoId,
+    titles: { comic: titleOf("comic"), video: titleOf("video"), novel: titleOf("novel") },
+  });
+
+  // ---- 11. the shape the next start of this Profile has to find: two contexts, the book and the library in two columns, the project's page, the window left in the project ----
+  await prepareRestart({ view, call, observe, logsDir, novelId, projectId });
 
   const failed = observations.filter((item) => item.status !== "passed").map((item) => item.name);
   const missing = REQUIRED_OBSERVATIONS.filter((name) => !observations.some((item) => item.name === name));

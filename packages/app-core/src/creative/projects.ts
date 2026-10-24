@@ -1,4 +1,4 @@
-import { MangaError, PROJECT_MATERIAL_KINDS, createId, type ProjectMaterialKind } from "@manga/contracts";
+import { MangaError, PROJECT_MATERIAL_KINDS, createId, type MaterialOrigin, type ProjectMaterialKind } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { describeObject, featureOfKind, resourcesOf, type ObjectKind, type ObjectOpens } from "./objects.ts";
 
@@ -24,7 +24,7 @@ const OVERVIEW_PROJECTS = 6;
 const OVERVIEW_ROWS = 8;
 
 export type ProjectMaterial = {
-  id: string; kind: ProjectMaterialKind; targetId: string; label: string; state: "ok" | "missing" | "disabled"; addedAt: string; opens?: ObjectOpens;
+  id: string; kind: ProjectMaterialKind; targetId: string; label: string; state: "ok" | "missing" | "disabled"; addedAt: string; origin: MaterialOrigin; opens?: ObjectOpens;
   /** What a project package said about material this profile does not have, so a missing reference can still be read. */
   snapshot?: { text: string; takenAt: string };
 };
@@ -162,7 +162,14 @@ export class ProjectService {
       const materials = Number(sqlite.prepare("DELETE FROM project_materials WHERE project_id = ?").run(projectId).changes);
       const terms = Number(sqlite.prepare("DELETE FROM project_terms WHERE project_id = ?").run(projectId).changes);
       sqlite.prepare("DELETE FROM project_snapshots WHERE project_id = ?").run(projectId);
+      // The project's conversations become conversations of "最近": the one about the project itself is a general conversation there, the rest keep their targets.
+      sqlite.prepare("UPDATE agent_sessions SET kind = 'shared', target_id = NULL WHERE project_id = ? AND kind = 'project'").run(projectId);
       const kept = Number(sqlite.prepare("UPDATE agent_sessions SET project_id = NULL WHERE project_id = ?").run(projectId).changes);
+      // What was kept per context goes with the context: where the person was in each resource, the tabs and layout, and the removed-material marks.
+      sqlite.prepare("DELETE FROM progress WHERE context_id = ?").run(projectId);
+      sqlite.prepare("DELETE FROM workspace_contexts WHERE context_id = ?").run(projectId);
+      sqlite.prepare("DELETE FROM project_material_exclusions WHERE project_id = ?").run(projectId);
+      sqlite.prepare("DELETE FROM schema_meta WHERE key = ?").run(`conversation.current.project.${projectId}`);
       sqlite.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
       return { projectId, removed: { materials, terms, objects: objects.n }, keptSessions: kept };
     })();
@@ -171,14 +178,14 @@ export class ProjectService {
   // ------------------------------------------------------------------ materials
 
   materials(projectId: string): ProjectMaterial[] {
-    const rows = this.store.sqlite.prepare("SELECT id, kind, target_id AS targetId, label, added_at AS addedAt FROM project_materials WHERE project_id = ? ORDER BY sort_order, added_at, id").all(projectId) as Array<{ id: string; kind: ProjectMaterialKind; targetId: string; label: string; addedAt: string }>;
+    const rows = this.store.sqlite.prepare("SELECT id, kind, target_id AS targetId, label, added_at AS addedAt, origin FROM project_materials WHERE project_id = ? ORDER BY sort_order, added_at, id").all(projectId) as Array<{ id: string; kind: ProjectMaterialKind; targetId: string; label: string; addedAt: string; origin: MaterialOrigin }>;
     return rows.map((row) => {
       const found = describeObject(this.store, row.kind as ObjectKind, row.targetId);
       const state = !found.exists ? "missing" : this.featureOn(featureOfKind(row.kind as ObjectKind)) ? "ok" : "disabled";
       // The name saved with the reference stays readable when what it pointed at is gone.
       const snap = found.exists ? undefined : this.store.sqlite.prepare("SELECT snapshot_json AS json, taken_at AS takenAt FROM project_snapshots WHERE project_id = ? AND kind = ? AND target_id = ?").get(projectId, row.kind, row.targetId) as { json: string; takenAt: string } | undefined;
       const text = snap ? String((JSON.parse(snap.json) as { text?: string }).text ?? "") : "";
-      return { id: row.id, kind: row.kind, targetId: row.targetId, label: found.exists && found.label ? found.label : row.label, state, addedAt: row.addedAt, ...(found.opens ? { opens: found.opens } : {}), ...(snap ? { snapshot: { text, takenAt: snap.takenAt } } : {}) };
+      return { id: row.id, kind: row.kind, targetId: row.targetId, label: found.exists && found.label ? found.label : row.label, state, addedAt: row.addedAt, origin: row.origin, ...(found.opens ? { opens: found.opens } : {}), ...(snap ? { snapshot: { text, takenAt: snap.takenAt } } : {}) };
     });
   }
 
@@ -201,28 +208,49 @@ export class ProjectService {
     return { objects: found };
   }
 
-  addMaterial(input: { projectId: string; kind: ProjectMaterialKind; targetId: string; label?: string }): ProjectMaterial {
+  /**
+   * Adds a reference. `origin: "auto"` is what opening or making something inside the project does (Q-33): it adds nothing the person has taken out of the
+   * project before (the answer is then `{ skipped: "excluded" }`), and a reference that is there already is left as it is. An addition by the person
+   * (the default) works even for something they removed earlier, and lifts that mark.
+   */
+  addMaterial(input: { projectId: string; kind: ProjectMaterialKind; targetId: string; label?: string; origin?: MaterialOrigin }): ProjectMaterial | { skipped: "excluded" | "limit" } {
     this.row(input.projectId);
     if (!(PROJECT_MATERIAL_KINDS as readonly string[]).includes(input.kind)) throw new MangaError("VALIDATION_ERROR", "that kind of material cannot be added to a project");
+    const origin: MaterialOrigin = input.origin ?? "manual";
     const found = describeObject(this.store, input.kind as ObjectKind, input.targetId);
     if (!found.exists) throw new MangaError("NOT_FOUND", "what you are adding does not exist");
     const existing = this.store.sqlite.prepare("SELECT id FROM project_materials WHERE project_id = ? AND kind = ? AND target_id = ?").get(input.projectId, input.kind, input.targetId) as { id: string } | undefined;
     const now = new Date().toISOString();
     let materialId = existing?.id;
     if (!materialId) {
-      if (this.count("SELECT COUNT(*) AS n FROM project_materials WHERE project_id = ?", input.projectId) >= MAX_MATERIALS) throw new MangaError("VALIDATION_ERROR", "this project already holds too many materials", { details: { reason: "limit" } });
+      const excluded = this.store.sqlite.prepare("SELECT 1 FROM project_material_exclusions WHERE project_id = ? AND kind = ? AND target_id = ?").get(input.projectId, input.kind, input.targetId);
+      if (origin === "auto" && excluded) return { skipped: "excluded" };
+      if (this.count("SELECT COUNT(*) AS n FROM project_materials WHERE project_id = ?", input.projectId) >= MAX_MATERIALS) {
+        if (origin === "auto") return { skipped: "limit" };
+        throw new MangaError("VALIDATION_ERROR", "this project already holds too many materials", { details: { reason: "limit" } });
+      }
       materialId = createId("pmt");
       const order = (this.store.sqlite.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM project_materials WHERE project_id = ?").get(input.projectId) as { n: number }).n;
-      this.store.sqlite.prepare("INSERT INTO project_materials(id, project_id, kind, target_id, label, sort_order, added_at) VALUES (?,?,?,?,?,?,?)").run(materialId, input.projectId, input.kind, input.targetId, (input.label ?? found.label).slice(0, 200), order, now);
-      this.store.sqlite.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now, input.projectId);
+      this.store.sqlite.transaction(() => {
+        this.store.sqlite.prepare("INSERT INTO project_materials(id, project_id, kind, target_id, label, sort_order, added_at, origin) VALUES (?,?,?,?,?,?,?,?)").run(materialId, input.projectId, input.kind, input.targetId, (input.label ?? found.label).slice(0, 200), order, now, origin);
+        if (origin === "manual") this.store.sqlite.prepare("DELETE FROM project_material_exclusions WHERE project_id = ? AND kind = ? AND target_id = ?").run(input.projectId, input.kind, input.targetId);
+        this.store.sqlite.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now, input.projectId);
+      })();
     }
     return this.materials(input.projectId).find((item) => item.id === materialId)!;
   }
 
+  /** Takes a reference out. What the person removed is not added again by opening it in this project; adding it by hand lifts that. */
   removeMaterial(projectId: string, materialId: string): { projectId: string; materialId: string } {
     this.row(projectId);
-    if (!this.store.sqlite.prepare("DELETE FROM project_materials WHERE id = ? AND project_id = ?").run(materialId, projectId).changes) throw new MangaError("NOT_FOUND", "that material is not in the project");
-    this.store.sqlite.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), projectId);
+    const row = this.store.sqlite.prepare("SELECT kind, target_id AS targetId FROM project_materials WHERE id = ? AND project_id = ?").get(materialId, projectId) as { kind: string; targetId: string } | undefined;
+    if (!row) throw new MangaError("NOT_FOUND", "that material is not in the project");
+    const now = new Date().toISOString();
+    this.store.sqlite.transaction(() => {
+      this.store.sqlite.prepare("DELETE FROM project_materials WHERE id = ? AND project_id = ?").run(materialId, projectId);
+      this.store.sqlite.prepare("INSERT OR REPLACE INTO project_material_exclusions(project_id, kind, target_id, removed_at) VALUES (?,?,?,?)").run(projectId, row.kind, row.targetId, now);
+      this.store.sqlite.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now, projectId);
+    })();
     return { projectId, materialId };
   }
 

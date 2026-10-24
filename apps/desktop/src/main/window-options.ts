@@ -8,10 +8,10 @@ export const productWindow = {
   backgroundColor: "#F3F4F7",
   /**
    * No system frame and no system caption buttons (`titleBarOverlay` is not set): the page draws minimize, maximize or restore, and close itself
-   * (A-91), and the top of every column is the height of those buttons. macOS keeps its traffic lights, which the page leaves room for.
+   * (A-91), and the top row is the height of those buttons. macOS keeps its traffic lights, which the page leaves room for.
    */
   titleBarStyle: "hidden" as const,
-  /** The height of a column's top and so of the window's buttons (`COLUMN_TOP` in shell.tsx). */
+  /** The height of the top row and so of the window's buttons (`TOP_ROW_HEIGHT` in the shell layout). */
   topHeightPx: 36,
 };
 

@@ -9,6 +9,7 @@ import { zhCNAcquisition } from "./messages-acquisition.ts";
 import { zhCNRoughcut } from "./messages-roughcut.ts";
 import { zhCNPlugins } from "./messages-plugins.ts";
 import { zhCNSemantic } from "./messages-semantic.ts";
+import { zhCNShell } from "./messages-shell.ts";
 import { zhCNWorkspace } from "./messages-workspace.ts";
 import { zhCNWorks } from "./messages-works.ts";
 
@@ -18,11 +19,9 @@ export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "zh-CN";
 
 const zhCNBase = {
-  "app.title": "MANGA",
   "app.channel.release": "正式版",
   "app.channel.development": "开发版",
   "app.channel.test": "测试通道",
-  "nav.agent": "对话",
   "nav.settings": "设置",
   "status.empty": "还没有内容",
   "status.loading": "正在加载…",
@@ -92,15 +91,6 @@ const zhCNBase = {
   "library.repair": "修复位置",
   "library.available": "可用",
   "library.unavailable": "不可用",
-  "mode.enthusiast": "娱乐模式",
-  "mode.creator": "工作模式",
-  "mode.group": "模式",
-  "mode.enthusiastHint": "阅读、观看与随手记录，和 Agent 聊天",
-  "mode.creatorHint": "整理笔记、管理项目与积累创作材料",
-  "shell.showLeft": "打开导航",
-  "shell.showRight": "打开辅助",
-  "shell.hideLeft": "收起导航",
-  "shell.hideRight": "收起辅助",
   "shell.stop": "停止任务",
   "reading.search": "在本书中查找",
   "reading.progress": "记到这里",
@@ -204,15 +194,13 @@ const zhCNBase = {
   "notes.titleSaved": "标题/标签已保存",
   "notes.saveTitle": "保存",
   "notes.cancelEdit": "取消",
-  "agent.sessionsNone": "还没有打开的资源会话",
   "package.decisions": "逐项选择",
   "package.rowDefault": "跟随整体策略",
   "session.open": "打开会话",
-  "session.active": "进行中",
 } as const;
 
 // Later catalogs replace the wording of an earlier screen whose behavior changed.
-const zhCN = { ...zhCNBase, ...zhCNMedia, ...zhCNWorkspace, ...zhCNCreative, ...zhCNCanvas, ...zhCNCopy, ...zhCNResearch, ...zhCNSemantic, ...zhCNPlugins, ...zhCNAcquisition, ...zhCNRoughcut, ...zhCNWorks, ...zhCNDanmaku, ...zhCNAgent } as const;
+const zhCN = { ...zhCNBase, ...zhCNMedia, ...zhCNWorkspace, ...zhCNShell, ...zhCNCreative, ...zhCNCanvas, ...zhCNCopy, ...zhCNResearch, ...zhCNSemantic, ...zhCNPlugins, ...zhCNAcquisition, ...zhCNRoughcut, ...zhCNWorks, ...zhCNDanmaku, ...zhCNAgent } as const;
 
 type MessageKey = keyof typeof zhCN;
 

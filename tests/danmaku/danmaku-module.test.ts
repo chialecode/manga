@@ -450,7 +450,7 @@ describe("a task reads only what is kept, and only what has been watched (AT-94)
     const { ctx, v, as } = await watched();
     await ok(ctx, "danmaku.load", { resourceId: v.resourceId });
     await ok(ctx, "settings.setShell", { spoilerGuard: true });
-    await ok(ctx, "progress.setTime", { resourceId: v.resourceId, resourceRevisionId: v.revisionId, timeMs: 6000, played: [{ startMs: 0, endMs: 6000 }] });
+    await ok(ctx, "progress.setTime", { contextId: null, resourceId: v.resourceId, resourceRevisionId: v.revisionId, timeMs: 6000, played: [{ startMs: 0, endMs: 6000 }] });
     const sent = ctx.server.requests.length;
 
     const near = (await call(ctx, "danmaku.around", { resourceId: v.resourceId, resourceRevisionId: v.revisionId, centerMs: 5000, windowMs: 20_000 }, as)).value as Around;

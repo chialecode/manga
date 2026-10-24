@@ -4,6 +4,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import {
   commandInputJsonSchema,
+  contextKey,
   DANMAKU_ATTRIBUTION,
   MangaError,
   NOTE_TAG_MAX,
@@ -15,6 +16,7 @@ import {
   type Actor,
   type CommandEnvelope,
   type CommandResult,
+  type ContextId,
   type EmbedKind,
   type LocationLayout,
   type PageRegion,
@@ -24,6 +26,7 @@ import {
   type ScopeGrant,
   type SourceLocator,
   type WorkMediaKind,
+  type WorkspaceState,
 } from "@manga/contracts";
 import { MangaRuntime } from "@manga/kernel";
 import { DrizzleStore, acquireHostLock, releaseHostLock, type Mutation } from "@manga/storage-drizzle";
@@ -55,7 +58,7 @@ import {
   sourceCard,
   writeShell,
 } from "./reading-service.ts";
-import { getProgress, setPageProgress, setProgress, setTimeProgress } from "./progress-service.ts";
+import { frontierConsumed, getProgress, setPageProgress, setProgress, setTimeProgress } from "./progress-service.ts";
 import { readLayout } from "./domain/revision-layout.ts";
 import { WorkFolders } from "./work-folders.ts";
 import { NoteFiles } from "./note-files.ts";
@@ -102,9 +105,11 @@ import { recordsList } from "./ops/records.ts";
 import { sessionStream } from "./ops/stream.ts";
 import { redactDeep } from "./ops/redact.ts";
 import { QuickTaskService } from "./quick-tasks.ts";
-import { ConversationService, type ConversationMode } from "./conversations.ts";
+import { ConversationService, currentKey } from "./conversations.ts";
+import { WorkspaceService } from "./workspace-service.ts";
+import { SidebarService } from "./sidebar-service.ts";
 import { ProjectService } from "./creative/projects.ts";
-import { AGENT_LOGGED_COMMANDS, AGENT_PROJECT_COMMANDS, AgentProjectAccess, agentToolSchema, takesProject } from "./creative/agent-access.ts";
+import { AGENT_LOGGED_COMMANDS, AGENT_PROJECT_COMMANDS, AgentProjectAccess, agentToolSchema, takesContext, takesProject } from "./creative/agent-access.ts";
 import { OpLog } from "./creative/ops.ts";
 import { EmbedService, noteEmbedsOf } from "./creative/embeds.ts";
 import { WhiteboardService } from "./creative/whiteboard.ts";
@@ -130,7 +135,7 @@ import { AgentTrace, recordedRequest } from "./agent-trace.ts";
 import { AgentMaterials, subtitleLimit, publicMedia, renderImages, renderMedia, WORKS_BUDGET, type AgentMediaInput, type FrozenImage, type FrozenMedia } from "./agent-materials.ts";
 
 const OWNER_COMMANDS = [
-  "workspace.get", "workspace.sessions", "session.open", "session.close", "library.importText", "library.importEpub", "library.importDocument", "library.getResource", "library.read", "library.readOriginal", "library.readSlice", "library.contextSnapshot", "library.search", "library.find", "library.list",
+  "workspace.get", "workspace.sessions", "workspace.contexts", "workspace.loadContext", "workspace.saveContext", "workspace.setLastContext", "workspace.sidebar", "workspace.items", "workspace.objects", "workspace.find", "session.open", "library.importText", "library.importEpub", "library.importDocument", "library.getResource", "library.read", "library.readOriginal", "library.readSlice", "library.contextSnapshot", "library.search", "library.find", "library.list",
   "library.exportPackage", "library.cancelExport", "library.importPackage", "package.preview", "package.importResolved", "library.transcribeAudio", "library.indexExternal", "library.rebuildIndex", "library.repairSource", "progress.set", "progress.setPage", "progress.setTime", "progress.get",
   "works.list", "works.get", "works.deletePreview", "works.delete", "works.unassigned", "works.setKind", "works.moveResource", "works.setOrdinal", "works.setShelf", "works.setOverride", "works.open",
   "notes.create", "notes.update", "notes.undo", "notes.get", "notes.list", "notes.history", "notes.restore", "notes.tags", "notes.split", "notes.merge", "notes.move", "notes.copy", "notes.replace", "notes.insert", "notes.remove", "notes.setType", "notes.rename", "notes.asset", "notes.openSource",
@@ -154,7 +159,7 @@ const OWNER_COMMANDS = [
   "quickTasks.list", "quickTasks.save", "quickTasks.delete", "quickTasks.reorder", "quickTasks.restore",
   "log.query", "usage.query", "records.list", "notes.delete", "notes.undelete", "session.stream", "debug.context",
   "project.list", "project.overview", "project.create", "project.get", "project.update", "project.delete", "project.addMaterial", "project.removeMaterial", "project.objects", "project.terms", "project.addTerm", "project.updateTerm", "project.removeTerm", "project.importTerms", "project.exportPackage", "project.packagePreview", "project.importPackage",
-  "conversation.current", "conversation.new", "conversation.history", "conversation.resume", "conversation.list", "conversation.delete", "conversation.deleteAll",
+  "conversation.current", "conversation.new", "conversation.history", "conversation.resume", "conversation.rename", "conversation.move", "conversation.list", "conversation.delete", "conversation.deleteAll",
   "dictionary.list", "dictionary.removedWorks", "dictionary.add", "dictionary.update", "dictionary.remove", "dictionary.importMetadata", "dictionary.prompt",
   "whiteboard.list", "whiteboard.create", "whiteboard.get", "whiteboard.rename", "whiteboard.delete", "whiteboard.edit", "whiteboard.setViewport", "whiteboard.undo", "whiteboard.redo",
   "draft.list", "draft.create", "draft.get", "draft.rename", "draft.delete", "draft.save", "draft.checkpoint", "draft.version", "draft.restore",
@@ -259,6 +264,8 @@ export class MangaProductApp {
   readonly research: ResearchService;
   readonly semantic: SemanticService;
   readonly conversations: ConversationService;
+  readonly workspaces: WorkspaceService;
+  readonly sidebar: SidebarService;
   readonly scan: ScanService;
   readonly plugins: PluginService;
   readonly pluginRuntime: PluginRuntime;
@@ -349,6 +356,8 @@ export class MangaProductApp {
       projectScope: (projectId) => this.semanticScope(projectId), ...options.semantic,
     });
     this.conversations = new ConversationService(this.store);
+    this.workspaces = new WorkspaceService(this.store);
+    this.sidebar = new SidebarService(this.store);
     this.pluginRuntime = new PluginRuntime({ spawn: options.plugins?.spawn ?? nodeSpawner, limits: options.plugins?.limits });
     this.plugins = new PluginService({
       store: this.store, pluginsDir: path.join(this.layout.partitions.data, "plugins"), dataDir: path.join(this.layout.partitions.data, "plugin-data"),
@@ -883,14 +892,23 @@ export class MangaProductApp {
           });
         }
         this.runtime.registerCommand("manga.library", "workspace.get", () => this.workspace());
-        this.runtime.registerCommand("manga.library", "workspace.sessions", (envelope) => {
-          const input = envelope.input as { mode?: "enthusiast" | "creator" };
-          return this.sessionList(input.mode);
-        });
-        this.runtime.registerCommand("manga.library", "session.close", (envelope) => {
-          ownerOnly(envelope);
+        this.runtime.registerCommand("manga.library", "workspace.sessions", (envelope) => this.sessionList((envelope.input as { contextId: ContextId }).contextId));
+        this.runtime.registerCommand("manga.library", "workspace.contexts", (envelope) => this.workspaces.contexts((envelope.input as { includeArchived?: boolean }).includeArchived));
+        this.runtime.registerCommand("manga.library", "workspace.loadContext", (envelope) => this.workspaces.load((envelope.input as { contextId: ContextId }).contextId));
+        this.runtime.registerCommand("manga.library", "workspace.sidebar", (envelope) => this.sidebar.sidebar(envelope.input as Parameters<SidebarService["sidebar"]>[0]));
+        this.runtime.registerCommand("manga.library", "workspace.items", (envelope) => this.sidebar.items(envelope.input as Parameters<SidebarService["items"]>[0]));
+        this.runtime.registerCommand("manga.library", "workspace.objects", (envelope) => this.sidebar.objects(envelope.input as Parameters<SidebarService["objects"]>[0]));
+        this.runtime.registerCommand("manga.library", "workspace.find", (envelope) => this.sidebar.find(envelope.input as Parameters<SidebarService["find"]>[0]));
+        this.runtime.registerCommand("manga.library", "workspace.saveContext", (envelope) => {
           this.assertWritable();
-          return this.closeSession((envelope.input as { sessionId: string }).sessionId);
+          const input = envelope.input as { contextId: ContextId; state: WorkspaceState };
+          return this.workspaces.save(input.contextId, input.state);
+        });
+        this.runtime.registerCommand("manga.library", "workspace.setLastContext", (envelope) => {
+          this.assertWritable();
+          const { contextId } = envelope.input as { contextId: ContextId };
+          // A project that no longer exists is not somewhere to come back to.
+          return writeShell(this.store, readShell(this.store), { lastContext: contextId && this.projects.exists(contextId) ? contextId : null }, envelope);
         });
         this.runtime.registerCommand("manga.library", "library.importText", (envelope, signal) => {
           this.assertWritable();
@@ -955,7 +973,7 @@ export class MangaProductApp {
           return setTimeProgress(this.store, envelope, this.grantOf(envelope), this.grants);
         });
         this.runtime.registerCommand("manga.library", "progress.get", (envelope) => {
-          const input = envelope.input as { resourceId: string; resourceRevisionId?: string };
+          const input = envelope.input as { contextId: ContextId; resourceId: string; resourceRevisionId?: string };
           if (!this.grants.canRead(this.grantOf(envelope), input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
           return getProgress(this.store, input);
         });
@@ -2204,14 +2222,7 @@ export class MangaProductApp {
         this.runtime.registerCommand("manga.settings", "settings.getShell", () => readShell(this.store));
         this.runtime.registerCommand("manga.settings", "settings.setShell", (envelope) => {
           this.assertWritable();
-          return writeShell(this.store, readShell(this.store), envelope.input as {
-            mode?: "enthusiast" | "creator";
-            spoilerGuard?: boolean;
-            focus?: boolean;
-            left?: { visible?: boolean; width?: number };
-            right?: { visible?: boolean; width?: number };
-            reading?: { measurePx?: number; fontSizePx?: number; lineHeight?: number; theme?: "paper" | "night" };
-          }, envelope);
+          return writeShell(this.store, readShell(this.store), envelope.input as Parameters<typeof writeShell>[2], envelope);
         });
         this.runtime.registerCommand("manga.settings", "settings.getRecording", () => readRecordingSettings(this.store));
         this.runtime.registerCommand("manga.settings", "settings.setRecording", (envelope) => {
@@ -2345,7 +2356,7 @@ export class MangaProductApp {
           if (grant.access !== "owner") throw new MangaError("FORBIDDEN", "the message stream belongs to the owner");
           return sessionStream(this.store, this.runtime.gateway.has("capture.list") ? this.voice : null, envelope.input as Parameters<typeof sessionStream>[2]);
         });
-        // The entertainment mode's one global conversation, its history, and a new one (A-65).
+        // The general conversation of a context ("最近" or a project), its history, and a new one (A-65, A-94).
         const ownerOnly = (envelope: CommandEnvelope): ScopeGrant => {
           const grant = this.grantOf(envelope);
           if (grant.access !== "owner") throw new MangaError("FORBIDDEN", "conversations belong to the owner");
@@ -2353,27 +2364,37 @@ export class MangaProductApp {
         };
         this.runtime.registerCommand("manga.agent", "conversation.current", (envelope) => {
           ownerOnly(envelope);
-          return { conversation: this.conversations.current((envelope.input as { mode: ConversationMode }).mode) };
+          return { conversation: this.conversations.current((envelope.input as { contextId: ContextId }).contextId) };
         });
         this.runtime.registerCommand("manga.agent", "conversation.new", (envelope) => {
           const grant = ownerOnly(envelope);
           this.assertWritable();
-          return this.conversations.start((envelope.input as { mode: ConversationMode }).mode, grant.handle);
+          return this.conversations.start((envelope.input as { contextId: ContextId }).contextId, grant.handle);
         });
         this.runtime.registerCommand("manga.agent", "conversation.history", (envelope) => {
           ownerOnly(envelope);
-          const input = envelope.input as { mode: ConversationMode; limit?: number };
-          return this.conversations.history(input.mode, input.limit);
+          const input = envelope.input as { contextId: ContextId; limit?: number };
+          return this.conversations.history(input.contextId, input.limit);
         });
         this.runtime.registerCommand("manga.agent", "conversation.resume", (envelope) => {
           ownerOnly(envelope);
           this.assertWritable();
-          const resumedId = (envelope.input as { sessionId: string }).sessionId;
-          const conversation = this.conversations.resume(resumedId);
-          this.reopenSession(resumedId);
+          const conversation = this.conversations.resume((envelope.input as { sessionId: string }).sessionId);
           return { conversation };
         });
-        // Deleting conversations (A-89): the list for "设置 › 记录" and the two ways to delete. Owner only, and not among the commands a task is given.
+        this.runtime.registerCommand("manga.agent", "conversation.rename", (envelope) => {
+          ownerOnly(envelope);
+          this.assertWritable();
+          const input = envelope.input as { sessionId: string; title: string };
+          return { conversation: this.conversations.rename(input.sessionId, input.title) };
+        });
+        this.runtime.registerCommand("manga.agent", "conversation.move", (envelope) => {
+          ownerOnly(envelope);
+          this.assertWritable();
+          const input = envelope.input as { sessionId: string; contextId: ContextId };
+          return { conversation: this.conversations.move(input.sessionId, input.contextId) };
+        });
+        // Deleting conversations (A-89): the list for the records tab ("对话管理") and the two ways to delete. Owner only, and not among the commands a task is given.
         const taskInProgress = (runId: string) => this.runAbort.has(runId);
         const afterDelete = (result: ReturnType<ConversationService["remove"]>) => {
           if (result.removed.length) this.notify("conversation.deleted", { sessionIds: result.removed, replaced: result.replaced });
@@ -2396,7 +2417,7 @@ export class MangaProductApp {
         // Bound resource/project sessions belong to the agent module: it owns their identity and tasks.
         this.runtime.registerCommand("manga.agent", "session.open", (envelope) => {
           this.assertWritable();
-          return this.openSession(envelope, envelope.input as { kind: "resource" | "project" | "note" | "work"; targetId: string; mode?: "enthusiast" | "creator"; sessionId?: string });
+          return this.openSession(envelope, envelope.input as { kind: "resource" | "project" | "note" | "work"; targetId: string; contextId: ContextId; sessionId?: string });
         });
       },
       deactivate: () => {
@@ -2745,7 +2766,7 @@ export class MangaProductApp {
       ORDER BY r.created_at DESC, r.id DESC LIMIT 101`).all() as Array<{ id: string; title: string; createdAt: string; revisionId: string | null }>;
     const resources = resourceRows.slice(0, 100);
     const resourceTotal = (this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources").get() as { n: number }).n;
-    const sessions = this.store.sqlite.prepare("SELECT * FROM agent_sessions ORDER BY updated_at DESC").all();
+    const sessions = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, project_id AS contextId, created_at AS createdAt, updated_at AS updatedAt FROM agent_sessions ORDER BY updated_at DESC").all();
     const runs = this.store.sqlite.prepare("SELECT id, session_id AS sessionId, status, grant_handle AS grantHandle, input_text AS inputText, created_at AS createdAt, updated_at AS updatedAt FROM agent_runs ORDER BY created_at DESC LIMIT 50").all();
     const refs = this.store.sqlite.prepare(`SELECT r.from_object_id AS objectId, r.from_block_id AS blockId, r.to_id AS anchorId, a.resource_id AS resourceId
       FROM refs r JOIN anchors a ON a.id = r.to_id WHERE r.to_kind = 'anchor'`).all() as Array<{ objectId: string; blockId: string | null; anchorId: string; resourceId: string }>;
@@ -2784,30 +2805,14 @@ export class MangaProductApp {
     };
   }
 
-  /** Resource/project sessions shown under the left-rail navigation, each bound to its own agent session. */
   /**
-   * Takes a conversation off the left rail without touching it (A-74): the session, its runs, its notes and the place in the file stay, and
-   * opening the same target again lists it again. Only what the rail lists can be closed: a resource, a project, or a work-mode conversation.
+   * The conversations of one context, most recent first (A-94): what the sidebar lists under a project or under "最近". A conversation about a resource
+   * carries where the person is in that resource in this context, so a row can show "page 12 of 180" without opening the file.
    */
-  private closeSession(sessionId: string): { sessionId: string; closed: true } {
-    const row = this.store.sqlite.prepare("SELECT kind, mode FROM agent_sessions WHERE id = ?").get(sessionId) as { kind: string; mode: string | null } | undefined;
-    if (!row) throw new MangaError("NOT_FOUND", "the conversation does not exist");
-    const listed = row.kind === "resource" || row.kind === "project" || (row.kind === "shared" && row.mode === "creator");
-    if (!listed) throw new MangaError("VALIDATION_ERROR", "this conversation is not on the left rail");
-    this.store.sqlite.prepare("INSERT OR REPLACE INTO closed_sessions(session_id, closed_at) VALUES (?, ?)").run(sessionId, new Date().toISOString());
-    return { sessionId, closed: true };
-  }
-
-  /** A conversation that is opened, resumed or continued is listed again. */
-  private reopenSession(sessionId: string): void {
-    this.store.sqlite.prepare("DELETE FROM closed_sessions WHERE session_id = ?").run(sessionId);
-  }
-
-  sessionList(mode?: "enthusiast" | "creator"): Array<Record<string, unknown>> {
-    const rows = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode, project_id AS projectId, updated_at AS updatedAt FROM agent_sessions WHERE id NOT IN (SELECT session_id FROM closed_sessions) ORDER BY updated_at DESC LIMIT 100").all() as Array<{ id: string; title: string; kind: string; targetId: string | null; mode: string | null; projectId: string | null; updatedAt: string }>;
-    // A row saved before modes existed belongs to the enthusiast default, matching session.open.
-    const filtered = mode ? rows.filter((row) => (row.mode ?? "enthusiast") === mode) : rows;
-    return filtered.map((row) => {
+  sessionList(contextId: ContextId): Array<Record<string, unknown>> {
+    const rows = this.store.sqlite.prepare(`SELECT id, title, kind, target_id AS targetId, project_id AS contextId, updated_at AS updatedAt FROM agent_sessions WHERE ${contextId ? "project_id = ?" : "project_id IS NULL"} ORDER BY updated_at DESC LIMIT 100`)
+      .all(...(contextId ? [contextId] : [])) as Array<{ id: string; title: string; kind: string; targetId: string | null; contextId: string | null; updatedAt: string }>;
+    return rows.map((row) => {
       const runCount = Number((this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_runs WHERE session_id = ?").get(row.id) as { n: number }).n);
       const active = this.store.sqlite.prepare("SELECT id, status FROM agent_runs WHERE session_id = ? AND status IN ('queued','running','waiting_input') ORDER BY created_at DESC LIMIT 1").get(row.id) as { id: string; status: string } | undefined;
       const resource = row.targetId && row.kind === "resource"
@@ -2816,11 +2821,11 @@ export class MangaProductApp {
       // A work page's session is bound to the work itself.
       const workId = resource?.workId ?? (row.kind === "work" ? row.targetId : null);
       const work = workId ? this.store.sqlite.prepare("SELECT title, media_kind AS mediaKind, cover_id AS coverId, projection_json AS projection FROM works WHERE id = ?").get(workId) as { title: string; mediaKind: string | null; coverId: string | null; projection: string } | undefined : undefined;
-      // Where the reader is, so a row can show "page 12 of 180" or a time next to the cover without opening the file.
+      // Where the reader is in this context.
       let progress: Record<string, unknown> | null = null;
       if (resource && row.targetId) {
         const revision = this.store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(row.targetId) as { id: string } | undefined;
-        const saved = revision ? this.store.sqlite.prepare("SELECT percent, completion_state AS completion, last_locator_json AS locator FROM progress WHERE resource_id = ? AND resource_revision_id = ?").get(row.targetId, revision.id) as { percent: number; completion: string; locator: string | null } | undefined : undefined;
+        const saved = revision ? this.store.sqlite.prepare("SELECT percent, completion_state AS completion, last_locator_json AS locator FROM progress WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?").get(contextKey(contextId), row.targetId, revision.id) as { percent: number; completion: string; locator: string | null } | undefined : undefined;
         const layout = revision ? readLayout(this.store, revision.id) : undefined;
         if (saved) progress = { percent: saved.percent, completion: saved.completion, locator: saved.locator ? safeJsonValue(saved.locator) : null, unit: layout?.unit ?? null, total: layout?.total ?? 0 };
       }
@@ -2838,8 +2843,7 @@ export class MangaProductApp {
         ordinalLabel: resource?.ordinalLabel ?? null,
         coverId: work?.coverId ?? null,
         progress,
-        mode: row.mode,
-        projectId: row.projectId,
+        contextId: row.contextId,
         runCount,
         activeRunId: active?.id ?? null,
         activeRunStatus: active?.status ?? null,
@@ -2876,7 +2880,8 @@ export class MangaProductApp {
   private screenshotVisible(shot: ScreenshotView): boolean {
     if (!readShell(this.store).spoilerGuard) return true;
     let consumed: Array<{ start: number; end: number }> = [];
-    try { consumed = (getProgress(this.store, { resourceId: shot.resourceId, resourceRevisionId: shot.resourceRevisionId }) as { consumed: typeof consumed }).consumed ?? []; } catch { /* no progress: nothing has been reached */ }
+    // Reached in any context counts (A-96): the guard keeps the furthest the person has been.
+    try { consumed = frontierConsumed(this.store, shot.resourceId, shot.resourceRevisionId); } catch { /* no progress: nothing has been reached */ }
     if (shot.mediaKind === "video") return shot.positionMs !== null && subtitleLimit({ positionMs: shot.positionMs, consumed, guard: true }).limitMs >= shot.positionMs;
     const index = typeof shot.meta.pageIndex === "number" ? shot.meta.pageIndex : -1;
     return index >= 0 && consumed.some((range) => range.start <= index && index < range.end);
@@ -4079,7 +4084,7 @@ export class MangaProductApp {
 
   private createSession(envelope: CommandEnvelope) {
     this.assertWritable();
-    const input = envelope.input as { title?: string; kind?: "shared" | "resource" | "project"; targetId?: string; mode?: "enthusiast" | "creator" };
+    const input = envelope.input as { title?: string; kind?: "shared" | "resource" | "project" | "work" | "note"; targetId?: string; contextId?: ContextId };
     if (input.targetId && !this.grants.canRead(this.grantOf(envelope), input.targetId)) throw new MangaError("SCOPE_DENIED", "session target is outside the authorized set");
     const id = createId("ses");
     const now = new Date().toISOString();
@@ -4087,76 +4092,93 @@ export class MangaProductApp {
     // A conversation of a project is bound to a project that exists; its title is the project's name unless one was given.
     const project = kind === "project" ? (input.targetId ? this.projects.list("all").projects.find((item) => item.id === input.targetId) : undefined) : undefined;
     if (kind === "project" && !project) throw new MangaError("NOT_FOUND", "the project does not exist");
+    // Every other conversation belongs to the context it is made in (a project, or "最近").
+    const contextId = project ? project.id : input.contextId ?? null;
+    if (contextId && !this.projects.exists(contextId)) throw new MangaError("NOT_FOUND", "the project does not exist");
     const title = input.title ?? project?.name ?? (input.targetId ? this.resourceTitle(input.targetId) ?? "会话" : "会话");
-    this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, mode, project_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)").run(id, title, envelope.scopeHandle, kind, input.targetId ?? null, input.mode ?? null, project?.id ?? null, now, now);
-    return { id, title, kind, targetId: input.targetId ?? null, mode: input.mode ?? null, projectId: project?.id ?? null };
+    this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, project_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, title, envelope.scopeHandle, kind, input.targetId ?? null, contextId, now, now);
+    return { id, title, kind, targetId: input.targetId ?? null, contextId };
   }
 
   /**
-   * Open (or reuse) the session owned by a resource or project. Each session keeps its own agent
-   * context, so switching targets never reuses another target's task.
+   * Open (or reuse) the conversation of a resource, work, note or project in a context. Each conversation keeps its own agent context, so switching
+   * targets never reuses another target's task, and the same target has its own conversation in each context (A-94).
    */
-  private openSession(envelope: CommandEnvelope, input: { kind: "resource" | "project" | "note" | "work"; targetId: string; mode?: "enthusiast" | "creator"; sessionId?: string }) {
+  private openSession(envelope: CommandEnvelope, input: { kind: "resource" | "project" | "note" | "work"; targetId: string; contextId: ContextId; sessionId?: string }) {
     const grant = this.grantOf(envelope);
-    const owner = { kind: "user" as const, id: "desktop-user" };
-    void owner;
+    if (input.contextId && !this.projects.exists(input.contextId)) throw new MangaError("NOT_FOUND", "the project does not exist");
+    type Found = { id: string; title: string; kind: string; targetId: string; contextId: string | null };
+    const find = (kind: string, targetId: string, contextId: ContextId) => this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, project_id AS contextId FROM agent_sessions WHERE kind = ? AND target_id = ? AND COALESCE(project_id, '') = ? ORDER BY updated_at DESC, rowid DESC LIMIT 1")
+      .get(kind, targetId, contextKey(contextId)) as Found | undefined;
+    const touch = (id: string) => this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
     if (input.kind === "work") {
       // A work page has a conversation of its own: about the work as a whole rather than about one chapter.
       if (grant.access !== "owner") throw new MangaError("FORBIDDEN", "a work conversation belongs to the owner");
       const work = this.store.sqlite.prepare("SELECT id, title, media_kind FROM works WHERE id = ?").get(input.targetId) as { id: string; title: string; media_kind: string } | undefined;
       if (!work) throw new MangaError("NOT_FOUND", "the work does not exist");
-      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'work' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      const existing = find("work", input.targetId, input.contextId);
       if (existing) {
-        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
+        touch(existing.id);
         return { ...existing, reused: true };
       }
       const id = createId("ses");
       const now = new Date().toISOString();
-      this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, mode, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, work.title, envelope.scopeHandle, "work", work.id, input.mode ?? null, now, now);
-      return { id, title: work.title, kind: "work", targetId: work.id, mode: input.mode ?? null, reused: false };
+      this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, project_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, work.title, envelope.scopeHandle, "work", work.id, input.contextId, now, now);
+      return { id, title: work.title, kind: "work", targetId: work.id, contextId: input.contextId, reused: false };
     }
     if (input.kind === "resource") {
       if (!this.grants.canRead(grant, input.targetId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
-      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'resource' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      const existing = find("resource", input.targetId, input.contextId);
       if (existing) {
         // Switching back to a session must not silently change its bound model, runtime or grant.
-        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
-        this.reopenSession(existing.id);
+        touch(existing.id);
         return { ...existing, reused: true };
       }
-      return { ...this.createSession({ ...envelope, input: { title: this.resourceTitle(input.targetId), kind: "resource", targetId: input.targetId, mode: input.mode } }), reused: false };
+      return { ...this.createSession({ ...envelope, input: { title: this.resourceTitle(input.targetId), kind: "resource", targetId: input.targetId, contextId: input.contextId } }), reused: false };
     }
     if (input.kind === "note") {
       this.assertNoteAccess(envelope, input.targetId, false);
       const note = readNote(this.store, input.targetId);
       const resourceId = ((note.sources as Array<{ resourceId: string }>)[0]?.resourceId) ?? null;
-      // A note session is its own kind, so the left rail opens the note instead of trying to read it as a book.
-      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'note' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      // A note session is its own kind, so a tab opens the note instead of trying to read it as a book.
+      const existing = find("note", input.targetId, input.contextId);
       if (existing) {
-        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
+        touch(existing.id);
         return { ...existing, resourceId, reused: true };
       }
       const id = createId("ses");
       const now = new Date().toISOString();
-      this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, mode, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, String(note.title), envelope.scopeHandle, "note", input.targetId, input.mode ?? null, now, now);
-      return { id, title: String(note.title), kind: "note", targetId: input.targetId, mode: input.mode ?? null, resourceId, reused: false };
+      this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, project_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, String(note.title), envelope.scopeHandle, "note", input.targetId, input.contextId, now, now);
+      return { id, title: String(note.title), kind: "note", targetId: input.targetId, contextId: input.contextId, resourceId, reused: false };
     }
     if (input.kind === "project") {
-      // One project, one mode, one conversation; the conversation reads and writes only inside the project's scope.
+      // The conversation of a project reads and writes only inside the project's scope. A project has as many as it needs; this is the current one.
       if (!this.projects.exists(input.targetId)) throw new MangaError("NOT_FOUND", "the project does not exist");
-      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE kind = 'project' AND target_id = ? AND COALESCE(mode, 'enthusiast') = COALESCE(?, 'enthusiast') ORDER BY updated_at DESC LIMIT 1").get(input.targetId, input.mode ?? null) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
-      if (existing) {
-        this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), existing.id);
-        this.reopenSession(existing.id);
-        return { ...existing, reused: true };
+      const current = this.conversations.current(input.targetId);
+      if (current) {
+        touch(current.sessionId);
+        return { id: current.sessionId, title: current.title, kind: "project", targetId: input.targetId, contextId: input.targetId, reused: true };
       }
-      return { ...this.createSession({ ...envelope, input: { kind: "project", targetId: input.targetId, mode: input.mode } }), reused: false };
+      const created = this.createSession({ ...envelope, input: { kind: "project", targetId: input.targetId, contextId: input.targetId } });
+      this.store.setMeta(currentKey(input.targetId), created.id);
+      return { ...created, reused: false };
     }
     if (input.sessionId) {
-      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, mode FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; title: string; kind: string; targetId: string; mode: string | null } | undefined;
+      const existing = this.store.sqlite.prepare("SELECT id, title, kind, target_id AS targetId, project_id AS contextId FROM agent_sessions WHERE id = ?").get(input.sessionId) as Found | undefined;
       if (existing) return { ...existing, reused: true };
     }
     throw new MangaError("VALIDATION_ERROR", "session target is missing");
+  }
+
+  /** The resources a conversation about one thing always reaches, even when the person has taken that thing out of the project's materials. */
+  private sessionTargetResources(session: { kind?: string; target_id?: string | null }): string[] {
+    if (!session.target_id) return [];
+    if (session.kind === "resource") return [session.target_id];
+    if (session.kind === "work") return (this.store.sqlite.prepare("SELECT id FROM resources WHERE work_id = ?").all(session.target_id) as Array<{ id: string }>).map((row) => row.id);
+    if (session.kind === "note") {
+      try { return (readNote(this.store, session.target_id).sources as Array<{ resourceId: string }>).map((source) => source.resourceId); } catch { return []; }
+    }
+    return [];
   }
 
   private resourceTitle(resourceId: string): string | undefined {
@@ -4173,12 +4195,10 @@ export class MangaProductApp {
   private async sendAgent(envelope: CommandEnvelope, signal?: AbortSignal) {
     this.assertWritable();
     const input = envelope.input as { sessionId: string; text: string; readResourceIds?: string[]; noteObjectIds?: string[]; selection?: { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number } } & AgentMediaInput & { allowCommands?: string[]; quickTask?: { id: string | null; name: string } };
-    const session = this.store.sqlite.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; grant_handle: string; kind?: string; project_id?: string | null } | undefined;
+    const session = this.store.sqlite.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; grant_handle: string; kind?: string; target_id?: string | null; project_id?: string | null } | undefined;
     if (!session) throw new MangaError("NOT_FOUND", "session missing");
-    // Talking in a conversation that was closed from the rail opens it again.
-    this.reopenSession(session.id);
     const projectId = session.project_id && this.projects.exists(session.project_id) ? session.project_id : null;
-    const projectScope = projectId ? new Set(this.projects.scopeResourceIds(projectId)) : null;
+    const projectScope = projectId ? new Set([...this.projects.scopeResourceIds(projectId), ...this.sessionTargetResources(session)]) : null;
     const runId = createId("run");
     const now = new Date().toISOString();
     const owner = this.grantOf(envelope);
@@ -4247,7 +4267,7 @@ export class MangaProductApp {
     // Notes are captured by revision with their text, so the model sees what the user saw and a later
     // edit cannot silently change the material under a running task.
     type FrozenNote = { objectId: string; revision: number; title: string; text: string; truncated: boolean; blockCount: number; resourceId?: string; resourceRevisionId?: string };
-    const projectNotes = projectId ? new Set(this.projects.scopeNoteIds(projectId)) : null;
+    const projectNotes = projectId ? new Set([...this.projects.scopeNoteIds(projectId), ...(session.kind === "note" && session.target_id ? [session.target_id] : [])]) : null;
     const notes: FrozenNote[] = [...new Set([...(input.noteObjectIds ?? []), ...pageNoteIds])].flatMap((objectId) => {
       // A note joins a project conversation when the project holds it, or when what it quotes is inside the project's scope.
       if (projectNotes && projectScope && !projectNotes.has(objectId)) {
@@ -4275,6 +4295,8 @@ export class MangaProductApp {
     });
     const project = projectId ? this.projects.get(projectId) : null;
     const snapshot = {
+      // The context the task runs in (A-96): the reading position it asks for is the one in this context.
+      contextId: projectId,
       materials: this.captureMaterials(requested),
       selection,
       notes,
@@ -4731,6 +4753,10 @@ export class MangaProductApp {
         if (AGENT_PROJECT_COMMANDS.includes(commandId) && takesProject(commandInputJsonSchema(commandId)) && parsed && typeof parsed === "object" && !("projectId" in parsed)) {
           try { parsed = { ...(parsed as Record<string, unknown>), projectId: this.agentAccess.projectOf(grant) }; } catch { /* the project is gone: the command itself says so */ }
         }
+        // A command that works in a context (the reading position) works in the one the conversation runs in, whatever the model wrote.
+        if (takesContext(commandInputJsonSchema(commandId)) && parsed && typeof parsed === "object") {
+          parsed = { ...(parsed as Record<string, unknown>), contextId: this.agentAccess.contextOf(grant) };
+        }
         const inputHash = createHash("sha256").update(JSON.stringify(parsed ?? {})).digest("hex");
         const summary = toolInputSummary(call.arguments, inputHash);
         // Only in the step a restart cut short: the command that already ran there is not run again, whatever words the model now uses for it. Every other call runs, and a call that repeats an
@@ -5075,7 +5101,7 @@ export class MangaProductApp {
     const grant = this.grantOf(envelope);
     if (grant.access !== "owner") throw new MangaError("FORBIDDEN", "the context panel belongs to the owner");
     const input = envelope.input as { sessionId?: string; resourceId?: string; workId?: string; page?: string };
-    const session = input.sessionId ? this.store.sqlite.prepare("SELECT id, kind, target_id AS targetId, mode FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; kind: string; targetId: string | null; mode: string | null } | undefined : undefined;
+    const session = input.sessionId ? this.store.sqlite.prepare("SELECT id, kind, target_id AS targetId, project_id AS contextId FROM agent_sessions WHERE id = ?").get(input.sessionId) as { id: string; kind: string; targetId: string | null; contextId: string | null } | undefined : undefined;
     if (input.sessionId && !session) throw new MangaError("NOT_FOUND", "session missing");
     const run = session
       ? this.store.sqlite.prepare("SELECT id, status, input_text, snapshot_json, budget_json, runtime, model_id, input_tokens, output_tokens, created_at FROM agent_runs WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(session.id) as { id: string; status: string; input_text: string; snapshot_json: string | null; budget_json: string; runtime: string | null; model_id: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string } | undefined
@@ -5086,9 +5112,9 @@ export class MangaProductApp {
     const host = (() => { try { return new URL(connection?.base_url ?? "").host; } catch { return null; } })();
     const report = {
       generatedAt: new Date().toISOString(),
-      scope: { sessionId: session?.id ?? null, sessionKind: session?.kind ?? null, targetId: session?.targetId ?? input.resourceId ?? input.workId ?? null, mode: session?.mode ?? null, page: input.page ?? null },
+      scope: { sessionId: session?.id ?? null, sessionKind: session?.kind ?? null, targetId: session?.targetId ?? input.resourceId ?? input.workId ?? null, contextId: session?.contextId ?? null, page: input.page ?? null },
       model: connection ? { connectionId: connection.id, protocol: connection.protocol, modelId: connection.model_id, runtime: connection.runtime, host } : null,
-      tools: [...AGENT_COMMANDS, ...(session?.kind === "project" ? AGENT_PROJECT_COMMANDS : [])].filter((commandId) => this.runtime.gateway.has(commandId)).map((commandId) => ({ id: commandId, description: TOOL_DESCRIPTIONS[commandId] ?? commandId })),
+      tools: [...AGENT_COMMANDS, ...(session?.contextId ? AGENT_PROJECT_COMMANDS : [])].filter((commandId) => this.runtime.gateway.has(commandId)).map((commandId) => ({ id: commandId, description: TOOL_DESCRIPTIONS[commandId] ?? commandId })),
       budget: run?.budget_json ? safeJsonValue(run.budget_json) : { ...readAgentSettings(this.store).limits, ...budgetOf(DEFAULT_MODEL_PROFILE) },
       lastRun: run ? {
         runId: run.id, status: run.status, at: run.created_at, runtime: run.runtime, modelId: run.model_id, inputTokens: run.input_tokens, outputTokens: run.output_tokens,
@@ -5309,12 +5335,12 @@ export class MangaProductApp {
 
   private readResource(envelope: CommandEnvelope) {
     const grant = this.grantOf(envelope);
-    const input = envelope.input as { resourceId: string; revisionId?: string };
+    const input = envelope.input as { resourceId: string; revisionId?: string; contextId?: ContextId };
     if (!this.grants.canRead(grant, input.resourceId)) throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
     assertOpenable(this.store, input.resourceId);
     const snapshot = grant.runId ? this.snapshotRevision(grant.runId, input.resourceId) : undefined;
     if (snapshot && input.revisionId && snapshot !== input.revisionId) throw new MangaError("REVISION_CONFLICT", "requested material revision differs from the run snapshot");
-    const document = readDocument(this.store, input.resourceId, snapshot ?? input.revisionId);
+    const document = readDocument(this.store, input.resourceId, snapshot ?? input.revisionId, contextKey(input.contextId));
     const slice = document.slice as { partId: string; start: number; end: number; textLayer: boolean } | null;
     if (slice?.textLayer) this.assertConsumedRange(grant, input.resourceId, String(document.revisionId), slice.partId, slice.start, slice.end);
     return document;
