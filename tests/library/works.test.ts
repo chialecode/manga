@@ -78,8 +78,8 @@ describe("works: listing, shelf, override, ordering", () => {
       const high = seedComic(ctx.app, { title: "读了大半", pageCount: 10 });
       const none = seedVideo(ctx.app, { title: "没看过" });
       const novel = await importNovel(ctx, "有笔记的小说", "第一段文字。".repeat(30));
-      await run(ctx, "progress.setPage", { resourceId: low.resourceId, resourceRevisionId: low.revisionId, pageId: low.pageIds[1], consumed: true });
-      await run(ctx, "progress.setPage", { resourceId: high.resourceId, resourceRevisionId: high.revisionId, pageId: high.pageIds[7], consumed: true });
+      await run(ctx, "progress.setPage", { contextId: null, resourceId: low.resourceId, resourceRevisionId: low.revisionId, pageId: low.pageIds[1], consumed: true });
+      await run(ctx, "progress.setPage", { contextId: null, resourceId: high.resourceId, resourceRevisionId: high.revisionId, pageId: high.pageIds[7], consumed: true });
       await run(ctx, "works.open", { resourceId: low.resourceId });
       await run(ctx, "works.open", { resourceId: high.resourceId });
       const titles = async (input: Record<string, unknown>) => ((await run(ctx, "works.list", input)).value as { items: Array<{ title: string; progress: number }> }).items;
@@ -123,7 +123,7 @@ describe("works: listing, shelf, override, ordering", () => {
       await run(ctx, "works.setShelf", { workId: a.workId, state: "wishlist" });
       await run(ctx, "works.open", { resourceId: a.resourceId });
       expect(await shelfOf(a.workId)).toBe("wishlist");
-      const last = await run(ctx, "progress.setPage", { resourceId: a.resourceId, resourceRevisionId: a.revisionId, pageId: a.pageIds.at(-1), consumed: true });
+      const last = await run(ctx, "progress.setPage", { contextId: null, resourceId: a.resourceId, resourceRevisionId: a.revisionId, pageId: a.pageIds.at(-1), consumed: true });
       expect(last.value).toMatchObject({ completion: "completed" });
       expect(await shelfOf(a.workId)).toBe("wishlist");
     } finally { ctx.app.close(); }
@@ -250,28 +250,28 @@ describe("progress by page and by time", () => {
     const ctx = await startApp();
     try {
       const comic = seedComic(ctx.app, { title: "翻页", pageCount: 10 });
-      const page = (index: number, consumed = true) => run(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[index], consumed });
+      const page = (index: number, consumed = true) => run(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[index], consumed });
       for (const index of [0, 1, 2]) await page(index);
       await page(6);
-      const mid = await run(ctx, "progress.get", { resourceId: comic.resourceId });
+      const mid = await run(ctx, "progress.get", { contextId: null, resourceId: comic.resourceId });
       expect(mid.value).toMatchObject({ unit: "pages", total: 10, completion: "reading", locator: { kind: "image", pageId: comic.pageIds[6] } });
       expect((mid.value as { consumed: unknown[] }).consumed).toEqual([{ partId: "$pages", start: 0, end: 3 }, { partId: "$pages", start: 6, end: 7 }]);
       expect((mid.value as { percent: number }).percent).toBeCloseTo(0.7);
       // Looking at a page without reading it moves the position but not the read set.
       await page(8, false);
-      expect(((await run(ctx, "progress.get", { resourceId: comic.resourceId })).value as { consumed: unknown[] }).consumed).toHaveLength(2);
+      expect(((await run(ctx, "progress.get", { contextId: null, resourceId: comic.resourceId })).value as { consumed: unknown[] }).consumed).toHaveLength(2);
       const last = await page(9);
       expect(last.value).toMatchObject({ completion: "completed", percent: 1 });
       // Going back never un-finishes.
       await page(0);
-      expect(((await run(ctx, "progress.get", { resourceId: comic.resourceId })).value as { completion: string }).completion).toBe("completed");
+      expect(((await run(ctx, "progress.get", { contextId: null, resourceId: comic.resourceId })).value as { completion: string }).completion).toBe("completed");
 
-      const unknown = await run(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: "nope.png" });
+      const unknown = await run(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: "nope.png" });
       expect(unknown.error?.code).toBe("NOT_FOUND");
       const novel = await importNovel(ctx, "不是漫画");
-      const wrongKind = await run(ctx, "progress.setPage", { resourceId: novel.resourceId, resourceRevisionId: novel.revisionId, pageId: "x" });
+      const wrongKind = await run(ctx, "progress.setPage", { contextId: null, resourceId: novel.resourceId, resourceRevisionId: novel.revisionId, pageId: "x" });
       expect(wrongKind.error?.code).toBe("VALIDATION_ERROR");
-      const foreign = await run(ctx, "progress.setPage", { resourceId: novel.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[0] });
+      const foreign = await run(ctx, "progress.setPage", { contextId: null, resourceId: novel.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[0] });
       expect(foreign.error?.code).toBe("NOT_FOUND");
     } finally { ctx.app.close(); }
   });
@@ -280,23 +280,23 @@ describe("progress by page and by time", () => {
     const ctx = await startApp();
     try {
       const video = seedVideo(ctx.app, { title: "看剧", durationMs: 1_440_000 });
-      const time = (timeMs: number, played?: Array<{ startMs: number; endMs: number }>) => run(ctx, "progress.setTime", { resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs, ...(played ? { played } : {}) });
+      const time = (timeMs: number, played?: Array<{ startMs: number; endMs: number }>) => run(ctx, "progress.setTime", { contextId: null, resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs, ...(played ? { played } : {}) });
       await time(60_000, [{ startMs: 0, endMs: 60_000 }]);
       // Drag the playhead to the end without playing: position moves, nothing new is consumed.
       const seeked = await time(1_430_000);
       expect(seeked.value).toMatchObject({ completion: "reading" });
-      const state = (await run(ctx, "progress.get", { resourceId: video.resourceId })).value as { consumed: Array<{ partId: string; start: number; end: number }>; percent: number; locator: { startMs: number } };
+      const state = (await run(ctx, "progress.get", { contextId: null, resourceId: video.resourceId })).value as { consumed: Array<{ partId: string; start: number; end: number }>; percent: number; locator: { startMs: number } };
       expect(state.consumed).toEqual([{ partId: "$time", start: 0, end: 60_000 }]);
       expect(state.locator.startMs).toBe(1_430_000);
       expect(state.percent).toBeGreaterThan(0.99);
       // Playing most of it and ending near the end completes the episode, despite skipping an opening.
       await time(1_430_000, [{ startMs: 120_000, endMs: 1_430_000 }]);
-      expect(((await run(ctx, "progress.get", { resourceId: video.resourceId })).value as { completion: string }).completion).toBe("completed");
+      expect(((await run(ctx, "progress.get", { contextId: null, resourceId: video.resourceId })).value as { completion: string }).completion).toBe("completed");
 
-      const pastEnd = await run(ctx, "progress.setTime", { resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: 5_000_000 });
+      const pastEnd = await run(ctx, "progress.setTime", { contextId: null, resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: 5_000_000 });
       expect(pastEnd.error?.code).toBe("VALIDATION_ERROR");
       const comic = seedComic(ctx.app, { title: "不是视频" });
-      expect((await run(ctx, "progress.setTime", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, timeMs: 10 })).error?.code).toBe("VALIDATION_ERROR");
+      expect((await run(ctx, "progress.setTime", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, timeMs: 10 })).error?.code).toBe("VALIDATION_ERROR");
       const finished = (await run(ctx, "works.get", { workId: video.workId })).value as { finishedCount: number; progress: number };
       expect(finished.finishedCount).toBe(1);
     } finally { ctx.app.close(); }

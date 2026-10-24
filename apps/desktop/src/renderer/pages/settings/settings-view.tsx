@@ -1,4 +1,4 @@
-import type { ReadingStylePatch, ShellPreference, WorkMode } from "@manga/contracts/reading";
+import type { ReadingStylePatch, ShellPreference } from "@manga/contracts/reading";
 import type { Translator } from "@manga/i18n";
 import type { HostState } from "../../lib/api.ts";
 import type { ConnectionForm } from "../../lib/types.ts";
@@ -18,7 +18,6 @@ import type { PlainTestResult, SaveConnectionResult } from "./connection-dialog.
 import { ModelsPage } from "./models-page.tsx";
 import { PluginsPage } from "./plugins-page.tsx";
 import { QuickTasksPage } from "./quick-tasks-page.tsx";
-import { RecordsPage } from "./records-page.tsx";
 import { SemanticPage } from "./semantic-page.tsx";
 import { ShortcutsPage } from "./shortcuts-page.tsx";
 import { DanmakuPage } from "./danmaku-page.tsx";
@@ -50,8 +49,6 @@ export type SettingsViewProps = {
   inventory: Record<string, unknown> | null;
   migration: MigrationPlan | null;
   shell: ShellPreference;
-  mode: WorkMode;
-  onMode: (mode: WorkMode) => void;
   onReading: (patch: ReadingStylePatch) => void;
   recording: { settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void> };
   comic: { settings: ComicSettings; change: (patch: Partial<ComicSettings>) => void };
@@ -88,12 +85,6 @@ export type SettingsViewProps = {
     onRepair: (id: string) => void;
     onOpenCategory: (category: "comic" | "video") => void;
   };
-  records: {
-    workId?: string | null;
-    onOpenNote: (objectId: string) => void;
-    onOpenNoteSource: (objectId: string) => void;
-    onOpenRecording: (sessionId: string, workId: string | null) => void;
-  };
 };
 
 /**
@@ -113,12 +104,6 @@ export function SettingsView(props: SettingsViewProps) {
             <SettingsSection testId="appearance-rows">
               <SettingsRow label={t("appearance.theme")} hint={t("appearance.themeHint")} htmlFor="appearance-theme">
                 <select id="appearance-theme" data-testid="appearance-theme" value="light" disabled><option value="light">{t("appearance.themeLight")}</option></select>
-              </SettingsRow>
-              <SettingsRow label={t("appearance.mode")} hint={t("appearance.modeHint")} htmlFor="appearance-mode">
-                <select id="appearance-mode" data-testid="appearance-mode" value={props.mode} onChange={(event) => props.onMode(event.target.value as WorkMode)}>
-                  <option value="enthusiast">{t("mode.enthusiast")}</option>
-                  <option value="creator">{t("mode.creator")}</option>
-                </select>
               </SettingsRow>
             </SettingsSection>
           </SettingsPage>
@@ -163,8 +148,6 @@ export function SettingsView(props: SettingsViewProps) {
         return <QuickTasksPage t={t} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
       case "usage":
         return <UsagePage t={t} formatDate={i18n.formatDate} formatNumber={i18n.formatNumber} onError={props.onError} onNotice={props.onNotice} />;
-      case "records":
-        return <RecordsPage t={t} formatDate={i18n.formatDate} initialWorkId={props.records.workId ?? null} onOpenNote={props.records.onOpenNote} onOpenNoteSource={props.records.onOpenNoteSource} onOpenRecording={props.records.onOpenRecording} onError={props.onError} onNotice={props.onNotice} />;
       case "logs":
         return <LogsPage t={t} formatDate={i18n.formatDate} onError={props.onError} />;
     }

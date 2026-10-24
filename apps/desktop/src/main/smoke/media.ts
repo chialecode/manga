@@ -4,7 +4,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
-import { clickTestId, openFromShelf, setField, sleep, trustedClick, waitForTestId } from "./driver.ts";
+import { clickTestId, closeTabs, openFromShelf, setField, sleep, trustedClick, waitForTestId } from "./driver.ts";
 import { fullscreenRoundTrip, toRail } from "./common.ts";
 import { differenceMask, glyphCells } from "./glyph-cells.ts";
 import { expectedPlace, judgeDialogue, judgeTopCaption, MEASURE, type Measure, type Verdict } from "./subtitle-check.ts";
@@ -162,7 +162,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
     const found = await resourceOf(imported.workIds[0]!);
     if (!found) { record(`comic:${item.id}`, false, { stage: "resource" }); continue; }
     await toRail(view);
-    const opened = await openFromShelf(view, "nav-comic", found.resourceId, 10_000);
+    const opened = await openFromShelf(view, "comic", found.resourceId, 10_000);
     const decoded = opened && await until<boolean>(view, PAGE_DRAWN, 20_000);
     const position0 = await js<string>(view, `document.querySelector('[data-testid="comic-position"]')?.textContent ?? ""`);
     await capture(`ui-media-comic-${item.id}.png`);
@@ -183,14 +183,14 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
       turned += 1;
     }
     // Leaving the reader saves the position; reopening restores it.
-    await clickTestId(view, "nav-back");
+    await closeTabs(view, ["reader"]);
     await sleep(400);
     // Back goes to the page before (a place passed through quickly is not one of the history's places), and the shelf's "read" resumes at the saved page.
     const landed = await js<string>(view, `document.querySelector('[data-testid^="page-"]')?.getAttribute("data-testid") ?? ""`);
-    const reopened = await openFromShelf(view, "nav-comic", found.resourceId, 10_000);
+    const reopened = await openFromShelf(view, "comic", found.resourceId, 10_000);
     const restored = reopened && await until<string>(view, `(() => { const text = document.querySelector('[data-testid="comic-position"]')?.textContent ?? ""; return text && text === ${JSON.stringify(lastPosition)} ? text : null; })()`, 10_000);
     const positionAfter = await js<string>(view, `document.querySelector('[data-testid="comic-position"]')?.textContent ?? ""`);
-    await clickTestId(view, "nav-back");
+    await closeTabs(view, ["reader"]);
     record(`comic:${item.id}`, Boolean(decoded) && turned >= Math.min(item.pages, 4) - 1 && Boolean(restored), { suggested: imported.suggested, decoded: Boolean(decoded), turned, landed, reopened, restored: Boolean(restored), position: position0, left: lastPosition, positionAfter });
   }
 
@@ -213,7 +213,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
     row.plans = plans;
     await toRail(view);
     const clicked = Date.now();
-    await openFromShelf(view, "nav-video", found.resourceId, 10_000);
+    await openFromShelf(view, "video", found.resourceId, 10_000);
     const outcome = await until<string>(view, `(() => {
       if (document.querySelector('[data-testid="video-reader"][data-ready]')) return "ready";
       for (const id of ["video-needs-copy", "video-unsupported", "video-failed", "video-missing"]) if (document.querySelector('[data-testid="' + id + '"]')) return id.slice(6);
@@ -231,7 +231,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
       })()`, 180_000) ?? "timeout";
       timings.copyBuildMs!.push(Date.now() - built);
       row.copy = done;
-      if (done !== "ready") { row.result = "copy-" + done; record(`video:${id}`, false, row); await clickTestId(view, "nav-back"); return; }
+      if (done !== "ready") { row.result = "copy-" + done; record(`video:${id}`, false, row); await closeTabs(view, ["reader"]); return; }
       row.path = "play_copy";
     } else if (outcome === "ready") {
       row.path = "original";
@@ -239,7 +239,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
       row.result = outcome === "unsupported" ? "unsupported" : outcome;
       // An honest refusal is a valid result; a timeout or a failure is not.
       record(`video:${id}`, outcome === "unsupported", row);
-      await clickTestId(view, "nav-back");
+      await closeTabs(view, ["reader"]);
       return;
     }
     timings.videoFirstFrameMs!.push(Date.now() - clicked);
@@ -320,7 +320,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
     const subtitlesOk = !subtitles || (subtitles.loadFailedNotice === false && Number(subtitles.differingPixels) > 200);
 
     // Position survives leaving and coming back.
-    await clickTestId(view, "nav-back");
+    await closeTabs(view, ["reader"]);
     await sleep(500);
     const picture = row.picture as { decodedFrames: number | null; notice: boolean } | undefined;
     const pictureOk = Boolean(picture && Number(picture.decodedFrames) > 0 && picture.notice === false);
@@ -382,7 +382,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
       const found = imported.ok ? await resourceOf(imported.workIds[0]!) : null;
       if (!found) { record(`subtitles:${id}:open`, false, { stage: imported.ok ? "resource" : "import" }); return null; }
       await toRail(view);
-      await openFromShelf(view, "nav-video", found.resourceId, 10_000);
+      await openFromShelf(view, "video", found.resourceId, 10_000);
       const ready = await until<boolean>(view, `Boolean(document.querySelector('[data-testid="video-reader"][data-ready]'))`, 40_000);
       if (!ready) { record(`subtitles:${id}:open`, false, { stage: "player" }); return null; }
       return found;
@@ -445,9 +445,9 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
         note("shot-text", judgeTextShot({ withTracks: withBoth, without, screen, fewer: withMain, expectTexts: texts }), { lines: texts.length, captions: screen.captions.length });
 
         await call("settings.setMedia", { video: { shotSubtitles: false } });
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(500);
-        await openFromShelf(view, "nav-video", resourceId, 10_000);
+        await openFromShelf(view, "video", resourceId, 10_000);
         const ready = await until<boolean>(view, `Boolean(document.querySelector('[data-testid="video-reader"][data-ready]'))`, 40_000);
         if (!ready) { record("subtitles:shot-setting-off", false, { stage: "player" }); return; }
         await choose("video-subtitles", `secondary-${secondaryId}`);
@@ -520,7 +520,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
         await choose("video-subtitles", byName("episode.zh-CN.srt").id);
         const full = await inFullscreen(async () => { const m = await showing("0:02.000", 1, 0, "第一句台词"); await capture("ui-subtitles-fullscreen.png"); return m; });
         if (full) verdict("fullscreen", judgeDialogue(full, { lines: 1 })); else record("subtitles:fullscreen", false, { entered: false });
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(400);
       }
 
@@ -537,7 +537,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
         await resize("wide");
         const full = await inFullscreen(async () => { const m = await showing("0:02.000", 1, 0, "第一句台词"); await capture("ui-subtitles-239-fullscreen.png"); return m; });
         if (full) verdict("widescreen:fullscreen", judgeDialogue(full, { lines: 1 }), { expectedPlace: expectedPlace(full) }); else record("subtitles:widescreen:fullscreen", false, { entered: false });
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(400);
       }
 
@@ -560,7 +560,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
           if (both) verdict("secondary-track", judgeDialogue(both, { lines: 2, small: 1 }), { order: both.lines.map((line) => line.text) }); else record("subtitles:secondary-track", false, { picked });
           if (both) await subtitlesInShots(both, embedded.resourceId, english.id);
         } else record("subtitles:secondary-track", false, { tracks: tracks.length });
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(400);
       }
     } catch (error) {
@@ -588,7 +588,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
       const found = imported.ok ? await resourceOf(imported.workIds[0]!) : null;
       if (!found) { problems.push(`${id}: it did not come in through the library`); return false; }
       await toRail(view);
-      await openFromShelf(view, "nav-video", found.resourceId, 10_000);
+      await openFromShelf(view, "video", found.resourceId, 10_000);
       if (!await ready()) { problems.push(`${id}: the player did not become ready`); return false; }
       return true;
     };
@@ -663,12 +663,12 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
     try {
       if (await openSample("video-episodes", "directory")) {
         await walk("episodes", "video-episodes");
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(400);
       }
       if (await openSample("video-mkv-ass-fonts", "file")) {
         await walk("audio", "video-audio");
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(400);
       }
     } catch (error) {
@@ -691,7 +691,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
       if (file && !found) record("picture:missing-font:open", false, { stage: imported?.ok ? "resource" : "import" });
       if (found) {
         await toRail(view);
-        const opened = await openFromShelf(view, "nav-video", found.resourceId, 10_000);
+        const opened = await openFromShelf(view, "video", found.resourceId, 10_000);
         const ready = await until<boolean>(view, `Boolean(document.querySelector('[data-testid="video-reader"][data-ready]'))`, 40_000);
         // What the window shows instead of a ready player, so a failure says where it stopped.
         if (!ready) record("picture:missing-font:open", false, { stage: "player", opened, showing: await js<string[]>(view, `[...document.querySelectorAll('[data-testid^="page-"], [data-testid^="video-"]')].map((el) => el.getAttribute("data-testid")).filter((id) => !/^video-(row|frame|time)/.test(id)).slice(0, 20)`) });
@@ -755,7 +755,7 @@ export async function runMediaSmoke(input: Input): Promise<Record<string, unknow
           await capture("ui-picture-debug-facts.png");
           await clickTestId(view, "debug-toggle");
         }
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(400);
       }
     } catch (error) {

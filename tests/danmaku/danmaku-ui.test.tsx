@@ -10,6 +10,8 @@ import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts
 import { resetVideoSupport } from "../../apps/desktop/src/renderer/readers/video-support.ts";
 import { resetDanmakuSettings } from "../../apps/desktop/src/renderer/hooks/use-danmaku-settings.ts";
 import { installCapture, installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
+import { contextHandlers, stay } from "../helpers/app-host.ts";
+import { openShelf, openWorkPage } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
@@ -50,8 +52,7 @@ function installHost(initial: Partial<Scenario> = {}, overrides: Record<string, 
   const revealed: string[] = [];
   const reply = (match: DanmakuMatchInfo) => ({ state: "ok", items: scenario.items, fetchedAt: "2026-10-09T08:00:00.000Z", expiresAt: "2026-10-09T14:00:00.000Z", fromCache: false, stale: false, warning: null, match });
   const handlers: Record<string, Handler> = {
-    "workspace.get": () => ({ uiFacets: ["agent", "library", "settings", "comic", "video", "notes", "voice", "whiteboard", "projects", "danmaku"], sessions: [], runs: [], notes: [], resources: [] }),
-    "workspace.sessions": () => [],
+    ...contextHandlers({ facets: ["agent", "library", "settings", "comic", "video", "notes", "voice", "whiteboard", "projects", "danmaku"] }).handlers,
     "inventory.overview": () => ({ items: [], totals: {} }),
     "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
     "notes.list": () => [],
@@ -126,19 +127,11 @@ function unsizeStage() {
   if (sizes.high) Object.defineProperty(HTMLElement.prototype, "clientHeight", sizes.high);
 }
 const element = () => screen.getByTestId("video-element") as HTMLVideoElement;
-const stay = () => new Promise<void>((resolve) => { setTimeout(resolve, 140); });
 
 async function openVideo() {
   render(<App />);
-  await waitFor(() => expect(screen.getByTestId("nav-video")).toBeTruthy());
-  await stay();
-  fireEvent.click(screen.getByTestId("nav-video"));
-  await waitFor(() => expect(screen.getByTestId("open-res_v1")).toBeTruthy());
-  await stay();
-  fireEvent.click(screen.getByTestId("open-res_v1"));
-  await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
-  await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
-  await stay();
+  await openShelf("video");
+  await openWorkPage("open-res_v1");
   fireEvent.click(screen.getByTestId("work-read"));
   await waitFor(() => expect(screen.getByTestId("video-reader")).toBeTruthy());
   await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());

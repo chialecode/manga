@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Translator } from "@manga/i18n";
 import { attempt, call } from "../lib/api.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
 import { captureBus } from "./capture-bus.ts";
 import { openMicrophone } from "./mic.ts";
 import { Recorder, type MicHandle, type RecorderState } from "./recorder.ts";
@@ -34,6 +35,8 @@ export type RecorderDeps = {
   setNotice: (message?: string) => void;
   /** The voice module is on; with it off there is nothing to record into. */
   enabled: boolean;
+  /** The context the person is working in: a recording made there becomes a material of the project. */
+  contextId?: string | null;
   /** Test seams: the real microphone and clock. */
   openMic?: (deviceId: string | null) => Promise<MicHandle>;
   now?: () => number;
@@ -50,6 +53,10 @@ const OVERLAY_EVERY_MS = 200;
  */
 export function useRecorder(deps: RecorderDeps) {
   const { i18n, setError, setNotice, enabled } = deps;
+  const contextRef = useRef<string | null>(deps.contextId ?? null);
+  contextRef.current = deps.contextId ?? null;
+  /** The context the running recording began in: it belongs to that project even if the person moves on. */
+  const startedIn = useRef<string | null>(null);
   const recorder = useMemo(() => new Recorder({
     call: (commandId, input, options) => call(commandId, input, options) as Promise<never>,
     openMic: deps.openMic ?? openMicrophone,
@@ -84,6 +91,8 @@ export function useRecorder(deps: RecorderDeps) {
 
   const begin = useCallback(async (mode: "hold" | "toggle") => {
     if (!enabled || recorder.getState().phase !== "idle") return;
+    captureBus.bind();
+    startedIn.current = contextRef.current;
     const where = captureBus.latest();
     await recorder.start({
       mode,
@@ -93,6 +102,8 @@ export function useRecorder(deps: RecorderDeps) {
       retention: settingsRef.current.retention,
       deviceId: settingsRef.current.deviceId,
     });
+    // A start that did not take leaves nothing bound.
+    if (recorder.getState().phase === "idle") captureBus.unbind();
   }, [enabled, recorder]);
 
   const stop = useCallback((reason: "user" | "focus_lost" | "key_lost" = "user") => recorder.stop(reason), [recorder]);
@@ -113,6 +124,8 @@ export function useRecorder(deps: RecorderDeps) {
 
   // The reader's position reaches the recording as it changes.
   useEffect(() => captureBus.subscribe((event) => recorder.event(event)), [recorder]);
+  // A recording hears the tab that was in front when it began; once it is over the next one is bound to the tab then in front.
+  useEffect(() => { if (state.phase === "idle") captureBus.unbind(); }, [state.phase]);
 
   // ---- keys: hold to record, press to start or stop ----
   // Key repeat tells that the key is still down: once repeats have been seen and then stop, the key-up was lost.
@@ -167,6 +180,7 @@ export function useRecorder(deps: RecorderDeps) {
     const stopped = state.lastStop;
     if (!stopped || lastNoticed.current === stopped.sessionId) return;
     lastNoticed.current = stopped.sessionId;
+    void autoAddMaterial(startedIn.current, "recording", stopped.sessionId);
     if (stopped.reason === "user") return;
     const key = `record.stopped.${stopped.reason}` as "record.stopped.focus_lost";
     setNotice(i18n.t(key, { message: state.issue?.message ?? "" }));

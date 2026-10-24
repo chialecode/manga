@@ -27,6 +27,34 @@ describe("the key table (AT-90)", () => {
     expect(KEY_ACTIONS.filter((entry) => entry.group === "comic" || entry.group === "novel").flatMap((entry) => keys[entry.id]!)).not.toContain("R");
   });
 
+  it("has the workspace keys of Q-33 as global actions: tabs, columns, the side columns, conversations and projects, none of them a reader's key", () => {
+    const keys = resolveKeys(null);
+    expect(keys["global.newTab"]).toEqual(["Ctrl+T"]);
+    expect(keys["global.closeTab"]).toEqual(["Ctrl+W"]);
+    expect(keys["global.reopenTab"]).toEqual(["Ctrl+Shift+T"]);
+    expect(keys["global.nextTab"]).toEqual(["Ctrl+Tab"]);
+    expect(keys["global.prevTab"]).toEqual(["Ctrl+Shift+Tab"]);
+    expect([1, 2, 3, 4].map((n) => keys[`global.column${n}`])).toEqual([["Ctrl+1"], ["Ctrl+2"], ["Ctrl+3"], ["Ctrl+4"]]);
+    expect(keys["global.splitToggle"]).toEqual(["Ctrl+\\"]);
+    expect(keys["global.sidebar"]).toEqual(["Ctrl+B"]);
+    expect(keys["global.dock"]).toEqual(["Ctrl+Alt+B"]);
+    expect(keys["global.newConversation"]).toEqual(["Ctrl+N"]);
+    expect(keys["global.newProject"]).toEqual(["Ctrl+Shift+N"]);
+    // Each is found by its own key event, and a reader's keys (which have no Ctrl+letter) are untouched by them.
+    expect(actionOf(press("t", { ctrlKey: true }), keys, "global")).toBe("global.newTab");
+    expect(actionOf(press("T", { ctrlKey: true, shiftKey: true }), keys, "global")).toBe("global.reopenTab");
+    expect(actionOf(press("Tab", { ctrlKey: true }), keys, "global")).toBe("global.nextTab");
+    expect(actionOf(press("Tab", { ctrlKey: true, shiftKey: true }), keys, "global")).toBe("global.prevTab");
+    expect(actionOf(press("b", { ctrlKey: true, altKey: true }), keys, "global")).toBe("global.dock");
+    expect(actionOf(press("\\", { ctrlKey: true }), keys, "global")).toBe("global.splitToggle");
+    expect(actionOf(press("w", { metaKey: true }), keys, "global")).toBe("global.closeTab");
+    // A plain W still fills the window; Ctrl + W no longer does anything else than close the tab.
+    expect(actionOf(press("w"), keys, "global")).toBe("global.windowFullscreen");
+    expect(findConflicts(keys)).toEqual([]);
+    const readers = KEY_ACTIONS.filter((entry) => entry.group !== "global").flatMap((entry) => keys[entry.id]!);
+    for (const entry of KEY_ACTIONS.filter((item) => item.group === "global")) for (const chord of keys[entry.id]!) expect(readers, `${entry.id} ${chord}`).not.toContain(chord);
+  });
+
   it("names a key event the way the table spells it", () => {
     expect(chordOf(press("w"))).toBe("W");
     expect(chordOf(press("W", { shiftKey: true }))).toBe("W");

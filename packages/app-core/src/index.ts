@@ -6,7 +6,8 @@ export { exportLibraryPackage, exportLibraryPackageCancellable, importLibraryPac
 export { parseDocument, parseDocumentBytes, parseEpubBytes, parseMobiBytes, parsePdfBytes, parseTextBytes, buildEpubFixture, buildMobiFixture, buildPdfFixture, buildPdfObjectStreamFixture, buildZip, readZip, palmdocDecompress, htmlToText, htmlImageSources, htmlSvgImageHrefs, sniffFormat } from "./domain/formats.ts";
 export { applyNoteOp, coerceNoteDocument, notePlainText, uniqueBlockIds, isKnownBlockType } from "./domain/note-document.ts";
 export { resolveTextLocator, findQuoteMatches } from "./domain/anchors.ts";
-export { deriveShell, reduceHover, initialHover, defaultShell } from "./domain/shell-layout.ts";
+export { deriveShell, reduceHover, initialHover, defaultShell, clampSide, dragLimit, RAIL_WIDTH, TOP_ROW_HEIGHT, MAIN_FLOOR, SIDE_WIDTH } from "./domain/shell-layout.ts";
+export type { ShellChrome, ShellViewport, OverlaySide, HoverState } from "./domain/shell-layout.ts";
 export { builtinReaderEngine, type ReaderEngine, type ReaderEngineDocument, type ReaderEnginePart, type ReaderEngineTextRun } from "./domain/reader-engine.ts";
 export { readShell } from "./reading-service.ts";
 export { MediaServices } from "./media/services.ts";

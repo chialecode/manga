@@ -5,6 +5,7 @@
 @import "./styles-video.css";
 @import "./styles-voice.css";
 @import "./styles-agent.css";
+@import "./styles-frame.css";
 @import "./styles-workspace.css";
 @import "./styles-creative.css";
 @import "./styles-canvas.css";
@@ -29,6 +30,8 @@
   --color-frame: #F3F4F7;
   --color-on-frame: #687184;
   --color-frame-glass: #F3F4F7E6;
+  /* The sidebar: halfway between the frame's gray and the main area's white (the cards and the settings directory share it). */
+  --color-sidebar: #F9FAFB;
   --color-player: #151925;
   --color-on-player: #FFFFFF;
   --color-player-shade: #101522E6;
@@ -75,6 +78,27 @@
   --color-ring: #AD3268;
 }
 
+/* The dark values of the roles the window frame names (A-99): the sidebar is again halfway between the frame and the main area. No setting chooses them yet (the themes
+   wait for Q-08); the walk of the window stamps data-theme on the root to check them. The pages below it read only these roles. */
+:root[data-theme="dark"] {
+  --color-bg: #14171F;
+  --color-surface: #1F232E;
+  --color-muted: #2A2F3D;
+  --color-border: #343A4A;
+  --color-text: #E6E9F2;
+  --color-subtle: #9AA3B8;
+  --color-accent: #E27AA8;
+  --color-accent-soft: #3A2230;
+  --color-scroll: #3E4556;
+  --color-frame: #14171F;
+  --color-on-frame: #9AA3B8;
+  --color-frame-glass: #14171FE6;
+  --color-sidebar: #1A1D27;
+  --color-background: #14171F;
+  --color-foreground: #E6E9F2;
+  color-scheme: dark;
+}
+
 html, body, #root {
   height: 100%;
   background: var(--color-bg);
@@ -95,9 +119,6 @@ html, body, #root {
 .tiptap [data-block-type="quote"] { border-left: 3px solid var(--color-border); padding-left: 1em; color: var(--color-subtle); }
 .tiptap [data-block-type="code"], .tiptap [data-block-type="plaintext"] { white-space: pre-wrap; font-family: monospace; background: var(--color-muted); }
 .tiptap > div + div { margin-top: .5em; }
-@media (max-width: 959px) {
-  [data-shell-state="dock"] { display: none; }
-}
 
 :focus-visible {
   outline: 2px solid var(--color-focus);
@@ -120,106 +141,6 @@ button, select, input, textarea { font: inherit; }
 button { cursor: pointer; }
 input[type="range"], input[type="checkbox"], progress { accent-color: var(--color-accent); }
 button:disabled { cursor: default; opacity: .5; }
-/* The window is three flat regions (rail, page, assistant) split by one-pixel dividers: no card, no shadow, no gap between them. */
-.manga-shell { padding: 0; font-size: 14px; background: var(--color-bg); }
-/* There is no title bar row: every column owns its top (36 px, as high as the window's own buttons), and the dividers run from the window's top to its bottom. */
-.column-top { position: relative; display: flex; align-items: stretch; flex: 0 0 var(--column-top-h); height: var(--column-top-h); color: var(--color-on-frame); background: var(--color-frame); user-select: none; }
-.column-top strong { color: var(--color-text); }
-.titlebar-seg { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.column-top > .titlebar-seg { flex: 1 1 auto; }
-.titlebar-left { padding: 0 4px; gap: 2px; }
-.titlebar-left .mode-segment { margin-left: 4px; }
-.titlebar-main { --top-pad: 14px; padding: 0 var(--top-pad); overflow: hidden; }
-/* Where the side columns are not docked their controls stand at the ends of the main top, closer to the window's edge than the page's own margin. */
-.titlebar-main > .titlebar-left { flex: 0 0 auto; margin-left: calc(4px - var(--top-pad)); padding: 0; }
-.titlebar-main > .titlebar-right { flex: 0 0 auto; margin-right: calc(4px - var(--top-pad)); padding: 0; }
-.titlebar-right { padding-left: 4px; }
-/* The window's own buttons (A-91): as high as a top, 46 px wide like the system's, in the theme's colors; never part of a drag area. */
-.window-controls { display: flex; flex: 0 0 auto; align-self: stretch; margin-left: 6px; }
-.window-control { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); transition: background-color 90ms ease; }
-.window-control:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 10%, transparent); }
-.window-control:active:not(:disabled) { background: color-mix(in srgb, var(--color-text) 16%, transparent); }
-.window-control:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -3px; }
-.window-control[data-kind="close"]:hover:not(:disabled) { background: var(--color-danger); color: #fff; }
-.window-control[data-kind="close"]:active:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 82%, #000); color: #fff; }
-@media (prefers-reduced-motion: reduce) { .window-control { transition: none; } }
-/* macOS keeps its traffic lights at the left end of the window; the first top leaves them room. */
-.manga-shell[data-window-controls="system"] .shell-navigation > .column-top > .titlebar-left, .manga-shell[data-window-controls="system"] .shell-main-column > .column-top .titlebar-main > .titlebar-left:first-child { padding-left: 72px; }
-.column-top .shell-icon, .titlebar-menu .menu-button { width: 28px; height: 28px; }
-/* Where the window is too narrow for every button, forward is left to the menu (and to Alt+Right and the mouse's side button). */
-@media (max-width: 479px) { .titlebar-left [data-testid="nav-forward"] { display: none; } .titlebar-main { --top-pad: 6px; } }
-.titlebar-right-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
-.titlebar-menu { display: inline-flex; }
-.titlebar-menu .menu-button { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; }
-.titlebar-menu .menu-list { -webkit-app-region: no-drag; app-region: no-drag; }
-.titlebar-menu .menu-button:hover { background: var(--color-muted); }
-.shell-icon:disabled { opacity: .35; }
-.shell-workspace { gap: 0; }
-.shell-main-column { position: relative; background: var(--color-surface); }
-.shell-navigation { display: flex; flex-direction: column; background: var(--color-bg); user-select: none; overflow: hidden; }
-.shell-left-body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; padding: 0 10px; }
-.shell-navigation[data-shell-state="overlay"] { border-right: 1px solid var(--color-border); background: var(--color-bg); }
-.shell-left-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-.shell-brand { display: flex; align-items: center; gap: 13px; padding: 12px 12px 14px; font-size: 21px; letter-spacing: .4px; flex-shrink: 0; }
-.shell-brand > span, .brand-accent { color: var(--color-brand); }
-/* The two modes are one choice in the title bar, next to the sidebar button; the pressed one is filled. */
-.mode-segment { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); flex-shrink: 0; }
-.mode-segment-button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 7px; color: var(--color-subtle); }
-.mode-segment-button:hover { background: var(--color-muted); color: var(--color-text); }
-.mode-segment-button[aria-pressed="true"] { color: var(--color-accent); background: var(--color-accent-soft); }
-.mode-segment-button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.shell-nav { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
-.shell-nav button { display: flex; align-items: center; gap: 15px; padding: 9px 12px; text-align: left; border-radius: 9px; color: var(--color-subtle); }
-.shell-nav button:hover { background: var(--color-muted); color: var(--color-text); }
-.shell-nav button[aria-current="page"] { color: var(--color-accent); background: var(--color-accent-soft); font-weight: 600; }
-/* The list of what has been opened takes the room that is left and scrolls inside itself; the settings button under it never moves. */
-.shell-sessions { margin-top: 8px; padding: 8px 0; border-top: 1px solid var(--color-border); flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-.shell-sessions > p { font-size: 12px; line-height: 1.7; padding: 4px 6px; }
-.session-group + .session-group { margin-top: 6px; }
-.session-group-title { margin: 0; }
-.session-group-toggle { display: flex; align-items: center; gap: 4px; width: 100%; padding: 4px 4px; border-radius: 6px; font-size: 12px; color: var(--color-subtle); text-align: left; }
-.session-group-toggle:hover { background: var(--color-muted); color: var(--color-text); }
-.session-group-count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 9px; background: var(--color-muted); }
-.shell-session-row { position: relative; border-radius: 8px; }
-.shell-session-row:hover { background: var(--color-muted); }
-.shell-session-row.is-current { background: var(--color-accent-soft); }
-.session-close { position: absolute; top: 6px; right: 4px; display: none; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 5px; color: var(--color-subtle); background: var(--color-surface); }
-.shell-session-row:hover .session-close, .shell-session-row:focus-within .session-close { display: inline-flex; }
-.session-close:hover { color: var(--color-text); background: var(--color-border); }
-.rail-menu { position: fixed; z-index: 60; min-width: 120px; padding: 4px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); box-shadow: var(--shadow-panel); }
-.rail-menu button { display: block; width: 100%; padding: 6px 10px; border-radius: 5px; text-align: left; font-size: 13px; }
-.rail-menu button:hover { background: var(--color-muted); }
-.shell-session { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; column-gap: 9px; padding: 6px 26px 6px 4px; border-radius: 8px; }
-.shell-session > .session-cover { grid-row: span 2; display: grid; place-items: center; height: 38px; background: var(--color-muted); border: 1px solid var(--color-border); border-radius: 5px; color: var(--color-accent); }
-.shell-session > .text-\[var\(--color-subtle\)\] { font-size: 10px; }
-.shell-settings { border-top: 1px solid var(--color-border); padding: 8px 0; flex-shrink: 0; }
-.shell-content, .shell-assistant { background: var(--color-surface); }
-.shell-assistant[data-shell-state="overlay"] { border-left: 1px solid var(--color-border); }
-.shell-navigation[data-shell-state="dock"], .shell-assistant[data-shell-state="dock"] { position: relative; }
-/* The main panel is a column with a definite height, so a page that fills it (a reader, a shelf) is bounded by the window and not by its own content.
-   The scrollbar's room is always kept (A-70): the page does not move sideways when a long page gets its bar. A page that fills the panel keeps none. */
-.shell-content { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-.shell-content[data-fill="true"] { overflow: hidden; scrollbar-gutter: auto; }
-/* A page that scrolls inside itself keeps its own scrollbar's room; the main area then has none to keep, or the page would have two. */
-.shell-content:has(> .page-pad, > .settings-view, > .page-host) { scrollbar-gutter: auto; }
-.shell-assistant { display: flex; flex-direction: column; overflow: hidden; }
-.shell-right-body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; padding: 8px 16px 12px; }
-.shell-assistant > .assistant-heading { padding: 12px 16px 0; }
-/* The window fills with the page: the main top floats over it as glass and comes down when the pointer reaches the top edge. It takes no room, so the page does not change size. */
-.shell-main-column[data-immersive="true"] > .column-top { position: absolute; top: 0; left: 0; right: 0; z-index: 40; background: var(--color-frame-glass); backdrop-filter: blur(14px); transform: translateY(-100%); transition: transform 160ms ease; box-shadow: var(--shadow-panel); }
-.shell-main-column[data-immersive="true"][data-revealed="true"] > .column-top, .shell-main-column[data-immersive="true"] > .column-top:hover, .shell-main-column[data-immersive="true"] > .column-top:focus-within { transform: none; }
-/* In that state the window's top edge is still a place to take hold of it: an invisible strip is a drag area, and the zone under it brings the top down.
-   A drag area gets no pointer events, so the zone is what the pointer meets first; the floating top, once down, is itself a drag area apart from its buttons. */
-.immersive-drag { position: absolute; top: 0; left: 0; right: 0; height: 8px; z-index: 42; }
-.immersive-hotzone { position: absolute; top: 8px; left: 0; right: 0; height: 16px; z-index: 41; }
-@media (prefers-reduced-motion: reduce) { .shell-main-column[data-immersive="true"] > .column-top { transition: none; } }
-/* The divider is the one-pixel line between two regions; the pointer's room around it is wider than it looks. */
-.shell-divider { position: relative; flex: 0 0 1px; width: 1px; background: var(--color-border); cursor: col-resize; z-index: 5; touch-action: none; }
-.shell-divider::before { content: ""; position: absolute; top: 0; bottom: 0; left: -4px; right: -4px; }
-.shell-divider:hover, .shell-divider:focus-visible, .shell-divider:active { background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); outline: none; }
-.assistant-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 0; flex-shrink: 0; }
-.assistant-heading strong { font-size: 16px; }
-.mode-badge { display: inline-flex; align-items: center; color: var(--color-accent); background: var(--color-accent-soft); border-radius: 12px; padding: 3px 9px; font-size: 10px; font-weight: 600; white-space: nowrap; }
 .workspace-page { padding: 22px; }
 .workspace-page :where(button, input, select, textarea) { border-color: var(--color-border); }
 .workspace-page :where(button) { transition: background-color 120ms ease; }

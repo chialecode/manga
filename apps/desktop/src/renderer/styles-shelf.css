@@ -16,6 +16,7 @@
 .popup[data-placement="below"][data-align="end"] { position-area: bottom span-left; }
 .popup[data-placement="above"][data-align="start"] { position-area: top span-right; }
 .popup[data-placement="above"][data-align="end"] { position-area: top span-left; }
+.popup[data-placement="right"] { margin-left: 6px; position-area: right span-bottom; }
 .menu-list { min-width: 160px; max-width: calc(100vw - 24px); padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px #30364722; }
 .menu-list button { text-align: left; padding: 7px 10px; border-radius: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-list button:hover:not(:disabled), .menu-list button:focus-visible { background: var(--color-accent-soft); }
@@ -92,7 +93,9 @@
 .work-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-sub, .work-line { font-size: 12px; color: var(--color-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 16px; }
 .work-progress { display: grid; gap: 3px; }
-.work-progress-label { font-size: 11px; color: var(--color-accent); }
+.work-progress-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.work-progress-label { font-size: 11px; color: var(--color-accent); flex: none; }
+.work-origin { font-size: 11px; color: var(--color-subtle); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-progress-bar { display: block; height: 3px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
 .work-progress-bar > span { display: block; height: 100%; background: var(--color-brand); }
 .work-tag { justify-self: start; font-size: 11px; padding: 1px 8px; border-radius: 10px; color: var(--color-accent); background: var(--color-accent-soft); }

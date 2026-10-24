@@ -35,7 +35,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const counts = { materials: 0, terms: 0, sessions: 0, whiteboards: 0, mindmaps: 0, drafts: 0, excerpts: 0, roughCuts: 0 };
 const project = (id: string, name: string, extra: Record<string, unknown> = {}) => ({ id, name, goal: "", status: "active", modelConnectionId: null, createdAt: "2026-10-01T10:00:00.000Z", updatedAt: "2026-10-02T10:00:00.000Z", counts, ...extra });
 
-describe("the entertainment mode's conversation bar (AT-75)", () => {
+describe("the conversation bar at the top of the dock (AT-75)", () => {
   const history = [
     { sessionId: "ses_a", title: "对话 2026-10-01 10:00", excerpt: "第一段对话的第一句话", runCount: 3, updatedAt: "2026-10-01T10:00:00.000Z" },
     { sessionId: "ses_b", title: "对话 2026-09-30 09:00", excerpt: "", runCount: 0, updatedAt: "2026-09-30T09:00:00.000Z" },
@@ -44,7 +44,7 @@ describe("the entertainment mode's conversation bar (AT-75)", () => {
   it("names the current conversation and starts a new one", async () => {
     installHost({ "conversation.history": () => ({ current: "ses_now", items: history }) });
     const onNew = vi.fn();
-    render(<ConversationBar t={t} mode="enthusiast" title="对话 2026-10-02 08:00" version={0} formatDate={i18n.formatDate} onNew={onNew} onResume={() => undefined} onError={() => undefined} />);
+    render(<ConversationBar t={t} contextId={null} title="对话 2026-10-02 08:00" version={0} formatDate={i18n.formatDate} onNew={onNew} onResume={() => undefined} onError={() => undefined} />);
     expect(screen.getByTestId("conversation-title").textContent).toBe("对话 2026-10-02 08:00");
     fireEvent.click(screen.getByTestId("conversation-new"));
     expect(onNew).toHaveBeenCalledTimes(1);
@@ -55,10 +55,10 @@ describe("the entertainment mode's conversation bar (AT-75)", () => {
   it("lists the history with title, time and the start of what was said, continues one, and closes with Escape", async () => {
     const host = installHost({ "conversation.history": () => ({ current: "ses_now", items: history }) });
     const resume = vi.fn();
-    render(<ConversationBar t={t} mode="enthusiast" title="现在" version={0} formatDate={i18n.formatDate} onNew={() => undefined} onResume={resume} onError={() => undefined} />);
+    render(<ConversationBar t={t} contextId={null} title="现在" version={0} formatDate={i18n.formatDate} onNew={() => undefined} onResume={resume} onError={() => undefined} />);
     fireEvent.click(screen.getByTestId("conversation-history"));
     await waitFor(() => expect(screen.getByTestId("conversation-item-ses_a")).toBeTruthy());
-    expect(host.of("conversation.history")[0]!.input).toEqual({ mode: "enthusiast", limit: 50 });
+    expect(host.of("conversation.history")[0]!.input).toEqual({ contextId: null, limit: 50 });
     const first = screen.getByTestId("conversation-item-ses_a");
     expect(first.textContent).toContain("对话 2026-10-01 10:00");
     expect(first.textContent).toContain("第一段对话的第一句话");
@@ -77,13 +77,13 @@ describe("the entertainment mode's conversation bar (AT-75)", () => {
   it("says the history is empty before a second conversation exists, and reads it again when the conversations change", async () => {
     let items: typeof history = [];
     const host = installHost({ "conversation.history": () => ({ current: "ses_now", items }) });
-    const view = render(<ConversationBar t={t} mode="creator" title="" version={0} formatDate={i18n.formatDate} onNew={() => undefined} onResume={() => undefined} onError={() => undefined} />);
+    const view = render(<ConversationBar t={t} contextId="prj_1" title="" version={0} formatDate={i18n.formatDate} onNew={() => undefined} onResume={() => undefined} onError={() => undefined} />);
     expect(screen.getByTestId("conversation-title").textContent).toBe("当前对话");
     fireEvent.click(screen.getByTestId("conversation-history"));
     await waitFor(() => expect(screen.getByTestId("conversation-empty")).toBeTruthy());
-    expect(host.of("conversation.history")[0]!.input).toMatchObject({ mode: "creator" });
+    expect(host.of("conversation.history")[0]!.input).toMatchObject({ contextId: "prj_1" });
     items = history;
-    view.rerender(<ConversationBar t={t} mode="creator" title="" version={1} formatDate={i18n.formatDate} onNew={() => undefined} onResume={() => undefined} onError={() => undefined} />);
+    view.rerender(<ConversationBar t={t} contextId="prj_1" title="" version={1} formatDate={i18n.formatDate} onNew={() => undefined} onResume={() => undefined} onError={() => undefined} />);
     await waitFor(() => expect(screen.getByTestId("conversation-item-ses_a")).toBeTruthy());
   });
 });

@@ -1,16 +1,11 @@
 import { z } from "zod";
 import { SourceLocatorSchema } from "./location.ts";
+import { DEFAULT_RAIL_PREFERENCE, RailPreferenceSchema } from "./sidebar.ts";
 
 /** Visual shell preference. Distinct from storage-location layout (`settings.setLayout`). */
 export const ShellPanelSchema = z.object({
   visible: z.boolean(),
   width: z.number().int().min(160).max(720),
-}).strict();
-
-export const ShellModeLayoutSchema = z.object({
-  focus: z.boolean(),
-  left: ShellPanelSchema,
-  right: ShellPanelSchema,
 }).strict();
 
 /** Reader backgrounds: white, book yellow, eye-care green, teal and dark. Only the reading column takes the color, never the app shell. */
@@ -40,19 +35,54 @@ export const ReadingPreferenceSchema = z.object({
   pageRatio: z.enum(READING_PAGE_RATIOS).default("book"),
 }).strict();
 
+/**
+ * The shell preference (A-94). One workspace, so one set of widths: the sidebar (projects and conversations) and the dock (the conversation on the right).
+ * `lastContext` is where the person was working when the application was left: a project id, or null for "最近".
+ */
 export const ShellPreferenceSchema = z.object({
-  version: z.literal(1),
-  mode: z.enum(["enthusiast", "creator"]),
+  version: z.literal(2),
   spoilerGuard: z.boolean(),
-  layouts: z.object({
-    enthusiast: ShellModeLayoutSchema,
-    creator: ShellModeLayoutSchema,
-  }).strict(),
+  sidebar: ShellPanelSchema,
+  dock: ShellPanelSchema,
+  lastContext: z.string().min(1).max(256).nullable(),
+  /** The icon rail and the settings page last visited (A-99, A-101). Version 2 was not released before these were added, so a saved record without them reads with their defaults. */
+  rail: RailPreferenceSchema.default(() => structuredClone(DEFAULT_RAIL_PREFERENCE)),
   reading: ReadingPreferenceSchema,
 }).strict();
 
 export type ShellPreference = z.infer<typeof ShellPreferenceSchema>;
-export type WorkMode = ShellPreference["mode"];
+
+/** What version 1 stored: two modes, each with its own columns. Read only to convert it (schema v12); nothing writes it any more. */
+export const ShellPreferenceV1Schema = z.object({
+  version: z.literal(1),
+  mode: z.enum(["enthusiast", "creator"]),
+  spoilerGuard: z.boolean(),
+  layouts: z.object({
+    enthusiast: z.object({ focus: z.boolean(), left: ShellPanelSchema, right: ShellPanelSchema }).strict(),
+    creator: z.object({ focus: z.boolean(), left: ShellPanelSchema, right: ShellPanelSchema }).strict(),
+  }).strict(),
+  reading: ReadingPreferenceSchema,
+}).strict();
+
+export type ShellPreferenceV1 = z.infer<typeof ShellPreferenceV1Schema>;
+
+/** Version 1 → 2: the columns of the entertainment mode become the sidebar and the dock; `lastContext` is set by whoever knows the projects. */
+export function shellFromV1(old: ShellPreferenceV1, lastContext: string | null): ShellPreference {
+  const columns = old.layouts.enthusiast;
+  return {
+    version: 2,
+    spoilerGuard: old.spoilerGuard,
+    sidebar: { visible: columns.left.visible, width: Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, columns.left.width)) },
+    dock: { visible: columns.right.visible, width: Math.min(DOCK_WIDTH.max, Math.max(DOCK_WIDTH.min, columns.right.width)) },
+    lastContext,
+    rail: structuredClone(DEFAULT_RAIL_PREFERENCE),
+    reading: old.reading,
+  };
+}
+
+/** How wide the sidebar and the dock may be made, in pixels. */
+export const SIDEBAR_WIDTH = { min: 200, max: 400, initial: 260 } as const;
+export const DOCK_WIDTH = { min: 320, max: 640, initial: 360 } as const;
 
 export const NOTE_BLOCK_TYPES = ["paragraph", "heading", "list", "quote", "code", "plaintext"] as const;
 export type NoteBlockType = (typeof NOTE_BLOCK_TYPES)[number];
@@ -128,13 +158,12 @@ export const ReadingStylePatchSchema = z.object({
 export type ReadingStylePatch = z.infer<typeof ReadingStylePatchSchema>;
 
 export const DEFAULT_SHELL_PREFERENCE: ShellPreference = {
-  version: 1,
-  mode: "enthusiast",
+  version: 2,
   spoilerGuard: false,
-  layouts: {
-    enthusiast: { focus: false, left: { visible: true, width: 224 }, right: { visible: true, width: 360 } },
-    creator: { focus: false, left: { visible: true, width: 224 }, right: { visible: true, width: 360 } },
-  },
+  sidebar: { visible: true, width: SIDEBAR_WIDTH.initial },
+  dock: { visible: true, width: DOCK_WIDTH.initial },
+  lastContext: null,
+  rail: structuredClone(DEFAULT_RAIL_PREFERENCE),
   reading: { measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, paragraphSpacingPx: 0, theme: "white", pageMode: "single", pageRatio: "book" },
 };
 
@@ -168,7 +197,7 @@ export const PARSER_CANDIDATES = [
     accepted: false,
   },
   {
-    id: "pdfjs-dist@6.3.289",
+    id: "pdfjs-dist@6.4.299",
     format: "pdf",
     license: "Apache-2.0",
     offline: true,

@@ -6,7 +6,7 @@
 | 编写日期 | 2026-09-19；2026-10-06 更新 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据和 Agent 已合入 main（最近合并提交 `62d5391`）；当前阶段 M3 在分支 `feat/m3-mvp-completion`。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
+| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据和 Agent 已合入 main（最近合并提交 `c22d886`，含创作工作区、粗剪、插件与 BitTorrent 获取）；当前阶段（M4，分支 `feat/m4-project-workspace`，计划见[当前阶段计划](delivery/stage-plan.md)）已把两种模式合成按项目组织、带标签页与分屏的单一工作区，等待集中审查与合并。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
 
 ## 1. 阅读顺序
 
@@ -25,7 +25,7 @@
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
 | [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
 | [最近一次门禁证据](evidence/gate/report.json) | 最近一次阶段门禁（test、package、bench、report）的脱敏结果，随阶段更新；过程文档与轮次证据按[阶段收尾清理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
-| [当前阶段计划](delivery/stage-plan.md) | 当前阶段（M3）唯一计划，覆盖整个阶段（A-46）：阶段开始的整理、剩余全部 MVP、2026-10-06 用户提出的界面与功能问题、B 执行 prompt；阶段报告为 `delivery/stage-report.md`。两者在下一阶段整理后提炼并删除 |
+| [当前阶段计划](delivery/stage-plan.md) | 当前阶段唯一计划，覆盖整个阶段（A-46）：阶段开始的整理、单一工作区（项目、标签页与分屏）、按项目分开的进度与对话、schema v12 迁移、依赖盘点、B 执行 prompt；阶段报告由 B 在本阶段新建为 `delivery/stage-report.md`。两者在下一阶段整理后提炼并删除 |
 | [模块规格](modules/library.md) | 各内置模块的数据所有权、命令、上下文、停用与恢复 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 

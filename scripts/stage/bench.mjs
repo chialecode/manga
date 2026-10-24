@@ -12,6 +12,7 @@ import { runBtBench } from "./bench-bt.mjs";
 import { runCanvasBench } from "./bench-canvas.mjs";
 import { runNoteFileBench, runRoughcutBench, runSemanticBench, runTraceBench } from "./bench-creative.mjs";
 import { runReaderBench } from "./bench-reader.mjs";
+import { runWorkspaceBench } from "./bench-workspace.mjs";
 import { runVideoImportBench } from "./bench-import.mjs";
 
 const stage = currentStage();
@@ -79,6 +80,7 @@ const progressSaveMs = await sample(10, async (i) => {
     commandId: "progress.set",
     idempotencyKey: `progress-${i}`,
     input: {
+      contextId: null,
       resourceId: "res_b0",
       resourceRevisionId: "rev_b0",
       consumed: false,
@@ -257,6 +259,10 @@ const readerWanted = config.bench.reader;
 const reader = await runReaderBench({ ...appCommand, ...readerWanted });
 if (!reader.danmaku?.ok || !reader.memory?.ok) process.stderr.write(`reader window bench incomplete: ${JSON.stringify({ reason: reader.reason, danmaku: reader.danmaku && { ok: reader.danmaku.ok, reason: reader.danmaku.reason, failures: reader.danmaku.failures, stderr: reader.danmaku.stderr }, memory: reader.memory && { ok: reader.memory.ok, reason: reader.memory.reason, failures: reader.memory.failures, stderr: reader.memory.stderr } })}
 `);
+// The workspace in the real window: tabs, contexts, readers kept loaded, and four columns with a video playing.
+const workspace = await runWorkspaceBench({ ...appCommand, ...config.bench.workspace });
+if (workspace.window?.ok !== true || workspace.memory?.ok !== true) process.stderr.write(`workspace window bench incomplete: ${JSON.stringify({ reason: workspace.reason, window: workspace.window && { ok: workspace.window.ok, reason: workspace.window.reason, failures: workspace.window.failures, stderr: workspace.window.stderr, counts: workspace.window.counts }, memory: workspace.memory && { ok: workspace.memory.ok, failures: workspace.memory.failures } })}
+`);
 const canvasRaw = {
   whiteboardOpen: { raw: canvas.whiteboardOpenMs, scale: { cards: canvas.scale?.cards ?? 0 } },
   whiteboardDrag: { raw: canvas.whiteboardDragMs, scale: { cards: canvas.scale?.cards ?? 0 } },
@@ -285,6 +291,16 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
   if (id === "readerMemory") {
     const m = reader.memory ?? {};
     creative[id] = { kind: "electron-reader", scale: { runs: m.raw?.length ?? 0 }, raw: m.raw ?? [], detail: { ok: m.ok === true, failures: m.failures ?? [m.reason], unit: m.unit, rows: m.rows, processes: m.processes } };
+  }
+  if (id === "tabSwitch" || id === "contextSwitch" || id === "contextRestore" || id === "quadLateFrame" || id === "mountedReaders") {
+    const w = workspace.window ?? {};
+    const raw = { tabSwitch: w.tabSwitchMs, contextSwitch: w.contextSwitchMs, contextRestore: w.contextRestoreMs, quadLateFrame: w.quadLateFramePct, mountedReaders: w.mountedReadersOverColumns }[id] ?? [];
+    const scale = { tabSwitch: { tabs: w.tabs?.length ?? 0 }, contextSwitch: { contexts: w.contexts ?? 0 }, contextRestore: { contexts: w.contexts ?? 0 }, quadLateFrame: { columns: w.quadRuns?.length ? 4 : 0 }, mountedReaders: { readers: w.readers?.opened ?? 0 } }[id];
+    creative[id] = { kind: "electron-workspace", scale, raw, detail: { ok: w.ok === true, failures: w.failures ?? [workspace.reason], window: w.window, wait: w.waits?.[id], tabs: id === "tabSwitch" ? w.tabs : undefined, readers: id === "mountedReaders" ? w.readers : undefined, usualIntervalMs: id === "quadLateFrame" ? w.usualIntervalMs : undefined, baselineLatePct: id === "quadLateFrame" ? w.baselineLatePct : undefined, runs: id === "quadLateFrame" ? w.quadRuns : undefined, playMs: id === "quadLateFrame" ? w.playMs : undefined } };
+  }
+  if (id === "quadMemory") {
+    const m = workspace.memory ?? {};
+    creative[id] = { kind: "electron-workspace", scale: { columns: m.raw?.length ? 4 : 0 }, raw: m.raw ?? [], detail: { ok: m.ok === true, failures: m.failures ?? [workspace.reason], unit: m.unit, rows: m.rows, wait: "application working set, all processes, with a video in a single column and then with the four columns (two videos, a comic, a note), each in a window of its own" } };
   }
   if (id === "traceOverhead") {
     const result = await runTraceBench({ runs: wanted.minSamples });
@@ -332,6 +348,9 @@ const metrics = {
   // Requirement 6.2 in the real window on the benchmark-scale Profile.
   scaleColdStartToLibraryMs: p95(scaleWindow.raw?.coldStartToLibraryMs ?? []),
   scaleUiFeedbackP95Ms: p95(scaleWindow.raw?.uiFeedbackMs ?? []),
+  scaleRailSwitchP95Ms: p95(scaleWindow.raw?.railSwitchMs ?? []),
+  scaleSearchNamesP95Ms: p95(scaleWindow.raw?.searchNamesMs ?? []),
+  scaleSettingsP95Ms: p95(scaleWindow.raw?.settingsMs ?? []),
   scaleLargeTxtTailP95Ms: p95(scaleWindow.raw?.largeTxtTailMs ?? []),
   scaleLargeEpubTailP95Ms: p95(scaleWindow.raw?.largeEpubTailMs ?? []),
   scaleSaveReceiptP95Ms: p95(scaleWindow.raw?.saveReceiptMs ?? []),
@@ -343,7 +362,7 @@ const metrics = {
   scanInteractionP95Ms: scanPane.scan?.interaction?.p95 ?? Number.POSITIVE_INFINITY,
   ...creativeMetrics,
 };
-const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
+const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
 fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   status: passed ? "passed" : "failed",
   stage,
@@ -380,6 +399,9 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
     requirement: {
       scaleColdStartToLibraryMs: "6.2 冷启动至可操作资源库 ≤ 5 s",
       scaleUiFeedbackP95Ms: "6.2 本地界面反馈 p95 ≤ 100 ms",
+      scaleRailSwitchP95Ms: "AT-119 点图标切换视图到侧栏列表画好 p95 ≤ 100 ms（规模样本）",
+      scaleSearchNamesP95Ms: "AT-121 搜索框里输入后名字结果出现 p95 ≤ 200 ms（规模样本）",
+      scaleSettingsP95Ms: "AT-122 进入设置与离开设置回到工作区画好 p95 ≤ 150 ms",
       scaleLargeTxtTailP95Ms: "6.2 已索引小说首屏 TXT ≤ 10 MiB p95 ≤ 2 s（恢复到末段）",
       scaleLargeEpubTailP95Ms: "6.2 已索引小说首屏 EPUB ≤ 30 MiB p95 ≤ 2 s（恢复到末章末段）",
       scaleSaveReceiptP95Ms: "6.2 自动保存：编辑草稿 ≤ 1 s",

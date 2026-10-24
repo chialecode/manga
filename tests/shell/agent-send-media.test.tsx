@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { BUILTIN_QUICK_TASKS } from "@manga/contracts";
+import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts/reading";
 import { App } from "../../apps/desktop/src/renderer/App.tsx";
 import { readerContext } from "../../apps/desktop/src/renderer/lib/reader-context.ts";
 import { quoteTags } from "../../apps/desktop/src/renderer/lib/quote-tags.ts";
@@ -9,103 +10,47 @@ import { resetCovers } from "../../apps/desktop/src/renderer/lib/covers.ts";
 import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts";
 import { resetVideoSupport } from "../../apps/desktop/src/renderer/readers/video-support.ts";
 import { installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
+import { installHost as baseHost, workDetail, type Handler } from "../helpers/app-host.ts";
+import { openShelf, openWorkPage } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
-
-type Call = { commandId: string; input: Record<string, any> };
-type Handler = (input: Record<string, any>) => unknown;
-
-const work = (id: string, kind: "video" | "comic", resourceId: string) => ({
-  id, title: `作品 ${id}`, author: "合成作者", mediaKind: kind, shelf: "reading", coverId: null,
-  lastResource: { id: resourceId, title: `作品 ${id}`, ordinalLabel: null, revisionId: `rev_${resourceId}` },
-  progress: 0.25, finishedCount: 0, resourceCount: 1, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null,
-});
-const workDetail = (id: string, kind: "video" | "comic", title: string, resourceId: string) => ({
-  ...work(id, kind, resourceId), title, originalTitle: title, fields: {}, override: { fields: {}, locked: [], cleared: [] }, links: [], snapshots: [], coverState: "auto", coverCount: 0,
-  resources: [{ id: resourceId, title: "第一话", kind, ordinalLabel: "第 1 话", available: true }],
-});
 
 /** The quick tasks of a page, as the host's own list gives them: the built-in ones, in their order. */
 const quickFor = (page: string) => BUILTIN_QUICK_TASKS.filter((task) => (task.pages as readonly string[]).includes(page))
   .map((task, order) => ({ id: `qt_${task.builtinKey}`, builtin: true, enabled: true, order, ...task }));
 
+const FACETS = ["agent", "library", "settings", "comic", "video", "notes", "metadata"];
+const detailOf = (id: string, kind: "video" | "comic", title: string, resourceId: string) => workDetail(id, kind, title, [{ id: resourceId, title: "第一话", kind, ordinalLabel: "第 1 话", available: true }]);
+
 function installHost(overrides: Record<string, Handler> = {}) {
-  const calls: Call[] = [];
-  const sessions: Array<Record<string, unknown>> = [{ sessionId: "ses_shared", title: "会话 1", kind: "shared", targetId: null, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null }];
-  const handlers: Record<string, Handler> = {
-    "workspace.get": () => ({ uiFacets: ["agent", "library", "settings", "comic", "video", "notes", "metadata"], sessions: [], runs: [], notes: [], resources: [] }),
-    "workspace.sessions": () => sessions,
-    "inventory.overview": () => ({ items: [], totals: {} }),
-    "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
-    "notes.list": () => [],
-    "quickTasks.list": (input) => ({ tasks: quickFor(String(input.page)) }),
-    "session.stream": () => ({ items: [], hasMore: false, session: { id: "ses", kind: "resource", targetId: null, workId: null, resourceId: null } }),
-    "works.list": (input) => {
-      const items = input.kind === "video" ? [work("wv", "video", "res_v1")] : input.kind === "comic" || !input.kind ? [work("wc", "comic", "res_c1")] : [];
-      return { items, total: items.length, nextCursor: null };
+  return baseHost({
+    facets: FACETS,
+    overrides: {
+      "quickTasks.list": (input) => ({ tasks: quickFor(String(input.page)) }),
+      "works.get": (input) => input.workId === "wv" ? detailOf("wv", "video", "合成动画", "res_v1") : detailOf("wc", "comic", "合成漫画", "res_c1"),
+      "progress.get": () => ({ locator: { kind: "temporal", startMs: 65_000 }, completion: "in_progress" }),
+      "agent.send": () => ({ runId: "run_1", status: "running" }),
+      "metadata.related": () => ({ source: null, relations: [], similar: [] }),
+      "material.region": () => ({ materialId: "mat_page", mediaType: "image/webp", base64: "AAAA", width: 800, height: 1200, bytes: 3, extraction: "页面图像" }),
+      "material.frame": () => ({ materialId: "mat_frame", mediaType: "image/webp", base64: "BBBB", width: 1280, height: 720, bytes: 3, extraction: "视频画面" }),
+      ...overrides,
     },
-    "works.open": (input) => ({ workId: input.workId ?? "wc", shelf: "reading", promoted: false }),
-    "works.get": (input) => input.workId === "wv" ? workDetail("wv", "video", "合成动画", "res_v1") : workDetail("wc", "comic", "合成漫画", "res_c1"),
-    "covers.list": () => ({ workId: "wc", state: "auto", coverId: null, covers: [] }),
-    "video.probe": (input) => ({ resourceId: input.resourceId, revisionId: `rev_${input.resourceId}`, available: true, probe: { durationMs: 120_000 } }),
-    "video.audioTracks": () => ({ audio: [] }),
-    "video.subtitles": () => ({ subtitles: [] }),
-    "video.playbackPlan": () => ({ available: true, plan: { decision: "direct", reasons: [], detail: "" }, copy: null }),
-    "video.handle": () => ({ url: "manga-media://h/v", mediaType: "video/mp4", bytes: 1, startMs: 0 }),
-    "video.frameIndex": () => { throw Object.assign(new Error("none"), { code: "CAPABILITY_UNAVAILABLE" }); },
-    "settings.getMedia": () => ({}),
-    "progress.get": () => ({ locator: { kind: "temporal", startMs: 65_000 }, completion: "in_progress" }),
-    "session.open": (input) => {
-      const id = `ses_${String(input.kind)}_${String(input.targetId)}`;
-      if (!sessions.some((row) => row.sessionId === id)) sessions.push({ sessionId: id, title: String(input.targetId), kind: input.kind, targetId: input.targetId, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null });
-      return { id };
-    },
-    "agent.send": () => ({ runId: "run_1", status: "running" }),
-    "metadata.related": () => ({ source: null, relations: [], similar: [] }),
-    "material.region": () => ({ materialId: "mat_page", mediaType: "image/webp", base64: "AAAA", width: 800, height: 1200, bytes: 3, extraction: "页面图像" }),
-    "material.frame": () => ({ materialId: "mat_frame", mediaType: "image/webp", base64: "BBBB", width: 1280, height: 720, bytes: 3, extraction: "视频画面" }),
-    "comic.pages": (input) => ({
-      resourceId: input.resourceId, revisionId: "rev_res_c1", title: "合成漫画", direction: null, available: true, warnings: [],
-      pages: Array.from({ length: 6 }, (_, index) => ({ id: `p${index}`, index, name: `${index}.png`, width: 800, height: 1200, spread: false, ok: true })),
-    }),
-    "comic.pageHandles": (input) => ({ pages: (input.pageIds as string[]).map((pageId) => ({ pageId, available: true, kind: "image", url: `manga-media://h/${pageId}`, handle: pageId, mediaType: "image/png", width: 800, height: 1200 })) }),
-    ...overrides,
-  };
-  (window as unknown as { manga: unknown }).manga = {
-    async state() { return { layout: { channel: "test", pointerPath: "pointer.json", partitions: { data: "d" }, writable: true, recovery: "none" }, writable: true, vaultAvailable: true }; },
-    async command(payload: { commandId: string; input?: Record<string, unknown> }) {
-      const input = payload.input ?? {};
-      calls.push({ commandId: payload.commandId, input });
-      const handler = handlers[payload.commandId];
-      if (!handler) return { status: "ok", value: {} };
-      try { return { status: "ok", value: handler(input) }; } catch (error) {
-        const failure = error as { code?: string; message?: string };
-        return { status: "error", error: { code: failure.code ?? "INTERNAL", message: failure.message ?? "failed" } };
-      }
-    },
-    onNotice: () => () => undefined,
-    async chooseDirectory() { return null; }, async chooseFile() { return null; }, async chooseAudio() { return null; }, async stashSecret() { return null; },
-    async reveal() { return { status: "ok", value: {} }; },
-  };
-  return { calls, of: (id: string) => calls.filter((call) => call.commandId === id) };
+  });
 }
 
 let media: ReturnType<typeof installMediaElement>;
 const element = () => screen.getByTestId("video-element") as HTMLVideoElement;
-const pane = () => within(screen.getByTestId("shell-right"));
+const pane = () => within(screen.getByTestId("shell-dock"));
 
-async function openFromShelf(nav: string, card: string) {
+async function openFromShelf(kind: "comic" | "video", card: string) {
   render(<App />);
-  await waitFor(() => expect(screen.getByTestId(nav)).toBeTruthy());
-  fireEvent.click(screen.getByTestId(nav));
-  await waitFor(() => expect(screen.getByTestId(card)).toBeTruthy());
-  fireEvent.click(screen.getByTestId(card));
-  await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
+  await openShelf(kind);
+  await openWorkPage(card);
   fireEvent.click(screen.getByTestId("work-read"));
 }
 
 async function openComic() {
-  await openFromShelf("nav-comic", "open-res_c1");
+  await openFromShelf("comic", "open-res_c1");
   await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
   await waitFor(() => expect(readerContext.get()).toMatchObject({ kind: "comic", pageNumber: 1, pageCount: 6 }));
   await waitFor(() => expect(pane().getByTestId("chat-pane")).toBeTruthy());
@@ -114,7 +59,7 @@ async function openComic() {
 }
 
 async function openVideo() {
-  await openFromShelf("nav-video", "open-res_v1");
+  await openFromShelf("video", "open-res_v1");
   await waitFor(() => expect(screen.getByTestId("video-reader")).toBeTruthy());
   await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
   act(() => media.loaded(element(), 120));
@@ -154,7 +99,7 @@ describe("tasks sent from the comic and video pages", () => {
     await waitFor(() => expect(host.of("agent.send")).toHaveLength(1));
     const sent = host.of("agent.send")[0]!.input;
     expect(sent).toMatchObject({
-      sessionId: "ses_resource_res_c1", text: "这一页写了什么？",
+      sessionId: "ses_recent_resource_res_c1", text: "这一页写了什么？",
       mediaContext: { comic: { resourceId: "res_c1", resourceRevisionId: "rev_res_c1", pageId: "p0" } },
       imageMaterialIds: ["mat_page"],
     });
@@ -164,10 +109,10 @@ describe("tasks sent from the comic and video pages", () => {
 
   it("lets a picture be attached while a task runs, keeps it out of that task, and sends it with the next one", async () => {
     let status = "running";
-    const run = () => ({ runId: "run_1", id: "run_1", status, sessionId: "ses_resource_res_c1", inputText: "第一问", messages: [] });
+    const run = () => ({ runId: "run_1", id: "run_1", status, sessionId: "ses_recent_resource_res_c1", inputText: "第一问", messages: [] });
     let sent = false;
     const host = installHost({
-      "workspace.get": () => ({ uiFacets: ["agent", "library", "settings", "comic", "video", "notes", "metadata"], sessions: [], runs: sent ? [{ id: "run_1", sessionId: "ses_resource_res_c1", status }] : [], notes: [], resources: [] }),
+      "workspace.get": () => ({ uiFacets: FACETS, sessions: [], runs: sent ? [{ id: "run_1", sessionId: "ses_recent_resource_res_c1", status }] : [], notes: [], resources: [], shell: DEFAULT_SHELL_PREFERENCE }),
       "agent.send": () => { sent = true; return run(); },
       "agent.getRun": () => run(),
     });

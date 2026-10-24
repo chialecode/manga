@@ -6,7 +6,7 @@ import type { VideoService } from "./video/service.ts";
 import type { CaptureService } from "./voice/capture.ts";
 import type { GrantRegistry } from "./grants.ts";
 import { getWork } from "./works-service.ts";
-import { getProgress } from "./progress-service.ts";
+import { frontierConsumed } from "./progress-service.ts";
 import { describeMediaLocator } from "./domain/media-anchors.ts";
 import { makeThumbnail } from "./media/thumbnails.ts";
 import type { Cue } from "./video/cues.ts";
@@ -336,8 +336,8 @@ export class AgentMaterials {
 
   private consumed(resourceId: string, revisionId: string): Consumed {
     try {
-      const progress = getProgress(this.deps.store, { resourceId, resourceRevisionId: revisionId }) as { consumed: Consumed };
-      return progress.consumed ?? [];
+      // What the subtitle window may reach is what has been watched in any context (A-96, Q-33 item 4).
+      return frontierConsumed(this.deps.store, resourceId, revisionId);
     } catch {
       return [];
     }

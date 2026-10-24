@@ -5,7 +5,7 @@ import type { Editor } from "@tiptap/core";
 import type { NoteBlock } from "@manga/contracts";
 import { afterEach } from "vitest";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts";
-import { ShellFrame } from "../../apps/desktop/src/renderer/shell.tsx";
+import { frame, shellRail } from "../helpers/shell-frame.tsx";
 import { NoteEditor } from "../../apps/desktop/src/renderer/note-editor.tsx";
 import { productWindow } from "../../apps/desktop/src/main/window-options.ts";
 import { readingSelection, ReadingPane, highlightSlices } from "../../apps/desktop/src/renderer/reading.tsx";
@@ -13,20 +13,6 @@ import { readingSelection, ReadingPane, highlightSlices } from "../../apps/deskt
 /** jsdom has no layout, so the "bring the jump target into view" call the reader makes needs a stub. */
 Element.prototype.scrollIntoView = () => {};
 
-const labels = {
-  showLeft: "打开导航",
-  showRight: "打开辅助",
-  hideLeft: "收起导航",
-  hideRight: "收起辅助",
-  stop: "停止任务",
-  modeGroup: "模式",
-  menu: "菜单",
-  back: "后退",
-  forward: "前进",
-  rightTitle: "MANGA Agent",
-  resizeLeft: "调整导航栏宽度",
-  resizeRight: "调整辅助栏宽度",
-};
 
 const editorLabels = {
   blockInsert: "插入块",
@@ -97,48 +83,16 @@ function renderEditor(input: {
   return screen.getByTestId("note-surface") as HTMLElement & { editor: Editor };
 }
 
-function frame(width: number, height: number, extra: Partial<Parameters<typeof ShellFrame>[0]> = {}) {
-  return render(
-    <ShellFrame
-      viewport={{ width, height }}
-      preference={DEFAULT_SHELL_PREFERENCE}
-      page="reading"
-      pages={[
-        { id: "agent", label: "Agent", testId: "nav-agent" },
-        { id: "reading", label: "阅读", testId: "nav-reading" },
-        { id: "notes", label: "笔记", testId: "nav-notes" },
-      ]}
-      onPage={() => undefined}
-      hasRight
-      running
-      title="很长的书名用来检查标题省略"
-      modeLabel="娱乐模式"
-      modeNames={{ enthusiast: "娱乐模式", creator: "工作模式" }}
-      modeHints={{ enthusiast: "阅读、观看与随手记录", creator: "整理笔记与管理项目" }}
-      labels={labels}
-      menuItems={[{ id: "settings", label: "设置", onSelect: () => undefined }]}
-      history={{ canBack: false, canForward: false, onBack: () => undefined, onForward: () => undefined }}
-      onMode={() => undefined}
-      onHide={() => undefined}
-      onShow={() => undefined}
-      onStop={() => undefined}
-      right={<p>辅助</p>}
-      {...extra}
-    >
-      <p>主面板</p>
-    </ShellFrame>,
-  );
-}
 
 afterEach(() => cleanup());
 
-describe("AT-60 AT-61 AT-62 shell", () => {
-  it("docks sidebars on a wide window and keeps the reading measure", () => {
+describe("AT-60 AT-61 AT-62 AT-111 shell", () => {
+  it("docks the columns on a wide window and keeps the reading measure", () => {
     frame(1600, 900);
-    expect(screen.getByTestId("shell-left").getAttribute("data-shell-state")).toBe("dock");
-    expect(screen.getByTestId("shell-right").getAttribute("data-shell-state")).toBe("dock");
+    expect(screen.getByTestId("shell-sidebar").getAttribute("data-shell-state")).toBe("dock");
+    expect(screen.getByTestId("shell-dock").getAttribute("data-shell-state")).toBe("dock");
     expect(screen.getByTestId("shell-main").getAttribute("data-measure")).toBe("680");
-    expect(screen.getByTestId("nav-reading")).toBeTruthy();
+    expect(screen.getByTestId("nav-home")).toBeTruthy();
     expect(screen.queryByText("白板")).toBeNull();
     expect(productWindow.minWidth).toBeLessThanOrEqual(360);
     expect(productWindow.topHeightPx).toBe(36);
@@ -146,84 +100,62 @@ describe("AT-60 AT-61 AT-62 shell", () => {
 
   it("opens one overlay from hover and restores focus with Escape", () => {
     frame(800, 700);
-    expect(screen.queryByTestId("shell-left")).toBeNull();
-    const toggle = screen.getByTestId("shell-left-toggle");
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
+    const toggle = screen.getByTestId("shell-sidebar-toggle");
     toggle.focus();
     fireEvent.mouseEnter(toggle);
-    expect(screen.getByTestId("shell-left").getAttribute("data-shell-state")).toBe("overlay");
+    expect(screen.getByTestId("shell-sidebar").getAttribute("data-shell-state")).toBe("overlay");
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("shell-left")).toBeNull();
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
     expect(document.activeElement).toBe(toggle);
   });
 
   it("keeps a stop control and the full-size layout", () => {
-    frame(1280, 840);
+    frame(1280, 840, { running: true });
     expect(screen.getByTestId("shell-task-stop")).toBeTruthy();
     expect(screen.getByTestId("shell-root").getAttribute("data-compact")).toBe("false");
   });
 
-  it("switches mode from two icon buttons in the title bar, not from the left sidebar", () => {
-    const onMode = vi.fn();
-    frame(1280, 840, { onMode });
-    const group = screen.getByTestId("mode-switch");
-    // The mode switch is in the top of the left column (no title bar row exists); the sidebar's list below it does not hold it.
-    const top = group.closest("[data-testid='column-top-left']");
-    expect(top).toBeTruthy();
-    expect(screen.getByTestId("shell-left").firstElementChild).toBe(top);
-    expect(group.closest(".shell-left-body")).toBeNull();
-    // The left top: menu, sidebar, back, forward, then the mode switch; the title follows in the main top.
-    const order = Array.from(screen.getByTestId("shell-root").querySelectorAll("[data-testid='shell-menu'], [data-testid='shell-left-toggle'], [data-testid='nav-back'], [data-testid='nav-forward'], [data-testid='mode-switch'], [data-testid='shell-title']")).map((node) => node.getAttribute("data-testid"));
-    expect(order).toEqual(["shell-menu", "shell-left-toggle", "nav-back", "nav-forward", "mode-switch", "shell-title"]);
-    expect(group.getAttribute("role")).toBe("group");
-    expect(group.getAttribute("aria-label")).toBe("模式");
-    const entertainment = screen.getByTestId("mode-enthusiast");
-    const work = screen.getByTestId("mode-creator");
-    expect(entertainment.getAttribute("aria-pressed")).toBe("true");
-    expect(work.getAttribute("aria-pressed")).toBe("false");
-    // The name and what the mode is for are in the tooltip; the accessible name is the name alone.
-    expect(entertainment.getAttribute("aria-label")).toBe("娱乐模式");
-    expect(entertainment.getAttribute("title")).toBe("娱乐模式：阅读、观看与随手记录");
-    expect(work.getAttribute("title")).toBe("工作模式：整理笔记与管理项目");
-    // Icons only: no text in the buttons.
-    expect((entertainment.textContent ?? "").trim()).toBe("");
-    fireEvent.click(work);
-    expect(onMode).toHaveBeenCalledWith("creator");
-    // The old controls are gone.
+  it("has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch", () => {
+    frame(1280, 840);
+    const top = screen.getByTestId("shell-top");
+    const order = Array.from(top.querySelectorAll("[data-testid='shell-sidebar-toggle'], [data-testid='nav-back'], [data-testid='nav-forward'], [data-testid='menubar'], [data-testid^='mode-']")).map((node) => node.getAttribute("data-testid"));
+    expect(order).toEqual(["shell-sidebar-toggle", "nav-back", "nav-forward", "menubar"]);
+    expect(screen.getByTestId("shell-sidebar").querySelector("[data-testid^='mode-'], [role='group'][aria-label='模式']")).toBeNull();
+    expect(screen.queryByTestId("mode-switch")).toBeNull();
     expect(screen.queryByTestId("mode-menu")).toBeNull();
-    expect(screen.queryByTestId("mode-menu-list")).toBeNull();
-    expect(screen.queryByTestId("mode-quick-enthusiast")).toBeNull();
+    // The buttons are icons: no text in the switch and the history buttons.
+    for (const id of ["shell-sidebar-toggle", "nav-back", "nav-forward"]) expect((screen.getByTestId(id).textContent ?? "").trim(), id).toBe("");
   });
 
-  it("reflects the saved mode and moves between the modes with the arrow keys", () => {
-    const onMode = vi.fn();
-    const preference = structuredClone(DEFAULT_SHELL_PREFERENCE);
-    preference.mode = "creator";
-    frame(1280, 840, { preference, onMode });
-    expect(screen.getByTestId("mode-creator").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("mode-enthusiast").getAttribute("aria-pressed")).toBe("false");
-    const work = screen.getByTestId("mode-creator");
-    work.focus();
-    fireEvent.keyDown(work, { key: "ArrowLeft" });
-    expect(onMode).toHaveBeenLastCalledWith("enthusiast");
-    // Both buttons are plain buttons: Tab reaches them and Enter or Space activates them like any button.
-    expect(screen.getByTestId("mode-enthusiast").tagName).toBe("BUTTON");
-    expect(screen.getByTestId("mode-enthusiast").getAttribute("tabindex")).toBeNull();
+  it("reflects the saved preference: a hidden sidebar stays hidden until its switch is pressed, and the switch is a plain button", () => {
+    const show = vi.fn();
+    const hidden = structuredClone(DEFAULT_SHELL_PREFERENCE);
+    hidden.sidebar.visible = false;
+    frame(1280, 840, { preference: hidden, onShow: show });
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
+    expect(screen.getByTestId("shell-sidebar-toggle").getAttribute("aria-expanded")).toBe("false");
+    // Tab reaches it, and Enter or Space activates it like any button.
+    expect(screen.getByTestId("shell-sidebar-toggle").tagName).toBe("BUTTON");
+    expect(screen.getByTestId("shell-sidebar-toggle").getAttribute("tabindex")).toBeNull();
+    fireEvent.click(screen.getByTestId("shell-sidebar-toggle"));
+    expect(show).toHaveBeenCalledWith("sidebar");
   });
 
   it("restores docking after a user hides the sidebar and closes pinned narrow panels", () => {
     const show = vi.fn();
     const preference = structuredClone(DEFAULT_SHELL_PREFERENCE);
-    preference.layouts.enthusiast.left.visible = false;
+    preference.sidebar.visible = false;
     frame(1280, 840, { preference, onShow: show });
-    fireEvent.click(screen.getByTestId("shell-left-toggle"));
-    expect(show).toHaveBeenCalledWith("left");
+    fireEvent.click(screen.getByTestId("shell-sidebar-toggle"));
+    expect(show).toHaveBeenCalledWith("sidebar");
     cleanup();
     frame(360, 780);
-    const toggle = screen.getByTestId("shell-left-toggle");
+    const toggle = screen.getByTestId("shell-sidebar-toggle");
     fireEvent.click(toggle);
-    expect(screen.getByTestId("shell-left").getAttribute("data-shell-state")).toBe("overlay");
+    expect(screen.getByTestId("shell-sidebar").getAttribute("data-shell-state")).toBe("overlay");
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("shell-left")).toBeNull();
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
     expect(document.activeElement).toBe(toggle);
   });
 
@@ -262,120 +194,59 @@ describe("AT-60 AT-61 AT-62 shell", () => {
     expect(screen.getByTestId("note-source").getAttribute("data-block-id")).toBe("code1");
   });
 
-  it("shows the opened resource sessions under the left navigation, grouped by medium, with where each one is", () => {
-    const opened = vi.fn();
-    frame(1280, 840, {
-      sessions: [
-        { sessionId: "ses_reading", title: "合成书", kind: "resource", targetId: "res_1", mode: "enthusiast", runCount: 2, activeRunId: "run_1", activeRunStatus: "running" },
-        { sessionId: "ses_other", title: "另一本", kind: "resource", targetId: "res_2", mediaKind: "comic", mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null },
-      ],
-      sessionLabels: { empty: "还没有打开的资源会话", active: "进行中", close: "关闭", groups: { novel: "小说", comic: "漫画", video: "动漫" }, position: (session) => (session.sessionId === "ses_other" ? "第 12 / 30 页" : "第 3 章") },
-      onSession: opened,
-    });
-    const rail = screen.getByTestId("shell-sessions");
-    expect(rail.textContent).toContain("合成书");
-    // The rail says where each one is (A-47); a run in progress is marked on the row, and named in the conversations list.
-    expect(screen.getByTestId("session-position-ses_reading").textContent).toBe("第 3 章");
-    expect(screen.getByTestId("session-position-ses_other").textContent).toBe("第 12 / 30 页");
-    expect(screen.getByTestId("session-open-ses_reading").getAttribute("data-active")).toBe("true");
-    expect(screen.getByTestId("session-group-novel").textContent).toContain("合成书");
-    expect(screen.getByTestId("session-group-comic").textContent).toContain("另一本");
-    expect(screen.queryByTestId("session-group-video")).toBeNull();
-    fireEvent.click(screen.getByTestId("session-open-ses_other"));
-    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "ses_other" }));
+
+  it("has no dock where a conversation tab is in front: the same conversation is not shown twice, and the conversation is the page", () => {
+    frame(1280, 840, { hasDock: false, dock: null });
+    expect(screen.queryByTestId("shell-dock")).toBeNull();
+    expect(screen.queryByTestId("shell-dock-toggle")).toBeNull();
+    expect(screen.getByTestId("shell-sidebar")).toBeTruthy();
+    expect(screen.getByTestId("nav-home")).toBeTruthy();
   });
 
-  it("keeps the rail on the opened resources on the chat page: the entertainment mode's conversation is the page itself, not a list", () => {
+  it("keeps the top row's own actions and a panel under the page, and the settings navigation is not the frame's", () => {
     frame(1280, 840, {
-      page: "agent",
-      sessions: [
-        { sessionId: "ses_reading", title: "合成书", kind: "resource", targetId: "res_1", mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null },
-        { sessionId: "ses_chat1", title: "关于合成作品的讨论", kind: "shared", targetId: null, mode: "enthusiast", runCount: 3, activeRunId: "run_9", activeRunStatus: "running" },
-      ],
-      sessionLabels: { empty: "x", active: "进行中", close: "关闭", groups: { novel: "小说" }, position: () => "" },
-    });
-    expect(screen.getByTestId("session-open-ses_reading")).toBeTruthy();
-    expect(screen.queryByTestId("session-open-ses_chat1")).toBeNull();
-    expect(screen.queryByTestId("chat-list")).toBeNull();
-    expect(screen.queryByTestId("chat-new")).toBeNull();
-  });
-
-  it("lists the work mode's project sessions first, and its conversations that belong to no project last", () => {
-    const opened = vi.fn();
-    const creator = structuredClone(DEFAULT_SHELL_PREFERENCE);
-    creator.mode = "creator";
-    frame(1280, 840, {
-      preference: creator,
-      sessions: [
-        { sessionId: "ses_old", title: "旧的一般对话", kind: "shared", targetId: null, mode: "creator", runCount: 2, activeRunId: null, activeRunStatus: null },
-        { sessionId: "ses_book", title: "合成书", kind: "resource", targetId: "res_1", mode: "creator", runCount: 0, activeRunId: null, activeRunStatus: null },
-        { sessionId: "ses_project", title: "合集解说", kind: "project", targetId: "prj_1", mode: "creator", runCount: 1, activeRunId: null, activeRunStatus: null },
-      ],
-      sessionLabels: { empty: "x", active: "进行中", close: "关闭", groups: { project: "项目会话", novel: "小说", unattached: "未归属项目" }, position: () => "" },
-      onSession: opened,
-    });
-    const groups = [...screen.getByTestId("shell-sessions").querySelectorAll("[data-testid^='session-group-']")].map((node) => node.getAttribute("data-testid"));
-    expect(groups).toEqual(["session-group-project", "session-group-novel", "session-group-unattached"]);
-    expect(screen.getByTestId("session-group-project").textContent).toContain("项目会话");
-    expect(screen.getByTestId("session-group-project").textContent).toContain("合集解说");
-    expect(screen.getByTestId("session-group-unattached").textContent).toContain("旧的一般对话");
-    fireEvent.click(screen.getByTestId("session-open-ses_project"));
-    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "ses_project", kind: "project", targetId: "prj_1" }));
-  });
-
-  it("replaces the navigation with the settings navigation, and keeps the title bar's own actions and a panel under the page", () => {
-    frame(1280, 840, {
-      leftSlot: <nav data-testid="settings-nav-slot">设置导航</nav>,
       titleActions: <button type="button" data-testid="title-action-debug">调试</button>,
       bottom: <section data-testid="debug-slot">调试面板</section>,
     });
-    expect(screen.getByTestId("shell-left").contains(screen.getByTestId("settings-nav-slot"))).toBe(true);
-    expect(screen.queryByTestId("nav-reading")).toBeNull();
-    expect(screen.queryByTestId("shell-sessions")).toBeNull();
     expect(screen.getByTestId("shell-title-actions").contains(screen.getByTestId("title-action-debug"))).toBe(true);
+    expect(screen.getByTestId("shell-top").contains(screen.getByTestId("shell-title-actions"))).toBe(true);
     expect(screen.getByTestId("shell-main").contains(screen.getByTestId("debug-slot"))).toBe(true);
+    expect(screen.getByTestId("shell-sidebar").querySelector("[data-testid='settings-nav']")).toBeNull();
   });
 
-  it("shows the floating capsule only while the right pane is folded away, and neither the pane nor the capsule where there is no right pane", () => {
+  it("shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock", () => {
     const folded = structuredClone(DEFAULT_SHELL_PREFERENCE);
-    folded.layouts.enthusiast.right.visible = false;
+    folded.dock.visible = false;
     frame(1280, 840, { preference: folded, capsule: <div data-testid="capsule-slot">胶囊</div> });
-    expect(screen.queryByTestId("shell-right")).toBeNull();
+    expect(screen.getByTestId("shell-dock").getAttribute("data-shell-state")).toBe("hidden");
     expect(screen.getByTestId("shell-main").contains(screen.getByTestId("capsule-slot"))).toBe(true);
     cleanup();
     frame(1600, 900, { capsule: <div data-testid="capsule-slot">胶囊</div> });
-    expect(screen.getByTestId("shell-right")).toBeTruthy();
+    expect(screen.getByTestId("shell-dock")).toBeTruthy();
     expect(screen.queryByTestId("capsule-slot")).toBeNull();
     cleanup();
-    // The chat page is the conversation itself: no right pane, no toggle for one, and no capsule.
-    frame(1600, 900, { hasRight: false, right: undefined, capsule: <div data-testid="capsule-slot">胶囊</div> });
-    expect(screen.queryByTestId("shell-right")).toBeNull();
-    expect(screen.queryByTestId("shell-right-toggle")).toBeNull();
+    // A conversation tab is the conversation itself: no dock, no switch for one, and no capsule.
+    frame(1600, 900, { hasDock: false, dock: null, capsule: <div data-testid="capsule-slot">胶囊</div> });
+    expect(screen.queryByTestId("shell-dock")).toBeNull();
+    expect(screen.queryByTestId("shell-dock-toggle")).toBeNull();
     expect(screen.queryByTestId("capsule-slot")).toBeNull();
   });
 
-  it("marks the page the user is on, and puts settings apart from the pages", () => {
+  it("marks the view the sidebar is on in the rail, and puts settings apart from the others", () => {
     const go = vi.fn();
-    frame(1280, 840, {
-      page: "notes",
-      pages: [
-        { id: "library", label: "书架", testId: "nav-library" },
-        { id: "agent", label: "聊天", testId: "nav-agent" },
-        { id: "notes", label: "笔记", testId: "nav-notes" },
-        { id: "settings", label: "设置", testId: "nav-settings" },
-      ],
-      onPage: go,
-    });
-    expect(screen.getByTestId("nav-notes").getAttribute("aria-current")).toBe("page");
-    expect(screen.getByTestId("nav-library").getAttribute("aria-current")).toBeNull();
-    expect(screen.getByTestId("nav-settings").closest(".shell-settings")).toBeTruthy();
-    expect(screen.getByTestId("nav-library").closest(".shell-settings")).toBeNull();
-    fireEvent.click(screen.getByTestId("nav-library"));
-    expect(go).toHaveBeenCalledWith("library");
+    const settings = vi.fn();
+    frame(1280, 840, { rail: shellRail({ current: "video", onSelect: go, settings: { active: false, onSelect: settings } }) });
+    expect(screen.getByTestId("nav-video").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("nav-home").getAttribute("aria-current")).toBeNull();
+    expect(screen.getByTestId("nav-settings").closest(".rail-bottom")).toBeTruthy();
+    expect(screen.getByTestId("nav-home").closest(".rail-bottom")).toBeNull();
+    fireEvent.click(screen.getByTestId("nav-home"));
+    expect(go).toHaveBeenCalledWith("home");
     fireEvent.click(screen.getByTestId("nav-settings"));
-    expect(go).toHaveBeenLastCalledWith("settings");
+    expect(settings).toHaveBeenCalledTimes(1);
   });
 });
+
 
 function note(onSave: Parameters<typeof NoteEditor>[0]["onSave"], drafts?: Parameters<typeof NoteEditor>[0]["drafts"]) {
   renderEditor({

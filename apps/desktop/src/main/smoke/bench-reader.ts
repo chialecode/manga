@@ -3,17 +3,18 @@ import os from "node:os";
 import path from "node:path";
 import { app, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, openFromShelf, pressKey, sleep, waitUntil } from "./driver.ts";
-import { caller, js, toRail } from "./common.ts";
+import { clickTestId, closeTabs, DRAWN, openFromShelf, PICK, pressKey, showTab, sleep, waitUntil } from "./driver.ts";
+import { caller, js, leaveSettings, toRail } from "./common.ts";
 
 /**
- * Two figures of the video player in the real window that the second round of use asked for. Both are measured in a window the harness shows, because a hidden
+ * Two figures of the video player in the real window (AT-94, AT-88). Both are measured in a window the harness shows, because a hidden
  * one presents no frames.
  *
  * - Danmaku: an episode with thousands of comments is played in the window with the layer on, and the frames the page is given are counted: how many came
  *   later than one and a half of the usual interval (the interval of the same playback with the layer off) is the share dropped.
  * - Memory: what keeping a player behind settings costs. The application's working set is read with no player kept, and again with one kept (opened, played
- *   a little, paused in the middle, settings opened over it); the difference, in MiB, is the figure.
+ *   a little, paused in the middle, the settings tab brought to the front of its column); the difference, in MiB, is the figure. The tab of the player stays
+ *   mounted behind the settings tab, and the number of readers the page holds is read with it.
  */
 
 export type DanmakuBenchSpec = { runs: number; baselineRuns: number; playMs: number; comments: number };
@@ -40,7 +41,7 @@ async function seedVideo(appService: MangaProductApp, call: ReturnType<typeof ca
   return got?.lastResource?.id ?? got?.resources?.[0]?.id ?? null;
 }
 
-const median = (values: number[]) => {
+export const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted.length ? sorted[Math.floor(sorted.length / 2)]! : 0;
 };
@@ -88,7 +89,7 @@ export async function measureDanmakuBench(appService: MangaProductApp, grant: st
   if (loaded.status !== "ok") failures.push(`the comments could not be loaded: ${loaded.error?.message ?? "failed"}`);
   await view.webContents.reload();
   await toRail(view);
-  const opened = await openFromShelf(view, "nav-video", resourceId, 10_000) && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 30_000);
+  const opened = await openFromShelf(view, "video", resourceId, 10_000) && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 30_000);
   if (!opened) return { ok: false, failures: [...failures, "the player did not open"], comments: count };
   view.webContents.focus();
   await sleep(600);
@@ -150,7 +151,7 @@ const snapshot = (): { total: number; byType: Record<string, number> } => {
 };
 
 /** Several readings a short while apart; the middle one, so that a moment of garbage collection does not decide. */
-async function readMemory(): Promise<{ total: number; byType: Record<string, number> }> {
+export async function readMemory(): Promise<{ total: number; byType: Record<string, number> }> {
   const values: Array<ReturnType<typeof snapshot>> = [];
   for (let i = 0; i < 5; i += 1) { values.push(snapshot()); await sleep(300); }
   return values.sort((a, b) => a.total - b.total)[Math.floor(values.length / 2)]!;
@@ -168,22 +169,23 @@ export async function measureMemoryBench(appService: MangaProductApp, grant: str
   const raw: number[] = [];
   const rows: Array<Record<string, unknown>> = [];
   for (let run = 0; run < spec.runs; run += 1) {
-    // No player kept: settings over the library.
+    // No player kept: settings alone in the context.
+    await leaveSettings(view);
+    await closeTabs(view, "all");
     await toRail(view);
     await clickTestId(view, "nav-settings");
-    await waitUntil(view, `document.querySelector('[data-testid="settings-nav"]')`, 6000);
+    await waitUntil(view, `${DRAWN}(${PICK}("settings-nav"))`, 6000);
     await sleep(1200);
     const without = await readMemory();
-    await clickTestId(view, "settings-back");
-    await toRail(view);
     // One player kept: opened, played a little, paused in the middle, and settings opened over it.
-    const opened = await openFromShelf(view, "nav-video", resourceId, 10_000) && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 30_000);
+    const opened = await openFromShelf(view, "video", resourceId, 10_000) && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 30_000);
     if (!opened) { failures.push(`run ${run + 1}: the player did not open`); break; }
     await js(view, `(async () => { const v = document.querySelector('[data-testid="video-element"]'); v.muted = true; await v.play(); await new Promise((r) => setTimeout(r, 1500)); v.pause(); v.currentTime = (v.duration || 4) / 2; return true; })()`);
     await sleep(500);
     await clickTestId(view, "nav-settings");
-    await waitUntil(view, `document.querySelector('[data-testid="settings-nav"]')`, 6000);
+    await waitUntil(view, `${DRAWN}(${PICK}("settings-nav"))`, 6000);
     const kept = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="video-element"]'))`);
+    const mountedReaders = await js<number>(view, `document.querySelectorAll('[data-testid="context-host"][data-active="true"] [data-testid="video-reader"]').length`);
     if (!kept) failures.push(`run ${run + 1}: the player was not kept behind settings`);
     await sleep(1200);
     const withReader = await readMemory();
@@ -191,12 +193,11 @@ export async function measureMemoryBench(appService: MangaProductApp, grant: str
     const grewBy = Object.fromEntries(Object.keys({ ...withReader.byType, ...without.byType }).sort().map((type) => [type, Math.round(((withReader.byType[type] ?? 0) - (without.byType[type] ?? 0)) * 10) / 10]));
     // A reading that came out lower is noise in what the allocator gave back; the figure is what the player costs, so it is not below nothing. The row keeps what was read.
     raw.push(Math.max(0, grew));
-    rows.push({ withoutMiB: Math.round(without.total), withMiB: Math.round(withReader.total), grewMiB: grew, grewByProcessMiB: grewBy, kept });
-    // The player comes back, and is closed again for the next run: the cross of its entry in the rail.
-    await clickTestId(view, "settings-back");
-    await waitUntil(view, `Boolean(document.querySelector('[data-testid="video-reader"]'))`, 6000);
-    await toRail(view);
-    await js(view, `document.querySelector('[data-testid^="session-close-"]')?.click()`);
+    rows.push({ withoutMiB: Math.round(without.total), withMiB: Math.round(withReader.total), grewMiB: grew, grewByProcessMiB: grewBy, kept, mountedReaders });
+    // Settings are left with the back arrow and the player is in front again (its title in the strip), and is closed for the next run: the cross of its tab.
+    const back = await leaveSettings(view) && await showTab(view, { kind: "reader" }) && await waitUntil(view, `${DRAWN}(${PICK}("video-reader"))`, 6000);
+    if (!back) failures.push(`run ${run + 1}: the player did not come back to the front`);
+    await closeTabs(view, ["reader"]);
     const closed = await waitUntil(view, `!document.querySelector('[data-testid="video-element"]')`, 6000);
     if (!closed) { failures.push(`run ${run + 1}: the player could not be closed again`); break; }
     await sleep(800);

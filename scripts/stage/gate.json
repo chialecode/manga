@@ -45,6 +45,9 @@
       "importToReadableP95Ms": 5000,
       "scaleColdStartToLibraryMs": 5000,
       "scaleUiFeedbackP95Ms": 100,
+      "scaleRailSwitchP95Ms": 100,
+      "scaleSearchNamesP95Ms": 200,
+      "scaleSettingsP95Ms": 150,
       "scaleLargeTxtTailP95Ms": 2000,
       "scaleLargeEpubTailP95Ms": 2000,
       "scaleSaveReceiptP95Ms": 1000,
@@ -65,7 +68,13 @@
       "danmaku3000LateFramePct": 2,
       "readerMemoryIncreaseMiB": 300,
       "traceOverheadP95Ms": 10,
-      "noteFileWriteP95Ms": 25
+      "noteFileWriteP95Ms": 25,
+      "tabSwitchP95Ms": 100,
+      "contextSwitchP95Ms": 300,
+      "contextRestoreP95Ms": 2000,
+      "quadLateFramePct": 2,
+      "quadMemoryIncreaseMiB": 600,
+      "mountedReadersOverColumns": 2
     },
     "scale": {
       "metadataCount": 10000,
@@ -78,6 +87,18 @@
       ],
       "scaleUiFeedbackP95Ms": [
         "uiFeedbackMs",
+        10
+      ],
+      "scaleRailSwitchP95Ms": [
+        "railSwitchMs",
+        10
+      ],
+      "scaleSearchNamesP95Ms": [
+        "searchNamesMs",
+        10
+      ],
+      "scaleSettingsP95Ms": [
+        "settingsMs",
         10
       ],
       "scaleLargeTxtTailP95Ms": [
@@ -161,7 +182,7 @@
         "scale": {
           "clips": 10
         },
-        "requirement": "阶段计划 8：粗剪 10 个片段的流复制导出，从导出前检查到成片，除媒体工具自己运行的时间外的额外开销（最慢一次）≤ 2 s"
+        "requirement": "AT-33、AT-98：粗剪 10 个片段的流复制导出，从导出前检查到成片，除媒体工具自己运行的时间外的额外开销（最慢一次）≤ 2 s"
       },
       "btLoopback": {
         "metric": "btUnverifiedPieces",
@@ -170,7 +191,7 @@
         "scale": {
           "bytes": 209715200
         },
-        "requirement": "阶段计划 8：本机回环的 BT 下载 200 MB 完成，且读回成品后全部分片都与种子文件里的分片哈希一致（未校验的分片数 = 0）"
+        "requirement": "AT-56：本机回环的 BT 下载 200 MB 完成，且读回成品后全部分片都与种子文件里的分片哈希一致（未校验的分片数 = 0）"
       },
       "whiteboardOpen": {
         "metric": "whiteboardOpenMs",
@@ -179,7 +200,7 @@
         "scale": {
           "cards": 500
         },
-        "requirement": "阶段计划 8：500 张卡片的白板，从点开项目的白板页签到所有卡片都在页面里排好（实际窗口，隐藏窗口不含绘制，最慢一次）≤ 1.5 s"
+        "requirement": "AT-26：500 张卡片的白板，从点开项目的白板页签到所有卡片都在页面里排好（实际窗口，隐藏窗口不含绘制，最慢一次）≤ 1.5 s"
       },
       "whiteboardDrag": {
         "metric": "whiteboardDragP95Ms",
@@ -188,7 +209,7 @@
         "scale": {
           "cards": 500
         },
-        "requirement": "阶段计划 8：500 张卡片的白板，拖动一张卡片时每一步到页面提交新位置的 p95 ≤ 50 ms（实际窗口；两个视图：白板自己的缩放与缩到最小）"
+        "requirement": "AT-26：500 张卡片的白板，拖动一张卡片时每一步到页面提交新位置的 p95 ≤ 50 ms（实际窗口；两个视图：白板自己的缩放与缩到最小）"
       },
       "whiteboardZoom": {
         "metric": "whiteboardZoomP95Ms",
@@ -197,7 +218,7 @@
         "scale": {
           "cards": 500
         },
-        "requirement": "阶段计划 8：500 张卡片的白板，滚轮缩放每一步到页面提交新视口的 p95 ≤ 50 ms（实际窗口；两个视图同上）"
+        "requirement": "AT-26：500 张卡片的白板，滚轮缩放每一步到页面提交新视口的 p95 ≤ 50 ms（实际窗口；两个视图同上）"
       },
       "mindmapFold": {
         "metric": "mindmapFoldP95Ms",
@@ -206,7 +227,7 @@
         "scale": {
           "nodes": 1000
         },
-        "requirement": "阶段计划 8：1000 个节点的思维导图，折叠与展开一个节点到页面提交的 p95 ≤ 100 ms（实际窗口；含 110 个节点的分支和 999 个节点的根）"
+        "requirement": "AT-27：1000 个节点的思维导图，折叠与展开一个节点到页面提交的 p95 ≤ 100 ms（实际窗口；含 110 个节点的分支和 999 个节点的根）"
       },
       "videoImport": {
         "metric": "videoImportBrowsableMs",
@@ -215,7 +236,7 @@
         "scale": {
           "videos": 50
         },
-        "requirement": "返工 W2（AT-80）：50 个合成视频的文件夹加为资源库位置并扫描，从开始到整季作为一个作品列出、每集都能打开（最慢一次）≤ 10 s；在 3 个独立 Profile 里各做一次"
+        "requirement": "AT-80：50 个合成视频的文件夹加为资源库位置并扫描，从开始到整季作为一个作品列出、每集都能打开（最慢一次）≤ 10 s；在 3 个独立 Profile 里各做一次"
       },
       "videoImportPacketReads": {
         "metric": "videoImportPacketReads",
@@ -224,7 +245,7 @@
         "scale": {
           "videos": 50
         },
-        "requirement": "返工 W2（AT-80）：同一次导入里，媒体工具读取整个文件全部数据包（帧时间表）的次数 = 0；帧时间表只在第一次逐帧操作时才建"
+        "requirement": "AT-80：同一次导入里，媒体工具读取整个文件全部数据包（帧时间表）的次数 = 0；帧时间表只在第一次逐帧操作时才建"
       },
       "danmaku3000": {
         "metric": "danmaku3000LateFramePct",
@@ -233,7 +254,7 @@
         "scale": {
           "comments": 1500
         },
-        "requirement": "第二轮返工计划 15.7 / AT-94：一集 3000 条弹幕在打包版窗口里播放时，到达页面的时间晚于无弹幕时常规帧间隔 1.5 倍的帧占比，五次播放取最大，≤ 2 %（场景：20 秒内集中出现，每秒约 150 条）"
+        "requirement": "AT-94：一集 3000 条弹幕在打包版窗口里播放时，到达页面的时间晚于无弹幕时常规帧间隔 1.5 倍的帧占比，五次播放取最大，≤ 2 %（场景：20 秒内集中出现，每秒约 150 条）"
       },
       "readerMemory": {
         "metric": "readerMemoryIncreaseMiB",
@@ -242,7 +263,7 @@
         "scale": {
           "runs": 3
         },
-        "requirement": "第二轮返工计划 15.7 / AT-88：设置盖在视频阅读器上时，应用各进程工作集比没有阅读器时的增量，三个各自独立的窗口取最大，≤ 300 MiB（样本为 640×360 H.264，分辨率更高的视频更大）"
+        "requirement": "AT-88：设置盖在视频阅读器上时，应用各进程工作集比没有阅读器时的增量，三个各自独立的窗口取最大，≤ 300 MiB（样本为 640×360 H.264，分辨率更高的视频更大）"
       },
       "traceOverhead": {
         "metric": "traceOverheadP95Ms",
@@ -251,7 +272,7 @@
         "scale": {
           "requestBytes": 60000
         },
-        "requirement": "第二轮返工计划 15.7 / AT-97：一次约 80 KiB 的请求（40 条消息、12 个工具定义）的记录从开始、首字到完成三次调用的耗时，200 次的 p95 ≤ 10 ms（表里已有 400 条记录）"
+        "requirement": "AT-97：一次约 80 KiB 的请求（40 条消息、12 个工具定义）的记录从开始、首字到完成三次调用的耗时，200 次的 p95 ≤ 10 ms（表里已有 400 条记录）"
       },
       "noteFileWrite": {
         "metric": "noteFileWriteP95Ms",
@@ -260,7 +281,61 @@
         "scale": {
           "blocks": 200
         },
-        "requirement": "第三轮返工计划 16.7 / AT-102：保存一条 200 个块（标题、段落、列表、引用、代码）的笔记后，把它写成 Markdown 文件（读笔记、生成 Markdown、写文件、记录文件）的耗时，200 次的 p95 ≤ 25 ms；写在保存之后的短暂等待之后、主进程里，所以这是它占用窗口的时间，保存的答复时间另记、不含它"
+        "requirement": "AT-102：保存一条 200 个块（标题、段落、列表、引用、代码）的笔记后，把它写成 Markdown 文件（读笔记、生成 Markdown、写文件、记录文件）的耗时，200 次的 p95 ≤ 25 ms；写在保存之后的短暂等待之后、主进程里，所以这是它占用窗口的时间，保存的答复时间另记、不含它"
+      },
+      "tabSwitch": {
+        "metric": "tabSwitchP95Ms",
+        "stat": "p95",
+        "minSamples": 60,
+        "scale": {
+          "tabs": 8
+        },
+        "requirement": "AT-118：一栏里八个标签（三个是阅读器），按下一个标签的标题到它的内容画出（目标已挂载），p95 ≤ 100 ms（实际窗口，真实鼠标按下，页面内计时）"
+      },
+      "contextSwitch": {
+        "metric": "contextSwitchP95Ms",
+        "stat": "p95",
+        "minSamples": 30,
+        "scale": {
+          "contexts": 3
+        },
+        "requirement": "AT-118：“最近”与两个项目都访问过后轮流切换，按下侧栏的一行到该上下文的焦点标签（一本书）画出，p95 ≤ 300 ms（实际窗口，真实鼠标按下，页面内计时）"
+      },
+      "contextRestore": {
+        "metric": "contextRestoreP95Ms",
+        "stat": "p95",
+        "minSamples": 10,
+        "scale": {
+          "contexts": 3
+        },
+        "requirement": "AT-117、AT-118：页面重新加载后（上下文从资源库重新建立），按下另外两个上下文各一次到焦点标签画出，p95 ≤ 2 s（实际窗口；窗口自己回到的那个上下文不计）"
+      },
+      "quadLateFrame": {
+        "metric": "quadLateFramePct",
+        "stat": "max",
+        "minSamples": 5,
+        "scale": {
+          "columns": 4
+        },
+        "requirement": "AT-118：四宫格（两路视频其一播放、漫画、一篇笔记文稿）播放时，到达页面的时间晚于同一播放在单栏里常规帧间隔 1.5 倍的帧占比，五次播放取最大，≤ 2 %"
+      },
+      "quadMemory": {
+        "metric": "quadMemoryIncreaseMiB",
+        "stat": "max",
+        "minSamples": 3,
+        "scale": {
+          "columns": 4
+        },
+        "requirement": "AT-118：四宫格相对单栏视频，应用各进程工作集的增量，三个各自独立的窗口取最大，≤ 600 MiB"
+      },
+      "mountedReaders": {
+        "metric": "mountedReadersOverColumns",
+        "stat": "max",
+        "minSamples": 1,
+        "scale": {
+          "readers": 10
+        },
+        "requirement": "AT-118：打开 10 个阅读器标签并轮流切换两遍后，内容还在页面里的阅读器数减去可见的栏数 ≤ 2"
       }
     },
     "canvas": {
@@ -275,6 +350,20 @@
       "danmaku": {
         "comments": 3000,
         "runs": 5,
+        "baselineRuns": 3,
+        "playMs": 6000
+      },
+      "memory": {
+        "runs": 3
+      }
+    },
+    "workspace": {
+      "window": {
+        "switchRounds": 10,
+        "contextRounds": 12,
+        "restoreRounds": 8,
+        "readers": 10,
+        "quadRuns": 5,
         "baselineRuns": 3,
         "playMs": 6000
       },
@@ -296,6 +385,8 @@
       "media",
       "voice",
       "window-walk",
+      "workspace-restart",
+      "workspace-migrated",
       "creative",
       "trace",
       "plugins"
@@ -359,7 +450,7 @@
       "tests": [
         "^immediate run identity returns a runId before the provider finishes$",
         "^immediate run identity restores run input, live text and history after close$",
-        "^App restore sends from the chat page, shows the history in the side pane, stops, and restores after remount$",
+        "^App restore sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount$",
         "^interrupted runs marks an in-flight run interrupted on close and lets the reopened host retry it$",
         "^interrupted runs interrupts running tasks before the library moves$"
       ]
@@ -482,7 +573,7 @@
         "restores the stored reading position and never marks a jump as read",
         "restores the slice at the stored offset and merges repeated consumed ranges",
         "gives each resource its own agent session and freezes the visible materials",
-        "keeps a note session apart from the book session and from the other work mode",
+        "^source repair and reader state keeps a note session apart from the book session and the sessions of one context apart from those of another$",
         "previews a conflicting package and imports it with a chosen strategy",
         "restores hosted media locations and preserves unknown attachments",
         "discards a note write when the commit process exits",
@@ -574,15 +665,16 @@
       "id": "AT-61",
       "kind": "automated",
       "tests": [
-        "reflects the saved mode and moves between the modes with the arrow keys",
-        "shows the opened resource sessions under the left navigation"
+        "^AT-111 AT-114 AT-119 the home view of the sidebar switches the context from a project's name: its own tabs and conversation, and the last context is kept for the next start$",
+        "^AT-87 AT-112 two contexts are two workspaces a project has its own tabs and conversation, and 最近 comes back as it was: the same player at the same place, the same draft$",
+        "^AT-111 AT-114 AT-119 the home view of the sidebar opens and folds a project's things without leaving the context on screen, and keeps what was left open for the next start$"
       ]
     },
     {
       "id": "AT-62",
       "kind": "automated",
       "tests": [
-        "docks sidebars on a wide window and keeps the reading measure",
+        "^AT-60 AT-61 AT-62 AT-111 shell docks the columns on a wide window and keeps the reading measure$",
         "marks the stored bookmark range in the body, and keeps the restored position out of the reading area"
       ]
     },
@@ -694,8 +786,8 @@
         "^video context and the spoiler limit carries the position, the frame and the A-B interval, and keeps them when the player moves on",
         "^pictures as material and the model that looks at them sends the picture with the question to a text model that was verified to see, and keeps the same picture on retry",
         "^reading notes closure gives each resource its own agent session and freezes the visible materials",
-        "^agent surface binding binds the Agent to the resource open in a comic or video reader",
-        "^agent surface binding does not reuse another mode's session or draft key",
+        "^agent surface binding binds the dock to the resource open in a comic or video reader",
+        "^agent surface binding keeps the conversations of two contexts apart: no session or draft key is shared between 最近 and a project$",
         "^tasks sent from the comic and video pages a quick task on a comic page is one visible send",
         "^tasks sent from the comic and video pages keeps a failed frame capture visible without losing the draft",
         "^the right pane's input: what goes with the next task holds the quick tasks that send while a task runs",
@@ -739,15 +831,15 @@
         "^a second source, and turning the module off cancels a batch search that is running",
         "^play copies leaves nothing behind when a copy is cancelled, or when the module is turned off while it runs",
         "^recording controls turning the module off ends a recording in progress",
-        "^recording in the app has no microphone in the right pane, the player or the title bar while the voice module is off"
+        "^recording in the app has no microphone in the dock, the player or the top row while the voice module is off$"
       ]
     },
     {
       "id": "AT-16-layout-keyboard-ime",
       "kind": "automated",
       "tests": [
-        "^AT-60 AT-61 AT-62 shell docks sidebars on a wide window",
-        "^AT-60 AT-61 AT-62 shell does not autosave a note while composition is active",
+        "^AT-60 AT-61 AT-62 AT-111 shell docks the columns on a wide window",
+        "^AT-60 AT-61 AT-62 AT-111 shell does not autosave a note while composition is active",
         "^shelf does not search while an input method is still composing",
         "^shelf separates an empty library, a failed read and a turned-off module",
         "^comic reader does not take over keys while a dialog is open",
@@ -1179,8 +1271,8 @@
         "^media pages in the app keeps the shelf as it was left when the user comes back from a work's page",
         "^shelf shows the shelf as it was left, with the tab, the search, the filters and the sort, when it is shown again",
         "^App restore starts on the library paths page when the library is empty, and on the shelf when it has works",
-        "^AT-60 AT-61 AT-62 shell shows the opened resource sessions under the left navigation, grouped by medium, with where each one is",
-        "^the left rail follows the place a resource was left \\(A-47\\) shows the page a comic was left at once the reader closes"
+        "^media pages in the app keeps the page a reader was opened from in its own tab: the reader's history starts with the reader, and the library tab walks back and forth by itself$",
+        "^AT-88 AT-122 the workspace under the settings stays where it is closing the resource and opening it again goes back to where the viewer was \\(AT-82\\)$"
       ]
     },
     {
@@ -1253,7 +1345,7 @@
         "^notes in the message list: four kinds of source \\(A-48\\) ",
         "^the message stream of a session ",
         "^media pages in the app opens a note's time source in the player with its interval, and returns to the note",
-        "^media pages in the app turns a marked interval into a tag in the right pane, and a note typed there into a time-located note, without leaving the player"
+        "^media pages in the app turns a marked interval into a tag in the dock, and a note typed there into a time-located note, without leaving the player$"
       ]
     },
     {
@@ -1268,7 +1360,7 @@
       "kind": "automated",
       "tests": [
         "^the floating capsule: the same note and microphone as the pane \\(A-47\\) ",
-        "^AT-60 AT-61 AT-62 shell shows the floating capsule only while the right pane is folded away"
+        "^AT-60 AT-61 AT-62 AT-111 shell shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock$"
       ]
     },
     {
@@ -1286,7 +1378,8 @@
         "^settings pages inside the app \\(A-49, A-52\\) opens settings from a shelf, reaches the quick-task page, and goes back to the same shelf",
         "^settings pages inside the app \\(A-49, A-52\\) leaves the pages that need a module out of the navigation",
         "^settings pages inside the app \\(A-49, A-52\\) returns from a note to the page it was opened from",
-        "^AT-60 AT-61 AT-62 shell replaces the navigation with the settings navigation",
+        "^AT-60 AT-61 AT-62 AT-111 shell keeps the top row's own actions and a panel under the page, and the settings navigation is not the frame's$",
+        "^AT-87 AT-112 two contexts are two workspaces the settings belong to no context: opened from either, they add no tab to it, and leaving them finds each context as it was$",
         "^settings for media, recording and metadata "
       ]
     },
@@ -1326,9 +1419,9 @@
       "id": "chat-page-no-right-pane",
       "kind": "automated",
       "tests": [
-        "^AT-60 AT-61 AT-62 shell keeps the rail on the opened resources on the chat page",
-        "^AT-60 AT-61 AT-62 shell shows the floating capsule only while the right pane is folded away, and neither the pane nor the capsule where there is no right pane",
-        "^App restore sends from the chat page, shows the history in the side pane, stops, and restores after remount$"
+        "^AT-60 AT-61 AT-62 AT-111 shell has no dock where a conversation tab is in front: the same conversation is not shown twice, and the conversation is the page$",
+        "^AT-60 AT-61 AT-62 AT-111 shell shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock$",
+        "^App restore sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount$"
       ]
     },
     {
@@ -1355,7 +1448,7 @@
         "^notes in the message list: four kinds of source \\(A-48\\) ",
         "^the floating capsule: the same note and microphone as the pane \\(A-47\\) ",
         "^where a note can be written: a resource or a work, never nowhere \\(A-48\\) ",
-        "^recording in the app puts the microphone in the right pane, not in the player or the title bar, and shows a recording as a bubble that opens its review",
+        "^recording in the app puts the microphone in the dock, not in the player or the top row, and shows a recording as a bubble that opens its review$",
         "^recording in the app jumps from a recorded sentence to the video time it was said at"
       ]
     },
@@ -1650,21 +1743,23 @@
       ]
     },
     {
-      "id": "AT-74-mode-buttons",
+      "id": "AT-74-top-row-without-modes",
       "kind": "automated",
       "tests": [
-        "^AT-60 AT-61 AT-62 shell switches mode from two icon buttons in the title bar",
-        "^AT-60 AT-61 AT-62 shell reflects the saved mode and moves between the modes with the arrow keys"
+        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch$",
+        "^AT-60 AT-61 AT-62 AT-111 shell reflects the saved preference: a hidden sidebar stays hidden until its switch is pressed, and the switch is a plain button$",
+        "^the shell preference is version 2: ",
+        "^schema v12 migration \\(one workspace: .*\\) converts a v11 library: "
       ]
     },
     {
       "id": "AT-75-conversations",
       "kind": "automated",
       "tests": [
-        "^the entertainment mode's one global conversation \\(AT-75\\) ",
-        "^the entertainment mode's conversation bar \\(AT-75\\) ",
-        "^AT-60 AT-61 AT-62 shell keeps the rail on the opened resources on the chat page",
-        "^AT-60 AT-61 AT-62 shell lists the work mode's project sessions first"
+        "^the general conversation of 最近 \\(AT-75\\) ",
+        "^the conversation bar at the top of the dock \\(AT-75\\) ",
+        "^App restore shows the current conversation in the dock, starts a new one from its top into a tab, and continues one from the history \\(AT-75\\)$",
+        "^AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen$"
       ]
     },
     {
@@ -1712,17 +1807,17 @@
       "id": "AT-81-window-frame",
       "kind": "automated",
       "tests": [
-        "^AT-81 window frame: title bar and columns ",
-        "^AT-81 page history: what the title bar's back and forward walk through ",
-        "^AT-60 AT-61 AT-62 shell switches mode from two icon buttons in the title bar"
+        "^AT-81 AT-111 window frame: the top row, the rail and the columns ",
+        "^a tab's own back and forward \\(AT-110\\) ",
+        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch$"
       ]
     },
     {
       "id": "AT-82-close-opened-entry",
       "kind": "automated",
       "tests": [
-        "^AT-82 window frame: the left rail ",
-        "^closing an entry of the left rail \\(AT-82\\) "
+        "^AT-82 AT-111 AT-119 window frame: the icon rail ",
+        "^closing a tab keeps what it showed \\(AT-82, AT-111\\) "
       ]
     },
     {
@@ -1766,9 +1861,9 @@
       "id": "AT-86-frame-tops-and-colors",
       "kind": "automated",
       "tests": [
-        "^AT-81 window frame: title bar and columns gives every column its own top",
-        "^AT-81 window frame: title bar and columns puts the menu, sidebar, back, forward and the title at the start of the main top",
-        "^AT-81 window frame: title bar and columns brings the page up to the window's edges",
+        "^AT-81 AT-111 window frame: the top row, the rail and the columns has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel$",
+        "^AT-81 AT-111 window frame: the top row, the rail and the columns keeps the same top row in a window too narrow for the columns, and opens them over the page from their buttons$",
+        "^AT-81 AT-111 window frame: the top row, the rail and the columns brings the page up to the window's edges",
         "^AT-105 the window's own buttons takes its colors from the theme's tokens, ",
         "^window colors "
       ]
@@ -1777,7 +1872,7 @@
       "id": "AT-87-two-workspaces",
       "kind": "automated",
       "tests": [
-        "^AT-87 the two modes are two workspaces ",
+        "^AT-87 AT-112 two contexts are two workspaces ",
         "^the work mode's overview \\(A-77\\) "
       ]
     },
@@ -1785,7 +1880,7 @@
       "id": "AT-88-stays-in-the-background",
       "kind": "automated",
       "tests": [
-        "^AT-88 the page left for settings stays in the background ",
+        "^AT-88 AT-122 the workspace under the settings stays where it is ",
         "^a reader mounted again starts where the viewer is, not where the resource was opened ",
         "^AT-88 the right pane's place in a conversation "
       ]
@@ -2008,7 +2103,7 @@
         "^deleting a conversation takes the whole of it and only it \\(AT-103\\) ",
         "^the list of conversations \\(AT-103\\) ",
         "^the conversations category in the records page ",
-        "^the right pane after its conversation was deleted "
+        "^the dock after its conversation was deleted "
       ]
     },
     {
@@ -2077,6 +2172,167 @@
         "^playback rates and the key table are kept with the media settings \\(AT-90\\) puts the subtitles of the picture into a screenshot ",
         "^settings for media, recording and metadata keeps the subtitles in a screenshot unless the person turns that off, and a reset of the style leaves it alone \\(AT-109\\)$"
       ]
+    },
+    {
+      "id": "AT-110-single-workspace",
+      "kind": "automated",
+      "tests": [
+        "^opening and closing tabs \\(AT-110, AT-112\\) ",
+        "^a tab's own back and forward \\(AT-110\\) ",
+        "^the tabs that were closed \\(AT-110\\) ",
+        "^commands that work in a context does not accept the mode any more, on any command$",
+        "^commands that work in a context has no command to close a session, and no list of the sessions that were closed$",
+        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: ",
+        "^schema v12 migration \\(one workspace: .*\\) converts a v11 library: "
+      ]
+    },
+    {
+      "id": "AT-111-frame-and-sidebar",
+      "kind": "automated",
+      "tests": [
+        "^AT-81 AT-111 window frame: the top row, the rail and the columns ",
+        "^AT-82 AT-111 AT-119 window frame: the icon rail ",
+        "^AT-111 the frame in a short window ",
+        "^AT-60 AT-61 AT-62 AT-111 shell ",
+        "^AT-111 AT-114 AT-119 the home view of the sidebar ",
+        "^AT-111 AT-114 AT-119 a view of one kind ",
+        "^AT-111 AT-114 the sidebar's own menus ",
+        "^the side columns fold before the columns of the split have to \\(AT-111\\) ",
+        "^what is saved, and when \\(AT-111, AT-113\\) ",
+        "^a context that has nothing yet, and one that is gone \\(AT-111\\) ",
+        "^the shell preference "
+      ]
+    },
+    {
+      "id": "AT-112-tabs-open-restore",
+      "kind": "automated",
+      "tests": [
+        "^what makes two tabs the same tab \\(AT-112\\) ",
+        "^opening and closing tabs \\(AT-110, AT-112\\) ",
+        "^AT-87 AT-112 two contexts are two workspaces ",
+        "^the saved state of a context ",
+        "^media pages in the app keeps the page a reader was opened from in its own tab: ",
+        "^media pages in the app opens a new tab at the library's overview and leaves the first library tab where it was, on the work's page$",
+        "^closing a tab keeps what it showed \\(AT-82, AT-111\\) "
+      ]
+    },
+    {
+      "id": "AT-113-split-layout",
+      "kind": "automated",
+      "tests": [
+        "^how tabs are dealt over the columns \\(AT-113\\) ",
+        "^what is saved, and when \\(AT-111, AT-113\\) ",
+        "^the readers kept loaded out of sight \\(A-95, AT-113\\) ",
+        "^what a tab shows besides its name \\(A-95\\) ",
+        "^how a thing was asked for \\(A-95\\) ",
+        "^AT-81 AT-111 window frame: the top row, the rail and the columns folds the dock and then the sidebar into overlays ",
+        "^AT-89 window full screen: the reader fills the application window "
+      ]
+    },
+    {
+      "id": "AT-114-contexts-and-materials",
+      "kind": "automated",
+      "tests": [
+        "^AT-111 AT-114 AT-119 the home view of the sidebar ",
+        "^AT-111 AT-114 AT-119 a view of one kind ",
+        "^AT-111 AT-114 the sidebar's own menus ",
+        "^loading and saving the tabs of a context ",
+        "^the contexts of the sidebar ",
+        "^references that opening something adds to a project \\(Q-33\\) ",
+        "^closing a tab keeps what it showed \\(AT-82, AT-111\\) ",
+        "^AT-87 AT-112 two contexts are two workspaces a project has its own tabs and conversation, "
+      ]
+    },
+    {
+      "id": "AT-115-progress-per-context",
+      "kind": "automated",
+      "tests": [
+        "^a position is the position in one context \\(A-96\\) ",
+        "^the three readings of progress \\(plan 4.7\\) ",
+        "^the line over a reader that another context has already started ",
+        "^AT-87 AT-112 two contexts are two workspaces the same resource open in a project and in 最近 is two players, "
+      ]
+    },
+    {
+      "id": "AT-116-dock-follows-focus",
+      "kind": "automated",
+      "tests": [
+        "^agent surface binding ",
+        "^a task knows the context it runs in ",
+        "^AT-60 AT-61 AT-62 AT-111 shell has no dock where a conversation tab is in front: ",
+        "^App restore shows the current conversation in the dock, starts a new one from its top into a tab, and continues one from the history \\(AT-75\\)$",
+        "^App restore sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount$",
+        "^the dock after its conversation was deleted "
+      ]
+    },
+    {
+      "id": "AT-117-schema-v12-migration",
+      "kind": "automated",
+      "tests": [
+        "^schema v12 migration \\(one workspace: ",
+        "^the shell preference converts version 1 once: ",
+        "^the saved state of a context "
+      ]
+    },
+    {
+      "id": "AT-118-workspace-resources",
+      "kind": "automated",
+      "tests": [
+        "^the readers kept loaded out of sight \\(A-95, AT-113\\) ",
+        "^a context that has nothing yet, and one that is gone \\(AT-111\\) keeps the last ",
+        "^AT-88 AT-122 the workspace under the settings stays where it is "
+      ]
+    },
+    {
+      "id": "AT-119-rail-views",
+      "kind": "automated",
+      "tests": [
+        "^AT-82 AT-111 AT-119 window frame: the icon rail ",
+        "^AT-111 AT-114 AT-119 the home view of the sidebar ",
+        "^AT-111 AT-114 AT-119 a view of one kind ",
+        "^the home: every project and what it holds, by kind ",
+        "^a view of one kind ",
+        "^the lists follow the data ",
+        "^the objects of every project in a list of their own ",
+        "^the rail ",
+        "^the commands the sidebar and the search ask "
+      ]
+    },
+    {
+      "id": "AT-120-rail-hide-card-color",
+      "kind": "automated",
+      "tests": [
+        "^AT-120 which icons the rail shows for a window's height ",
+        "^AT-120 the card that comes out of an icon ",
+        "^AT-120 the rail's icons: taking one out, ",
+        "^AT-120 the card of a view, with the sidebar folded away ",
+        "^AT-120 the sidebar's color ",
+        "^what the shell keeps of the rail "
+      ]
+    },
+    {
+      "id": "AT-121-search-box",
+      "kind": "automated",
+      "tests": [
+        "^AT-121 the search box is a floating box over the window ",
+        "^AT-121 choosing in the search box ",
+        "^AT-121 the search box is a state of the window ",
+        "^finding things by name ",
+        "^only the person's own interface asks ",
+        "^tabs of the kinds that are gone ",
+        "^the tabs of the kinds the workspace no longer has "
+      ]
+    },
+    {
+      "id": "AT-122-settings-view",
+      "kind": "automated",
+      "tests": [
+        "^AT-122 the settings view over the workspace ",
+        "^AT-122 the settings view is a state of the window ",
+        "^AT-88 AT-122 the workspace under the settings stays where it is ",
+        "^tabs of the kinds that are gone ",
+        "^the tabs of the kinds the workspace no longer has "
+      ]
     }
   ],
   "scenarios": [
@@ -2114,18 +2370,27 @@
     "creative-fit-wide",
     "creative-fit-narrow",
     "creative-fit-short",
-    "frame-title-segments",
     "frame-window-controls",
     "frame-flat-chrome",
     "frame-history-menu",
     "frame-resize",
     "frame-rail",
     "frame-scrollbar-stable",
-    "frame-close-entry",
     "frame-fits-wide",
     "frame-fits-narrow",
     "frame-fits-short",
     "frame-window-fullscreen",
+    "workspace-frame",
+    "workspace-menu",
+    "tabs-open-restore",
+    "split-presets",
+    "split-move-video",
+    "split-focus-keys",
+    "context-switch",
+    "same-file-contexts",
+    "dock-follows-focus",
+    "workspace-restart",
+    "migrated-profile",
     "manage-open-blocked",
     "manage-entry-delete",
     "manage-conversation-delete",
@@ -2142,9 +2407,14 @@
     "danmaku-layer",
     "danmaku-privacy",
     "danmaku-network",
-    "modes-two-overviews",
     "settings-round-trip",
     "screenshots-into-whiteboard",
+    "rail-views",
+    "rail-hide-more",
+    "rail-hover-card",
+    "search-popup",
+    "settings-view",
+    "legacy-tabs-dropped",
     "agent-trace-timeline"
   ]
 }

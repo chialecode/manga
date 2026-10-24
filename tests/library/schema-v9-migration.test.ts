@@ -28,8 +28,8 @@ describe("schema v9 migration (the creative workspace, the dictionary, projects)
     seedV8(dir, ids);
     const store = new DrizzleStore({ profileDir: dir, hostId: "migrate-v9" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(11);
-      expect(store.getMeta("schemaVersion")).toBe("11");
+      expect(PRODUCT_SCHEMA_VERSION).toBe(12);
+      expect(store.getMeta("schemaVersion")).toBe("12");
       expect(fs.readdirSync(dir).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v8"]);
       // The backup is the v8 schema, untouched.
       const backup = new Database(path.join(dir, "manga.sqlite.premigrate-v8"), { readonly: true });

@@ -7,7 +7,7 @@ const SAMPLE_EVERY_MS = 1000;
  * Tells the recorder what the video is doing: it opened here, it plays, it paused, it was moved, its rate changed, and
  * where it is once a second while it plays. The time is the player's own, which is the time on the original file.
  */
-export function useVideoCapture(element: HTMLVideoElement | null, target: { resourceId: string; revisionId: string }, enabled: boolean, originMs = 0): void {
+export function useVideoCapture(element: HTMLVideoElement | null, target: { resourceId: string; revisionId: string }, enabled: boolean, originMs = 0, owner = ""): void {
   const { resourceId, revisionId } = target;
   useEffect(() => {
     if (!element || !enabled) return;
@@ -19,7 +19,7 @@ export function useVideoCapture(element: HTMLVideoElement | null, target: { reso
         locator: { kind: "temporal", startMs: Math.max(0, Math.round(element.currentTime * 1000 - originMs)) },
         playing: !element.paused,
         playbackRate: element.playbackRate,
-      });
+      }, owner);
     };
     send("resource_change");
     const onPlay = () => send("resume");
@@ -37,7 +37,7 @@ export function useVideoCapture(element: HTMLVideoElement | null, target: { reso
       element.removeEventListener("seeked", onSeeked);
       element.removeEventListener("ratechange", onRate);
       window.clearInterval(timer);
-      captureBus.clear(resourceId);
+      captureBus.clear(resourceId, owner);
     };
-  }, [element, enabled, resourceId, revisionId, originMs]);
+  }, [element, enabled, resourceId, revisionId, originMs, owner]);
 }

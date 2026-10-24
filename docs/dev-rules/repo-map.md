@@ -67,7 +67,7 @@
 | `pnpm dev` | Windows 可用 | 检查 Electron SQLite ABI 后以独立开发 Profile 启动；无须手工 rebuild；媒体功能需要 `dist/tools` 中的随包工具 |
 | `node scripts/verify.mjs` | 可用 | 统一入口，范围见[质量门禁](quality-gates.md) |
 | `node scripts/stage.mjs test` | 可用 | 全部 Vitest + 脚本自测，按必需用例匹配写入跑次目录 |
-| `node scripts/stage.mjs bench` | 可用 | 10k 元数据 / 50k 块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、200 封面读取与 1000 条消息右栏的打包窗口测量（`scripts/stage/bench-scan-pane.mjs`，需先有打包产物），再加语义检索（1 万片）、粗剪导出开销、本机回环 BT 下载 200 MB（`bench-creative.mjs`、`bench-bt.mjs`）与白板/导图交互（`bench-canvas.mjs`，隐藏窗口），保留原始样本 |
+| `node scripts/stage.mjs bench` | 可用 | 10k 元数据 / 50k 块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、200 封面读取与 1000 条消息停靠栏的打包窗口测量（`scripts/stage/bench-scan-pane.mjs`，需先有打包产物），再加语义检索（1 万片）、粗剪导出开销、本机回环 BT 下载 200 MB（`bench-creative.mjs`、`bench-bt.mjs`）与白板/导图交互（`bench-canvas.mjs`，隐藏窗口），保留原始样本 |
 | `node scripts/stage.mjs package` | Windows 可用 | Forge 未签名包及打包烟测（含媒体、录音、`window-walk`、创作工作区 `creative` 与插件下载 `plugins` 阶段并写 `scenarios.json`，需先生成合成样本，并有第一方私钥来签随包插件） |
 | `node scripts/stage.mjs report` | 可用 | 核对必需文件/用例/指纹/基准/包；缺项或失败非零退出，不计算产品验收 |
 | `node scripts/samples/generate-media-samples.mjs` | 可用 | 生成合成漫画/视频/字幕/录音样本到 `dist/samples/media` |

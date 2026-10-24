@@ -6,6 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./reading": "./src/reading.ts",
+    "./workspace-state": "./src/workspace-state.ts",
+    "./sidebar": "./src/sidebar.ts",
     "./location": "./src/location.ts",
     "./errors": "./src/errors.ts",
     "./media": "./src/media.ts",
@@ -23,6 +25,6 @@
     "./models": "./src/inputs-models.ts"
   },
   "dependencies": {
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }

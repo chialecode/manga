@@ -67,7 +67,7 @@ async function furnished(ctx: App) {
   for (let at = 0; at < pcm.length; at += step) ok(await run(ctx, "capture.append", { sessionId: started.sessionId, seq: seq++, data: toBase64(pcm.subarray(at, Math.min(pcm.length, at + step))) }));
   ok(await run(ctx, "capture.stop", { sessionId: started.sessionId, durationMs: pcm.length / 16 }));
   // A conversation about the chapter. Talking needs a model; a stored run stands in for one that was had.
-  const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: one!.id }));
+  const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: one!.id, contextId: null }));
   const db = ctx.app.store.sqlite;
   const now = new Date().toISOString();
   db.prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run("run-user-content", session.id, "completed", ctx.grant.handle, "{}", "这一话讲了什么？", now, now);

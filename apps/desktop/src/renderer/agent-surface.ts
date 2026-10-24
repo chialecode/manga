@@ -1,203 +1,107 @@
+import { contextKey } from "@manga/contracts";
+import type { WorkspaceTab } from "@manga/contracts";
+import { PROJECT_OBJECT_KINDS, str } from "./workspace/model.ts";
+
 /**
- * Which resource, note and selection a send is allowed to freeze.
- * The open page decides the target. A note or book left in memory from another page
- * must not ride along, and a switched session must not be replaced on send.
+ * Which conversation the dock follows, and what a send from it may freeze (A-94). The tab in front decides: a reader talks in its resource's conversation
+ * of the context it is in, a work's page in the work's, a note in the note's, a project's tabs in the project's, and every other page in the context's
+ * current conversation. A conversation tab has the dock folded away, because the conversation is already on screen. A note or a book left in memory from
+ * another tab must not ride along, so everything here is read from the one tab and the context it is in.
  */
-export type SurfaceSession = {
-  sessionId: string;
-  kind: string;
-  targetId: string | null;
-  title: string;
-  /** Work mode that owns this session. Absent only for a list that has not been loaded yet. */
-  mode?: string | null;
-};
-
-export type SurfaceSelection = {
-  resourceId: string;
-  resourceRevisionId: string;
-  partId?: string;
-  start: number;
-  end: number;
-  quote: string;
-};
-
-export type SurfaceReading = { resourceId: string; revisionId: string; title: string };
-export type SurfaceNote = { objectId: string; revision: number; title: string; resourceId?: string | null };
-/** A work's own page: the conversation there is about the work, not about one file of it. */
-export type SurfaceWork = { workId: string; title: string };
-/** A project's page: the conversation there is the project's own and reads only what the project refers to. */
-export type SurfaceProject = { projectId: string; name: string };
-
-export type AgentSurfaceInput = {
-  page: string;
-  sessionId?: string;
-  /** The mode the user is looking at, including a switch that has not finished refreshing. */
-  mode?: string;
-  sessions: SurfaceSession[];
-  reading?: SurfaceReading | null;
-  note?: SurfaceNote | null;
-  work?: SurfaceWork | null;
-  project?: SurfaceProject | null;
-  selection?: SurfaceSelection | null;
-};
 
 export type AgentSurface = {
-  /** Set when the user is already on a chosen session and send must not open a different one. */
-  sessionId?: string;
-  /** Mode this surface's draft, run and session must belong to. */
-  mode?: string;
+  /** The context the conversation belongs to: a project id, null for "最近". */
+  contextId: string | null;
+  /** The session to open for the tab's own subject; absent for the context's current conversation or an exact session. */
   open?: { kind: "resource" | "note" | "work" | "project"; targetId: string };
+  /** A conversation named exactly (a conversation tab). */
+  sessionId?: string;
+  /** What the pane's quick tasks and empty state are for: reading, comic, video, work, notes, projects, library or agent. */
+  page: string;
   resourceId?: string;
   resourceRevisionId?: string;
   resourceTitle?: string;
+  workId?: string;
+  /** The author of the work the page is about, for the quick tasks' placeholders. */
+  author?: string;
   noteObjectId?: string;
-  noteRevision?: number;
-  noteTitle?: string;
-  selection: SurfaceSelection | null;
+  /** The name shown at the top of the pane. */
   label?: string;
+  /** Where the composer's text and chosen materials are kept: one per context and subject, so a switch never shows or sends another subject's text. */
+  draftKey: string;
 };
 
-/** Pages that show one resource in a reader: the open resource is the Agent's target there. */
-const MEDIA_PAGES = new Set(["reading", "comic", "video"]);
+/** What the reader in a tab has said about its book, for the parts a tab's saved target does not hold. */
+export type SurfaceFacts = {
+  reading?: { resourceId: string; revisionId: string; title: string; workId?: string | null } | null;
+  projectName?: string;
+};
 
-function selectionFor(input: AgentSurfaceInput, resourceId: string | undefined): SurfaceSelection | null {
-  const selection = input.selection;
-  if (!selection || !resourceId || selection.resourceId !== resourceId) return null;
-  if (input.reading && input.reading.resourceId !== resourceId) return null;
-  return selection;
-}
+const PAGE_FOR_MEDIA: Record<string, string> = { novel: "reading", comic: "comic", video: "video" };
 
-function noteForResource(note: SurfaceNote | null | undefined, resourceId: string | undefined): SurfaceNote | null {
-  if (!note || !resourceId || note.resourceId !== resourceId) return null;
-  return note;
-}
+const draftKeyOf = (contextId: string | null, subject: string): string => `${contextKey(contextId)}:${subject}`;
 
-export function resolveAgentSurface(input: AgentSurfaceInput): AgentSurface {
-  return { ...resolveAgentSurfaceBody(input), mode: input.mode };
-}
-
-function resolveAgentSurfaceBody(input: AgentSurfaceInput): AgentSurface {
-  const reading = input.reading ?? null;
-  const note = input.note ?? null;
-
-  if (input.page === "notes" && note) {
-    const linked = note.resourceId && reading?.resourceId === note.resourceId ? reading : null;
+/** The surface of the focused tab; null when the dock has nothing to show (a conversation tab, or no tab). */
+export function surfaceOfTab(tab: WorkspaceTab | undefined, contextId: string | null, facts: SurfaceFacts = {}): AgentSurface | null {
+  if (!tab) return null;
+  if (tab.kind === "conversation") return null;
+  const target = tab.target;
+  if (tab.kind === "reader") {
+    const resourceId = str(target.resourceId);
+    if (!resourceId) return contextSurface(contextId);
+    const live = facts.reading?.resourceId === resourceId ? facts.reading : null;
+    const workId = str(target.workId) || live?.workId || undefined;
     return {
-      open: { kind: "note", targetId: note.objectId },
-      noteObjectId: note.objectId,
-      noteRevision: note.revision,
-      noteTitle: note.title,
-      resourceId: note.resourceId ?? undefined,
-      resourceRevisionId: linked?.revisionId,
-      resourceTitle: linked?.title,
-      selection: selectionFor(input, note.resourceId ?? undefined),
-      label: note.title,
+      contextId,
+      open: { kind: "resource", targetId: resourceId },
+      page: PAGE_FOR_MEDIA[str(target.mediaKind)] ?? "reading",
+      resourceId,
+      ...(live ? { resourceRevisionId: live.revisionId } : {}),
+      resourceTitle: live?.title ?? tab.title,
+      ...(workId ? { workId } : {}),
+      label: live?.title ?? tab.title,
+      draftKey: draftKeyOf(contextId, `resource:${resourceId}`),
     };
   }
-
-  if (input.page === "work" && input.work) {
-    return { open: { kind: "work", targetId: input.work.workId }, selection: null, label: input.work.title };
+  if (tab.kind === "library" && target.page === "work" && str(target.workId)) {
+    const workId = str(target.workId);
+    const author = str(target.author);
+    return { contextId, open: { kind: "work", targetId: workId }, page: "work", workId, ...(author ? { author } : {}), label: tab.title, draftKey: draftKeyOf(contextId, `work:${workId}`) };
   }
-
-  if (input.page === "projects" && input.project) {
-    return { open: { kind: "project", targetId: input.project.projectId }, selection: null, label: input.project.name };
-  }
-
-  if (input.page === "agent") {
-    const session = input.sessions.find((item) => item.sessionId === input.sessionId && (!input.mode || !item.mode || item.mode === input.mode));
-    if (session?.kind === "note" && session.targetId) {
-      const same = note?.objectId === session.targetId ? note : null;
-      const resourceId = same?.resourceId ?? undefined;
-      const linked = resourceId && reading?.resourceId === resourceId ? reading : null;
-      return {
-        sessionId: session.sessionId,
-        noteObjectId: session.targetId,
-        noteRevision: same?.revision,
-        noteTitle: same?.title ?? session.title,
-        resourceId,
-        resourceRevisionId: linked?.revisionId,
-        resourceTitle: linked?.title,
-        selection: selectionFor(input, resourceId),
-        label: same?.title ?? session.title,
-      };
-    }
-    if (session?.kind === "resource" && session.targetId) {
-      const sameBook = reading?.resourceId === session.targetId ? reading : null;
-      const owned = noteForResource(note, session.targetId);
-      return {
-        sessionId: session.sessionId,
-        resourceId: session.targetId,
-        resourceRevisionId: sameBook?.revisionId,
-        resourceTitle: sameBook?.title ?? session.title,
-        noteObjectId: owned?.objectId,
-        noteRevision: owned?.revision,
-        noteTitle: owned?.title,
-        selection: sameBook ? selectionFor(input, session.targetId) : null,
-        label: sameBook?.title ?? session.title,
-      };
-    }
-    return { sessionId: input.sessionId, selection: null, label: session?.title };
-  }
-
-  if (MEDIA_PAGES.has(input.page) && reading) {
-    const owned = noteForResource(note, reading.resourceId);
-    // In the work mode a resource opened from a project is talked about in the project's conversation, with the resource as what is being read.
-    const project = input.project ?? null;
+  if (tab.kind === "note" && str(target.objectId)) {
+    const objectId = str(target.objectId);
+    const resourceId = str(target.resourceId);
     return {
-      open: project ? { kind: "project", targetId: project.projectId } : { kind: "resource", targetId: reading.resourceId },
-      resourceId: reading.resourceId,
-      resourceRevisionId: reading.revisionId,
-      resourceTitle: reading.title,
-      noteObjectId: owned?.objectId,
-      noteRevision: owned?.revision,
-      noteTitle: owned?.title,
-      selection: selectionFor(input, reading.resourceId),
-      label: project ? `${project.name} · ${reading.title}` : reading.title,
+      contextId,
+      open: { kind: "note", targetId: objectId },
+      page: "notes",
+      noteObjectId: objectId,
+      ...(resourceId ? { resourceId } : {}),
+      label: tab.title,
+      draftKey: draftKeyOf(contextId, `note:${objectId}`),
     };
   }
-
-  return { sessionId: input.sessionId, selection: null };
-}
-
-function sameMode(surface: AgentSurface, session: SurfaceSession): boolean {
-  // A session row without a mode cannot be told apart; a known other mode never owns this composer.
-  return !surface.mode || !session.mode || session.mode === surface.mode;
-}
-
-/**
- * The composer follows the surface's session in the current mode.
- * Once the mode's session list is loaded, an id from another mode is not a fallback.
- */
-export function composerKeyFor(surface: AgentSurface, sessions: SurfaceSession[], fallbackSessionId?: string, sessionsLoaded = false): string {
-  if (surface.sessionId) {
-    const bound = sessions.find((item) => item.sessionId === surface.sessionId);
-    if (bound && sameMode(surface, bound)) return bound.sessionId;
+  const projectId = tab.kind === "project" || (PROJECT_OBJECT_KINDS as readonly string[]).includes(tab.kind) ? str(target.projectId) || contextId : null;
+  if (projectId) {
+    // A project's conversation belongs to the project itself, whichever context its tab was opened from.
+    return { contextId: projectId, open: { kind: "project", targetId: projectId }, page: "projects", label: facts.projectName ?? (tab.kind === "project" ? tab.title : undefined), draftKey: draftKeyOf(projectId, `project:${projectId}`) };
   }
-  if (surface.open) {
-    const match = sessions.find((item) => item.kind === surface.open?.kind && item.targetId === surface.open.targetId && sameMode(surface, item));
-    return match?.sessionId ?? "";
-  }
-  const fallback = sessions.find((item) => item.sessionId === fallbackSessionId);
-  if (fallback && sameMode(surface, fallback)) return fallback.sessionId;
-  // Before the first list arrives, keep the session the shell already restored.
-  if (!sessionsLoaded && sessions.length === 0 && fallbackSessionId) return fallbackSessionId;
-  return "";
+  return contextSurface(contextId);
 }
 
-/** Reading, note and Agent views of one mode/target share the same in-memory composer. */
-export function draftKeyFor(surface: AgentSurface, sessions: SurfaceSession[], boundSessionKey: string): string {
-  const bound = sessions.find((session) => session.sessionId === boundSessionKey && sameMode(surface, session));
-  const target = surface.open ?? (bound?.targetId ? { kind: bound.kind, targetId: bound.targetId } : undefined);
-  if (target) return `${surface.mode ?? "enthusiast"}:${target.kind}:${target.targetId}`;
-  return boundSessionKey ? `${surface.mode ?? "enthusiast"}:session:${boundSessionKey}` : "";
+/** The context's current conversation: where the library, search, records, downloads and settings talk. */
+export function contextSurface(contextId: string | null, label?: string): AgentSurface {
+  return { contextId, page: "library", ...(label ? { label } : {}), draftKey: draftKeyOf(contextId, "current") };
 }
 
-/** Checked materials belong to one session in the current mode. They are not copied onto a different target. */
-export function manualMaterialsApply(surface: AgentSurface, sessions: SurfaceSession[], key: string): boolean {
-  if (!key) return false;
-  const bound = sessions.find((item) => item.sessionId === key);
-  if (bound && !sameMode(surface, bound)) return false;
-  if (surface.sessionId) return surface.sessionId === key;
-  if (!surface.open) return true;
-  return sessions.some((item) => item.sessionId === key && item.kind === surface.open?.kind && item.targetId === surface.open.targetId && sameMode(surface, item));
+/** A conversation named exactly: what a conversation tab shows. */
+export function sessionSurface(sessionId: string, contextId: string | null, label?: string): AgentSurface {
+  return { contextId, sessionId, page: "agent", ...(label ? { label } : {}), draftKey: draftKeyOf(contextId, `session:${sessionId}`) };
+}
+
+/** Whether the surface is the same conversation as another: a change of surface that is not one keeps the pane's session and run. */
+export function sameSurface(a: AgentSurface | null, b: AgentSurface | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.draftKey === b.draftKey && a.contextId === b.contextId;
 }

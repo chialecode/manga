@@ -47,7 +47,7 @@ function runWindow({ executable, args, env, cwd, timeout }) {
   });
 }
 
-async function phase({ executable, args, name, spec, file, fake }) {
+export async function phase({ executable, args, name, spec, file, fake, specEnv = "MANGA_SMOKE_READER_SPEC" }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `manga-bench-${name}-`));
   const specFile = path.join(dir, "spec.json");
   fs.writeFileSync(specFile, JSON.stringify(spec));
@@ -59,7 +59,7 @@ async function phase({ executable, args, name, spec, file, fake }) {
     MANGA_DOCUMENTS_DIR: path.join(dir, "documents"),
     MANGA_POINTER_FILE: path.join(dir, "launcher", "pointer.json"),
     MANGA_SMOKE_PHASE: name,
-    MANGA_SMOKE_READER_SPEC: specFile,
+    [specEnv]: specFile,
     MANGA_SMOKE_SAMPLES: SAMPLES,
     MANGA_SMOKE_LAUNCHED_AT: String(Date.now()),
     ...(fake ? { MANGA_SMOKE_DANDAN_ORIGIN: fake.origin } : {}),

@@ -5,13 +5,14 @@ import userEvent from "@testing-library/user-event";
 import { App } from "../../apps/desktop/src/renderer/App.tsx";
 import { quoteTags } from "../../apps/desktop/src/renderer/lib/quote-tags.ts";
 import { readerContext } from "../../apps/desktop/src/renderer/lib/reader-context.ts";
+import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts/reading";
+import { contextHandlers, type SessionRow } from "../helpers/app-host.ts";
 
 type CommandPayload = { commandId: string; input?: Record<string, unknown> };
 type Store = {
   sessionId: string;
   run: Record<string, unknown> | null;
   runs: Array<{ id: string; sessionId: string; status: string; inputText?: string }>;
-  mode?: string;
   sent: Array<Record<string, unknown>>;
 };
 
@@ -19,6 +20,9 @@ Element.prototype.scrollIntoView = () => {};
 
 function installHost(store: Store, extra: Record<string, (input: Record<string, unknown>) => unknown> = {}) {
   const work = { id: "w1", title: "合成作品", author: "合成作者", mediaKind: "comic", shelf: "reading", coverId: null, lastResource: null, progress: 0, finishedCount: 0, resourceCount: 0, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null };
+  // The sidebar lists the conversation the store holds now: the table the synthetic host answers from follows it.
+  const table: SessionRow[] = [];
+  const context = contextHandlers({ facets: ["agent", "library", "settings"], sessions: table }).handlers;
   window.manga = {
     async state() {
       return {
@@ -29,6 +33,7 @@ function installHost(store: Store, extra: Record<string, (input: Record<string, 
     },
     async command(payload: unknown) {
       const body = payload as CommandPayload;
+      table.splice(0, table.length, { sessionId: store.sessionId, title: "会话 1", kind: "shared", targetId: null, contextId: null, runCount: store.runs.length, activeRunId: store.run ? "run-1" : null, activeRunStatus: store.run ? String(store.run.status) : null, updatedAt: "2026-01-01T00:00:00.000Z" });
       if (extra[body.commandId]) return { status: "ok" as const, value: extra[body.commandId]!(body.input ?? {}) };
       if (body.commandId === "workspace.get") {
         return {
@@ -39,6 +44,7 @@ function installHost(store: Store, extra: Record<string, (input: Record<string, 
             runs: store.runs,
             notes: [],
             resources: [],
+            shell: DEFAULT_SHELL_PREFERENCE,
           },
         };
       }
@@ -49,7 +55,7 @@ function installHost(store: Store, extra: Record<string, (input: Record<string, 
       if (body.commandId === "workspace.sessions") {
         return {
           status: "ok" as const,
-          value: [{ sessionId: store.sessionId, title: "会话 1", kind: "shared", targetId: null, mode: store.mode ?? "enthusiast", runCount: store.runs.length, activeRunId: store.run ? "run-1" : null, activeRunStatus: store.run ? String(store.run.status) : null }],
+          value: [{ sessionId: store.sessionId, title: "会话 1", kind: "shared", targetId: null, contextId: null, runCount: store.runs.length, activeRunId: store.run ? "run-1" : null, activeRunStatus: store.run ? String(store.run.status) : null }],
         };
       }
       if (body.commandId === "session.stream") {
@@ -63,7 +69,9 @@ function installHost(store: Store, extra: Record<string, (input: Record<string, 
       }
       if (body.commandId === "notes.list") return { status: "ok" as const, value: [] };
       if (body.commandId === "quickTasks.list") return { status: "ok" as const, value: { tasks: [] } };
-      if (body.commandId === "agent.createSession") return { status: "ok" as const, value: { id: store.sessionId, mode: body.input?.mode ?? "enthusiast" } };
+      if (body.commandId === "conversation.current") return { status: "ok" as const, value: { conversation: { sessionId: store.sessionId, title: "会话 1" } } };
+      if (body.commandId === "conversation.resume") return { status: "ok" as const, value: { conversation: { sessionId: store.sessionId, title: "会话 1", contextId: null } } };
+      if (context[body.commandId]) return { status: "ok" as const, value: context[body.commandId]!(body.input ?? {}) };
       if (body.commandId === "agent.send") {
         store.sent.push(body.input ?? {});
         store.run = {
@@ -101,18 +109,18 @@ beforeEach(() => { quoteTags.reset(); readerContext.reset(); try { window.localS
 afterEach(() => { cleanup(); quoteTags.reset(); readerContext.reset(); });
 
 describe("App restore", () => {
-  it("sends from the chat page, shows the history in the side pane, stops, and restores after remount", async () => {
-    // A wide window keeps the right pane docked next to every page except the chat page itself.
+  it("sends from a conversation tab, shows the same conversation in the dock on another page, stops, and restores after remount", async () => {
+    // A wide window keeps the dock next to every tab except a conversation tab, which is the conversation itself.
     window.innerWidth = 1600;
     const store: Store = { sessionId: "ses-1", run: null, runs: [], sent: [] };
     installHost(store);
     const user = userEvent.setup();
     const first = render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-agent")).toBeTruthy());
-    await user.click(screen.getByTestId("nav-agent"));
+    await waitFor(() => expect(screen.getByTestId("session-open-ses-1")).toBeTruthy());
+    await user.click(screen.getByTestId("session-open-ses-1"));
     await waitFor(() => expect(screen.getByTestId("page-agent").querySelector("[data-testid='agent-composer']")).toBeTruthy());
-    // The chat page is the conversation itself: no right pane beside it.
-    expect(screen.queryByTestId("shell-right")).toBeNull();
+    // The conversation tab is the conversation itself: no dock beside it.
+    expect(screen.queryByTestId("shell-dock")).toBeNull();
     const agentPage = () => within(screen.getByTestId("page-agent"));
     // Nothing is open to write a note about here, so the input only asks the Agent.
     expect(agentPage().queryByTestId("chat-mode-note")).toBeNull();
@@ -121,19 +129,19 @@ describe("App restore", () => {
     await user.click(agentPage().getByTestId("agent-send"));
     await waitFor(() => expect(agentPage().getByTestId("bubble-user-u-run-1").textContent).toContain("slow-smoke-prompt"));
     expect(store.sent[0]).toMatchObject({ sessionId: "ses-1", text: "slow-smoke-prompt" });
-    // On another page the same session is the copilot in the right pane.
-    await user.click(screen.getByTestId("nav-library"));
-    const pane = () => within(screen.getByTestId("shell-right"));
+    // On another tab the same conversation is the copilot in the dock (the library's overview is one click away on the home view).
+    await user.click(screen.getByTestId("sidebar-entry-library"));
+    const pane = () => within(screen.getByTestId("shell-dock"));
     await waitFor(() => expect(pane().getByTestId("bubble-user-u-run-1").textContent).toContain("slow-smoke-prompt"));
     await user.click(pane().getByTestId("agent-stop"));
     await waitFor(() => expect(store.run?.status).toBe("cancelled"));
     first.unmount();
     render(<App />);
-    await waitFor(() => expect(within(screen.getByTestId("shell-right")).getByTestId("bubble-user-u-run-1").textContent).toContain("slow-smoke-prompt"));
-    expect(within(screen.getByTestId("shell-right")).getByTestId("bubble-agent-a-run-1").getAttribute("data-status")).toBe("cancelled");
+    await waitFor(() => expect(within(screen.getByTestId("shell-dock")).getByTestId("bubble-user-u-run-1").textContent).toContain("slow-smoke-prompt"));
+    expect(within(screen.getByTestId("shell-dock")).getByTestId("bubble-agent-a-run-1").getAttribute("data-status")).toBe("cancelled");
   });
 
-  it("shows the current conversation on the chat page, starts a new one from its top, and continues one from the history (AT-75)", async () => {
+  it("shows the current conversation in the dock, starts a new one from its top into a tab, and continues one from the history (AT-75)", async () => {
     window.innerWidth = 1600;
     const store: Store = { sessionId: "ses-1", run: null, runs: [], sent: [] };
     const asked: string[] = [];
@@ -142,19 +150,20 @@ describe("App restore", () => {
       "conversation.current": () => ({ conversation: { sessionId: current, title: "对话 2026-10-05 09:00" } }),
       "conversation.new": () => { asked.push("new"); current = "ses-2"; store.sessionId = "ses-2"; return { sessionId: "ses-2", reused: false }; },
       "conversation.history": () => ({ current, items: [{ sessionId: "ses-1", title: "对话 2026-10-01 10:00", excerpt: "第一句话", runCount: 2, updatedAt: "2026-10-01T10:00:00.000Z" }] }),
-      "conversation.resume": (input) => { asked.push(`resume:${String(input.sessionId)}`); current = String(input.sessionId); store.sessionId = current; return { conversation: { sessionId: current, title: "对话 2026-10-01 10:00" } }; },
+      "conversation.resume": (input) => { asked.push(`resume:${String(input.sessionId)}`); current = String(input.sessionId); store.sessionId = current; return { conversation: { sessionId: current, title: "对话 2026-10-01 10:00", contextId: null } }; },
     });
     const user = userEvent.setup();
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-agent")).toBeTruthy());
-    await user.click(screen.getByTestId("nav-agent"));
     await waitFor(() => expect(screen.getByTestId("conversation-bar")).toBeTruthy());
-    // The rail is not a list of conversations: the page has its own new button and history.
+    // The dock is not a list of conversations: it has its own new button and history.
     expect(screen.queryByTestId("chat-list")).toBeNull();
     expect(screen.queryByTestId("chat-new")).toBeNull();
     await user.click(screen.getByTestId("conversation-new"));
     await waitFor(() => expect(asked).toEqual(["new"]));
     await waitFor(() => expect(document.body.textContent).toContain("已开启新对话"));
+    // The new conversation is a tab of its own, with the same bar at its top (the dock is out of the way there).
+    await waitFor(() => expect(screen.getByTestId("page-agent")).toBeTruthy());
+    expect(screen.queryByTestId("shell-dock")).toBeNull();
     await user.click(screen.getByTestId("conversation-history"));
     await waitFor(() => expect(screen.getByTestId("conversation-item-ses-1")).toBeTruthy());
     await user.click(screen.getByTestId("conversation-item-ses-1"));

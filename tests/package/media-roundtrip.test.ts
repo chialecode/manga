@@ -68,7 +68,7 @@ async function seedLibrary(ctx: Ctx) {
   db.prepare("INSERT INTO capture_drafts(id, session_id, state, text, edited_text, note_object_id, error_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
     .run("drf-1", "cap-fixed-1", "ready", "整理后的草稿", null, null, null, now, now);
   db.prepare("UPDATE progress SET percent = 0.4 WHERE resource_id = ?").run(comic.resourceId);
-  await call(ctx, "progress.setPage", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[2] });
+  await call(ctx, "progress.setPage", { contextId: null, resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[2] });
   return { comic, video, coverId, coverName, audioName, pageNote: pageNote.value as { objectId: string }, timeNote: timeNote.value as { objectId: string } };
 }
 
@@ -262,6 +262,35 @@ describe("library package round trip with media objects", () => {
     } finally { source.app.close(); target.app.close(); }
   });
 
+  it("carries the positions of 最近 and none of a project, and takes a position that names a project the profile lacks into 最近", async () => {
+    const source = await startApp();
+    const target = await startApp();
+    try {
+      const seeded = await seedLibrary(source);
+      // A position kept in a context other than 最近 (the project itself is not in this profile, so the package holds no project).
+      source.app.store.sqlite.prepare("INSERT INTO progress(context_id, resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent) VALUES (?,?,?,?,?,?,?,?)")
+        .run("prj_elsewhere", seeded.comic.resourceId, seeded.comic.revisionId, null, "[]", "reading", "2026-10-02T00:00:00.000Z", 0.8);
+      expect(count(source, "progress")).toBeGreaterThan(1);
+      const dir = path.join(tempProfile(), "pkg");
+      const manifest = exportLibraryPackage(source.app.store, dir);
+      // The positions kept while working in a project belong to the project and travel in its package, not in the library's.
+      expect(manifest.progress.length).toBe(count(source, "progress") - 1);
+      expect(manifest.progress.every((row) => !row.context_id)).toBe(true);
+
+      // A position that names a project this profile does not have is not lost: it goes to 最近, where the later of two positions of a revision stays.
+      const manifestPath = path.join(dir, "manifest.json");
+      const written = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as { progress: Array<Record<string, any>> };
+      const mine = written.progress.find((row) => row.resource_id === seeded.comic.resourceId)!;
+      written.progress.push({ ...mine, context_id: "prj_gone", last_interaction_at: "2099-01-01T00:00:00.000Z", percent: 0.95, last_locator_json: JSON.stringify({ kind: "image", pageId: seeded.comic.pageIds[4], representationId: seeded.comic.revisionId }) });
+      fs.writeFileSync(manifestPath, JSON.stringify(written));
+      importLibraryPackageResolved(target.app.store, dir, { strategy: "replace" });
+      const rows = target.app.store.sqlite.prepare("SELECT context_id, percent, last_interaction_at FROM progress WHERE resource_id = ?").all(seeded.comic.resourceId) as Array<{ context_id: string; percent: number; last_interaction_at: string }>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ context_id: "", percent: 0.95, last_interaction_at: "2099-01-01T00:00:00.000Z" });
+      expect(target.app.store.sqlite.prepare("SELECT COUNT(*) AS n FROM progress WHERE context_id <> ''").get()).toEqual({ n: 0 });
+    } finally { source.app.close(); target.app.close(); }
+  });
+
   it("imports a package written before the media columns existed", async () => {
     const source = await startApp();
     const target = await startApp();
@@ -276,7 +305,7 @@ describe("library package round trip with media objects", () => {
       for (const row of manifest.works) for (const key of ["media_kind", "shelf_state", "author", "cover_id", "cover_state", "last_resource_id", "last_opened_at", "projection_json", "updated_at"]) delete row[key];
       for (const row of manifest.resources) for (const key of ["ordinal_label", "ordinal_number", "ordinal_type", "sort_key"]) delete row[key];
       for (const row of manifest.revisions) delete row.layout_json;
-      for (const row of manifest.progress) delete row.percent;
+      for (const row of manifest.progress) { delete row.percent; delete row.context_id; }
       fs.writeFileSync(manifestPath, JSON.stringify(manifest));
       importLibraryPackageResolved(target.app.store, dir, { strategy: "replace" });
       expect(target.app.store.sqlite.prepare("SELECT media_kind, shelf_state, cover_state FROM works").get()).toEqual({ media_kind: "novel", shelf_state: "none", cover_state: "auto" });

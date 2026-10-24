@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, sleep, waitUntil } from "./driver.ts";
+import { clickTestId, DRAWN, openProjectsPage, PICK, sleep, waitUntil } from "./driver.ts";
 import { caller, js, toRail } from "./common.ts";
 
 /**
@@ -96,22 +96,24 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
   const seedMs = Date.now() - seedStarted;
   const nodeCount = 1 + tree.length;
 
-  // ---- the window: creator mode shows the projects page in the rail ----
+  // ---- the window: the home's projects entry opens the list, and the list's button opens the project (its home is a tab of the project's context) ----
   await toRail(view);
   await js(view, PRELUDE);
-  // The creator mode is chosen where a person chooses it, on the shell's mode switch; the rail then offers the projects page.
-  const switched = await clickTestId(view, "mode-creator") && await waitUntil(view, `document.querySelector('[data-testid="nav-projects"]')`, 8000);
-  if (!switched) failures.push("the creator mode was not reachable");
-  const reachedProjects = switched && await clickTestId(view, "nav-projects") && await waitUntil(view, `document.querySelector('[data-testid="project-open-${projectId}"]')`, 10_000);
+  const reachedProjects = await openProjectsPage(view, 10_000) && await waitUntil(view, `${DRAWN}(${PICK}("project-open-${projectId}"))`, 10_000);
   if (!reachedProjects) failures.push("the projects page was not reachable");
 
+  // The project's page is in front once it is the context's tab in focus; it is reached from the list only when it is not.
   const openProject = async (tab: string): Promise<boolean> => {
-    if (!await clickTestId(view, `project-open-${projectId}`, 8000)) return false;
-    return waitUntil(view, `document.querySelector('[data-testid="project-tab-${tab}"]')`, 8000);
+    if (!await js<boolean>(view, `${DRAWN}(${PICK}("page-project"))`)) {
+      if (!await openProjectsPage(view, 8000)) return false;
+      if (!await clickTestId(view, `project-open-${projectId}`, 8000)) return false;
+    }
+    return waitUntil(view, `${DRAWN}(${PICK}("project-tab-${tab}"))`, 8000);
   };
+  // Leaving the board or the map is a click on another tab of the project, so that the next open of it is a real open and not the page still in place.
   const back = async (): Promise<void> => {
-    await clickTestId(view, "project-back");
-    await waitUntil(view, `document.querySelector('[data-testid="project-open-${projectId}"]')`, 8000);
+    await clickTestId(view, "project-tab-materials");
+    await waitUntil(view, `!document.querySelector('[data-testid="whiteboard-board"]') && !document.querySelector('[data-testid="mindmap-tab"]')`, 8000);
   };
   const timedClick = (testId: string, until: string, timeoutMs = 20_000) => js<Sample>(view, `window.__bc.timed(() => window.__bc.press(window.__bc.q(${JSON.stringify(testId)})), () => ${until}, ${timeoutMs})`);
 

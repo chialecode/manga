@@ -92,9 +92,9 @@ describe("schema v11 migration (a resource may be in no work; files are kept by 
     before.close();
     const store = new DrizzleStore({ profileDir: seeded.data, worksDir: seeded.works, hostId: "migrate-v11" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(11);
-      expect(store.getMeta("schemaVersion")).toBe("11");
-      expect(store.migration).toMatchObject({ from: 10, to: 11 });
+      expect(PRODUCT_SCHEMA_VERSION).toBe(12);
+      expect(store.getMeta("schemaVersion")).toBe("12");
+      expect(store.migration).toMatchObject({ from: 10, to: 12 });
       expect(fs.readdirSync(seeded.data).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v10"]);
 
       // The backup is v10, untouched.
@@ -147,7 +147,7 @@ describe("schema v11 migration (a resource may be in no work; files are kept by 
     const { dir } = makeLegacyProfile(9);
     const store = new DrizzleStore({ profileDir: dir, hostId: "chain-v11" });
     try {
-      expect(store.migration).toMatchObject({ from: 9, to: 11 });
+      expect(store.migration).toMatchObject({ from: 9, to: 12 });
       expect(fs.readdirSync(dir).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v9"]);
       expect(names(store.sqlite, "file_locations")).toContain("library_path_id");
       expect(names(store.sqlite, "resources")).toContain("left_work_at");
@@ -163,7 +163,7 @@ describe("schema v11 migration (a resource may be in no work; files are kept by 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-v11-fresh-"));
     const store = new DrizzleStore({ profileDir: dir, hostId: "fresh-v11" });
     try {
-      expect(store.getMeta("schemaVersion")).toBe("11");
+      expect(store.getMeta("schemaVersion")).toBe("12");
       expect(store.getMeta("workLayout")).toBe("settled");
       expect(store.migration).toBeNull();
       expect(tablesOf(store.sqlite)).toContain("removed_works");
@@ -188,7 +188,7 @@ describe("schema v11 migration (a resource may be in no work; files are kept by 
     half.close();
     const retried = new DrizzleStore({ profileDir: seeded.data, worksDir: seeded.works, hostId: "retry-v11" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("11");
+      expect(retried.getMeta("schemaVersion")).toBe("12");
       expect(retried.sqlite.prepare("SELECT COUNT(*) AS n FROM work_files").get()).toEqual({ n: 3 });
       expect(fs.readdirSync(seeded.data).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v10"]);
     } finally {
@@ -212,7 +212,7 @@ describe("schema v11 migration (a resource may be in no work; files are kept by 
     for (const key of ["shotA", "shotB", "audio"]) expect(fs.existsSync(seeded.files[key]!), key).toBe(true);
     const again = new DrizzleStore({ profileDir: seeded.data, worksDir: seeded.works, hostId: "again-forward-v11" });
     try {
-      expect(again.migration).toMatchObject({ from: 10, to: 11 });
+      expect(again.migration).toMatchObject({ from: 10, to: 12 });
       expect(dump(again.sqlite)).toEqual(forward);
     } finally {
       again.close();
@@ -238,7 +238,7 @@ describe("the files and notes are put where the rules say after the start, in th
     try {
       await ctx.app.whenLayoutSettled();
       expect(ctx.app.store.getMeta("workLayout")).toBe("settled");
-      expect(ctx.app.store.getMeta("schemaVersion")).toBe("11");
+      expect(ctx.app.store.getMeta("schemaVersion")).toBe("12");
       const wf = ctx.app.workFolders;
       const placed = filesOf(ctx.app.store.sqlite);
       // The linked work's screenshot stays in the folder of the entry; the other one goes to the folder of its file.

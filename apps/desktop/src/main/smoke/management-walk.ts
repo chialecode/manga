@@ -4,16 +4,16 @@ import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createTranslator } from "@manga/i18n";
 import { testHooks } from "../test-hooks.ts";
-import { clickTestId, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, closeTabs, openLibrary, openShelf, setField, sleep, viaSidebar, waitForTestId, waitUntil, type ShelfKind } from "./driver.ts";
 import { js, openSettingsPage, toRail, type caller } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
 /**
- * The management flows of the third round in the packaged window (AT-99…AT-109), with synthetic data only: a resource whose library path was removed or
+ * The management flows in the packaged window (AT-99…AT-109), with synthetic data only: a resource whose library path was removed or
  * whose file is gone asks before it opens, from the overview and from its page, and the rail stops offering it; an entry is deleted from its menu with a
  * dialog that lists what goes and what stays, and its resources are listed as not in a work with their files moved; a conversation is deleted from
- * settings › records; a model connection is added, checked, tested (it fails: nothing listens), edited and deleted in its dialog; and the pages the third
- * round gave new words are looked at for their titles, for identifiers drawn as they are, and for words about features that were taken away.
+ * the conversations' management tab (the sidebar's "对话管理"); a model connection is added, checked, tested (it fails: nothing listens), edited and deleted in its dialog; and the pages with
+ * reworded text are looked at for their titles, for identifiers drawn as they are, and for words about features that were taken away.
  * Each observation is named; the package stage requires every one of them to pass.
  */
 
@@ -44,13 +44,13 @@ export type ManagementEnv = {
 
 const t = createTranslator("zh-CN").t;
 
-/** Whether the browser would draw a node: an `Activity` that is hidden puts `display: none` on its children. */
-const SHOWN = `(el) => { for (let at = el; at; at = at.parentElement) if (getComputedStyle(at).display === "none") return false; return true; }`;
+/** Whether the browser would draw a node: a tab out of sight is `visibility: hidden` in the dock, and a folded column is `display: none`. */
+const SHOWN = DRAWN;
 
 export async function runManagementWalk(env: ManagementEnv): Promise<void> {
   const { view, appService, call, observe, shot, resize, folders } = env;
   const exists = (id: string) => js<boolean>(view, `Boolean(document.querySelector('[data-testid="${id}"]'))`);
-  const textOf = (id: string) => js<string>(view, `document.querySelector('[data-testid="${id}"]')?.textContent ?? ""`);
+  const textOf = (id: string) => js<string>(view, `${PICK}(${JSON.stringify(id)})?.textContent ?? ""`);
   const waitFor = (expression: string, ms = 6000) => waitUntil(view, expression, ms);
   const gone = (id: string, ms = 6000) => waitFor(`!document.querySelector('[data-testid="${id}"]')`, ms);
   const noticeText = () => js<string>(view, `[...document.querySelectorAll('[data-testid="toast-notice"]')].map((el) => el.textContent ?? "").join(" | ")`);
@@ -61,7 +61,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
   const openableOf = async (resourceId: string): Promise<string> => String(((await call("library.openable", { resourceId })).value as { state?: string } | undefined)?.state ?? "?");
   const railState = async (resourceId: string): Promise<string> => {
     type Row = { targetId?: string | null; openState?: string; kind?: string };
-    const got = (await call("workspace.sessions", { mode: "enthusiast" })).value as Row[] | { items?: Row[] } | undefined;
+    const got = (await call("workspace.sessions", { contextId: null })).value as Row[] | { items?: Row[] } | undefined;
     const listed = Array.isArray(got) ? got : got?.items ?? [];
     return listed.find((item) => item.kind === "resource" && item.targetId === resourceId)?.openState ?? "none";
   };
@@ -75,13 +75,13 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
       reason: text("open-blocked-reason"), place: text("open-blocked-place"), folder: text("open-blocked-folder"),
       buttons: ["open-blocked-add", "open-blocked-relocate", "open-blocked-content-view", "open-blocked-close"].filter((id) => document.querySelector('[data-testid="' + id + '"]')),
       readers: ["video-reader", "comic-reader", "reading-page"].filter((id) => { const el = document.querySelector('[data-testid="' + id + '"]'); return el && shown(el); }),
-      page: document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-page") ?? null,
+      page: document.querySelector('[data-testid="tab"][data-focused="true"]')?.getAttribute("data-tab") ?? null,
     };
   })()`);
 
   /** A work's own page, opened from its card on the shelf of its medium. A work that was never opened has no file it was last at, so its card is found by the work's id as well as by the file's. */
-  const openWorkPage = async (nav: string, workId: string, resourceId: string): Promise<boolean> => {
-    if (!(await clickTestId(view, nav, 6000))) return false;
+  const openWorkPage = async (kind: ShelfKind, workId: string, resourceId: string): Promise<boolean> => {
+    if (!(await openShelf(view, kind, 6000))) return false;
     const card = `[data-testid="open-${resourceId}"], [data-testid="open-work-${workId}"]`;
     const found = await waitUntil(view, `(() => {
       if (document.querySelector(${JSON.stringify(card)})) return true;
@@ -96,7 +96,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
   /** The overview's card menu "keep reading/watching" for a work, and what the question that comes back looks like (it is left open for the caller). */
   const askFromOverview = async (workId: string) => {
     await toRail(view);
-    await clickTestId(view, "nav-library");
+    await openLibrary(view);
     const overview = await waitFor(`document.querySelector('[data-testid="page-library"]') && document.querySelector('[data-testid="work-menu-${workId}"]')`, 8000);
     const before = await blocked();
     const asked = overview && await clickTestId(view, `work-menu-${workId}`) && await clickTestId(view, `work-menu-${workId}-open`) && await waitFor(`document.querySelector('[data-testid="open-blocked"]')`, 6000);
@@ -147,7 +147,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
 
         // From the work's own page: the file is marked as outside, "watch" is not offered, and the resource's button shows what was made on it instead.
         await toRail(view);
-        const onPage = await openWorkPage("nav-video", videoWork.id, videoId) && await clickTestId(view, "detail-tab-resources", 4000) && await waitFor(`document.querySelector('[data-testid="detail-resource-${videoId}"]')`, 6000);
+        const onPage = await openWorkPage("video", videoWork.id, videoId) && await clickTestId(view, "detail-tab-resources", 4000) && await waitFor(`document.querySelector('[data-testid="detail-resource-${videoId}"]')`, 6000);
         const page = await js<{ read: string; readDisabled: boolean; chip: string; button: string; readers: string[] }>(view, `(() => {
           const shown = ${SHOWN};
           const read = document.querySelector('[data-testid="work-read"]');
@@ -181,11 +181,11 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         if (detail.stateAfterAdd !== "open") problems.push(`after the folder is added the video is "${String(detail.stateAfterAdd)}"`);
         if (detail.railBack !== "open") problems.push("the rail does not offer the video again once its folder is added");
         await toRail(view);
-        const reopened = await openWorkPage("nav-video", videoWork.id, videoId) && await clickTestId(view, "work-read", 8000);
+        const reopened = await openWorkPage("video", videoWork.id, videoId) && await clickTestId(view, "work-read", 8000);
         const opened = reopened && await waitFor(`(() => { const shown = ${SHOWN}; const el = document.querySelector('[data-testid="video-reader"]'); return Boolean(el) && shown(el); })()`, 20_000);
         detail.opensAgain = opened;
         if (!opened) problems.push("the video does not open after its folder was added");
-        await clickTestId(view, "nav-back");
+        await closeTabs(view, ["reader"]);
         await sleep(300);
 
         // A file that is not where its library path says: the question is the other one, and locating the file again opens it. The novel's text file is
@@ -198,9 +198,9 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         else {
           // It is read once first, so the card knows the file it was last at.
           await toRail(view);
-          const read = await openWorkPage("nav-reading", novelWork.id, novelId) && await clickTestId(view, "work-read", 8000) && await waitFor(`document.querySelector('[data-testid="reading-page"]')`, 10_000);
+          const read = await openWorkPage("novel", novelWork.id, novelId) && await clickTestId(view, "work-read", 8000) && await waitFor(`document.querySelector('[data-testid="reading-page"]')`, 10_000);
           if (!read) problems.push("the novel did not open before its file was removed");
-          await clickTestId(view, "nav-back");
+          await closeTabs(view, ["reader"]);
           await sleep(300);
           fs.rmSync(file, { force: true });
           detail.stateMissing = await openableOf(novelId);
@@ -221,7 +221,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
           testHooks.pick = undefined;
           detail.located = located;
           if (!located) problems.push("locating the file again did not open it");
-          await clickTestId(view, "nav-back");
+          await closeTabs(view, ["reader"]);
           await sleep(300);
         }
       }
@@ -245,7 +245,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         await call("session.open", { kind: "resource", targetId: comicId });
         await resize("wide");
         await toRail(view);
-        await clickTestId(view, "nav-comic");
+        await openShelf(view, "comic");
         const menu = await waitFor(`document.querySelector('[data-testid="work-menu-${comicWork.id}"]')`, 8000);
         const asked = menu && await clickTestId(view, `work-menu-${comicWork.id}`) && await clickTestId(view, `work-menu-${comicWork.id}-delete`) && await waitFor(`document.querySelector('[data-testid="delete-entry-body"]')`, 8000);
         if (!asked) problems.push("the card's menu did not open the dialog that lists what goes and what stays");
@@ -301,17 +301,18 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
     observe("manage-entry-delete", problems.length === 0, { ...detail, problems });
   }
 
-  // ---- 3. deleting a conversation in settings › records (A-89, AT-103) -------------------------------------------------------------------------------
+  // ---- 3. deleting a conversation in the conversations' management tab (A-89, A-101, AT-103) -------------------------------------------------------------------------------
   {
     const problems: string[] = [];
     const detail: Record<string, unknown> = {};
     try {
       const before = (await call("conversation.list", { limit: 1 })).value as { total?: number } | undefined;
       const notesBefore = JSON.stringify(((await call("notes.list", {})).value as unknown) ?? {}).length;
-      const opened = await openSettingsPage(view, "records");
-      await setSelect(view, "records-type", "conversation");
+      // The conversations are managed in their own tab, which the sidebar of the conversation view opens ("对话管理", A-101); the settings no longer have a records page.
+      const opened = await viaSidebar(view, "conversation", "sidebar-manage", 8000) && await waitUntil(view, `document.querySelector('[data-testid="records-tab"][data-type="conversation"]')`, 8000);
+      if (!opened) problems.push("the conversation view's management entry did not open the conversations' tab");
       const rows = opened && await waitFor(`document.querySelector('li.record-row[data-testid^="conv-"]')`, 8000);
-      if (!rows) problems.push("settings › records lists no conversation");
+      if (!rows) problems.push("the conversations' management tab lists no conversation");
       const pick = rows ? await js<string | null>(view, `(() => {
         const row = [...document.querySelectorAll('li.record-row[data-testid^="conv-"]')].find((el) => el.getAttribute("data-running") === "false" && !el.querySelector('[data-testid^="conv-current-"]'));
         return row ? row.getAttribute("data-testid").slice("conv-".length) : null;
@@ -466,7 +467,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
     observe("manage-model-dialog", problems.length === 0, { ...detail, problems });
   }
 
-  // ---- 5. titles and words of the pages the third round changed (A-93, AT-100) -----------------------------------------------------------------------
+  // ---- 5. titles and words of the pages with reworded text (A-93, AT-100) -----------------------------------------------------------------------
   {
     const problems: string[] = [];
     const rows: Array<Record<string, unknown>> = [];
@@ -484,10 +485,12 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         for (const pattern of ${JSON.stringify(GONE_WORDS.map((item) => item.source))}) if (new RegExp(pattern).test(text)) found.push("gone:" + pattern);
         return found;
       })()`);
-      const look = async (name: string, how: () => Promise<boolean>, titleSelector: string, expected: string, extra: Array<[string, string]> = []) => {
+      // The page in front: the contexts and tabs out of sight keep their own pages, with the same test ids.
+      const FRONT = '[data-testid="context-host"][data-active="true"] [data-testid="tab-panel"][data-focused="true"]';
+      const look = async (name: string, how: () => Promise<boolean>, titleSelector: string, expected: string, extra: Array<[string, string]> = [], front: string = FRONT) => {
         const arrived = await how();
         await sleep(500);
-        const title = (await js<string>(view, `document.querySelector(${JSON.stringify(titleSelector)})?.textContent ?? ""`)).trim();
+        const title = (await js<string>(view, `document.querySelector(${JSON.stringify(`${front} ${titleSelector}`)})?.textContent ?? ""`)).trim();
         const found = await leaks();
         const missingExtra = [];
         for (const [id, want] of extra) if (!(await textOf(id)).includes(want)) missingExtra.push(id);
@@ -499,12 +502,14 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         if (missingExtra.length) problems.push(`${name}: ${missingExtra.join(", ")} lack their words`);
       };
       await toRail(view);
-      await look("overview", async () => (await clickTestId(view, "nav-library")) && await waitFor(`document.querySelector('[data-testid="shelf-all"]')`, 6000), '[data-testid="shelf-title"]', t("shelf.title.all"));
-      await look("novel", async () => (await clickTestId(view, "nav-reading")) && await waitFor(`document.querySelector('[data-testid="shelf-novel"]')`, 6000), '[data-testid="shelf-title"]', t("shelf.title.novel"));
-      await look("comic", async () => (await clickTestId(view, "nav-comic")) && await waitFor(`document.querySelector('[data-testid="shelf-comic"]')`, 6000), '[data-testid="shelf-title"]', t("shelf.title.comic"), [["unassigned-group", t("unassigned.title")]]);
-      await look("video", async () => (await clickTestId(view, "nav-video")) && await waitFor(`document.querySelector('[data-testid="shelf-video"]')`, 6000), '[data-testid="shelf-title"]', t("shelf.title.video"));
-      await look("storage", async () => openSettingsPage(view, "storage"), '[data-testid="settings-page-storage"] h2', t("settings.page.storage"), [["storage-overview", t("storage.overview")]]);
-      await look("models", async () => openSettingsPage(view, "models"), '[data-testid="settings-page-models"] h2', t("settings.page.models"));
+      await look("overview", async () => (await openLibrary(view)) && await waitFor(`${SHOWN}(document.querySelector('[data-testid="shelf-all"]'))`, 6000), '[data-testid="shelf-title"]', t("shelf.title.all"));
+      await look("novel", async () => (await openShelf(view, "novel")), '[data-testid="shelf-title"]', t("shelf.title.novel"));
+      await look("comic", async () => (await openShelf(view, "comic")), '[data-testid="shelf-title"]', t("shelf.title.comic"), [["unassigned-group", t("unassigned.title")]]);
+      await look("video", async () => (await openShelf(view, "video")), '[data-testid="shelf-title"]', t("shelf.title.video"));
+      // The settings are a view of the window over the workspace, not a tab: their pages are looked for in the settings area.
+      const SETTINGS = '[data-testid="settings-area"]';
+      await look("storage", async () => openSettingsPage(view, "storage"), '[data-testid="settings-page-storage"] h2', t("settings.page.storage"), [["storage-overview", t("storage.overview")]], SETTINGS);
+      await look("models", async () => openSettingsPage(view, "models"), '[data-testid="settings-page-models"] h2', t("settings.page.models"), [], SETTINGS);
     } catch (error) {
       problems.push(`the walk stopped: ${error instanceof Error ? error.message : String(error)}`);
     }

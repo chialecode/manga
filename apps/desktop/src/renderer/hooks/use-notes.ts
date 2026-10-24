@@ -3,13 +3,16 @@ import type { NoteBlock } from "@manga/contracts/reading";
 import type { Translator } from "@manga/i18n";
 import { asArray, call, messageOf } from "../lib/api.ts";
 import type { NoteDoc, NoteRevision } from "../lib/types.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
 
 export type NotesDeps = {
   i18n: Translator;
   setError: (message?: string) => void;
   setNotice: (message?: string) => void;
-  /** A note keeps its own session, so the Agent never inherits the reading target. */
-  bindSession: (kind: "note", targetId: string) => Promise<unknown>;
+  /** The context the note is opened in: opening it there makes it one of the project's materials. */
+  contextId: string | null;
+  /** The note knows its title once it has loaded. */
+  onTitle?: (title: string) => void;
 };
 
 /** The open note and the operations on it. A late answer for a note that is no longer open is dropped. Finding notes is the records page's job. */
@@ -45,7 +48,8 @@ export function useNotes(deps: NotesDeps) {
     setFocusBlock(focusBlockId ?? null);
     setShowHistory(false);
     setRenaming(false);
-    await deps.bindSession("note", objectId);
+    deps.onTitle?.(String(value.title ?? ""));
+    void autoAddMaterial(deps.contextId, "note", objectId);
   }
 
   async function save(blocks: NoteBlock[], expectedRevision: number, title: string, tags: string[]): Promise<number | void> {
@@ -63,6 +67,7 @@ export function useNotes(deps: NotesDeps) {
     try {
       const value = await call("notes.rename", { objectId: doc.objectId, expectedRevision: doc.revision, title, tags: parsedTags });
       setDoc({ ...doc, revision: Number(value.revision ?? doc.revision + 1), title, tags: parsedTags });
+      deps.onTitle?.(title);
       setRenaming(false);
       deps.setNotice(i18n.t("notes.titleSaved"));
     } catch (error) {

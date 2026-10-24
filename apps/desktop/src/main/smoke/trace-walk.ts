@@ -3,7 +3,7 @@ import path from "node:path";
 import { clipboard, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { startMockProvider } from "@manga/model-protocol";
-import { clickTestId, pressKey, setField, sleep, trustedClick, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, pressKey, setField, sleep, trustedClick, viaSidebar, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, capturePage, js, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -46,8 +46,8 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     if (connection.status !== "ok") problems.push("the connection for the stand-in model could not be made");
     // The window learns of the connection when it reads its settings again.
     await view.webContents.reload();
-    const onChat = await toRail(view) && await clickTestId(view, "nav-agent") && await waitForTestId(view, "page-agent", "data-present", null, 8000);
-    if (!onChat) problems.push("the chat page did not open");
+    const onChat = await toRail(view) && await viaSidebar(view, "home", "sidebar-new-conversation", 10_000) && await waitDrawn(view, "page-agent", 8000);
+    if (!onChat) problems.push("the conversation tab did not open");
     await clickTestId(view, "chat-mode-ask");
     await setField(view, "agent-composer", PROMPT);
     const sent = await clickTestId(view, "agent-send");
@@ -87,6 +87,8 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     // The page's clipboard needs a real click (user activation), the way a person's click is. The person's own clipboard is put back afterwards.
     const keptClipboard = await clipboard.readText();
     clipboard.clear();
+    // The notice of the conversation that was started stays in the corner, over the dialog's foot, until it times out; a click there would be its own.
+    await waitUntil(view, `!document.querySelector('[data-testid="toast-notice"]')`, 8000);
     view.webContents.focus();
     const copied = await trustedClick(view, "trace-copy", 4000);
     await sleep(800);

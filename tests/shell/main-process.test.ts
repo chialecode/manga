@@ -158,13 +158,14 @@ describe("window colors", () => {
     expect(main).toContain("titleBarStyle: productWindow.titleBarStyle");
   });
 
-  it("the buttons are as high as the tops of the columns", () => {
-    const shell = readFileSync(new URL("../../apps/desktop/src/renderer/shell.tsx", import.meta.url), "utf8");
-    expect(Number(/const COLUMN_TOP = (\d+);/.exec(shell)![1])).toBe(productWindow.topHeightPx);
+  it("the buttons are as high as the top row", () => {
+    const layout = readFileSync(new URL("../../packages/app-core/src/domain/shell-layout.ts", import.meta.url), "utf8");
+    expect(Number(/export const TOP_ROW_HEIGHT = (\d+);/.exec(layout)![1])).toBe(productWindow.topHeightPx);
     const css = readFileSync(new URL("../../apps/desktop/src/renderer/styles.css", import.meta.url), "utf8");
+    const frame = readFileSync(new URL("../../apps/desktop/src/renderer/styles-frame.css", import.meta.url), "utf8");
     // One variable carries the height; the top, and everything that sits under it in window full screen, read it.
     expect(css).toMatch(new RegExp(String.raw`--column-top-h: *${productWindow.topHeightPx}px`));
-    expect(css).toMatch(/\.column-top \{[^}]*height: var\(--column-top-h\)/);
+    expect(frame).toMatch(/\.shell-top \{[^}]*height: var\(--column-top-h\)/);
   });
 });
 

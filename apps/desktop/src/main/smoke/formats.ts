@@ -3,12 +3,12 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { buildEpubFixture, buildMobiFixture, buildPdfFixture, type MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
-import { clickTestId, openFromShelf, pressKey, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
-import { caller, ensureRightPane, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
+import { clickTestId, openFromShelf, pressKey, setField, setSelect, sleep, tabsOf, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
+import { caller, ensureDock, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 
 /**
- * Open txt, epub, pdf and mobi in the real window, then a bad file and a mode switch. Every book is opened the way a person opens it
- * now: the rail's shelf, the card, the work's page, "read". The PDF's text is selected and taken to a note from the right pane.
+ * Open txt, epub, pdf and mobi in the real window, then a switch of context and a bad file. Every book is opened the way a person opens it
+ * now: the library tab's shelf, the card, the work's page, "read". The PDF's text is selected and taken to a note from the dock.
  */
 
 /** What the text layer of the open PDF page was doing when a selection was made or failed (LOOP-06). */
@@ -48,6 +48,7 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   let pdfError = "";
   let pdfReview = false;
   let loop06: Record<string, unknown> = {};
+  let drawnMs = -1;
   const ids: Record<string, string> = {};
   for (const book of books) {
     const file = path.join(booksDir, book.name);
@@ -58,19 +59,19 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
     ids[book.format] = String((imported.value as { resourceId?: string }).resourceId ?? "");
   }
   await view.webContents.reload();
-  await waitForTestId(view, "nav-reading");
+  await waitForTestId(view, "nav-home");
   for (const book of books) {
     const resourceId = ids[book.format] ?? "";
-    const clicked = await openFromShelf(view, "nav-reading", resourceId);
+    const clicked = await openFromShelf(view, "novel", resourceId);
     const visible = await waitUntil(view, `(() => {
       const text = document.querySelector('[data-testid="reading-body"]')?.textContent ?? "";
       const image = [...document.querySelectorAll('[data-testid="reading-page"] img')].some((item) => item.complete && item.naturalWidth > 0);
-      const title = document.querySelector('[data-testid="shell-title"]');
-      return title && (text.includes(${JSON.stringify(book.marker)}) || (${JSON.stringify(book.format)} === "pdf" && image));
+      const tab = document.querySelector('[data-testid="tab"][data-focused="true"]');
+      return tab && (text.includes(${JSON.stringify(book.marker)}) || (${JSON.stringify(book.format)} === "pdf" && image));
     })()`, 8000);
     if (book.format === "pdf" && visible) {
       const painted = await waitUntil(view, `(() => { const canvas = document.querySelector('[data-testid="reading-pdf-canvas"]'); return canvas && canvas.width > 0 && canvas.height > 0; })()`, 8000);
-      await ensureRightPane(view);
+      await ensureDock(view);
       // LOOP-06: a selection made while the page is still being painted again is lost with the text layer it was made in. The page is
       // given the time to settle (its render count unchanged for a while) before the text is selected; nothing is retried. The count and
       // whether the chosen node is still in the document are recorded at the selection and again at the end, so a failure can be placed.
@@ -127,9 +128,14 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
         excerpt = noted && await waitUntil(view, `(document.querySelector('[data-testid="chat-log"]')?.textContent ?? "").includes("FORMAT-PDF-MARK")`, 8000);
       }
       // The second page is an image page: reading it again from the shelf, then forward.
-      await openFromShelf(view, "nav-reading", resourceId);
-      // The part is chosen by its number: the position is a button that turns into a field (AT-83); Enter goes there.
+      await openFromShelf(view, "novel", resourceId);
+      // The part is chosen by its number: the position is a button that turns into a field (AT-83); Enter goes there. The reader is in a tab that
+      // comes to the front a moment after it is mounted, and a field turned on while its tab is out of sight cannot take the keyboard.
+      const drawnAt = Date.now();
+      const drawn = await waitDrawn(view, "reading-part-position");
+      drawnMs = Date.now() - drawnAt;
       await clickTestId(view, "reading-part-position");
+      await waitDrawn(view, "reading-part-input", 4000);
       await setField(view, "reading-part-input", "2");
       await pressKey(view, "Enter");
       const image = await waitUntil(view, `(() => {
@@ -139,30 +145,28 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
         return position.includes("第 2 /") && ((canvas && canvas.width > 0) || decoded);
       })()`, 8000);
       opened[book.format] = clicked && painted && excerpt && image;
-      pdfDebug = { painted, selected: Boolean(tagged), noted, excerpt, image };
+      pdfDebug = { painted, selected: Boolean(tagged), noted, excerpt, image, drawn, drawnMs };
       pdfLayer = atEnd.layer;
       pdfSpans = atEnd.spans;
       pdfError = atEnd.error;
       pdfReview = atEnd.review;
     } else opened[book.format] = clicked && visible;
   }
-  // Mode switch: each mode keeps its own draft and its own opened resources.
-  const drafted = await setField(view, "agent-composer", "formats enthusiast draft");
-  const enthusiast = await call("workspace.sessions", { mode: "enthusiast" }) as { status?: string; value?: Array<{ sessionId: string }> };
-  const enthusiastId = enthusiast.value?.[0]?.sessionId ?? "";
-  await clickTestId(view, "mode-creator");
-  const switched = await waitUntil(view, `(() => {
-    const work = document.querySelector('[data-testid="mode-creator"]')?.getAttribute("aria-pressed") === "true";
-    const draft = document.querySelector('[data-testid="agent-composer"]')?.value ?? "";
-    const listed = document.querySelector('[data-testid="session-open-${enthusiastId}"]');
-    return work && draft !== "formats enthusiast draft" && !listed;
-  })()`, 8000);
-  await clickTestId(view, "mode-enthusiast");
-  const returned = await waitUntil(view, `(() => {
-    const entertainment = document.querySelector('[data-testid="mode-enthusiast"]')?.getAttribute("aria-pressed") === "true";
-    const draft = document.querySelector('[data-testid="agent-composer"]')?.value ?? "";
-    return entertainment && draft === "formats enthusiast draft";
-  })()`, 8000);
+  // Context switch: "最近" and a project each keep their own draft and their own tabs. The readers above are tabs of "最近"; a project made in the sidebar becomes the
+  // window's context, shows none of them and none of the draft, and going back brings both back as they were.
+  await ensureDock(view);
+  const drafted = await setField(view, "agent-composer", "formats recent draft");
+  const recentTabs = (await tabsOf(view)).length;
+  const created = await clickTestId(view, "sidebar-new-project")
+    && await setField(view, "project-name", "格式烟测项目")
+    && await clickTestId(view, "project-create-submit");
+  const inProject = created && await waitUntil(view, `document.querySelector('[data-testid^="context-"][data-current="true"]')?.getAttribute("data-testid") !== "context-recent" && document.querySelector('[data-testid="context-host"][data-active="true"]')?.getAttribute("data-context")`, 10_000);
+  const projectTabs = await tabsOf(view);
+  const switched = Boolean(inProject) && projectTabs.length > 0 && projectTabs.every((tab) => tab.kind !== "reader")
+    && await waitUntil(view, `(document.querySelector('[data-testid="agent-composer"]')?.value ?? "") !== "formats recent draft"`, 8000);
+  const back = await clickTestId(view, "context-open-recent");
+  const returned = back && await waitUntil(view, `(document.querySelector('[data-testid="agent-composer"]')?.value ?? "") === "formats recent draft"`, 8000)
+    && (await tabsOf(view)).length === recentTabs;
   // A damaged file inside a library path is reported by the scan, on the library page (the interface has no import dialog).
   const badFolder = path.join(dir, "bad-library");
   fs.mkdirSync(badFolder, { recursive: true });
@@ -175,5 +179,5 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   const failureVisible = await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-last-"]')].some((el) => /失败 [1-9]/.test(el.textContent || ""))`, 20000);
   testHooks.pick = undefined;
   const pages = books.every((book) => opened[book.format]);
-  return { ok: drafted && pages && switched && returned && failureVisible, pages, modes: switched && returned, failureVisible, opened, pdfDebug, pdfLayer, pdfSpans, pdfError, pdfReview, loop06 };
+  return { ok: drafted && pages && switched && returned && failureVisible, pages, contexts: switched && returned, failureVisible, opened, pdfDebug, pdfLayer, pdfSpans, pdfError, pdfReview, loop06 };
 }

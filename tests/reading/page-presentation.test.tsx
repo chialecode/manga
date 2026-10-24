@@ -312,6 +312,7 @@ describe("hybrid package decisions", () => {
     try {
       const { book } = await libraryWithNote(ctx);
       await command(ctx, "progress.set", {
+        contextId: null,
         resourceId: book.resourceId, resourceRevisionId: book.revisionId,
         locator: { kind: "text", partId: "body", representationId: book.revisionId, normalizationVersion: "nfc-lf-codepoint-v1", range: { start: 0, end: 2 }, quote: { exact: "甲乙" } },
       });

@@ -4,16 +4,18 @@ import path from "node:path";
 import { MangaProductApp, type resolveLaunchLayout } from "@manga/app-core";
 import { createId } from "@manga/contracts";
 import { productWindow } from "../window-options.ts";
-import { clickTestId, viewport } from "./driver.ts";
-import { actor, capturePage, openSettingsPage, toRail } from "./common.ts";
+import { openLibrary, openRecords, openShelf, viewport, waitDrawn } from "./driver.ts";
+import { actor, caller, capturePage, toRail } from "./common.ts";
 import { runAgentSmoke } from "./agent.ts";
 import { measurePaneBench, measureScaleWindowBench, measureWindowBench, type ScaleSpec } from "./bench-window.ts";
 import { measureCanvasBench, type CanvasSpec } from "./bench-canvas.ts";
 import { measureDanmakuBench, measureMemoryBench, type DanmakuBenchSpec, type MemoryBenchSpec } from "./bench-reader.ts";
+import { measureWorkspaceBench, measureWorkspaceMemory, type WorkspaceBenchSpec, type WorkspaceMemorySpec } from "./bench-workspace.ts";
 import { runReadingLoopSmoke } from "./reading-loop.ts";
 import { runFormatsSmoke } from "./formats.ts";
 import { runMediaSmoke } from "./media.ts";
 import { runWindowWalkSmoke } from "./window-walk.ts";
+import { runMigratedSmoke, runRestartSmoke } from "./workspace-restart.ts";
 import { runCreativeSmoke } from "./creative-walk.ts";
 import { runPluginsSmoke } from "./plugins-walk.ts";
 import { runVoiceSmoke } from "./voice.ts";
@@ -63,7 +65,8 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
     } else if (phaseName === "agent" || phaseName === "agent-restart") {
       merge(await runAgentSmoke(appService, ownerGrant, window, phaseName));
     } else if (phaseName === "reading") {
-      const opened = await toRail(window) && await clickTestId(window, "nav-reading");
+      // The library is empty in this phase: the overview, which says so in place of its sections, is what the window can show.
+      const opened = await toRail(window) && await openLibrary(window) && await waitDrawn(window, "shelf-empty", 8000);
       await window.setContentSize(productWindow.width, productWindow.height);
       await new Promise((resolve) => setTimeout(resolve, 400));
       const wide = await viewport(window);
@@ -84,6 +87,10 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       merge(await runFormatsSmoke(appService, ownerGrant, window, layout.partitions.logs));
     } else if (phaseName === "window-walk") {
       merge(await runWindowWalkSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "workspace-restart") {
+      merge(await runRestartSmoke({ view: window, call: caller(appService, ownerGrant), logsDir: layout.partitions.logs }));
+    } else if (phaseName === "workspace-migrated") {
+      merge(await runMigratedSmoke({ view: window, call: caller(appService, ownerGrant), dataDir: layout.partitions.data }));
     } else if (phaseName === "creative") {
       merge(await runCreativeSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
     } else if (phaseName === "trace") {
@@ -108,6 +115,14 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_READER_SPEC), "utf8")) as DanmakuBenchSpec & MemoryBenchSpec;
       const measured = phaseName === "bench-danmaku" ? await measureDanmakuBench(appService, ownerGrant, window, spec) : await measureMemoryBench(appService, ownerGrant, window, spec);
       reportExtras.readerOk = measured.ok;
+      markerRestored = measured.ok === true;
+      fs.mkdirSync(layout.partitions.logs, { recursive: true });
+      fs.writeFileSync(path.join(layout.partitions.logs, `${phaseName}-window.json`), `${JSON.stringify(measured, null, 2)}
+`);
+    } else if (phaseName === "bench-workspace" || phaseName === "bench-workspace-memory") {
+      const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_WORKSPACE_SPEC), "utf8")) as WorkspaceBenchSpec & WorkspaceMemorySpec;
+      const measured = phaseName === "bench-workspace" ? await measureWorkspaceBench(appService, ownerGrant, window, spec) : await measureWorkspaceMemory(appService, ownerGrant, window, spec);
+      reportExtras.workspaceOk = measured.ok;
       markerRestored = measured.ok === true;
       fs.mkdirSync(layout.partitions.logs, { recursive: true });
       fs.writeFileSync(path.join(layout.partitions.logs, `${phaseName}-window.json`), `${JSON.stringify(measured, null, 2)}
@@ -153,20 +168,21 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
   if (evidenceDir) {
     await capturePage(window, evidenceDir, `ui-smoke-${phaseName}.png`);
     // The pages that belong to the phase, reached through the rail the way a person reaches them.
-    if (phaseName === "initial" && await toRail(window) && await clickTestId(window, "nav-library")) {
+    if (phaseName === "initial" && await toRail(window) && await openLibrary(window)) {
       await new Promise((resolve) => setTimeout(resolve, 250));
       await capturePage(window, evidenceDir, "ui-smoke-initial-library.png");
     }
-    if ((phaseName === "agent" || phaseName === "agent-restart") && await toRail(window) && await clickTestId(window, "nav-agent")) {
+    // The conversation the phase ended on, as it is: opening another one would be what the next start comes back to.
+    if ((phaseName === "agent" || phaseName === "agent-restart") && await waitDrawn(window, "page-agent", 8000)) {
       await new Promise((resolve) => setTimeout(resolve, 250));
       await capturePage(window, evidenceDir, `ui-smoke-${phaseName}-agent.png`);
     }
     if (phaseName === "reading-loop" || phaseName === "reading-loop-restart") {
-      if (await toRail(window) && await clickTestId(window, "nav-reading")) {
+      if (await toRail(window) && await openShelf(window, "novel")) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         await capturePage(window, evidenceDir, `ui-smoke-${phaseName}-reading.png`);
       }
-      if (await openSettingsPage(window, "records")) {
+      if (await openRecords(window, "note")) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         await capturePage(window, evidenceDir, `ui-smoke-${phaseName}-records.png`);
       }

@@ -10,7 +10,7 @@ const fake = vi.hoisted(() => ({
 }));
 
 vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({
-  version: "6.3.289",
+  version: "6.4.299",
   GlobalWorkerOptions: {},
   getDocument: () => ({
     destroy: fake.destroy,
