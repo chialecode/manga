@@ -53,6 +53,8 @@ export const zhCNShell = {
   "columns.n": "第 {n} 栏",
   "workspace.empty": "这一栏还没有标签页",
   "workspace.openLibrary": "打开资源库",
+  "workspace.emptyView": "还没有打开的{name}",
+  "workspace.emptyDownloads": "还没有打开下载",
 
   // ---- the tabs ----
   "tab.new": "新标签页",
@@ -101,6 +103,13 @@ export const zhCNShell = {
   "sidebar.recent": "最近",
   "sidebar.noProjects": "还没有项目",
   "sidebar.more": "更多（{n}）",
+  "sidebar.less": "收起",
+  "sidebar.display.cover": "以封面列出",
+  "sidebar.display.list": "以列表列出",
+  "sidebar.progress.read": "读到 {n}%",
+  "sidebar.progress.watched": "看到 {n}%",
+  "sidebar.progress.episode": "看到{episode}",
+  "sidebar.progress.none": "没看过",
   "sidebar.expand": "展开{name}",
   "sidebar.collapse": "收起{name}",
   "sidebar.archived": "已归档项目“{name}”",
@@ -126,6 +135,9 @@ export const zhCNShell = {
   "rail.hide": "从图标栏隐藏",
   "rail.pin": "固定到图标栏",
   "rail.pinOf": "把“{name}”固定到图标栏",
+  "rail.moveUp": "上移",
+  "rail.moveDown": "下移",
+  "rail.moved": "{name}已移到第 {n} 位",
 
   // ---- the views of the sidebar (A-99, 交互设计 2.10) ----
   "sidebar.manage.conversation": "对话管理",
@@ -159,6 +171,7 @@ export const zhCNShell = {
   "sidebar.failed": "读取失败，点击重试",
   "sidebar.menu.openItem": "打开",
   "sidebar.menu.openBehind": "在后台打开",
+  "sidebar.menu.workPage": "打开作品主页",
   "sidebar.menu.removeFromProject": "从这个项目移除",
   "sidebar.menu.deleteObject": "删除…",
   "sidebar.removed": "已从项目“{name}”移除“{title}”",

@@ -8,8 +8,6 @@ import { rangeConsumed } from "../reading-service.ts";
 import { DEFAULT_SEGMENTATION, SEGMENTATIONS, chunkText, estimateChunks, isSegmentation, type SegmentationId } from "./chunk.ts";
 import type { EmbeddingConnection, EmbeddingPort } from "./ports.ts";
 
-export { SEGMENTATIONS } from "./chunk.ts";
-
 type VersionRow = {
   id: number; connection_id: string; model: string; dim: number | null; segmentation: string; engine: "vec0" | "blob";
   status: "building" | "active" | "failed" | "cancelled"; total: number; done: number; error_json: string | null; created_at: string; updated_at: string; activated_at: string | null;

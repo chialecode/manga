@@ -24,6 +24,8 @@
   --color-subtle: #687184;
   --color-accent: #AD3268;
   --color-accent-soft: #F8E4ED;
+  /* One step past the accent: what is pointed at inside a row that is already in the accent (the pin of "…", A-109). */
+  --color-accent-deep: #84204D;
   --color-brand: #DE6C9B;
   --color-scroll: #C9CED9;
   /* The window frame: the top of every column and the bars under the readers. It is the sidebar's gray, and a translucent version of it when the page fills the window. */
@@ -32,6 +34,11 @@
   --color-frame-glass: #F3F4F7E6;
   /* The sidebar: halfway between the frame's gray and the main area's white (the cards and the settings directory share it). */
   --color-sidebar: #F9FAFB;
+  /* The sidebar's kind pill (A-103), the same neutral for every kind, and the guide line a context's list hangs from (A-110). */
+  --color-pill: #E9EBF0;
+  --color-on-pill: #586176;
+  --color-guide: #DDE1E8;
+  --color-guide-current: var(--color-accent);
   --color-player: #151925;
   --color-on-player: #FFFFFF;
   --color-player-shade: #101522E6;
@@ -89,11 +96,16 @@
   --color-subtle: #9AA3B8;
   --color-accent: #E27AA8;
   --color-accent-soft: #3A2230;
+  --color-accent-deep: #F5B3D0;
   --color-scroll: #3E4556;
   --color-frame: #14171F;
   --color-on-frame: #9AA3B8;
   --color-frame-glass: #14171FE6;
   --color-sidebar: #1A1D27;
+  --color-pill: #2C3140;
+  --color-on-pill: #B6BED0;
+  --color-guide: #343A4A;
+  --color-guide-current: #E27AA8;
   --color-background: #14171F;
   --color-foreground: #E6E9F2;
   color-scheme: dark;

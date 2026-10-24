@@ -27,23 +27,6 @@ export const zhCNCreative = {
   "log.dictionary.remove": "删除了词典词条",
   "log.dictionary.importMetadata": "从资料加入了词典词条",
 
-  // ---- the work mode's overview ----
-  "overview.title": "项目总览",
-  "overview.recent": "最近的项目",
-  "overview.recent.empty": "还没有项目。项目把一次创作用到的材料、白板、导图、文稿和对话放在一起，先新建一个。",
-  "overview.counts": "{materials} 个材料 · {whiteboards} 块白板 · {mindmaps} 张导图 · {drafts} 篇文稿 · {roughCuts} 个粗剪",
-  "overview.objects": "最近编辑",
-  "overview.objects.empty": "还没有编辑过白板、导图、文稿或粗剪。",
-  "overview.kind.whiteboard": "白板",
-  "overview.kind.mindmap": "导图",
-  "overview.kind.draft": "文稿",
-  "overview.kind.roughcut": "粗剪",
-  "overview.suggestions": "待采纳的建议",
-  "overview.suggestions.empty": "没有等待处理的文稿建议。",
-  "overview.suggestion.of": "{kind}建议 · {project}",
-  "overview.all": "全部项目",
-  "overview.archivedHint": "另有 {n} 个已归档的项目",
-
   // ---- the projects page ----
   "projects.title": "项目",
   "projects.empty": "还没有项目。项目把一次创作用到的材料、白板、导图、文稿和对话放在一起。",

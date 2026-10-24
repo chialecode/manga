@@ -3,9 +3,8 @@ import path from "node:path";
 import { MangaError } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { listBookmarks, listNotes } from "./reading-service.ts";
-import { outsideSql } from "./works-versions.ts";
 import { contextName } from "./progress-service.ts";
-import { libraryRoots, resolveLocation } from "./library-locations.ts";
+import { libraryRoots, outsideSql, resolveLocation } from "./library-locations.ts";
 
 export type ResourceContent = {
   resource: {

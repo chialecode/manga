@@ -49,6 +49,14 @@ if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
     if (fs.existsSync(desktopTsconfig)) {
       run(process.execPath, [tscJs, '--noEmit', '-p', 'apps/desktop/tsconfig.json']);
     }
+    // Files, exports and dependencies nothing uses (knip.json names the entry points it cannot find on its own).
+    const knip = path.join(root, 'node_modules/knip/bin/knip.js');
+    if (!fs.existsSync(knip)) {
+      console.error('FAILED unused code: knip is not installed');
+      failed = true;
+    } else {
+      run(process.execPath, [knip, '--no-progress']);
+    }
     const vitest = path.join(root, 'node_modules/vitest/vitest.mjs');
     if (!fs.existsSync(vitest)) {
       console.error('FAILED tests: vitest is not installed');

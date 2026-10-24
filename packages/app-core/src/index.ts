@@ -1,4 +1,5 @@
 export { MangaProductApp, type ProductAppOptions } from "./product-app.ts";
+export { AGENT_COMMANDS, AGENT_OPT_IN_COMMANDS, NOTE_CONTENT_COMMANDS, OWNER_COMMANDS } from "./commands/access.ts";
 export { resolveLaunchLayout, persistPointer, defaultPointerPath, type LaunchRequest } from "./locations.ts";
 export { TestVault, UnavailableVault, ElectronSafeStorageVault, type CredentialVault } from "./credentials.ts";
 export { GrantRegistry } from "./grants.ts";

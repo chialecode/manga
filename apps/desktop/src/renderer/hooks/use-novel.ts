@@ -11,6 +11,11 @@ import { captureBus } from "../voice/capture-bus.ts";
 import { quoteTags } from "../lib/quote-tags.ts";
 import { novelDebugOf, readerContext } from "../lib/reader-context.ts";
 import { autoAddMaterial } from "../lib/materials.ts";
+import { WINDOW_CHARS } from "../reader/pages.ts";
+import { pageHolds } from "../reader/page-offsets.ts";
+
+/** A page position is saved once the reader has rested on it this long, so turning through pages is not a write per page. */
+const POSITION_SAVE_MS = 600;
 
 export type NovelDeps = {
   i18n: Translator;
@@ -57,11 +62,22 @@ export function useNovel(deps: NovelDeps) {
   /** The work's own name, and whether it has more than one resource: the title bar names the work, not a chapter file. */
   const [work, setWork] = useState<{ title: string; many: boolean } | null>(null);
   const readingRef = useRef<ReadingDocument | null>(null);
+  /** The range on screen (a page, or the window when scrolling): progress, bookmarks and the conversation use it (A-115). */
+  const [position, setPosition] = useState<{ partId: string; start: number; end: number } | null>(null);
+  const positionRef = useRef<{ partId: string; start: number; end: number } | null>(null);
+  const positionTimer = useRef<number | null>(null);
+  /** The save the timer waits to make: made at once when the reader goes away or the window closes, so the last page turned is not lost. */
+  const positionSave = useRef<(() => void) | null>(null);
+  /** The position last saved from here; before any, the one the book was opened at. */
+  const savedAt = useRef<{ resourceId: string; partId: string; start: number } | null>(null);
+  const extending = useRef(false);
   const assetUrlsRef = useRef<Record<string, string>>({});
 
   // The recorder hears where the book is: the book opening, each new slice, and a selection.
   const announced = useRef<string | null>(null);
-  const sliceKey = reading?.slice ? `${reading.slice.partId}:${reading.slice.start}:${reading.slice.end}` : "";
+  const shownAt = reading?.slice && position?.partId === reading.slice.partId && position.start >= reading.slice.start && position.start <= reading.slice.end
+    ? position : reading?.slice ? { partId: reading.slice.partId, start: reading.slice.start, end: reading.slice.end } : null;
+  const sliceKey = shownAt ? `${shownAt.partId}:${shownAt.start}:${shownAt.end}` : "";
   useEffect(() => {
     if (!reading?.slice) {
       if (!reading && announced.current) { captureBus.clear(announced.current, tabId); announced.current = null; }
@@ -69,7 +85,7 @@ export function useNovel(deps: NovelDeps) {
     }
     const locator = {
       kind: "text" as const, partId: reading.slice.partId, representationId: reading.revisionId, normalizationVersion: NORMALIZATION_V1,
-      range: { start: reading.slice.start, end: Math.max(reading.slice.end, reading.slice.start) },
+      range: { start: shownAt!.start, end: Math.max(shownAt!.end, shownAt!.start) },
     };
     const changed = announced.current !== reading.resourceId;
     announced.current = reading.resourceId;
@@ -83,7 +99,7 @@ export function useNovel(deps: NovelDeps) {
     readerContext.set({
       kind: "novel", resourceId: reading.resourceId, revisionId: reading.revisionId, title: reading.title, workId,
       partId: slice.partId, partTitle: part?.title ?? reading.toc.find((item) => item.partId === slice.partId)?.label ?? "",
-      start: slice.start, end: Math.max(slice.end, slice.start), excerpt: [...slice.text].slice(0, 200).join(""),
+      start: shownAt!.start, end: Math.max(shownAt!.end, shownAt!.start), excerpt: [...slice.text].slice(shownAt!.start - slice.start, shownAt!.start - slice.start + 200).join(""),
       debug: novelDebugOf(reading.progress, reading.readRanges, part),
     }, tabId);
   }, [reading?.resourceId, reading?.revisionId, sliceKey, workId, reading?.progress?.restoredFrom, reading?.progress?.restoredRange?.start, reading?.readRanges?.length]);
@@ -194,14 +210,18 @@ export function useNovel(deps: NovelDeps) {
     setBookmarks(result.status === "ok" ? asArray<Bookmark>(result.value) : []);
   }
 
-  async function openSlice(partId: string, start: number, options: { highlight?: { start: number; end: number } | null; revisionId?: string } = {}) {
+  /**
+   * Open a chapter from an offset. `quiet` loads a window for the pages to place themselves in: the saved position and the mark stay, and the
+   * reader reports the page it shows (`savePosition`).
+   */
+  async function openSlice(partId: string, start: number, options: { highlight?: { start: number; end: number } | null; revisionId?: string; quiet?: boolean } = {}) {
     const request = viewRequest.current;
     const current = readingRef.current;
     if (!current) return;
     const revisionId = options.revisionId ?? current.revisionId;
     const pdf = current.format === "pdf";
     const sliceStart = pdf ? 0 : start;
-    const result = await run("library.readSlice", { resourceId: current.resourceId, revisionId, partId, start: sliceStart, limit: pdf ? 8000 : 4000 });
+    const result = await run("library.readSlice", { resourceId: current.resourceId, revisionId, partId, start: sliceStart, limit: pdf ? 8000 : WINDOW_CHARS });
     if (request !== viewRequest.current || readingRef.current?.resourceId !== current.resourceId) return;
     if (result.status === "error") { setError(result.error?.message); return; }
     const value = result.value as { text?: string; start?: number; end?: number; kind?: string; textLayer?: boolean; images?: ReadingAsset[]; placements?: Array<{ assetId: string; offset: number; width?: number; height?: number }>; render?: ReadingDocument["slice"] extends null ? never : NonNullable<ReadingDocument["slice"]>["render"] } | undefined;
@@ -220,11 +240,13 @@ export function useNovel(deps: NovelDeps) {
       },
     };
     publishReading(next);
+    if (options.quiet) { await loadAssets(next, request); return; }
     setHighlight(options.highlight ?? null);
     // A chapter/page jump is a reading position change even before the reader explicitly marks it read.
     // Save only the position; navigation alone must not expand the Agent's consumed-content scope.
     // Bookmark/search highlights are temporary lookups and retain the saved reading position.
     if (!options.highlight) {
+      savedAt.current = { resourceId: next.resourceId, partId, start: next.slice!.start };
       const progress = await window.manga.command({
         commandId: "progress.set", idempotencyKey: id(), input: {
           contextId,
@@ -246,8 +268,91 @@ export function useNovel(deps: NovelDeps) {
     await loadAssets(next, request);
   }
 
+  /** The next window of the chapter, appended to the text already shown: the pages before it stay where they are. */
+  async function extendSlice() {
+    const current = readingRef.current;
+    const slice = current?.slice;
+    if (!current || !slice || current.format === "pdf" || extending.current) return;
+    const part = current.parts.find((entry) => entry.id === slice.partId);
+    if (part && slice.end >= part.length) return;
+    const request = viewRequest.current;
+    extending.current = true;
+    try {
+      const result = await run("library.readSlice", { resourceId: current.resourceId, revisionId: current.revisionId, partId: slice.partId, start: slice.end, limit: WINDOW_CHARS });
+      if (request !== viewRequest.current || readingRef.current?.slice !== slice) return;
+      if (result.status === "error") { setError(result.error?.message); return; }
+      const value = result.value as { text?: string; end?: number; images?: ReadingAsset[]; placements?: Array<{ assetId: string; offset: number; width?: number; height?: number }> } | undefined;
+      const text = String(value?.text ?? "");
+      const end = Number(value?.end ?? slice.end);
+      if (!text || end <= slice.end) return;
+      const known = new Set((slice.images ?? []).map((image) => image.id));
+      const next: ReadingDocument = {
+        ...current,
+        slice: {
+          ...slice,
+          text: slice.text + text,
+          end,
+          images: [...(slice.images ?? []), ...(value?.images ?? []).filter((image) => !known.has(image.id))],
+          placements: [...(slice.placements ?? []), ...(value?.placements ?? [])],
+        },
+      };
+      publishReading(next);
+      await loadAssets(next, request);
+    } finally {
+      extending.current = false;
+    }
+  }
+
+  /** The range the reader shows; saved as the reading position once the reader rests on it. Navigation never widens what was read. */
+  function savePosition(partId: string, start: number, end: number) {
+    const current = readingRef.current;
+    if (!current) return;
+    const at = { partId, start, end: Math.max(end, start) };
+    positionRef.current = at;
+    setPosition(at);
+    if (positionTimer.current !== null) window.clearTimeout(positionTimer.current);
+    positionTimer.current = null;
+    positionSave.current = null;
+    // A bookmark, a search hit or a note's source is a lookup: resting on its page keeps the saved reading position, turning away from it moves on from there.
+    if (highlight && highlight.start >= at.start && highlight.start <= at.end) return;
+    // Still on the page of the saved position (the book was just opened, or laid out anew): it stays exactly where it is.
+    const opened = current.progress?.restoredPartId && current.progress.restoredRange ? { partId: current.progress.restoredPartId, start: current.progress.restoredRange.start } : null;
+    if (pageHolds(savedAt.current?.resourceId === current.resourceId ? savedAt.current : opened, at)) return;
+    const save = () => {
+      if (positionTimer.current !== null) window.clearTimeout(positionTimer.current);
+      positionTimer.current = null;
+      positionSave.current = null;
+      savedAt.current = { resourceId: current.resourceId, partId, start: at.start };
+      void window.manga.command({
+        commandId: "progress.set", idempotencyKey: id(), input: {
+          contextId, resourceId: current.resourceId, resourceRevisionId: current.revisionId, consumed: false,
+          locator: { kind: "text", partId, representationId: current.revisionId, normalizationVersion: NORMALIZATION_V1, range: { start: at.start, end: at.end } },
+        },
+      }).then((saved) => {
+        if (saved.status === "error") setError(saved.error?.message);
+        else announceCommand("progress.set", { contextId, resourceId: current.resourceId });
+      });
+    };
+    positionSave.current = save;
+    positionTimer.current = window.setTimeout(save, POSITION_SAVE_MS);
+  }
+  // A page turned just before the reader closes (or the window does) is still saved: the waiting save is made at once, not dropped.
+  useEffect(() => {
+    const now = () => positionSave.current?.();
+    window.addEventListener("pagehide", now);
+    return () => { window.removeEventListener("pagehide", now); now(); };
+  }, []);
+
+  /** The page on screen when it is in the open slice, else the slice itself. */
+  function shownRange(slice: NonNullable<ReadingDocument["slice"]>) {
+    const at = positionRef.current;
+    return at && at.partId === slice.partId && at.start >= slice.start && at.start <= slice.end ? at : { partId: slice.partId, start: slice.start, end: slice.end };
+  }
+
   async function markProgress() {
     if (!reading?.slice) return;
+    // What was read reaches the end of the page on screen, not the end of the loaded window (the Agent's read range, A-96).
+    const shown = shownRange(reading.slice);
     const exact = reading.slice.text.slice(0, 32);
     const result = await window.manga.command({
       commandId: "progress.set",
@@ -262,12 +367,26 @@ export function useNovel(deps: NovelDeps) {
           partId: reading.slice.partId,
           representationId: reading.revisionId,
           normalizationVersion: NORMALIZATION_V1,
-          range: { start: reading.slice.start, end: Math.max(reading.slice.end, reading.slice.start) },
+          range: { start: reading.slice.start, end: Math.max(shown.end, reading.slice.start) },
           quote: { exact },
         },
       },
     });
     if (result.status === "error") { setError(result.error?.message); return; }
+    // The range above is what was read, from the start of the window; the reader stays on the page on screen, so that page is the position it reopens at.
+    const position = await window.manga.command({
+      commandId: "progress.set",
+      idempotencyKey: id(),
+      input: {
+        contextId,
+        resourceId: reading.resourceId,
+        resourceRevisionId: reading.revisionId,
+        consumed: false,
+        locator: { kind: "text", partId: reading.slice.partId, representationId: reading.revisionId, normalizationVersion: NORMALIZATION_V1, range: { start: shown.start, end: Math.max(shown.end, shown.start) } },
+      },
+    });
+    if (position.status === "error") { setError(position.error?.message); return; }
+    savedAt.current = { resourceId: reading.resourceId, partId: reading.slice.partId, start: shown.start };
     setNotice(i18n.t("reading.progress"));
     await openResource(reading.resourceId);
   }
@@ -386,23 +505,25 @@ export function useNovel(deps: NovelDeps) {
 
   async function addBookmark() {
     if (!reading?.slice) return;
-    const start = reading.slice.start;
-    // A bookmark keeps a readable anchor, not the whole window, so the jump can always show it.
+    // The page on screen is marked: its first character, and a readable stretch after it.
+    const shown = shownRange(reading.slice);
+    const start = shown.start;
     const end = Math.min(reading.slice.end, start + 120);
+    const from = [...reading.slice.text].slice(start - reading.slice.start).join("");
     const result = await window.manga.command({
       commandId: "reading.setBookmark",
       idempotencyKey: id(),
       input: {
         resourceId: reading.resourceId,
         resourceRevisionId: reading.revisionId,
-        label: `${reading.slice.partId} · ${[...reading.slice.text].slice(0, 20).join("")}`,
+        label: `${reading.slice.partId} · ${[...from].slice(0, 20).join("")}`,
         locator: {
           kind: "text",
           partId: reading.slice.partId,
           representationId: reading.revisionId,
           normalizationVersion: NORMALIZATION_V1,
           range: { start, end: Math.max(end, start) },
-          quote: { exact: reading.slice.text.slice(0, 32) },
+          quote: { exact: from.slice(0, 32) },
         },
       },
     });
@@ -430,6 +551,8 @@ export function useNovel(deps: NovelDeps) {
     assetUrlsRef.current = {};
     setAssetUrls({});
     publishReading(null);
+    positionRef.current = null;
+    setPosition(null);
     setHighlight(null);
     setOriginalBytes(null);
     setSourceCard(null);
@@ -461,9 +584,7 @@ export function useNovel(deps: NovelDeps) {
   return {
     reading, hits, searched, bookmarks, assetUrls, highlight, originalBytes, sourceCard, returnTo, agentSelection, workId, work,
     setAgentSelection,
-    openResource, openSlice, markProgress, selectText, openNoteSource, backToNote, repairNoteSource,
+    openResource, openSlice, extendSlice, savePosition, markProgress, selectText, openNoteSource, backToNote, repairNoteSource,
     addBookmark, removeBookmark, openBookmark, closeReader, search, saveStyle,
   };
 }
-
-export type Novel = ReturnType<typeof useNovel>;

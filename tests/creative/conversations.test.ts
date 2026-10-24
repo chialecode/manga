@@ -148,3 +148,44 @@ describe("renaming and moving a conversation (the sidebar)", () => {
     expect(ok<{ conversation: View }>(await run(ctx, "conversation.rename", { sessionId: bound.id, title: "改名的作品对话" })).conversation.title).toBe("改名的作品对话");
   });
 });
+
+describe("AT-127 a conversation is named by the first thing said in it (A-127)", () => {
+  it("takes the start of the first line, keeps a name the person gave, and does not rename one that was spoken in before", async () => {
+    const ctx = await boot();
+    const first = ok<View>(await run(ctx, "conversation.new", { contextId: null }));
+    expect(first.title).toMatch(/^对话 \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    await say(ctx, first.sessionId, "\n  这一集  里的反派\t动机是什么？为什么他最后放过了主角？\n第二行不算");
+    const named = (await current(ctx, null))!;
+    expect(named.title).toBe("这一集 里的反派 动机是什么？为什么他最…");
+    // The sidebar and the tab read the same name.
+    const listed = ok<{ groups: Array<{ sections: Array<{ items: Array<{ open: { id: string }; title: string }> }> }> }>(await run(ctx, "workspace.sidebar", { view: "conversation" }));
+    expect(listed.groups.flatMap((group) => group.sections.flatMap((section) => section.items)).find((item) => item.open.id === first.sessionId)?.title).toBe(named.title);
+    // The second message does not rename it.
+    await say(ctx, first.sessionId, "再问一句");
+    expect((await current(ctx, null))!.title).toBe(named.title);
+
+    // A name the person gave stays.
+    const second = ok<View>(await run(ctx, "conversation.new", { contextId: null }));
+    ok(await run(ctx, "conversation.rename", { sessionId: second.sessionId, title: "我的名字" }));
+    await say(ctx, second.sessionId, "随便问问");
+    expect((await current(ctx, null))!.title).toBe("我的名字");
+
+    // A short line is taken whole; a project's conversation is named the same way.
+    const project = ok<{ id: string }>(await run(ctx, "project.create", { name: "某项目" })).id;
+    const third = ok<View>(await run(ctx, "conversation.new", { contextId: project }));
+    await say(ctx, third.sessionId, "短问题");
+    expect((await current(ctx, project))!.title).toBe("短问题");
+  });
+
+  it("leaves a name that only looks made up: it is not the one the conversation was made with", async () => {
+    const ctx = await boot();
+    const made = ok<View>(await run(ctx, "conversation.new", { contextId: null }));
+    await say(ctx, made.sessionId, "第一句");
+    // A name in the same form, but for another time, was not given by the app at making.
+    const sqlite = ctx.app.store.sqlite;
+    const old = ok<View>(await run(ctx, "conversation.new", { contextId: null }));
+    sqlite.prepare("UPDATE agent_sessions SET title = '对话 2020-01-01 00:00' WHERE id = ?").run(old.sessionId);
+    await say(ctx, old.sessionId, "不会改名");
+    expect((await current(ctx, null))!.title).toBe("对话 2020-01-01 00:00");
+  });
+});

@@ -138,7 +138,7 @@ describe("page view draws the modelled advance", () => {
       resources={[]} document={advanceDoc} style={baseStyle} hits={[]} bookmarks={[]} assets={{}}
       highlight={null} sourceCard={null} onBackToNote={() => {}} onRepair={() => {}} labelsExtra={paneLabelsExtra}
       labels={paneLabels} onImportBook={() => {}} onOpen={() => {}} onSearch={() => {}} onJump={() => {}}
-      onProgress={() => {}} onNote={() => {}} onMore={() => {}} onPart={() => {}} onStyle={() => {}}
+      onProgress={() => {}} onNote={() => {}} onPart={() => {}} onStyle={() => {}}
       onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}}
     />);
     expect(document.querySelector("text")).toBeNull();
@@ -150,7 +150,7 @@ describe("page view draws the modelled advance", () => {
       resources={[]} document={noAdvanceDoc} style={baseStyle} hits={[]} bookmarks={[]} assets={{}}
       highlight={null} sourceCard={null} onBackToNote={() => {}} onRepair={() => {}} labelsExtra={paneLabelsExtra}
       labels={paneLabels} onImportBook={() => {}} onOpen={() => {}} onSearch={() => {}} onJump={() => {}}
-      onProgress={() => {}} onNote={() => {}} onMore={() => {}} onPart={() => {}} onStyle={() => {}}
+      onProgress={() => {}} onNote={() => {}} onPart={() => {}} onStyle={() => {}}
       onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}}
     />);
     expect(document.querySelector("[textLength]")).toBeNull();

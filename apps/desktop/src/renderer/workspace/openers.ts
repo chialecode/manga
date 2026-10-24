@@ -1,6 +1,6 @@
 import type { Translator } from "@manga/i18n";
 import type { SegmentAnchor } from "@manga/contracts/media";
-import type { ContextId, ObjectListKind } from "@manga/contracts";
+import { viewOfTab, type ContextId, type ObjectListKind } from "@manga/contracts";
 import type { OpenBlock } from "../pages/open-blocked-dialog.tsx";
 import { attempt } from "../lib/api.ts";
 import { OBJECT_SPEC } from "../lib/object-kinds.ts";
@@ -106,7 +106,8 @@ export function createOpeners(get: () => OpenerDeps): Openers {
       const target = { page: "work", workId, ...(options.kind ? { kind: options.kind } : {}), ...(options.tab ? { tab: options.tab } : {}) };
       const title = options.title ?? t("tab.work");
       const focused = c().focusedTab();
-      if (!options.mode && !options.background && focused?.kind === "library") {
+      // The library tab in front goes to the work, when the work is of the view that tab is in (A-107); else the work opens in a tab of its own view.
+      if (!options.mode && !options.background && focused?.kind === "library" && (c().view === "home" || viewOfTab(focused) === viewOfTab({ kind: "library", target }))) {
         if (JSON.stringify(focused.target) !== JSON.stringify(target)) c().navigate(focused.id, target, title);
         return;
       }
@@ -118,7 +119,7 @@ export function createOpeners(get: () => OpenerDeps): Openers {
       const target = { page };
       const title = libraryTitle(t, page);
       const focused = c().focusedTab();
-      if (!options.mode && !options.background && focused?.kind === "library") {
+      if (!options.mode && !options.background && focused?.kind === "library" && (c().view === "home" || viewOfTab(focused) === viewOfTab({ kind: "library", target }))) {
         if (focused.target.page !== page || focused.target.workId) c().navigate(focused.id, target, title);
         return;
       }
@@ -294,7 +295,13 @@ export function createOpeners(get: () => OpenerDeps): Openers {
       get().enterSettings("shortcuts");
     },
 
+    /** A new tab of the view on screen (A-107): its management page — the shelf of a medium, the records or objects of a kind — or, in the home, the library. */
     newTab() {
+      const view = c().view;
+      if (view === "novel" || view === "comic" || view === "video") { c().open({ kind: "library", target: { page: view }, title: libraryTitle(t, view), mode: "new" }); return; }
+      if (view === "note" || view === "conversation") { c().open({ kind: "records", target: { section: "records", type: view }, title: t(`sidebar.manage.${view}` as never), mode: "new" }); return; }
+      if (view === "whiteboard" || view === "mindmap" || view === "draft" || view === "roughcut") { c().open({ kind: "objects", target: { kind: view }, title: t(`sidebar.manage.${view}` as never), mode: "new" }); return; }
+      if (view === "downloads") { self.downloads(); return; }
       c().open({ kind: "library", target: { page: "overview" }, title: t("tab.library"), mode: "new" });
     },
     reopenTab() {

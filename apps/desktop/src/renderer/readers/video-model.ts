@@ -59,7 +59,6 @@ export function parseClock(text: string): number | null {
 
 /** The rates offered until the person edits the list in the settings. */
 export const RATE_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
-export const DEFAULT_CUSTOM_RATE = 1.5;
 export const RATE_MIN = 0.25;
 export const RATE_MAX = 4;
 /** Share of the volume that stays while a recording lowers the picture's sound (Q-05 default: 30%). */
@@ -73,6 +72,11 @@ export const REWIND_STEP_MS = 400;
 export function clampRate(rate: number): number {
   if (!Number.isFinite(rate)) return 1;
   return Math.min(RATE_MAX, Math.max(RATE_MIN, Math.round(rate * 100) / 100));
+}
+
+/** The rate the video plays at now: the temporary rate while → is held, whatever else (a new source, a change of the setting) writes it (A-112). */
+export function playingRate(held: boolean, settings: { rate: number; holdRate: number }): number {
+  return clampRate(held ? settings.holdRate : settings.rate);
 }
 
 /** A rate typed by the user, `1.75` or `1.75x`; null when it is not a number or lies outside 0.25–4. */

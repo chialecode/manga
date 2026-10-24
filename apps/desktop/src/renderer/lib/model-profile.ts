@@ -1,4 +1,4 @@
-import type { ConnectionTestResult, ModelInputType, ModelProfile, ModelProfilePatch, ReasoningEffort } from "@manga/contracts/models";
+import type { ModelInputType, ModelProfile, ModelProfilePatch, ReasoningEffort } from "@manga/contracts/models";
 import { MODEL_CAPABILITIES, MODEL_INPUT_TYPES, REASONING_EFFORTS } from "@manga/contracts/models";
 
 export { MODEL_CAPABILITIES, MODEL_INPUT_TYPES, REASONING_EFFORTS };
@@ -48,5 +48,3 @@ export function profileProblem(form: ProfileForm): "window" | "output" | "order"
 
 /** The short statement of a result's time, as seconds with one decimal. */
 export const seconds = (ms: number) => (ms / 1000).toFixed(ms < 10_000 ? 1 : 0);
-
-export type LastTest = ConnectionTestResult | null | undefined;

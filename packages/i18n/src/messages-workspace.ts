@@ -565,6 +565,8 @@ export const zhCNWorkspace = {
   "log.works.setKind": "修改了作品的媒介类型",
   "log.works.delete": "删除了条目",
   "log.works.moveResource": "把资源移到了另一部作品",
+  "log.works.reidentify": "重新识别了资源所在的作品",
+  "log.library.removeOutside": "移除了不在资源库位置里的资源记录",
   "log.works.setOrdinal": "修改了资源的话数或集数",
   "log.works.setShelf": "修改了阅读或观看状态",
   "log.video.playCopy": "生成了播放副本",

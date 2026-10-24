@@ -15,7 +15,7 @@ import { runReadingLoopSmoke } from "./reading-loop.ts";
 import { runFormatsSmoke } from "./formats.ts";
 import { runMediaSmoke } from "./media.ts";
 import { runWindowWalkSmoke } from "./window-walk.ts";
-import { runMigratedSmoke, runRestartSmoke } from "./workspace-restart.ts";
+import { closeForReal, runClosedSmoke, runMigratedSmoke, runRestartSmoke } from "./workspace-restart.ts";
 import { runCreativeSmoke } from "./creative-walk.ts";
 import { runPluginsSmoke } from "./plugins-walk.ts";
 import { runVoiceSmoke } from "./voice.ts";
@@ -89,6 +89,8 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       merge(await runWindowWalkSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
     } else if (phaseName === "workspace-restart") {
       merge(await runRestartSmoke({ view: window, call: caller(appService, ownerGrant), logsDir: layout.partitions.logs }));
+    } else if (phaseName === "workspace-closed") {
+      merge(await runClosedSmoke({ view: window, call: caller(appService, ownerGrant), logsDir: layout.partitions.logs }));
     } else if (phaseName === "workspace-migrated") {
       merge(await runMigratedSmoke({ view: window, call: caller(appService, ownerGrant), dataDir: layout.partitions.data }));
     } else if (phaseName === "creative") {
@@ -188,6 +190,8 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       }
     }
   }
+  // The restart phase ends by really closing its window, after a change of the layout the next phase looks for (AT-128); its report is written already.
+  if (phaseName === "workspace-restart" && report.status === "passed" && appService && ownerGrant) await closeForReal({ view: window, call: caller(appService, ownerGrant), logsDir: layout.partitions.logs });
   appService?.close();
   appService = undefined;
   app.exit(report.status === "passed" ? 0 : 1);

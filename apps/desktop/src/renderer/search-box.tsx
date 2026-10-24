@@ -77,7 +77,8 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
     const mine = ++latestBody.current;
     setBusy(true);
     const [library, meaning] = await Promise.all([
-      attempt<unknown>("library.find", { text: query }),
+      // A medium's scope asks for that medium's resources only (计划 4.8); "全部" asks for every hit.
+      attempt<unknown>("library.find", { text: query, ...(scope === "novel" || scope === "comic" || scope === "video" ? { mediaKind: scope } : {}) }),
       s.facets.has("semantic") ? attempt<SemanticSearchView>("semantic.search", { text: query }) : Promise.resolve(null),
     ]);
     if (mine !== latestBody.current) return;

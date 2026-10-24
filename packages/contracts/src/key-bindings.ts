@@ -83,7 +83,7 @@ export const KEY_ACTIONS: readonly KeyActionDef[] = [
   action("comic.screenshot", ["S"]),
 
   action("novel.next", ["ArrowRight", "PageDown", "Space"]),
-  action("novel.prev", ["ArrowLeft", "PageUp"]),
+  action("novel.prev", ["ArrowLeft", "PageUp", "Shift+Space"]),
 ];
 
 const BY_ID = new Map(KEY_ACTIONS.map((entry) => [entry.id, entry]));

@@ -105,9 +105,42 @@ export function engineSpeed(speedPxPerS: number, rate: number, followRate: boole
 /** How many seconds a scrolling comment takes to cross the picture, for the settings page to say. */
 export const crossingSeconds = (speed: number): number => Math.round((REFERENCE_WIDTH / speed) * 10) / 10;
 
-/** The part of a stage the picture really covers: a video is fitted inside its box and the rest is bars. The comments are laid over the picture, not the bars. */
+/** A box in CSS pixels. */
+export type Box = { left: number; top: number; width: number; height: number };
+
+/**
+ * Where the comments go (A-111): from the top of the whole play area and across its whole width, bars included, as tall as the display area of its
+ * height. The picture keeps its place in the middle, so a window taller than the picture can have every comment in the bar above it.
+ */
+export function danmakuArea(stageWidth: number, stageHeight: number, area: number): Box {
+  return { left: 0, top: 0, width: Math.max(0, Math.round(stageWidth)), height: Math.max(0, Math.round(stageHeight * area)) };
+}
+
+/**
+ * What of the comments a screenshot keeps: the part of the layer over the picture, cut out of the layer's canvas (which may have more pixels than CSS
+ * pixels) and scaled onto the frame. Nothing when the two do not meet. `picture` is in the layer's CSS pixels, from the layer's top left corner.
+ */
+export function danmakuCrop(canvas: { width: number; height: number }, layer: { width: number; height: number }, picture: Box, frame: { width: number; height: number }):
+  { sx: number; sy: number; sw: number; sh: number; dx: number; dy: number; dw: number; dh: number } | null {
+  if (canvas.width <= 0 || canvas.height <= 0 || layer.width <= 0 || layer.height <= 0 || picture.width <= 0 || picture.height <= 0) return null;
+  const left = Math.max(0, picture.left);
+  const top = Math.max(0, picture.top);
+  const right = Math.min(layer.width, picture.left + picture.width);
+  const bottom = Math.min(layer.height, picture.top + picture.height);
+  if (right <= left || bottom <= top) return null;
+  const kx = canvas.width / layer.width;
+  const ky = canvas.height / layer.height;
+  const fx = frame.width / picture.width;
+  const fy = frame.height / picture.height;
+  return {
+    sx: left * kx, sy: top * ky, sw: (right - left) * kx, sh: (bottom - top) * ky,
+    dx: (left - picture.left) * fx, dy: (top - picture.top) * fy, dw: (right - left) * fx, dh: (bottom - top) * fy,
+  };
+}
+
+/** The part of a stage the picture really covers: a video is fitted inside its box and the rest is bars. Without the video's size there is none. */
 export function pictureRect(stageWidth: number, stageHeight: number, videoWidth: number, videoHeight: number): { left: number; top: number; width: number; height: number } {
-  if (stageWidth <= 0 || stageHeight <= 0 || videoWidth <= 0 || videoHeight <= 0) return { left: 0, top: 0, width: Math.max(0, stageWidth), height: Math.max(0, stageHeight) };
+  if (stageWidth <= 0 || stageHeight <= 0 || videoWidth <= 0 || videoHeight <= 0) return { left: 0, top: 0, width: 0, height: 0 };
   const scale = Math.min(stageWidth / videoWidth, stageHeight / videoHeight);
   const width = Math.round(videoWidth * scale);
   const height = Math.round(videoHeight * scale);

@@ -83,9 +83,9 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 | @types/node | 24.5.2 | 26.6.5 | 类型随运行时（Node 24.x）；Node 升级时同步 |
 | openapi-typescript | 7.13.0（仅在 `dist/tools/openapi-gen` 生成 Bangumi 类型，不进仓库依赖） | — | 它依赖 TypeScript 编译器 API，而 TypeScript 7 不再提供，所以生成器在隔离目录里用 TypeScript 5.9 运行；生成结果 `bangumi-openapi.ts` 入库并固定到官方规格提交与哈希；上游支持 TypeScript 7 后改回常规开发依赖 |
 
-## 2026-10-22 依赖刷新与分屏库（M4）
+## 2026-10-22 依赖刷新与分屏库
 
-阶段 M4 开始时按 A-35 再盘点一次（`pnpm outdated -r`，最小发行龄不绕过，没有写入任何豁免），并把上面保留旧版本的例外逐个复试。结果与每项的验证记录在[阶段报告](../delivery/stage-report.md#dependencies)。
+单一工作区那一阶段开始时按 A-35 再盘点一次（`pnpm outdated -r`，最小发行龄不绕过，没有写入任何豁免），并把上面保留旧版本的例外逐个复试。结果与每项的验证记录在[阶段报告](https://github.com/chialecode/manga/blob/b3b468b/docs/delivery/stage-report.md#dependencies)。
 
 | 项 | 前 | 后 | 结果 |
 | --- | --- | --- | --- |
@@ -129,13 +129,19 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 录音保存与上传 | 保留模式用 FFmpeg（libopus）把 PCM 转为 Opus 存入附件；上传给 ASR 的块用 WAV（16 kHz 单声道） | — |
 | 视觉与 OCR 路由 | 沿用 OpenAI 格式协议的图像输入（Responses `input_image`、Chat Completions `image_url`），不新增依赖 | tesseract.js 7.0.0：竖排日文漫画效果差，且本地 OCR 不是需求 |
 | 大列表 | TanStack Virtual 3.14.21 | — |
-| 标签页与分屏（2026-10-22 查证，M4） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](../delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
+| 标签页与分屏（2026-10-22 查证） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b3b468b/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
 | 消息流贴底 | use-stick-to-bottom 1.1.6（MIT） | 自写滚动判定 |
 | 目录遍历与定时扫描 | Node 内置 `fs.promises.opendir`，在 `worker_threads` 中执行，写库仍由单写入宿主按小批次完成；定时用应用内计时器（关闭、30 分钟、1 小时、6 小时、每天）与启动后延迟扫描 | fdir 6.5.0：瓶颈不在遍历本身；croner 10.0.1：用不到 cron 表达式 |
 | 文件变更监听 | 不采用（用户要求的是按间隔扫描） | chokidar 5.0.0 与 @parcel/watcher 2.6.0：大目录树长期监听有句柄与网络盘问题，需要“即时发现新文件”时的候选 |
 | 播放器控件 | 保留原生 `video` 播放器，只改样式与控件布局 | media-chrome 4.19.3：换控件层要重接帧号跳转、JASSUB、A-B 与录音标记；Vidstack 的 React 包 0.6.15 停在 2024-04 |
 | 快捷任务模板 | 只替换白名单占位符的简单渲染 | mustache 4.2.0 停在 2021，条件与循环没有需求，还会让模板看起来能执行逻辑 |
+| 每个视图一份布局（2026-10-24 查证） | 沿用 dockview-react 8.6.1：每个上下文里每个视图一个 dockview 实例，只有当前视图的那个可见，其余挂着、用统一的隐藏层（`data-hidden-layer`）藏起；布局各自用 `toJSON` / `fromJSON` 存进工作区状态 version 2。阅读器与编辑器挂在按标签编号的宿主里，一个标签同时出现在主页与它的功能视图时是同一个实例，换视图不重建 | 一个实例切换视图时 `fromJSON` 换布局：`fromJSON` 先清掉全部面板再按新布局建，面板内容会卸下再挂上，播放中的视频要重新载入，不满足“切走切回 `currentTime` 连续”。这条是按 dockview 的行为判断，没有另做隔离试验；采用的路线由打包窗口观察 `view-main-linkage` 验证 |
+| 拖过最窄即收起（2026-10-24 查证） | 改在现有的分隔条（`shell.tsx` 的 `Divider`）里，借用 react-resizable-panels 4.14.8 的 `collapsible` 与 allotment 1.20.6 的 `snap` 语义：越过最窄宽度的一半才收起，宽度偏好保持拖动前的值；键盘照 WAI-ARIA APG 的 Window Splitter（Enter 收起与恢复） | 引入这两个库：外壳的侧栏与停靠栏是固定宽度的列，不是按比例分配的面板组，换库要重写外壳与它的观察 |
+| 图标栏拖动换位置（2026-10-24 查证） | 自写：十来个固定高度的图标，用与分隔条相同的指针捕获做纵向排序，按下后移动约 4 px 才开始拖动，Esc 或拖出图标栏取消；键盘用右键菜单的“上移 / 下移” | @dnd-kit/core 6.3.1 与 @dnd-kit/sortable 10.0.0：最后发行在 2024-12；@dnd-kit/react 0.5.1：未到 1.0、发行不满 14 天；@atlaskit/pragmatic-drag-and-drop 4.0.0：基于原生拖放，dockview 的标签拖动也用原生拖放，两者在主区上空会互相响应 |
+| 侧栏的引导线（2026-10-24 查证） | CSS 左边框画 1 px 竖线；侧栏只有“上下文 → 条目”两层、每组分页 | react-arborist 4.0.1、@headless-tree/react 1.8.0：不需要虚拟化的树、拖放与键盘树导航 |
+| 小说分页（2026-10-26 查证） | 在现有的文本层上自写：一章放进页框大小的 CSS 多栏容器，`column-width` 等于页宽，一栏一页，翻页平移一个页宽；页与文本偏移的换算用 `Range.getClientRects` 与 `caretPositionFromPoint`，位置仍是 `NORMALIZATION_V1` 的文本锚点 | foliate-js（npm 1.0.1 停在 2025-04）、@readium/navigator 2.14.0（发行不满 14 天）：在 iframe 里渲染原始出版物、用自己的位置（CFI 或 Readium 的定位），笔记、书签、进度与 Agent 的已读范围都要另起一套或双向换算；epub.js 0.3.93：GitHub 最后一个发行在 2020 年 |
+| 无用代码（2026-10-24 查证，2026-11-02 接入） | knip 6.41.0（ISC，开发依赖，查询时满 14 天的最新版；6.43.0 当时不满 14 天）接进 `node scripts/verify.mjs`：没有用到的文件、导出与依赖算失败；`knip.json` 写明它自己找不到的入口（打包入口、worker、插件进程与测试的子进程）与动态加载的依赖 | — |
 | 封面原图 | 独立图片表，按内容哈希去重，列表查询不读字节（A-51） | 文件附件（原方案）：用户决定改存数据库。SQLite 官方对比：约 100 KB 以上的 BLOB 放外部文件读得更快，封面原图通常 100—500 KB，存库读取略慢，但备份与迁移只需一个文件 |
 
 ## 模型用途隔离（A-27）

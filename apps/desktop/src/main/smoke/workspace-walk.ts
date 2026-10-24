@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import {
   DRAWN, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressChord, pressKey, railTo, showTab, sleep, tabsOf, trustedClick, viaSidebar,
-  waitDrawn, waitForTestId, waitUntil, type TabFact,
+  waitDrawn, waitForTestId, waitUntil,
 } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller } from "./common.ts";
 
@@ -47,6 +47,8 @@ const near = (a: number, b: number, tolerance = 2) => Math.abs(a - b) <= toleran
 const RECT_OF = `(id) => { const el = document.querySelector('[data-testid="' + id + '"]'); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom }; }`;
 /** The context in front, as the dock of it says. */
 const HOST = `document.querySelector('[data-testid="context-host"][data-active="true"]')`;
+/** The layout of the view on screen in the context in front (each view of a context has its own, 计划 4.1): its columns, and whether one fills the window. */
+const DOCK = `${HOST}?.querySelector('[data-testid="view-dock"]')`;
 /** The page in front of the context in front: the contexts and tabs out of sight keep their own pages, with the same test ids. */
 const FRONT = `${HOST}?.querySelector('[data-testid="tab-panel"][data-focused="true"]')`;
 
@@ -84,7 +86,7 @@ export async function hostFacts(view: BrowserWindow): Promise<HostFacts | null> 
       key: host.getAttribute("data-context"),
       columns: Number(host.getAttribute("data-columns") ?? "0"),
       groups: groups.length,
-      single: host.getAttribute("data-single") === "true",
+      single: host.querySelector('[data-testid="view-dock"]')?.getAttribute("data-single") === "true",
       ids: chips.map((chip) => chip.getAttribute("data-tab") ?? "").sort(),
       focused: chips.find((chip) => chip.getAttribute("data-focused") === "true")?.getAttribute("data-tab") ?? null,
       rects: groups.map(box),
@@ -127,7 +129,7 @@ const closeMenu = async (view: BrowserWindow) => {
   await pressKey(view, "Escape");
   await waitUntil(view, `!document.querySelector('[role="menu"]')`, 1500);
 };
-async function chooseMenu(view: BrowserWindow, trigger: string, item: string): Promise<boolean> {
+export async function chooseMenu(view: BrowserWindow, trigger: string, item: string): Promise<boolean> {
   if (!(await clickTestId(view, trigger, 3000))) return false;
   if (!(await waitUntil(view, `document.querySelector('[data-testid="${item}"]')`, 2500))) { await closeMenu(view); return false; }
   const clicked = await clickTestId(view, item, 2000);
@@ -447,8 +449,8 @@ async function walkTabs(env: WorkspaceEnv): Promise<Opened> {
     detail.reopen = { gone, back, ready, place, placeAfter, of: stripAfter.length };
     if (!gone) problems.push("the close button left the tab");
     if (!back || !ready) problems.push("Ctrl+Shift+T did not bring the closed video back");
-    // The tab comes back with its page and its reading position, at the end of the column in front, and takes the focus there.
-    else if (placeAfter !== stripAfter.length - 1) problems.push(`the reopened tab is number ${placeAfter + 1} of ${stripAfter.length} in the strip, not the last of the column in front`);
+    // The tab comes back with its page and its reading position, where it was closed (its view, its column, its place: LOOP-24 2), and takes the focus there.
+    else if (placeAfter !== place) problems.push(`the reopened tab is number ${placeAfter + 1} of ${stripAfter.length} in the strip, not number ${place + 1} where it was closed`);
   }
 
   // From a view of the sidebar: the notes view's manage entry opens the records tab, once (a second press brings the same tab to the front). The settings are a view
@@ -735,7 +737,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
     const video = document.querySelector('[data-testid="tab-panel"][data-tab="${video.id}"]');
     const reader = comic?.querySelector('[data-testid="comic-reader"]');
     const b = reader ? reader.getBoundingClientRect() : null;
-    return { single: ${HOST}.getAttribute("data-single") === "true", comic: drawn(comic), video: drawn(video), fills: Boolean(b) && Math.abs(b.width - window.innerWidth) <= 1.5 && Math.abs(b.height - window.innerHeight) <= 1.5 };
+    return { single: ${DOCK}?.getAttribute("data-single") === "true", comic: drawn(comic), video: drawn(video), fills: Boolean(b) && Math.abs(b.width - window.innerWidth) <= 1.5 && Math.abs(b.height - window.innerHeight) <= 1.5 };
   })()`);
   detail.fullscreen = { entered, ...full };
   if (!entered) problems.push("W did not fill the window with the column in focus");
@@ -743,7 +745,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   if (!full.fills) problems.push("the focused column does not fill the window in window full screen");
   await shot("workspace-split-fullscreen");
   await pressKey(view, "Escape");
-  const left = await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "false" && ${HOST}.getAttribute("data-single") === "false"`, 4000);
+  const left = await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "false" && ${DOCK}?.getAttribute("data-single") === "false"`, 4000);
   await sleep(500);
   const back = await js<{ comic: boolean; video: boolean }>(view, `({ comic: ${DRAWN}(document.querySelector('[data-testid="tab-panel"][data-tab="${comic.id}"]')), video: ${DRAWN}(document.querySelector('[data-testid="tab-panel"][data-tab="${video.id}"]')) })`);
   detail.back = { left, ...back };
@@ -840,6 +842,8 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
     else if (!opensTab) problems.push("a row under another project opened no conversation tab in that project");
     await clickTestId(view, `context-open-${projectId}`);
     await waitContext(view, projectId);
+    // The conversations' view shows only its own tabs; the first project's were measured in 主页, which shows them all.
+    await railTo(view, "home");
     const oneAfter = await settledHost(view);
     if (!oneAfter || oneAfter.ids.join() !== (inOne?.ids ?? []).join()) problems.push("opening a row of the second project changed the first project's tabs");
   }
@@ -1000,6 +1004,8 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
     const hidden = !(await dockDrawn()) && !(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="shell-dock-toggle"]'))`));
     detail.conversationTab = { dockHidden: hidden };
     if (!hidden) problems.push("the dock stays when a conversation tab is in front");
+    // The new conversation opened in the conversations' view, which has no library tab; 主页 has both.
+    await railTo(view, "home");
     await showTab(view, { kind: "library" });
     const returned = await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-dock"]'))`, 4000);
     if (!returned) problems.push("the dock did not come back when the conversation tab was left");
@@ -1081,5 +1087,3 @@ async function forgetTabs(view: BrowserWindow): Promise<void> {
   await closeTabs(view, "all");
   await waitForTestId(view, "nav-home");
 }
-
-export type { TabFact };

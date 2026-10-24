@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { attempt } from "../lib/api.ts";
 import {
-  clampRate, closePlayed, drainPlayed, emptyPlayed, frameLanded, REWIND_STEP_MS, REWIND_TICK_MS, samplePlayed, seekTargetForFrame,
+  clampRate, closePlayed, playingRate, drainPlayed, emptyPlayed, frameLanded, REWIND_STEP_MS, REWIND_TICK_MS, samplePlayed, seekTargetForFrame,
   type FrameAnswer, type PlayedState, type TimeRange,
 } from "./video-model.ts";
 
@@ -166,9 +166,11 @@ export function useVideoPlayback(options: Options) {
       setDurationMs(duration);
       const at = resumeAt.current;
       if (at > 0 && at < duration - NEAR_END_MS) element.currentTime = (at + origin()) / 1000;
-      element.playbackRate = latest.current.settings.rate;
+      element.playbackRate = playingRate(heldFrom.current !== null, latest.current.settings);
       element.volume = Math.min(1, Math.max(0, latest.current.settings.volume * (latest.current.volumeFactor ?? 1)));
       element.muted = latest.current.settings.muted;
+      // Loading the element again (a new source) pauses it without a pause event: the state follows the element, not the last event.
+      setPlaying(!element.paused);
       setReady(true);
       sync();
       void refreshFrame();
@@ -208,9 +210,10 @@ export function useVideoPlayback(options: Options) {
       const error = element.error;
       latest.current.onMediaError(error ? error.code : null, error?.message ?? "");
     };
+    const onEmptied = () => { if (element.paused) setPlaying(false); };
     // Listeners that were taken off while the page was in the background missed the pause that put it there.
     if (metaSeen.current) { setPlaying(!element.paused); sync(); }
-    const events: Array<[string, () => void]> = [["loadedmetadata", onMeta], ["durationchange", onDuration], ["timeupdate", onTime], ["play", onPlay], ["pause", onPause], ["seeking", onSeeking], ["seeked", onSeeked], ["ended", onEnd], ["error", onError], ["progress", sync]];
+    const events: Array<[string, () => void]> = [["loadedmetadata", onMeta], ["durationchange", onDuration], ["timeupdate", onTime], ["play", onPlay], ["pause", onPause], ["seeking", onSeeking], ["seeked", onSeeked], ["ended", onEnd], ["error", onError], ["emptied", onEmptied], ["progress", sync]];
     for (const [name, handler] of events) element.addEventListener(name, handler);
     // A file that is already known (cached, or quick to open) can report its metadata before these listeners exist; the event is not repeated.
     if (!metaSeen.current && element.readyState >= 1 && element.getAttribute("src")) onMeta();
@@ -259,8 +262,8 @@ export function useVideoPlayback(options: Options) {
   }, [element, options.settings.volume, options.settings.muted, options.volumeFactor, url]);
   useEffect(() => {
     baseRate.current = options.settings.rate;
-    if (element && !holding) element.playbackRate = clampRate(options.settings.rate);
-  }, [element, options.settings.rate, holding, url]);
+    if (element) element.playbackRate = playingRate(heldFrom.current !== null, { rate: options.settings.rate, holdRate: options.settings.holdRate });
+  }, [element, options.settings.rate, options.settings.holdRate, holding, url]);
 
   // ---- leaving: the last position and the stretch being watched are not lost ----
   const flushRef = useRef(flush);
@@ -364,10 +367,11 @@ export function useVideoPlayback(options: Options) {
 
   /** → held: play at the temporary rate until it is let go. A paused video plays while it is held and is paused again after. */
   const holdStart = useCallback(() => {
-    if (!element || heldFrom.current) return;
-    heldFrom.current = { paused: element.paused };
+    if (!element) return;
+    // A hold that is still on record (its end was missed) keeps what it saw first; the rate and the state are set every time.
+    heldFrom.current ??= { paused: element.paused };
     setHolding(true);
-    element.playbackRate = clampRate(latest.current.settings.holdRate);
+    element.playbackRate = playingRate(true, latest.current.settings);
     if (element.paused) void play();
   }, [element, play]);
   const holdEnd = useCallback(() => {

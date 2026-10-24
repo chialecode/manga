@@ -13,6 +13,10 @@ export const READING_THEMES = ["white", "paper", "green", "teal", "night"] as co
 export const FONT_PRESETS = ["sans", "serif", "mono"] as const;
 export const READING_PAGE_MODES = ["single", "double"] as const;
 export const READING_PAGE_RATIOS = ["book", "free"] as const;
+/** How a reflowable book is read (A-115): page by page in a fixed frame, or one long column. */
+export const READING_FLOWS = ["paged", "scroll"] as const;
+/** The reader's left panel (contents, search, bookmarks; A-116). */
+export const READER_PANEL_WIDTH = { min: 200, max: 480, initial: 280 } as const;
 
 /**
  * A preset name or the family name of an installed font. The name goes into a CSS font stack, so it may not carry
@@ -33,6 +37,8 @@ export const ReadingPreferenceSchema = z.object({
   theme: z.enum(READING_THEMES),
   pageMode: z.enum(READING_PAGE_MODES).default("single"),
   pageRatio: z.enum(READING_PAGE_RATIOS).default("book"),
+  flow: z.enum(READING_FLOWS).default("paged"),
+  panelPx: z.number().int().min(READER_PANEL_WIDTH.min).max(READER_PANEL_WIDTH.max).default(READER_PANEL_WIDTH.initial),
 }).strict();
 
 /**
@@ -153,6 +159,8 @@ export const ReadingStylePatchSchema = z.object({
   theme: z.enum(READING_THEMES).optional(),
   pageMode: z.enum(READING_PAGE_MODES).optional(),
   pageRatio: z.enum(READING_PAGE_RATIOS).optional(),
+  flow: z.enum(READING_FLOWS).optional(),
+  panelPx: z.number().int().min(READER_PANEL_WIDTH.min).max(READER_PANEL_WIDTH.max).optional(),
 }).strict();
 
 export type ReadingStylePatch = z.infer<typeof ReadingStylePatchSchema>;
@@ -164,7 +172,7 @@ export const DEFAULT_SHELL_PREFERENCE: ShellPreference = {
   dock: { visible: true, width: DOCK_WIDTH.initial },
   lastContext: null,
   rail: structuredClone(DEFAULT_RAIL_PREFERENCE),
-  reading: { measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, paragraphSpacingPx: 0, theme: "white", pageMode: "single", pageRatio: "book" },
+  reading: { measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, paragraphSpacingPx: 0, theme: "white", pageMode: "single", pageRatio: "book", flow: "paged", panelPx: READER_PANEL_WIDTH.initial },
 };
 
 /** Candidate parsers are reversible adapters. `accepted` stays false until a separate decision. */

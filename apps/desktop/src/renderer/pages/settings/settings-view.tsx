@@ -56,6 +56,10 @@ export type SettingsViewProps = {
   /** The reader keys: the table in use, the person's changes, and a way to save them. */
   keys: ReturnType<typeof useKeyBindings>;
   onGoto: (page: SettingsPageId) => void;
+  /** The library changed elsewhere: the lists on the page are read again. */
+  refreshKey?: number;
+  /** Opens what was made on a resource that cannot be opened (the resources outside the library). */
+  onViewRecords?: (resourceId: string, kind: "novel" | "comic" | "video") => void;
   onModulesChanged: () => Promise<void> | void;
   /** Something other pages show has changed: quick tasks, library paths, notes. */
   onChanged: () => void;
@@ -117,7 +121,7 @@ export function SettingsView(props: SettingsViewProps) {
       case "recording":
         return <VoicePage t={t} settings={props.settings} recording={props.recording} onGoto={props.onGoto} onError={props.onError} onNotice={props.onNotice} />;
       case "library":
-        return <LibraryPage t={t} scan={props.scan} formatDate={i18n.formatDate} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
+        return <LibraryPage t={t} scan={props.scan} formatDate={i18n.formatDate} refreshKey={props.refreshKey} onViewRecords={props.onViewRecords} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
       case "semantic":
         return <SemanticPage t={t} formatDate={i18n.formatDate} formatNumber={i18n.formatNumber} onGoto={props.onGoto} onError={props.onError} onNotice={props.onNotice} />;
       case "plugins":

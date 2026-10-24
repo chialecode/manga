@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { createId } from "@manga/contracts";
 import type { MangaProductApp } from "@manga/app-core";
@@ -150,7 +153,24 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
     await waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, 3000);
     return sample;
   };
-  const bodyHas = (marker: string) => `(${PICK}("reading-body")?.textContent || "").includes(${JSON.stringify(marker)})`;
+  /** The marker is on the page shown, not only in the text loaded around it (a window holds many pages): it lies inside the reading area. */
+  const onScreen = (marker: string) => `(() => {
+    const body = ${PICK}("reading-body");
+    const at = (body?.textContent || "").indexOf(${JSON.stringify(marker)});
+    if (at < 0) return false;
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let left = at;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (left >= node.length) { left -= node.length; continue; }
+      const range = document.createRange();
+      range.setStart(node, left);
+      range.setEnd(node, left + 1);
+      const box = range.getBoundingClientRect();
+      const area = document.querySelector('[data-testid="reading-pages"]')?.getBoundingClientRect();
+      return Boolean(area) && box.width > 0 && box.left >= area.left && box.right <= area.right;
+    }
+    return false;
+  })()`;
   /** The shelf of novels, reached from the rail the way a person reaches it; readers and library tabs of an earlier sample are closed first. */
   const shelf = async (resourceId: string) => {
     await closeTabs(view, ["library", "reader"]);
@@ -203,6 +223,59 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   }
   await railTo(view, "home");
 
+  // The home's one list, and the media views' grids, each from another view: the rail's figure above is all the views together.
+  const homeListMs: number[] = [];
+  for (let round = 0; round < 12; round += 1) {
+    await railTo(view, "note");
+    keep("home list", await timed("nav-home", sidebarListed("home"), 15_000, 1), homeListMs);
+  }
+  const mediaGridMs: number[] = [];
+  for (let round = 0; round < 4; round += 1) {
+    for (const name of ["novel", "comic", "video"]) {
+      await railTo(view, "home");
+      keep(`media grid ${name}`, await timed(`nav-${name}`, sidebarListed(name), 15_000, 1), mediaGridMs);
+    }
+  }
+
+  // A scan with the shelf on screen: what its refreshes cost the page, as frames later than 1.5 times the usual interval.
+  const scanLateFramePct: number[] = [];
+  {
+    const scanCall = caller(appService, grant);
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-scan-"));
+    try {
+      for (let series = 0; series < 50; series += 1) {
+        const dir = path.join(folder, `基准系列${String(series).padStart(2, "0")}`);
+        fs.mkdirSync(dir);
+        for (let file = 1; file <= 10; file += 1) fs.writeFileSync(path.join(dir, `第${file}章.txt`), `第${file}章\n\n${"用于扫描基准的一段合成文字。".repeat(30)}\n`);
+      }
+      await railTo(view, "novel");
+      await sleep(500);
+      const framing = `(() => { const box = (window.__frames = { on: true, times: [] }); const tick = (at) => { if (!box.on) return; box.times.push(at); requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`;
+      const frames = async () => { const times = await js<number[]>(view, `(() => { window.__frames.on = false; return window.__frames.times; })()`); return times.slice(1).map((at, index) => at - times[index]!); };
+      await js(view, framing);
+      await sleep(2000);
+      const idle = (await frames()).sort((a, b) => a - b);
+      const usual = idle[Math.floor(idle.length / 2)] ?? 16.7;
+      await js(view, framing);
+      const added = await scanCall("library.paths.add", { pathHandle: appService.registerPath("directory", folder), mediaKind: "novel", autoScan: true });
+      if (added.status !== "ok") failures.push(`scan: ${JSON.stringify(added.error)}`);
+      await sleep(200);
+      await appService.scan.whenIdle();
+      const during = await frames();
+      const late = during.filter((value) => value > usual * 1.5).length;
+      if (during.length < 30) failures.push(`scan: only ${during.length} frames`);
+      scanLateFramePct.push(Math.round((late / Math.max(1, during.length)) * 10_000) / 100);
+      const paths = await scanCall("library.paths.list", {});
+      const row = ((paths.value as { items?: Array<{ id: string; path?: string }> } | Array<{ id: string; path?: string }> | undefined));
+      const rows = Array.isArray(row) ? row : row?.items ?? [];
+      const mine = rows.find((item) => item.path === folder);
+      if (mine) await scanCall("library.paths.remove", { pathId: mine.id });
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+    await railTo(view, "home");
+  }
+
   // The search box: names typed into it until the first names are listed (the box is opened from the home's sidebar and closed with Esc each time).
   const searchNamesMs: number[] = [];
   for (let round = 0; round < 4; round += 1) {
@@ -249,7 +322,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   for (let round = 0; round < 3; round += 1) {
     for (const [book, into] of [[spec.txt, largeTxtTailMs], [spec.epub, largeEpubTailMs]] as const) {
       await shelf(book.resourceId);
-      keep(`tail ${book.resourceId}`, await openTimed(`open-${book.resourceId}`, bodyHas(book.marker), 20_000), into);
+      keep(`tail ${book.resourceId}`, await openTimed(`open-${book.resourceId}`, onScreen(book.marker), 20_000), into);
     }
   }
 
@@ -381,6 +454,9 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
     coldStartToLibraryMs,
     uiFeedbackMs,
     railSwitchMs,
+    homeListMs,
+    mediaGridMs,
+    scanLateFramePct,
     searchNamesMs,
     settingsMs,
     largeTxtTailMs,
@@ -398,7 +474,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
       railSwitch: "dispatched click on the icon of a view in the rail → DOM commit of the docked sidebar listing the view (its rows or its empty sentence drawn, no loading line left), every view of the rail in turn, 4 rounds",
       searchNames: "names typed into the search box's input (native setter and input event) → the first name results drawn and the box not busy; the box opened from the home's sidebar and closed with Esc for each sample",
       settingsEnterLeave: "dispatched click on the rail's settings → the settings directory and page drawn; dispatched click on the back arrow → the settings view gone and the focused tab's panel of the workspace drawn again (both directions are samples)",
-      largeTail: "card click → the work's page → read click → DOM commit whose reading body contains the tail marker restored from stored progress",
+      largeTail: "card click → the work's page → read click → the tail marker restored from stored progress is on the page shown (inside the reading area, not only in the text loaded around it)",
       saveReceipt: "insertText in the note editor (opened from the notes' records tab) → data-save-state leaves and returns to saved",
       duringParse: "same UI and save samples, kept only while a 10 MiB import is still parsing",
     },

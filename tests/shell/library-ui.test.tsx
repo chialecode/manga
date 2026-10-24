@@ -57,7 +57,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); removeMatchMedia(); });
 const summary = (extra: Partial<WorkSummary> = {}): WorkSummary => ({
   id: "w1", title: "合成作品", author: "合成作者", mediaKind: "video", shelf: "reading", coverId: null,
   lastResource: { id: "r1", title: "第一话", ordinalLabel: "第 1 话", revisionId: "rev1" },
-  progress: 0, finishedCount: 0, resourceCount: 1, versionCount: 1, outsideCount: 0, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null, ...extra,
+  progress: 0, finishedCount: 0, resourceCount: 1, versionCount: 1, outsideCount: 0, missingCount: 0, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null, ...extra,
 });
 
 const resource = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -236,14 +236,15 @@ describe("the library is what the library paths hold (AT-79)", () => {
   it("flags an entry on the shelf that holds a resource outside the paths, and one whose files are gone", async () => {
     installHost({
       "works.list": () => ({
-        items: [summary({ outsideCount: 1 }), summary({ id: "w3", title: "没有文件的作品", resourceCount: 0, lastResource: null })],
-        total: 2, nextCursor: null,
+        items: [summary({ outsideCount: 1 }), summary({ id: "w3", title: "没有文件的作品", resourceCount: 0, lastResource: null }), summary({ id: "w4", title: "文件丢失的作品", missingCount: 1 })],
+        total: 3, nextCursor: null,
       }),
     });
     render(<Shelf t={t} kind="video" refreshKey={0} facets={new Set(["library", "video"])} onOpen={() => {}} onContinue={() => {}} onDetail={() => {}} onAddPath={() => {}} onViewAll={() => {}} onSetShelf={() => {}} />);
     await waitFor(() => expect(screen.getByTestId("work-flags-w1")).toBeTruthy());
     expect(screen.getByTestId("work-flags-w1").textContent).toContain("库外");
     expect(screen.getByTestId("work-flags-w3").textContent).toContain("没有资源");
+    expect(screen.getByTestId("work-flags-w4").textContent).toContain("文件不可用");
   });
 
   it("has no import entry on the library settings page", async () => {

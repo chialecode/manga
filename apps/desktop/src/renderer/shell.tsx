@@ -1,7 +1,7 @@
-import { Activity, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Activity, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, PanelLeft, PanelRight, Shrink, Square } from "lucide-react";
 import { chordOf } from "@manga/contracts/keys";
-import type { RailView } from "@manga/contracts";
+import type { HideableRailView, RailView } from "@manga/contracts";
 import type { ShellPreference } from "@manga/contracts/reading";
 import { SIDE_WIDTH, TOP_ROW_HEIGHT, cardOf, clampSide, deriveShell, dragLimit, initialHover, reduceHover, viewOfCard, type HoverTarget } from "../../../../packages/app-core/src/domain/shell-layout.ts";
 import { Menu, type MenuItem } from "./components/menu.tsx";
@@ -23,6 +23,7 @@ export type ShellRail = {
   onSelect: (view: RailView) => void;
   onHide: (view: RailView) => void;
   onPin: (view: RailView) => void;
+  onMove?: (view: HideableRailView, visible: readonly HideableRailView[], to: number) => void;
 };
 
 /** What goes in the sidebar's place: a view of the rail, or the settings directory. */
@@ -36,61 +37,113 @@ const REVEAL_KEEP = TOP_ROW_HEIGHT + 6;
 /** A pointer that leaves the page this near its top edge brings the floating top down. */
 const REVEAL_REACH = 24;
 
-/** The divider between two regions: dragged with the pointer, moved with the arrow keys, put back to the default by a double click. */
+/** What a drag of a divider shows while it goes on: the width under the pointer, or (past half the least width) the column folded away. */
+export type DividerDrag = { width: number; hidden: boolean };
+
+/**
+ * The divider between a column and the main area (A-104, 计划 4.4). Dragged, it sets the width between the least and the most; dragged on past half the
+ * least width it folds the column away while the pointer is there (a line in the accent says that letting go folds it), and letting go there hides the
+ * column with its saved width as it was before the drag. With the sidebar folded away the same divider is the strip at the rail's right edge that pulls
+ * it out (`pull`): past half the least width the sidebar comes, follows the pointer, and stays when let go. A cancelled pointer or a window that loses
+ * the focus puts everything back. Keys (the APG window splitter): the arrows change the width and stop at the least; Enter folds the column away.
+ */
 function Divider(props: {
   side: Side;
   width: number;
   limit: number;
   label: string;
-  onDrag: (width: number | null) => void;
+  /** The sidebar is folded away: the divider is the strip that pulls it out. */
+  pull?: boolean;
+  onDrag: (drag: DividerDrag | null) => void;
   onCommit: (width: number) => void;
+  /** Let go past the threshold, or Enter: the column goes. */
+  onCollapse: () => void;
+  /** Pulled out past the threshold and let go: the column comes, this wide. */
+  onPull?: (width: number) => void;
 }) {
-  const start = useRef<{ x: number; width: number } | null>(null);
+  const start = useRef<{ x: number; width: number; pull: boolean; pointerId: number } | null>(null);
+  const [state, setState] = useState<DividerDrag | null>(null);
   const bounds = SIDE_WIDTH[props.side];
   const direction = props.side === "sidebar" ? 1 : -1;
   const clampTo = (value: number) => Math.max(bounds.min, Math.min(props.limit, Math.round(value)));
+  const measure = (clientX: number): DividerDrag => {
+    const from = start.current!;
+    const raw = from.width + direction * (clientX - from.x);
+    return raw < bounds.min / 2 ? { width: from.pull ? bounds.min : clampTo(from.width), hidden: true } : { width: clampTo(raw), hidden: false };
+  };
+  const stop = useCallback(() => {
+    start.current = null;
+    setState(null);
+    props.onDrag(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.onDrag]);
+  // A window that loses the focus in the middle of a drag, or Esc, gets back what it had.
+  const dragging = state !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); stop(); } };
+    window.addEventListener("blur", stop);
+    window.addEventListener("keydown", onKey, true);
+    return () => { window.removeEventListener("blur", stop); window.removeEventListener("keydown", onKey, true); };
+  }, [dragging, stop]);
+
   const move = (event: ReactPointerEvent) => {
-    if (!start.current || !Number.isFinite(event.clientX)) return;
-    props.onDrag(clampTo(start.current.width + direction * (event.clientX - start.current.x)));
+    if (!start.current || start.current.pointerId !== event.pointerId || !Number.isFinite(event.clientX)) return;
+    const next = measure(event.clientX);
+    setState(next);
+    props.onDrag(next);
   };
   const finish = (event: ReactPointerEvent, commit: boolean) => {
-    if (!start.current) return;
-    if (!Number.isFinite(event.clientX)) { start.current = null; props.onDrag(null); return; }
-    const next = clampTo(start.current.width + direction * (event.clientX - start.current.x));
-    start.current = null;
-    props.onDrag(null);
-    if (commit) props.onCommit(next);
+    const from = start.current;
+    if (!from || from.pointerId !== event.pointerId) return;
+    if (!commit || !Number.isFinite(event.clientX)) { stop(); return; }
+    const next = measure(event.clientX);
+    stop();
+    if (from.pull) { if (!next.hidden) props.onPull?.(next.width); return; }
+    if (next.hidden) props.onCollapse(); else props.onCommit(next.width);
   };
   const onKey = (event: ReactKeyboardEvent) => {
+    if (props.pull) return;
     const step = event.shiftKey ? 48 : 16;
     const grow = props.side === "sidebar" ? "ArrowRight" : "ArrowLeft";
     const shrink = props.side === "sidebar" ? "ArrowLeft" : "ArrowRight";
+    if (event.key === "Enter") { event.preventDefault(); props.onCollapse(); return; }
     let next: number | null = null;
     if (event.key === grow) next = props.width + step;
     else if (event.key === shrink) next = props.width - step;
     else if (event.key === "Home") next = bounds.min;
     else if (event.key === "End") next = props.limit;
-    else if (event.key === "Enter") next = bounds.initial;
     if (next === null) return;
     event.preventDefault();
     props.onCommit(clampTo(next));
   };
+  const hidden = state ? state.hidden : Boolean(props.pull);
+  // A docked column dragged past the threshold is still this divider, with its line, until it is let go.
+  const strip = Boolean(props.pull) && !(start.current && !start.current.pull);
   return (
     <div
       role="separator"
       aria-orientation="vertical"
       aria-label={props.label}
-      aria-valuenow={props.width}
-      aria-valuemin={bounds.min}
+      aria-valuenow={hidden ? 0 : (state?.width ?? props.width)}
+      aria-valuemin={0}
       aria-valuemax={props.limit}
-      tabIndex={0}
-      className={`shell-divider shell-divider-${props.side}`}
-      data-testid={`shell-resize-${props.side}`}
-      onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); start.current = { x: event.clientX, width: props.width }; }}
+      tabIndex={props.pull ? -1 : 0}
+      className={`shell-divider shell-divider-${props.side}${strip ? " shell-pullout" : ""}`}
+      data-testid={strip ? "shell-pullout" : `shell-resize-${props.side}`}
+      data-collapsing={state && state.hidden && !start.current?.pull ? "true" : undefined}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        start.current = { x: event.clientX, width: props.pull ? 0 : props.width, pull: Boolean(props.pull), pointerId: event.pointerId };
+      }}
+      // Text selected across the page must not turn this press into a drag of the selection, which would cancel the pointer.
+      onDragStart={(event) => event.preventDefault()}
       onPointerMove={move}
       onPointerUp={(event) => finish(event, true)}
       onPointerCancel={(event) => finish(event, false)}
-      onDoubleClick={() => props.onCommit(bounds.initial)}
+      onLostPointerCapture={(event) => { if (start.current?.pointerId === event.pointerId) stop(); }}
+      onDoubleClick={() => { if (!props.pull) props.onCommit(bounds.initial); }}
       onKeyDown={onKey}
     />
   );
@@ -160,7 +213,7 @@ export function ShellFrame(props: {
   children: ReactNode;
 }) {
   const [hover, setHover] = useState(initialHover);
-  const [dragging, setDragging] = useState<{ side: Side; width: number } | null>(null);
+  const [dragging, setDragging] = useState<({ side: Side } & DividerDrag) | null>(null);
   const sidebarButton = useRef<HTMLButtonElement>(null);
   const dockButton = useRef<HTMLButtonElement>(null);
   const sidebarPanel = useRef<HTMLElement>(null);
@@ -183,6 +236,8 @@ export function ShellFrame(props: {
     if (dragging) {
       shown = structuredClone(shown);
       shown[dragging.side].width = dragging.width;
+      // Past half the least width the column is already folded away under the pointer (A-104).
+      shown[dragging.side].visible = !dragging.hidden;
     }
     if (settingsOn && !shown.sidebar.visible) {
       shown = structuredClone(shown);
@@ -197,7 +252,9 @@ export function ShellFrame(props: {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (sidebarPanel.current?.contains(document.activeElement) || dockPanel.current?.contains(document.activeElement)) return;
+      // A card or an overlay with the focus in it stays. The focus in a docked column holds nothing back: a card can still come out of the rail.
+      const holds = (panel: HTMLElement | null) => panel?.getAttribute("data-shell-state") === "overlay" && panel.contains(document.activeElement);
+      if (holds(sidebarPanel.current) || holds(dockPanel.current)) return;
       setHover((state) => reduceHover(state, { type: "tick", now: Date.now() }, HOVER_MS));
     }, 40);
     return () => window.clearInterval(timer);
@@ -358,11 +415,24 @@ export function ShellFrame(props: {
 
   const cardTarget = viewOfCard(hover.overlay);
   const cardView: RailView | "settings" = cardTarget === "settings" ? (settingsOn ? "settings" : props.rail.current) : cardTarget !== null ? (cardTarget as RailView) : ownView;
-  const sidebarBody = chrome.sidebar === "dock"
+  // The sidebar's content is made again only when what it shows changes: a drag of the divider changes its width, not its lists (计划 4.4).
+  const sidebarBody = useMemo(() => (chrome.sidebar === "dock"
     ? props.sidebar(ownView, { variant: "dock" })
     : chrome.sidebar === "overlay"
       ? props.sidebar(cardView, { variant: "card", onDone: closeOverlay })
-      : null;
+      : null),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [chrome.sidebar, ownView, cardView, props.sidebar]);
+  /** A column folded away from its divider (drag or Enter): the focus goes to the column's switch, where it comes back from (APG window splitter). */
+  const collapse = (side: Side) => {
+    props.onHide(side);
+    setHover(initialHover());
+    window.requestAnimationFrame(() => buttonOf(side).current?.focus());
+  };
+  /** The sidebar can be pulled out from the rail's edge: it is folded away by the person, and the window has room to dock it. */
+  const pullable = !immersive && !settingsOn && chrome.sidebar !== "dock" && !props.preference.sidebar.visible
+    && deriveShell({ viewport: props.viewport, preference: { ...props.preference, sidebar: { ...props.preference.sidebar, visible: true } }, hasDock: dockActive, overlay: null, mainFloor: props.mainFloor }).sidebar === "dock";
+  const onDragOf = (side: Side) => (drag: DividerDrag | null) => setDragging(drag === null ? null : { side, ...drag });
 
   const stop = props.running ? (
     <button type="button" className="shell-no-drag shell-icon" aria-label={labels.stop} title={labels.stop} data-testid="shell-task-stop" onClick={props.onStop}><Square size={16} /></button>
@@ -420,6 +490,7 @@ export function ShellFrame(props: {
               onSelect={selectView}
               onHide={props.rail.onHide}
               onPin={props.rail.onPin}
+              {...(props.rail.onMove ? { onMove: props.rail.onMove } : {})}
               onHover={{ enter: (view, element) => enterCard(view, element), leave: (view, event) => leave(cardOf(view), event) }}
               buttonRef={(view, element) => { if (element) railButtons.current.set(view, element); else railButtons.current.delete(view); }}
             />
@@ -441,13 +512,26 @@ export function ShellFrame(props: {
             {sidebarBody}
           </aside>
         ) : null}
-        {sidebarDocked ? <Divider side="sidebar" width={chrome.sidebarWidth} limit={sidebarLimit} label={labels.resizeSidebar} onDrag={(width) => setDragging(width === null ? null : { side: "sidebar", width })} onCommit={(width) => commitWidth("sidebar", width)} /> : null}
+        {/* One divider all along a drag, so the pointer it holds is not lost when the sidebar folds away or comes out under it. */}
+        {sidebarDocked || pullable || dragging?.side === "sidebar" ? (
+          <Divider
+            side="sidebar"
+            width={chrome.sidebarWidth}
+            limit={sidebarLimit}
+            label={labels.resizeSidebar}
+            pull={!sidebarDocked}
+            onDrag={onDragOf("sidebar")}
+            onCommit={(width) => commitWidth("sidebar", width)}
+            onCollapse={() => collapse("sidebar")}
+            onPull={(width) => { props.onShow("sidebar"); commitWidth("sidebar", width); setHover(initialHover()); }}
+          />
+        ) : null}
         <main data-testid="shell-main" data-measure={chrome.measurePx} className="shell-main flex-1 min-w-0 min-h-0 relative">
           {props.children}
           {props.bottom}
           {dockActive && !dockOpen && !immersive ? props.capsule : null}
         </main>
-        {dockDocked ? <Divider side="dock" width={chrome.dockWidth} limit={dockLimit} label={labels.resizeDock} onDrag={(width) => setDragging(width === null ? null : { side: "dock", width })} onCommit={(width) => commitWidth("dock", width)} /> : null}
+        {dockDocked || dragging?.side === "dock" ? <Divider side="dock" width={chrome.dockWidth} limit={dockLimit} label={labels.resizeDock} onDrag={onDragOf("dock")} onCommit={(width) => commitWidth("dock", width)} onCollapse={() => collapse("dock")} /> : null}
         {props.hasDock || immersive ? (
           <Activity mode={dockOpen ? "visible" : "hidden"}>
             <aside

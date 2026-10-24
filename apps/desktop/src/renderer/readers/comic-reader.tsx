@@ -345,7 +345,8 @@ export function ComicReader(props: {
   const keys = useKeyTable();
   const keysRef = useRef(keys);
   keysRef.current = keys;
-  useEffect(() => {
+  // Put on in the commit that makes the tab the focused one, so that a key pressed at once is not lost.
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target) || event.defaultPrevented) return;
       if (document.querySelector('[role="dialog"]')) return;

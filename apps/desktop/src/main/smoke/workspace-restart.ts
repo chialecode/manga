@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { BrowserWindow } from "electron";
-import { clickTestId, closeTabs, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressKey, showTab, sleep, tabsOf, waitDrawn, waitForTestId, waitUntil, type TabFact } from "./driver.ts";
+import { app, ipcMain, type BrowserWindow } from "electron";
+import { clickTestId, closeTabs, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressKey, railTo, showTab, sleep, tabsOf, waitDrawn, waitForTestId, waitUntil, type TabFact } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller, type FlowResult } from "./common.ts";
-import { hostFacts, waitContext } from "./workspace-walk.ts";
+import { chooseMenu, hostFacts, waitContext } from "./workspace-walk.ts";
 import { hideRailIcon, railHidden, railOrder } from "./rail-walk.ts";
 import type { Observation } from "./window-walk.ts";
 
@@ -19,16 +19,20 @@ import type { Observation } from "./window-walk.ts";
 
 export const RESTART_OBSERVATION = "workspace-restart";
 export const MIGRATED_OBSERVATION = "migrated-profile";
+export const CLOSED_OBSERVATION = "close-saves-layout";
 
 type Call = ReturnType<typeof caller>;
 type Shape = { key: string; columns: number; tabs: Array<{ kind: string; title: string }>; focused: { kind: string; title: string } | null };
 type Snapshot = {
   prepared: boolean; active: string; contexts: Shape[]; persisted: Array<{ key: string; kinds: string[]; focusedKind: string | null; preset: string }>; problems: string[];
+  /** The comic view was turned to rows before the quit (AT-126). */
+  comicRows?: boolean;
   /** The icons taken out of the rail before the quit, and the icons the rail drew then. */
   rail?: { hidden: string[]; icons: string[]; settingsPage: string | null };
 };
 
 const SNAPSHOT_FILE = "workspace-restart.json";
+const CLOSED_FILE = "workspace-closed.json";
 
 const shapeOf = async (view: BrowserWindow, key: string): Promise<Shape> => {
   const facts = await hostFacts(view);
@@ -82,6 +86,13 @@ export async function prepareRestart(env: { view: BrowserWindow; call: Call; obs
   const project = contexts.find((shape) => shape.key === projectId);
   if (!project || !project.tabs.some((tab) => tab.kind === "project")) problems.push("the project was not left with its page");
   if (active !== projectId) problems.push("the window was not left in the project");
+  // The comic view as rows, to be found so after the restart (AT-126).
+  await railTo(view, "comic");
+  await clickTestId(view, "sidebar-display", 3000);
+  const comicRows = await waitUntil(view, `document.querySelector('[data-testid="sidebar-display"]')?.getAttribute("data-display") === "list"`, 2000);
+  if (!comicRows) problems.push("the comic view could not be turned to rows");
+  await railTo(view, "home");
+  await sleep(700);
   // An icon taken out of the rail with its menu is still out at the next start (A-99); the shell kept it, and "…" lists it.
   const iconsAll = await railOrder(view);
   if (!(await hideRailIcon(view, "whiteboard"))) problems.push("the whiteboard icon could not be taken out of the rail");
@@ -89,7 +100,7 @@ export async function prepareRestart(env: { view: BrowserWindow; call: Call; obs
   const rail = { hidden: await railHidden(call), icons: await railOrder(view), settingsPage: shell?.rail?.settingsPage ?? null };
   if (!rail.settingsPage) problems.push("the shell kept no settings page after the walk went through them");
   if (JSON.stringify(rail.hidden) !== JSON.stringify(["whiteboard"]) || rail.icons.length !== iconsAll.length - 1) problems.push(`the rail is ${JSON.stringify(rail.icons)} with ${JSON.stringify(rail.hidden)} kept as out`);
-  const snapshot: Snapshot = { prepared: problems.length === 0, active, contexts, persisted, problems, rail };
+  const snapshot: Snapshot = { prepared: problems.length === 0, active, contexts, persisted, problems, comicRows, rail };
   fs.mkdirSync(logsDir, { recursive: true });
   fs.writeFileSync(path.join(logsDir, SNAPSHOT_FILE), `${JSON.stringify(snapshot, null, 2)}\n`);
   env.observe("workspace-restart-prepared", problems.length === 0, { problems, contexts: contexts.map((shape) => ({ key: shape.key ? "project" : "recent", columns: shape.columns, tabs: shape.tabs.length })) });
@@ -145,6 +156,26 @@ export async function runRestartSmoke(input: { view: BrowserWindow; call: Call; 
       detail.readerBody = body;
       if (!body) problems.push("the book did not open from its restored tab");
     }
+    // Each view has its own layout after the restart (AT-130): the novels' view holds the book and not the home's other tabs, the home still holds all of them in two columns.
+    await railTo(view, "novel");
+    await sleep(900);
+    const novelTabs = (await tabsOf(view)).map((tab) => tab.kind);
+    const novelMain = await js<string | null>(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="view-dock"]')?.getAttribute("data-view") ?? null`);
+    await railTo(view, "home");
+    await sleep(900);
+    const homeNow = await shapeOf(view, "");
+    detail.views = { novelMain, novelTabs, homeColumns: homeNow.columns, homeTabs: homeNow.tabs.map((tab) => tab.kind) };
+    if (novelMain !== "novel" || !novelTabs.includes("reader") || novelTabs.length >= recent.tabs.length) problems.push(`after the restart the novels' view shows ${novelMain} with ${JSON.stringify(novelTabs)}, not its own part of the ${recent.tabs.length} tabs of the home`);
+    if (homeNow.columns !== recent.columns || homeNow.tabs.length !== recent.tabs.length) problems.push(`after the restart the home has ${homeNow.columns} columns with ${homeNow.tabs.length} tabs, it was left with ${recent.columns} and ${recent.tabs.length}`);
+  }
+  // The view turned to rows is rows after the restart.
+  if (before.comicRows) {
+    await railTo(view, "comic");
+    await sleep(500);
+    const display = await js<string | null>(view, `document.querySelector('[data-testid="sidebar-display"]')?.getAttribute("data-display") ?? null`);
+    detail.comicDisplay = display;
+    if (display !== "list") problems.push(`after the restart the comic view is ${display}, it was left as rows`);
+    await railTo(view, "home");
   }
   // The icon that was taken out of the rail is still out, "…" lists it with its pin, and the pin puts it back where it was.
   if (before.rail) {
@@ -168,6 +199,75 @@ export async function runRestartSmoke(input: { view: BrowserWindow; call: Call; 
     }
   }
   observe(RESTART_OBSERVATION, problems.length === 0, { problems, ...detail });
+  return { ok: observations.every((row) => row.status === "passed"), observations };
+}
+
+type Closing = { key: string; from: string; to: string; storedBeforeClose: string; answeredMs: number | null; closedMs: number | null; problems: string[] };
+
+/**
+ * The real close of the window (AT-128, plan 4.8): it ends the restart phase, after its report is written. The layout of the context in front is changed and
+ * the window is closed 60 ms later, inside the page's own pause before it saves, through the window's own `close` (`apps/desktop/src/main/index.ts`): the
+ * save that reaches the library is the one the close asked for. The quit that follows the last window is held so the record is written; the caller exits.
+ * `runClosedSmoke` is the next start of the Profile and finds the new layout.
+ */
+export async function closeForReal(input: { view: BrowserWindow; call: Call; logsDir: string }): Promise<void> {
+  const { view, call, logsDir } = input;
+  const problems: string[] = [];
+  await railTo(view, "home");
+  // Whatever the phase changed last has been saved by the usual pause.
+  await sleep(1200);
+  const key = (await hostFacts(view))?.key ?? "";
+  const from = (await persistedOf(call, key)).preset;
+  const to = from === "single" ? "two" : "single";
+  if (!(await chooseMenu(view, "layout-menu", `layout-${to}`))) problems.push(`the layout ${to} could not be chosen`);
+  await sleep(60);
+  // Not yet saved by the pause: otherwise this would not show that the close saves.
+  const storedBeforeClose = (await persistedOf(call, key)).preset;
+  const contents = view.webContents;
+  app.once("will-quit", (event) => event.preventDefault());
+  const closing = await new Promise<{ answeredMs: number | null; closedMs: number | null }>((resolve) => {
+    const started = Date.now();
+    let answeredMs: number | null = null;
+    const onSaved = (event: Electron.IpcMainEvent) => { if (event.sender === contents && answeredMs === null) answeredMs = Date.now() - started; };
+    const finish = (closedMs: number | null) => { clearTimeout(timer); ipcMain.removeListener("manga:saved", onSaved); resolve({ answeredMs, closedMs }); };
+    const timer = setTimeout(() => finish(null), 5000);
+    ipcMain.on("manga:saved", onSaved);
+    view.once("closed", () => finish(Date.now() - started));
+    view.close();
+  });
+  const record: Closing = { key, from, to, storedBeforeClose, ...closing, problems };
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.writeFileSync(path.join(logsDir, CLOSED_FILE), `${JSON.stringify(record, null, 2)}\n`);
+  console.error(`restart close-for-real: ${JSON.stringify(record)}`);
+}
+
+/** The start after the real close: the window and the library hold the layout chosen 60 ms before the window was closed. */
+export async function runClosedSmoke(input: { view: BrowserWindow; call: Call; logsDir: string }): Promise<FlowResult & { observations: Observation[] }> {
+  const { view, call, logsDir } = input;
+  const observations: Observation[] = [];
+  const observe = (name: string, ok: boolean, detail: unknown) => {
+    observations.push({ name, status: ok ? "passed" : "failed", detail });
+    console.error(`closed ${name}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, 700)}`);
+    return ok;
+  };
+  const file = path.join(logsDir, CLOSED_FILE);
+  if (!fs.existsSync(file)) { observe(CLOSED_OBSERVATION, false, { reason: "the restart phase left no record of closing its window" }); return { ok: false, observations }; }
+  const before = JSON.parse(fs.readFileSync(file, "utf8")) as Closing;
+  const problems = [...before.problems];
+  if (before.storedBeforeClose !== before.from) problems.push(`the layout was already stored as ${before.storedBeforeClose} before the close; the check shows nothing`);
+  if (before.answeredMs === null) problems.push("the close did not ask the page to save, or the page did not answer");
+  if (before.closedMs === null) problems.push("the window did not close within 5 s");
+  else if (before.answeredMs !== null && before.closedMs < before.answeredMs) problems.push("the window closed before the page answered");
+  else if (before.closedMs > 1500 + 500) problems.push(`the window took ${before.closedMs} ms to close`);
+  await toRail(view);
+  const back = await waitContext(view, before.key, 10_000);
+  if (!back) problems.push("the window did not come back in the context it was closed in");
+  await sleep(900);
+  const stored = (await persistedOf(call, before.key)).preset;
+  const columns = (await hostFacts(view))?.columns ?? 0;
+  if (stored !== before.to) problems.push(`the layout chosen just before the close is stored as ${stored}, not ${before.to}`);
+  if (before.to === "single" && columns !== 1) problems.push(`the window shows ${columns} columns after the start, not the single column chosen before the close`);
+  observe(CLOSED_OBSERVATION, problems.length === 0, { problems, from: before.from, to: before.to, answeredMs: before.answeredMs, closedMs: before.closedMs, stored, columns });
   return { ok: observations.every((row) => row.status === "passed"), observations };
 }
 

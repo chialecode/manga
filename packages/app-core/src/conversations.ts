@@ -9,11 +9,22 @@ type Row = { id: string; title: string; kind: string; project_id: string | null;
 /** Where the current general conversation of a context is recorded: "最近" and each project have their own. */
 export const currentKey = (contextId: ContextId): string => (contextId ? `conversation.current.project.${contextId}` : "conversation.current.recent");
 const EXCERPT_CHARS = 80;
+const TITLE_CHARS = 20;
 
 const stamp = (date: Date): string => {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
+
+/** The name a new conversation is made with: "对话" and the minute it was made, in local time. */
+export const autoName = (createdAt: string): string => `对话 ${stamp(new Date(createdAt))}`;
+
+/** The name the first message gives: its first line that has text, with the spaces run together, 20 characters at most; "…" when it was longer. */
+export function titleFrom(text: string): string {
+  const line = text.split(/\r?\n/).map((item) => item.replace(/\s+/g, " ").trim()).find((item) => item.length > 0) ?? "";
+  const chars = [...line];
+  return chars.length > TITLE_CHARS ? `${chars.slice(0, TITLE_CHARS).join("")}…` : line;
+}
 
 /**
  * The general conversation of each context (A-65, A-94). "最近" has `shared` conversations; a project has `project` conversations, as many as it needs. The
@@ -62,7 +73,7 @@ export class ConversationService {
     if (current && current.runCount === 0) return { ...current, reused: true };
     const id = createId("ses");
     const now = new Date().toISOString();
-    const title = `对话 ${stamp(new Date())}`;
+    const title = autoName(now);
     const kind = this.kindOf(contextId);
     this.store.sqlite.transaction(() => {
       this.store.sqlite.prepare("INSERT INTO agent_sessions(id, title, grant_handle, kind, target_id, project_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)").run(id, title, grantHandle, kind, contextId, contextId, now, now);
@@ -96,6 +107,24 @@ export class ConversationService {
     this.store.setMeta(currentKey(contextFromKey(row.project_id)), row.id);
     this.store.sqlite.prepare("UPDATE agent_sessions SET updated_at = ? WHERE id = ?").run(now, row.id);
     return this.view({ ...row, updated_at: now });
+  }
+
+  /**
+   * The first thing said in a general conversation names it (A-127, 计划 4.7): while its name is still the one it was made with ("对话" and the time it
+   * was made, worked out again from that time, so no column is needed), the name becomes the start of the first line of the message, 20 characters at
+   * most. A name the person gave is left alone, and so is a conversation that was spoken in before. The update says which name it replaces, so two
+   * first messages at once rename it once. Returns the new name, or null when it kept its own.
+   */
+  autoTitle(sessionId: string, text: string): string | null {
+    const row = this.store.sqlite.prepare("SELECT id, title, kind, created_at FROM agent_sessions WHERE id = ?").get(sessionId) as Pick<Row, "id" | "title" | "kind" | "created_at"> | undefined;
+    if (!row || (row.kind !== "shared" && row.kind !== "project")) return null;
+    if (row.title !== autoName(row.created_at)) return null;
+    const spoken = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_runs WHERE session_id = ?").get(sessionId) as { n: number };
+    if (spoken.n > 1) return null;
+    const name = titleFrom(text);
+    if (!name) return null;
+    const changed = this.store.sqlite.prepare("UPDATE agent_sessions SET title = ? WHERE id = ? AND title = ?").run(name, sessionId, row.title).changes;
+    return changed ? name : null;
   }
 
   /** A new name for a conversation of any kind. */

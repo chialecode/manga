@@ -12,14 +12,14 @@
       "id": "recording-shown",
       "ok": true,
       "detail": {
-        "feedbackMs": 16
+        "feedbackMs": 17
       }
     },
     {
       "id": "microphone",
       "ok": true,
       "detail": {
-        "level": 0.5,
+        "level": 0.34,
         "clock1": "0:00",
         "clock2": "0:01"
       }
@@ -41,18 +41,18 @@
       "ok": true,
       "detail": {
         "session": {
-          "id": "cap_b1474232-8208-48e5-9459-b3968dbbdccc",
+          "id": "cap_e4e9cb2a-f328-4f3f-a3d6-67137f677578",
           "mode": "toggle",
           "retention": "keep",
           "stage": "done",
           "audioState": "retained",
           "playable": true,
           "durationMs": 11200,
-          "createdAt": "2026-10-24T04:58:08.931Z",
-          "stoppedAt": "2026-10-24T04:58:20.198Z",
-          "workId": "work_11fd2b2f-d439-4ed7-849c-75aa378d4f2b",
+          "createdAt": "2026-11-03T12:04:27.234Z",
+          "stoppedAt": "2026-11-03T12:04:38.472Z",
+          "workId": "work_e5ffbba4-190b-4ad1-b12c-f176873abc51",
           "deviceLabel": "Fake Default Audio Input",
-          "resourceId": "res_b9f4159a-c4ad-4ba7-af7d-fe0fa8e5e2da",
+          "resourceId": "res_14d407cb-33e1-49e6-81c8-31bf894f1d30",
           "error": null,
           "segments": {
             "total": 1,
@@ -61,7 +61,7 @@
             "pending": 0,
             "noSpeech": 0
           },
-          "speechMs": 6176
+          "speechMs": 6144
         },
         "segments": 1
       }
@@ -75,7 +75,7 @@
           "multipart/form-data"
         ],
         "bytes": [
-          213908
+          214932
         ]
       }
     },
@@ -86,13 +86,13 @@
         "sample": [
           {
             "startMs": 0,
-            "endMs": 6668,
-            "resourceId": "res_b9f4159a-c4ad-4ba7-af7d-fe0fa8e5e2da",
-            "resourceRevisionId": "rev_88ef06eb-2914-4d19-bc49-5d630510337b",
+            "endMs": 6700,
+            "resourceId": "res_14d407cb-33e1-49e6-81c8-31bf894f1d30",
+            "resourceRevisionId": "rev_dc47a5b5-c993-4917-88d9-be934c738359",
             "locator": {
               "kind": "text",
               "partId": "body",
-              "representationId": "rev_88ef06eb-2914-4d19-bc49-5d630510337b",
+              "representationId": "rev_dc47a5b5-c993-4917-88d9-be934c738359",
               "normalizationVersion": "text-nfc-lf-v1",
               "range": {
                 "start": 0,

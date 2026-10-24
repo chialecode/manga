@@ -182,5 +182,3 @@ export function useChat(deps: ChatDeps) {
     removeImage: (materialId: string) => deps.updateComposer((current) => ({ images: current.images.filter((item) => item.materialId !== materialId) })),
   };
 }
-
-export type Chat = ReturnType<typeof useChat>;

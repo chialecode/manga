@@ -85,7 +85,7 @@ export const WorkCard = memo(function WorkCard(props: {
   // A position of the current context is not noted; one from another context is (A-96).
   const origin = percent > 0 && props.context !== undefined && work.progressContext && work.progressContext.contextId !== props.context ? work.progressContext.name : null;
   // Facts of the entry beyond its files: how many versions it has, that it stands outside every library path, that its files are gone.
-  const flags = [work.versionCount > 1 ? t("card.versions", { count: work.versionCount }) : "", work.outsideCount > 0 ? t("card.outside") : "", work.resourceCount === 0 ? t("card.noResource") : ""].filter(Boolean);
+  const flags = [work.versionCount > 1 ? t("card.versions", { count: work.versionCount }) : "", work.outsideCount > 0 ? t("card.outside") : "", (work.missingCount ?? 0) > 0 ? t("card.missing") : "", work.resourceCount === 0 ? t("card.noResource") : ""].filter(Boolean);
   return (
     <article
       className={props.layout === "row" ? "work-row" : "work-card"}

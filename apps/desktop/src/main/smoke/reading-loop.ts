@@ -34,6 +34,16 @@ function readingAreaHasNoDebugFacts(view: BrowserWindow): Promise<boolean> {
   })()`);
 }
 
+/** The page on screen shows the tail mark: its offset (the chapter fits one window, which starts at 0) is inside the body's page range. */
+const TAIL_PAGE_SHOWN = `(() => {
+  const body = document.querySelector('[data-testid="reading-body"]');
+  const text = body?.textContent ?? "";
+  const at = text.indexOf("chi-close-tail");
+  if (!body || at < 0 || !body.hasAttribute("data-page-start")) return false;
+  const offset = [...text.slice(0, at)].length;
+  return Number(body.getAttribute("data-page-start")) <= offset && offset < Number(body.getAttribute("data-page-end"));
+})()`;
+
 export async function runReadingLoopSmoke(appService: MangaProductApp, grant: string, view: BrowserWindow, phase: string): Promise<FlowResult> {
   const call = caller(appService, grant);
   if (phase === "reading-loop-restart") {
@@ -75,7 +85,7 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
         const text = document.querySelector('[data-testid="reading-body"]')?.textContent ?? "";
         const offset = Number(status?.getAttribute("data-offset") ?? "0");
         return status?.getAttribute("data-restored") === "progress" && offset > 0 && text.includes("chi-close-tail");
-      })()`, 8000);
+      })()`, 8000) && await waitUntil(view, TAIL_PAGE_SHOWN, 8000);
       debugOnly = await readingAreaHasNoDebugFacts(view);
     }
     // The reader's tab is in front a moment after the reader is there; what the person sees is what `innerText` reports.
@@ -151,10 +161,15 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
     selectionAccurate = excerpt === selectedQuote && selectedQuote === "chi-close-sel" && quoteRange?.start === 8 && quoteRange.end === 21;
   }
 
-  // Move through the reader to the tail and mark that position. The first window must not already contain it.
-  const firstWindowHasTail = await js<boolean>(view, `(document.querySelector('[data-testid="reading-body"]')?.textContent ?? "").includes("chi-close-tail")`);
-  const moved = await clickTestId(view, "reading-more");
-  const uiTailVisible = !firstWindowHasTail && moved && await waitUntil(view, `(document.querySelector('[data-testid="reading-body"]')?.textContent ?? "").includes("chi-close-tail")`, 8000);
+  // Turn the pages to the tail and mark that position (A-115). The first page must not show it; there is no "continue reading" button.
+  const firstPageHasTail = await js<boolean>(view, TAIL_PAGE_SHOWN);
+  let moved = false;
+  for (let turn = 0; turn < 80 && !(await js<boolean>(view, TAIL_PAGE_SHOWN)); turn += 1) {
+    moved = await clickTestId(view, "reading-page-next");
+    await sleep(200);
+  }
+  const noMoreButton = await js<boolean>(view, `!document.querySelector('[data-testid="reading-more"]')`);
+  const uiTailVisible = !firstPageHasTail && moved && noMoreButton && await waitUntil(view, TAIL_PAGE_SHOWN, 8000);
   const marked = uiTailVisible && await clickTestId(view, "reading-progress");
   await ensureDebugPanel(view);
   const progressAtTail = marked && await waitUntil(view, `(() => {

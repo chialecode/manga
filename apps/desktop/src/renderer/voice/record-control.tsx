@@ -56,6 +56,7 @@ export function RecordControl(props: {
         type="button"
         className="record-hold"
         data-testid="record-hold"
+        onDragStart={(event) => event.preventDefault()}
         title={t("record.holdKey", { key: props.settings.holdKey })}
         onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); props.onHoldStart(); }}
         onPointerUp={props.onHoldEnd}

@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Clock, FolderKanban, FolderPlus, Library, MessageSquarePlus, Plus, Search, SquareStack } from "lucide-react";
-import { contextKey, itemTypeOfView, type ContextId, type ObjectListKind, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType, type SidebarSection } from "@manga/contracts";
+import { Clock, Folder, FolderKanban, FolderOpen, LayoutGrid, Library, List, MessageSquarePlus, Plus, Search, SquareStack } from "lucide-react";
+import {
+  contextKey, isCoverView, itemTypeOfView, type ContextId, type ObjectListKind, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType, type SidebarSection,
+} from "@manga/contracts";
+import type { WorkspaceTab } from "@manga/contracts/workspace-state";
+import type { WorkMediaKind } from "./lib/works.ts";
 import type { MessageKey } from "@manga/i18n";
 import { Modal } from "./components/modal.tsx";
 import { attempt } from "./lib/api.ts";
+import { useCovers } from "./lib/covers.ts";
 import { OBJECT_SPEC } from "./lib/object-kinds.ts";
-import { RAIL_ICON } from "./rail.tsx";
+import { CoverImage } from "./pages/work-card.tsx";
 import { sectionKey, shownOf, useRail, useSidebarData, openKeysOf } from "./sidebar-data.ts";
 import { ContextMenu, type ContextItem } from "./workspace/context-menu.tsx";
+import { useWorkspaceValue } from "./workspace/context.tsx";
 import { useServices } from "./workspace/services.tsx";
 
 /** The words for a kind of thing and for a view (the rail's own labels). */
@@ -44,6 +50,22 @@ type Target = { kind: "project"; group: SidebarGroup } | { kind: "item"; item: S
 type Renaming = { type: "project" | "conversation" | "object"; id: string; objectKind?: ObjectListKind; text: string };
 type Tip = { item: SidebarItem; left: number; top: number };
 
+const str = (value: unknown) => (typeof value === "string" ? value : "");
+/** Whether a tab shows a thing of the sidebar: the row of what is in front of the main area is marked (A-107). A work of "最近" is shown by any of its resources. */
+export function tabShows(tab: Pick<WorkspaceTab, "kind" | "target"> | undefined, item: SidebarItem): boolean {
+  if (!tab) return false;
+  const target = tab.target ?? {};
+  const { open } = item;
+  switch (open.kind) {
+    case "conversation": return tab.kind === "conversation" && str(target.sessionId) === open.id;
+    case "resource": return tab.kind === "reader" && (str(target.resourceId) === open.id || (item.key.startsWith("work:") && Boolean(open.workId) && str(target.workId) === open.workId));
+    case "work": return (tab.kind === "library" && str(target.page) === "work" && str(target.workId) === open.id) || (tab.kind === "reader" && str(target.workId) === open.id);
+    case "note": return tab.kind === "note" && str(target.objectId) === open.id;
+    case "download": case "project": return false;
+    default: return tab.kind === open.kind && str(target.objectId) === open.id;
+  }
+}
+
 /**
  * One view of the sidebar (A-99, 交互设计 2.10): the view's name and the search button, its own entries (the management tab, a new one), then the projects
  * and "最近" with the things of the view's kind — or, on the home, with every kind in small groups. The same component fills the docked sidebar and the card
@@ -54,7 +76,12 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
   const { t } = s;
   const { view } = props;
   const { rail, change } = useRail();
-  const { data, status, more, loadMore, reload } = useSidebarData(view);
+  const { data, status, more, loadMore, collapse, reload } = useSidebarData(view);
+  const display = isCoverView(view) ? (rail.display[view] ?? "cover") : "list";
+  const focusedTab = useWorkspaceValue((c) => c.focusedTab());
+  const shows = (item: SidebarItem) => tabShows(focusedTab, item);
+  const coverIds = display === "cover" ? (data?.groups ?? []).flatMap((group) => group.sections.flatMap((section) => shownOf(section, more[sectionKey(view, group.contextId, section.type)]).items.map((item) => item.coverId))) : [];
+  const cover = useCovers(coverIds, "grid");
   const current = s.currentContext;
   const currentKey = contextKey(current);
   const own = itemTypeOfView(view);
@@ -87,11 +114,11 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
   const entries: Entry[] = [];
   const entry = (id: string, testId: string, label: string, icon: ReactNode, run: Entry["run"]) => entries.push({ id, testId, label, icon, run });
   const newConversation = () => { done(); void s.open.newConversation(); };
-  if (view === "home" || view === "conversation") {
+  // The home has no "新对话" (A-110): the conversation view, the file menu and Ctrl+N make one; a project is made from the "+" of the projects' title.
+  if (view === "conversation") {
     if (s.facets.has("agent")) entry("new-conversation", "sidebar-new-conversation", t("sidebar.newConversation"), <MessageSquarePlus size={16} aria-hidden="true" />, newConversation);
   }
   if (view === "home") {
-    if (s.facets.has("projects")) entry("new-project", "sidebar-new-project", t("sidebar.newProject"), <FolderPlus size={16} aria-hidden="true" />, () => { done(); s.open.newProject(); });
     if (s.facets.has("library") || s.facets.has("inventory")) entry("library", "sidebar-entry-library", t("sidebar.entry.library"), <Library size={16} aria-hidden="true" />, () => { done(); s.open.library("overview"); });
     if (s.facets.has("projects")) entry("projects", "sidebar-entry-projects", t("sidebar.entry.projects"), <FolderKanban size={16} aria-hidden="true" />, () => { done(); void s.open.project(null); });
   } else {
@@ -204,6 +231,9 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
       { id: "open", label: t("sidebar.menu.openItem"), onSelect: () => open(item) },
       { id: "background", label: t("sidebar.menu.openBehind"), onSelect: () => open(item, { background: true }) },
     ];
+    // A work, or a work of "最近" that opens the episode last watched, also opens its own page (A-105).
+    const workId = item.open.kind === "work" ? null : item.key.startsWith("work:") ? item.open.workId ?? null : null;
+    if (workId) items.push({ id: "work-page", label: t("sidebar.menu.workPage"), onSelect: () => { done(); s.open.work(workId, { kind: (item.open.mediaKind ?? null) as WorkMediaKind | null, title: item.title }); } });
     if (isObjectView(item.type as RailView)) {
       items.push({ id: "rename", label: t("sidebar.menu.rename"), separatorBefore: true, onSelect: () => setRenaming({ type: "object", id: item.open.id, objectKind: item.type as ObjectListKind, text: item.title }) });
       items.push({ id: "delete", label: t("sidebar.menu.deleteObject"), danger: true, onSelect: () => setAsking(item) });
@@ -228,9 +258,32 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
   const tipOff = () => { window.clearTimeout(tipTimer.current); setTip(null); };
 
   // ------------------------------------------------------------------------------------------------------------------------ the rows
+  /** The small line under a cover, and after a name in a row of a medium (A-105): how far the person got. */
+  const progressText = (item: SidebarItem): string | null => {
+    if (item.type !== "novel" && item.type !== "comic" && item.type !== "video") return null;
+    const progress = item.progress;
+    if (!progress) return t("sidebar.progress.none");
+    if (progress.episode) return t("sidebar.progress.episode", { episode: progress.episode });
+    return t(item.type === "video" ? "sidebar.progress.watched" : "sidebar.progress.read", { n: progress.percent ?? 0 });
+  };
+  const rowProps = (item: SidebarItem) => ({
+    "data-testid": item.type === "conversation" ? `session-open-${item.open.id}` : `sidebar-item-${item.open.kind}-${item.open.id}`,
+    "data-opens": true,
+    "data-active": item.running,
+    "data-type": item.type,
+    "aria-current": shows(item) ? ("true" as const) : undefined,
+    onClick: () => open(item),
+    onAuxClick: (event: ReactMouseEvent) => { if (event.button === 1) { event.preventDefault(); open(item, { background: true }); } },
+    onMouseDown: (event: ReactMouseEvent) => { if (event.button === 1) event.preventDefault(); },
+    onContextMenu: (event: ReactMouseEvent) => onMenu(event, { kind: "item", item }),
+    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => tipOn(item, event.currentTarget),
+    onMouseLeave: tipOff,
+    onFocus: tipOff,
+  });
+
   function renderItem(item: SidebarItem) {
-    const Icon = RAIL_ICON[(item.type === "download" ? "downloads" : item.type) as RailView];
     const isRenaming = renaming && ((renaming.type === "conversation" && item.type === "conversation") || (renaming.type === "object" && renaming.objectKind === item.type)) && renaming.id === item.open.id;
+    const progress = own ? progressText(item) : null;
     return (
       <li key={item.key}>
         {isRenaming ? (
@@ -238,26 +291,30 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
             <input autoFocus aria-label={t(item.type === "conversation" ? "sidebar.rename.conversation" : "objects.name")} data-testid="sidebar-rename" value={renaming.text} maxLength={200} onChange={(event) => setRenaming({ ...renaming, text: event.target.value })} onBlur={() => setRenaming(null)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setRenaming(null); } }} />
           </form>
         ) : (
-          <button
-            type="button"
-            className="sidebar-row"
-            data-testid={item.type === "conversation" ? `session-open-${item.open.id}` : `sidebar-item-${item.open.kind}-${item.open.id}`}
-            data-opens
-            data-active={item.running}
-            data-type={item.type}
-            onClick={() => open(item)}
-            onAuxClick={(event) => { if (event.button === 1) { event.preventDefault(); open(item, { background: true }); } }}
-            onMouseDown={(event) => { if (event.button === 1) event.preventDefault(); }}
-            onContextMenu={(event) => onMenu(event, { kind: "item", item })}
-            onMouseEnter={(event) => tipOn(item, event.currentTarget)}
-            onMouseLeave={tipOff}
-            onFocus={tipOff}
-          >
-            <Icon size={14} aria-hidden="true" />
+          <button type="button" className="sidebar-row" {...rowProps(item)}>
             <span className="truncate">{item.title}</span>
+            {/* The kind, after the name, only where kinds are mixed (A-103). */}
+            {own ? null : <span className="sidebar-pill" data-testid="sidebar-pill">{t(VIEW_LABEL[(item.type === "download" ? "downloads" : item.type) as RailView])}</span>}
+            {progress ? <span className="sidebar-row-note">{progress}</span> : null}
             {item.running ? <span className="tab-mark" data-mark="running" role="img" aria-label={t("tab.mark.running")} /> : null}
           </button>
         )}
+      </li>
+    );
+  }
+
+  /** A thing of a medium as a cover (A-105): the cover, the name in at most two lines, and how far the person got. */
+  function renderCover(item: SidebarItem) {
+    const progress = progressText(item) ?? "";
+    return (
+      <li key={item.key}>
+        <button type="button" className="sidebar-cover" aria-label={`${item.title}，${progress}`} {...rowProps(item)}>
+          <span className="sidebar-cover-image" data-landscape={item.type === "video" ? "true" : undefined}>
+            <CoverImage url={cover(item.coverId)} coverId={item.coverId} kind={item.type as "novel" | "comic" | "video"} title={item.title} landscape={item.type === "video"} />
+          </span>
+          <span className="sidebar-cover-title">{item.title}</span>
+          <span className="sidebar-cover-note">{progress}</span>
+        </button>
       </li>
     );
   }
@@ -268,50 +325,59 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
     const added = more[sectionKey(view, group.contextId, section.type)];
     const shown = shownOf(section, added);
     const rest = section.total - shown.items.length;
-    const typeId = section.type === "download" ? "downloads" : section.type;
+    const covers = display === "cover";
     return (
       <div key={section.type} className="sidebar-section" data-testid={`sidebar-section-${name}-${section.type}`}>
-        {own ? null : <h3 className="sidebar-type" data-testid={`sidebar-type-${name}-${section.type}`}>{t(VIEW_LABEL[typeId as RailView])}<span className="sidebar-type-count">{section.total}</span></h3>}
-        {section.loaded && section.total === 0 ? <p className="sidebar-empty" data-testid={`sidebar-empty-${name}`}>{t(EMPTY_KEY[section.type])}</p> : null}
+        {section.loaded && section.total === 0 ? <p className="sidebar-empty" data-testid={`sidebar-empty-${name}`}>{t(section.type === "all" ? "sidebar.empty.all" : EMPTY_KEY[section.type])}</p> : null}
         {section.loaded ? (
-          <ul className="sidebar-rows">
-            {shown.items.map(renderItem)}
-            {shown.next !== null && rest > 0 ? (
-              <li>
-                <button type="button" className="sidebar-more" data-testid={own ? `sidebar-more-${name}` : `sidebar-more-${name}-${section.type}`} onClick={() => void loadMore(group.contextId, section.type, shown.next)}>{t("sidebar.more", { n: rest })}</button>
-              </li>
+          <>
+            <ul className={covers ? "sidebar-covers" : "sidebar-rows"} data-testid={covers ? `sidebar-covers-${name}` : undefined}>
+              {shown.items.map(covers ? renderCover : renderItem)}
+            </ul>
+            {(shown.next !== null && rest > 0) || added ? (
+              <div className="sidebar-more-row">
+                {shown.next !== null && rest > 0 ? <button type="button" className="sidebar-more" data-testid={`sidebar-more-${name}`} onClick={() => void loadMore(group.contextId, section.type, shown.next)}>{t("sidebar.more", { n: rest })}</button> : null}
+                {added ? <button type="button" className="sidebar-more" data-testid={`sidebar-less-${name}`} onClick={() => collapse(group.contextId, section.type)}>{t("sidebar.less")}</button> : null}
+              </div>
             ) : null}
-          </ul>
+          </>
         ) : <p className="sidebar-empty">{section.total} · {t("sidebar.loading")}</p>}
       </div>
     );
   }
 
+  /**
+   * A context: its title (a folder that is open or closed for a project, a clock for "最近", either one the button that opens and closes the group, A-110)
+   * and, when open, its list hanging from a guide line.
+   */
   function renderGroup(group: SidebarGroup) {
     const key = contextKey(group.contextId);
     const opened = isOpen(key);
-    const Chevron = opened ? ChevronDown : ChevronRight;
     const isCurrent = key === currentKey;
     const project = group.kind === "project";
     const name = key || "recent";
     const label = project ? group.name : t("sidebar.recent");
+    const Icon = project ? (opened ? FolderOpen : Folder) : Clock;
     return (
-      <div key={name} className="sidebar-context" data-testid={`context-${name}`} data-current={isCurrent ? "true" : "false"}>
+      <div key={name} className="sidebar-context" data-testid={`context-${name}`} data-current={isCurrent ? "true" : "false"} data-open={opened ? "true" : "false"}>
         <div className="sidebar-context-head" onContextMenu={project ? (event) => onMenu(event, { kind: "project", group }) : undefined}>
-          <button type="button" className="sidebar-chevron" data-testid={`context-toggle-${name}`} aria-expanded={opened} aria-label={t(opened ? "sidebar.collapse" : "sidebar.expand", { name: label })} disabled={isCurrent} onClick={() => toggle(key)}><Chevron size={14} aria-hidden="true" /></button>
+          <button type="button" className="sidebar-folder" data-testid={`context-toggle-${name}`} aria-expanded={opened} aria-label={t(opened ? "sidebar.collapse" : "sidebar.expand", { name: label })} title={t(opened ? "sidebar.collapse" : "sidebar.expand", { name: label })} disabled={isCurrent} onClick={() => toggle(key)}>
+            <Icon size={15} aria-hidden="true" />
+          </button>
           {renaming?.type === "project" && renaming.id === group.contextId ? (
             <form className="sidebar-rename" onSubmit={(event) => void commitRename(event)}>
               <input autoFocus aria-label={t("sidebar.rename.project")} data-testid="sidebar-rename" value={renaming.text} maxLength={120} onChange={(event) => setRenaming({ ...renaming, text: event.target.value })} onBlur={() => setRenaming(null)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setRenaming(null); } }} />
             </form>
           ) : (
             <button type="button" className="sidebar-context-name" data-testid={`context-open-${name}`} aria-current={isCurrent ? "true" : undefined} title={label} onClick={() => { done(); void s.open.switchContext(group.contextId); }}>
-              {project ? <FolderKanban size={15} aria-hidden="true" /> : <Clock size={15} aria-hidden="true" />}
               <span className="truncate">{label}</span>
             </button>
           )}
         </div>
         {opened ? (
-          group.sections.length === 0 ? <p className="sidebar-empty" data-testid={`sidebar-empty-${name}`}>{t("sidebar.empty.all")}</p> : group.sections.map((section) => renderSection(group, section))
+          <div className="sidebar-context-body" data-testid={`guide-${name}`}>
+            {group.sections.length === 0 ? <p className="sidebar-empty" data-testid={`sidebar-empty-${name}`}>{t("sidebar.empty.all")}</p> : group.sections.map((section) => renderSection(group, section))}
+          </div>
         ) : null}
       </div>
     );
@@ -341,16 +407,15 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
       <>
         {s.facets.has("projects") ? (
           <section className="sidebar-group" aria-label={t("sidebar.projects")} data-testid="sidebar-projects">
-            <h2 className="sidebar-group-title">{t("sidebar.projects")}</h2>
+            <div className="sidebar-group-head">
+              <h2 className="sidebar-group-title">{t("sidebar.projects")}</h2>
+              <button type="button" className="sidebar-group-add" data-testid="sidebar-new-project" aria-label={t("sidebar.newProject")} title={t("sidebar.newProject")} onClick={() => { done(); s.open.newProject(); }}><Plus size={14} aria-hidden="true" /></button>
+            </div>
             {projects.length === 0 ? <p className="sidebar-empty" data-testid="sidebar-no-projects">{t("sidebar.noProjects")}</p> : projects.map(renderGroup)}
           </section>
         ) : null}
-        {recent ? (
-          <section className="sidebar-group" aria-label={t("sidebar.recent")} data-testid="sidebar-recent">
-            <h2 className="sidebar-group-title">{t("sidebar.recent")}</h2>
-            {renderGroup(recent)}
-          </section>
-        ) : null}
+        {/* "最近" has one title: its own context row (A-110). */}
+        {recent ? <section className="sidebar-group" aria-label={t("sidebar.recent")} data-testid="sidebar-recent">{renderGroup(recent)}</section> : null}
       </>
     );
   })();
@@ -361,6 +426,19 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
       <div className="sidebar-head">
         <h1 className="sidebar-title" data-testid="sidebar-title">{viewName}</h1>
         <span className="flex-1" />
+        {isCoverView(view) ? (
+          <button
+            type="button"
+            className="shell-icon"
+            data-testid="sidebar-display"
+            data-display={display}
+            aria-label={t(display === "cover" ? "sidebar.display.list" : "sidebar.display.cover")}
+            title={t(display === "cover" ? "sidebar.display.list" : "sidebar.display.cover")}
+            onClick={() => change({ display: { [view]: display === "cover" ? "list" : "cover" } })}
+          >
+            {display === "cover" ? <List size={17} aria-hidden="true" /> : <LayoutGrid size={17} aria-hidden="true" />}
+          </button>
+        ) : null}
         <button type="button" className="shell-icon" data-testid="sidebar-search" aria-label={t("sidebar.search")} title={t("sidebar.search")} onClick={() => { done(); s.open.search(undefined, view === "home" || view === "downloads" ? null : view); }}><Search size={17} aria-hidden="true" /></button>
       </div>
       {entries.length ? (

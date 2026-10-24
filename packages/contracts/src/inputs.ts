@@ -50,7 +50,8 @@ export const CommandInputs = {
     revisionId: id.optional(),
     partId: id,
     start: z.number().int().nonnegative().optional(),
-    limit: z.number().int().positive().max(8000).optional(),
+    /** A paged chapter is laid out in windows of about 60 000 characters (A-115); the cap leaves room for a window and its look-ahead. */
+    limit: z.number().int().positive().max(120_000).optional(),
   }).strict(),
   "library.rebuildIndex": z.object({}).strict(),
   "library.repairSource": z.object({ resourceId: id, pathHandle: id }).strict(),
@@ -156,6 +157,8 @@ export const CommandInputs = {
     readAllowlist: z.array(id).max(10000).optional(),
     resourceId: id.optional(),
     withinProgress: z.boolean().optional(),
+    /** The search box's medium (计划 4.8): only the hits of resources of this medium (by the work's medium, else the resource's own kind); no note hits. */
+    mediaKind: z.enum(["novel", "comic", "video"]).optional(),
   }).strict(),
   "notes.undo": z.object({ objectId: id, expectedRevision: z.number().int().positive() }).strict(),
   "inventory.overview": z.object({}).strict(),

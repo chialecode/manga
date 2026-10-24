@@ -72,6 +72,10 @@ export const MediaCommandInputs = {
   "works.delete": z.object({ workId: id }).strict(),
   /** The resources that are in no work: the ones left by a deleted entry or taken out of a work. */
   "works.unassigned": z.object({ kind: WorkMediaKindSchema.optional(), query: z.string().max(200).optional(), limit: z.number().int().min(1).max(500).optional() }).strict(),
+  "works.reidentify": z.object({ resourceIds: z.array(id).min(1).max(200) }).strict(),
+  "library.outside": z.object({}).strict(),
+  "library.outsidePreview": z.object({}).strict(),
+  "library.removeOutside": z.object({ expectedCount: z.number().int().min(0) }).strict(),
   /** The same episode or volume in another version of the title, and the place in it that matches where the reader is (A-68). */
   "works.counterpart": z.object({ resourceId: id, toWorkId: id, fraction: z.number().min(0).max(1).optional() }).strict(),
   /** What the user made on one resource and whether its file can be opened: the "resource unavailable" view (A-67). */

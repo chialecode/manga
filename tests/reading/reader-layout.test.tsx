@@ -58,7 +58,7 @@ describe("reader paragraphs", () => {
 describe("reader preferences", () => {
   it("accepts a value saved before the new fields existed and fills the defaults", () => {
     const old = { measurePx: 680, fontSizePx: 18, fontFamily: "serif", lineHeight: 1.7, marginPx: 24, theme: "green" };
-    expect(ReadingPreferenceSchema.parse(old)).toMatchObject({ ...old, paragraphSpacingPx: 0, pageMode: "single", pageRatio: "book" });
+    expect(ReadingPreferenceSchema.parse(old)).toMatchObject({ ...old, paragraphSpacingPx: 0, pageMode: "single", pageRatio: "book", flow: "paged", panelPx: 280 });
     const stored = { ...DEFAULT_SHELL_PREFERENCE, reading: old };
     expect(ShellPreferenceSchema.parse(stored).reading.pageMode).toBe("single");
   });
@@ -95,7 +95,7 @@ function pane(style: Record<string, unknown>, extra: Record<string, unknown> = {
       document={doc("甲乙丙\n丁戊己")} style={{ ...baseStyle, ...style }} labels={readingLabels(i18n)} t={i18n.t}
       labelsExtra={{ sourceNeedsReview: "", sourceMissing: "", sourceRepair: "" }}
       hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
-      onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onNote={() => {}} onMore={() => {}} onPart={() => {}}
+      onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onNote={() => {}} onPart={() => {}}
       onStyle={() => {}} onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}} onBackToNote={() => {}} onRepair={() => {}}
       {...extra}
     />,
@@ -130,52 +130,69 @@ describe("novel reader", () => {
     expect(styled).toHaveBeenCalledWith({ pageMode: "double" });
   });
 
-  it("renders a double page with the title in the head and the position in the foot, and still exposes the body for selection", () => {
+  it("lays a double page out as two pages of one frame, and still exposes the body for selection (AT-139)", () => {
     pane({ pageMode: "double" });
-    expect(screen.getByTestId("reading-spread")).toBeTruthy();
+    expect(screen.getByTestId("reading-pages").getAttribute("data-columns")).toBe("2");
     expect(screen.getByTestId("reading-body").getAttribute("data-layout")).toBe("double");
     expect(screen.getByTestId("reading-body").textContent).toBe("甲乙丙\n丁戊己");
-    expect(screen.getByTestId("reading-spread-position").textContent).toContain("1");
-    // The page background belongs to the reading column only.
-    expect(screen.getByTestId("reading-spread").getAttribute("style")).toContain("background");
+    expect(screen.getByTestId("reading-page-position").textContent).toMatch(/本章 第 1 \/ (约 )?\d+ 页/);
+    // The page background belongs to the page frame.
+    expect(screen.getByTestId("reading-pages").getAttribute("style")).toContain("background");
   });
 
-  it("changes pages with the arrow keys in a double page, and leaves the keys to a text field", () => {
-    const more = vi.fn();
-    pane({ pageMode: "double" }, { onMore: more });
+  it("turns pages with the keys, past the loaded text into the next window, and leaves the keys to a text field (AT-139)", () => {
+    const extend = vi.fn();
+    pane({}, { onExtend: extend });
+    // The loaded text is near its end at once: the next window is asked for before the reader gets there.
+    expect(extend).toHaveBeenCalled();
+    extend.mockClear();
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(more).toHaveBeenCalled();
-    more.mockClear();
+    fireEvent.keyDown(window, { key: "PageDown" });
+    fireEvent.keyDown(window, { key: " ", code: "Space" });
     const input = document.createElement("input");
     document.body.append(input);
     fireEvent.keyDown(input, { key: "ArrowRight" });
-    expect(more).not.toHaveBeenCalled();
     input.remove();
+    // Waiting for the window already asked for, a turn does not ask again.
+    expect(extend).not.toHaveBeenCalled();
   });
 
-  it("turns the pages of a double page with buttons that are about pages, not parts; a single page has none (AT-83)", () => {
-    const more = vi.fn();
-    pane({}, { onMore: more });
-    expect(screen.queryByTestId("reading-spread-prev")).toBeNull();
-    expect(screen.queryByTestId("reading-spread-next")).toBeNull();
-    cleanup();
-    pane({ pageMode: "double" }, { onMore: more });
+  it("has previous and next page buttons in the bottom bar when paged, and none when scrolling (AT-83, AT-139)", () => {
+    const part = vi.fn();
+    render(
+      <ReadingPane
+        document={{ ...doc("甲乙丙"), parts: [{ id: "a", kind: "text", length: 3, textLayer: true }, { id: "body", kind: "text", length: 3, textLayer: true }, { id: "c", kind: "text", length: 3, textLayer: true }] }}
+        style={{ ...baseStyle }} labels={readingLabels(i18n)} t={i18n.t} labelsExtra={{ sourceNeedsReview: "", sourceMissing: "", sourceRepair: "" }}
+        hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
+        onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onPart={part} onWindow={(partId: string, from: number) => part(`window:${partId}`, from)} onSelect={() => {}}
+        onStyle={() => {}} onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}} onBackToNote={() => {}} onRepair={() => {}}
+      />,
+    );
     const foot = screen.getByTestId("reading-footer");
-    expect(foot.contains(screen.getByTestId("reading-spread-next"))).toBe(true);
-    expect(screen.getByTestId("reading-spread-prev")).toHaveProperty("disabled", true);
-    fireEvent.click(screen.getByTestId("reading-spread-next"));
-    expect(more).toHaveBeenCalled();
-    for (const gone of ["reading-prev", "reading-next"]) expect(screen.queryByTestId(gone), gone).toBeNull();
+    expect(foot.contains(screen.getByTestId("reading-page-next"))).toBe(true);
+    // The last page of a chapter goes on to the first page of the next; the first goes back to the last page of the one before.
+    fireEvent.click(screen.getByTestId("reading-page-next"));
+    expect(part).toHaveBeenLastCalledWith("c", 0);
+    fireEvent.click(screen.getByTestId("reading-page-prev"));
+    expect(part).toHaveBeenLastCalledWith("window:a", 0);
+    for (const gone of ["reading-prev", "reading-next", "reading-more"]) expect(screen.queryByTestId(gone), gone).toBeNull();
+    cleanup();
+    pane({ flow: "scroll" });
+    expect(screen.queryByTestId("reading-page-next")).toBeNull();
+    expect(screen.queryByTestId("reading-pages")).toBeNull();
+    expect(screen.getByTestId("reading-body").getAttribute("data-layout")).toBe("scroll");
   });
 
-  it("keeps the search, bookmark and contents panels closed until asked", () => {
+  it("keeps the search, bookmark and contents panels closed until asked, and opens them at the left of the text (AT-140)", () => {
     pane({});
     expect(screen.queryByTestId("reading-panel")).toBeNull();
     fireEvent.click(screen.getByTestId("reading-panel-toc"));
     expect(screen.getByTestId("toc-body")).toBeTruthy();
-    // The panel is part of the bottom bar and opens above its buttons.
-    expect(screen.getByTestId("reading-footer").contains(screen.getByTestId("reading-panel"))).toBe(true);
-    expect(screen.getByTestId("reading-panel").getAttribute("data-placement")).toBe("above");
+    const panel = screen.getByTestId("reading-panel");
+    expect(screen.getByTestId("reading-footer").contains(panel)).toBe(false);
+    expect(panel.getAttribute("data-placement")).toBe("left");
+    // Before the text, in the same row.
+    expect(panel.nextElementSibling).toBe(screen.getByTestId("reading-scroll"));
   });
 });
 
@@ -240,7 +257,7 @@ describe("novel reader as a regular reader (A-63)", () => {
         }}
         style={{ ...baseStyle }} labels={readingLabels(i18n)} t={i18n.t} labelsExtra={{ sourceNeedsReview: "", sourceMissing: "", sourceRepair: "" }}
         hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
-        onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onMore={() => {}} onPart={() => {}} onSelect={() => {}}
+        onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onPart={() => {}} onSelect={() => {}}
         onStyle={() => {}} onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}} onBackToNote={() => {}} onRepair={() => {}}
       />,
     );
@@ -276,7 +293,7 @@ describe("novel reader as a regular reader (A-63)", () => {
     expect(match).toHaveBeenCalledTimes(1);
   });
 
-  it("puts the tools, the part number and the progress mark in the bottom bar, with no previous or next part button, and keeps continue-reading with the text (AT-83)", () => {
+  it("puts the tools, the part number and the progress mark in the bottom bar, with no previous or next part button and no continue-reading (AT-83, AT-139)", () => {
     const part = vi.fn();
     const progress = vi.fn();
     render(
@@ -284,15 +301,13 @@ describe("novel reader as a regular reader (A-63)", () => {
         document={{ ...doc("甲乙丙"), parts: [{ id: "a", kind: "text", length: 3, textLayer: true }, { id: "body", kind: "text", length: 3, textLayer: true }, { id: "c", kind: "text", length: 3, textLayer: true }] }}
         style={{ ...baseStyle }} labels={readingLabels(i18n)} t={i18n.t} labelsExtra={{ sourceNeedsReview: "", sourceMissing: "", sourceRepair: "" }}
         hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
-        onSearch={() => {}} onJump={() => {}} onProgress={progress} onMore={() => {}} onPart={part} onSelect={() => {}}
+        onSearch={() => {}} onJump={() => {}} onProgress={progress} onPart={part} onSelect={() => {}}
         onStyle={() => {}} onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}} onBackToNote={() => {}} onRepair={() => {}}
       />,
     );
     const foot = screen.getByTestId("reading-footer");
     for (const id of ["reading-part-position", "reading-panel-toc", "reading-panel-search", "reading-panel-bookmarks", "reading-bookmark-add", "reading-fullscreen", "reading-settings", "reading-progress"]) expect(foot.contains(screen.getByTestId(id)), id).toBe(true);
-    for (const gone of ["reading-prev", "reading-next", "reading-spread-prev", "reading-spread-next"]) expect(screen.queryByTestId(gone), gone).toBeNull();
-    expect(foot.contains(screen.getByTestId("reading-more"))).toBe(false);
-    expect(screen.getByTestId("reading-scroll").contains(screen.getByTestId("reading-more"))).toBe(true);
+    for (const gone of ["reading-prev", "reading-next", "reading-more"]) expect(screen.queryByTestId(gone), gone).toBeNull();
     // The part is chosen by its number, typed into the position itself; the table of contents is the other way.
     expect(screen.getByTestId("reading-part-position").textContent).toContain("2 / 3");
     fireEvent.click(screen.getByTestId("reading-part-position"));

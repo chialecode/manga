@@ -4,13 +4,14 @@ import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createTranslator } from "@manga/i18n";
 import { testHooks } from "../test-hooks.ts";
-import { DRAWN, PICK, clickTestId, closeTabs, openLibrary, openShelf, setField, sleep, viaSidebar, waitForTestId, waitUntil, type ShelfKind } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, closeTabs, openLibrary, openShelf, pressKey, setField, sleep, viaSidebar, waitForTestId, waitUntil, type ShelfKind } from "./driver.ts";
 import { js, openSettingsPage, toRail, type caller } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
 /**
- * The management flows in the packaged window (AT-99…AT-109), with synthetic data only: a resource whose library path was removed or
- * whose file is gone asks before it opens, from the overview and from its page, and the rail stops offering it; an entry is deleted from its menu with a
+ * The management flows in the packaged window (AT-99…AT-109, AT-137), with synthetic data only: a resource whose library path was removed leaves the
+ * overview and its shelf for the settings' outside section, asks before it opens from there, and comes back when its folder is added; a resource whose
+ * file is gone asks before it opens from the overview; the rail stops offering either; an entry is deleted from its menu with a
  * dialog that lists what goes and what stays, and its resources are listed as not in a work with their files moved; a conversation is deleted from
  * the conversations' management tab (the sidebar's "对话管理"); a model connection is added, checked, tested (it fails: nothing listens), edited and deleted in its dialog; and the pages with
  * reworded text are looked at for their titles, for identifiers drawn as they are, and for words about features that were taken away.
@@ -132,51 +133,68 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         detail.railRowShown = session ? await exists(`session-open-${session}`) : false;
         if (detail.railAfter === "open" || detail.railRowShown) problems.push("the rail still offers the video whose file is outside the library");
 
-        // From the overview: the card's menu "keep watching" asks, and nothing opens behind the question.
-        const fromOverview = await askFromOverview(videoWork.id);
-        // What the question said is recorded as facts, not as text: the folder it names is a path on the machine the walk ran on.
-        detail.fromOverview = { ...fromOverview, folder: fromOverview.folder !== "", place: fromOverview.place !== "" };
-        if (!fromOverview.asked) problems.push("opening from the overview did not ask");
-        if (fromOverview.state !== "outside" || !fromOverview.reason || !fromOverview.folder) problems.push("the question from the overview does not say the file is outside the library, or which folder");
-        if (!fromOverview.buttons.includes("open-blocked-add")) problems.push("the question offers no way to add the folder");
-        if (fromOverview.readers.length) problems.push(`opening from the overview opened ${fromOverview.readers.join(", ")} behind the question`);
-        if (fromOverview.pageAfter !== fromOverview.pageBefore) problems.push("the page changed while the question was asked");
-        await shot("open-blocked-outside");
-        await clickTestId(view, "open-blocked-close");
-        await gone("open-blocked");
-
-        // From the work's own page: the file is marked as outside, "watch" is not offered, and the resource's button shows what was made on it instead.
+        // The library lists only what is in a library path (A-113): the work whose one file is outside is on neither the overview nor its shelf.
         await toRail(view);
-        const onPage = await openWorkPage("video", videoWork.id, videoId) && await clickTestId(view, "detail-tab-resources", 4000) && await waitFor(`document.querySelector('[data-testid="detail-resource-${videoId}"]')`, 6000);
-        const page = await js<{ read: string; readDisabled: boolean; chip: string; button: string; readers: string[] }>(view, `(() => {
-          const shown = ${SHOWN};
-          const read = document.querySelector('[data-testid="work-read"]');
-          return {
-            read: read?.textContent ?? "", readDisabled: Boolean(read?.disabled),
-            chip: document.querySelector('[data-testid="detail-outside-${videoId}"]')?.textContent ?? "",
-            button: document.querySelector('[data-testid="detail-open-${videoId}"]')?.textContent ?? "",
-            readers: ["video-reader", "comic-reader", "reading-page"].filter((id) => { const el = document.querySelector('[data-testid="' + id + '"]'); return el && shown(el); }),
-          };
-        })()`);
-        detail.fromWorkPage = { onPage, readDisabled: page.readDisabled, chip: page.chip, button: page.button, readers: page.readers };
-        if (!onPage) problems.push("the work's page did not open");
-        if (!page.readDisabled) problems.push("the work's page offers to watch a file that is outside the library");
-        if (page.chip !== t("work.outside")) problems.push(`the resource on the work's page is marked "${page.chip}", not "${t("work.outside")}"`);
-        if (page.button !== t("work.viewContent")) problems.push(`the resource's button on the work's page says "${page.button}", not "${t("work.viewContent")}"`);
-        if (page.readers.length) problems.push(`the work's page opened ${page.readers.join(", ")}`);
-        await shot("open-blocked-work-page");
+        await openLibrary(view);
+        const overviewShown = await waitFor(`document.querySelector('[data-testid="page-library"]')`, 8000);
+        await sleep(600);
+        const onOverview = await exists(`work-menu-${videoWork.id}`);
+        const shelfShown = await openShelf(view, "video", 6000);
+        await sleep(600);
+        const onShelf = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="open-${videoId}"], [data-testid="open-work-${videoWork.id}"]'))`);
+        detail.listed = { overviewShown, onOverview, shelfShown, onShelf };
+        if (!overviewShown || !shelfShown) problems.push("the overview or the video shelf did not open");
+        if (onOverview) problems.push("the overview still lists the work whose file is outside the library");
+        if (onShelf) problems.push("the video shelf still lists the work whose file is outside the library");
 
-        // The way forward: the folder is added again from the question, and the file opens from the work's page.
-        await askFromOverview(videoWork.id);
+        // It is in the settings' section of resources outside the library paths, by its folder, with a way to add the folder and to see what was made on it.
+        await openSettingsPage(view, "library");
+        const inSection = await waitFor(`document.querySelector('[data-testid="library-outside-${videoId}"]')`, 8000);
+        const section = await js<{ add: boolean; viewButton: boolean; remove: boolean }>(view, `({
+          add: Boolean(document.querySelector('[data-testid="library-outside"] [data-testid="library-outside-add"]')),
+          viewButton: Boolean(document.querySelector('[data-testid="library-outside-view-${videoId}"]')),
+          remove: Boolean(document.querySelector('[data-testid="library-outside-remove"]')),
+        })`);
+        detail.section = { listed: inSection, ...section };
+        if (!inSection) problems.push("the settings' section of resources outside the library does not list the video");
+        if (!section.add || !section.viewButton || !section.remove) problems.push(`the outside section lacks a button (${JSON.stringify(section)})`);
+        await shot("library-outside");
+
+        // "查看笔记与记录" goes the way every opening goes: it asks, and nothing opens behind the question.
+        const before = await blocked();
+        const asked = section.viewButton && await clickTestId(view, `library-outside-view-${videoId}`) && await waitFor(`document.querySelector('[data-testid="open-blocked"]')`, 6000);
+        const fromSection = await blocked();
+        // What the question said is recorded as facts, not as text: the folder it names is a path on the machine the walk ran on.
+        detail.fromSection = { asked: Boolean(asked), state: fromSection.state, reason: fromSection.reason !== "", folder: fromSection.folder !== "", place: fromSection.place !== "", buttons: fromSection.buttons, readers: fromSection.readers };
+        if (!asked) problems.push("opening from the outside section did not ask");
+        if (fromSection.state !== "outside" || !fromSection.reason || !fromSection.folder) problems.push("the question does not say the file is outside the library, or which folder");
+        if (!fromSection.buttons.includes("open-blocked-add")) problems.push("the question offers no way to add the folder");
+        if (fromSection.readers.length) problems.push(`asking opened ${fromSection.readers.join(", ")} behind the question`);
+        if (fromSection.page !== before.page) problems.push("the page changed while the question was asked");
+        await shot("open-blocked-outside");
+        // What was made on it is there instead of the file.
+        const contentShown = asked && await clickTestId(view, "open-blocked-content-view") && await waitFor(`document.querySelector('[data-testid="open-blocked-content"]')`, 6000);
+        const contentReaders = (await blocked()).readers;
+        detail.content = { shown: Boolean(contentShown), readers: contentReaders };
+        if (!contentShown) problems.push("the question's \"查看笔记与记录\" showed nothing");
+        if (contentReaders.length) problems.push(`the records of the file opened ${contentReaders.join(", ")}`);
+        await shot("open-blocked-content");
+        await pressKey(view, "Escape");
+        await gone("open-blocked-content", 3000);
+        if (await exists("open-blocked")) { await clickTestId(view, "open-blocked-close"); await gone("open-blocked"); }
+
+        // The way forward: the folder is added again from the section, and the file opens from the work's page.
+        await openSettingsPage(view, "library");
+        await waitFor(`document.querySelector('[data-testid="library-outside-${videoId}"]')`, 6000);
         testHooks.pick = () => folders.video;
-        const added = await clickTestId(view, "open-blocked-add") && await gone("open-blocked", 8000);
+        const added = await clickTestId(view, "library-outside-add") && await gone(`library-outside-${videoId}`, 8000);
         testHooks.pick = undefined;
         await sleep(500);
         detail.folderAdded = added;
-        detail.noticeAfterAdd = (await noticeText()).includes(t("open.folderAdded"));
+        detail.noticeAfterAdd = (await noticeText()).includes(t("content.folderAdded"));
         detail.stateAfterAdd = await openableOf(videoId);
         detail.railBack = await railState(videoId);
-        if (!added) problems.push("adding the folder from the question did not close it");
+        if (!added) problems.push("adding the folder from the outside section did not take the video out of it");
         if (!detail.noticeAfterAdd) problems.push("adding the folder did not say so");
         if (detail.stateAfterAdd !== "open") problems.push(`after the folder is added the video is "${String(detail.stateAfterAdd)}"`);
         if (detail.railBack !== "open") problems.push("the rail does not offer the video again once its folder is added");

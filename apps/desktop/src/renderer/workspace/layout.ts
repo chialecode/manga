@@ -4,7 +4,6 @@ import { distribute, groupPanels } from "./model.ts";
 
 /** The narrowest a column may be (A-95), and the most columns there can be. */
 export const MIN_COLUMN_WIDTH = 320;
-export const MIN_COLUMN_HEIGHT = 160;
 export const MAX_COLUMNS = 4;
 
 /** The preset a number of columns is: the layout menu marks the one that matches what is on screen. */
@@ -17,11 +16,6 @@ export function columnsOf(api: DockviewApi): DockviewGroupPanel[] {
   const ordered = groupPanels(api.toJSON()).map((entry) => api.groups.find((group) => group.id === entry.id)).filter((group): group is DockviewGroupPanel => Boolean(group));
   const known = new Set(ordered.map((group) => group.id));
   return [...ordered, ...api.groups.filter((group) => !known.has(group.id))];
-}
-
-/** Every panel in reading order: the tabs of the first column, then the second, … */
-export function panelsInOrder(api: DockviewApi): string[] {
-  return groupPanels(api.toJSON()).flatMap((entry) => entry.panels);
 }
 
 /**

@@ -25,7 +25,7 @@ Feature `projects`；Facet `service`/`ui`；硬依赖 `manga.library`。创作�
 
 ### 项目总览（A-77）
 
-项目总览是主页视图里“项目总览”入口打开的标签（`pages/projects/project-overview.tsx`）：最近的项目及其材料、白板、导图、文稿、粗剪的数量与最后编辑时间，最近编辑的对象，待采纳的文稿建议，以及“新建项目”。数据来自命令 `project.overview`（聚合现有各对象的计数与更新时间），不新增表。
+项目总览是主页视图里“项目总览”入口打开的标签（`pages/projects/projects-page.tsx`）：列出项目及其材料、术语、对话、白板、导图、文稿、摘录、粗剪的数量，可以打开、归档、恢复、删除项目、导入项目包与“新建项目”。数据来自 `project.list`。命令 `project.overview`（聚合各对象的计数与更新时间，不新增表）仍可调用，界面不使用。
 
 ## 3. Agent 与界面
 
