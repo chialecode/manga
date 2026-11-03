@@ -16,6 +16,8 @@ export type ReaderStyle = {
   paragraphSpacingPx?: number;
   pageMode?: "single" | "double";
   pageRatio?: "book" | "free";
+  flow?: "paged" | "scroll";
+  panelPx?: number;
 };
 
 const THEME_LABEL = { white: "reading.themeWhite", paper: "reading.themePaper", green: "reading.themeGreen", teal: "reading.themeTeal", night: "reading.themeNight" } as const;
@@ -41,7 +43,8 @@ export function ReadingSettings(props: {
   const fonts = useInstalledFonts();
   const family = style.fontFamily ?? "sans";
   const known = isPreset(family) || fonts.families.includes(family);
-  const double = (style.pageMode ?? "single") === "double";
+  const paged = (style.flow ?? "paged") === "paged";
+  const double = paged && (style.pageMode ?? "single") === "double";
 
   useEffect(() => {
     const outside = (event: PointerEvent) => {
@@ -126,11 +129,18 @@ export function ReadingSettings(props: {
         <span data-testid="reading-measure-value" className="reader-size">{style.measurePx}</span>
       </label>
       <div className="reading-setting">
+        <span className="reading-setting-name">{t("reader.flow")}</span>
+        <span className="reader-group" role="group" aria-label={t("reader.flow")}>
+          <button type="button" className="secondary-button reader-ratio" data-testid="reading-flow-paged" aria-pressed={paged} onClick={() => props.onStyle({ flow: "paged" })}>{t("reader.flowPaged")}</button>
+          <button type="button" className="secondary-button reader-ratio" data-testid="reading-flow-scroll" aria-pressed={!paged} onClick={() => props.onStyle({ flow: "scroll" })}>{t("reader.flowScroll")}</button>
+        </span>
+      </div>
+      <div className="reading-setting">
         <span className="reading-setting-name">{t("reader.pageMode")}</span>
         <span className="reader-group" role="group" aria-label={t("reader.pageMode")}>
-          <button type="button" className="icon-button" data-testid="reading-mode-single" aria-pressed={!double} aria-label={t("reader.single")} title={t("reader.single")} onClick={() => props.onStyle({ pageMode: "single" })}><Square size={16} /></button>
-          <button type="button" className="icon-button" data-testid="reading-mode-double" aria-pressed={double} aria-label={t("reader.double")} title={t("reader.double")} disabled={!props.canDouble} onClick={() => props.onStyle({ pageMode: "double" })}><Columns2 size={16} /></button>
-          <button type="button" className="secondary-button reader-ratio" data-testid="reading-ratio" aria-pressed={(style.pageRatio ?? "book") === "book"} disabled={!double} onClick={() => props.onStyle({ pageRatio: (style.pageRatio ?? "book") === "book" ? "free" : "book" })}>{t("reader.ratio")}</button>
+          <button type="button" className="icon-button" data-testid="reading-mode-single" aria-pressed={!double} aria-label={t("reader.single")} title={t("reader.single")} disabled={!paged} onClick={() => props.onStyle({ pageMode: "single" })}><Square size={16} /></button>
+          <button type="button" className="icon-button" data-testid="reading-mode-double" aria-pressed={double} aria-label={t("reader.double")} title={t("reader.double")} disabled={!props.canDouble || !paged} onClick={() => props.onStyle({ pageMode: "double" })}><Columns2 size={16} /></button>
+          <button type="button" className="secondary-button reader-ratio" data-testid="reading-ratio" aria-pressed={(style.pageRatio ?? "book") === "book"} disabled={!paged} onClick={() => props.onStyle({ pageRatio: (style.pageRatio ?? "book") === "book" ? "free" : "book" })}>{t("reader.ratio")}</button>
         </span>
       </div>
       {props.extra}

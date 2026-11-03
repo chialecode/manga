@@ -1,17 +1,12 @@
+import { LIST_CHANGING_COMMANDS } from "@manga/contracts/sidebar";
+
 /**
  * What the sidebar lists can change without the sidebar's doing (交互设计 2.10: the lists follow the data): a reader that opens a resource inside a project
  * adds it to the project's materials, a note is written, renamed or deleted, an object is renamed in its own tab, and a resource read in "最近" goes to the
- * top of its list there. The commands that do so are named here; when one of them succeeds the window is told, once for a burst of them, and what lists
- * these things asks again. The conversations, the projects and the shelf have words of their own (`conversationsChanged`, `changedProjects`, `bump`).
+ * top of its list there. The commands that do so are `LIST_CHANGING_COMMANDS`; when one of them succeeds the window is told, once for a burst of them, and
+ * what lists these things asks again. The conversations, the projects and the shelf have words of their own (`conversationsChanged`, `changedProjects`, `bump`).
  */
-const CHANGING = new Set<string>([
-  "project.addMaterial", "project.removeMaterial",
-  "notes.create", "notes.rename", "notes.delete", "notes.undelete",
-  "whiteboard.create", "whiteboard.rename", "whiteboard.delete",
-  "mindmap.create", "mindmap.rename", "mindmap.delete",
-  "draft.create", "draft.rename", "draft.delete",
-  "roughcut.create", "roughcut.rename", "roughcut.delete",
-]);
+const CHANGING = new Set<string>(LIST_CHANGING_COMMANDS);
 
 /** A position saved in "最近" (a project's resources are its materials, not its positions); only a resource other than the last one moves its list. */
 const PROGRESS = new Set<string>(["progress.set", "progress.setPage", "progress.setTime"]);

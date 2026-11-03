@@ -1,6 +1,7 @@
 import { MangaError } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { readLayout } from "./domain/revision-layout.ts";
+import { outsideSql } from "./library-locations.ts";
 
 /**
  * Versions of one title and the facts a work holds that its files do not (A-67, A-68, A-69). Everything here is derived from rows that
@@ -16,13 +17,6 @@ export const bangumiEntrySql = (alias: string) => `(SELECT gl.external_id FROM w
  */
 export const groupKeySql = (alias: string) => `(CASE WHEN EXISTS (SELECT 1 FROM resources gr WHERE gr.work_id = ${alias}.id)
   THEN COALESCE(${alias}.media_kind || ':bgm:' || ${bangumiEntrySql(alias)}, ${alias}.id) ELSE ${alias}.id END)`;
-
-/**
- * A resource whose file is under no library path: it was imported before every file had to come from one (A-69, A-80). A resource that has
- * no file at all (text that was pasted in) has nothing to be outside of.
- */
-export const outsideSql = (alias: string) => `(EXISTS (SELECT 1 FROM resource_revisions ohv JOIN file_locations ohl ON ohl.resource_revision_id = ohv.id WHERE ohv.resource_id = ${alias}.id)
-  AND NOT EXISTS (SELECT 1 FROM resource_revisions ohv2 JOIN file_locations ohl2 ON ohl2.resource_revision_id = ohv2.id WHERE ohv2.resource_id = ${alias}.id AND ohl2.library_path_id IS NOT NULL))`;
 
 export type WorkVersion = {
   workId: string;
@@ -63,6 +57,12 @@ export function versionCount(store: DrizzleStore, workId: string): number {
 /** How many of a work's resources were imported on their own, outside every library path. */
 export function outsideCount(store: DrizzleStore, workId: string): number {
   return (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND ${outsideSql("r")}`).get(workId) as { n: number }).n;
+}
+
+/** How many of a work's resources are in a library path with their file gone (a scan or an opening found it missing): listed and marked as not available (A-113). */
+export function missingCount(store: DrizzleStore, workId: string): number {
+  const located = (available: 0 | 1) => `EXISTS (SELECT 1 FROM resource_revisions v JOIN file_locations fl ON fl.resource_revision_id = v.id WHERE v.resource_id = r.id AND fl.available = ${available})`;
+  return (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND NOT ${outsideSql("r")} AND ${located(0)} AND NOT ${located(1)}`).get(workId) as { n: number }).n;
 }
 
 /**

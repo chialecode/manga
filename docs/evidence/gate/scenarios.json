@@ -1,13 +1,13 @@
 {
   "status": "passed",
-  "stage": "m4",
-  "sourceFingerprint": "154b65590a277e6396496d96771f441466bcbfaacf52244d2504e206a17f72dd",
-  "lockFingerprint": "f4c9a5ebe492c4162531407f4c9f4a4b080e020a6f342edbfde4d8c5b2a0f0a4",
-  "testScriptFingerprint": "3e1306fc8a2ad2cff3cdda1ae103125b7190911f54ba96b5f5da82000565575f",
-  "buildScriptFingerprint": "ce748e107ee92e4f8c2a5eba2a17784490b7a6bb9821a95ca619b4a0c23a9e90",
+  "stage": "m5",
+  "sourceFingerprint": "243bffd08f65270bacb9d18a3b4f6edf4d188764115c01f3a70e42d9b4c09d74",
+  "lockFingerprint": "b1b59cfe9cec9a65ec3211a39ee6437721fe93fd26bc944e2a181702f21ad791",
+  "testScriptFingerprint": "65a5d2109c884b29d93e736bf5a3c54bc94a718ac4e112685b86aea5be724dd0",
+  "buildScriptFingerprint": "1c0ce66045a98760c8a86b5b1f9bdc66678733c47cf9d33ac0a859cf132ac689",
   "productAcceptance": "not-run",
-  "at": "2026-10-24T05:03:41.812Z",
-  "source": "packaged window walk, restart of its Profile, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
+  "at": "2026-11-03T14:48:09.225Z",
+  "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
       1280,
@@ -41,7 +41,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 1112,
+        "scanMs": 1109,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -1178,7 +1178,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.61329,
+            "time": 0.604421,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1186,7 +1186,7 @@
         },
         "rewind": {
           "at": 23.7,
-          "after": 20.5,
+          "after": 20.1,
           "rewinding": true
         },
         "rightButton": {
@@ -1323,6 +1323,71 @@
       }
     },
     {
+      "name": "hold-rate-hint-only",
+      "status": "passed",
+      "detail": {
+        "hold": {
+          "during": {
+            "rate": 2,
+            "holding": true
+          },
+          "after": {
+            "rate": 1,
+            "holding": false
+          },
+          "samples": 17,
+          "barSeen": 0
+        },
+        "showing": {
+          "woke": true,
+          "faded": true,
+          "onBar": true,
+          "keptOnBar": true
+        },
+        "tap": {
+          "from": 10.82,
+          "step": 5.22,
+          "downIdle": true,
+          "upIdle": false
+        },
+        "rewind": {
+          "rewinding": true,
+          "samples": 16,
+          "barSeen": 0
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "hold-rate-recovers",
+      "status": "passed",
+      "detail": {
+        "lostKeyUp": {
+          "firstHold": true,
+          "secondHold": true,
+          "firstBack": true,
+          "moved": 1.44,
+          "paused": true
+        },
+        "rateButton": true,
+        "repeatsOnly": {
+          "menu": true,
+          "menuClosed": true,
+          "inPanel": true,
+          "fromRepeats": true,
+          "secondBack": true
+        },
+        "sourceChange": {
+          "thirdHold": true,
+          "reloaded": true,
+          "rateAfterLoad": 2,
+          "holding": true,
+          "thirdBack": true
+        },
+        "problems": []
+      }
+    },
+    {
       "name": "overlays-player",
       "status": "passed",
       "detail": {
@@ -1410,6 +1475,143 @@
       }
     },
     {
+      "name": "danmaku-window-top",
+      "status": "passed",
+      "detail": {
+        "tall": {
+          "layer": {
+            "x": 48.66666793823242,
+            "y": 70.66667175292969,
+            "w": 671,
+            "h": 190
+          },
+          "picture": {
+            "x": 48.66666793823242,
+            "y": 262.33335876464844,
+            "w": 671,
+            "h": 377
+          },
+          "area": {
+            "x": 48.66666793823242,
+            "y": 70.66667175292969,
+            "w": 671,
+            "h": 760
+          },
+          "canvas": {
+            "w": 1006,
+            "h": 285
+          },
+          "count": 5,
+          "visible": true
+        },
+        "aboveThePicture": {
+          "bar": 192,
+          "canvasInk": 2544,
+          "screenBright": 5936,
+          "reach": true
+        },
+        "screenshot": {
+          "width": 640,
+          "height": 360,
+          "composited": "none",
+          "native": {
+            "w": 640,
+            "h": 360
+          },
+          "commentsExpected": false
+        },
+        "wide": {
+          "layer": {
+            "x": 308,
+            "y": 70,
+            "w": 831,
+            "h": 95
+          },
+          "picture": {
+            "x": 384.5,
+            "y": 70.16667175292969,
+            "w": 678,
+            "h": 381
+          },
+          "area": {
+            "x": 308,
+            "y": 70,
+            "w": 831,
+            "h": 381
+          },
+          "canvas": {
+            "w": 1246,
+            "h": 142
+          },
+          "count": 5,
+          "visible": true
+        },
+        "screenshotOver": {
+          "width": 640,
+          "height": 360,
+          "composited": "danmaku",
+          "native": {
+            "w": 640,
+            "h": 360
+          },
+          "commentsExpected": true
+        },
+        "windowFull": {
+          "layer": {
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 210
+          },
+          "picture": {
+            "x": 0,
+            "y": 60,
+            "w": 1280,
+            "h": 720
+          },
+          "area": {
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 840
+          },
+          "canvas": {
+            "w": 1920,
+            "h": 315
+          },
+          "count": 5,
+          "visible": true
+        },
+        "screenFull": {
+          "layer": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 360
+          },
+          "picture": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "area": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "canvas": {
+            "w": 3840,
+            "h": 540
+          },
+          "count": 5,
+          "visible": true
+        },
+        "problems": []
+      }
+    },
+    {
       "name": "danmaku-layer",
       "status": "passed",
       "detail": {
@@ -1424,13 +1626,13 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 325,
+        "searchMs": 328,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
-            "y": 249.6666717529297,
+            "y": 70.66667175292969,
             "w": 610,
-            "h": 172
+            "h": 350
           },
           "picture": {
             "x": 308.66668701171875,
@@ -1438,20 +1640,26 @@
             "w": 610,
             "h": 343
           },
+          "area": {
+            "x": 308.66668701171875,
+            "y": 70.66667175292969,
+            "w": 610,
+            "h": 700
+          },
           "canvas": {
             "w": 915,
-            "h": 258
+            "h": 525
           },
           "count": 5,
           "visible": true
         },
-        "ink": 2464,
+        "ink": 2466,
         "small": {
           "layer": {
             "x": 308.66668701171875,
-            "y": 132.6666717529297,
+            "y": 70.66667175292969,
             "w": 671,
-            "h": 189
+            "h": 250
           },
           "picture": {
             "x": 308.66668701171875,
@@ -1459,9 +1667,15 @@
             "w": 671,
             "h": 377
           },
+          "area": {
+            "x": 308.66668701171875,
+            "y": 70.66667175292969,
+            "w": 671,
+            "h": 500
+          },
           "canvas": {
             "w": 1006,
-            "h": 283
+            "h": 375
           },
           "count": 5,
           "visible": true
@@ -1474,6 +1688,12 @@
             "h": 720
           },
           "picture": {
+            "x": 0,
+            "y": 0,
+            "w": 2560,
+            "h": 1440
+          },
+          "area": {
             "x": 0,
             "y": 0,
             "w": 2560,
@@ -1494,7 +1714,7 @@
       "status": "passed",
       "detail": {
         "problems": [],
-        "bridge": 17
+        "bridge": 18
       }
     },
     {
@@ -1583,19 +1803,19 @@
       "detail": {
         "foot": {
           "x": 308.66668701171875,
-          "y": 788.1666870117188,
+          "y": 752.1666870117188,
           "w": 610,
-          "h": 51.5,
+          "h": 87.5,
           "r": 918.6666870117188,
           "b": 839.6666870117188
         },
         "panel": {
           "x": 566.6666870117188,
-          "y": 478.8333435058594,
+          "y": 407.5,
           "w": 340,
-          "h": 306,
+          "h": 341.3333435058594,
           "r": 906.6666870117188,
-          "b": 784.8333435058594
+          "b": 748.8333435058594
         },
         "viewport": {
           "w": 1280,
@@ -1604,8 +1824,13 @@
         "hidden": {
           "state": "hidden",
           "gap": 0.0000152587890625,
-          "text": true
+          "text": true,
+          "active": "body",
+          "activeInFoot": false,
+          "settings": false,
+          "side": false
         },
+        "hideLateMs": 10,
         "problems": []
       }
     },
@@ -1615,19 +1840,19 @@
       "detail": {
         "foot": {
           "x": 48.66666793823242,
-          "y": 692.1666870117188,
+          "y": 656.1666870117188,
           "w": 311,
-          "h": 87.5,
+          "h": 123.5,
           "r": 359.6666679382324,
           "b": 779.6666870117188
         },
         "panel": {
           "x": 60.66666793823242,
-          "y": 382.8333435058594,
+          "y": 311.5,
           "w": 287,
-          "h": 306,
+          "h": 341.3333435058594,
           "r": 347.6666679382324,
-          "b": 688.8333435058594
+          "b": 652.8333435058594
         },
         "viewport": {
           "w": 360,
@@ -1636,8 +1861,13 @@
         "hidden": {
           "state": "hidden",
           "gap": 0.0000152587890625,
-          "text": true
+          "text": true,
+          "active": "body",
+          "activeInFoot": false,
+          "settings": false,
+          "side": false
         },
+        "hideLateMs": 11,
         "problems": []
       }
     },
@@ -1655,11 +1885,11 @@
         },
         "panel": {
           "x": 748,
-          "y": 99.16667175292969,
+          "y": 121.83333587646484,
           "w": 340,
-          "h": 306,
+          "h": 283.3333435058594,
           "r": 1088,
-          "b": 405.1666717529297
+          "b": 405.1666793823242
         },
         "viewport": {
           "w": 1100,
@@ -1668,8 +1898,13 @@
         "hidden": {
           "state": "hidden",
           "gap": 0,
-          "text": true
+          "text": true,
+          "active": "body",
+          "activeInFoot": false,
+          "settings": false,
+          "side": false
         },
+        "hideLateMs": 8,
         "problems": []
       }
     },
@@ -1961,19 +2196,19 @@
           {
             "label": "novel-wide",
             "shown": true,
-            "checked": 9,
+            "checked": 11,
             "covered": []
           },
           {
             "label": "novel-narrow",
             "shown": true,
-            "checked": 9,
+            "checked": 11,
             "covered": []
           },
           {
             "label": "novel-short",
             "shown": true,
-            "checked": 9,
+            "checked": 11,
             "covered": []
           }
         ],
@@ -2129,7 +2364,7 @@
               0.666667
             ],
             "radius": [
-              10,
+              0,
               0,
               0,
               0
@@ -2789,13 +3024,13 @@
           "back": true,
           "ready": true,
           "place": 1,
-          "placeAfter": 3,
+          "placeAfter": 1,
           "of": 4
         },
         "fromViews": {
           "manage": true,
           "recordsTabs": 1,
-          "tabsInSettings": 5,
+          "tabsInSettings": 1,
           "same": true
         },
         "board": {
@@ -2806,18 +3041,18 @@
         "reload": {
           "before": [
             "reader:合成漫画",
+            "reader:合成动画",
             "reader:合成长篇 第一章",
-            "library:合成漫画",
-            "reader:合成动画"
+            "library:合成漫画"
           ],
           "after": [
             "reader:合成漫画",
+            "reader:合成动画",
             "reader:合成长篇 第一章",
-            "library:合成漫画",
-            "reader:合成动画"
+            "library:合成漫画"
           ],
-          "focusedBefore": "tmvlxlhbsbvv",
-          "focusedAfter": "tmvlxlhbsbvv",
+          "focusedBefore": "tmw0ssytjbcd",
+          "focusedAfter": "tmw0ssytjbcd",
           "context": ""
         },
         "stored": 4
@@ -2873,16 +3108,16 @@
         "problems": [],
         "other-column": {
           "before": 12,
-          "after": 13.769006,
-          "column": 1,
+          "after": 13.769715,
+          "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 13.824119,
-          "after": 15.652632,
-          "column": 2,
+          "before": 13.820186,
+          "after": 15.636087,
+          "column": 3,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
@@ -2938,6 +3173,39 @@
             "key": "2",
             "code": "Digit2",
             "ctrl": true,
+            "at": "tab-panel",
+            "within": "tmw0ssytjbcd",
+            "dialog": false,
+            "prevented": true,
+            "by": "event.preventDefault < l < e",
+            "focus": true
+          },
+          {
+            "key": " ",
+            "code": "Space",
+            "ctrl": false,
+            "at": "tab-panel",
+            "within": "tmw0ssytjbcd",
+            "dialog": false,
+            "prevented": true,
+            "by": "event.preventDefault < e",
+            "focus": true
+          },
+          {
+            "key": " ",
+            "code": "Space",
+            "ctrl": false,
+            "at": "tab-panel",
+            "within": "tmw0ssytjbcd",
+            "dialog": false,
+            "prevented": true,
+            "by": "event.preventDefault < e",
+            "focus": true
+          },
+          {
+            "key": "1",
+            "code": "Digit1",
+            "ctrl": true,
             "at": "DIV",
             "within": null,
             "dialog": false,
@@ -2950,18 +3218,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmvlxlhbsbvv",
-            "dialog": false,
-            "prevented": true,
-            "by": "event.preventDefault < e",
-            "focus": true
-          },
-          {
-            "key": " ",
-            "code": "Space",
-            "ctrl": false,
-            "at": "tab-panel",
-            "within": "tmvlxlhbsbvv",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -2972,29 +3229,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmvlxlhbsbvv",
-            "dialog": false,
-            "prevented": true,
-            "by": "event.preventDefault < l < e",
-            "focus": true
-          },
-          {
-            "key": " ",
-            "code": "Space",
-            "ctrl": false,
-            "at": "tab-panel",
-            "within": "tmvlxlh6f961",
-            "dialog": false,
-            "prevented": true,
-            "by": "event.preventDefault < e",
-            "focus": true
-          },
-          {
-            "key": "1",
-            "code": "Digit1",
-            "ctrl": true,
-            "at": "tab-panel",
-            "within": "tmvlxlh6f961",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3005,7 +3240,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmvlxlh6f961",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3016,7 +3251,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmvlxlh6f961",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3026,20 +3261,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmvlxlhbsbvv",
-            "at": 8331,
+            "tab": "tmw0ssytjbcd",
+            "at": 8156,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmvlxlhbsbvv",
-            "at": 8988,
+            "tab": "tmw0ssytjbcd",
+            "at": 8844,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmvlxlhbsbvv",
-            "at": 10248,
+            "tab": "tmw0ssytjbcd",
+            "at": 10098,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3065,7 +3300,7 @@
           },
           "one": {
             "columns": 1,
-            "tabs": 2
+            "tabs": 3
           }
         },
         "recentAgain": {
@@ -3086,7 +3321,7 @@
           ],
           "one": [
             "single",
-            2
+            3
           ],
           "two": [
             "two",
@@ -3155,7 +3390,7 @@
           "title": "窗口截图项目"
         },
         "behind": {
-          "hiddenTabs": 9,
+          "hiddenTabs": 13,
           "boardCards": 2,
           "drawn": 0
         },
@@ -3176,26 +3411,33 @@
         "stateAfterRemoval": "outside",
         "railAfter": "outside",
         "railRowShown": false,
-        "fromOverview": {
+        "listed": {
+          "overviewShown": true,
+          "onOverview": false,
+          "shelfShown": true,
+          "onShelf": false
+        },
+        "section": {
+          "listed": true,
+          "add": true,
+          "viewButton": true,
+          "remove": true
+        },
+        "fromSection": {
           "asked": true,
           "state": "outside",
-          "reason": "这个资源的文件在所有资源库位置之外，所以不能打开。把它所在的文件夹加为资源库位置后就可以了。",
-          "place": false,
+          "reason": true,
           "folder": true,
+          "place": false,
           "buttons": [
             "open-blocked-add",
             "open-blocked-content-view",
             "open-blocked-close"
           ],
-          "readers": [],
-          "pageBefore": "tmvlxmaouij8",
-          "pageAfter": "tmvlxmaouij8"
+          "readers": []
         },
-        "fromWorkPage": {
-          "onPage": true,
-          "readDisabled": true,
-          "chip": "库外",
-          "button": "查看记录",
+        "content": {
+          "shown": true,
           "readers": []
         },
         "folderAdded": true,
@@ -3353,13 +3595,11 @@
         "views": {
           "home": {
             "groups": [
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded",
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:3",
-              "recent:12"
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:3",
+              "recent:8"
             ],
             "entries": [
-              "sidebar-new-conversation",
-              "sidebar-new-project",
               "sidebar-entry-library",
               "sidebar-entry-projects"
             ]
@@ -3370,8 +3610,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:1",
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:1",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:1",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3382,9 +3622,9 @@
           },
           "novel": {
             "rows": [
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded",
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:0",
-              "recent:0"
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "recent:2"
             ],
             "flat": 0,
             "entries": [
@@ -3393,8 +3633,8 @@
           },
           "comic": {
             "rows": [
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded",
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:1",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3404,8 +3644,8 @@
           },
           "video": {
             "rows": [
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded",
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3419,8 +3659,8 @@
           },
           "note": {
             "rows": [
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded",
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:folded",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3435,8 +3675,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:2",
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:2",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3446,8 +3686,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:0",
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3457,8 +3697,8 @@
           },
           "draft": {
             "rows": [
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:0",
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3468,8 +3708,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_d63f1700-4e3a-4f69-b47e-e0150ad75c73:0",
-              "prj_f396fdbc-c993-487a-9610-9f4ab32dbf6c:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3533,9 +3773,9 @@
             "x": 48,
             "y": 36,
             "w": 260,
-            "h": 311.8333435058594,
+            "h": 569.4375,
             "r": 308,
-            "b": 347.8333435058594
+            "b": 605.4375
           },
           "rail": {
             "x": 0,
@@ -3556,6 +3796,18 @@
             ],
             "covers": true
           }
+        },
+        "afterIcon": {
+          "main": {
+            "x": 48,
+            "y": 36,
+            "w": 1232,
+            "h": 804,
+            "r": 1280,
+            "b": 840
+          },
+          "dock": null,
+          "dockBefore": true
         },
         "keys": {
           "keyCard": true,
@@ -3593,7 +3845,7 @@
           "tabs": 2,
           "columns": 1,
           "dock": true,
-          "time": 1.29
+          "time": 1.28
         },
         "directory": {
           "pages": 17,
@@ -3617,7 +3869,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 1.296629,
+            "time": 1.289246,
             "paused": true,
             "ready": 4
           }
@@ -3639,10 +3891,10 @@
           "same": true,
           "emptied": 0,
           "loads": 0,
-          "time": 1.3,
+          "time": 1.29,
           "paused": true,
           "ready": 4,
-          "before": 1.29
+          "before": 1.28
         }
       }
     },
@@ -3659,6 +3911,822 @@
           "library",
           "records"
         ]
+      }
+    },
+    {
+      "name": "view-main-linkage",
+      "status": "passed",
+      "detail": {
+        "open": {
+          "boardOpen": true,
+          "videoReady": true,
+          "marked": [
+            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15",
+            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15"
+          ]
+        },
+        "atBoard": {
+          "main": "whiteboard",
+          "focused": "whiteboard",
+          "video": {
+            "same": true,
+            "time": 1.482038,
+            "paused": true,
+            "loads": 0,
+            "emptied": 0
+          },
+          "dock": "当前对话",
+          "projectDock": "当前对话"
+        },
+        "comic": {
+          "main": "comic",
+          "empty": true,
+          "manage": true
+        },
+        "back": {
+          "main": "video",
+          "video": {
+            "same": true,
+            "time": 1.482038,
+            "paused": true,
+            "loads": 0,
+            "emptied": 0
+          },
+          "dock": "合成动画",
+          "left": 1.482038,
+          "episodeDock": "合成动画"
+        },
+        "home": {
+          "kinds": [
+            "whiteboard",
+            "reader"
+          ],
+          "columns": [
+            1,
+            1
+          ]
+        },
+        "fromCard": {
+          "card": "wb-open-wbn_c5413f12-f8d0-4dd2-99bc-9f6b7fd5b298",
+          "switched": true,
+          "there": "video"
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "hidden-layers",
+      "status": "passed",
+      "detail": {
+        "whiteboard": {
+          "the settings": {
+            "hidden": true,
+            "leaks": [],
+            "screen": [
+              "#ffffff",
+              "#ffffff",
+              "#ffffff"
+            ],
+            "was": [
+              "#ffffff",
+              "#ffffff",
+              "#ffffff"
+            ]
+          },
+          "another tab": {
+            "hidden": true,
+            "leaks": [],
+            "screen": [
+              "#ffffff",
+              "#ffffff",
+              "#ffffff"
+            ],
+            "was": [
+              "#ffffff",
+              "#ffffff",
+              "#ffffff"
+            ]
+          },
+          "another view": {
+            "hidden": true,
+            "leaks": [],
+            "screen": [
+              "#ffffff",
+              "#ffffff",
+              "#ffffff"
+            ],
+            "was": [
+              "#ffffff",
+              "#ffffff",
+              "#ffffff"
+            ]
+          }
+        },
+        "mindmap": {
+          "the settings": {
+            "hidden": true,
+            "leaks": [],
+            "screen": [
+              "#ffffff",
+              "#ffffff"
+            ],
+            "was": [
+              "#ffffff",
+              "#ffffff"
+            ]
+          },
+          "another tab": {
+            "hidden": true,
+            "leaks": [],
+            "screen": [
+              "#ffffff",
+              "#ffffff"
+            ],
+            "was": [
+              "#ffffff",
+              "#ffffff"
+            ]
+          },
+          "another view": {
+            "hidden": true,
+            "leaks": [],
+            "screen": [
+              "#ffffff",
+              "#ffffff"
+            ],
+            "was": [
+              "#ffffff",
+              "#ffffff"
+            ]
+          }
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "tab-reopen-place",
+      "status": "passed",
+      "detail": {
+        "setup": {
+          "right": true,
+          "opened": 3,
+          "columns": [
+            1,
+            3
+          ]
+        },
+        "reopen": {
+          "gone": true,
+          "closed": {
+            "column": 1,
+            "index": 1
+          },
+          "back": {
+            "index": 1,
+            "at": 1
+          },
+          "columns": [
+            1,
+            3
+          ],
+          "scanned": 0
+        },
+        "keys": {
+          "focused": true,
+          "before": 4,
+          "kept": 4
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "quit-saves-layout",
+      "status": "passed",
+      "detail": {
+        "save": {
+          "before": "two",
+          "answered": true,
+          "ms": 9,
+          "after": "single"
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "shell-corner",
+      "status": "passed",
+      "detail": {
+        "rows": {
+          "sidebar-shown": {
+            "radius": "0px",
+            "corner": "#ad3268",
+            "below": "#ffffff",
+            "frame": "#f3f4f7",
+            "odd": []
+          },
+          "sidebar-folded": {
+            "radius": "0px",
+            "corner": "#ad3268",
+            "below": "#ffffff",
+            "frame": "#f3f4f7",
+            "odd": []
+          },
+          "window-full-screen": {
+            "radius": "0px",
+            "corner": "#fefefe",
+            "below": "#ffffff",
+            "frame": "#f3f4f7",
+            "odd": []
+          }
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "sidebar-drag-collapse",
+      "status": "passed",
+      "detail": {
+        "drag": {
+          "width0": 260,
+          "atLeast": {
+            "width": 200,
+            "collapsing": null
+          },
+          "stopped": {
+            "width": 200,
+            "collapsing": null
+          },
+          "folding": {
+            "collapsing": "true",
+            "sidebar": false,
+            "valuenow": "0"
+          },
+          "back": {
+            "collapsing": null,
+            "width": 200
+          },
+          "after": {
+            "visible": false,
+            "width": 260
+          }
+        },
+        "pullout": {
+          "drawn": true,
+          "rail": 48,
+          "at": 48
+        },
+        "pull": {
+          "short": false,
+          "during": 280,
+          "pulled": {
+            "visible": true,
+            "width": 280
+          }
+        },
+        "blurred": {
+          "was": "true",
+          "kept": {
+            "visible": true,
+            "width": 280
+          },
+          "width": 280
+        },
+        "dock": {
+          "dockWidth": 360,
+          "dockFolding": "true",
+          "before": {
+            "visible": true,
+            "width": 360
+          },
+          "dockAfter": {
+            "visible": false,
+            "width": 360
+          }
+        },
+        "keys": {
+          "folded": true,
+          "focus": "shell-sidebar-toggle",
+          "back": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "menu-hover",
+      "status": "passed",
+      "detail": {
+        "pink": "#f8e4ed",
+        "contextMenu": {
+          "left": "#f8e4ed",
+          "right": "#f8e4ed",
+          "item": [
+            5,
+            5
+          ]
+        },
+        "more": {
+          "left": "#f8e4ed",
+          "right": "#f8e4ed",
+          "leftOnPin": "#f8e4ed",
+          "rightOnPin": "#f8e4ed",
+          "pin": [
+            32,
+            34
+          ],
+          "pinIdle": {
+            "color": "rgb(173, 50, 104)",
+            "background": "rgba(0, 0, 0, 0)"
+          },
+          "pinHover": {
+            "color": "rgb(132, 32, 77)",
+            "background": "rgba(0, 0, 0, 0)"
+          }
+        },
+        "order": {
+          "before": [
+            "conversation",
+            "novel",
+            "comic",
+            "video",
+            "note",
+            "whiteboard",
+            "mindmap",
+            "draft",
+            "roughcut"
+          ],
+          "afterPin": [
+            "conversation",
+            "novel",
+            "comic",
+            "video",
+            "note",
+            "whiteboard",
+            "mindmap",
+            "draft",
+            "roughcut"
+          ]
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "rail-reorder",
+      "status": "passed",
+      "detail": {
+        "initial": [
+          "conversation",
+          "novel",
+          "comic",
+          "video",
+          "note",
+          "whiteboard",
+          "mindmap",
+          "draft",
+          "roughcut"
+        ],
+        "home": {
+          "draggingHome": false,
+          "moved": 0
+        },
+        "menuUp": {
+          "from": 4,
+          "to": 3,
+          "focus": "comic",
+          "said": "漫画已移到第 5 位"
+        },
+        "final": {
+          "drawn": [
+            "roughcut",
+            "note",
+            "conversation",
+            "comic",
+            "novel",
+            "video",
+            "whiteboard",
+            "mindmap",
+            "draft"
+          ],
+          "kept": [
+            "roughcut",
+            "note",
+            "conversation",
+            "comic",
+            "novel",
+            "video",
+            "whiteboard",
+            "mindmap",
+            "draft"
+          ]
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "sidebar-home-list",
+      "status": "passed",
+      "detail": {
+        "project": {
+          "icon": "lucide-folder-open",
+          "folded": "lucide-folder",
+          "rows": [
+            "主页混排的新笔记|笔记",
+            "轨道项目对话|对话",
+            "隐藏层导图|导图",
+            "截图白板|白板",
+            "合成动画|动漫",
+            "白板 2|白板",
+            "合成漫画|漫画"
+          ],
+          "guide": {
+            "drawn": true,
+            "color": "rgb(221, 225, 232)",
+            "x": 72
+          }
+        },
+        "recent": {
+          "icon": "lucide-clock",
+          "rows": 8,
+          "guide": {
+            "drawn": true,
+            "color": "rgb(173, 50, 104)",
+            "x": 72
+          }
+        },
+        "entries": [
+          "sidebar-entry-library",
+          "sidebar-entry-projects"
+        ],
+        "sections": [
+          "all:7"
+        ],
+        "guides": {
+          "current": "recent:rgb(173, 50, 104)",
+          "other": "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:rgb(221, 225, 232)"
+        },
+        "narrow": {
+          "width": 200,
+          "rows": 15,
+          "broken": []
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "sidebar-counts",
+      "status": "passed",
+      "detail": {
+        "counts": {
+          "home/recent/all": "36=36",
+          "home/project/all": "7=7",
+          "comic/recent/comic": "1=1",
+          "comic/project/comic": "1=1",
+          "novel/recent/novel": "2=2",
+          "novel/project/novel": "0=0"
+        },
+        "samples": {
+          "comic": "res_6fdbb46e-63e3-4089-9fe8-df83270322e3",
+          "novel": "res_84946f7e-0afa-440b-9259-d876c7657983"
+        },
+        "before": {
+          "comicOpened": true,
+          "material": true,
+          "listed": 2
+        },
+        "drawn": {
+          "more": [],
+          "empty": false,
+          "rows": 1,
+          "ids": 1
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "media-view-covers",
+      "status": "passed",
+      "detail": {
+        "width": 260,
+        "novel": {
+          "display": "cover",
+          "covers": 2,
+          "perRow": 2,
+          "placeholders": 2,
+          "images": 0,
+          "keys": [
+            "sidebar-item-resource-res_00deb5bb-4c83-4064-b507-b72899eec530",
+            "sidebar-item-resource-res_8f8e7659-ff6b-4c87-b270-f6787fddc6d0"
+          ],
+          "rows": 0,
+          "width": 260,
+          "recent": [
+            "work:work_1962017a-b244-4261-a12f-b8be082d91cd",
+            "work:work_ee3123e1-572c-49f2-927b-8a9c46d8dc7d"
+          ]
+        },
+        "comic": {
+          "display": "cover",
+          "covers": 1,
+          "perRow": 1,
+          "placeholders": 1,
+          "images": 0,
+          "keys": [
+            "sidebar-item-resource-res_c786fa0a-8c9f-461a-8942-42b946337eff"
+          ],
+          "rows": 0,
+          "width": 260,
+          "recent": [
+            "resource:res_c786fa0a-8c9f-461a-8942-42b946337eff"
+          ]
+        },
+        "video": {
+          "display": "cover",
+          "covers": 1,
+          "perRow": 1,
+          "placeholders": 0,
+          "images": 1,
+          "keys": [
+            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15"
+          ],
+          "rows": 0,
+          "width": 260,
+          "recent": [
+            "work:work_157d1078-2fe4-4223-9bc3-ca7b1e7f9cb1"
+          ]
+        },
+        "switch": {
+          "listed": {
+            "display": "list",
+            "rows": 1,
+            "covers": 0
+          },
+          "kept": {
+            "display": "list",
+            "rows": 1
+          },
+          "stored": {
+            "video": "list"
+          }
+        },
+        "card": {
+          "covers": 1,
+          "box": {
+            "x": 48,
+            "y": 36.66666793823242,
+            "w": 259.3333435058594,
+            "h": 423.8020935058594,
+            "r": 307.3333435058594,
+            "b": 460.4687614440918
+          },
+          "viewport": {
+            "w": 1280,
+            "h": 840
+          }
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-paginate",
+      "status": "passed",
+      "detail": {
+        "txt": {
+          "start": 0,
+          "end": 441,
+          "page": 1,
+          "total": 29,
+          "chapter": ""
+        },
+        "fontChange": {
+          "before": {
+            "start": 1764,
+            "end": 2205,
+            "page": 5,
+            "total": 29,
+            "chapter": ""
+          },
+          "after": {
+            "start": 1428,
+            "end": 1785,
+            "page": 5,
+            "total": 36,
+            "chapter": ""
+          }
+        },
+        "epub": {
+          "start": 0,
+          "end": 404,
+          "page": 1,
+          "total": 9,
+          "chapter": "第1章"
+        },
+        "bookmark": {
+          "marked": {
+            "start": 404,
+            "end": 833,
+            "page": 2,
+            "total": 9,
+            "chapter": "第1章"
+          },
+          "back": {
+            "start": 404,
+            "end": 833,
+            "page": 2,
+            "total": 9,
+            "chapter": "第1章"
+          },
+          "hit": true
+        },
+        "nextChapter": {
+          "start": 0,
+          "end": 404,
+          "page": 1,
+          "total": 9,
+          "chapter": "第2章"
+        },
+        "previousChapter": {
+          "start": 3324,
+          "end": 3363,
+          "page": 9,
+          "total": 9,
+          "chapter": "第1章"
+        },
+        "double": {
+          "twoFrom": {
+            "start": 3190,
+            "end": 3363,
+            "page": 21,
+            "total": 22,
+            "chapter": "第1章"
+          },
+          "twoTo": {
+            "start": 2870,
+            "end": 3190,
+            "page": 19,
+            "total": 22,
+            "chapter": "第1章"
+          }
+        },
+        "scrollOnward": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "novel-side-panel",
+      "status": "passed",
+      "detail": {
+        "toc": {
+          "box": {
+            "placement": "left",
+            "panelRight": 588.6666870117188,
+            "bodyLeft": 588.6666870117188,
+            "opened": true,
+            "pageWidth": 1030
+          },
+          "before": {
+            "start": 0,
+            "end": 444,
+            "page": 1,
+            "total": 8,
+            "chapter": "第2章"
+          },
+          "after": {
+            "start": 0,
+            "end": 444,
+            "page": 1,
+            "total": 8,
+            "chapter": "第2章"
+          }
+        },
+        "readerWidth": 1030,
+        "search": {
+          "box": {
+            "placement": "left",
+            "panelRight": 588.6666870117188,
+            "bodyLeft": 588.6666870117188,
+            "opened": true,
+            "pageWidth": 1030
+          },
+          "before": {
+            "start": 0,
+            "end": 444,
+            "page": 1,
+            "total": 8,
+            "chapter": "第2章"
+          },
+          "after": {
+            "start": 0,
+            "end": 444,
+            "page": 1,
+            "total": 8,
+            "chapter": "第2章"
+          }
+        },
+        "bookmarks": {
+          "box": {
+            "placement": "left",
+            "panelRight": 588.6666870117188,
+            "bodyLeft": 588.6666870117188,
+            "opened": true,
+            "pageWidth": 1030
+          },
+          "before": {
+            "start": 0,
+            "end": 444,
+            "page": 1,
+            "total": 8,
+            "chapter": "第2章"
+          },
+          "after": {
+            "start": 0,
+            "end": 444,
+            "page": 1,
+            "total": 8,
+            "chapter": "第2章"
+          }
+        },
+        "narrow": {
+          "placement": "float",
+          "panelRight": 328.6666679382324,
+          "bodyLeft": 48.66666793823242,
+          "opened": true,
+          "pageWidth": 571
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "scan-incremental",
+      "status": "passed",
+      "detail": {
+        "progressAt": 1274,
+        "cardAt": 1280,
+        "cardAfterProgressMs": 6,
+        "runningAtCard": true,
+        "opened": {
+          "read": true,
+          "runningAtOpen": true
+        },
+        "works": 20,
+        "afterImport": {
+          "calls": 8,
+          "first": 1273,
+          "finishedAt": 7555
+        },
+        "cardsShown": 15,
+        "problems": []
+      }
+    },
+    {
+      "name": "library-in-locations",
+      "status": "passed",
+      "detail": {
+        "lists": {
+          "works": false,
+          "library": false,
+          "sidebar": false,
+          "home": false,
+          "find": false,
+          "missing": {
+            "listed": true,
+            "missingCount": 1
+          }
+        },
+        "drawn": {
+          "onOverview": false,
+          "novel": true,
+          "outside": false,
+          "missing": true,
+          "flags": " · 文件不可用"
+        },
+        "section": {
+          "shown": true,
+          "total": 1,
+          "items": 1,
+          "titled": true
+        },
+        "removal": {
+          "removed": true,
+          "countsBefore": {
+            "works": 29,
+            "library": 100
+          },
+          "countsAfter": {
+            "works": 29,
+            "library": 100
+          },
+          "noteKept": true,
+          "outsideAfter": 0
+        },
+        "loose": 5,
+        "unassigned": {
+          "opened": true,
+          "assigned": true,
+          "inTarget": true,
+          "identified": true,
+          "stillLoose": false,
+          "said": true
+        },
+        "problems": []
       }
     },
     {
@@ -3719,13 +4787,40 @@
           }
         ],
         "readerBody": true,
+        "views": {
+          "novelMain": "novel",
+          "novelTabs": [
+            "library",
+            "reader"
+          ],
+          "homeColumns": 2,
+          "homeTabs": [
+            "library",
+            "reader",
+            "library"
+          ]
+        },
+        "comicDisplay": "list",
         "rail": {
           "icons": 9,
           "kept": [
             "whiteboard"
           ]
         },
-        "settingsPage": "models"
+        "settingsPage": "library"
+      }
+    },
+    {
+      "name": "close-saves-layout",
+      "status": "passed",
+      "detail": {
+        "problems": [],
+        "from": "two",
+        "to": "single",
+        "answeredMs": 7,
+        "closedMs": 15,
+        "stored": "single",
+        "columns": 1
       }
     },
     {
@@ -3877,7 +4972,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 9
+        "overheadMs": 3
       }
     },
     {
@@ -3916,6 +5011,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3925,6 +5028,14 @@
           "tabbar": true,
           "canvas": 553,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3934,6 +5045,14 @@
           "tabbar": true,
           "canvas": 468,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3943,6 +5062,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3952,6 +5079,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3961,6 +5096,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3970,6 +5113,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -3979,6 +5130,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1280,
+            "inner": 1280,
+            "mainScroll": 610,
+            "mainClient": 610,
+            "overflow": "hidden"
+          },
           "ok": true
         }
       ]
@@ -3994,6 +5153,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4003,6 +5170,14 @@
           "tabbar": true,
           "canvas": 360,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4012,6 +5187,14 @@
           "tabbar": true,
           "canvas": 360,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4021,6 +5204,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4030,6 +5221,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4039,6 +5238,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4048,6 +5255,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4057,6 +5272,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 360,
+            "inner": 360,
+            "mainScroll": 311,
+            "mainClient": 311,
+            "overflow": "hidden"
+          },
           "ok": true
         }
       ]
@@ -4072,6 +5295,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4081,6 +5312,14 @@
           "tabbar": true,
           "canvas": 360,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4090,6 +5329,14 @@
           "tabbar": true,
           "canvas": 360,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4099,6 +5346,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4108,6 +5363,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4117,6 +5380,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4126,6 +5397,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         },
         {
@@ -4135,6 +5414,14 @@
           "tabbar": true,
           "canvas": null,
           "body": true,
+          "wide": [],
+          "sizes": {
+            "doc": 1100,
+            "inner": 1100,
+            "mainScroll": 792,
+            "mainClient": 792,
+            "overflow": "hidden"
+          },
           "ok": true
         }
       ]
@@ -4149,9 +5436,28 @@
           "firstToken": true,
           "duration": true
         },
-        "copied": 55210,
+        "copied": 56082,
         "holdersChecked": 8,
         "leaks": [],
+        "problems": []
+      }
+    },
+    {
+      "name": "conversation-auto-title",
+      "status": "passed",
+      "detail": {
+        "first": {
+          "before": "对话",
+          "tab": "帮我总结一下第一章的主要人物",
+          "named": true,
+          "stored": true
+        },
+        "sidebar": true,
+        "dock": true,
+        "renamed": {
+          "again": true,
+          "kept": "我自己起的名字"
+        },
         "problems": []
       }
     }

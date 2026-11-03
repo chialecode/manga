@@ -100,13 +100,6 @@ export function fitScale(fit: ComicFit, size: Size, viewport: Size, zoom = 1): n
   return safe(base) * safe(zoom);
 }
 
-/** Pixel size of a spread on screen. Rounded so two pages of a spread never leave a hairline seam. */
-export function fittedSize(fit: ComicFit, pages: readonly ComicPageInfo[], viewport: Size, zoom = 1): Size {
-  const natural = spreadSize(pages);
-  const scale = fitScale(fit, natural, viewport, zoom);
-  return { width: Math.max(1, Math.round(natural.width * scale)), height: Math.max(1, Math.round(natural.height * scale)) };
-}
-
 /** Pixel size of each page of a spread, in the given order. The pages share one height, so the pair lines up. */
 export function pageBoxes(fit: ComicFit, pages: readonly ComicPageInfo[], viewport: Size, zoom = 1): Size[] {
   const natural = spreadSize(pages);

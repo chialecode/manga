@@ -217,4 +217,52 @@ describe("the player hands its bar's height and whether the window is full to th
       expect(screen.getByTestId("video-stage").style.getPropertyValue("--player-lift")).toBe("84px");
     } finally { restore(); }
   });
+
+  it("AT-134 in a full window: holding an arrow shows only its hint, a bar that shows fades, and a tap shows the bar when the key goes up", async () => {
+    const restore = withHeights({ "video-controls": 84 });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const shell = () => screen.getByTestId("video-shell");
+    try {
+      await ready(windowFull(true));
+      await act(async () => { await element().play(); });
+      act(() => { vi.advanceTimersByTime(3000); });
+      await waitFor(() => expect(shell().hasAttribute("data-idle")).toBe(true));
+      // Held past the hold time, with the system's repeats: the bar never shows, the hint does.
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      for (let tick = 0; tick < 8; tick += 1) {
+        act(() => { vi.advanceTimersByTime(100); });
+        fireEvent.keyDown(window, { key: "ArrowRight", repeat: true });
+        expect(shell().hasAttribute("data-idle"), `tick ${tick}`).toBe(true);
+      }
+      expect(screen.getByTestId("video-holding")).toBeTruthy();
+      fireEvent.keyUp(window, { key: "ArrowRight" });
+      expect(shell().hasAttribute("data-idle")).toBe(true);
+      // The pointer moves: the bar shows; a hold now fades it at once.
+      fireEvent.pointerMove(window);
+      expect(shell().hasAttribute("data-idle")).toBe(false);
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      expect(shell().hasAttribute("data-idle")).toBe(false);
+      act(() => { vi.advanceTimersByTime(350); });
+      await waitFor(() => expect(shell().hasAttribute("data-idle")).toBe(true));
+      fireEvent.keyUp(window, { key: "ArrowRight" });
+      // ← held is the same: the rewind does not bring the bar.
+      fireEvent.keyDown(window, { key: "ArrowLeft" });
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(screen.getByTestId("video-rewinding")).toBeTruthy();
+      expect(shell().hasAttribute("data-idle")).toBe(true);
+      fireEvent.keyUp(window, { key: "ArrowLeft" });
+      await waitFor(() => expect(screen.queryByTestId("video-rewinding")).toBeNull());
+      expect(shell().hasAttribute("data-idle")).toBe(true);
+      // A tap: nothing while it is down, the bar when it goes up.
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      expect(shell().hasAttribute("data-idle")).toBe(true);
+      fireEvent.keyUp(window, { key: "ArrowRight" });
+      expect(shell().hasAttribute("data-idle")).toBe(false);
+      // Another key shows it as before.
+      act(() => { vi.advanceTimersByTime(3000); });
+      await waitFor(() => expect(shell().hasAttribute("data-idle")).toBe(true));
+      fireEvent.keyDown(window, { key: "m" });
+      expect(shell().hasAttribute("data-idle")).toBe(false);
+    } finally { restore(); }
+  });
 });

@@ -26,6 +26,14 @@ contextBridge.exposeInMainWorld("manga", {
     ipcRenderer.on("manga:window-state", handler);
     return () => { ipcRenderer.removeListener("manga:window-state", handler); };
   },
+  // Before the window closes the main process asks the page to save what waits for its save now (LOOP-23); the page answers when it is done.
+  onSaveNow: (listener: () => Promise<unknown>) => {
+    const handler = (_event: unknown, token: string) => {
+      void Promise.resolve().then(listener).catch(() => undefined).finally(() => ipcRenderer.send("manga:saved", token));
+    };
+    ipcRenderer.on("manga:save-now", handler);
+    return () => { ipcRenderer.removeListener("manga:save-now", handler); };
+  },
   // The title bar's menu: leaves the application (the main process decides how it closes down).
   quit: () => ipcRenderer.invoke("manga:quit"),
   // Only the metadata source's own pages open, in the system browser; the main process decides.

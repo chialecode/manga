@@ -4,7 +4,7 @@ import type { DrizzleStore } from "@manga/storage-drizzle";
 import { readLayout } from "../domain/revision-layout.ts";
 import type { StreamItem, VoiceSessionLike } from "./stream-types.ts";
 
-export type { StreamAgent, StreamItem, StreamNote, StreamUser, StreamVoice } from "./stream-types.ts";
+export type { StreamItem } from "./stream-types.ts";
 
 type SessionRow = { id: string; kind: string; target_id: string | null };
 

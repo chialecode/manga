@@ -15,8 +15,9 @@ const FIRST = 24;
 const asKind = (kind: string): WorkMediaKind => (kind === "comic" || kind === "video" ? kind : "novel");
 
 /**
- * The resources that are in no work (LIB-02, A-87): the ones whose entry was deleted, and the ones taken out of a work. They stay listed at the end of
- * the shelf and open like any other; they can be put in a work, or matched to an online entry, which makes a work for them first.
+ * The resources that are in no work (LIB-02, A-87): the ones whose entry was deleted, and the ones taken out of a work, in a library path (A-113).
+ * They stay listed at the end of the shelf and open like any other; they can be put back in a work by the folder they are in (one or the ones
+ * ticked), put in a work, or matched to an online entry, which makes a work for them first.
  */
 export function UnassignedGroup(props: {
   t: T;
@@ -36,6 +37,7 @@ export function UnassignedGroup(props: {
   const [state, setState] = useState<{ items: UnassignedItem[]; total: number } | null>(null);
   const [all, setAll] = useState(false);
   const [moving, setMoving] = useState<UnassignedItem | null>(null);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const load = useCallback(async () => {
     const result = await attempt<{ items: UnassignedItem[]; total: number }>("works.unassigned", { ...(props.kind ? { kind: props.kind } : {}), ...(props.query ? { query: props.query } : {}), limit: 200 });
@@ -50,12 +52,28 @@ export function UnassignedGroup(props: {
     props.onMatch(result.value.workId, asKind(item.kind));
   }
 
+  async function reidentify(resourceIds: string[]) {
+    const result = await attempt<{ results: unknown[] }>("works.reidentify", { resourceIds });
+    if (!result.ok) { props.onError(result.error.message); return; }
+    setPicked(new Set());
+    props.onNotice(t("unassigned.reidentified", { count: asArray(result.value.results).length }));
+    props.onChanged();
+    void load();
+  }
+  const toggle = (resourceId: string) => setPicked((current) => {
+    const next = new Set(current);
+    if (next.has(resourceId)) next.delete(resourceId); else next.add(resourceId);
+    return next;
+  });
+
   if (!state || state.total === 0) return null;
+  const chosen = state.items.filter((item) => picked.has(item.resourceId)).map((item) => item.resourceId);
   const shown = all ? state.items : state.items.slice(0, FIRST);
   return (
     <section className="shelf-section unassigned-group" data-testid="unassigned-group" aria-label={t("unassigned.title")}>
       <header>
         <h2>{t("unassigned.title")}<span className="section-count" data-testid="unassigned-count">{t("unassigned.count", { count: state.total })}</span></h2>
+        {chosen.length ? <button type="button" className="secondary-button" data-testid="unassigned-reidentify-picked" onClick={() => void reidentify(chosen)}>{t("unassigned.reidentifySelected", { count: chosen.length })}</button> : null}
       </header>
       <p className="detail-muted">{t("unassigned.hint")}</p>
       <ul className="unassigned-list" data-testid="unassigned-list">
@@ -65,6 +83,7 @@ export function UnassignedGroup(props: {
           const label = item.ordinalLabel ? `${item.ordinalLabel} ${item.title}`.trim() : item.title;
           return (
             <li key={item.resourceId} className="unassigned-row" data-testid={`unassigned-${item.resourceId}`} data-kind={kind}>
+              <input type="checkbox" className="unassigned-pick" data-testid={`unassigned-pick-${item.resourceId}`} aria-label={t("unassigned.select", { title: label })} checked={picked.has(item.resourceId)} onChange={() => toggle(item.resourceId)} />
               <button type="button" className="unassigned-open" data-testid={`unassigned-open-${item.resourceId}`} aria-label={`${t("unassigned.open")}：${label}`} onClick={() => props.onOpenResource(item.resourceId, kind)}>
                 <Icon size={16} aria-hidden="true" />
                 <span className="unassigned-title" title={label}>{label}</span>
@@ -76,6 +95,7 @@ export function UnassignedGroup(props: {
                 align="end"
                 trigger={<MoreHorizontal size={16} />}
                 items={[
+                  { id: "reidentify", label: t("unassigned.reidentify"), onSelect: () => void reidentify(picked.has(item.resourceId) && chosen.length > 1 ? chosen : [item.resourceId]) },
                   { id: "assign", label: t("unassigned.assign"), onSelect: () => setMoving(item) },
                   { id: "match", label: t("unassigned.match"), onSelect: () => void match(item) },
                 ]}

@@ -283,7 +283,7 @@ function renderReader(document_: Parameters<typeof ReadingPane>[0]["document"], 
       onJump={() => {}}
       onProgress={() => {}}
       onNote={() => {}}
-      onMore={() => {}}
+     
       onPart={() => {}}
       onStyle={() => {}}
       bookmarks={[]}

@@ -12,6 +12,34 @@ afterEach(() => { cleanup(); delete (window as unknown as { manga?: unknown }).m
 
 const order = (root: Element, ids: string[]) => Array.from(root.querySelectorAll(ids.map((id) => `[data-testid='${id}']`).join(", "))).map((node) => node.getAttribute("data-testid"));
 
+describe("AT-125 a press on a divider with text selected", () => {
+  it("is a drag of the divider: no native drag of the selection starts", () => {
+    const sources: Array<[string, RegExp]> = [
+      ["apps/desktop/src/renderer/shell.tsx", /shell-resize-/],
+      ["apps/desktop/src/renderer/rail.tsx", /onPointerMove={pointer.move}/],
+      ["apps/desktop/src/renderer/reader/side-panel.tsx", /reading-panel-grip/],
+      ["apps/desktop/src/renderer/pages/debug-panel.tsx", /debug-grip/],
+      ["apps/desktop/src/renderer/components/chat/composer.tsx", /chat.mic.hint/],
+      ["apps/desktop/src/renderer/readers/comic-page.tsx", /comic-select-layer/],
+      ["apps/desktop/src/renderer/voice/record-control.tsx", /record-hold/],
+    ];
+    for (const [file, mark] of sources) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).toMatch(mark);
+      expect(text, file).toContain("onDragStart={(event) => event.preventDefault()}");
+    }
+  });
+});
+
+describe("AT-136 the main area has square corners (UI-01)", () => {
+  it("draws no rounded corner on the main area, where it meets the sidebar, the rail or the top row", () => {
+    const css = readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8");
+    const rules = [...css.matchAll(/([^{}]*\.shell-main[^{}]*)\{([^}]*)\}/g)].filter((match) => /\.shell-main\s*(,|$)/.test(match[1]!.trim()));
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) expect(rule[2]).not.toMatch(/border-[a-z-]*radius/);
+  });
+});
+
 describe("AT-81 AT-111 window frame: the top row, the rail and the columns", () => {
   it("has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel", async () => {
     windowHost();
@@ -147,7 +175,8 @@ describe("AT-81 AT-111 window frame: the top row, the rail and the columns", () 
     const sidebar = screen.getByTestId("shell-resize-sidebar");
     expect(sidebar.getAttribute("role")).toBe("separator");
     expect(sidebar.getAttribute("aria-valuenow")).toBe(String(SIDE_WIDTH.sidebar.initial));
-    expect(sidebar.getAttribute("aria-valuemin")).toBe(String(SIDE_WIDTH.sidebar.min));
+    // Folded away is the least it can be (APG window splitter): 0.
+    expect(sidebar.getAttribute("aria-valuemin")).toBe("0");
     pointer(sidebar, "pointerdown", 308);
     pointer(sidebar, "pointermove", 368);
     // The column follows the pointer while it is held; nothing is saved yet.
@@ -159,8 +188,9 @@ describe("AT-81 AT-111 window frame: the top row, the rail and the columns", () 
     pointer(sidebar, "pointerdown", 308);
     pointer(sidebar, "pointerup", 5000);
     expect(onResize).toHaveBeenLastCalledWith("sidebar", dragLimit("sidebar", 1600, SIDE_WIDTH.dock.initial));
+    // Short of the least, but not past half of it, stops at the least.
     pointer(sidebar, "pointerdown", 308);
-    pointer(sidebar, "pointerup", -4000);
+    pointer(sidebar, "pointerup", 308 - (SIDE_WIDTH.sidebar.initial - SIDE_WIDTH.sidebar.min) - 60);
     expect(onResize).toHaveBeenLastCalledWith("sidebar", SIDE_WIDTH.sidebar.min);
     // The dock grows toward the left.
     const dock = screen.getByTestId("shell-resize-dock");
@@ -187,13 +217,117 @@ describe("AT-81 AT-111 window frame: the top row, the rail and the columns", () 
     expect(onResize).toHaveBeenLastCalledWith("sidebar", SIDE_WIDTH.sidebar.initial - 16);
     fireEvent.keyDown(sidebar, { key: "Home" });
     expect(onResize).toHaveBeenLastCalledWith("sidebar", SIDE_WIDTH.sidebar.min);
-    fireEvent.keyDown(sidebar, { key: "Enter" });
-    expect(onResize).toHaveBeenLastCalledWith("sidebar", SIDE_WIDTH.sidebar.initial);
     const dock = screen.getByTestId("shell-resize-dock");
     fireEvent.keyDown(dock, { key: "ArrowLeft" });
     expect(onResize).toHaveBeenLastCalledWith("dock", SIDE_WIDTH.dock.initial + 16);
     fireEvent.keyDown(dock, { key: "ArrowRight" });
     expect(onResize).toHaveBeenLastCalledWith("dock", SIDE_WIDTH.dock.initial - 16);
+  });
+
+  it("AT-125 folds a column away when dragged past half its least width, shows it folding while held, and keeps the saved width (A-104)", () => {
+    const onResize = vi.fn();
+    const onHide = vi.fn();
+    frame(1600, 900, { onResize, onHide });
+    const sidebar = screen.getByTestId("shell-resize-sidebar");
+    const start = 308;
+    const half = start - SIDE_WIDTH.sidebar.initial + SIDE_WIDTH.sidebar.min / 2;
+    // With text selected a press here would otherwise become a native drag of the selection, which cancels the pointer.
+    expect(fireEvent.dragStart(sidebar)).toBe(false);
+    pointer(sidebar, "pointerdown", start);
+    // At the least width the column stops; a little further it still stands at the least.
+    pointer(sidebar, "pointermove", half + 10);
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe(`${SIDE_WIDTH.sidebar.min}px`);
+    expect(sidebar.getAttribute("data-collapsing")).toBeNull();
+    // Past half of it the sidebar is folded away under the pointer, and the line says so; the divider is the same one.
+    pointer(sidebar, "pointermove", half - 10);
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
+    const held = screen.getByTestId("shell-resize-sidebar");
+    expect(held).toBe(sidebar);
+    // Not the strip's look: the line that says it will fold is drawn.
+    expect(held.className).not.toContain("shell-pullout");
+    expect(held.getAttribute("data-collapsing")).toBe("true");
+    expect(held.getAttribute("aria-valuenow")).toBe("0");
+    // Back inside the threshold it comes back at the least width.
+    pointer(held, "pointermove", half + 10);
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe(`${SIDE_WIDTH.sidebar.min}px`);
+    pointer(held, "pointermove", half - 10);
+    pointer(held, "pointerup", half - 10);
+    expect(onHide).toHaveBeenCalledWith("sidebar");
+    expect(onResize).not.toHaveBeenCalled();
+    // The dock the same way, toward the right.
+    const dock = screen.getByTestId("shell-resize-dock");
+    pointer(dock, "pointerdown", 1200);
+    pointer(dock, "pointermove", 1200 + SIDE_WIDTH.dock.initial - SIDE_WIDTH.dock.min / 2 + 10);
+    expect(dock.getAttribute("data-collapsing")).toBe("true");
+    pointer(dock, "pointerup", 1200 + SIDE_WIDTH.dock.initial - SIDE_WIDTH.dock.min / 2 + 10);
+    expect(onHide).toHaveBeenLastCalledWith("dock");
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("AT-125 puts everything back when the pointer is cancelled, Esc is pressed or the window loses the focus in the middle of a drag", () => {
+    const onResize = vi.fn();
+    const onHide = vi.fn();
+    frame(1600, 900, { onResize, onHide });
+    const sidebar = screen.getByTestId("shell-resize-sidebar");
+    pointer(sidebar, "pointerdown", 308);
+    pointer(sidebar, "pointermove", 0);
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
+    fireEvent(sidebar, new MouseEvent("pointercancel", { bubbles: true, clientX: 0 }));
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe(`${SIDE_WIDTH.sidebar.initial}px`);
+    pointer(sidebar, "pointerdown", 308);
+    pointer(sidebar, "pointermove", 0);
+    fireEvent(window, new Event("blur"));
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe(`${SIDE_WIDTH.sidebar.initial}px`);
+    pointer(sidebar, "pointerup", 0);
+    pointer(sidebar, "pointerdown", 308);
+    pointer(sidebar, "pointermove", 0);
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe(`${SIDE_WIDTH.sidebar.initial}px`);
+    pointer(sidebar, "pointerup", 0);
+    expect(onHide).not.toHaveBeenCalled();
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("AT-125 folds a column away with Enter on its divider and gives the focus to its switch", async () => {
+    const onHide = vi.fn();
+    frame(1600, 900, { onHide });
+    fireEvent.keyDown(screen.getByTestId("shell-resize-sidebar"), { key: "Enter" });
+    expect(onHide).toHaveBeenCalledWith("sidebar");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("shell-sidebar-toggle")));
+    fireEvent.keyDown(screen.getByTestId("shell-resize-dock"), { key: "Enter" });
+    expect(onHide).toHaveBeenLastCalledWith("dock");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("shell-dock-toggle")));
+  });
+
+  it("AT-125 pulls the folded sidebar out from the rail's edge past half its least width, and leaves it folded short of that", () => {
+    const folded = structuredClone(DEFAULT_SHELL_PREFERENCE);
+    folded.sidebar.visible = false;
+    const onShow = vi.fn();
+    const onResize = vi.fn();
+    frame(1600, 900, { preference: folded, onShow, onResize });
+    const strip = screen.getByTestId("shell-pullout");
+    expect(strip.getAttribute("tabindex")).toBe("-1");
+    expect(strip.getAttribute("aria-valuenow")).toBe("0");
+    // Short of the threshold nothing changes.
+    pointer(strip, "pointerdown", 52);
+    pointer(strip, "pointermove", 52 + SIDE_WIDTH.sidebar.min / 2 - 10);
+    expect(screen.queryByTestId("shell-sidebar")).toBeNull();
+    pointer(strip, "pointerup", 52 + SIDE_WIDTH.sidebar.min / 2 - 10);
+    expect(onShow).not.toHaveBeenCalled();
+    // Past it the sidebar comes, at the least width, then follows the pointer.
+    pointer(strip, "pointerdown", 52);
+    pointer(strip, "pointermove", 52 + SIDE_WIDTH.sidebar.min / 2 + 10);
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe(`${SIDE_WIDTH.sidebar.min}px`);
+    pointer(strip, "pointermove", 52 + 300);
+    expect(screen.getByTestId("shell-sidebar").style.width).toBe("300px");
+    pointer(strip, "pointerup", 52 + 300);
+    expect(onShow).toHaveBeenCalledWith("sidebar");
+    expect(onResize).toHaveBeenCalledWith("sidebar", 300);
+    // A window too narrow to dock it has no strip.
+    cleanup();
+    frame(800, 700, { preference: folded });
+    expect(screen.queryByTestId("shell-pullout")).toBeNull();
   });
 
   it("shows a saved width, and keeps the stored widths inside what a column can be", () => {

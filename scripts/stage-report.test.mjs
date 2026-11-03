@@ -24,6 +24,16 @@ function read(dir, file) {
 }
 const evaluate = (dir) => evaluateStageEvidence(dir, fingerprints, config);
 
+const scratchDirs = [];
+function scratch(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+test.after(() => {
+  for (const dir of scratchDirs) fs.rmSync(dir, { recursive: true, force: true });
+});
+
 // The required patterns are anchored regular expressions; a synthetic name is the text they match.
 const literal = (pattern) => pattern.replace(/^\^/, "").replace(/\$$/, "").replace(/\\(.)/g, "$1");
 
@@ -40,7 +50,7 @@ function creativeEntry(wanted) {
 }
 
 function passing() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-stage-report-"));
+  const dir = scratch("manga-stage-report-");
   const cases = config.cases.map((def) => ({
     caseId: def.id,
     kind: def.kind,
@@ -120,7 +130,7 @@ function passing() {
 }
 
 test("report rejects a missing evidence file", () => {
-  const report = evaluate(fs.mkdtempSync(path.join(os.tmpdir(), "manga-stage-missing-")));
+  const report = evaluate(scratch("manga-stage-missing-"));
   assert.equal(report.engineeringReviewable, false);
   assert.equal(report.productAcceptance, "not-run");
   assert.ok(report.errors.some((error) => error.includes("missing")));

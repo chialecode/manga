@@ -40,8 +40,6 @@ export type RelatedWorks = { workId: string; source: { providerId: string; fetch
 export type Facets = ReadonlySet<string>;
 
 /** The shell page that reads each kind. The novel reader keeps its earlier page id. */
-export const PAGE_FOR_KIND: Record<WorkMediaKind, string> = { novel: "reading", comic: "comic", video: "video" };
-
 /** The resource after `currentId` in a work's order that can be opened, or null at the end. */
 export function nextResource<T extends { id: string; available?: boolean }>(rows: readonly T[], currentId: string): T | null {
   const at = rows.findIndex((row) => row.id === currentId);

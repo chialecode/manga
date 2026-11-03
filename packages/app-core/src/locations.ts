@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { peekSchemaMeta } from "@manga/storage-drizzle";
-import { comparablePath, pathsOverlap, isTransientPartitionFile } from "./domain/file-ownership.ts";
-export { ownedFileFingerprint, pathsOverlap, copyOwnedFile, listCopyFiles, fingerprintTree, isTransientPartitionFile } from "./domain/file-ownership.ts";
+import { comparablePath, pathsOverlap } from "./domain/file-ownership.ts";
+export { ownedFileFingerprint, pathsOverlap, copyOwnedFile, listCopyFiles, fingerprintTree } from "./domain/file-ownership.ts";
 import {
   CHANNELS,
   LOCATION_PARTITIONS,
@@ -178,10 +178,6 @@ export function persistPointerAt(layout: LocationLayout, pointerPath: string): v
   persistPointer({ ...layout, pointerPath });
 }
 
-export function resolvedEqual(left: string, right: string): boolean {
-  return path.resolve(left) === path.resolve(right);
-}
-
 export function isReparsePath(target: string): boolean {
   const resolved = path.resolve(target);
   if (!fs.existsSync(resolved)) return false;
@@ -203,14 +199,6 @@ export function assertSafeMigrationTarget(sourceRoot: string, targetRoot: string
     throw new MangaError("VALIDATION_ERROR", "migration paths cannot be reparse points or links");
   }
 }
-
-export type OwnedCopy = {
-  partition: LocationPartition;
-  relativePath: string;
-  absolutePath: string;
-  fingerprint: string;
-  state: "planned" | "copying" | "committed";
-};
 
 export function directoryStats(dir: string): { bytes: number; fileCount: number } {
   let bytes = 0;
@@ -265,14 +253,4 @@ export async function scanDirectoryBatched(
     if (seen % batch === 0) await yieldTurn();
   }
   return { bytes, fileCount, missing: false, cancelled: false };
-}
-
-export function copyPartition(source: string, target: string): void {
-  fs.mkdirSync(target, { recursive: true });
-  if (!fs.existsSync(source)) return;
-  fs.cpSync(source, target, {
-    recursive: true,
-    errorOnExist: false,
-    filter: (file) => !isTransientPartitionFile(path.basename(file)),
-  });
 }

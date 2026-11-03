@@ -143,7 +143,7 @@ describe("putting a screenshot together (AT-109)", () => {
   it("puts the comments under the subtitles and tells which of them it drew", async () => {
     const comments = document.createElement("canvas");
     comments.width = 800; comments.height = 200;
-    const shot = await captureVideoFrame(video(), { subtitles: { text }, danmaku: { canvas: comments, area: 0.5, opacity: 1 } });
+    const shot = await captureVideoFrame(video(), { subtitles: { text }, danmaku: { canvas: comments, layer: { width: 800, height: 200 }, picture: { left: 0, top: 0, width: 800, height: 450 }, opacity: 1 } });
     expect("failure" in shot).toBe(false);
     if ("failure" in shot) return;
     expect(shot.danmakuDrawn).toBe(true);
@@ -151,5 +151,14 @@ describe("putting a screenshot together (AT-109)", () => {
     // frame, then the comments; the subtitles are text, drawn last
     expect(capture.draws[1]!.args[0]).toBe(comments);
     expect(capture.texts.length).toBeGreaterThan(0);
+  });
+
+  it("AT-133 leaves out the comments that are in the bars and says none were drawn when all of them are", async () => {
+    const comments = document.createElement("canvas");
+    comments.width = 800; comments.height = 100;
+    // The layer is the top 100 px of a play area whose picture starts 150 px down.
+    const shot = await captureVideoFrame(video(), { danmaku: { canvas: comments, layer: { width: 800, height: 100 }, picture: { left: 0, top: 150, width: 800, height: 450 }, opacity: 1 } });
+    expect("failure" in shot ? null : shot.danmakuDrawn).toBe(false);
+    expect(capture.draws).toHaveLength(1);
   });
 });

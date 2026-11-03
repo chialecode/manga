@@ -17,7 +17,7 @@ export const VIEW_NAMES: Record<RailView, string> = {
   home: "主页", conversation: "对话", novel: "小说", comic: "漫画", video: "动漫", note: "笔记", whiteboard: "白板", mindmap: "导图", draft: "文稿", roughcut: "粗剪", downloads: "下载",
 };
 
-export const railLabels = { more: "更多功能", moreEmpty: "没有收起的功能", hide: "从图标栏隐藏", pin: "固定到图标栏", pinOf: (name: string) => `把“${name}”固定到图标栏`, settings: "设置" };
+export const railLabels = { more: "更多功能", moreEmpty: "没有收起的功能", hide: "从图标栏隐藏", pin: "固定到图标栏", pinOf: (name: string) => `把“${name}”固定到图标栏`, settings: "设置", moveUp: "上移", moveDown: "下移", moved: (name: string, n: number) => `${name}已移到第 ${n} 位` };
 
 /** The rail of a window: the views it lists (the home, then the kinds), the ones taken out, the view the sidebar is on, and what its buttons do. */
 export function shellRail(extra: Partial<ShellRail> & { views?: RailView[] } = {}): ShellRail {

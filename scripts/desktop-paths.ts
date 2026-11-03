@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const desktopOutput = path.join(repoRoot, "dist/desktop");
-export const desktopPackageDir = path.join(desktopOutput, "packages");
+// MANGA_DESKTOP_PACKAGE_DIR (relative to the repository, or absolute) builds and walks a package somewhere else, for when the usual folder is locked by a copy of the application someone has open.
+export const desktopPackageDir = process.env.MANGA_DESKTOP_PACKAGE_DIR ? path.resolve(repoRoot, process.env.MANGA_DESKTOP_PACKAGE_DIR) : path.join(desktopOutput, "packages");
 export const latestDesktopPackage = path.join(desktopOutput, "latest-package.json");
 export const evidenceRunsRoot = path.join(repoRoot, "dist/evidence-runs");
 

@@ -8,12 +8,17 @@ import { clickTestId, closeTabs, openFromShelf, openShelf, revealNovelControls, 
 import { READER_CONTROL_OBSERVATIONS, walkComicControls, walkNovelControls, walkPlayerControls } from "./reader-controls-walk.ts";
 import { PLAYER_MENU_OBSERVATIONS, walkPlayerFullscreen, walkPlayerMenus } from "./player-menus-walk.ts";
 import { DANMAKU_OBSERVATIONS, walkDanmaku } from "./danmaku-walk.ts";
+import { HOLD_OBSERVATIONS, walkHoldKeys } from "./hold-walk.ts";
 import { OVERLAY_OBSERVATIONS, walkComicOverlays, walkNovelOverlays, walkPlayerOverlays } from "./overlay-walk.ts";
 import { RETENTION_OBSERVATIONS, screenshotWalk, walkSettingsRoundTrip } from "./retention-walk.ts";
 import { capturePage, caller, clickFirst, ensureDock, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 import { FRAME_OBSERVATIONS, runFrameWalk } from "./frame-walk.ts";
 import { MANAGEMENT_OBSERVATIONS, runManagementWalk } from "./management-walk.ts";
 import { RAIL_OBSERVATIONS, runRailWalk } from "./rail-walk.ts";
+import { LIBRARY_OBSERVATIONS, runLibraryWalk } from "./library-walk.ts";
+import { NOVEL_OBSERVATIONS, walkNovelPages } from "./novel-walk.ts";
+import { SHELL_OBSERVATIONS, runShellWalk } from "./shell-walk.ts";
+import { VIEW_OBSERVATIONS, runViewWalk } from "./view-walk.ts";
 import { WORKSPACE_OBSERVATIONS, runWorkspaceWalk } from "./workspace-walk.ts";
 import { prepareRestart } from "./workspace-restart.ts";
 
@@ -42,12 +47,17 @@ export const REQUIRED_OBSERVATIONS = [
   ...(Object.keys(WINDOW_SIZES) as SizeName[]).flatMap((size) => [...FITS.map((fit) => `comic-layout-${size}-${fit}`), `player-controls-${size}`, `novel-controls-${size}`, `readers-fill-main-${size}`]),
   ...READER_CONTROL_OBSERVATIONS,
   ...DANMAKU_OBSERVATIONS,
+  ...HOLD_OBSERVATIONS,
   ...OVERLAY_OBSERVATIONS,
   ...RETENTION_OBSERVATIONS,
   ...FRAME_OBSERVATIONS,
   ...WORKSPACE_OBSERVATIONS,
   ...MANAGEMENT_OBSERVATIONS,
   ...RAIL_OBSERVATIONS,
+  ...LIBRARY_OBSERVATIONS,
+  ...NOVEL_OBSERVATIONS,
+  ...SHELL_OBSERVATIONS,
+  ...VIEW_OBSERVATIONS,
 ] as const;
 
 type Rect = { x: number; y: number; w: number; h: number; r: number; b: number };
@@ -372,6 +382,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     await walkPlayerControls(view, observe, titleOf("video"));
     await walkPlayerMenus(view, observe, shot);
     await walkPlayerFullscreen(view, observe, shot);
+    await walkHoldKeys(view, observe);
     await walkPlayerOverlays(view, observe, shot);
     await walkDanmaku(view, observe, shot);
     // The pictures of the two readers go onto the board; then the page is left for settings, and comes back as it was (AT-88).
@@ -380,7 +391,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     await walkSettingsRoundTrip(view, observe, shot);
   } else {
     observe("reader-controls-player", false, { reason: "the video did not become ready" });
-    for (const name of [...PLAYER_MENU_OBSERVATIONS, "overlays-player", ...DANMAKU_OBSERVATIONS, ...RETENTION_OBSERVATIONS]) observe(name, false, { reason: "the video did not become ready" });
+    for (const name of [...PLAYER_MENU_OBSERVATIONS, ...HOLD_OBSERVATIONS, "overlays-player", ...DANMAKU_OBSERVATIONS, ...RETENTION_OBSERVATIONS]) observe(name, false, { reason: "the video did not become ready" });
   }
   if (videoOpen) await closeTabs(view, ["reader"]);
 
@@ -408,18 +419,27 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(bar.viewport.w / 2), y: Math.round(bar.viewport.h / 2) });
     // Hidden, the controls are out of sight and the text keeps its place: a window with nothing but reading.
     await sleep(2800);
-    const hidden = await js<{ state: string | null; gap: number | null; text: boolean }>(view, `(() => {
+    const hideWait = Date.now();
+    await waitUntil(view, `document.querySelector('[data-testid="reading-page"]')?.getAttribute("data-controls") === "hidden"`, 3200);
+    await sleep(350);
+    const hideLateMs = Date.now() - hideWait - 350;
+    const hidden = await js<{ state: string | null; gap: number | null; text: boolean; active: string | null; activeInFoot: boolean; settings: boolean; side: boolean }>(view, `(() => {
       const root = document.querySelector('[data-testid="reading-page"]');
       const foot = document.querySelector('[data-testid="reading-footer"]');
+      const active = document.activeElement;
       // The bar's upper edge, measured from the bottom of the reading page: slid out of sight it is at or below that edge.
-      return { state: root?.getAttribute("data-controls") ?? null, gap: foot && root ? foot.getBoundingClientRect().top - root.getBoundingClientRect().bottom : null, text: Boolean(document.querySelector('[data-testid="reading-body"]')?.textContent) };
+      return {
+        state: root?.getAttribute("data-controls") ?? null, gap: foot && root ? foot.getBoundingClientRect().top - root.getBoundingClientRect().bottom : null, text: Boolean(document.querySelector('[data-testid="reading-body"]')?.textContent),
+        active: active ? (active.getAttribute("data-testid") || active.tagName.toLowerCase()) : null, activeInFoot: Boolean(foot && active && foot.contains(active)),
+        settings: Boolean(document.querySelector('[data-testid="reading-settings-panel"]')), side: Boolean(document.querySelector('.reader-main[data-panel]')),
+      };
     })()`);
     const problems: string[] = [];
     if (!bar.foot || !inside(bar.foot, bar.viewport)) problems.push("the bottom bar is not inside the window");
     if (!panel || !inside(panel, bar.viewport)) problems.push("the settings panel is cut off or missing");
     if (bar.docOverflow > 1) problems.push(`the window scrolls sideways by ${bar.docOverflow}px`);
     if (hidden.state !== "hidden" || hidden.gap === null || hidden.gap < -1 || !hidden.text) problems.push(`the controls did not get out of the way (${JSON.stringify(hidden)})`);
-    observe(name, problems.length === 0, { foot: bar.foot, panel, viewport: bar.viewport, hidden, problems });
+    observe(name, problems.length === 0, { foot: bar.foot, panel, viewport: bar.viewport, hidden, hideLateMs, problems });
     await shot(`novel-${size}`);
     await capsuleCheck(`novel-${size}`, ['[data-testid="reading-footer"] button']);
   }
@@ -458,7 +478,20 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     titles: { comic: titleOf("comic"), video: titleOf("video"), novel: titleOf("novel") },
   });
 
-  // ---- 11. the shape the next start of this Profile has to find: two contexts, the book and the library in two columns, the project's page, the window left in the project ----
+  // ---- the views and the main area, the hidden layers, a reopened tab, the save before a close (AT-128, AT-130, AT-131) ----
+  if (boardId) await runViewWalk({ view, call, observe, shot, resize, projectId, boardId, videoId, titles: { video: titleOf("video") } });
+  else for (const name of VIEW_OBSERVATIONS) observe(name, false, { problems: ["the walk has no whiteboard"] });
+
+  // ---- the frame's corner, the dividers, the menus, the rail's order, the home's list, the counts and the covers (AT-123 — AT-126, AT-132, AT-136) ----
+  await runShellWalk({ view, call, observe, shot, resize, projectId, novelId, folders });
+
+  // ---- a book by the page and the panels on its left (AT-139, AT-140) ----
+  await walkNovelPages({ view, call, observe, shot });
+
+  // ---- 11. the library: a scan shows each work when it is done, the lists show only what is in a library path (AT-137, AT-138) ----
+  await runLibraryWalk({ view, appService, call, observe, shot, resize, folders });
+
+  // ---- 12. the shape the next start of this Profile has to find: two contexts, the book and the library in two columns, the project's page, the window left in the project ----
   await prepareRestart({ view, call, observe, logsDir, novelId, projectId });
 
   const failed = observations.filter((item) => item.status !== "passed").map((item) => item.name);

@@ -3,7 +3,7 @@ import path from "node:path";
 import { clipboard, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { startMockProvider } from "@manga/model-protocol";
-import { clickTestId, pressKey, setField, sleep, trustedClick, viaSidebar, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, ensureSidebar, pressKey, railTo, setField, sleep, trustedClick, viaSidebar, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, capturePage, js, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -46,7 +46,8 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     if (connection.status !== "ok") problems.push("the connection for the stand-in model could not be made");
     // The window learns of the connection when it reads its settings again.
     await view.webContents.reload();
-    const onChat = await toRail(view) && await viaSidebar(view, "home", "sidebar-new-conversation", 10_000) && await waitDrawn(view, "page-agent", 8000);
+    // A new conversation is made from the conversations' view (the home has no 新对话, A-110).
+    const onChat = await toRail(view) && await viaSidebar(view, "conversation", "sidebar-new-conversation", 10_000) && await waitDrawn(view, "page-agent", 8000);
     if (!onChat) problems.push("the conversation tab did not open");
     await clickTestId(view, "chat-mode-ask");
     await setField(view, "agent-composer", PROMPT);
@@ -119,6 +120,7 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     if (leaks.length) problems.push(...leaks);
     await pressKey(view, "Escape");
     observe("agent-trace-timeline", problems.length === 0, { entries: items.length, first: { model: first.model, firstToken: first.firstToken, duration: first.duration }, copied: copy.length, holdersChecked: Object.keys(holders).length, leaks, problems });
+    await walkAutoTitle(view, call, observe);
   } finally {
     await server.close();
   }
@@ -131,4 +133,65 @@ async function latestRun(call: ReturnType<typeof caller>): Promise<string> {
   const ws = await call("workspace.get", {});
   const runs = ((ws.value as { runs?: Array<{ id: string }> } | undefined)?.runs) ?? [];
   return String(runs[0]?.id ?? "");
+}
+
+const FIRST_LINE = "帮我总结一下第一章的主要人物";
+const SECOND_LINE = "顺便列出出现过的地点";
+const OWN_NAME = "我自己起的名字";
+
+/**
+ * AT-127 (计划 4.7) in the real window: a new conversation is named by the start of the first thing said in it, and the tab, the conversations' sidebar and
+ * the dock all show that name; a name the person gave stays when more is said.
+ */
+async function walkAutoTitle(view: BrowserWindow, call: ReturnType<typeof caller>, observe: (name: string, ok: boolean, detail: unknown) => boolean): Promise<void> {
+  const problems: string[] = [];
+  const detail: Record<string, unknown> = {};
+  type Session = { sessionId: string; title: string };
+  const sessions = async (): Promise<Session[]> => ((await call("workspace.sessions", { contextId: null })).value as Session[] | undefined) ?? [];
+  // Two conversations are open by now, each with its own composer: only the one in front is meant.
+  const shown = (testId: string) => `[...document.querySelectorAll('[data-testid="${testId}"]')].find((el) => el.checkVisibility({ visibilityProperty: true }))`;
+  const send = async (text: string) => {
+    if (!(await waitUntil(view, shown("agent-composer"), 8000))) return false;
+    await js(view, `(() => { const el = ${shown("agent-composer")}; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(el, ${JSON.stringify(text)}); el.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    if (!(await waitUntil(view, `${shown("agent-send")}?.disabled === false`, 4000))) return false;
+    await js(view, `${shown("agent-send")}.click()`);
+    // A short answer can come and go between two looks at the stop button: what is asked is that the words are in the conversation and the turn is over.
+    const said = await waitUntil(view, `${shown("page-agent")}?.innerText.includes(${JSON.stringify(text.split("\n")[0])})`, 15_000);
+    return said && await waitUntil(view, `!(${shown("agent-stop")}) && ${shown("agent-send")}`, 60_000);
+  };
+  const tabTitle = () => js<string>(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-focused="true"] .tab-title')?.textContent ?? ""`);
+  const opened = await toRail(view) && await viaSidebar(view, "conversation", "sidebar-new-conversation", 10_000) && await waitDrawn(view, "page-agent", 8000);
+  if (!opened) problems.push("a new conversation did not open");
+  const before = await tabTitle();
+  const done = opened && await send(`${FIRST_LINE}\n${SECOND_LINE}`);
+  if (!done) problems.push("the first message was not sent and answered");
+  const named = await waitUntil(view, `(document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-focused="true"] .tab-title')?.textContent ?? "") === ${JSON.stringify(FIRST_LINE)}`, 6000);
+  const session = (await sessions()).find((item) => item.title === FIRST_LINE);
+  detail.first = { before, tab: await tabTitle(), named, stored: Boolean(session) };
+  if (!named) problems.push(`the tab is named ${JSON.stringify(await tabTitle())}, not the start of the first message`);
+  if (!session) problems.push("the conversation is not stored with the start of the first message as its name");
+  // The conversations' sidebar.
+  await railTo(view, "conversation");
+  await ensureSidebar(view);
+  const inSidebar = session ? await waitUntil(view, `(document.querySelector('[data-testid="sidebar"][data-view="conversation"] [data-testid="session-open-${session.sessionId}"]')?.textContent ?? "").includes(${JSON.stringify(FIRST_LINE)})`, 6000) : false;
+  detail.sidebar = inSidebar;
+  if (!inSidebar) problems.push("the conversations' sidebar does not show the new name");
+  // The dock, once a page that is not the conversation is in front: the current conversation of 最近 is this one.
+  await viaSidebar(view, "home", "sidebar-entry-library", 6000);
+  await waitDrawn(view, "page-library", 6000);
+  const inDock = await waitUntil(view, `(document.querySelector('[data-testid="shell-dock"]')?.textContent ?? "").includes(${JSON.stringify(FIRST_LINE)})`, 6000);
+  detail.dock = inDock;
+  if (!inDock) problems.push("the dock does not show the new name");
+  // A name the person gives is kept when more is said.
+  if (session) {
+    await call("conversation.rename", { sessionId: session.sessionId, title: OWN_NAME });
+    await viaSidebar(view, "conversation", `session-open-${session.sessionId}`, 6000);
+    await waitDrawn(view, "page-agent", 8000);
+    const again = await send("再补充一句别的话");
+    const kept = (await sessions()).find((item) => item.sessionId === session.sessionId)?.title ?? null;
+    detail.renamed = { again, kept };
+    if (!again) problems.push("the second message was not sent and answered");
+    if (kept !== OWN_NAME) problems.push(`after the person named it and spoke again, the conversation is named ${JSON.stringify(kept)}`);
+  }
+  observe("conversation-auto-title", problems.length === 0, { ...detail, problems });
 }

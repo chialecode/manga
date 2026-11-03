@@ -630,6 +630,25 @@ describe("video player: rate", () => {
     expect(media.state(element()).seeks).toEqual([]);
   });
 
+  it("AT-135 keeps the temporary rate when a new source loads in the middle of a hold, and starts a hold from repeats alone", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await ready({ settings: { ...baseSettings, rate: 1.25 } });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    act(() => { vi.advanceTimersByTime(350); });
+    expect(media.state(element()).rate).toBe(2);
+    // The source changes under the hold (a play copy opens): its metadata does not put the saved rate back.
+    act(() => media.loaded(element(), 120));
+    expect(media.state(element()).rate).toBe(2);
+    fireEvent.keyUp(window, { key: "ArrowRight" });
+    expect(media.state(element()).rate).toBe(1.25);
+    // The press went to a menu and only the system's repeats reach the player: the hold starts at once, with no step.
+    fireEvent.keyDown(window, { key: "ArrowRight", repeat: true });
+    expect(media.state(element()).rate).toBe(2);
+    fireEvent.keyUp(window, { key: "ArrowRight" });
+    expect(media.state(element()).rate).toBe(1.25);
+    expect(media.state(element()).seeks).toEqual([]);
+  });
+
   it("opens the menu with the right button and never changes the rate for a long press", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await ready();

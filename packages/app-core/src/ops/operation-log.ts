@@ -54,7 +54,7 @@ export type LogInput = {
 export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "library.importText": "library", "library.importEpub": "library", "library.importDocument": "library", "works.importDirectory": "library",
   "library.indexExternal": "library", "library.rebuildIndex": "library", "library.repairSource": "library",
-  "works.setKind": "library", "works.moveResource": "library", "works.delete": "library", "works.setOrdinal": "library", "works.setShelf": "library",
+  "works.setKind": "library", "works.moveResource": "library", "works.reidentify": "library", "library.removeOutside": "library", "works.delete": "library", "works.setOrdinal": "library", "works.setShelf": "library",
   "library.paths.add": "scan", "library.paths.update": "scan", "library.paths.remove": "scan", "library.scan.start": "scan", "library.scan.cancel": "scan", "library.scan.setSchedule": "scan",
   "works.setOverride": "metadata", "covers.select": "metadata", "covers.lock": "metadata", "covers.fromImage": "metadata",
   "metadata.setProvider": "metadata", "metadata.link": "metadata", "metadata.unlink": "metadata", "metadata.refresh": "metadata", "metadata.findMissing": "metadata",

@@ -37,7 +37,7 @@ const phases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.inc
 const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated"]);
 // The restart of the workspace is the next start of the Profile the window walk used (it left two contexts in a known shape); the upgrade check starts on a
 // synthetic v11 library made here, before the application has seen it.
-const SAME_PROFILE_AS = { "workspace-restart": "window-walk" };
+const SAME_PROFILE_AS = { "workspace-restart": "window-walk", "workspace-closed": "window-walk" };
 const homes = {};
 // The media and recording phases drive the real window with synthetic samples; they have to exist for the gate to mean anything.
 const samplesRoot = path.join(root, "dist/samples/media");
@@ -120,7 +120,7 @@ async function smoke(phase) {
         ...(bt?.env ?? {}),
         ...(dandan ? { MANGA_SMOKE_DANDAN_ORIGIN: dandan.origin } : {}),
       },
-      timeout: phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
+      timeout: phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
     });
   } finally {
     await bt?.swarm.close();
@@ -180,7 +180,7 @@ async function smoke(phase) {
     if (report.notRun) throw new Error("window-walk smoke did not run");
     if (report.ok !== true) throw new Error(`window-walk smoke failed: ${(report.failed ?? []).concat(report.missing ?? []).join(", ")}`);
   }
-  if (phase === "workspace-restart" || phase === "workspace-migrated") {
+  if (phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated") {
     if (report.notRun) throw new Error(`${phase} smoke did not run`);
     if (report.ok !== true) throw new Error(`${phase} smoke failed: ${(report.observations ?? []).filter((row) => row.status !== "passed").map((row) => row.name).join(", ")}`);
   }
@@ -220,6 +220,7 @@ const observations = [
   ...(smokeReports["window-walk"]?.observations ?? []),
   ...(danmakuNetwork ? [{ name: "danmaku-network", status: danmakuNetwork.status, detail: danmakuNetwork.detail }] : []),
   ...(smokeReports["workspace-restart"]?.observations ?? []),
+  ...(smokeReports["workspace-closed"]?.observations ?? []),
   ...(smokeReports["workspace-migrated"]?.observations ?? []),
   ...(smokeReports.creative?.observations ?? []),
   ...(smokeReports.trace?.observations ?? []),
@@ -256,7 +257,7 @@ fs.writeFileSync(path.join(evidence, "scenarios.json"), `${JSON.stringify({
   ...stageFingerprints(root, config),
   productAcceptance: "not-run",
   at: new Date().toISOString(),
-  source: "packaged window walk, restart of its Profile, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
+  source: "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   windowSizes: smokeReports["window-walk"]?.windowSizes ?? null,
   observations: observations.map((row) => ({ name: row.name, status: row.status, detail: row.detail ?? null })),
 }, null, 2)}\n`);
@@ -282,8 +283,8 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   loop06: smokeReports.formats?.loop06 ?? null,
   agent: { runningShown: smokeReports.agent?.runningShown ?? false, stoppedShown: smokeReports.agent?.stoppedShown ?? false, conversationShown: smokeReports["agent-restart"]?.conversationShown ?? false },
   windowWalk: { ok: smokeReports["window-walk"]?.ok ?? false, observations: observations.length },
-  // The workspace over a restart of the window walk's Profile, and on a synthetic v11 library of the two-mode shell started on for the first time (plan 4.8).
-  workspace: { restart: smokeReports["workspace-restart"]?.ok ?? false, migrated: smokeReports["workspace-migrated"]?.ok ?? false },
+  // The workspace over a restart of the window walk's Profile, the start after that restart closed its window for real, and on a synthetic v11 library of the two-mode shell started on for the first time (plan 4.8).
+  workspace: { restart: smokeReports["workspace-restart"]?.ok ?? false, closed: smokeReports["workspace-closed"]?.ok ?? false, migrated: smokeReports["workspace-migrated"]?.ok ?? false },
   creative: { ok: smokeReports.creative?.ok ?? false, observations: (smokeReports.creative?.observations ?? []).length },
   // AT-97 in the window: a task against a stand-in model, its record opened from the reply, and no secret anywhere it could be read.
   trace: { ok: smokeReports.trace?.ok ?? false, observations: (smokeReports.trace?.observations ?? []).length },

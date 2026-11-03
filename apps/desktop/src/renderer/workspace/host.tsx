@@ -1,8 +1,9 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ErrorInfo, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type IDockviewHeaderActionsProps, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type IWatermarkPanelProps } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import { Columns2, Columns3, LayoutGrid, Plus, Square, X } from "lucide-react";
-import { contextFromKey, type WorkspacePreset } from "@manga/contracts";
+import { contextFromKey, type WorkspacePreset, type WorkspaceView } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
 import { Menu } from "../components/menu.tsx";
 import { readerContext } from "../lib/reader-context.ts";
@@ -16,8 +17,18 @@ import { useServices } from "./services.tsx";
 import { TabIcon } from "./tab-icon.tsx";
 import { TabProvider, type TabInfo } from "./tab-context.tsx";
 import { TabView } from "./views/tab-view.tsx";
+import { hostOf, placeTabs, releaseHost, setParking, setSlot } from "./placement.ts";
+import { EmptyView } from "./empty-view.tsx";
 
-type PanelParams = { tabId: string; contextKey: string };
+type PanelParams = { tabId: string; contextKey: string; view?: WorkspaceView };
+
+/** The view a dock shows, for the parts the dock draws itself (titles, buttons, the empty column). */
+const DockViewContext = createContext<{ key: string; view: WorkspaceView }>({ key: "", view: "home" });
+/** Whether the dock around is the one on screen: a dock of a view out of sight keeps its parts but does not offer them to tests and walks. */
+function useDockOnScreen(): boolean {
+  const { key, view } = useContext(DockViewContext);
+  return useWorkspaceValue((c) => c.activeKey === key && c.view === view);
+}
 
 /** A tab's content that fails to draw does not take the window down: the tab says so and can be tried again or closed. */
 class TabBoundary extends Component<{ retryLabel: string; closeLabel: string; message: string; onClose: () => void; children: ReactNode }, { failed: boolean; attempt: number }> {
@@ -39,29 +50,22 @@ class TabBoundary extends Component<{ retryLabel: string; closeLabel: string; me
 }
 
 /**
- * One tab's place in the dock. The content of every tab stays in the page while the tab is out of sight (the dock draws panels `always`), which is
- * what keeps a playing video playing when it is moved to another column. Whether the tab is in front is told to its content and to the controller after
- * one frame: moving a tab between columns hides and shows it within the same turn, and the content must not see that as leaving.
+ * The content of one tab. It is drawn once per tab into a node of its own (`placement.ts`), and that node is put into the panel of the tab in the
+ * dock of the view on screen, or parked out of sight when the view on screen does not hold the tab (A-107): going from one view to another moves the
+ * node, it does not make the content again, so a reader keeps its place and a video its time. Whether the tab is in front is told to its content and to
+ * the controller after one frame (see `TabSlot`): moving a tab between columns hides and shows it within the same turn, and the content must not see that
+ * as leaving.
  */
-function TabPanel(props: IDockviewPanelProps<PanelParams>) {
-  const { tabId, contextKey: key } = props.params;
+function TabContent(props: { contextKey: string; tabId: string }) {
+  const { tabId, contextKey: key } = props;
   const s = useServices();
   const controller = useWorkspace();
   const global = useWindowFullscreen();
   const focusedId = useWorkspaceValue((c) => c.focusedTabId(key));
   const contextOn = useWorkspaceValue((c) => c.activeKey === key);
+  const shown = useWorkspaceValue((c) => c.isShown(key, tabId));
   // The settings are on screen (A-101): the tab stays where it is and keeps what it has loaded, and its content is told it is out of sight.
   const suspended = useWorkspaceValue((c) => c.suspended);
-  const [shown, setShown] = useState(() => props.api.isVisible);
-  useEffect(() => {
-    let frame = 0;
-    setShown(props.api.isVisible);
-    const watch = props.api.onDidVisibilityChange((event) => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setShown(event.isVisible));
-    });
-    return () => { cancelAnimationFrame(frame); watch.dispose(); };
-  }, [props.api]);
 
   const focused = contextOn && focusedId === tabId;
   const visible = contextOn && shown && !suspended;
@@ -109,7 +113,40 @@ function TabPanel(props: IDockviewPanelProps<PanelParams>) {
   );
 }
 
-const COMPONENTS = { tab: TabPanel };
+/**
+ * A tab's place in the dock of one view: an empty slot that the tab's content is moved into while this view is on screen. The dock hides a panel that
+ * is not in front by `visibility`; the slot marks itself hidden at once (`data-hidden-layer`, so parts that make themselves visible stay hidden too, 计划
+ * 4.8) and tells the controller a frame later.
+ */
+function TabSlot(props: IDockviewPanelProps<PanelParams>) {
+  const { tabId, contextKey: key, view = "home" } = props.params;
+  const controller = useWorkspace();
+  const slot = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = slot.current;
+    if (!node) return;
+    setSlot(key, view, tabId, node);
+    return () => setSlot(key, view, tabId, null);
+  }, [key, view, tabId]);
+  useEffect(() => {
+    let frame = 0;
+    const mark = (visible: boolean) => {
+      if (visible) slot.current?.removeAttribute("data-hidden-layer");
+      else slot.current?.setAttribute("data-hidden-layer", "");
+    };
+    mark(props.api.isVisible);
+    controller.setShown(key, view, tabId, props.api.isVisible);
+    const watch = props.api.onDidVisibilityChange((event) => {
+      mark(event.isVisible);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => controller.setShown(key, view, tabId, event.isVisible));
+    });
+    return () => { cancelAnimationFrame(frame); watch.dispose(); controller.setShown(key, view, tabId, false); };
+  }, [props.api, controller, key, view, tabId]);
+  return <div ref={slot} className="tab-slot" data-slot={tabId} />;
+}
+
+const COMPONENTS = { tab: TabSlot };
 
 /** The content of a tab takes the keyboard focus once its title has been pressed: the keys of a reader are heard on the page, not on the strip. */
 function focusContentOf(tabId: string): void {
@@ -137,7 +174,9 @@ function TabHeader(props: IDockviewPanelHeaderProps<PanelParams>) {
     return () => { watch.dispose(); front.dispose(); };
   }, [props.api]);
 
-  const columns = useWorkspaceValue((c) => c.columns(key));
+  const { view } = useContext(DockViewContext);
+  const onScreen = useDockOnScreen();
+  const columns = useWorkspaceValue((c) => c.columns(key, view));
   const focused = useWorkspaceValue((c) => c.focusedTabId(key) === tabId);
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -172,7 +211,7 @@ function TabHeader(props: IDockviewPanelHeaderProps<PanelParams>) {
   return (
     <div
       className="tab-chip"
-      data-testid="tab"
+      data-testid={onScreen ? "tab" : undefined}
       data-tab={tabId}
       data-kind={model?.kind ?? ""}
       data-active={active ? "true" : "false"}
@@ -208,19 +247,20 @@ const PRESET_ICON: Record<WorkspacePreset, typeof Square> = { single: Square, tw
 function HeaderActions(props: IDockviewHeaderActionsProps) {
   const s = useServices();
   const controller = useWorkspace();
-  useWorkspaceValue((c) => c.version());
-  const columns = controller.columns();
-  const preset = controller.preset();
+  const { key, view } = useContext(DockViewContext);
+  const onScreen = useDockOnScreen();
+  const columns = useWorkspaceValue((c) => c.columns(key, view));
+  const preset = useWorkspaceValue((c) => c.preset(key, view));
   const order = columnsOf(props.containerApi);
   const layoutHere = order[columns >= 4 ? 1 : Math.max(0, columns - 1)]?.id === props.group.id || (order.length === 0);
   const Icon = PRESET_ICON[preset];
   return (
-    <div className="tab-actions" data-testid="tab-actions">
+    <div className="tab-actions" data-testid={onScreen ? "tab-actions" : undefined}>
       <button type="button" className="tab-action" data-testid="tab-new" aria-label={s.t("tab.new")} title={s.t("tab.new")} onClick={() => { props.group.api.setActive(); s.open.newTab(); }}><Plus size={15} aria-hidden="true" /></button>
       {layoutHere ? (
         <Menu
           label={s.t("layout.menu")}
-          testId="layout-menu"
+          testId={onScreen ? "layout-menu" : "layout-menu-hidden"}
           className="tab-action"
           trigger={<Icon size={15} aria-hidden="true" />}
           align="end"
@@ -231,23 +271,27 @@ function HeaderActions(props: IDockviewHeaderActionsProps) {
   );
 }
 
-/** What an empty column shows: a way to put something in it. */
+/** What an empty column shows: a way to put something in it. A feature view with no tab at all says so (A-107, `EmptyView`). */
 function Watermark(props: IWatermarkPanelProps) {
   const s = useServices();
+  const { key, view } = useContext(DockViewContext);
+  const onScreen = useDockOnScreen();
+  const none = useWorkspaceValue((c) => c.tabsIn(view, key).length === 0);
+  if (view !== "home" && none) return <EmptyView view={view} onScreen={onScreen} />;
   return (
-    <div className="workspace-empty" data-testid="workspace-empty">
+    <div className="workspace-empty" data-testid={onScreen ? "workspace-empty" : undefined}>
       <p>{s.t("workspace.empty")}</p>
-      <button type="button" className="secondary-button" data-testid="workspace-open-library" onClick={() => { props.group?.api.setActive(); s.open.newTab(); }}>{s.t("workspace.openLibrary")}</button>
+      <button type="button" className="secondary-button" data-testid={onScreen ? "workspace-open-library" : undefined} onClick={() => { props.group?.api.setActive(); s.open.newTab(); }}>{s.t("workspace.openLibrary")}</button>
     </div>
   );
 }
 
 /** The columns of a window too narrow for them: one is shown, and these buttons choose which (the saved layout does not change). */
-function ColumnSwitcher(props: { contextKey: string }) {
+function ColumnSwitcher(props: { contextKey: string; view: WorkspaceView }) {
   const s = useServices();
   const controller = useWorkspace();
-  const columns = useWorkspaceValue((c) => c.columns(props.contextKey));
-  const active = useWorkspaceValue((c) => c.activeColumn(props.contextKey));
+  const columns = useWorkspaceValue((c) => c.columns(props.contextKey, props.view));
+  const active = useWorkspaceValue((c) => c.activeColumn(props.contextKey, props.view));
   return (
     <div className="column-switcher" role="group" aria-label={s.t("columns.switch")} data-testid="column-switcher">
       {Array.from({ length: columns }, (_, index) => (
@@ -258,36 +302,27 @@ function ColumnSwitcher(props: { contextKey: string }) {
 }
 
 /**
- * The dock of one context. Every context that is kept on screen has one; the ones not in front are hidden, not unmade, so going back to a context is
- * immediate and a video in it keeps its place. The dock's own layout is the controller's to save and restore (see `WorkspaceController.attach`).
+ * The dock of one view of a context. The dock of the view on screen is shown; the others stay laid out under it, hidden as a layer (计划 4.8), so going
+ * back to a view is immediate and its columns keep their sizes. The dock's own layout is the controller's to save and restore (`WorkspaceController.attach`).
  */
-export function ContextHost(props: { contextKey: string }) {
-  const { contextKey: key } = props;
+function ViewDock(props: { contextKey: string; view: WorkspaceView; width: number }) {
+  const { contextKey: key, view, width } = props;
   const contextId = contextFromKey(key);
   const controller = useWorkspace();
   const fullscreen = useWindowFullscreen();
-  const active = useWorkspaceValue((c) => c.activeKey === key);
-  const columns = useWorkspaceValue((c) => c.columns(key));
-  const focusedId = useWorkspaceValue((c) => c.focusedTabId(key));
+  const active = useWorkspaceValue((c) => c.activeKey === key && c.view === view);
+  const columns = useWorkspaceValue((c) => c.columns(key, view));
+  const focusedId = useWorkspaceValue((c) => (c.view === view ? c.focusedTabId(key) : null));
   const [api, setApi] = useState<DockviewApi | null>(null);
-  const root = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const scope = useMemo(() => ({ key, view }), [key, view]);
 
   // The dock keeps its instance when the host's effects run again (React's checks, a hidden host) and does not say it is ready a second time, so the host
   // attaches it from here, and lets go of it when the host goes.
   useEffect(() => {
     if (!api) return;
-    controller.attach(contextId, api);
-    return () => controller.detach(contextId, api);
-  }, [api, controller, contextId]);
-
-  useEffect(() => {
-    const node = root.current;
-    if (!node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => setWidth(Math.round(entries[0]?.contentRect.width ?? 0)));
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
+    controller.attach(contextId, api, view);
+    return () => controller.detach(contextId, api, view);
+  }, [api, controller, contextId, view]);
 
   const onReady = useCallback((event: DockviewReadyEvent) => {
     const dock = event.api;
@@ -309,7 +344,12 @@ export function ContextHost(props: { contextKey: string }) {
   useEffect(() => {
     if (!api) return;
     const minimumWidth = columns > 1 && !single ? MIN_COLUMN_WIDTH : 0;
-    for (const group of api.groups) group.api.setConstraints({ minimumWidth });
+    const apply = () => { for (const group of api.groups) group.api.setConstraints({ minimumWidth }); };
+    apply();
+    // A dock's first group comes with its first tab, and a layout read back makes new groups, with the number of columns the same as before.
+    const added = api.onDidAddGroup(apply);
+    const restored = api.onDidLayoutFromJSON(apply);
+    return () => { added.dispose(); restored.dispose(); };
   }, [api, columns, single]);
   useEffect(() => {
     if (!api) return;
@@ -323,19 +363,93 @@ export function ContextHost(props: { contextKey: string }) {
   }, [api, single, focusedId, columns]);
 
   return (
-    <div ref={root} className="context-host" hidden={!active} data-testid="context-host" data-context={key} data-active={active ? "true" : "false"} data-columns={columns} data-single={single ? "true" : "false"}>
-      {active && squeezed && !fullscreen.active ? <ColumnSwitcher contextKey={key} /> : null}
-      <DockviewReact
-        className="dockview-theme-manga"
-        components={COMPONENTS}
-        defaultTabComponent={TabHeader}
-        watermarkComponent={Watermark}
-        rightHeaderActionsComponent={HeaderActions}
-        onReady={onReady}
-        defaultRenderer="always"
-        disableFloatingGroups
-        noPanelsOverlay="emptyGroup"
-      />
+    <div className="view-dock" data-testid={active ? "view-dock" : undefined} data-view={view} data-columns={columns} data-single={single ? "true" : "false"} {...(active ? {} : { "data-hidden-layer": "", inert: true })}>
+      {active && squeezed && !fullscreen.active ? <ColumnSwitcher contextKey={key} view={view} /> : null}
+      <DockViewContext.Provider value={scope}>
+        <DockviewReact
+          className="dockview-theme-manga"
+          components={COMPONENTS}
+          defaultTabComponent={TabHeader}
+          watermarkComponent={Watermark}
+          rightHeaderActionsComponent={HeaderActions}
+          onReady={onReady}
+          defaultRenderer="always"
+          disableFloatingGroups
+          noPanelsOverlay="emptyGroup"
+        />
+      </DockViewContext.Provider>
+    </div>
+  );
+}
+
+const SEP = String.fromCharCode(10);
+
+/** The content of every tab of a context, each drawn once into its own node (see `TabContent`); the nodes are then put where the view on screen wants them. */
+function TabContents(props: { contextKey: string }) {
+  const { contextKey: key } = props;
+  const ids = useWorkspaceValue((c) => c.tabsOf(key).map((tab) => tab.id).join(SEP));
+  const list = useMemo(() => (ids ? ids.split(SEP) : []), [ids]);
+  const kept = useRef(new Set<string>());
+  useEffect(() => {
+    // The node of a tab that was closed goes with it.
+    const now = new Set(list);
+    for (const tabId of kept.current) if (!now.has(tabId)) releaseHost(key, tabId);
+    kept.current = now;
+  }, [key, list]);
+  useEffect(() => () => { for (const tabId of kept.current) releaseHost(key, tabId); }, [key]);
+  return <>{list.map((tabId) => createPortal(<TabContent contextKey={key} tabId={tabId} />, hostOf(key, tabId), tabId))}</>;
+}
+
+/**
+ * Delete and Backspace on a tab do not close it (LOOP-24 3, 计划 4.8): dockview has no option for it, so the two keys are stopped on the way down when
+ * the tab itself has the focus. Every other key (the arrows, Home, End, Enter, Space) still reaches dockview, Ctrl+W still closes, and a text box
+ * inside a tab is not a tab, so Backspace deletes there as always. A change of dockview's keys is caught by `tests/shell/workspace-keys.test.tsx`.
+ */
+function keepTabsFromKeys(event: ReactKeyboardEvent<HTMLDivElement>) {
+  if (event.key !== "Delete" && event.key !== "Backspace") return;
+  const target = event.target as HTMLElement | null;
+  if (!target || target.isContentEditable || target.closest("input, textarea, select")) return;
+  if (!target.classList.contains("dv-tab")) return;
+  event.stopPropagation();
+  event.preventDefault();
+}
+
+/**
+ * Everything of one context on the page: the docks of the views seen in it, the content of its tabs, and a hidden layer where the content of the tabs
+ * that the view on screen does not hold waits. Every context that is kept on screen has one; the ones not in front are hidden, not unmade, so going back
+ * to a context is immediate and a video in it keeps its place.
+ */
+export function ContextHost(props: { contextKey: string }) {
+  const { contextKey: key } = props;
+  const controller = useWorkspace();
+  const active = useWorkspaceValue((c) => c.activeKey === key);
+  const views = useWorkspaceValue((c) => c.dockViews(key).join(","));
+  const view = useWorkspaceValue((c) => c.view);
+  const columns = useWorkspaceValue((c) => c.columns(key));
+  const version = useWorkspaceValue((c) => c.version());
+  const root = useRef<HTMLDivElement>(null);
+  const parking = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const node = root.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => setWidth(Math.round(entries[0]?.contentRect.width ?? 0)));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    setParking(key, parking.current);
+    return () => setParking(key, null);
+  }, [key]);
+  // After every change of the workspace the content of each tab is where the view on screen wants it.
+  useLayoutEffect(() => { placeTabs(key, view, controller.tabsOf(key).map((tab) => tab.id)); }, [key, controller, version, views, view]);
+
+  return (
+    <div ref={root} className="context-host" hidden={!active} data-testid="context-host" data-context={key} data-active={active ? "true" : "false"} data-view={view} data-columns={columns} onKeyDownCapture={keepTabsFromKeys}>
+      {(views ? (views.split(",") as WorkspaceView[]) : []).map((item) => <ViewDock key={item} contextKey={key} view={item} width={width} />)}
+      <div ref={parking} className="tab-parking" data-hidden-layer="" aria-hidden="true" />
+      <TabContents contextKey={key} />
     </div>
   );
 }
@@ -346,4 +460,3 @@ export function WorkspaceHosts() {
   const list = useMemo(() => JSON.parse(keys) as string[], [keys]);
   return <>{list.map((key) => <ContextHost key={key} contextKey={key} />)}</>;
 }
-

@@ -98,8 +98,8 @@ export function App() {
   }, [notice?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- the workspace: the tabs and layouts of every context ------------------------------------------------------------------
-  const latest = useRef({ t, setNotice, setError });
-  latest.current = { t, setNotice, setError };
+  const latest = useRef<{ t: typeof t; setNotice: typeof setNotice; setError: typeof setError; changeRail?: (patch: RailPatch) => void }>({ t, setNotice, setError });
+  latest.current = { ...latest.current, t, setNotice, setError };
   const controller = useMemo(() => new WorkspaceController({
     call: (commandId, input) => attempt(commandId, input) as never,
     titleFor: (request) => titleOf(latest.current.t, request),
@@ -107,6 +107,8 @@ export function App() {
     seed: (contextId) => (contextId === null ? [{ kind: "library", target: { page: "overview" } }] : [{ kind: "project", target: { projectId: contextId } }]),
     onLimit: () => latest.current.setNotice(latest.current.t("tab.limit")),
     onError: (message) => latest.current.setError(message),
+    // Opening a thing of another kind in a feature view moves the screen to its view (A-107); the rail follows and keeps it.
+    onView: (view) => latest.current.changeRail?.({ view }),
   }), []);
   const context = useSyncExternalStore(controller.subscribe, () => controller.activeContextId, () => null);
 
@@ -132,6 +134,7 @@ export function App() {
   const [sidebarCache] = useState(createSidebarCache);
   const changeRailRef = useRef(changeRail);
   changeRailRef.current = changeRail;
+  latest.current.changeRail = changeRail;
   const hiddenPagesRef = useRef<ReadonlySet<string>>(new Set());
   const shellStore = useMemo(() => new ShellState({
     lastPage: () => {
@@ -222,7 +225,10 @@ export function App() {
     window.addEventListener("pagehide", save);
     window.addEventListener("beforeunload", save);
     document.addEventListener("visibilitychange", onVisibility);
+    // The window is about to close (LOOP-23): the main process waits for this answer, at most a moment, before it lets the window go.
+    const stopSaveNow = window.manga?.onSaveNow?.(() => controller.flushAll());
     return () => {
+      stopSaveNow?.();
       window.removeEventListener("pagehide", save);
       window.removeEventListener("beforeunload", save);
       document.removeEventListener("visibilitychange", onVisibility);

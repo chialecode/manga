@@ -4,6 +4,7 @@
  */
 
 import { drawTextSubtitles, type TextSubtitleDraw } from "./subtitle-raster.ts";
+import { danmakuCrop, type Box } from "./danmaku-model.ts";
 
 export type Captured = { data: string; width: number; height: number };
 export type CaptureFailure = "no-frame" | "tainted" | "encode";
@@ -49,16 +50,18 @@ function drawSubtitles(context: CanvasRenderingContext2D, width: number, height:
   return drawn;
 }
 
-/** The canvas the flying comments are drawn on, and how much of the picture it covers from the top (the display area) and how opaque it is. */
-export type DanmakuDraw = { canvas: HTMLCanvasElement; area: number; opacity: number };
+/** The canvas the flying comments are drawn on, the layer's size and where the picture is in it (CSS pixels), and how opaque they are. */
+export type DanmakuDraw = { canvas: HTMLCanvasElement; layer: { width: number; height: number }; picture: Box; opacity: number };
 
-/** The comments go where they are on screen: the canvas spans the picture's width and the top `area` of its height, whatever size the file is. */
-function drawDanmaku(context: CanvasRenderingContext2D, width: number, height: number, danmaku: DanmakuDraw): void {
-  if (danmaku.canvas.width <= 0 || danmaku.canvas.height <= 0) return;
+/** The comments go where they are on screen over the picture; the ones in the bars around it are not in the picture and stay out (A-111). */
+function drawDanmaku(context: CanvasRenderingContext2D, width: number, height: number, danmaku: DanmakuDraw): boolean {
+  const crop = danmakuCrop(danmaku.canvas, danmaku.layer, danmaku.picture, { width, height });
+  if (!crop) return false;
   context.save();
   context.globalAlpha = Math.min(1, Math.max(0, danmaku.opacity));
-  context.drawImage(danmaku.canvas, 0, 0, danmaku.canvas.width, danmaku.canvas.height, 0, 0, width, Math.round(height * danmaku.area));
+  context.drawImage(danmaku.canvas, crop.sx, crop.sy, crop.sw, crop.sh, crop.dx, crop.dy, crop.dw, crop.dh);
   context.restore();
+  return true;
 }
 
 /** A frame taken from a video, and which of the things laid over it reached the picture. */
@@ -82,7 +85,7 @@ export async function captureVideoFrame(video: HTMLVideoElement, options: { subt
   try {
     context.drawImage(video, 0, 0, width, height);
     let danmakuDrawn = false;
-    if (options.danmaku) { drawDanmaku(context, width, height, options.danmaku); danmakuDrawn = true; }
+    if (options.danmaku) danmakuDrawn = drawDanmaku(context, width, height, options.danmaku);
     const wanted = typeof options.subtitles === "function" ? await options.subtitles().catch(() => null) : options.subtitles ?? null;
     const subtitlesDrawn = wanted ? drawSubtitles(context, width, height, wanted) : false;
     const blob = await toBlob(canvas);

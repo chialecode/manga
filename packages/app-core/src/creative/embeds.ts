@@ -214,8 +214,6 @@ export class EmbedService {
 }
 
 /** Whether the value names an object kind that can sit inside another one. */
-export const isEmbedKind = (value: string): value is EmbedKind => isObjectKind(value) && SOURCE_KINDS.includes(value);
-
 /** The name of what a reference points at, with whether it is still there, for rows that only carry a kind and an id. */
 export function referenceInfo(store: DrizzleStore, kind: string, id: string, featureOn: (featureId: string) => boolean = () => true): { state: "ok" | "missing" | "disabled"; label: string; opens?: ReturnType<typeof describeObject>["opens"] } {
   if (!isObjectKind(kind)) return { state: "missing", label: "" };

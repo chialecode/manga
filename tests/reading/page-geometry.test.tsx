@@ -161,7 +161,7 @@ function renderPane(document: ReadingDocument) {
     hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
     onBackToNote={() => {}} onRepair={() => {}} labelsExtra={paneLabelsExtra} labels={paneLabels}
     onImportBook={() => {}} onOpen={() => {}} onSearch={() => {}} onJump={() => {}} onProgress={() => {}}
-    onNote={() => {}} onMore={() => {}} onPart={() => {}} onStyle={() => {}} onBookmark={() => {}}
+    onNote={() => {}} onPart={() => {}} onStyle={() => {}} onBookmark={() => {}}
     onRemoveBookmark={() => {}} onOpenBookmark={() => {}}
   />);
 }

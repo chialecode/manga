@@ -42,8 +42,8 @@ function leaveLibrary(ctx: App, revisionId: string) {
     .run(`loc-${revisionId}`, revisionId, "x.cbz", "f".repeat(64), "/gone/x.cbz");
 }
 
-describe("the home: every project and what it holds, by kind", () => {
-  it("lists 最近 and each project with the kinds that have something in them, five to a kind, and the count of the rest", async () => {
+describe("the home: every project and what it holds, in one list", () => {
+  it("lists 最近 and each project with everything in one list by latest activity, eight of it, and the count of all of it (A-103)", async () => {
     const ctx = await boot();
     const a = await project(ctx, "项目甲");
     const b = await project(ctx, "项目乙");
@@ -62,16 +62,25 @@ describe("the home: every project and what it holds, by kind", () => {
     expect(view.groups.map((item) => [item.contextId, item.kind])).toEqual([[null, "recent"], [expect.any(String), "project"], [expect.any(String), "project"]]);
     const mine = group(view, a);
     expect(mine.name).toBe("项目甲");
-    expect(mine.sections.map((section) => [section.type, section.total])).toEqual([["conversation", 1], ["novel", 1], ["comic", 1], ["note", 7], ["whiteboard", 1]]);
-    const notes = mine.sections.find((section) => section.type === "note")!;
-    expect(notes.items).toHaveLength(5);
-    expect(notes.nextCursor).toBe("5");
-    expect(notes.loaded).toBe(true);
-    // A project with nothing in it lists no kind on the home, and is still listed.
-    expect(group(view, b).sections).toEqual([]);
+    expect(mine.sections.map((section) => [section.type, section.total])).toEqual([["all", 11]]);
+    const list = mine.sections[0]!;
+    expect(list.items).toHaveLength(8);
+    expect(list.nextCursor).toEqual(expect.any(String));
+    expect(list.loaded).toBe(true);
+    // Every kind in one list, newest activity first.
+    expect(new Set(list.items.map((item) => item.type)).size).toBeGreaterThan(1);
+    const times = list.items.map((item) => item.updatedAt ?? "");
+    expect(times).toEqual([...times].sort().reverse());
+    // The rest is there to page through, and the count is what the pages hold.
+    const rest = ok<{ type: string; total: number; items: SidebarItem[]; nextCursor: string | null }>(await run(ctx, "workspace.items", { view: "home", contextId: a, limit: 20, cursor: list.nextCursor! }));
+    expect(rest).toMatchObject({ type: "all", total: 11, nextCursor: null });
+    expect(rest.items).toHaveLength(3);
+    expect(new Set([...list.items, ...rest.items].map((item) => item.key)).size).toBe(11);
+    // A project with nothing in it is still listed, with an empty list.
+    expect(group(view, b).sections).toEqual([{ type: "all", total: 0, items: [], loaded: true, nextCursor: null }]);
     // 最近 holds what belongs to no project: the conversation outside them and the note that is in no project's materials.
-    expect(group(view, null).sections.map((section) => [section.type, section.total])).toEqual([["conversation", 1], ["note", 1]]);
-    expect(group(view, null).sections.find((section) => section.type === "note")!.items[0]).toMatchObject({ title: "不属于任何项目的笔记", contextId: null, open: { kind: "note", id: loose } });
+    expect(group(view, null).sections.map((section) => [section.type, section.total])).toEqual([["all", 2]]);
+    expect(group(view, null).sections[0]!.items.find((item) => item.type === "note")).toMatchObject({ title: "不属于任何项目的笔记", contextId: null, open: { kind: "note", id: loose } });
   });
 
   it("answers a group that was not asked for with its counts only, and every group in full when none is named", async () => {
@@ -116,8 +125,8 @@ describe("a view of one kind", () => {
     expect(mine.items).toHaveLength(2);
     expect(mine.items.find((item) => item.open.id === asked)).toMatchObject({ title: "对话的漫画", running: true, open: { kind: "conversation", general: false }, contextId: a, contextName: "项目甲" });
     expect(mine.items.find((item) => item.open.id === chat)).toMatchObject({ running: false, open: { kind: "conversation", general: true } });
-    // The list counts what is listed; a file that cannot be opened is passed over when the page is made, not counted away.
-    expect(mine.total).toBe(3);
+    // The count is what is listed: a file that cannot be opened is neither listed nor counted (计划 4.3).
+    expect(mine.total).toBe(2);
     expect(mine.nextCursor).toBeNull();
     const empty = view.groups.find((item) => item.name === "空项目")!;
     expect(empty.sections[0]).toMatchObject({ type: "conversation", total: 0, items: [], loaded: true });
@@ -269,9 +278,9 @@ describe("the lists follow the data", () => {
     } while (cursor);
     expect(pages).toBe(3);
     expect(seen).toEqual(Array.from({ length: 23 }, (_, index) => `笔记${String(23 - index).padStart(2, "0")}`));
-    // On the home the kind says which list of the project is meant.
+    // On the home a kind narrows the list; without one it is the mixed list of every kind.
     expect(ok<{ type: string; total: number }>(await run(ctx, "workspace.items", { view: "home", contextId: a, type: "note", limit: 5 }))).toMatchObject({ type: "note", total: 23 });
-    expect((await run(ctx, "workspace.items", { view: "home", contextId: a, limit: 5 })).status).toBe("error");
+    expect(ok<{ type: string; total: number }>(await run(ctx, "workspace.items", { view: "home", contextId: a, limit: 5 }))).toMatchObject({ type: "all", total: 23 });
     expect((await run(ctx, "workspace.items", { view: "note", contextId: a, type: "comic", limit: 5 })).status).toBe("error");
     expect((await run(ctx, "workspace.items", { view: "note", contextId: a, limit: 101 })).status).toBe("error");
     // A project that is gone since the list was drawn answers with an empty list instead of failing.
@@ -367,8 +376,8 @@ describe("finding things by name", () => {
     const sessionId = await openResourceSession(ctx, lost.resourceId, null, { ran: true });
     const found = ok<{ groups: FindGroup[] }>(await run(ctx, "workspace.find", { q: "雨夜" })).groups;
     expect(found.some((group) => group.type === "conversation")).toBe(false);
-    // The work still is: it opens its own page, which says what is wrong with the file.
-    expect(found.find((group) => group.type === "comic")!.items.map((item) => item.open.kind)).toEqual(["work"]);
+    // Nor is its work, which has no resource in a library path left (A-113).
+    expect(found.some((group) => group.type === "comic")).toBe(false);
     void sessionId;
   });
 });
@@ -392,11 +401,11 @@ describe("only the person's own interface asks", () => {
 describe("what the shell keeps of the rail", () => {
   it("starts from the home with every icon shown, and keeps what the person changed, a part at a time", async () => {
     const ctx = await boot();
-    expect(readShell(ctx.app.store).rail).toEqual({ hidden: [], view: "home", open: {}, settingsPage: null });
+    expect(readShell(ctx.app.store).rail).toEqual({ hidden: [], view: "home", open: {}, settingsPage: null, order: [], display: {} });
     ok(await run(ctx, "settings.setShell", { rail: { hidden: ["whiteboard", "mindmap"], view: "comic" } }));
     ok(await run(ctx, "settings.setShell", { rail: { open: { comic: ["", "prj_a"] } } }));
     ok(await run(ctx, "settings.setShell", { rail: { open: { note: ["prj_b"] }, settingsPage: "storage" } }));
-    expect(readShell(ctx.app.store).rail).toEqual({ hidden: ["whiteboard", "mindmap"], view: "comic", open: { comic: ["", "prj_a"], note: ["prj_b"] }, settingsPage: "storage" });
+    expect(readShell(ctx.app.store).rail).toEqual({ hidden: ["whiteboard", "mindmap"], view: "comic", open: { comic: ["", "prj_a"], note: ["prj_b"] }, settingsPage: "storage", order: [], display: {} });
     // A part that is named again replaces it; the rest is as it was; the widths and the reading style are not touched.
     ok(await run(ctx, "settings.setShell", { rail: { hidden: [], settingsPage: null } }));
     expect(readShell(ctx.app.store)).toMatchObject({ rail: { hidden: [], view: "comic", open: { comic: ["", "prj_a"], note: ["prj_b"] }, settingsPage: null }, sidebar: { visible: true, width: 260 }, reading: DEFAULT_SHELL_PREFERENCE.reading });
@@ -412,7 +421,7 @@ describe("what the shell keeps of the rail", () => {
     expect(ShellPreferenceSchema.safeParse(older).success).toBe(true);
     expect(readShell(ctx.app.store)).toMatchObject({ spoilerGuard: true, rail: { hidden: [], view: "home" } });
     ok(await run(ctx, "settings.setShell", { rail: { view: "note" } }));
-    expect(JSON.parse((sql(ctx).prepare("SELECT value_json FROM config WHERE key = 'shell.layout'").get() as { value_json: string }).value_json).rail).toEqual({ hidden: [], view: "note", open: {}, settingsPage: null });
+    expect(JSON.parse((sql(ctx).prepare("SELECT value_json FROM config WHERE key = 'shell.layout'").get() as { value_json: string }).value_json).rail).toEqual({ hidden: [], view: "note", open: {}, settingsPage: null, order: [], display: {} });
   });
 });
 

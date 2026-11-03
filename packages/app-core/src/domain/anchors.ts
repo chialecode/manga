@@ -1,8 +1,6 @@
 import {
   type AnchorResolveResult,
-  type SourceLocator,
   type TextLocator,
-  MangaError,
 } from "@manga/contracts";
 import { codePointLength, findQuoteMatches, sliceCodePoints } from "./text.ts";
 
@@ -50,9 +48,4 @@ export function resolveTextLocator(
   const text = sliceCodePoints(representation.normalized, start, end);
   if (locator.quote?.exact && text !== locator.quote.exact) return resolveByQuote(locator, representation.normalized);
   return { status: "resolved", text, codePointRange: { start, end }, utf16Range: codePointRangeToUtf16(representation.normalized, start, end) };
-}
-
-export function assertTextLocator(locator: SourceLocator): TextLocator {
-  if (locator.kind !== "text") throw new MangaError("VALIDATION_ERROR", "this reading surface only resolves text or page locators");
-  return locator;
 }

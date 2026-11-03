@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts";
+import { installPointerEvent } from "../helpers/dom.ts";
 import { frame, shellRail } from "../helpers/shell-frame.tsx";
 
 afterEach(() => cleanup());
@@ -103,6 +104,85 @@ describe("AT-120 the rail's icons: taking one out, \"…\" and the pin", () => {
   });
 });
 
+describe("AT-132 moving the icons (A-108)", () => {
+  const order = () => [...screen.getByTestId("rail-views").querySelectorAll("[data-rail-view]")].map((node) => node.getAttribute("data-rail-view"));
+  /** jsdom lays nothing out: each icon of the rail stands 40 px below the one before it. */
+  function laidOut() {
+    screen.getByTestId("rail-views").querySelectorAll<HTMLElement>("[data-rail-view]").forEach((node, index) => {
+      node.getBoundingClientRect = () => ({ top: index * 40, bottom: index * 40 + 36, left: 0, right: 36, width: 36, height: 36, x: 0, y: index * 40, toJSON: () => ({}) });
+    });
+    screen.getByTestId("rail-views").getBoundingClientRect = () => ({ top: 0, bottom: 400, left: 0, right: 48, width: 48, height: 400, x: 0, y: 0, toJSON: () => ({}) });
+  }
+
+  it("moves an icon up or down from its menu, not past the ends, and says where it went; the home has no menu", () => {
+    const move = vi.fn();
+    frame(1280, 840, { rail: shellRail({ onMove: move }) });
+    fireEvent.contextMenu(screen.getByTestId("nav-conversation"), { clientX: 20, clientY: 80 });
+    let menu = screen.getByTestId("rail-menu");
+    expect(within(menu).getAllByRole("menuitem").map((node) => [(node.textContent ?? "").trim(), (node as HTMLButtonElement).disabled])).toEqual([["上移", true], ["下移", false], ["从图标栏隐藏", false]]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "下移" }));
+    expect(move).toHaveBeenLastCalledWith("conversation", ["conversation", "novel", "comic", "video", "note", "whiteboard"], 1);
+    expect(screen.getByTestId("rail-said").textContent).toBe("对话已移到第 3 位");
+    // The menu key opens the same menu; the last icon cannot go further down.
+    fireEvent.keyDown(screen.getByTestId("nav-whiteboard"), { key: "ContextMenu" });
+    menu = screen.getByTestId("rail-menu");
+    expect((within(menu).getByRole("menuitem", { name: "下移" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "上移" }));
+    expect(move).toHaveBeenLastCalledWith("whiteboard", expect.any(Array), 4);
+    fireEvent.contextMenu(screen.getByTestId("nav-home"), { clientX: 20, clientY: 40 });
+    expect(screen.queryByTestId("rail-menu")).toBeNull();
+  });
+
+  it("drags an icon to a new place after a press that moved 4 px, without choosing its view; Escape and leaving the rail put it back", () => {
+    installPointerEvent();
+    const move = vi.fn();
+    const select = vi.fn();
+    frame(1280, 840, { rail: shellRail({ onMove: move, onSelect: select }) });
+    laidOut();
+    const comic = screen.getByTestId("nav-comic");
+    // A press that does not move is a click.
+    fireEvent.pointerDown(comic, { pointerId: 1, button: 0, clientX: 18, clientY: 138 });
+    fireEvent.pointerMove(comic, { pointerId: 1, clientX: 18, clientY: 140 });
+    fireEvent.pointerUp(comic, { pointerId: 1, clientX: 18, clientY: 140 });
+    fireEvent.click(comic, { detail: 1 });
+    expect(select).toHaveBeenCalledWith("comic");
+    expect(move).not.toHaveBeenCalled();
+    select.mockClear();
+    // Up above the novels: it follows the pointer, the novels make room, and it lands second among the icons that move.
+    fireEvent.pointerDown(comic, { pointerId: 2, button: 0, clientX: 18, clientY: 138 });
+    fireEvent.pointerMove(comic, { pointerId: 2, clientX: 18, clientY: 70 });
+    expect(comic.getAttribute("data-dragging")).toBe("true");
+    expect(comic.style.transform).toBe("translateY(-68px)");
+    expect(screen.getByTestId("nav-novel").style.transform).toBe("translateY(40px)");
+    fireEvent.pointerUp(comic, { pointerId: 2, clientX: 18, clientY: 70 });
+    fireEvent.click(comic, { detail: 1 });
+    expect(move).toHaveBeenCalledWith("comic", ["conversation", "novel", "comic", "video", "note", "whiteboard"], 1);
+    expect(select).not.toHaveBeenCalled();
+    expect(comic.getAttribute("data-dragging")).toBeNull();
+    // Escape gives it up.
+    move.mockClear();
+    fireEvent.pointerDown(comic, { pointerId: 3, button: 0, clientX: 18, clientY: 138 });
+    fireEvent.pointerMove(comic, { pointerId: 3, clientX: 18, clientY: 230 });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(comic.getAttribute("data-dragging")).toBeNull();
+    fireEvent.pointerUp(comic, { pointerId: 3, clientX: 18, clientY: 230 });
+    expect(move).not.toHaveBeenCalled();
+    // So does leaving the rail sideways.
+    fireEvent.pointerDown(comic, { pointerId: 4, button: 0, clientX: 18, clientY: 138 });
+    fireEvent.pointerMove(comic, { pointerId: 4, clientX: 18, clientY: 230 });
+    fireEvent.pointerMove(comic, { pointerId: 4, clientX: 200, clientY: 230 });
+    fireEvent.pointerUp(comic, { pointerId: 4, clientX: 200, clientY: 230 });
+    expect(move).not.toHaveBeenCalled();
+    // The home does not move.
+    const home = screen.getByTestId("nav-home");
+    fireEvent.pointerDown(home, { pointerId: 5, button: 0, clientX: 18, clientY: 18 });
+    fireEvent.pointerMove(home, { pointerId: 5, clientX: 18, clientY: 200 });
+    expect(home.getAttribute("data-dragging")).toBeNull();
+    fireEvent.pointerUp(home, { pointerId: 5, clientX: 18, clientY: 200 });
+    expect(order()).toEqual(["home", "conversation", "novel", "comic", "video", "note", "whiteboard"]);
+  });
+});
+
 describe("AT-120 the card of a view, with the sidebar folded away", () => {
   it("comes out after the pointer rests on an icon, shows that view the way a card does, and goes when the pointer leaves", async () => {
     frame(1600, 900, { preference: folded() });
@@ -118,6 +198,16 @@ describe("AT-120 the card of a view, with the sidebar folded away", () => {
     expect(slot().getAttribute("data-variant")).toBe("card");
     fireEvent.mouseLeave(icon);
     await waitFor(() => expect(screen.queryByTestId("shell-sidebar")).toBeNull(), LATE);
+  });
+
+  it("comes out with the focus in the docked conversation column, and leaves the focus there", async () => {
+    frame(1600, 900, { preference: folded() });
+    const dock = screen.getByTestId("shell-dock");
+    dock.focus();
+    expect(document.activeElement).toBe(dock);
+    fireEvent.mouseEnter(screen.getByTestId("nav-comic"));
+    await waitFor(() => expect(card().getAttribute("data-shell-state")).toBe("overlay"), LATE);
+    expect(document.activeElement).toBe(dock);
   });
 
   it("brings out nothing for a pointer that passes over an icon", async () => {

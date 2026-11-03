@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     setupFiles: ["tests/helpers/setup-dom.ts"],
+    globalSetup: ["tests/helpers/global-temp.ts"],
     environment: "node",
     testTimeout: 60_000,
     hookTimeout: 60_000,
