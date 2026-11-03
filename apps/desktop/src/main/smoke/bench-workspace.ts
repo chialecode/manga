@@ -1,9 +1,10 @@
+import { measurePolish } from "./bench-polish.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, closeTabs, DRAWN, openFromShelf, openProjectsPage, PICK, pressChord, sleep, tabsOf, viaSidebar, waitUntil, type TabFact } from "./driver.ts";
+import { clickTestId, closeTabs, DRAWN, openFromShelf, openProjectsPage, PICK, pressChord, railTo, sleep, tabsOf, viaSidebar, waitUntil, type TabFact } from "./driver.ts";
 import { caller, js, toRail } from "./common.ts";
 import { median, readMemory } from "./bench-reader.ts";
 
@@ -195,7 +196,10 @@ async function seed(appService: MangaProductApp, call: ReturnType<typeof caller>
 /** The four tabs of the quad and nothing else, in one column: the two videos, the comic, the note. A player already open (`videoA`) is kept. */
 async function openFour(view: BrowserWindow, seeds: Seeds, videoA?: string): Promise<{ ids: Record<"videoA" | "videoB" | "comic" | "note", string>; failures: string[] } | null> {
   const failures: string[] = [];
-  if (!videoA) await closeTabs(view, "all");
+  if (!videoA) {
+    await railTo(view, "home");
+    await closeTabs(view, "all");
+  }
   const before = new Set((await tabsOf(view)).map((tab) => tab.id));
   // The strip adds a tab's title a moment after the page of the tab is drawn, so the new title is waited for (setup only; nothing is timed here).
   const idOfNew = async (): Promise<string | null> => {
@@ -217,6 +221,8 @@ async function openFour(view: BrowserWindow, seeds: Seeds, videoA?: string): Pro
     const id = await idOfNew();
     if (id) ids.note = id; else failures.push("the note has no tab");
   } else failures.push("the note did not open");
+  // Each went to its own view; the four columns are laid out in the home, which holds all the tabs of the context (A-107).
+  await railTo(view, "home");
   await closeTabs(view, ["library", "records"]);
   if (!ids.videoA || !ids.videoB || !ids.comic || !ids.note) return { ids: ids as never, failures: [...failures, "a tab is missing"] };
   return { ids: ids as never, failures };
@@ -289,6 +295,8 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     await openNote(view, seeds.noteId),
   ];
   if (opened.some((ok) => !ok)) failures.push(`tab switch: not every tab opened (${JSON.stringify(opened)})`);
+  // Each of them went to its own view; the home holds all the tabs of the context (A-107).
+  await railTo(view, "home");
   await sleep(1200);
   const strip = await tabsOf(view);
   const tabMs: number[] = [];
@@ -389,6 +397,10 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     await chooseMenu(view, "layout-menu", "layout-single");
   }
 
+  // ---- the views, a drag and a book by the page ----
+  note("views, a drag, a book by the page");
+  const polish = await measurePolish(view, call, seeds, { timedPress, prelude: PRELUDE, failures });
+
   note("done");
   const samples = { tabMs, contextMs, restoreMs };
   const enough = tabMs.length >= 60 && contextMs.length >= 30 && restoreMs.length >= 10 && lateRaw.length === spec.quadRuns;
@@ -405,6 +417,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     readers: { opened: openedReaders, ...loaded, over: loadedOver },
     mountedReadersOverColumns: loadedOver,
     quadLateFramePct: lateRaw,
+    ...polish,
     quadRuns: runs,
     usualIntervalMs: Math.round(usual * 100) / 100,
     baselineLatePct,
@@ -415,6 +428,13 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
       contextSwitch: "real press on the context's row in the sidebar → the context is in front and the book its front tab holds is drawn, all three contexts visited before",
       contextRestore: "same, after the page was loaded again: the context is made anew from the library (the one the window returns in is not pressed)",
       mountedReaders: "ten books opened and pressed in turn twice; reader tabs whose content is in the page, minus the columns shown",
+      viewSwitch: "real press on a view's icon → its sidebar is listed and its main area shows the tab in front, both tabs loaded, timed in the page from the press",
+      viewRestore: "same, the first press after the page was loaded again",
+      coversShown: "real press on the media view's icon after the page was loaded again → every picture of the view's grid is decoded (cells without a cover count as their placeholder)",
+      dragLateFrame: "frames given to the page while the sidebar's divider and an icon of the rail are dragged out and back, later than 1.5 times the usual interval with nothing going on",
+      novelTurn: "real press on the next page button → the page number has moved, in a chapter of 300 000 characters",
+      novelRefont: "real press on a larger or a smaller letter → the pages are laid out again and the page holds the character the reader is at (the first one of the page last turned to; twenty changes back and forth all come back to it), in a chapter of 300 000 characters",
+      novelOpen: "real press on a chapter in the contents → its first page is shown, chapters of 300 000 characters",
       quadLateFrame: "frames given to the page while one of two videos plays in four columns (two videos, a comic, a note), later than 1.5 times the usual interval of the same playback in one column",
     },
   };

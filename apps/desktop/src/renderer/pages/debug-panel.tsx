@@ -119,6 +119,7 @@ export function DebugPanel(props: {
         aria-label={t("debug.resize")}
         tabIndex={0}
         data-testid="debug-grip"
+        onDragStart={(event) => event.preventDefault()}
         onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); drag.current = { y: event.clientY, height: view.height }; }}
         onPointerMove={(event) => { if (drag.current) resize(drag.current.height + (drag.current.y - event.clientY)); }}
         onPointerUp={() => { drag.current = null; }}

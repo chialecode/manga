@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Camera, Captions, ChevronLeft, ChevronRight, Fullscreen, Gauge, Languages, ListVideo, Maximize2, Minimize2, MoreHorizontal, Pause, Play, Repeat, Shrink, StepBack, StepForward } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { Menu, type MenuGroup, type MenuItem } from "../components/menu.tsx";
@@ -33,7 +33,7 @@ import { SeekBar, type SeekMarker } from "./video-seekbar.tsx";
 import { VideoStatus } from "./video-status.tsx";
 import { VideoTime } from "./video-time.tsx";
 import { stepVolume, VolumeControl } from "./video-volume.tsx";
-import { DanmakuLayer } from "./danmaku-layer.tsx";
+import { DanmakuLayer, type DanmakuCapture } from "./danmaku-layer.tsx";
 import { DanmakuControl } from "./danmaku-controls.tsx";
 import { shownCount, sourcesOf } from "./danmaku-model.ts";
 import { useDanmaku } from "../hooks/use-danmaku.ts";
@@ -232,7 +232,7 @@ export function VideoPlayer(props: {
   const danmaku = useDanmaku({ on: danmakuOn, enabled: danmakuSettings.settings.enabled, resourceId: doc.resourceId, revisionId: doc.revisionId, convert: danmakuSettings.settings.convert });
   const [danmakuOpen, setDanmakuOpen] = useState(false);
   useEffect(() => { if (danmakuOn) setDanmakuSources(sourcesOf(danmaku.items)); }, [danmakuOn, danmaku.items]);
-  const danmakuCanvas = useRef<(() => HTMLCanvasElement | null) | null>(null);
+  const danmakuCanvas = useRef<(() => DanmakuCapture | null) | null>(null);
   const danmakuShown = useMemo(() => shownCount(danmaku.items, danmakuSettings.settings), [danmaku.items, danmakuSettings.settings]);
   const toggleDanmaku = useCallback(() => { void danmakuSettings.save({ enabled: !danmakuSettings.settings.enabled }); }, [danmakuSettings]);
 
@@ -246,7 +246,7 @@ export function VideoPlayer(props: {
     try {
       const positionMs = Math.max(0, Math.round(element.currentTime * 1000 - originMs));
       // Comments are in the picture only when the person asked for that and they are on screen.
-      const canvas = danmakuOn && danmakuSettings.settings.enabled && danmakuSettings.settings.shotWith ? danmakuCanvas.current?.() ?? null : null;
+      const comments = danmakuOn && danmakuSettings.settings.enabled && danmakuSettings.settings.shotWith ? danmakuCanvas.current?.() ?? null : null;
       const track = subtitles.tracks.find((entry) => entry.id === subtitles.selectedId);
       const second = subtitles.secondaryId ? subtitles.tracks.find((entry) => entry.id === subtitles.secondaryId) : undefined;
       // What is on screen at that moment, as lines: it goes into the record whether or not it is drawn into the picture.
@@ -260,7 +260,7 @@ export function VideoPlayer(props: {
           text: { main: subtitles.cues, second: subtitles.secondaryCues, timeMs: positionMs, style: subtitleStyle, ink: pageInk() },
           ass: track && subtitleRenderer(track) === "ass" ? await subtitles.assPicture(size) : null,
         }) : null,
-        danmaku: canvas ? { canvas, area: danmakuSettings.settings.area, opacity: danmakuSettings.settings.opacity } : null,
+        danmaku: comments ? { ...comments, opacity: danmakuSettings.settings.opacity } : null,
       });
       if ("failure" in shot) { port.fail(shot.failure); return; }
       const audio = doc.audio.find((entry) => entry.index === (audioIndex ?? defaultAudio?.index));
@@ -281,14 +281,16 @@ export function VideoPlayer(props: {
     } finally {
       shooting.current = false;
     }
-  }, [props.screenshots, element, originMs, subtitles.tracks, subtitles.selectedId, subtitles.secondaryId, subtitles.cues, subtitles.secondaryCues, subtitles.assPicture, subtitleStyle, settings.shotSubtitles, doc.audio, doc.resourceId, doc.revisionId, audioIndex, defaultAudio?.index, playback.frame, danmakuOn, danmakuSettings.settings.enabled, danmakuSettings.settings.shotWith, danmakuSettings.settings.area, danmakuSettings.settings.opacity]);
+  }, [props.screenshots, element, originMs, subtitles.tracks, subtitles.selectedId, subtitles.secondaryId, subtitles.cues, subtitles.secondaryCues, subtitles.assPicture, subtitleStyle, settings.shotSubtitles, doc.audio, doc.resourceId, doc.revisionId, audioIndex, defaultAudio?.index, playback.frame, danmakuOn, danmakuSettings.settings.enabled, danmakuSettings.settings.shotWith, danmakuSettings.settings.opacity]);
 
   // ---- keyboard ----
   // ← and → are a step when tapped and a hold when held; the controller tells the two apart and reads the player as it is at that moment.
   const live = useRef({ playback, settings });
   live.current = { playback, settings };
+  /** Shows the bar in full screen (set by the fading below): a tap shows where it landed when the key goes up. */
+  const wakeBar = useRef<() => void>(() => undefined);
   const arrows = useMemo(() => createArrowKeys({
-    tap: (side) => live.current.playback.seekBy(side * live.current.settings.seekStepSeconds * 1000),
+    tap: (side) => { live.current.playback.seekBy(side * live.current.settings.seekStepSeconds * 1000); wakeBar.current(); },
     holdStart: (side) => { if (side > 0) live.current.playback.holdStart(); else live.current.playback.rewindStart(); },
     holdEnd: (side) => { if (side > 0) live.current.playback.holdEnd(); else live.current.playback.rewindEnd(); },
   }), []);
@@ -324,7 +326,8 @@ export function VideoPlayer(props: {
     return true;
   }, [keys, settings.volume, settings.muted, settings.rates, settings.customRate, rate, playback, props, arrows, toggleFullscreen, volumeOpen, menuAt, fullscreen, markA, markB, takeScreenshot]);
 
-  useEffect(() => {
+  // Put on in the commit that makes the tab the focused one, so that a key pressed at once is not lost.
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const node = event.target;
       // A range slider is a control of this player: its arrow keys are the player's. Text fields keep their own keys.
@@ -352,21 +355,40 @@ export function VideoPlayer(props: {
   }, [arrows]);
 
   // ---- controls fade in full screen while a video plays ----
-  // A menu or the volume slider that is open keeps them: they hang from a control, which would fade out from under them.
+  // A menu or the volume slider that is open keeps them: they hang from a control, which would fade out from under them. ← and → do not show
+  // the bar while they are down (A-112): a tap shows it when the key goes up, a hold shows only its hint and fades a bar that is showing, unless
+  // the pointer is on the bar. After a hold the bar stays away until the pointer moves or another key is pressed.
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
+  const held = playback.holding || playback.rewinding;
+  // Set by a hold and cleared by the pointer or another key: a hold that ends paused (a paused video held with →, or ← that resumes a moment
+  // later) leaves the bar away instead of bringing it back while the video is not playing.
+  const quietAfterHold = useRef(false);
   useEffect(() => {
     // At the end the bar stays: the prompt to play again is lifted above it, and the person reaches for the bar next.
-    if (!full || !playback.playing || playback.ended) { setIdle(false); return; }
+    if (!full || playback.ended) { quietAfterHold.current = false; setIdle(false); wakeBar.current = () => undefined; return; }
+    const resting = !playback.playing && !held;
     let timer = 0;
+    const onBar = () => { try { return Boolean(controls.current?.matches(":hover")); } catch { return false; } };
     const arm = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => { if (popupOpen()) arm(); else setIdle(true); }, IDLE_MS);
+      timer = window.setTimeout(() => { if (popupOpen() || onBar()) arm(); else setIdle(true); }, IDLE_MS);
     };
-    const wake = () => { setIdle(false); arm(); };
-    arm();
+    // A paused video keeps its bar: waking it there does not start the timer that fades it.
+    const wake = () => { quietAfterHold.current = false; setIdle(false); if (!resting) arm(); };
+    const onKey = (event: KeyboardEvent) => { if (videoKeyAction(event, keysRef.current)?.type !== "arrow") wake(); };
+    if (held) {
+      quietAfterHold.current = true;
+      if (!popupOpen() && !onBar()) setIdle(true);
+      else arm();
+    } else if (resting) {
+      if (!quietAfterHold.current) setIdle(false);
+    } else arm();
+    wakeBar.current = wake;
     window.addEventListener("pointermove", wake);
-    window.addEventListener("keydown", wake);
-    return () => { window.clearTimeout(timer); window.removeEventListener("pointermove", wake); window.removeEventListener("keydown", wake); };
-  }, [full, playback.playing, playback.ended]);
+    window.addEventListener("keydown", onKey);
+    return () => { window.clearTimeout(timer); window.removeEventListener("pointermove", wake); window.removeEventListener("keydown", onKey); };
+  }, [full, playback.playing, playback.ended, held]);
 
   // ---- right button: the menu (the temporary rate is a held → key, not the mouse) ----
   useEffect(() => {

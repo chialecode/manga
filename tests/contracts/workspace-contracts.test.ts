@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   CommandInputs, DEFAULT_RAIL_PREFERENCE, DEFAULT_SHELL_PREFERENCE, HIDEABLE_RAIL_VIEWS, RAIL_VIEWS, RailPatchSchema, RailPreferenceSchema, SIDEBAR_ITEM_TYPES,
-  ShellPreferenceSchema, ShellPreferenceV1Schema, itemTypeOfView, shellFromV1, validateCommandInput,
+  ShellPreferenceSchema, ShellPreferenceV1Schema, itemTypeOfView, moveRailView, railOrder, shellFromV1, sidebarShown, applyRailPatch, validateCommandInput,
 } from "@manga/contracts";
 import {
-  ContextIdSchema, EMPTY_WORKSPACE_STATE, LEGACY_TAB_KINDS, WORKSPACE_CLOSED_LIMIT, WORKSPACE_STATE_BYTES, WORKSPACE_TAB_KINDS, WORKSPACE_TAB_LIMIT, WorkspaceStateSchema,
+  ContextIdSchema, EMPTY_WORKSPACE_STATE, WORKSPACE_FEATURE_VIEWS, featureViewsOf, upgradeWorkspaceState, viewOfTab, LEGACY_TAB_KINDS, WORKSPACE_CLOSED_LIMIT, WORKSPACE_STATE_BYTES, WORKSPACE_TAB_KINDS, WORKSPACE_TAB_LIMIT, WorkspaceStateSchema,
   contextFromKey, contextKey, dropLegacyTabs, trimWorkspaceState, type WorkspaceState, type WorkspaceTab,
 } from "@manga/contracts/workspace-state";
 
@@ -108,7 +108,8 @@ describe("the saved state of a context", () => {
   });
 
   it("refuses a state of another version, of a preset it does not know, and one that is too large to be one", () => {
-    expect(WorkspaceStateSchema.safeParse({ ...EMPTY_WORKSPACE_STATE, version: 2 }).success).toBe(false);
+    expect(WorkspaceStateSchema.safeParse({ ...EMPTY_WORKSPACE_STATE, version: 3 }).success).toBe(false);
+    expect(WorkspaceStateSchema.safeParse({ ...EMPTY_WORKSPACE_STATE, views: { novel: { preset: "octo", layout: null, focusedTab: null } } }).success).toBe(false);
     expect(WorkspaceStateSchema.safeParse({ ...EMPTY_WORKSPACE_STATE, preset: "octo" }).success).toBe(false);
     expect(WorkspaceStateSchema.safeParse({ ...EMPTY_WORKSPACE_STATE, tabs: [{ id: "", kind: "library", target: {}, title: "", view: {} }] }).success).toBe(false);
     const many = (n: number) => Array.from({ length: n }, (_, index) => tab(`t${index}`));
@@ -151,6 +152,67 @@ describe("the saved state of a context", () => {
   });
 });
 
+describe("the layouts of the views (version 2)", () => {
+  const some = (id: string, kind: string, target: Record<string, unknown> = {}) => tab(id, { kind, target });
+  it("puts each kind of tab in its feature view, and the overview, a project and the records of every kind in the home only", () => {
+    expect(viewOfTab(some("a", "reader", { mediaKind: "video" }))).toBe("video");
+    expect(viewOfTab(some("a", "reader", {}))).toBe("novel");
+    expect(viewOfTab(some("a", "library", { page: "comic" }))).toBe("comic");
+    expect(viewOfTab(some("a", "library", { page: "work", kind: "video" }))).toBe("video");
+    expect(viewOfTab(some("a", "library", { page: "work" }))).toBeNull();
+    expect(viewOfTab(some("a", "library", { page: "overview" }))).toBeNull();
+    expect(viewOfTab(some("a", "note"))).toBe("note");
+    expect(viewOfTab(some("a", "records", { type: "note" }))).toBe("note");
+    expect(viewOfTab(some("a", "records", { type: "conversation" }))).toBe("conversation");
+    expect(viewOfTab(some("a", "records", { type: "all" }))).toBeNull();
+    for (const kind of ["whiteboard", "mindmap", "draft", "roughcut"]) {
+      expect(viewOfTab(some("a", kind))).toBe(kind);
+      expect(viewOfTab(some("a", "objects", { kind }))).toBe(kind);
+    }
+    expect(viewOfTab(some("a", "conversation"))).toBe("conversation");
+    expect(viewOfTab(some("a", "downloads"))).toBe("downloads");
+    expect(viewOfTab(some("a", "project"))).toBeNull();
+    expect(viewOfTab(some("a", "hologram"))).toBeNull();
+    expect([...WORKSPACE_FEATURE_VIEWS].sort()).toEqual([...HIDEABLE_RAIL_VIEWS].sort());
+  });
+
+  it("reads a version 1 state as version 2: its layout is the home's, each feature view has its kind in one column, and no tab is lost", () => {
+    const v1 = {
+      version: 1, preset: "two", layout: { grid: { orientation: "HORIZONTAL" } }, focusedTab: "v2",
+      tabs: [some("n1", "reader", { mediaKind: "novel" }), some("v1", "reader", { mediaKind: "video" }), some("v2", "reader", { mediaKind: "video" }), some("o", "library", { page: "overview" }), some("x", "hologram")],
+      closed: [some("c", "note")],
+      extra: { kept: true },
+    };
+    const read = WorkspaceStateSchema.parse(JSON.parse(JSON.stringify(v1)));
+    expect(read.version).toBe(2);
+    expect(read.tabs.map((item) => item.id)).toEqual(["n1", "v1", "v2", "o", "x"]);
+    expect(read.closed.map((item) => item.id)).toEqual(["c"]);
+    expect(read).toMatchObject({ preset: "two", layout: v1.layout, focusedTab: "v2", extra: { kept: true } });
+    expect(read.views).toEqual({ novel: { preset: "single", layout: null, focusedTab: "n1" }, video: { preset: "single", layout: null, focusedTab: "v2" } });
+    expect(upgradeWorkspaceState({ version: 2, views: {} })).toEqual({ version: 2, views: {} });
+    expect(featureViewsOf([], null)).toEqual({});
+  });
+
+  it("cuts the feature views' layouts before the home's", () => {
+    const big = state({
+      layout: { grid: "h".repeat(4_000) },
+      tabs: [tab("a")],
+      focusedTab: "a",
+      views: { novel: { preset: "single", layout: { grid: "n".repeat(4_000) }, focusedTab: null }, video: { preset: "two", layout: { grid: "v".repeat(4_000) }, focusedTab: null } },
+    });
+    const size = (value: WorkspaceState) => new TextEncoder().encode(JSON.stringify(value)).length;
+    const cut = trimWorkspaceState(big, size(big) - 4_000);
+    expect(cut.state.layout).toEqual(big.layout);
+    expect(Object.values(cut.state.views).some((view) => view.layout === null)).toBe(true);
+    const harder = trimWorkspaceState(big, size(big) - 8_000);
+    expect(harder.state.views.novel!.layout).toBeNull();
+    expect(harder.state.views.video!.layout).toBeNull();
+    expect(harder.state.views.video!.preset).toBe("two");
+    expect(harder.state.layout).toEqual(big.layout);
+    expect(trimWorkspaceState(big, 500).state.layout).toBeNull();
+  });
+});
+
 describe("the shell preference", () => {
   it("is version 2: a sidebar and a dock, the context to come back to, and no mode", () => {
     expect(ShellPreferenceSchema.parse(DEFAULT_SHELL_PREFERENCE)).toEqual(DEFAULT_SHELL_PREFERENCE);
@@ -180,7 +242,9 @@ describe("the commands the sidebar and the search ask", () => {
   const accepts = (commandId: string, input: Record<string, unknown>) => expect(() => validateCommandInput(commandId, input), `${commandId} ${JSON.stringify(input)}`).not.toThrow();
 
   it("fill in how many to list, and refuse a page that is empty or larger than the limit", () => {
-    expect(validateCommandInput("workspace.sidebar", { view: "home" })).toMatchObject({ perGroup: 5 });
+    // Without a number each view lists its own: the home 8, a medium 6 covers, the rest 5 (A-103, A-105).
+    expect(validateCommandInput("workspace.sidebar", { view: "home" })).not.toHaveProperty("perGroup");
+    expect([sidebarShown("home"), sidebarShown("comic"), sidebarShown("note")]).toEqual([8, 6, 5]);
     expect(validateCommandInput("workspace.items", { view: "note", contextId: null })).toMatchObject({ limit: 20 });
     expect(validateCommandInput("workspace.objects", { kind: "draft" })).toMatchObject({ limit: 50, offset: 0 });
     expect(validateCommandInput("workspace.find", { q: "雨" })).toMatchObject({ perType: 4 });
@@ -196,9 +260,9 @@ describe("the commands the sidebar and the search ask", () => {
     accepts("workspace.find", { q: "x".repeat(128) });
   });
 
-  it("ask the home for the kind of the list, give a view of one kind only its own, and the downloads none", () => {
+  it("let the home ask for its mixed list or one kind, give a view of one kind only its own, and the downloads none", () => {
     accepts("workspace.items", { view: "home", contextId: "prj_a", type: "comic" });
-    refuses("workspace.items", { view: "home", contextId: "prj_a" });
+    accepts("workspace.items", { view: "home", contextId: "prj_a" });
     accepts("workspace.items", { view: "comic", contextId: "prj_a" });
     accepts("workspace.items", { view: "comic", contextId: "prj_a", type: "comic" });
     refuses("workspace.items", { view: "comic", contextId: "prj_a", type: "note" });
@@ -221,15 +285,31 @@ describe("the rail", () => {
     expect(RAIL_VIEWS).not.toContain("settings");
   });
 
+  it("keeps the person's order of the icons and fits in the ones it does not name at their default place (A-108)", () => {
+    expect(railOrder([])).toEqual([...HIDEABLE_RAIL_VIEWS]);
+    // Each icon it does not name goes right after the nearest one before it in the default order.
+    expect(railOrder(["note", "conversation"])).toEqual(["note", "whiteboard", "mindmap", "draft", "roughcut", "downloads", "conversation", "novel", "comic", "video"]);
+    expect(railOrder(["roughcut", "conversation", "novel", "comic", "video", "note", "whiteboard", "mindmap", "draft"])).toEqual(["roughcut", "downloads", "conversation", "novel", "comic", "video", "note", "whiteboard", "mindmap", "draft"]);
+    // A move among the icons in sight: before the one now at that place; the hidden ones keep theirs.
+    const visible = ["conversation", "novel", "comic", "note"] as const;
+    expect(moveRailView([], visible, "note", 0)).toEqual(["note", "conversation", "novel", "comic", "video", "whiteboard", "mindmap", "draft", "roughcut", "downloads"]);
+    expect(moveRailView([], visible, "conversation", 3)).toEqual(["novel", "comic", "video", "note", "conversation", "whiteboard", "mindmap", "draft", "roughcut", "downloads"]);
+    expect(moveRailView([], visible, "comic", 1)).toEqual(["conversation", "comic", "novel", "video", "note", "whiteboard", "mindmap", "draft", "roughcut", "downloads"]);
+    // A saved v2 shell preference without the new fields reads with their defaults.
+    expect(ShellPreferenceSchema.parse({ ...DEFAULT_SHELL_PREFERENCE, rail: { hidden: [], view: "home", open: {}, settingsPage: null } }).rail).toMatchObject({ order: [], display: {} });
+    expect(applyRailPatch(DEFAULT_RAIL_PREFERENCE, { display: { comic: "list" } }).display).toEqual({ comic: "list" });
+    expect(applyRailPatch({ ...DEFAULT_RAIL_PREFERENCE, display: { comic: "list" } }, { display: { video: "list" } }).display).toEqual({ comic: "list", video: "list" });
+  });
+
   it("is kept whole with its defaults, and changed by a patch that names only what changes", () => {
     expect(RailPreferenceSchema.parse({})).toEqual(DEFAULT_RAIL_PREFERENCE);
     expect(RailPreferenceSchema.parse({ hidden: ["video"], view: "video", open: { video: ["", "prj_a"] }, settingsPage: "storage" }))
-      .toEqual({ hidden: ["video"], view: "video", open: { video: ["", "prj_a"] }, settingsPage: "storage" });
+      .toEqual({ hidden: ["video"], view: "video", open: { video: ["", "prj_a"] }, settingsPage: "storage", order: [], display: {} });
     // A patch has no defaults, or naming one part would reset the others.
     expect(RailPatchSchema.parse({})).toEqual({});
     expect(RailPatchSchema.parse({ view: "note" })).toEqual({ view: "note" });
     expect(RailPatchSchema.parse({ settingsPage: null })).toEqual({ settingsPage: null });
-    for (const bad of [{ hidden: ["home"] }, { hidden: ["settings"] }, { view: "settings" }, { open: { settings: [] } }, { settingsPage: "" }, { extra: 1 }]) {
+    for (const bad of [{ hidden: ["home"] }, { hidden: ["settings"] }, { view: "settings" }, { open: { settings: [] } }, { settingsPage: "" }, { extra: 1 }, { order: ["home"] }, { display: { note: "list" } }, { display: { comic: "grid" } }]) {
       expect(RailPatchSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
       expect(RailPreferenceSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
     }

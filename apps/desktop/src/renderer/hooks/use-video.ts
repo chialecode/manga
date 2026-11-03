@@ -244,5 +244,3 @@ export function useVideo(deps: VideoDeps) {
 
   return { doc, status, elsewhere, dismissElsewhere: () => setElsewhere(null), startMs: resumeMs, focusApplied, settings, next, focus, sourceCard, visible: doc !== null, open, openFromNote, playRange, close, backToNote, repair, changeSettings, recordProgress, settled };
 }
-
-export type VideoState = ReturnType<typeof useVideo>;

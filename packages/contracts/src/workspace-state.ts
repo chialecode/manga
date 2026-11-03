@@ -70,20 +70,96 @@ export const WorkspaceTabSchema = z.object({
 export type WorkspaceTab = z.infer<typeof WorkspaceTabSchema>;
 
 /**
- * The saved state of one context: the split layout (the docking library's own serialisation, or null before any arrangement was made, in which case
- * the tabs are placed by `preset`), the tabs, the focused tab and the tabs that were closed last.
+ * The feature views of the rail (A-107) that have a main area of their own. The home is the other one: its layout is the state's own `preset`, `layout`
+ * and `focusedTab`, and it holds every tab of the context. The same list as the rail's hideable views (`HIDEABLE_RAIL_VIEWS`).
  */
-export const WorkspaceStateSchema = z.object({
-  version: z.literal(1),
+export const WORKSPACE_FEATURE_VIEWS = ["conversation", "novel", "comic", "video", "note", "whiteboard", "mindmap", "draft", "roughcut", "downloads"] as const;
+export type WorkspaceFeatureView = (typeof WORKSPACE_FEATURE_VIEWS)[number];
+export type WorkspaceView = "home" | WorkspaceFeatureView;
+const FEATURE_VIEWS = new Set<string>(WORKSPACE_FEATURE_VIEWS);
+export const isFeatureView = (view: string): view is WorkspaceFeatureView => FEATURE_VIEWS.has(view);
+
+const MEDIA_VIEWS = new Set<string>(["novel", "comic", "video"]);
+const str = (value: unknown): string => (typeof value === "string" ? value : "");
+
+/**
+ * The feature view a tab belongs to (A-107, 计划 4.1), or null when it is shown in the home only (the library overview, a project's page, the records of
+ * every kind, a kind this version does not know). Every tab is in the home as well.
+ */
+export function viewOfTab(tab: Pick<WorkspaceTab, "kind" | "target">): WorkspaceFeatureView | null {
+  const target = tab.target ?? {};
+  switch (tab.kind) {
+    case "reader": { const media = str(target.mediaKind) || "novel"; return MEDIA_VIEWS.has(media) ? (media as WorkspaceFeatureView) : null; }
+    case "library": {
+      const page = str(target.page);
+      if (MEDIA_VIEWS.has(page)) return page as WorkspaceFeatureView;
+      if (page === "work" && MEDIA_VIEWS.has(str(target.kind))) return str(target.kind) as WorkspaceFeatureView;
+      return null;
+    }
+    case "note": return "note";
+    case "whiteboard": case "mindmap": case "draft": case "roughcut": return tab.kind;
+    case "conversation": return "conversation";
+    case "records": return target.type === "note" ? "note" : target.type === "conversation" ? "conversation" : null;
+    case "objects": { const kind = str(target.kind); return FEATURE_VIEWS.has(kind) ? (kind as WorkspaceFeatureView) : null; }
+    case "downloads": return "downloads";
+    default: return null;
+  }
+}
+
+/** The arrangement of one feature view: its split layout (null until one was made: the tabs are then placed by `preset`) and the tab it had in front. */
+export const WorkspaceViewLayoutSchema = z.object({
+  preset: z.enum(WORKSPACE_PRESETS),
+  layout: object.nullable(),
+  focusedTab: z.string().min(1).max(64).nullable(),
+}).catchall(z.unknown());
+export type WorkspaceViewLayout = z.infer<typeof WorkspaceViewLayoutSchema>;
+
+/** Where a closed tab was (计划 4.8): the view, the column (in reading order, from 0) and its place in that column's strip. Kept on the closed tab. */
+export const ClosedPlaceSchema = z.object({ view: z.string().min(1).max(32), column: z.number().int().nonnegative(), index: z.number().int().nonnegative() }).strict();
+export type ClosedPlace = z.infer<typeof ClosedPlaceSchema>;
+
+const WorkspaceStateV2Schema = z.object({
+  version: z.literal(2),
   preset: z.enum(WORKSPACE_PRESETS),
   layout: object.nullable(),
   tabs: z.array(WorkspaceTabSchema).max(WORKSPACE_TAB_LIMIT),
   focusedTab: z.string().min(1).max(64).nullable(),
   closed: z.array(WorkspaceTabSchema).max(WORKSPACE_CLOSED_LIMIT),
+  views: z.record(z.string().min(1).max(32), WorkspaceViewLayoutSchema),
 }).catchall(z.unknown());
-export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>;
 
-export const EMPTY_WORKSPACE_STATE: WorkspaceState = { version: 1, preset: "single", layout: null, tabs: [], focusedTab: null, closed: [] };
+/**
+ * The feature views of a state saved before them (version 1): the layout it had becomes the home's, and each feature view gets its kind of tab in the
+ * order they had, in one column, the first of them in front (or the one that had the focus, when it is of that kind).
+ */
+export function featureViewsOf(tabs: readonly Pick<WorkspaceTab, "id" | "kind" | "target">[], focusedTab: string | null): Record<string, WorkspaceViewLayout> {
+  const views: Record<string, WorkspaceViewLayout> = {};
+  for (const tab of tabs) {
+    const view = viewOfTab(tab);
+    if (!view) continue;
+    const entry = views[view] ?? (views[view] = { preset: "single", layout: null, focusedTab: tab.id });
+    if (tab.id === focusedTab) entry.focusedTab = tab.id;
+  }
+  return views;
+}
+
+/** A version 1 state read as version 2 (计划 4.1); anything else is left for the schema to judge. */
+export function upgradeWorkspaceState(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || (raw as { version?: unknown }).version !== 1) return raw;
+  const old = raw as { tabs?: unknown; focusedTab?: unknown };
+  const tabs = Array.isArray(old.tabs) ? old.tabs.filter((tab): tab is WorkspaceTab => Boolean(tab) && typeof tab === "object" && typeof (tab as WorkspaceTab).kind === "string" && typeof (tab as WorkspaceTab).id === "string") : [];
+  return { ...raw, version: 2, views: featureViewsOf(tabs, typeof old.focusedTab === "string" ? old.focusedTab : null) };
+}
+
+/**
+ * The saved state of one context (version 2, A-107): the tabs, the tabs that were closed last, the home's split layout (the docking library's own
+ * serialisation, or null before any arrangement was made, in which case the tabs are placed by `preset`) and the tab in front there, and the same for
+ * each feature view in `views`. A version 1 state is read as version 2 (`upgradeWorkspaceState`).
+ */
+export const WorkspaceStateSchema = z.preprocess(upgradeWorkspaceState, WorkspaceStateV2Schema);
+export type WorkspaceState = z.infer<typeof WorkspaceStateV2Schema>;
+
+export const EMPTY_WORKSPACE_STATE: WorkspaceState = { version: 2, preset: "single", layout: null, tabs: [], focusedTab: null, closed: [], views: {} };
 
 /** One entry of the sidebar: a project, or "最近". */
 export const WorkspaceContextSchema = z.object({
@@ -103,7 +179,7 @@ export type MaterialOrigin = (typeof MATERIAL_ORIGINS)[number];
 
 /**
  * Cuts a state to the size the profile keeps (A-94): the oldest closed tabs go first, then the view state of the tabs that are not the focused one
- * (the light pages first). The shape stays valid at every step; what cannot be cut is reported to the caller by the size it still has.
+ * (the light pages first), then the layouts of the feature views, the home's last. The shape stays valid at every step; what cannot be cut is reported to the caller by the size it still has.
  */
 export function trimWorkspaceState(state: WorkspaceState, limit = WORKSPACE_STATE_BYTES): { state: WorkspaceState; trimmed: boolean; bytes: number } {
   const size = (value: WorkspaceState) => new TextEncoder().encode(JSON.stringify(value)).length;
@@ -122,6 +198,13 @@ export function trimWorkspaceState(state: WorkspaceState, limit = WORKSPACE_STAT
     if (bytes <= limit) break;
     if (tab.id === current.focusedTab) continue;
     current = { ...current, tabs: current.tabs.map((item) => (item.id === tab.id ? { ...item, view: {} } : item)) };
+    bytes = size(current);
+  }
+  // The feature views' layouts go before the home's: a view without one places its tabs by its preset.
+  for (const view of Object.keys(current.views ?? {})) {
+    if (bytes <= limit) break;
+    if (!current.views[view]?.layout) continue;
+    current = { ...current, views: { ...current.views, [view]: { ...current.views[view]!, layout: null } } };
     bytes = size(current);
   }
   if (bytes > limit && current.layout) {

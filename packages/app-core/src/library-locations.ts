@@ -180,5 +180,29 @@ export function assertOpenable(store: DrizzleStore, resourceId: string): void {
     : "the file of this resource is not in its library path any more; locate it again to open it", { details: openFailureDetails(check) });
 }
 
-/** True when the resource's newest revision has its file under a library path (the application-managed one counts). */
-export const insideLibrarySql = (resourceAlias: string) => `EXISTS (SELECT 1 FROM resource_revisions lv JOIN file_locations ll ON ll.resource_revision_id = lv.id WHERE lv.resource_id = ${resourceAlias}.id AND ll.library_path_id IS NOT NULL)`;
+/**
+ * A resource whose file is under no library path: it was imported before every file had to come from one (A-69, A-80). A resource that has
+ * no file at all (text that was pasted in) has nothing to be outside of.
+ */
+export const outsideSql = (alias: string) => `(EXISTS (SELECT 1 FROM resource_revisions ohv JOIN file_locations ohl ON ohl.resource_revision_id = ohv.id WHERE ohv.resource_id = ${alias}.id)
+  AND NOT EXISTS (SELECT 1 FROM resource_revisions ohv2 JOIN file_locations ohl2 ON ohl2.resource_revision_id = ohv2.id WHERE ohv2.resource_id = ${alias}.id AND ohl2.library_path_id IS NOT NULL))`;
+
+/**
+ * The one condition every list of resources uses (A-113, 计划 4.13): the resource's file is in a library path, or it has no file at all (text that
+ * was pasted in). A resource whose file is in a path but missing for now is still listed, as unavailable (LIB-01). `tests/library/in-library.test.ts`
+ * checks that every query that lists resources uses it.
+ */
+export const inLibrarySql = (alias: string) => `NOT ${outsideSql(alias)}`;
+
+/** Of these resources, the ones a list may show: in a library path (A-113), and of the medium when one is named (the work's medium, else the resource's own kind). */
+export function resourcesListed(store: DrizzleStore, resourceIds: readonly string[], mediaKind?: string): Set<string> {
+  const ids = [...new Set(resourceIds)];
+  const listed = new Set<string>();
+  for (let at = 0; at < ids.length; at += 500) {
+    const chunk = ids.slice(at, at + 500);
+    const rows = store.sqlite.prepare(`SELECT r.id AS id FROM resources r LEFT JOIN works w ON w.id = r.work_id
+      WHERE r.id IN (${chunk.map(() => "?").join(",")}) AND ${inLibrarySql("r")}${mediaKind ? " AND COALESCE(w.media_kind, r.kind) = ?" : ""}`).all(...chunk, ...(mediaKind ? [mediaKind] : [])) as Array<{ id: string }>;
+    for (const row of rows) listed.add(row.id);
+  }
+  return listed;
+}

@@ -292,10 +292,10 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
     const m = reader.memory ?? {};
     creative[id] = { kind: "electron-reader", scale: { runs: m.raw?.length ?? 0 }, raw: m.raw ?? [], detail: { ok: m.ok === true, failures: m.failures ?? [m.reason], unit: m.unit, rows: m.rows, processes: m.processes } };
   }
-  if (id === "tabSwitch" || id === "contextSwitch" || id === "contextRestore" || id === "quadLateFrame" || id === "mountedReaders") {
+  if (["tabSwitch", "contextSwitch", "contextRestore", "quadLateFrame", "mountedReaders", "viewSwitch", "viewRestore", "coversShown", "dragLateFrame", "novelTurn", "novelRefont", "novelOpen"].includes(id)) {
     const w = workspace.window ?? {};
-    const raw = { tabSwitch: w.tabSwitchMs, contextSwitch: w.contextSwitchMs, contextRestore: w.contextRestoreMs, quadLateFrame: w.quadLateFramePct, mountedReaders: w.mountedReadersOverColumns }[id] ?? [];
-    const scale = { tabSwitch: { tabs: w.tabs?.length ?? 0 }, contextSwitch: { contexts: w.contexts ?? 0 }, contextRestore: { contexts: w.contexts ?? 0 }, quadLateFrame: { columns: w.quadRuns?.length ? 4 : 0 }, mountedReaders: { readers: w.readers?.opened ?? 0 } }[id];
+    const raw = { tabSwitch: w.tabSwitchMs, contextSwitch: w.contextSwitchMs, contextRestore: w.contextRestoreMs, quadLateFrame: w.quadLateFramePct, mountedReaders: w.mountedReadersOverColumns, viewSwitch: w.viewSwitchMs, viewRestore: w.viewRestoreMs, coversShown: w.coversShownMs, dragLateFrame: w.dragLateFramePct, novelTurn: w.novelTurnMs, novelRefont: w.novelRefontMs, novelOpen: w.novelOpenMs }[id] ?? [];
+    const scale = { tabSwitch: { tabs: w.tabs?.length ?? 0 }, contextSwitch: { contexts: w.contexts ?? 0 }, contextRestore: { contexts: w.contexts ?? 0 }, quadLateFrame: { columns: w.quadRuns?.length ? 4 : 0 }, mountedReaders: { readers: w.readers?.opened ?? 0 }, viewSwitch: { views: w.viewSwitchMs?.length ? 2 : 0 }, viewRestore: { views: w.viewRestoreMs?.length ? 2 : 0 }, coversShown: { cells: w.coverCells ?? 0 }, dragLateFrame: { runs: w.dragLateFramePct?.length ?? 0 }, novelTurn: { characters: w.novelCharacters ?? 0 }, novelRefont: { characters: w.novelCharacters ?? 0 }, novelOpen: { characters: w.novelCharacters ?? 0 } }[id];
     creative[id] = { kind: "electron-workspace", scale, raw, detail: { ok: w.ok === true, failures: w.failures ?? [workspace.reason], window: w.window, wait: w.waits?.[id], tabs: id === "tabSwitch" ? w.tabs : undefined, readers: id === "mountedReaders" ? w.readers : undefined, usualIntervalMs: id === "quadLateFrame" ? w.usualIntervalMs : undefined, baselineLatePct: id === "quadLateFrame" ? w.baselineLatePct : undefined, runs: id === "quadLateFrame" ? w.quadRuns : undefined, playMs: id === "quadLateFrame" ? w.playMs : undefined } };
   }
   if (id === "quadMemory") {
@@ -349,6 +349,9 @@ const metrics = {
   scaleColdStartToLibraryMs: p95(scaleWindow.raw?.coldStartToLibraryMs ?? []),
   scaleUiFeedbackP95Ms: p95(scaleWindow.raw?.uiFeedbackMs ?? []),
   scaleRailSwitchP95Ms: p95(scaleWindow.raw?.railSwitchMs ?? []),
+  scaleHomeListP95Ms: p95(scaleWindow.raw?.homeListMs ?? []),
+  scaleMediaGridP95Ms: p95(scaleWindow.raw?.mediaGridMs ?? []),
+  scaleScanLateFramePct: p95(scaleWindow.raw?.scanLateFramePct ?? []),
   scaleSearchNamesP95Ms: p95(scaleWindow.raw?.searchNamesMs ?? []),
   scaleSettingsP95Ms: p95(scaleWindow.raw?.settingsMs ?? []),
   scaleLargeTxtTailP95Ms: p95(scaleWindow.raw?.largeTxtTailMs ?? []),
@@ -400,6 +403,9 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
       scaleColdStartToLibraryMs: "6.2 冷启动至可操作资源库 ≤ 5 s",
       scaleUiFeedbackP95Ms: "6.2 本地界面反馈 p95 ≤ 100 ms",
       scaleRailSwitchP95Ms: "AT-119 点图标切换视图到侧栏列表画好 p95 ≤ 100 ms（规模样本）",
+      scaleHomeListP95Ms: "AT-123 主页视图切换到列表画好 p95 ≤ 100 ms（规模样本）",
+      scaleMediaGridP95Ms: "AT-126 媒介视图切换到格子画好（不等图片）p95 ≤ 120 ms（规模样本）",
+      scaleScanLateFramePct: "AT-138 扫描中界面刷新期间晚到帧的占比 ≤ 2 %（规模样本，500 个文件，每次运行一个值）",
       scaleSearchNamesP95Ms: "AT-121 搜索框里输入后名字结果出现 p95 ≤ 200 ms（规模样本）",
       scaleSettingsP95Ms: "AT-122 进入设置与离开设置回到工作区画好 p95 ≤ 150 ms",
       scaleLargeTxtTailP95Ms: "6.2 已索引小说首屏 TXT ≤ 10 MiB p95 ≤ 2 s（恢复到末段）",

@@ -20,6 +20,10 @@ const windowScheduler: Scheduler = { set: (run, ms) => window.setTimeout(run, ms
  * What an arrow key does depends on how long it is down (Q-13): let go at once it is a step; held past `HOLD_MS` it is a hold, which lasts until
  * the key is let go. The system's key repeat while a key is down is swallowed, so it neither steps again nor restarts the hold. A step is made
  * when the key goes up, so one press is never both a step and the start of a hold.
+ *
+ * Two events the player can miss heal themselves (A-112): a fresh press of a key that is still down means its key-up was lost, so the old press ends
+ * (a hold is let go, a pending step is dropped) and the new one starts; a repeat with no press on record means the press went somewhere else and the
+ * key has been down past the system's repeat delay, so the hold starts at once, with no step.
  */
 export function createArrowKeys(handlers: ArrowHandlers, options: { holdMs?: number; scheduler?: Scheduler } = {}) {
   const holdMs = options.holdMs ?? HOLD_MS;
@@ -36,11 +40,17 @@ export function createArrowKeys(handlers: ArrowHandlers, options: { holdMs?: num
   };
 
   return {
-    /** A key went down. `repeat` is the system's repeat of a key that is still down; it changes nothing. */
+    /** A key went down. `repeat` is the system's repeat of a key that is still down; for the key on record it changes nothing. */
     down(side: ArrowSide, repeat = false): void {
-      if (repeat || down?.side === side) return;
-      // The other arrow pressed while one is down: the first one ends as it stands, the new one starts.
-      finish(true);
+      if (repeat && down?.side === side) return;
+      // The same arrow pressed again (its key-up was lost) ends without a step; the other arrow ends the first one as it stands. The new one starts.
+      finish(down !== null && down.side !== side);
+      if (repeat) {
+        // The press itself never came here: the key is already held.
+        down = { side, timer: 0, held: true };
+        handlers.holdStart(side);
+        return;
+      }
       const current = { side, timer: 0, held: false };
       current.timer = scheduler.set(() => { current.held = true; handlers.holdStart(side); }, holdMs);
       down = current;

@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@manga/contracts": "workspace:*",
-    "@manga/i18n": "workspace:*",
     "@manga/kernel": "workspace:*",
     "@manga/model-protocol": "workspace:*",
     "@manga/plugin-sdk": "workspace:*",
@@ -24,7 +23,8 @@
     "pdfjs-dist": "6.4.299",
     "sharp": "0.35.5",
     "sqlite-vec": "0.1.9",
-    "yauzl": "3.4.0"
+    "yauzl": "3.4.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/yauzl": "^3.4.0"

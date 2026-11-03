@@ -78,10 +78,15 @@ const EpisodesSchema = z.object({ total: z.number().default(0), limit: z.number(
 
 // The schemas above must accept everything the published spec says the server can send for the fields they name.
 type Accepts<Input, Spec extends Input> = Spec;
+/** @public */
 export type _SubjectCompatible = Accepts<z.input<typeof BangumiSubjectSchema>, Pick<Subject, "id" | "type" | "name" | "name_cn" | "summary" | "platform" | "images" | "volumes" | "eps" | "total_episodes" | "tags">>;
+/** @public */
 export type _RelationCompatible = Accepts<z.input<typeof RelationSchema>, Pick<Relation, "id" | "type" | "name" | "name_cn" | "relation">>;
+/** @public */
 export type _CharacterCompatible = Accepts<z.input<typeof CharacterSchema>, Pick<RelatedCharacterSpec, "id" | "name" | "summary" | "type" | "images" | "relation" | "actors">>;
+/** @public */
 export type _PersonCompatible = Accepts<z.input<typeof PersonSchema>, Pick<RelatedPersonSpec, "id" | "name" | "type" | "career" | "images" | "relation" | "eps">>;
+/** @public */
 export type _EpisodeCompatible = Accepts<z.input<typeof EpisodeSchema>, Pick<Episode, "id" | "type" | "name" | "name_cn" | "sort" | "airdate" | "duration">>;
 
 export type BangumiOptions = {

@@ -108,8 +108,11 @@ function NovelBody({ env }: { env: TabEnv }) {
         }}
         onProgress={() => void novel.markProgress()}
         onSelect={(quote, start, end, partId) => novel.selectText(quote, start, end, partId)}
-        onMore={(partId, start) => void novel.openSlice(partId, start)}
         onPart={(partId, start) => void novel.openSlice(partId, start)}
+        onWindow={(partId, from) => void novel.openSlice(partId, from, { quiet: true })}
+        onExtend={() => void novel.extendSlice()}
+        onPosition={(partId, start, end) => novel.savePosition(partId, start, end)}
+        shown={env.visible}
         onStyle={(patch) => void s.saveReadingStyle(patch as ReadingStylePatch)}
         onBookmark={() => void novel.addBookmark()}
         onRemoveBookmark={(bookmarkId) => void novel.removeBookmark(bookmarkId)}

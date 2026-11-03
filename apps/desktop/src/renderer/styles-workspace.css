@@ -156,6 +156,16 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 /* ---- settings: library paths and scanning ---- */
 .library-paths { display: flex; flex-direction: column; list-style: none; padding: 0; margin: 0; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
 .library-paths > li + li { border-top: 1px solid var(--color-border); }
+/* The resources outside every library path, by folder (A-113). */
+.outside-groups { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0; }
+.outside-group { border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); padding: 8px 12px; }
+.outside-group > ul { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 2px; }
+.outside-folder { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.outside-folder-path, .outside-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.outside-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.outside-confirm { border: 1px solid var(--color-danger, var(--color-border)); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; background: var(--color-surface); font-size: 13px; }
+.outside-confirm ul { margin: 2px 0 8px; padding-left: 18px; }
+.outside-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .library-path { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 12px 16px; }
 .library-path[data-reachable="false"] { background: #B4231408; }
 .library-path-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; }

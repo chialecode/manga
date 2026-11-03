@@ -21,8 +21,8 @@ import { parseOverride, projectWork, projectedValue, type FieldOverride, type Pr
 import { readLayout } from "./domain/revision-layout.ts";
 import { contextName, touchWorkMutation } from "./progress-service.ts";
 import { workKindMutation } from "./reading-service.ts";
-import { resolveLocation } from "./library-locations.ts";
-import { groupKeySql, outsideCount, outsideSql, userContentSql, versionCount, versionsOf, workHoldsUserContent } from "./works-versions.ts";
+import { inLibrarySql, outsideSql, resolveLocation } from "./library-locations.ts";
+import { groupKeySql, missingCount, outsideCount, userContentSql, versionCount, versionsOf, workHoldsUserContent } from "./works-versions.ts";
 
 type WorkRow = {
   id: string;
@@ -141,10 +141,11 @@ export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit
   if (!owner && !grant.readResourceIds.length) return { items: [], total: 0, nextCursor: null };
   // What narrows the list, written for the table alias it is applied to: the list itself, or the inner pass that picks one version per title.
   const filters = (a: string): { where: string[]; params: Array<string | number> } => {
-    // A work with no resource is listed when it holds something the user wrote (A-67); an agent only sees works it can read a resource of.
+    // A work is listed for a resource in a library path (A-113); one with no resource at all is listed when it holds something the user wrote
+    // (A-67). One whose resources are all outside the library paths is not: they are in "设置 › 资源库". An agent only sees works it can read a resource of.
     const where: string[] = [owner
-      ? `(EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id) OR ${userContentSql(a)})`
-      : `EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id)`];
+      ? `(EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id AND ${inLibrarySql("rr")}) OR (NOT EXISTS (SELECT 1 FROM resources ro WHERE ro.work_id = ${a}.id) AND ${userContentSql(a)}))`
+      : `EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = ${a}.id AND ${inLibrarySql("rr")})`];
     const params: Array<string | number> = [];
     if (!owner) {
       const ids = grant.readResourceIds;
@@ -194,7 +195,7 @@ export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit
   // The total describes the complete filtered library; the cursor only narrows the returned page.
   const total = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${from} ${clause()}`).get(...fromParams, ...params) as { n: number }).n;
   // Progress of the resource the card shows (the last opened one, else the first), on its newest revision.
-  const shown = "COALESCE(w.last_resource_id, (SELECT sr.id FROM resources sr WHERE sr.work_id = w.id ORDER BY sr.sort_key, sr.created_at, sr.id LIMIT 1))";
+  const shown = `COALESCE((SELECT lr.id FROM resources lr WHERE lr.id = w.last_resource_id AND ${inLibrarySql("lr")}), (SELECT sr.id FROM resources sr WHERE sr.work_id = w.id AND ${inLibrarySql("sr")} ORDER BY sr.sort_key, sr.created_at, sr.id LIMIT 1))`;
   const progressExpr = `COALESCE((SELECT sp.percent FROM progress_latest sp WHERE sp.resource_id = ${shown} AND sp.resource_revision_id = (SELECT sv.id FROM resource_revisions sv WHERE sv.resource_id = ${shown} ORDER BY sv.created_at DESC, sv.rowid DESC LIMIT 1)), 0)`;
   const keyExpr = sort === "recent" ? "COALESCE(w.last_opened_at, '')" : sort === "added" ? "w.created_at" : sort === "progress" ? progressExpr : "LOWER(w.title)";
   const secondExpr = sort === "recent" ? "w.created_at" : undefined;
@@ -226,8 +227,9 @@ function summarize(store: DrizzleStore, row: WorkRow): WorkSummary {
   const resourceCount = (store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources WHERE work_id = ?").get(row.id) as { n: number }).n;
   const finished = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND EXISTS (
       SELECT 1 FROM progress_latest p WHERE p.resource_id = r.id AND p.completion_state = 'completed')`).get(row.id) as { n: number }).n;
-  const lastId = row.last_resource_id
-    ?? (store.sqlite.prepare("SELECT id FROM resources WHERE work_id = ? ORDER BY sort_key, created_at, id LIMIT 1").get(row.id) as { id: string } | undefined)?.id;
+  // The card continues with a resource in a library path: the last one opened, else the first (A-113).
+  const lastId = (store.sqlite.prepare(`SELECT r.id FROM resources r WHERE r.id = ? AND ${inLibrarySql("r")}`).get(row.last_resource_id ?? "") as { id: string } | undefined)?.id
+    ?? (store.sqlite.prepare(`SELECT r.id FROM resources r WHERE r.work_id = ? AND ${inLibrarySql("r")} ORDER BY r.sort_key, r.created_at, r.id LIMIT 1`).get(row.id) as { id: string } | undefined)?.id;
   const last = lastId
     ? store.sqlite.prepare(`SELECT r.id, r.title, r.ordinal_label AS ordinalLabel, (SELECT v.id FROM resource_revisions v WHERE v.resource_id = r.id ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1) AS revisionId FROM resources r WHERE r.id = ?`).get(lastId) as { id: string; title: string; ordinalLabel: string | null; revisionId: string | null } | undefined
     : undefined;
@@ -253,6 +255,7 @@ function summarize(store: DrizzleStore, row: WorkRow): WorkSummary {
     resourceCount,
     versionCount: versionCount(store, row.id),
     outsideCount: outsideCount(store, row.id),
+    missingCount: missingCount(store, row.id),
     linked,
     createdAt: row.created_at,
     lastOpenedAt: row.last_opened_at,

@@ -47,6 +47,7 @@ export function MicButton(props: { t: T; state: RecorderState; enabled: boolean;
       aria-pressed={active}
       aria-label={label}
       title={t("chat.mic.hint")}
+      onDragStart={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.currentTarget.setPointerCapture?.(event.pointerId);

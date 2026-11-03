@@ -187,7 +187,8 @@ describe("danmaku in the player (AT-94)", () => {
     expect(host.of("danmaku.load")).toHaveLength(1);
     expect(pressed()).toBe("true");
     expect(layer().getAttribute("data-count")).toBe("2");
-    expect(engine.made.at(-1)!.comments.map((comment) => comment.text)).toEqual(["第一条", "第二条"]);
+    // The display is built by an effect after the layer shows; on a slow machine that is a moment after the attribute.
+    await waitFor(() => expect(engine.made.at(-1)?.comments.map((comment) => comment.text)).toEqual(["第一条", "第二条"]));
     openPanel();
     const state = within(panel()).getByTestId("danmaku-state");
     expect(state.getAttribute("data-phase")).toBe("ready");
@@ -216,7 +217,7 @@ describe("danmaku in the player (AT-94)", () => {
     host.settings.value = { ...host.settings.value, enabled: true, top: false, blockWords: ["剧透"], sourcesOff: ["BiliBili"], merge: false };
     await openVideo();
     await waitFor(() => expect(layer().getAttribute("data-visible")).toBe("true"));
-    expect(engine.made.at(-1)!.comments.map((comment) => comment.text)).toEqual(["留下"]);
+    await waitFor(() => expect(engine.made.at(-1)?.comments.map((comment) => comment.text)).toEqual(["留下"]));
     openPanel();
     expect(within(panel()).getByTestId("danmaku-count").textContent).toBe("1 / 4 条弹幕（按设置显示）");
   });
@@ -267,6 +268,7 @@ describe("danmaku in the player (AT-94)", () => {
     host.settings.value = { ...host.settings.value, enabled: true };
     await openVideo();
     await waitFor(() => expect(layer().getAttribute("data-visible")).toBe("true"));
+    await waitFor(() => expect(engine.made.at(-1)?.comments.length).toBeGreaterThan(0));
     const before = engine.made.at(-1)!.comments[0]!.time;
     openPanel();
     fireEvent.click(screen.getByTestId("danmaku-offset+5000"));
@@ -333,6 +335,7 @@ describe("danmaku in the player (AT-94)", () => {
     host.settings.value = { ...host.settings.value, enabled: true, shotWith: false };
     await openVideo();
     await waitFor(() => expect(layer().getAttribute("data-visible")).toBe("true"));
+    await waitFor(() => expect(engine.made.length).toBeGreaterThan(0));
     const comments = document.createElement("canvas");
     comments.width = 640;
     comments.height = 180;
@@ -348,6 +351,7 @@ describe("danmaku in the player (AT-94)", () => {
     host.settings.value = { ...host.settings.value, enabled: true, shotWith: true };
     await openVideo();
     await waitFor(() => expect(layer().getAttribute("data-visible")).toBe("true"));
+    await waitFor(() => expect(engine.made.length).toBeGreaterThan(0));
     const comments = document.createElement("canvas");
     comments.width = 640;
     comments.height = 180;

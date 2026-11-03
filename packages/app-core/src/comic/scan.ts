@@ -272,10 +272,6 @@ export type MobiImageRecord = { recordIndex: number; offset: number; length: num
 /** Random access to the bytes of a MOBI: the whole file is never held, only the records that are asked for. */
 export type MobiReader = { size: number; read(offset: number, length: number): Buffer };
 
-export function bufferReader(bytes: Buffer): MobiReader {
-  return { size: bytes.length, read: (offset, length) => bytes.subarray(offset, Math.min(bytes.length, offset + length)) };
-}
-
 export function fileReader(file: string): { reader: MobiReader; close(): void } {
   const fd = fs.openSync(file, "r");
   const size = fs.fstatSync(fd).size;
@@ -358,12 +354,6 @@ export function mobiRecordTable(reader: MobiReader): MobiTable {
   ordered.push(...byRecord.values());
   return { title, textLength, records: ordered };
 }
-
-export function mobiImageRecords(bytes: Buffer): { title: string; records: MobiImageRecord[] } {
-  const { title, records } = mobiRecordTable(bufferReader(bytes));
-  return { title, records };
-}
-
 /** The record table of a MOBI on disk, read without loading the file. */
 export function mobiTableOfFile(file: string): MobiTable {
   const { reader, close } = fileReader(file);

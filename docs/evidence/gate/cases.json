@@ -1,10 +1,10 @@
 {
   "status": "passed",
-  "at": "2026-10-24T04:42:54.265Z",
-  "sourceFingerprint": "154b65590a277e6396496d96771f441466bcbfaacf52244d2504e206a17f72dd",
-  "lockFingerprint": "f4c9a5ebe492c4162531407f4c9f4a4b080e020a6f342edbfde4d8c5b2a0f0a4",
-  "testScriptFingerprint": "3e1306fc8a2ad2cff3cdda1ae103125b7190911f54ba96b5f5da82000565575f",
-  "buildScriptFingerprint": "ce748e107ee92e4f8c2a5eba2a17784490b7a6bb9821a95ca619b4a0c23a9e90",
+  "at": "2026-11-03T14:37:40.680Z",
+  "sourceFingerprint": "243bffd08f65270bacb9d18a3b4f6edf4d188764115c01f3a70e42d9b4c09d74",
+  "lockFingerprint": "b1b59cfe9cec9a65ec3211a39ee6437721fe93fd26bc944e2a181702f21ad791",
+  "testScriptFingerprint": "65a5d2109c884b29d93e736bf5a3c54bc94a718ac4e112685b86aea5be724dd0",
+  "buildScriptFingerprint": "1c0ce66045a98760c8a86b5b1f9bdc66678733c47cf9d33ac0a859cf132ac689",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -1441,6 +1441,26 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts accepts a well-formed library.outside",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts accepts a well-formed library.outsidePreview",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts accepts a well-formed library.removeOutside",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts accepts a well-formed works.reidentify",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
           "name": "media command contracts accepts a well-formed works.get",
           "status": "passed"
         },
@@ -1817,6 +1837,26 @@
         {
           "file": "tests/contracts/media-contracts.test.ts",
           "name": "media command contracts rejects an unknown field on library.openable",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts rejects an unknown field on library.outside",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts rejects an unknown field on library.outsidePreview",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts rejects an unknown field on library.removeOutside",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts rejects an unknown field on works.reidentify",
           "status": "passed"
         },
         {
@@ -2929,7 +2969,7 @@
         },
         {
           "file": "tests/reading/reader-layout.test.tsx",
-          "name": "novel reader changes pages with the arrow keys in a double page, and leaves the keys to a text field",
+          "name": "novel reader turns pages with the keys, past the loaded text into the next window, and leaves the keys to a text field (AT-139)",
           "status": "passed"
         },
         {
@@ -3702,6 +3742,11 @@
         {
           "file": "tests/reading/video-player.test.tsx",
           "name": "video player: rate lets go of a hold, without stepping, when the window loses focus",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/video-player.test.tsx",
+          "name": "video player: rate AT-135 keeps the temporary rate when a new source loads in the middle of a hold, and starts a hold from repeats alone",
           "status": "passed"
         },
         {
@@ -10474,7 +10519,7 @@
         },
         {
           "file": "tests/reading/reader-layout.test.tsx",
-          "name": "novel reader as a regular reader (A-63) puts the tools, the part number and the progress mark in the bottom bar, with no previous or next part button, and keeps continue-reading with the text (AT-83)",
+          "name": "novel reader as a regular reader (A-63) puts the tools, the part number and the progress mark in the bottom bar, with no previous or next part button and no continue-reading (AT-83, AT-139)",
           "status": "passed"
         },
         {
@@ -10653,7 +10698,12 @@
         },
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
-          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a project from the projects' title, lists the projects before the recent things, and names the one on screen (A-110)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind starts a conversation from the conversations' view, in a tab of the context on screen (AT-75, A-110)",
           "status": "passed"
         }
       ]
@@ -11020,6 +11070,26 @@
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 folds a column away when dragged past half its least width, shows it folding while held, and keeps the saved width (A-104)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 puts everything back when the pointer is cancelled, Esc is pressed or the window loses the focus in the middle of a drag",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 folds a column away with Enter on its divider and gives the focus to its switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 pulls the folded sidebar out from the rail's edge past half its least width, and leaves it folded short of that",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
           "name": "AT-81 AT-111 window frame: the top row, the rail and the columns shows a saved width, and keeps the stored widths inside what a column can be",
           "status": "passed"
         },
@@ -11214,12 +11284,12 @@
         },
         {
           "file": "tests/reading/reader-layout.test.tsx",
-          "name": "novel reader turns the pages of a double page with buttons that are about pages, not parts; a single page has none (AT-83)",
+          "name": "novel reader has previous and next page buttons in the bottom bar when paged, and none when scrolling (AT-83, AT-139)",
           "status": "passed"
         },
         {
           "file": "tests/reading/reader-layout.test.tsx",
-          "name": "novel reader as a regular reader (A-63) puts the tools, the part number and the progress mark in the bottom bar, with no previous or next part button, and keeps continue-reading with the text (AT-83)",
+          "name": "novel reader as a regular reader (A-63) puts the tools, the part number and the progress mark in the bottom bar, with no previous or next part button and no continue-reading (AT-83, AT-139)",
           "status": "passed"
         },
         {
@@ -11552,7 +11622,7 @@
         },
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-87 AT-112 two contexts are two workspaces hides the whole workspace behind the settings with a rule of the stylesheet, and keeps it in the page",
+          "name": "AT-87 AT-112 two contexts are two workspaces AT-131 hides the whole workspace behind the settings with the one rule for hidden layers, and keeps it in the page",
           "status": "passed"
         },
         {
@@ -12449,7 +12519,17 @@
       "tests": [
         {
           "file": "tests/danmaku/danmaku-layer.test.tsx",
-          "name": "danmaku layer covers the top part of the picture and not the bars around it",
+          "name": "danmaku layer AT-133 starts at the top of the play area and spans its width, bars included, with the letters of the picture and its crossing time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/danmaku/danmaku-layer.test.tsx",
+          "name": "danmaku layer AT-133 in a window taller than the picture: the area counts from the play area's top, so a quarter can be all in the bar above",
+          "status": "passed"
+        },
+        {
+          "file": "tests/danmaku/danmaku-layer.test.tsx",
+          "name": "danmaku layer AT-133 draws nothing before the video's size is known",
           "status": "passed"
         },
         {
@@ -12540,6 +12620,11 @@
         {
           "file": "tests/danmaku/danmaku-model.test.ts",
           "name": "danmaku model: size and place covers the picture and not the bars around it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/danmaku/danmaku-model.test.ts",
+          "name": "danmaku model: size and place AT-133 lays the comments from the play area's top across its width, and a screenshot keeps only the part over the picture",
           "status": "passed"
         },
         {
@@ -13625,6 +13710,16 @@
           "file": "tests/shell/entry-delete-ui.test.tsx",
           "name": "the resources that are in no work (AT-101) puts a resource into a work from its menu, and matching makes a work for it first and opens that work on the match",
           "status": "passed"
+        },
+        {
+          "file": "tests/shell/entry-delete-ui.test.tsx",
+          "name": "the resources that are in no work (AT-101) AT-137 re-identifies one from its menu, or the ticked ones together, and says there is no delete",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/entry-delete-ui.test.tsx",
+          "name": "the resources that are in no work (AT-101) AT-137 re-identifies the ticked resources in one call",
+          "status": "passed"
         }
       ]
     },
@@ -14239,6 +14334,11 @@
           "file": "tests/reading/overlay-avoid.test.tsx",
           "name": "the player hands its bar's height and whether the window is full to the rules (AT-108) keeps the bar at the end of the video even after it had faded while playing",
           "status": "passed"
+        },
+        {
+          "file": "tests/reading/overlay-avoid.test.tsx",
+          "name": "the player hands its bar's height and whether the window is full to the rules (AT-108) AT-134 in a full window: holding an arrow shows only its hint, a bar that shows fades, and a tap shows the bar when the key goes up",
+          "status": "passed"
         }
       ]
     },
@@ -14300,6 +14400,11 @@
         {
           "file": "tests/reading/subtitle-capture.test.ts",
           "name": "putting a screenshot together (AT-109) puts the comments under the subtitles and tells which of them it drew",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/subtitle-capture.test.ts",
+          "name": "putting a screenshot together (AT-109) AT-133 leaves out the comments that are in the bars and says none were drawn when all of them are",
           "status": "passed"
         },
         {
@@ -14563,6 +14668,26 @@
         },
         {
           "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 folds a column away when dragged past half its least width, shows it folding while held, and keeps the saved width (A-104)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 puts everything back when the pointer is cancelled, Esc is pressed or the window loses the focus in the middle of a drag",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 folds a column away with Enter on its divider and gives the focus to its switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 pulls the folded sidebar out from the rail's edge past half its least width, and leaves it folded short of that",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
           "name": "AT-81 AT-111 window frame: the top row, the rail and the columns shows a saved width, and keeps the stored widths inside what a column can be",
           "status": "passed"
         },
@@ -14653,7 +14778,7 @@
         },
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
-          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a project from the projects' title, lists the projects before the recent things, and names the one on screen (A-110)",
           "status": "passed"
         },
         {
@@ -14669,6 +14794,11 @@
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
           "name": "AT-111 AT-114 AT-119 the home view of the sidebar hides the project group and the new-project button while the projects module is off, and the new-conversation button while the agent is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind starts a conversation from the conversations' view, in a tab of the context on screen (AT-75, A-110)",
           "status": "passed"
         },
         {
@@ -14905,7 +15035,7 @@
         },
         {
           "file": "tests/shell/state-retention.test.tsx",
-          "name": "AT-87 AT-112 two contexts are two workspaces hides the whole workspace behind the settings with a rule of the stylesheet, and keeps it in the page",
+          "name": "AT-87 AT-112 two contexts are two workspaces AT-131 hides the whole workspace behind the settings with the one rule for hidden layers, and keeps it in the page",
           "status": "passed"
         },
         {
@@ -15084,7 +15214,7 @@
       "tests": [
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
-          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a project from the projects' title, lists the projects before the recent things, and names the one on screen (A-110)",
           "status": "passed"
         },
         {
@@ -15100,6 +15230,11 @@
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
           "name": "AT-111 AT-114 AT-119 the home view of the sidebar hides the project group and the new-project button while the projects module is off, and the new-conversation button while the agent is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind starts a conversation from the conversations' view, in a tab of the context on screen (AT-75, A-110)",
           "status": "passed"
         },
         {
@@ -15504,7 +15639,7 @@
         },
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
-          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen",
+          "name": "AT-111 AT-114 AT-119 the home view of the sidebar starts a project from the projects' title, lists the projects before the recent things, and names the one on screen (A-110)",
           "status": "passed"
         },
         {
@@ -15520,6 +15655,11 @@
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
           "name": "AT-111 AT-114 AT-119 the home view of the sidebar hides the project group and the new-project button while the projects module is off, and the new-conversation button while the agent is",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind starts a conversation from the conversations' view, in a tab of the context on screen (AT-75, A-110)",
           "status": "passed"
         },
         {
@@ -15559,12 +15699,12 @@
         },
         {
           "file": "tests/library/sidebar-lists.test.ts",
-          "name": "the home: every project and what it holds, by kind lists 最近 and each project with the kinds that have something in them, five to a kind, and the count of the rest",
+          "name": "the home: every project and what it holds, in one list lists 最近 and each project with everything in one list by latest activity, eight of it, and the count of all of it (A-103)",
           "status": "passed"
         },
         {
           "file": "tests/library/sidebar-lists.test.ts",
-          "name": "the home: every project and what it holds, by kind answers a group that was not asked for with its counts only, and every group in full when none is named",
+          "name": "the home: every project and what it holds, in one list answers a group that was not asked for with its counts only, and every group in full when none is named",
           "status": "passed"
         },
         {
@@ -15619,6 +15759,11 @@
         },
         {
           "file": "tests/contracts/workspace-contracts.test.ts",
+          "name": "the rail keeps the person's order of the icons and fits in the ones it does not name at their default place (A-108)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/workspace-contracts.test.ts",
           "name": "the rail is kept whole with its defaults, and changed by a patch that names only what changes",
           "status": "passed"
         },
@@ -15629,7 +15774,7 @@
         },
         {
           "file": "tests/contracts/workspace-contracts.test.ts",
-          "name": "the commands the sidebar and the search ask ask the home for the kind of the list, give a view of one kind only its own, and the downloads none",
+          "name": "the commands the sidebar and the search ask let the home ask for its mixed list or one kind, give a view of one kind only its own, and the downloads none",
           "status": "passed"
         }
       ]
@@ -15717,6 +15862,11 @@
         {
           "file": "tests/shell/rail-ui.test.tsx",
           "name": "AT-120 the card of a view, with the sidebar folded away comes out after the pointer rests on an icon, shows that view the way a card does, and goes when the pointer leaves",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-120 the card of a view, with the sidebar folded away comes out with the focus in the docked conversation column, and leaves the focus there",
           "status": "passed"
         },
         {
@@ -16026,6 +16176,462 @@
         {
           "file": "tests/contracts/workspace-contracts.test.ts",
           "name": "the tabs of the kinds the workspace no longer has are dropped from the tabs and from the closed ones, and the focus goes to the first tab that is left",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-123-home-list",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 lists eight things of the home's one list, the rest behind 更多 with its number, and folds them back with 收起",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 lists a medium as covers with how far the person got, switches to rows and keeps the choice for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 marks the row of the tab in front of the main area (A-107)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-124-counts-recent",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 lists eight things of the home's one list, the rest behind 更多 with its number, and folds them back with 收起",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 lists a medium as covers with how far the person got, switches to rows and keeps the choice for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 marks the row of the tab in front of the main area (A-107)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-125-drag-collapse",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-125 a press on a divider with text selected is a drag of the divider: no native drag of the selection starts",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 folds a column away when dragged past half its least width, shows it folding while held, and keeps the saved width (A-104)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 puts everything back when the pointer is cancelled, Esc is pressed or the window loses the focus in the middle of a drag",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 folds a column away with Enter on its divider and gives the focus to its switch",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-81 AT-111 window frame: the top row, the rail and the columns AT-125 pulls the folded sidebar out from the rail's edge past half its least width, and leaves it folded short of that",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-126-media-covers",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 lists eight things of the home's one list, the rest behind 更多 with its number, and folds them back with 收起",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 lists a medium as covers with how far the person got, switches to rows and keeps the choice for the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-123 AT-124 AT-126 the lists after A-103 and A-105 marks the row of the tab in front of the main area (A-107)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-127-conversation-title",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/creative/conversations.test.ts",
+          "name": "AT-127 a conversation is named by the first thing said in it (A-127) takes the start of the first line, keeps a name the person gave, and does not rename one that was spoken in before",
+          "status": "passed"
+        },
+        {
+          "file": "tests/creative/conversations.test.ts",
+          "name": "AT-127 a conversation is named by the first thing said in it (A-127) leaves a name that only looks made up: it is not the one the conversation was made with",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-128-workspace-limits",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-128 the keys on a tab (LOOP-24 3) does not close a tab on Delete or Backspace, and leaves the other keys and the text boxes alone",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-129-empty-scope",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/empty-scope.test.ts",
+          "name": "AT-129 a tool result explains an empty scope adds why and what to do only to a read with nothing it may read",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/empty-scope.test.ts",
+          "name": "AT-129 a tool result explains an empty scope gives the model the note after its one find, so it can tell the person instead of asking again",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-130-view-main",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "AT-130 each view has its own main area (A-107) shows in a feature view only its kind of tab, with the tab it had in front, and in the home every tab",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "AT-130 each view has its own main area (A-107) opens a thing of the same kind in the feature view on screen and in the home, and a thing of another kind in its own view",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "AT-130 each view has its own main area (A-107) closes a tab in every view at once, and reopens it in the view, the column and the place it was closed from",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "AT-130 each view has its own main area (A-107) saves the layout of each view, and puts each back after a restart",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "AT-130 each view has its own main area (A-107) reads a context saved before the views (version 1): its tabs all there, each feature view with its kind",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-131-hidden-layers",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/state-retention.test.tsx",
+          "name": "AT-87 AT-112 two contexts are two workspaces AT-131 hides the whole workspace behind the settings with the one rule for hidden layers, and keeps it in the page",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-132-rail",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-132 moving the icons (A-108) moves an icon up or down from its menu, not past the ends, and says where it went; the home has no menu",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/rail-ui.test.tsx",
+          "name": "AT-132 moving the icons (A-108) drags an icon to a new place after a press that moved 4 px, without choosing its view; Escape and leaving the rail put it back",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-133-danmaku-top",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/danmaku/danmaku-layer.test.tsx",
+          "name": "danmaku layer AT-133 starts at the top of the play area and spans its width, bars included, with the letters of the picture and its crossing time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/danmaku/danmaku-layer.test.tsx",
+          "name": "danmaku layer AT-133 in a window taller than the picture: the area counts from the play area's top, so a quarter can be all in the bar above",
+          "status": "passed"
+        },
+        {
+          "file": "tests/danmaku/danmaku-layer.test.tsx",
+          "name": "danmaku layer AT-133 draws nothing before the video's size is known",
+          "status": "passed"
+        },
+        {
+          "file": "tests/danmaku/danmaku-model.test.ts",
+          "name": "danmaku model: size and place AT-133 lays the comments from the play area's top across its width, and a screenshot keeps only the part over the picture",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/subtitle-capture.test.ts",
+          "name": "putting a screenshot together (AT-109) AT-133 leaves out the comments that are in the bars and says none were drawn when all of them are",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-134-hold-hint",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/reading/overlay-avoid.test.tsx",
+          "name": "the player hands its bar's height and whether the window is full to the rules (AT-108) AT-134 in a full window: holding an arrow shows only its hint, a bar that shows fades, and a tap shows the bar when the key goes up",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-135-hold-recovers",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/reading/video-keys.test.ts",
+          "name": "AT-135 holding → speeds up every time, even after the player missed a key takes a fresh press of a key still down as a lost key-up: the old hold ends, the new press holds on its own, and no step is added",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/video-keys.test.ts",
+          "name": "AT-135 holding → speeds up every time, even after the player missed a key starts the hold at once when only the system's repeats arrive (the press went elsewhere), with no step",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/video-keys.test.ts",
+          "name": "AT-135 holding → speeds up every time, even after the player missed a key keeps a short tap one step: a press and its key-up, repeated, never step twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/video-keys.test.ts",
+          "name": "AT-135 holding → speeds up every time, even after the player missed a key ends the hold when the window loses focus in the middle of it, and the next hold starts again",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/video-player.test.tsx",
+          "name": "video player: rate AT-135 keeps the temporary rate when a new source loads in the middle of a hold, and starts a hold from repeats alone",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-136-square-main",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/window-frame.test.tsx",
+          "name": "AT-136 the main area has square corners (UI-01) draws no rounded corner on the main area, where it meets the sidebar, the rail or the top row",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-137-in-locations",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/library/in-library.test.ts",
+          "name": "AT-137 every list of resources shows only the ones in a library path uses the one condition in each query that lists resources",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/in-library.test.ts",
+          "name": "AT-137 every list of resources shows only the ones in a library path moves the resources of a removed path out of every list and into the outside section, back on adding it, and removes their records keeping what was made",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/unassigned-recover.test.ts",
+          "name": "AT-137 the resources in no work can all be opened, put in a work and matched opens, assigns and matches, for each medium, a resource whose entry was deleted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/unassigned-recover.test.ts",
+          "name": "AT-137 the resources in no work can all be opened, put in a work and matched lists only the loose resources in a library path: one whose path is gone cannot be opened and is in the outside section",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/unassigned-recover.test.ts",
+          "name": "AT-137 the resources in no work can all be opened, put in a work and matched re-identifies loose resources the way a scan groups them: a new work for a folder whose work was deleted, the folder's work when it has one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/entry-delete-ui.test.tsx",
+          "name": "the resources that are in no work (AT-101) AT-137 re-identifies one from its menu, or the ticked ones together, and says there is no delete",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/entry-delete-ui.test.tsx",
+          "name": "the resources that are in no work (AT-101) AT-137 re-identifies the ticked resources in one call",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/library-outside-ui.test.tsx",
+          "name": "AT-137 the resources outside the library paths, in the library settings is not there when there are none",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/library-outside-ui.test.tsx",
+          "name": "AT-137 the resources outside the library paths, in the library settings lists them by folder with the count, opens the view of what was made on one, and removes the records after a confirmation that counts what goes and what stays",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-138-scan-incremental",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/library/library-scan.test.ts",
+          "name": "AT-138 a scan shows each work as soon as its files are in tells the windows the finished works at most once a second while it goes on, and starts their covers then",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/library-scan.test.ts",
+          "name": "AT-138 a scan shows each work as soon as its files are in tells a finished work within the second even while the next folder is still being read",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/library-scan.test.ts",
+          "name": "AT-138 a scan shows each work as soon as its files are in keeps and tells the works imported before a scan was cancelled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-139-novel-pages",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page reports no position from a tab behind another, and places the page when the tab comes back",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page places no page and reports no position while the tab is not in front, though it still has boxes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page comes back to the same page after laying out again and again (a column folding and coming back), not a page earlier each time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page does not take the start of a page for a new position while the saved character is on that page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page pages a chapter in a fixed frame, keeps the first character of the page after a larger font, and opens a bookmark at its page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page shows two pages a screen when double, turns one page per wheel gesture and on the page's outer thirds",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page goes from a chapter's last page to the next chapter, and from its first page to the last page of the one before",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page opens where the book was left: a window around the saved place, without moving the saved position",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page has no continue-reading button and no import diagnostics in the text, paged or scrolling",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page does not slide when the system asks for less motion",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page appends the next window while scrolling near the end of the loaded text",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-139 a novel is read page by page offers paged and scrolling in the reader's settings, and double pages only when paged",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-140-side-panel",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-140 contents, search and bookmarks at the reader's left opens one panel at a time, marks the current chapter, and closes with Esc giving the focus back to its button",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-140 contents, search and bookmarks at the reader's left is dragged or stepped wider, and the width is saved",
+          "status": "passed"
+        },
+        {
+          "file": "tests/reading/novel-pages.test.tsx",
+          "name": "AT-140 contents, search and bookmarks at the reader's left floats over the text in a narrow reader, and a click on the text closes it",
           "status": "passed"
         }
       ]

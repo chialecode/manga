@@ -52,13 +52,16 @@ function start(options: Parameters<typeof installHost>[0] = {}) {
 const rowsOf = (sidebar: HTMLElement) => [...sidebar.querySelectorAll("[data-opens]")].map((node) => node.textContent);
 
 describe("AT-111 AT-114 AT-119 the home view of the sidebar", () => {
-  it("starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen", async () => {
+  it("starts a project from the projects' title, lists the projects before the recent things, and names the one on screen (A-110)", async () => {
     start();
     const sidebar = await screen.findByTestId("sidebar");
     expect(sidebar.getAttribute("data-view")).toBe("home");
     expect(within(sidebar).getByTestId("sidebar-title").textContent).toBe("主页");
-    expect(within(sidebar).getByTestId("sidebar-new-conversation")).toBeTruthy();
-    expect(within(sidebar).getByTestId("sidebar-new-project")).toBeTruthy();
+    // The home has no "新对话"; "新建项目" is the "+" at the end of the projects' title.
+    expect(within(sidebar).queryByTestId("sidebar-new-conversation")).toBeNull();
+    const add = within(sidebar).getByTestId("sidebar-new-project");
+    expect(add.getAttribute("aria-label")).toBe("新建项目");
+    expect(add.closest(".sidebar-group-head")?.querySelector(".sidebar-group-title")?.textContent).toBe("项目");
     expect(within(sidebar).getByTestId("sidebar-search")).toBeTruthy();
     expect(within(sidebar).getByTestId("sidebar-entry-library").textContent).toContain("资源总览");
     expect(within(sidebar).getByTestId("sidebar-entry-projects").textContent).toContain("项目总览");
@@ -75,10 +78,20 @@ describe("AT-111 AT-114 AT-119 the home view of the sidebar", () => {
     expect(screen.getByTestId("session-open-ses_book")).toBeTruthy();
     expect(screen.queryByTestId("session-open-ses_quiet")).toBeNull();
     expect(screen.queryByTestId("session-open-ses_proj")).toBeNull();
-    // The home lists every kind in small groups, with its count; a kind with nothing in it has no group.
-    expect(screen.getByTestId("sidebar-type-recent-conversation").textContent).toContain("对话");
-    expect(screen.getByTestId("sidebar-type-recent-conversation").textContent).toContain("3");
-    expect(screen.queryByTestId("sidebar-type-recent-comic")).toBeNull();
+    // The home lists every kind in one list (A-103): no kind headings; a pill after each name says the kind, and no row has a leading icon.
+    expect(sidebar.querySelector("[data-testid^='sidebar-type-']")).toBeNull();
+    const old = screen.getByTestId("session-open-ses_old");
+    expect(within(old).getByTestId("sidebar-pill").textContent).toBe("对话");
+    expect(old.firstElementChild?.classList.contains("truncate")).toBe(true);
+    expect(old.querySelector("svg")).toBeNull();
+    expect(screen.getByTestId("sidebar-section-recent-all")).toBeTruthy();
+    // "最近" has one title: its own context row, with the clock as its toggle; a project's toggle is a folder, closed while folded.
+    expect(within(screen.getByTestId("sidebar-recent")).queryByRole("heading")).toBeNull();
+    expect(screen.getByTestId("context-toggle-recent").querySelector("svg")?.getAttribute("class")).toContain("clock");
+    expect(screen.getByTestId("context-toggle-prj_a").querySelector("svg")?.getAttribute("class")).toMatch(/lucide-folder(?!-open)/);
+    // The open context's list hangs from its guide line.
+    expect(screen.getByTestId("guide-recent").contains(old)).toBe(true);
+    expect(screen.queryByTestId("guide-prj_a")).toBeNull();
   });
 
   it("opens and folds a project's things without leaving the context on screen, and keeps what was left open for the next start", async () => {
@@ -88,6 +101,7 @@ describe("AT-111 AT-114 AT-119 the home view of the sidebar", () => {
     fireEvent.click(screen.getByTestId("context-toggle-prj_a"));
     await waitFor(() => expect(screen.getByTestId("session-open-ses_proj")).toBeTruthy());
     expect(screen.getByTestId("context-toggle-prj_a").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("context-toggle-prj_a").querySelector("svg")?.getAttribute("class")).toContain("folder-open");
     // The running conversation carries the mark; the context on screen stays "最近".
     expect(within(screen.getByTestId("session-open-ses_proj")).getByRole("img").getAttribute("data-mark")).toBe("running");
     expect(screen.getByTestId("context-recent").getAttribute("data-current")).toBe("true");
@@ -141,6 +155,19 @@ describe("AT-111 AT-114 AT-119 the home view of the sidebar", () => {
 });
 
 describe("AT-111 AT-114 AT-119 a view of one kind", () => {
+  it("starts a conversation from the conversations' view, in a tab of the context on screen (AT-75, A-110)", async () => {
+    const host = start();
+    fireEvent.click(await screen.findByTestId("nav-conversation"));
+    const sidebar = screen.getByTestId("sidebar");
+    await waitFor(() => expect(sidebar.getAttribute("data-view")).toBe("conversation"));
+    const before = tabTitles().length;
+    fireEvent.click(within(sidebar).getByTestId("sidebar-new-conversation"));
+    await waitFor(() => expect(host.of("conversation.new")).toHaveLength(1));
+    expect(host.of("conversation.new")[0]?.input).toMatchObject({ contextId: null });
+    await waitFor(() => expect(tabTitles().length).toBe(before + 1));
+    expect(focusedTitle()).toContain("对话");
+  });
+
   it("shows five conversations of a context and the rest behind a button that says how many, and takes the rest a page at a time", async () => {
     const host = installHost({ facets: FACETS, projects: [{ id: "prj_a", name: "合集解说" }] });
     for (let n = 1; n <= 8; n += 1) host.sessions.push(row(`ses_n${n}`, `第 ${n} 段`, "shared", null));
@@ -170,9 +197,10 @@ describe("AT-111 AT-114 AT-119 a view of one kind", () => {
     expect(within(sidebar).getByTestId("sidebar-title").textContent).toBe("漫画");
     expect(screen.getByTestId("nav-comic").getAttribute("aria-current")).toBe("page");
     expect(within(sidebar).getByTestId("sidebar-manage").textContent).toContain("漫画管理");
-    // A view of one kind has the entries of that kind only: no conversation or project buttons.
+    // A view of one kind has the entries of that kind only: no conversation button; a project is still made from the projects' title.
     expect(within(sidebar).queryByTestId("sidebar-new-conversation")).toBeNull();
-    expect(within(sidebar).queryByTestId("sidebar-new-project")).toBeNull();
+    expect(within(sidebar).queryAllByTestId("sidebar-new-project")).toHaveLength(1);
+    expect(within(sidebar).getByTestId("sidebar-new-project").closest(".sidebar-group-head")).toBeTruthy();
     // "最近" is open: the comic of no project is in view, the other kind is not, and the project's own comic waits behind its group.
     await waitFor(() => expect(screen.getByTestId("sidebar-item-work-wc2")).toBeTruthy());
     expect(screen.queryByTestId("sidebar-item-work-wv")).toBeNull();
@@ -193,7 +221,7 @@ describe("AT-111 AT-114 AT-119 a view of one kind", () => {
     fireEvent.click(screen.getByTestId("context-toggle-prj_a"));
     await waitFor(() => expect(screen.getByTestId("sidebar-item-work-wc")).toBeTruthy());
     fireEvent.click(screen.getByTestId("sidebar-item-work-wc"));
-    // The context is switched first, so the tab opens in the project's own arrangement (M4-U01), and the view is still the comic's.
+    // The context is switched first, so the tab opens in the project's own arrangement, and the view is still the comic's.
     await waitFor(() => expect(screen.getByTestId("context-prj_a").getAttribute("data-current")).toBe("true"));
     await waitFor(() => expect(tabTitles()).toContain("合成漫画"));
     expect(focusedTitle()).toBe("合成漫画");
@@ -320,10 +348,91 @@ describe("AT-111 AT-114 the sidebar's own menus", () => {
     await waitFor(() => expect(screen.getByTestId("context-toggle-prj_a")).toBeTruthy());
     fireEvent.click(screen.getByTestId("context-toggle-prj_a"));
     await waitFor(() => expect(screen.getByTestId("sidebar-item-work-wc")).toBeTruthy());
-    expect(rowsOf(screen.getByTestId("sidebar"))).toEqual(["合成漫画"]);
+    // A medium lists covers by default (A-105): the name, then how far the person got.
+    expect([...screen.getByTestId("sidebar").querySelectorAll("[data-opens] .sidebar-cover-title")].map((node) => node.textContent)).toEqual(["合成漫画"]);
+    expect(screen.getByTestId("sidebar-covers-prj_a")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-item-work-wc").getAttribute("aria-label")).toBe("合成漫画，没看过");
     fireEvent.contextMenu(screen.getByTestId("sidebar-item-work-wc"), { clientX: 40, clientY: 200 });
     expect(within(screen.getByTestId("sidebar-menu")).getAllByRole("menuitem").map((node) => (node.textContent ?? "").trim())).toEqual(["打开", "在后台打开", "从这个项目移除"]);
     fireEvent.click(within(screen.getByTestId("sidebar-menu")).getByRole("menuitem", { name: "从这个项目移除" }));
     await waitFor(() => expect(host.of("project.removeMaterial").at(-1)?.input).toEqual({ projectId: "prj_a", materialId: "mat_wc" }));
+  });
+});
+
+describe("AT-123 AT-124 AT-126 the lists after A-103 and A-105", () => {
+  it("lists eight things of the home's one list, the rest behind 更多 with its number, and folds them back with 收起", async () => {
+    const items: HostItem[] = Array.from({ length: 9 }, (_, index) => ({ type: "note", id: `n${index}`, title: `笔记 ${index}`, contextId: null, updatedAt: `2026-01-0${index + 1}T00:00:00.000Z` }));
+    const host = start({ items });
+    await waitFor(() => expect(screen.getByTestId("sidebar-more-recent")).toBeTruthy());
+    // Three conversations and nine notes: twelve in one list, eight shown.
+    expect(screen.getByTestId("guide-recent").querySelectorAll("[data-opens]")).toHaveLength(8);
+    expect(screen.getByTestId("sidebar-more-recent").textContent).toBe("更多（4）");
+    fireEvent.click(screen.getByTestId("sidebar-more-recent"));
+    await waitFor(() => expect(screen.getByTestId("guide-recent").querySelectorAll("[data-opens]")).toHaveLength(12));
+    // The page was asked for the whole list, without a kind.
+    expect(host.of("workspace.items").at(-1)?.input).not.toHaveProperty("type");
+    expect(screen.queryByTestId("sidebar-more-recent")).toBeNull();
+    fireEvent.click(screen.getByTestId("sidebar-less-recent"));
+    await waitFor(() => expect(screen.getByTestId("guide-recent").querySelectorAll("[data-opens]")).toHaveLength(8));
+    expect(screen.getByTestId("sidebar-more-recent")).toBeTruthy();
+  });
+
+  it("lists a medium as covers with how far the person got, switches to rows and keeps the choice for the next start", async () => {
+    const host = start({ items: [
+      { type: "video", id: "wv", title: "合成动画", contextId: null, coverId: null, progress: { percent: 30, episode: "第 3 集" } },
+      { type: "video", id: "wv2", title: "另一部动画", contextId: null, progress: { percent: 42, episode: null } },
+    ] });
+    fireEvent.click(await screen.findByTestId("nav-video"));
+    await waitFor(() => expect(screen.getByTestId("sidebar-covers-recent")).toBeTruthy());
+    expect(screen.getByTestId("sidebar-item-work-wv").getAttribute("aria-label")).toBe("合成动画，看到第 3 集");
+    expect(screen.getByTestId("sidebar-item-work-wv2").getAttribute("aria-label")).toBe("另一部动画，看到 42%");
+    expect(screen.getByTestId("sidebar-display").getAttribute("aria-label")).toBe("以列表列出");
+    fireEvent.click(screen.getByTestId("sidebar-display"));
+    await waitFor(() => expect(screen.queryByTestId("sidebar-covers-recent")).toBeNull());
+    expect(screen.getByTestId("sidebar-item-work-wv").textContent).toBe("合成动画看到第 3 集");
+    await waitFor(() => expect(host.state.rail.display.video).toBe("list"));
+    cleanup();
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("sidebar-item-work-wv")).toBeTruthy());
+    expect(screen.queryByTestId("sidebar-covers-recent")).toBeNull();
+    expect(screen.getByTestId("sidebar-display").getAttribute("data-display")).toBe("list");
+  });
+
+  it("marks the row of the tab in front of the main area (A-107)", async () => {
+    start();
+    await waitFor(() => expect(screen.getByTestId("session-open-ses_old")).toBeTruthy());
+    expect(screen.getByTestId("session-open-ses_old").getAttribute("aria-current")).toBeNull();
+    fireEvent.click(screen.getByTestId("session-open-ses_book"));
+    await waitFor(() => expect(screen.getByTestId("session-open-ses_book").getAttribute("aria-current")).toBe("true"));
+    expect(screen.getByTestId("session-open-ses_old").getAttribute("aria-current")).toBeNull();
+  });
+});
+
+describe("AT-128 the keys on a tab (LOOP-24 3)", () => {
+  it("does not close a tab on Delete or Backspace, and leaves the other keys and the text boxes alone", async () => {
+    start();
+    await waitFor(() => expect(screen.getByTestId("session-open-ses_book")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("session-open-ses_book"));
+    await waitFor(() => expect(tabTitles().length).toBeGreaterThan(0));
+    const before = tabTitles();
+    const strip = document.querySelector<HTMLElement>("[data-testid='context-host'][data-active='true'] .dv-tab")!;
+    expect(strip).toBeTruthy();
+    for (const key of ["Delete", "Backspace"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      strip.dispatchEvent(event);
+      expect(event.defaultPrevented, key).toBe(true);
+      expect(tabTitles()).toEqual(before);
+    }
+    // The other keys still reach the tab strip: Enter is dockview's to handle.
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    strip.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    // A text box in a tab keeps its Backspace.
+    const box = document.createElement("textarea");
+    document.querySelector("[data-testid='context-host'][data-active='true'] [data-testid='tab-panel']")!.appendChild(box);
+    const typed = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+    box.dispatchEvent(typed);
+    expect(typed.defaultPrevented).toBe(false);
+    box.remove();
   });
 });

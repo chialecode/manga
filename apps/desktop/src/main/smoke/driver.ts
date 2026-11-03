@@ -210,18 +210,6 @@ export async function openRecords(view: BrowserWindow, type: "note" | "conversat
   return waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="records-tab"][data-type="${type}"]'))`, timeoutMs);
 }
 
-/** The window's search box, brought up with the global shortcut as a person does; true once its input is drawn. */
-export async function openSearchBox(view: BrowserWindow, timeoutMs = 4000): Promise<boolean> {
-  await pressChord(view, "K", ["control"]);
-  return waitDrawn(view, "search-input", timeoutMs);
-}
-
-/** Close the search box with Esc; true once it is gone. */
-export async function closeSearchBox(view: BrowserWindow, timeoutMs = 3000): Promise<boolean> {
-  await pressKey(view, "Escape");
-  return waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, timeoutMs);
-}
-
 /**
  * The shelf of one medium, reached the way a person reaches it: the home's library entry (a library tab at its overview), then "all" on the medium's
  * section. Library tabs already open are closed first so the page holds one shelf, and readers too (see `closeTabs`).

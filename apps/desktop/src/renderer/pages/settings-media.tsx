@@ -182,8 +182,15 @@ function NovelPrefs(props: { t: T; reading: ShellPreference["reading"]; onReadin
         <input type="number" min={1.2} max={2.4} step={0.1} data-testid="msettings-novel-line" value={reading.lineHeight} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 1.2 && value <= 2.4) props.onReading({ lineHeight: Math.round(value * 10) / 10 }); }} />
       </label>
       <label className="msettings-field">
+        <span>{t("reader.flow")}</span>
+        <select data-testid="msettings-novel-flow" value={reading.flow ?? "paged"} onChange={(event) => props.onReading({ flow: event.target.value as "paged" | "scroll" })}>
+          <option value="paged">{t("reader.flowPaged")}</option>
+          <option value="scroll">{t("reader.flowScroll")}</option>
+        </select>
+      </label>
+      <label className="msettings-field">
         <span>{t("reader.pageMode")}</span>
-        <select data-testid="msettings-novel-page" value={reading.pageMode ?? "single"} onChange={(event) => props.onReading({ pageMode: event.target.value as "single" | "double" })}>
+        <select data-testid="msettings-novel-page" value={reading.pageMode ?? "single"} disabled={(reading.flow ?? "paged") !== "paged"} onChange={(event) => props.onReading({ pageMode: event.target.value as "single" | "double" })}>
           <option value="single">{t("reader.single")}</option>
           <option value="double">{t("reader.double")}</option>
         </select>

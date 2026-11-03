@@ -343,10 +343,21 @@ describe("AT-87 AT-112 two contexts are two workspaces", () => {
     expect(tabTitles()).toEqual(before);
   });
 
-  it("hides the whole workspace behind the settings with a rule of the stylesheet, and keeps it in the page", () => {
+  it("AT-131 hides the whole workspace behind the settings with the one rule for hidden layers, and keeps it in the page", () => {
     const css = readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8");
-    expect(css).toMatch(/\.workspace-area\[data-suspended="true"\] \{[^}]*visibility: hidden/);
-    expect(css).toMatch(/\.workspace-area\[data-suspended="true"\] \{[^}]*pointer-events: none/);
-    expect(css).not.toMatch(/\.workspace-area\[data-suspended="true"\] \{[^}]*display: none/);
+    // One rule hides every layer that stays mounted, its descendants included, over their own `visibility: visible` (计划 4.8).
+    expect(css).toMatch(/\[data-hidden-layer\], \[data-hidden-layer\] \* \{ visibility: hidden !important; \}/);
+    expect(css).toMatch(/\[data-hidden-layer\] \{[^}]*pointer-events: none/);
+    expect(css).not.toMatch(/\[data-hidden-layer\][^{]*\{[^}]*display: none/);
+    // The two rules it replaces are gone: no other selector hides a layer by its own attribute or by the dock's inline style.
+    expect(css).not.toMatch(/data-suspended="true"\] \{/);
+    expect(css).not.toMatch(/dv-render-overlay\[style/);
+    // Every hidden layer uses that attribute: the workspace behind the settings, a dock of a view out of sight, the parking layer, a panel behind another.
+    const workbench = readFileSync("apps/desktop/src/renderer/workbench.tsx", "utf8");
+    const host = readFileSync("apps/desktop/src/renderer/workspace/host.tsx", "utf8");
+    expect(workbench).toMatch(/settingsOn \? \{ inert: true, "data-hidden-layer": "" \}/);
+    expect(host).toMatch(/className="view-dock"[^>]*"data-hidden-layer": ""/);
+    expect(host).toMatch(/className="tab-parking" data-hidden-layer=""/);
+    expect(host).toMatch(/setAttribute\("data-hidden-layer", ""\)/);
   });
 });

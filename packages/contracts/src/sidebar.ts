@@ -12,6 +12,19 @@ export const RAIL_VIEWS = ["home", ...HIDEABLE_RAIL_VIEWS] as const;
 export type RailView = (typeof RAIL_VIEWS)[number];
 export const RailViewSchema = z.enum(RAIL_VIEWS);
 
+/**
+ * Commands after whose success the sidebar lists read again (交互设计 2.10): what a reader adds to a project's materials, and the making, renaming,
+ * deleting and restoring of notes and project objects. A test lists every registered command of these kinds and requires it here or in its exceptions.
+ */
+export const LIST_CHANGING_COMMANDS = [
+  "project.addMaterial", "project.removeMaterial",
+  "notes.create", "notes.rename", "notes.delete", "notes.undelete",
+  "whiteboard.create", "whiteboard.rename", "whiteboard.delete",
+  "mindmap.create", "mindmap.rename", "mindmap.delete",
+  "draft.create", "draft.rename", "draft.delete",
+  "roughcut.create", "roughcut.rename", "roughcut.delete",
+] as const;
+
 /** The kinds of thing a project or "最近" lists in the sidebar. The home shows all of them, in this order. */
 export const SIDEBAR_ITEM_TYPES = ["conversation", "novel", "comic", "video", "note", "whiteboard", "mindmap", "draft", "roughcut"] as const;
 export type SidebarItemType = (typeof SIDEBAR_ITEM_TYPES)[number];
@@ -22,8 +35,18 @@ export function itemTypeOfView(view: RailView): SidebarItemType | null {
   return (SIDEBAR_ITEM_TYPES as readonly string[]).includes(view) ? (view as SidebarItemType) : null;
 }
 
-/** Each group lists this many things before "更多" (A-94, 交互设计 2.10). */
+/** Each group lists this many things before "更多" (A-94, 交互设计 2.10); the home's mixed list shows 8 (Q-35 1), a medium's cover grid 6 (Q-35 5). */
 export const SIDEBAR_GROUP_SHOWN = 5;
+export const SIDEBAR_HOME_SHOWN = 8;
+export const SIDEBAR_COVER_SHOWN = 6;
+/** The media views, which list their things as covers by default (A-105). */
+export const COVER_VIEWS = ["novel", "comic", "video"] as const;
+export type CoverView = (typeof COVER_VIEWS)[number];
+export const isCoverView = (view: RailView): view is CoverView => (COVER_VIEWS as readonly string[]).includes(view);
+/** How many things an open group of a view lists before "更多". */
+export function sidebarShown(view: RailView): number {
+  return view === "home" ? SIDEBAR_HOME_SHOWN : isCoverView(view) ? SIDEBAR_COVER_SHOWN : SIDEBAR_GROUP_SHOWN;
+}
 /** The most things one page of a list answers with. */
 export const SIDEBAR_PAGE_MAX = 100;
 /** The most characters of a name that is looked for, and how many things of one kind a name search answers with. */
@@ -44,6 +67,14 @@ export const SidebarOpenSchema = z.object({
 }).strict();
 export type SidebarOpen = z.infer<typeof SidebarOpenSchema>;
 
+export const SidebarProgressSchema = z.object({
+  /** 0–100, how much of the resource last opened was read or watched. */
+  percent: z.number().min(0).max(100).nullable(),
+  /** The episode label of the resource last opened (a video's "第 3 集"), when it has one. */
+  episode: z.string().nullable(),
+}).strict();
+export type SidebarProgress = z.infer<typeof SidebarProgressSchema>;
+
 /** One thing in a list: what it is called, where it opens, where it belongs, and what can be done to it. */
 export const SidebarItemSchema = z.object({
   /** Stable among the items of a context: the same thing keeps its key while the list changes. */
@@ -62,12 +93,22 @@ export const SidebarItemSchema = z.object({
   running: z.boolean(),
   /** A material of a project (a work, a resource or a note): its id, so it can be taken out of the project. */
   materialId: z.string().nullable(),
+  /** A work's cover, or the cover of the work a resource belongs to (A-105); null when there is none. */
+  coverId: z.string().nullable(),
+  /**
+   * How far the person got (A-105), for the small line under a cover: the percent of the book or the episode last watched, in the context the item is
+   * listed in. Null when it was never opened there.
+   */
+  progress: SidebarProgressSchema.nullable(),
 }).strict();
 export type SidebarItem = z.infer<typeof SidebarItemSchema>;
 
-/** The things of one kind in one context: how many there are, the first of them (when the group is open) and where the rest start. */
+/**
+ * The things of one kind in one context, or (`all`, the home, A-103) of every kind in one list by latest activity: how many there are — exactly the
+ * number the list holds (计划 4.3) — the first of them (when the group is open) and where the rest start.
+ */
 export const SidebarSectionSchema = z.object({
-  type: z.enum([...SIDEBAR_ITEM_TYPES, "download"]),
+  type: z.enum([...SIDEBAR_ITEM_TYPES, "download", "all"]),
   total: z.number().int().nonnegative(),
   items: z.array(SidebarItemSchema),
   /** False when the group was not open: the count is there, the items are asked for when it is opened. */
@@ -131,9 +172,43 @@ export const RailPreferenceSchema = z.object({
   open: z.partialRecord(RailViewSchema, z.array(z.string().max(256)).max(200)).default({}),
   /** The settings page the person was on last. */
   settingsPage: z.string().min(1).max(32).nullable().default(null),
+  /**
+   * The order of the icons between the home and the settings (A-108), as the person dragged them; a hidden one keeps its place. Icons it does not name
+   * (one that came with a plugin later) take their place from the default order (`railOrder`).
+   */
+  order: z.array(z.enum(HIDEABLE_RAIL_VIEWS)).max(HIDEABLE_RAIL_VIEWS.length).default([]),
+  /** How each media view lists its things (A-105): covers, the default, or rows. */
+  display: z.partialRecord(z.enum(COVER_VIEWS), z.enum(["cover", "list"])).default({}),
 }).strict();
 export type RailPreference = z.infer<typeof RailPreferenceSchema>;
-export const DEFAULT_RAIL_PREFERENCE: RailPreference = { hidden: [], view: "home", open: {}, settingsPage: null };
+export const DEFAULT_RAIL_PREFERENCE: RailPreference = { hidden: [], view: "home", open: {}, settingsPage: null, order: [], display: {} };
+
+/** The icons of the rail in the person's order: the ones they placed, then each one they did not name at its default place (after its default predecessor). */
+export function railOrder(order: readonly HideableRailView[]): HideableRailView[] {
+  const placed = [...new Set(order.filter((view) => (HIDEABLE_RAIL_VIEWS as readonly string[]).includes(view)))];
+  for (const [index, view] of HIDEABLE_RAIL_VIEWS.entries()) {
+    if (placed.includes(view)) continue;
+    const before = HIDEABLE_RAIL_VIEWS.slice(0, index).reverse().find((item) => placed.includes(item));
+    placed.splice(before ? placed.indexOf(before) + 1 : 0, 0, view);
+  }
+  return placed;
+}
+
+/**
+ * The order after the person moved `view` to place `to` among the icons they see (`visible`, in their order, the home not among them; A-108): it goes
+ * right before the icon that is at that place after it left, or right after the last one. The icons they do not see (hidden, of a module that is off)
+ * keep their places.
+ */
+export function moveRailView(order: readonly HideableRailView[], visible: readonly HideableRailView[], view: HideableRailView, to: number): HideableRailView[] {
+  const full = railOrder(order).filter((item) => item !== view);
+  const others = visible.filter((item) => item !== view);
+  const at = Math.max(0, Math.min(others.length, to));
+  const before = others[at];
+  const after = others[at - 1];
+  const index = before ? full.indexOf(before) : after ? full.indexOf(after) + 1 : 0;
+  full.splice(index, 0, view);
+  return full;
+}
 
 /** A change to it: what is named is replaced (a view named in `open` takes the list it is given), the rest is left alone. */
 export const RailPatchSchema = z.object({
@@ -141,6 +216,8 @@ export const RailPatchSchema = z.object({
   view: RailViewSchema.optional(),
   open: z.partialRecord(RailViewSchema, z.array(z.string().max(256)).max(200)).optional(),
   settingsPage: z.string().min(1).max(32).nullable().optional(),
+  order: z.array(z.enum(HIDEABLE_RAIL_VIEWS)).max(HIDEABLE_RAIL_VIEWS.length).optional(),
+  display: z.partialRecord(z.enum(COVER_VIEWS), z.enum(["cover", "list"])).optional(),
 }).strict();
 export type RailPatch = z.infer<typeof RailPatchSchema>;
 
@@ -151,5 +228,7 @@ export function applyRailPatch(current: RailPreference, patch: RailPatch | undef
     view: patch?.view ?? current.view,
     open: { ...current.open, ...patch?.open },
     settingsPage: patch?.settingsPage === undefined ? current.settingsPage : patch.settingsPage,
+    order: patch?.order ?? current.order,
+    display: { ...current.display, ...patch?.display },
   };
 }

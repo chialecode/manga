@@ -78,7 +78,9 @@ describe("the library is what the library paths hold (AT-79)", () => {
       const pathId = await addPath(ctx, dir);
       expect((await works(ctx))[0]).toMatchObject({ title: "丙系列", outsideCount: 0, resourceCount: 1 });
       ok(await run(ctx, "library.paths.remove", { pathId }));
-      expect((await works(ctx))[0]).toMatchObject({ title: "丙系列", outsideCount: 1, resourceCount: 1 });
+      // Outside every path, the work leaves the lists (A-113) and its resource is in the outside section of the library settings.
+      expect(await works(ctx)).toEqual([]);
+      expect(ok(await run(ctx, "library.outside", {}))).toMatchObject({ total: 1 });
       expect(fs.existsSync(path.join(dir, "丙系列", "第1话.txt"))).toBe(true);
     } finally { ctx.app.close(); }
   });

@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { ScanService, type ScanHost, type ScanJob } from "../../packages/app-core/src/library-scan/service.ts";
 import { planScan, type WalkEntry } from "../../packages/app-core/src/library-scan/plan.ts";
+import { importScanUnit } from "../../packages/app-core/src/commands/library-io.ts";
 import { startApp } from "../helpers/app.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -345,5 +346,98 @@ describe("what a scan makes of a listing", () => {
     const plan = planScan("novel", files(...Array.from({ length: 30 }, (_, i) => `s/${String(i).padStart(3, "0")}.txt`)), "根", { maxUnits: 10 });
     expect(plan.truncated).toBe(true);
     expect(plan.groups[0]!.units).toHaveLength(10);
+  });
+});
+
+describe("AT-138 a scan shows each work as soon as its files are in", () => {
+  /** The app's own import, behind a clock that moves 400 ms for every file, so the test decides when a second has passed. */
+  function slowHost(ctx: App, clock: { now: number }, seen: Array<{ topic: string; payload: Record<string, unknown>; works: number }>, covered: string[][], cancelAfter?: { files: number; cancel: () => void }): ScanHost {
+    let files = 0;
+    return {
+      importUnit: async (request, signal) => {
+        clock.now += 400;
+        files += 1;
+        if (cancelAfter && files === cancelAfter.files) cancelAfter.cancel();
+        return importScanUnit(ctx.app, request, signal);
+      },
+      afterImport: (ids) => { covered.push(ids); },
+      moduleEnabled: () => true,
+      assertWritable: () => undefined,
+      notify: (topic, payload) => { seen.push({ topic, payload, works: count(ctx, "SELECT COUNT(*) AS n FROM works") }); },
+    };
+  }
+
+  it("tells the windows the finished works at most once a second while it goes on, and starts their covers then", async () => {
+    const ctx = await startApp();
+    const dir = scratch("incremental");
+    try {
+      for (let work = 1; work <= 5; work += 1) for (let part = 1; part <= 3; part += 1) write(dir, `作品${work}/第${part}章.txt`, chapter(`作品${work}之${part}`));
+      ctx.app.store.sqlite.prepare("INSERT INTO library_paths(id, path, media_kind, auto_scan, created_at) VALUES ('lpi', ?, 'novel', 0, ?)").run(dir, new Date().toISOString());
+      const clock = { now: 1_000_000 };
+      const seen: Array<{ topic: string; payload: Record<string, unknown>; works: number }> = [];
+      const covered: string[][] = [];
+      const service = new ScanService({ store: ctx.app.store, host: slowHost(ctx, clock, seen, covered), now: () => clock.now, progressMs: 1000 });
+      service.start({ pathId: "lpi", trigger: "manual" });
+      await service.whenIdle();
+      const progress = seen.filter((item) => item.topic === "work.updated" && item.payload.reason === "scan-progress");
+      // 1.2 s a work: each work is told at the next folder, one at a time, and the last at the end.
+      expect(progress.map((item) => (item.payload.workIds as string[]).length)).toEqual([1, 1, 1, 1, 1]);
+      expect(new Set(progress.flatMap((item) => item.payload.workIds as string[])).size).toBe(5);
+      // The first was told while the scan went on (only part of the works existed then).
+      expect(progress[0]!.works).toBeLessThan(5);
+      expect(seen.findIndex((item) => item.topic === "scan.finished")).toBeGreaterThan(seen.indexOf(progress[0]!));
+      // The covers start a stretch at a time, every resource once.
+      expect(covered.length).toBe(5);
+      expect(covered.flat()).toHaveLength(15);
+      service.dispose();
+    } finally { ctx.app.close(); }
+  });
+
+  it("tells a finished work within the second even while the next folder is still being read", async () => {
+    const ctx = await startApp();
+    const dir = scratch("incremental-long");
+    try {
+      // A short work, then a long one: 0.4 s for the first, 3.2 s for the second.
+      write(dir, "作品1/第1章.txt", chapter("作品1之1"));
+      for (let part = 1; part <= 8; part += 1) write(dir, `作品2/第${part}章.txt`, chapter(`作品2之${part}`));
+      ctx.app.store.sqlite.prepare("INSERT INTO library_paths(id, path, media_kind, auto_scan, created_at) VALUES ('lpl', ?, 'novel', 0, ?)").run(dir, new Date().toISOString());
+      const clock = { now: 1_000_000 };
+      const seen: Array<{ topic: string; payload: Record<string, unknown>; works: number }> = [];
+      const told: number[] = [];
+      const host = slowHost(ctx, clock, seen, []);
+      const notify = host.notify;
+      host.notify = (topic, payload) => { if (payload.reason === "scan-progress") told.push(clock.now - 1_000_000); notify(topic, payload); };
+      const service = new ScanService({ store: ctx.app.store, host, now: () => clock.now, progressMs: 1000 });
+      service.start({ pathId: "lpl", trigger: "manual" });
+      await service.whenIdle();
+      const progress = seen.filter((item) => item.topic === "work.updated" && item.payload.reason === "scan-progress");
+      expect(progress.map((item) => (item.payload.workIds as string[]).length)).toEqual([1, 1]);
+      // The first work is told about a second after the scan started, long before the second work is done (3.6 s).
+      expect(told[0]).toBeLessThanOrEqual(1600);
+      service.dispose();
+    } finally { ctx.app.close(); }
+  });
+
+  it("keeps and tells the works imported before a scan was cancelled", async () => {
+    const ctx = await startApp();
+    const dir = scratch("incremental-cancel");
+    try {
+      for (let work = 1; work <= 4; work += 1) for (let part = 1; part <= 2; part += 1) write(dir, `作品${work}/第${part}章.txt`, chapter(`作品${work}之${part}`));
+      ctx.app.store.sqlite.prepare("INSERT INTO library_paths(id, path, media_kind, auto_scan, created_at) VALUES ('lpc', ?, 'novel', 0, ?)").run(dir, new Date().toISOString());
+      const clock = { now: 1_000_000 };
+      const seen: Array<{ topic: string; payload: Record<string, unknown>; works: number }> = [];
+      const covered: string[][] = [];
+      let service: ScanService | null = null;
+      service = new ScanService({ store: ctx.app.store, host: slowHost(ctx, clock, seen, covered, { files: 5, cancel: () => service!.cancel({ jobId: service!.status().running!.id }) }), now: () => clock.now, progressMs: 1000 });
+      service.start({ pathId: "lpc", trigger: "manual" });
+      await service.whenIdle();
+      expect(service.status().recent[0]!.status).toBe("cancelled");
+      const kept = count(ctx, "SELECT COUNT(*) AS n FROM works");
+      expect(kept).toBeGreaterThanOrEqual(2);
+      const told = new Set(seen.filter((item) => item.payload.reason === "scan-progress").flatMap((item) => item.payload.workIds as string[]));
+      expect(told.size).toBe(kept);
+      expect(covered.flat().length).toBe(count(ctx, "SELECT COUNT(*) AS n FROM resources"));
+      service.dispose();
+    } finally { ctx.app.close(); }
   });
 });

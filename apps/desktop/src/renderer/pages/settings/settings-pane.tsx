@@ -50,6 +50,8 @@ export function SettingsPane(props: { page: SettingsPageId; onPage: (page: Setti
         video={prefs.video}
         keys={s.keyBindings}
         onGoto={props.onPage}
+        refreshKey={s.shelfKey}
+        onViewRecords={(resourceId, mediaKind) => void s.open.resource({ resourceId, mediaKind, workId: null })}
         onModulesChanged={() => s.refresh()}
         onChanged={s.bump}
         onError={(message) => s.setError(message)}

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MetadataProviderIdSchema } from "./media.ts";
 import { QuickTaskDraftSchema, QUICK_PAGES } from "./quick-tasks.ts";
-import { FIND_PER_TYPE_MAX, FIND_QUERY_MAX, OBJECT_KINDS, RailViewSchema, SIDEBAR_GROUP_SHOWN, SIDEBAR_PAGE_MAX, SidebarItemTypeSchema, itemTypeOfView } from "./sidebar.ts";
+import { FIND_PER_TYPE_MAX, FIND_QUERY_MAX, OBJECT_KINDS, RailViewSchema, SIDEBAR_PAGE_MAX, SidebarItemTypeSchema, itemTypeOfView } from "./sidebar.ts";
 import { ContextIdSchema, WorkspaceStateSchema } from "./workspace-state.ts";
 
 const id = z.string().min(1).max(256);
@@ -31,10 +31,11 @@ export const WorkspaceCommandInputs = {
    */
   "workspace.sidebar": z.object({
     view: RailViewSchema,
-    perGroup: z.number().int().min(1).max(20).default(SIDEBAR_GROUP_SHOWN),
+    /** How many things each open group lists; without it the view's own number (the home 8, a medium 6, the rest 5). */
+    perGroup: z.number().int().min(1).max(20).optional(),
     open: z.array(ContextIdSchema).max(600).optional(),
   }).strict(),
-  /** More of one list of the sidebar: the things of one kind in one context, a page at a time. `type` is needed on the home, where a context holds several kinds. */
+  /** More of one list of the sidebar: the things of one kind in one context, a page at a time. On the home, without `type` it is the mixed list of every kind (A-103). */
   "workspace.items": z.object({
     view: RailViewSchema,
     contextId: ContextIdSchema,
@@ -44,8 +45,8 @@ export const WorkspaceCommandInputs = {
   }).strict().refine((value) => {
     const own = itemTypeOfView(value.view);
     if (own) return value.type === undefined || value.type === own;
-    return value.view === "downloads" ? value.type === undefined : value.type !== undefined;
-  }, { message: "the home needs the kind of the list; the other views have their own" }),
+    return value.view === "downloads" ? value.type === undefined : true;
+  }, { message: "a view of one kind lists only that kind; the downloads have no kinds" }),
   /** The whiteboards, maps, drafts or cuts of every project, newest first, for the management tab of each. `q` narrows by name. */
   "workspace.objects": z.object({
     kind: z.enum(OBJECT_KINDS),

@@ -74,7 +74,17 @@
       "contextRestoreP95Ms": 2000,
       "quadLateFramePct": 2,
       "quadMemoryIncreaseMiB": 600,
-      "mountedReadersOverColumns": 2
+      "mountedReadersOverColumns": 2,
+      "viewSwitchP95Ms": 150,
+      "viewRestoreP95Ms": 2000,
+      "coversShownP95Ms": 600,
+      "dragLateFramePct": 2,
+      "novelTurnP95Ms": 50,
+      "novelRefontP95Ms": 400,
+      "novelOpenP95Ms": 500,
+      "scaleHomeListP95Ms": 100,
+      "scaleMediaGridP95Ms": 120,
+      "scaleScanLateFramePct": 2
     },
     "scale": {
       "metadataCount": 10000,
@@ -120,6 +130,18 @@
       "scaleDuringParseSaveP95Ms": [
         "duringParseSaveMs",
         1
+      ],
+      "scaleHomeListP95Ms": [
+        "homeListMs",
+        10
+      ],
+      "scaleMediaGridP95Ms": [
+        "mediaGridMs",
+        10
+      ],
+      "scaleScanLateFramePct": [
+        "scanLateFramePct",
+        3
       ]
     },
     "measurements": [
@@ -336,6 +358,69 @@
           "readers": 10
         },
         "requirement": "AT-118：打开 10 个阅读器标签并轮流切换两遍后，内容还在页面里的阅读器数减去可见的栏数 ≤ 2"
+      },
+      "viewSwitch": {
+        "metric": "viewSwitchP95Ms",
+        "stat": "p95",
+        "minSamples": 60,
+        "scale": {
+          "views": 2
+        },
+        "requirement": "AT-130：点图标切换视图，到侧栏与主区都画好（目标标签已挂载），p95 ≤ 150 ms（实际窗口，真实鼠标按下，页面内计时）"
+      },
+      "viewRestore": {
+        "metric": "viewRestoreP95Ms",
+        "stat": "p95",
+        "minSamples": 10,
+        "scale": {
+          "views": 2
+        },
+        "requirement": "AT-130：页面重新加载后第一次切到一个视图，到主区画好，p95 ≤ 2 s"
+      },
+      "coversShown": {
+        "metric": "coversShownP95Ms",
+        "stat": "p95",
+        "minSamples": 10,
+        "scale": {
+          "cells": 2
+        },
+        "requirement": "AT-126：媒介视图第一屏的封面全部显示，p95 ≤ 600 ms（页面重新加载后）"
+      },
+      "dragLateFrame": {
+        "metric": "dragLateFramePct",
+        "stat": "max",
+        "minSamples": 5,
+        "scale": {
+          "runs": 5
+        },
+        "requirement": "AT-125、AT-132：拖动分隔条与图标时，到达页面的时间晚于空闲时常规帧间隔 1.5 倍的帧占比，五次取最大，≤ 2 %"
+      },
+      "novelTurn": {
+        "metric": "novelTurnP95Ms",
+        "stat": "p95",
+        "minSamples": 60,
+        "scale": {
+          "characters": 300000
+        },
+        "requirement": "AT-139：小说翻一页到新页画好，p95 ≤ 50 ms"
+      },
+      "novelRefont": {
+        "metric": "novelRefontP95Ms",
+        "stat": "p95",
+        "minSamples": 20,
+        "scale": {
+          "characters": 300000
+        },
+        "requirement": "AT-139：小说改字号后重新分页并回到原位，30 万字的一章，p95 ≤ 400 ms"
+      },
+      "novelOpen": {
+        "metric": "novelOpenP95Ms",
+        "stat": "p95",
+        "minSamples": 20,
+        "scale": {
+          "characters": 300000
+        },
+        "requirement": "AT-139：小说打开一章到第一页画好，30 万字的一章，p95 ≤ 500 ms"
       }
     },
     "canvas": {
@@ -386,6 +471,7 @@
       "voice",
       "window-walk",
       "workspace-restart",
+      "workspace-closed",
       "workspace-migrated",
       "creative",
       "trace",
@@ -845,7 +931,7 @@
         "^comic reader does not take over keys while a dialog is open",
         "^comic reader jumps with the slider, and with a page number typed into the position itself; a typed key does not turn the page",
         "^video player: playing and seeking does not take keys typed into a field",
-        "^novel reader changes pages with the arrow keys in a double page, and leaves the keys to a text field",
+        "^novel reader turns pages with the keys, past the loaded text into the next window, and leaves the keys to a text field \\(AT-139\\)$",
         "^novel reader offers single and double pages, the five backgrounds and a size step",
         "^recording controls the toggle key starts and stops, and the hold key records only while it is down",
         "^settings for media, recording and metadata picks a key by pressing it",
@@ -1759,7 +1845,8 @@
         "^the general conversation of 最近 \\(AT-75\\) ",
         "^the conversation bar at the top of the dock \\(AT-75\\) ",
         "^App restore shows the current conversation in the dock, starts a new one from its top into a tab, and continues one from the history \\(AT-75\\)$",
-        "^AT-111 AT-114 AT-119 the home view of the sidebar starts a conversation or a project from its top, lists the projects before the recent things, and names the one on screen$"
+        "^AT-111 AT-114 AT-119 the home view of the sidebar starts a project from the projects' title, lists the projects before the recent things, and names the one on screen \\(A-110\\)$",
+        "^AT-111 AT-114 AT-119 a view of one kind starts a conversation from the conversations' view, in a tab of the context on screen \\(AT-75, A-110\\)$"
       ]
     },
     {
@@ -1828,8 +1915,8 @@
         "^video player controls \\(AT-83\\) ",
         "^AT-83 arrow keys: ",
         "has no bar at the top: the book name and the way back are the title bar's, and the chapter is in the bottom bar \\(AT-83\\)$",
-        "turns the pages of a double page with buttons that are about pages, not parts; a single page has none \\(AT-83\\)$",
-        "with no previous or next part button, and keeps continue-reading with the text \\(AT-83\\)$",
+        "has previous and next page buttons in the bottom bar when paged, and none when scrolling \\(AT-83, AT-139\\)$",
+        "with no previous or next part button and no continue-reading \\(AT-83, AT-139\\)$",
         "^the title bar over a book names the work, .* \\(AT-83\\)$"
       ]
     },
@@ -2290,7 +2377,7 @@
         "^AT-82 AT-111 AT-119 window frame: the icon rail ",
         "^AT-111 AT-114 AT-119 the home view of the sidebar ",
         "^AT-111 AT-114 AT-119 a view of one kind ",
-        "^the home: every project and what it holds, by kind ",
+        "^the home: every project and what it holds, in one list ",
         "^a view of one kind ",
         "^the lists follow the data ",
         "^the objects of every project in a list of their own ",
@@ -2332,6 +2419,132 @@
         "^AT-88 AT-122 the workspace under the settings stays where it is ",
         "^tabs of the kinds that are gone ",
         "^the tabs of the kinds the workspace no longer has "
+      ]
+    },
+    {
+      "id": "AT-123-home-list",
+      "kind": "automated",
+      "tests": [
+        "AT-123 "
+      ]
+    },
+    {
+      "id": "AT-124-counts-recent",
+      "kind": "automated",
+      "tests": [
+        "AT-124 "
+      ]
+    },
+    {
+      "id": "AT-125-drag-collapse",
+      "kind": "automated",
+      "tests": [
+        "AT-125 "
+      ]
+    },
+    {
+      "id": "AT-126-media-covers",
+      "kind": "automated",
+      "tests": [
+        "AT-126 "
+      ]
+    },
+    {
+      "id": "AT-127-conversation-title",
+      "kind": "automated",
+      "tests": [
+        "AT-127 "
+      ]
+    },
+    {
+      "id": "AT-128-workspace-limits",
+      "kind": "automated",
+      "tests": [
+        "AT-128 "
+      ]
+    },
+    {
+      "id": "AT-129-empty-scope",
+      "kind": "automated",
+      "tests": [
+        "AT-129 "
+      ]
+    },
+    {
+      "id": "AT-130-view-main",
+      "kind": "automated",
+      "tests": [
+        "AT-130 "
+      ]
+    },
+    {
+      "id": "AT-131-hidden-layers",
+      "kind": "automated",
+      "tests": [
+        "AT-131 "
+      ]
+    },
+    {
+      "id": "AT-132-rail",
+      "kind": "automated",
+      "tests": [
+        "AT-132 "
+      ]
+    },
+    {
+      "id": "AT-133-danmaku-top",
+      "kind": "automated",
+      "tests": [
+        "AT-133 "
+      ]
+    },
+    {
+      "id": "AT-134-hold-hint",
+      "kind": "automated",
+      "tests": [
+        "AT-134 "
+      ]
+    },
+    {
+      "id": "AT-135-hold-recovers",
+      "kind": "automated",
+      "tests": [
+        "AT-135 "
+      ]
+    },
+    {
+      "id": "AT-136-square-main",
+      "kind": "automated",
+      "tests": [
+        "AT-136 "
+      ]
+    },
+    {
+      "id": "AT-137-in-locations",
+      "kind": "automated",
+      "tests": [
+        "AT-137 "
+      ]
+    },
+    {
+      "id": "AT-138-scan-incremental",
+      "kind": "automated",
+      "tests": [
+        "AT-138 "
+      ]
+    },
+    {
+      "id": "AT-139-novel-pages",
+      "kind": "automated",
+      "tests": [
+        "AT-139 "
+      ]
+    },
+    {
+      "id": "AT-140-side-panel",
+      "kind": "automated",
+      "tests": [
+        "AT-140 "
       ]
     }
   ],
@@ -2415,6 +2628,26 @@
     "search-popup",
     "settings-view",
     "legacy-tabs-dropped",
-    "agent-trace-timeline"
+    "agent-trace-timeline",
+    "view-main-linkage",
+    "sidebar-home-list",
+    "sidebar-counts",
+    "sidebar-drag-collapse",
+    "media-view-covers",
+    "rail-reorder",
+    "menu-hover",
+    "hidden-layers",
+    "conversation-auto-title",
+    "tab-reopen-place",
+    "quit-saves-layout",
+    "close-saves-layout",
+    "danmaku-window-top",
+    "hold-rate-hint-only",
+    "hold-rate-recovers",
+    "shell-corner",
+    "library-in-locations",
+    "scan-incremental",
+    "novel-paginate",
+    "novel-side-panel"
   ]
 }

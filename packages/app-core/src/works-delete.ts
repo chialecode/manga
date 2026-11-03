@@ -1,7 +1,8 @@
 import { MangaError, type CommandEnvelope } from "@manga/contracts";
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { displayTitle } from "./works-service.ts";
-import { groupKeySql, outsideSql } from "./works-versions.ts";
+import { inLibrarySql, outsideSql } from "./library-locations.ts";
+import { groupKeySql } from "./works-versions.ts";
 
 /**
  * Deleting an entry (LIB-02, A-87). An entry on the shelf is a work, or the works that are versions of one title (A-68). Deleting it removes the
@@ -128,9 +129,12 @@ export type UnassignedItem = {
   outside: boolean;
 };
 
-/** The resources that are in no work, newest first: the ones whose entry was deleted, and the ones that were taken out of a work. */
+/**
+ * The resources that are in no work, newest first: the ones whose entry was deleted, and the ones that were taken out of a work. Only the ones in a
+ * library path (A-113): the others cannot be opened, and are in "设置 › 资源库".
+ */
 export function listUnassigned(store: DrizzleStore, input: { kind?: string; limit?: number; query?: string } = {}): { items: UnassignedItem[]; total: number } {
-  const where = ["r.work_id IS NULL"];
+  const where = ["r.work_id IS NULL", inLibrarySql("r")];
   const params: unknown[] = [];
   if (input.kind) { where.push("r.kind = ?"); params.push(input.kind); }
   if (input.query) { where.push("r.title LIKE ? ESCAPE '\\'"); params.push(`%${input.query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`); }

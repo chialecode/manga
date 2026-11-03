@@ -1,32 +1,32 @@
 import type { BrowserWindow } from "electron";
-import { pressKey, setField, sleep, waitForTestId, waitUntil } from "./driver.ts";
-import { js } from "./common.ts";
+import { clickTestId, pressKey, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { js, leaveSettings, openSettingsPage } from "./common.ts";
 import { SMOKE_DANMAKU_CREDENTIALS } from "../danmaku-credentials.ts";
 import { hitTestOpenPopup, realClick } from "./player-menus-walk.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
 /**
- * AT-94 in the real window. The comments of an episode are laid over the picture and not over the bars around it, they are really drawn on the canvas
- * while the video plays, the layer follows the picture when the window changes size and in screen full screen, the panel opens on the top layer with every
+ * AT-94 and AT-133 in the real window. The comments of an episode are laid from the top of the play area across its whole width (A-111), they are really drawn on
+ * the canvas while the video plays, the layer follows the play area when the window changes size and in screen full screen, the panel opens on the top layer with every
  * control reachable, and a work that is not linked asks before the file's details leave: the walk answers no, so the network is reached only by the search the
  * person types. The network here is a fake service on the loopback address that the harness started; the credentials of a release are never used, and
  * nothing the page can see holds the ones that are.
  */
 
-export const DANMAKU_OBSERVATIONS = ["danmaku-layer", "danmaku-privacy"] as const;
+export const DANMAKU_OBSERVATIONS = ["danmaku-layer", "danmaku-window-top", "danmaku-privacy"] as const;
 
 type Box = { x: number; y: number; w: number; h: number };
-type Alignment = { layer: Box | null; picture: Box | null; canvas: { w: number; h: number } | null; count: number; visible: boolean };
+type Alignment = { layer: Box | null; picture: Box | null; area: Box | null; canvas: { w: number; h: number } | null; count: number; visible: boolean };
 
-/** Where the layer is, and where the picture is: the part of the stage the video covers once it is fitted inside its box. */
+/** Where the layer is, where the play area is (the layer's parent), and where the picture is: the part of the play area the video covers once it is fitted inside it. */
 const alignmentOf = (view: BrowserWindow) => js<Alignment>(view, `(() => {
   const layer = document.querySelector('[data-testid="danmaku-layer"]');
   const video = document.querySelector('[data-testid="video-element"]');
-  const stage = document.querySelector('[data-testid="video-stage"]');
-  if (!layer || !video || !stage) return { layer: null, picture: null, canvas: null, count: 0, visible: false };
+  const area = layer?.parentElement;
+  if (!layer || !video || !area) return { layer: null, picture: null, area: null, canvas: null, count: 0, visible: false };
   const l = layer.getBoundingClientRect();
   const v = video.getBoundingClientRect();
-  const s = stage.getBoundingClientRect();
+  const a = area.getBoundingClientRect();
   const scale = video.videoWidth > 0 && video.videoHeight > 0 ? Math.min(v.width / video.videoWidth, v.height / video.videoHeight) : 1;
   const w = video.videoWidth > 0 ? Math.round(video.videoWidth * scale) : v.width;
   const h = video.videoHeight > 0 ? Math.round(video.videoHeight * scale) : v.height;
@@ -35,6 +35,7 @@ const alignmentOf = (view: BrowserWindow) => js<Alignment>(view, `(() => {
   return {
     layer: { x: l.x, y: l.y, w: l.width, h: l.height },
     picture,
+    area: { x: a.x + area.clientLeft, y: a.y + area.clientTop, w: area.clientWidth, h: area.clientHeight },
     canvas: canvas ? { w: canvas.width, h: canvas.height } : null,
     count: Number(layer.getAttribute("data-count") ?? 0),
     visible: layer.getAttribute("data-visible") === "true",
@@ -43,14 +44,15 @@ const alignmentOf = (view: BrowserWindow) => js<Alignment>(view, `(() => {
 
 const within = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance;
 
-/** The layer covers the top part of the picture and nothing outside it. */
+/** The layer starts at the top of the play area and is as wide as it (A-111), its height is the play area's times the setting, and it reaches across the picture. */
 function misplaced(name: string, got: Alignment, area: number): string[] {
-  if (!got.layer || !got.picture) return [`${name}: the layer or the picture is not there`];
+  if (!got.layer || !got.picture || !got.area) return [`${name}: the layer, the play area or the picture is not there`];
   const out: string[] = [];
-  const { layer, picture } = got;
-  if (!within(layer.x, picture.x, 2) || !within(layer.y, picture.y, 2)) out.push(`${name}: the layer starts at ${Math.round(layer.x)},${Math.round(layer.y)} and the picture at ${Math.round(picture.x)},${Math.round(picture.y)}`);
-  if (!within(layer.w, picture.w, 2)) out.push(`${name}: the layer is ${Math.round(layer.w)} wide and the picture ${Math.round(picture.w)}`);
-  if (!within(layer.h, picture.h * area, 3)) out.push(`${name}: the layer is ${Math.round(layer.h)} high, not ${area} of the picture's ${Math.round(picture.h)}`);
+  const { layer, picture, area: play } = got;
+  if (!within(layer.x, play.x, 2) || !within(layer.y, play.y, 2)) out.push(`${name}: the layer starts at ${Math.round(layer.x)},${Math.round(layer.y)} and the play area at ${Math.round(play.x)},${Math.round(play.y)}`);
+  if (!within(layer.w, play.w, 2)) out.push(`${name}: the layer is ${Math.round(layer.w)} wide and the play area ${Math.round(play.w)}`);
+  if (!within(layer.h, play.h * area, 3)) out.push(`${name}: the layer is ${Math.round(layer.h)} high, not ${area} of the play area's ${Math.round(play.h)}`);
+  if (layer.x > picture.x + 1 || layer.x + layer.w < picture.x + picture.w - 1) out.push(`${name}: the layer (${Math.round(layer.x)}–${Math.round(layer.x + layer.w)}) does not reach across the picture (${Math.round(picture.x)}–${Math.round(picture.x + picture.w)})`);
   return out;
 }
 
@@ -68,6 +70,30 @@ const inkOf = (view: BrowserWindow) => js<number>(view, `(() => {
 
 /** The comments of the walk: the fake service gives this episode (the second) seven; the page shows five of them after merging the repeat and leaving the bottom one out. */
 const EXPECTED_SHOWN = 5;
+
+/** The player's button is pressed; the picture has the file's size, and the comments are in it exactly when the layer lies over the picture (A-111). */
+async function checkShot(view: BrowserWindow, detail: Record<string, unknown>, name: string, commentsExpected: boolean): Promise<string[]> {
+  type Shot = { id: string; width: number; height: number; meta?: { composited?: string } };
+  // The command lists at most 200 at a time, the newest first.
+  const list = () => js<Shot[]>(view, `window.manga.command({ commandId: "screenshot.list", idempotencyKey: crypto.randomUUID(), input: { limit: 200 } }).then((result) => { if (result.status !== "ok") throw new Error(result.error?.message ?? "screenshot.list failed"); return result.value.items; })`);
+  const native = await js<{ w: number; h: number }>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return { w: v.videoWidth, h: v.videoHeight }; })()`);
+  const known = new Set((await list()).map((item) => item.id));
+  // Pressed the way the other screenshot walks press it; the real pointer may rest on the comments panel of a narrow window.
+  if (!await clickTestId(view, "video-screenshot", 4000)) return [`${name}: the button could not be pressed`];
+  let taken: Shot | undefined;
+  for (let waited = 0; !taken && waited < 15_000; waited += 250) {
+    taken = (await list()).find((item) => !known.has(item.id));
+    if (!taken) await sleep(250);
+  }
+  if (await clickTestId(view, "toast-notice-close", 1500)) await sleep(200);
+  detail[name] = taken ? { width: taken.width, height: taken.height, composited: taken.meta?.composited ?? null, native, commentsExpected } : null;
+  if (!taken) return [`${name}: the screenshot was not saved`];
+  const problems: string[] = [];
+  if (taken.width !== native.w || taken.height !== native.h) problems.push(`${name}: the screenshot is ${taken.width}x${taken.height}, not the picture's ${native.w}x${native.h}: something outside the picture is in it`);
+  const drawn = taken.meta?.composited === "danmaku" || taken.meta?.composited === "both";
+  if (drawn !== commentsExpected) problems.push(`${name}: the screenshot says the comments were ${taken.meta?.composited ?? "not"} drawn on it, and they ${commentsExpected ? "are" : "are not"} over the picture`);
+  return problems;
+}
 
 export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: (name: string) => Promise<void>): Promise<void> {
   const problems: string[] = [];
@@ -140,7 +166,7 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   await pressKey(view, "Escape");
   await sleep(250);
 
-  // 3. The comments are on the picture.
+  // 3. The comments are on the top half of the play area.
   const loaded = await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"][data-visible="true"]')`, 6000);
   if (!loaded) problems.push("the layer is not showing");
   const settled = await alignmentOf(view);
@@ -158,7 +184,7 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   if (shot) await shot("danmaku-playing");
   await js(view, `document.querySelector('[data-testid="video-element"]').pause(); true`);
 
-  // 5. The layer follows the picture when the window changes size...
+  // 5. The layer follows the play area when the window changes size...
   const [width, height] = view.getContentSize();
   try {
     view.setContentSize(980, 640);
@@ -173,7 +199,7 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   const restored = await alignmentOf(view);
   problems.push(...misplaced("back in the first size", restored, 0.5));
 
-  // 6. ... and in screen full screen, where the picture grows to the screen.
+  // 6. ... and in screen full screen, where the play area is the screen.
   const wasFull = view.isFullScreen();
   if (await realClick(view, "video-fullscreen") && await waitUntil(view, `document.fullscreenElement !== null`, 4000)) {
     try {
@@ -191,13 +217,17 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
     }
   } else problems.push("screen full screen did not start");
 
-  // 7. D turns it off, and the layer goes.
+  // 7. Above the picture: a tall window, a wide one, window full screen and screen full screen, and a screenshot (its own observation).
+  if (loaded) await walkDanmakuWindowTop(view, observe, shot);
+  else observe("danmaku-window-top", false, { problems: ["the layer never showed"] });
+
+  // 8. D turns it off, and the layer goes.
   await pressKey(view, "D");
   const gone = await waitUntil(view, `!document.querySelector('[data-testid="danmaku-layer"][data-visible="true"]')`, 4000);
   if (!gone) problems.push("D did not switch the danmaku off");
   observe("danmaku-layer", problems.length === 0, { ...detail, problems });
 
-  // 8. Nothing the page can see holds the application credentials: not the document, not what it stores.
+  // 9. Nothing the page can see holds the application credentials: not the document, not what it stores.
   const privacy: string[] = [];
   const seen = await js<{ document: string; stored: string }>(view, `(() => {
     let stored = "";
@@ -211,4 +241,133 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   const bridge = await js<string[]>(view, `Object.keys(window.manga ?? {})`);
   if (bridge.some((name) => /dandan|danmakuCredential|appSecret/i.test(name))) privacy.push("the preload offers a way to read the credentials");
   observe("danmaku-privacy", privacy.length === 0, { problems: privacy, bridge: bridge.length });
+}
+
+/** The pixels of the comments' canvas, between two lines given in CSS pixels from the layer's top, that are not empty. */
+const inkBetween = (view: BrowserWindow, fromCss: number, toCss: number) => js<number>(view, `(() => {
+  const layer = document.querySelector('[data-testid="danmaku-layer"]');
+  const canvas = layer?.querySelector("canvas");
+  if (!canvas || canvas.width === 0 || canvas.height === 0) return -1;
+  const scale = canvas.height / Math.max(1, layer.getBoundingClientRect().height);
+  const top = Math.max(0, Math.floor(${fromCss} * scale));
+  const bottom = Math.min(canvas.height, Math.ceil(${toCss} * scale));
+  if (bottom <= top) return 0;
+  const data = canvas.getContext("2d").getImageData(0, top, canvas.width, bottom - top).data;
+  let ink = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] > 0) ink += 1;
+  return ink;
+})()`);
+
+/** Bright pixels in a part of the window as the screen shows it (the comments are white letters; the bars around the picture are black). */
+async function brightOnScreen(view: BrowserWindow, box: Box): Promise<number> {
+  if (box.w < 2 || box.h < 2) return 0;
+  const image = await view.webContents.capturePage({ x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.w), height: Math.round(box.h) }, { stayAwake: true });
+  const bitmap = image.toBitmap();
+  let bright = 0;
+  for (let i = 0; i + 3 < bitmap.length; i += 4) if (bitmap[i]! > 200 && bitmap[i + 1]! > 200 && bitmap[i + 2]! > 200) bright += 1;
+  return bright;
+}
+
+/**
+ * The comments above the picture (A-111, 计划 4.12): with a window taller than the picture and the area at a quarter, the layer is the top of the play area and
+ * its first rows are in the black bar above the picture, which the canvas, a hit test and the screen's own pixels all show; with a window wider than the picture the
+ * layer spans the bars on both sides; window full screen and screen full screen are the same; and a screenshot is the picture alone, with the comments on it.
+ */
+async function walkDanmakuWindowTop(view: BrowserWindow, observe: Observe, shot?: (name: string) => Promise<void>): Promise<void> {
+  const problems: string[] = [];
+  const detail: Record<string, unknown> = {};
+  const [width, height] = view.getContentSize();
+  const play = (from: number) => js(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); v.muted = true; v.currentTime = ${from}; return v.play().then(() => true, () => false); })()`);
+  const pause = () => js(view, `document.querySelector('[data-testid="video-element"]').pause(); true`);
+  // The comments are in a screenshot only when the person asks for that, so the setting goes with the area here and is put back with it.
+  const area = async (value: string, shotWith: boolean) => {
+    const set = await openSettingsPage(view, "danmaku") && await setSelect(view, "danmaku-area", value)
+      && await js<boolean>(view, `(() => { const el = document.getElementById("danmaku-shot-with"); if (!el) return false; const on = el.checked ?? el.getAttribute("aria-checked") === "true"; if (on !== ${shotWith}) el.click(); return true; })()`);
+    await leaveSettings(view);
+    await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"][data-visible="true"]')`, 4000);
+    await sleep(400);
+    return set;
+  };
+  try {
+    if (!(await area("0.25", true))) problems.push("the area could not be set to a quarter in the settings");
+
+    // A window taller than the picture: black bars above and below it.
+    view.setContentSize(720, 900);
+    await sleep(900);
+    const tall = await alignmentOf(view);
+    detail.tall = tall;
+    problems.push(...misplaced("in a tall window", tall, 0.25));
+    const bar = tall.picture && tall.area ? tall.picture.y - tall.area.y : 0;
+    if (bar < 40) problems.push(`the tall window leaves ${Math.round(bar)} px above the picture, too little to look at`);
+    else {
+      await play(1);
+      await sleep(2800);
+      await pause();
+      await sleep(200);
+      const above = await inkBetween(view, 0, Math.min(bar, tall.layer?.h ?? 0));
+      // A pointer at a point of the bar above the picture, inside the layer, reaches the play area: nothing of the page is drawn over the comments there.
+      const point = { x: Math.round((tall.area!.x + tall.area!.w / 2)), y: Math.round(tall.area!.y + Math.min(bar, tall.layer!.h) / 2) };
+      const reach = await js<boolean>(view, `(() => {
+        const hit = document.elementFromPoint(${point.x}, ${point.y});
+        const layer = document.querySelector('[data-testid="danmaku-layer"]');
+        const area = layer?.parentElement;
+        const l = layer?.getBoundingClientRect();
+        return Boolean(hit && area && area.contains(hit) && l && ${point.y} >= l.top && ${point.y} <= l.bottom);
+      })()`);
+      const screen = await brightOnScreen(view, { x: tall.area!.x, y: tall.area!.y, w: tall.area!.w, h: bar });
+      detail.aboveThePicture = { bar: Math.round(bar), canvasInk: above, screenBright: screen, reach };
+      if (above <= 40) problems.push(`no comment was drawn on the canvas above the picture (${above} pixels)`);
+      if (!reach) problems.push("something of the page covers the bar above the picture where the comments are");
+      if (screen <= 20) problems.push(`the screen shows no comment above the picture (${screen} bright pixels)`);
+      if (shot) await shot("danmaku-above-picture");
+
+      // A screenshot here: the picture alone, at the file's size. The layer ends above the picture when a quarter of a tall window is over the bar, and the comments in the bar stay out of it.
+      const overlaps = tall.layer!.y + tall.layer!.h > tall.picture!.y + 1;
+      problems.push(...await checkShot(view, detail, "screenshot", overlaps));
+    }
+
+    // A window wider than the picture: the layer spans the bars on both sides.
+    view.setContentSize(1500, 520);
+    await sleep(900);
+    const wide = await alignmentOf(view);
+    detail.wide = wide;
+    problems.push(...misplaced("in a wide window", wide, 0.25));
+    // A screenshot here: the layer lies over the top of the picture, so the comments on it are in the picture.
+    problems.push(...await checkShot(view, detail, "screenshotOver", true));
+    if (wide.layer && wide.picture && wide.layer.w < wide.picture.w + 40) problems.push(`in a wide window the layer is ${Math.round(wide.layer.w)} wide, not wider than the picture's ${Math.round(wide.picture.w)}`);
+    view.setContentSize(width!, height!);
+    await sleep(700);
+
+    // Window full screen and screen full screen: the play area is the window, then the screen.
+    if (await realClick(view, "video-window-fullscreen") && await waitUntil(view, `document.querySelector('[data-testid="video-reader"]')?.hasAttribute("data-window-full")`, 4000)) {
+      await sleep(700);
+      const windowFull = await alignmentOf(view);
+      detail.windowFull = windowFull;
+      problems.push(...misplaced("in window full screen", windowFull, 0.25));
+      await realClick(view, "video-window-fullscreen");
+      await waitUntil(view, `!document.querySelector('[data-testid="video-reader"]')?.hasAttribute("data-window-full")`, 4000);
+      await sleep(400);
+    } else problems.push("window full screen did not start");
+    const wasFull = view.isFullScreen();
+    if (await realClick(view, "video-fullscreen") && await waitUntil(view, `document.fullscreenElement !== null`, 4000)) {
+      try {
+        await sleep(900);
+        const screenFull = await alignmentOf(view);
+        detail.screenFull = screenFull;
+        problems.push(...misplaced("in screen full screen", screenFull, 0.25));
+      } finally {
+        view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+        view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+        await waitUntil(view, `document.fullscreenElement === null`, 3000);
+        if (view.isFullScreen() !== wasFull) { await realClick(view, "video-fullscreen"); await waitUntil(view, `document.fullscreenElement === null`, 3000); }
+        await sleep(500);
+      }
+    } else problems.push("screen full screen did not start");
+  } finally {
+    view.setContentSize(width!, height!);
+    await sleep(500);
+    await pause();
+    await area("0.5", false);
+  }
+  observe("danmaku-window-top", problems.length === 0, { ...detail, problems });
 }

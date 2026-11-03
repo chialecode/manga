@@ -19,7 +19,9 @@
 .popup[data-placement="right"] { margin-left: 6px; position-area: right span-bottom; }
 .menu-list { min-width: 160px; max-width: calc(100vw - 24px); padding: 4px; display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 24px #30364722; }
 .menu-list button { text-align: left; padding: 7px 10px; border-radius: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.menu-list button:hover:not(:disabled), .menu-list button:focus-visible { background: var(--color-accent-soft); }
+/* Every menu (A-109): an item fills its row; pointed at or focused, the whole row is pink and its text and icon take the accent. */
+.menu-list button:hover:not(:disabled), .menu-list button:focus-visible { background: var(--color-accent-soft); color: var(--color-accent); }
+.menu-list button[data-danger="true"]:hover:not(:disabled), .menu-list button[data-danger="true"]:focus-visible { color: var(--color-danger); }
 .menu-list button[data-danger="true"] { color: var(--color-danger); }
 .menu-group { display: flex; flex-direction: column; }
 .menu-group + .menu-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--color-border); }
@@ -114,6 +116,8 @@
 .unassigned-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .unassigned-row { display: flex; align-items: center; gap: 8px; padding: 2px 6px 2px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
 .unassigned-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 0; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+.unassigned-group > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.unassigned-pick { flex: none; margin: 0; }
 .unassigned-title { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .delete-entry h3 { margin: 14px 0 4px; font-size: 13px; font-weight: 600; }
 .delete-entry ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }

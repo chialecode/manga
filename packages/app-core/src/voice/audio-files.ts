@@ -56,24 +56,6 @@ export function readPcmRange(file: string, startMs: number, endMs: number): Buff
   }
 }
 
-/** Walk a staged file in pieces, so a long recording is never held whole in memory. */
-export function* readPcmBlocks(file: string, blockSamples: number): Generator<Int16Array> {
-  const fd = fs.openSync(file, "r");
-  try {
-    const buffer = Buffer.alloc(blockSamples * 2);
-    for (;;) {
-      const read = fs.readSync(fd, buffer, 0, buffer.length, null);
-      if (read < 2) return;
-      const usable = read - (read % 2);
-      const copy = new Int16Array(usable / 2);
-      for (let i = 0; i < copy.length; i += 1) copy[i] = buffer.readInt16LE(i * 2);
-      yield copy;
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
 /** Long-term form of a recording: Opus in a WebM container, written beside its final name and renamed when complete. */
 export async function encodeRetained(ffmpeg: FfmpegService, pcmFile: string, outFile: string, signal?: AbortSignal): Promise<{ bytes: number }> {
   const part = `${outFile}.part`;

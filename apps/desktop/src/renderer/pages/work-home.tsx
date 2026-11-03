@@ -147,7 +147,9 @@ export function WorkHome(props: {
 
   const external = (url: string) => { void window.manga.openExternal?.(url); };
   const kind = (detail?.mediaKind === "comic" || detail?.mediaKind === "video" ? detail.mediaKind : "novel") as WorkMediaKind;
-  const target = detail ? (detail.lastResource && detail.resources.find((row) => row.id === detail.lastResource!.id && row.available) ? detail.lastResource.id : detail.resources.find((row) => row.available)?.id ?? null) : null;
+  // "继续" goes to a resource that can be opened: in a library path and there (A-113).
+  const openable = (row: { available?: boolean; outside?: boolean }) => row.available !== false && row.outside !== true;
+  const target = detail ? (detail.lastResource && detail.resources.find((row) => row.id === detail.lastResource!.id && openable(row)) ? detail.lastResource.id : detail.resources.find(openable)?.id ?? null) : null;
   const percent = detail ? percentOf(detail.progress) : 0;
   const verb = kind === "video" ? t("work.watch") : t("work.read");
   const readLabel = detail && percent > 0 && detail.lastResource
