@@ -12,7 +12,7 @@
       "id": "recording-shown",
       "ok": true,
       "detail": {
-        "feedbackMs": 17
+        "feedbackMs": 11
       }
     },
     {
@@ -41,18 +41,18 @@
       "ok": true,
       "detail": {
         "session": {
-          "id": "cap_e4e9cb2a-f328-4f3f-a3d6-67137f677578",
+          "id": "cap_47131754-720e-4c1b-a6de-610049f9e0a0",
           "mode": "toggle",
           "retention": "keep",
           "stage": "done",
           "audioState": "retained",
           "playable": true,
           "durationMs": 11200,
-          "createdAt": "2026-11-03T12:04:27.234Z",
-          "stoppedAt": "2026-11-03T12:04:38.472Z",
-          "workId": "work_e5ffbba4-190b-4ad1-b12c-f176873abc51",
+          "createdAt": "2026-11-03T14:39:52.737Z",
+          "stoppedAt": "2026-11-03T14:40:03.962Z",
+          "workId": "work_4d35a7d4-0a78-43d0-90cb-a5aef0a7e5c0",
           "deviceLabel": "Fake Default Audio Input",
-          "resourceId": "res_14d407cb-33e1-49e6-81c8-31bf894f1d30",
+          "resourceId": "res_91c9fb95-33a1-4430-bc73-4deedf282cae",
           "error": null,
           "segments": {
             "total": 1,
@@ -87,12 +87,12 @@
           {
             "startMs": 0,
             "endMs": 6700,
-            "resourceId": "res_14d407cb-33e1-49e6-81c8-31bf894f1d30",
-            "resourceRevisionId": "rev_dc47a5b5-c993-4917-88d9-be934c738359",
+            "resourceId": "res_91c9fb95-33a1-4430-bc73-4deedf282cae",
+            "resourceRevisionId": "rev_41919abc-ea72-4d42-b81a-85e2eb70a429",
             "locator": {
               "kind": "text",
               "partId": "body",
-              "representationId": "rev_dc47a5b5-c993-4917-88d9-be934c738359",
+              "representationId": "rev_41919abc-ea72-4d42-b81a-85e2eb70a429",
               "normalizationVersion": "text-nfc-lf-v1",
               "range": {
                 "start": 0,

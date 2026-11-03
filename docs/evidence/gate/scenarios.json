@@ -3,10 +3,10 @@
   "stage": "m5",
   "sourceFingerprint": "243bffd08f65270bacb9d18a3b4f6edf4d188764115c01f3a70e42d9b4c09d74",
   "lockFingerprint": "b1b59cfe9cec9a65ec3211a39ee6437721fe93fd26bc944e2a181702f21ad791",
-  "testScriptFingerprint": "75d6500f90f83830b918425deffb84e8bddd51c1ffd247cb4e18e7086dd38f78",
+  "testScriptFingerprint": "65a5d2109c884b29d93e736bf5a3c54bc94a718ac4e112685b86aea5be724dd0",
   "buildScriptFingerprint": "1c0ce66045a98760c8a86b5b1f9bdc66678733c47cf9d33ac0a859cf132ac689",
   "productAcceptance": "not-run",
-  "at": "2026-11-03T12:12:32.064Z",
+  "at": "2026-11-03T14:48:09.225Z",
   "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
@@ -41,7 +41,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 1113,
+        "scanMs": 1109,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -1178,7 +1178,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.661558,
+            "time": 0.604421,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1186,7 +1186,7 @@
         },
         "rewind": {
           "at": 23.7,
-          "after": 20.5,
+          "after": 20.1,
           "rewinding": true
         },
         "rightButton": {
@@ -1345,8 +1345,8 @@
           "keptOnBar": true
         },
         "tap": {
-          "from": 10.8,
-          "step": 5.23,
+          "from": 10.82,
+          "step": 5.22,
           "downIdle": true,
           "upIdle": false
         },
@@ -1366,7 +1366,7 @@
           "firstHold": true,
           "secondHold": true,
           "firstBack": true,
-          "moved": 1.45,
+          "moved": 1.44,
           "paused": true
         },
         "rateButton": true,
@@ -1506,8 +1506,8 @@
         },
         "aboveThePicture": {
           "bar": 192,
-          "canvasInk": 2560,
-          "screenBright": 5930,
+          "canvasInk": 2544,
+          "screenBright": 5936,
           "reach": true
         },
         "screenshot": {
@@ -1626,7 +1626,7 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 334,
+        "searchMs": 328,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
@@ -1653,7 +1653,7 @@
           "count": 5,
           "visible": true
         },
-        "ink": 2465,
+        "ink": 2466,
         "small": {
           "layer": {
             "x": 308.66668701171875,
@@ -1830,7 +1830,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 5,
+        "hideLateMs": 10,
         "problems": []
       }
     },
@@ -1867,7 +1867,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 0,
+        "hideLateMs": 11,
         "problems": []
       }
     },
@@ -1904,7 +1904,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 13,
+        "hideLateMs": 8,
         "problems": []
       }
     },
@@ -3051,8 +3051,8 @@
             "reader:合成长篇 第一章",
             "library:合成漫画"
           ],
-          "focusedBefore": "tmw0n8xglb52",
-          "focusedAfter": "tmw0n8xglb52",
+          "focusedBefore": "tmw0ssytjbcd",
+          "focusedAfter": "tmw0ssytjbcd",
           "context": ""
         },
         "stored": 4
@@ -3108,15 +3108,15 @@
         "problems": [],
         "other-column": {
           "before": 12,
-          "after": 13.754294,
+          "after": 13.769715,
           "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 13.811357,
-          "after": 15.629313,
+          "before": 13.820186,
+          "after": 15.636087,
           "column": 3,
           "paused": false,
           "loadstart": 0,
@@ -3173,6 +3173,39 @@
             "key": "2",
             "code": "Digit2",
             "ctrl": true,
+            "at": "tab-panel",
+            "within": "tmw0ssytjbcd",
+            "dialog": false,
+            "prevented": true,
+            "by": "event.preventDefault < l < e",
+            "focus": true
+          },
+          {
+            "key": " ",
+            "code": "Space",
+            "ctrl": false,
+            "at": "tab-panel",
+            "within": "tmw0ssytjbcd",
+            "dialog": false,
+            "prevented": true,
+            "by": "event.preventDefault < e",
+            "focus": true
+          },
+          {
+            "key": " ",
+            "code": "Space",
+            "ctrl": false,
+            "at": "tab-panel",
+            "within": "tmw0ssytjbcd",
+            "dialog": false,
+            "prevented": true,
+            "by": "event.preventDefault < e",
+            "focus": true
+          },
+          {
+            "key": "1",
+            "code": "Digit1",
+            "ctrl": true,
             "at": "DIV",
             "within": null,
             "dialog": false,
@@ -3185,18 +3218,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0n8xglb52",
-            "dialog": false,
-            "prevented": true,
-            "by": "event.preventDefault < e",
-            "focus": true
-          },
-          {
-            "key": " ",
-            "code": "Space",
-            "ctrl": false,
-            "at": "tab-panel",
-            "within": "tmw0n8xglb52",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3207,29 +3229,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmw0n8xglb52",
-            "dialog": false,
-            "prevented": true,
-            "by": "event.preventDefault < l < e",
-            "focus": true
-          },
-          {
-            "key": " ",
-            "code": "Space",
-            "ctrl": false,
-            "at": "tab-panel",
-            "within": "tmw0n8xbq9r5",
-            "dialog": false,
-            "prevented": true,
-            "by": "event.preventDefault < e",
-            "focus": true
-          },
-          {
-            "key": "1",
-            "code": "Digit1",
-            "ctrl": true,
-            "at": "tab-panel",
-            "within": "tmw0n8xbq9r5",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3240,7 +3240,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0n8xbq9r5",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3251,7 +3251,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0n8xbq9r5",
+            "within": "tmw0ssyol91k",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3261,20 +3261,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmw0n8xglb52",
-            "at": 8102,
+            "tab": "tmw0ssytjbcd",
+            "at": 8156,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmw0n8xglb52",
-            "at": 8783,
+            "tab": "tmw0ssytjbcd",
+            "at": 8844,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmw0n8xglb52",
-            "at": 10028,
+            "tab": "tmw0ssytjbcd",
+            "at": 10098,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3595,8 +3595,8 @@
         "views": {
           "home": {
             "groups": [
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded",
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:3",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:3",
               "recent:8"
             ],
             "entries": [
@@ -3610,8 +3610,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:1",
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:1",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:1",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3622,8 +3622,8 @@
           },
           "novel": {
             "rows": [
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded",
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
               "recent:2"
             ],
             "flat": 0,
@@ -3633,8 +3633,8 @@
           },
           "comic": {
             "rows": [
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded",
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:1",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3644,8 +3644,8 @@
           },
           "video": {
             "rows": [
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded",
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3659,8 +3659,8 @@
           },
           "note": {
             "rows": [
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded",
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:folded",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3675,8 +3675,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:2",
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:2",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3686,8 +3686,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:0",
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3697,8 +3697,8 @@
           },
           "draft": {
             "rows": [
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:0",
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3708,8 +3708,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_8f3ed767-c52c-4450-a1fd-808b51421506:0",
-              "prj_bca4eca4-c381-4dee-a602-7eadcfd46005:folded"
+              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3869,7 +3869,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 1.289486,
+            "time": 1.289246,
             "paused": true,
             "ready": 4
           }
@@ -3921,8 +3921,8 @@
           "boardOpen": true,
           "videoReady": true,
           "marked": [
-            "sidebar-item-resource-res_80de6fea-4a82-4f5d-a73e-699d77c3ab7e",
-            "sidebar-item-resource-res_80de6fea-4a82-4f5d-a73e-699d77c3ab7e"
+            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15",
+            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15"
           ]
         },
         "atBoard": {
@@ -3930,7 +3930,7 @@
           "focused": "whiteboard",
           "video": {
             "same": true,
-            "time": 1.477853,
+            "time": 1.482038,
             "paused": true,
             "loads": 0,
             "emptied": 0
@@ -3947,13 +3947,13 @@
           "main": "video",
           "video": {
             "same": true,
-            "time": 1.477853,
+            "time": 1.482038,
             "paused": true,
             "loads": 0,
             "emptied": 0
           },
           "dock": "合成动画",
-          "left": 1.477853,
+          "left": 1.482038,
           "episodeDock": "合成动画"
         },
         "home": {
@@ -3967,7 +3967,7 @@
           ]
         },
         "fromCard": {
-          "card": "wb-open-wbn_54519c6b-6e6a-4b64-b446-aeaba4194048",
+          "card": "wb-open-wbn_c5413f12-f8d0-4dd2-99bc-9f6b7fd5b298",
           "switched": true,
           "there": "video"
         },
@@ -4106,7 +4106,7 @@
         "save": {
           "before": "two",
           "answered": true,
-          "ms": 3,
+          "ms": 9,
           "after": "single"
         },
         "problems": []
@@ -4361,7 +4361,7 @@
         ],
         "guides": {
           "current": "recent:rgb(173, 50, 104)",
-          "other": "prj_8f3ed767-c52c-4450-a1fd-808b51421506:rgb(221, 225, 232)"
+          "other": "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:rgb(221, 225, 232)"
         },
         "narrow": {
           "width": 200,
@@ -4384,8 +4384,8 @@
           "novel/project/novel": "0=0"
         },
         "samples": {
-          "comic": "res_938af290-1bb1-41be-87ae-e758a90e48a5",
-          "novel": "res_e2f23dc1-7f3d-4c2a-8f78-85b027bdea76"
+          "comic": "res_6fdbb46e-63e3-4089-9fe8-df83270322e3",
+          "novel": "res_84946f7e-0afa-440b-9259-d876c7657983"
         },
         "before": {
           "comicOpened": true,
@@ -4413,14 +4413,14 @@
           "placeholders": 2,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_c5bcfad9-9376-432e-aa82-e29f0a550508",
-            "sidebar-item-resource-res_668aa3a4-e000-40c1-9a4b-2f4153adf014"
+            "sidebar-item-resource-res_00deb5bb-4c83-4064-b507-b72899eec530",
+            "sidebar-item-resource-res_8f8e7659-ff6b-4c87-b270-f6787fddc6d0"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_b3991656-b1d7-4eab-8dde-838ec8d756c2",
-            "work:work_613d77c9-893d-4a6d-aa9b-00c64e35f0fa"
+            "work:work_1962017a-b244-4261-a12f-b8be082d91cd",
+            "work:work_ee3123e1-572c-49f2-927b-8a9c46d8dc7d"
           ]
         },
         "comic": {
@@ -4430,12 +4430,12 @@
           "placeholders": 1,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_da50b658-4b46-4f7b-a143-bd2c0a5d0cb3"
+            "sidebar-item-resource-res_c786fa0a-8c9f-461a-8942-42b946337eff"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "resource:res_da50b658-4b46-4f7b-a143-bd2c0a5d0cb3"
+            "resource:res_c786fa0a-8c9f-461a-8942-42b946337eff"
           ]
         },
         "video": {
@@ -4445,12 +4445,12 @@
           "placeholders": 0,
           "images": 1,
           "keys": [
-            "sidebar-item-resource-res_80de6fea-4a82-4f5d-a73e-699d77c3ab7e"
+            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_419412b2-6016-46d2-af3e-be475fb0c527"
+            "work:work_157d1078-2fe4-4223-9bc3-ca7b1e7f9cb1"
           ]
         },
         "switch": {
@@ -4658,9 +4658,9 @@
       "name": "scan-incremental",
       "status": "passed",
       "detail": {
-        "progressAt": 1314,
-        "cardAt": 1322,
-        "cardAfterProgressMs": 8,
+        "progressAt": 1274,
+        "cardAt": 1280,
+        "cardAfterProgressMs": 6,
         "runningAtCard": true,
         "opened": {
           "read": true,
@@ -4668,9 +4668,9 @@
         },
         "works": 20,
         "afterImport": {
-          "calls": 7,
-          "first": 1313,
-          "finishedAt": 7336
+          "calls": 8,
+          "first": 1273,
+          "finishedAt": 7555
         },
         "cardsShown": 15,
         "problems": []
@@ -4743,7 +4743,7 @@
           {
             "key": "project",
             "columns": 1,
-            "tabs": 5
+            "tabs": 1
           }
         ]
       }
@@ -4781,10 +4781,6 @@
             "key": "project",
             "columns": 1,
             "tabs": [
-              "whiteboard",
-              "objects",
-              "mindmap",
-              "objects",
               "project"
             ],
             "focused": "project"
@@ -4821,8 +4817,8 @@
         "problems": [],
         "from": "two",
         "to": "single",
-        "answeredMs": 4,
-        "closedMs": 11,
+        "answeredMs": 7,
+        "closedMs": 15,
         "stored": "single",
         "columns": 1
       }
@@ -4976,7 +4972,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 4
+        "overheadMs": 3
       }
     },
     {

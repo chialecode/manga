@@ -49,13 +49,13 @@
 
 ## 验证基线
 
-下表是本阶段最终源码上的门禁（A 的 3 项修复与新增的关窗用例之后重跑，[阶段报告第 9、10 节](stage-report.md#gate)），取得于 2026-11-03（Windows 开发机，Node 26.12.1，不是基准参考机）；证据在 [`docs/evidence/gate/`](../evidence/gate/)，逐项映射、新门槛的数值与四份源码指纹见阶段报告第 9 节。
+下表是本阶段最终源码上的门禁（A 的 3 项修复、新增的关窗用例与 PR CI 暴露的测试时序修复之后重跑，[阶段报告第 9、10 节](stage-report.md#gate)），取得于 2026-11-03（Windows 开发机，Node 26.12.1，不是基准参考机）；证据在 [`docs/evidence/gate/`](../evidence/gate/)，逐项映射、新门槛的数值与四份源码指纹见阶段报告第 9 节。
 
 | 检查 | 结果 |
 | --- | --- |
 | `node scripts/stage.mjs test` | 必需用例 174/174 passed；Vitest 2754 个用例：2744 passed、0 failed、10 skipped（默认关闭的真实服务与真实样本探针） |
 | `node scripts/stage.mjs package` | passed：Electron 44.9.3 未签名本地包，不访问外网，17 个阶段与缺资产负例；100 个必需窗口观察（共记录 104 项，全部通过），含真的关窗再启动的 `close-saves-layout`；媒体阶段含选集与音轨菜单在窗口与屏幕全屏下的命中测试、带与不带字幕的截图的逐像素比较 |
-| `node scripts/stage.mjs bench` | passed：52 项门槛全部在目标内（重启电脑、关掉常驻应用、启动它的应用在前台时跑）；导图 1000 个节点折叠展开 p95 47.3 ms、30 MiB EPUB 末尾 765 ms。同一源码在重启之前跑出过 118.1 ms，见 [LOOP-13](#loop-13) |
+| `node scripts/stage.mjs bench` | passed：52 项门槛全部在目标内（重启电脑、关掉常驻应用、启动它的应用在前台时跑）；导图 1000 个节点折叠展开 p95 43.7 ms、30 MiB EPUB 末尾 775 ms。同一源码在重启之前跑出过 118.1 ms，见 [LOOP-13](#loop-13) |
 | `node scripts/stage.mjs report` | passed：self-check-passed；`productAcceptance` 恒为 not-run |
 | `node scripts/verify.mjs` | passed：类型检查、knip、文档检查（70 份文档、83 个需求、140 条验收用例）、发布检查、依赖边界与 Vitest 2754 个用例（2742 passed、12 skipped；比 `stage test` 多 2 个跳过，是默认关闭、只在 `stage test` 里打开的大文件阅读用例） |
 
