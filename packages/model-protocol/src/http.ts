@@ -39,11 +39,21 @@ export type StreamEvent =
 /** A still the model may look at. Only images travel to a chat model: audio is transcribed first and never sent as sound. */
 export type ImagePart = { mediaType: "image/jpeg" | "image/png" | "image/webp"; base64: string };
 
+/** A whole file handed to the model as it is (a PDF, 计划 4.5). Only the native runtime sends it, and only to a model whose profile takes PDF. */
+export type FilePart = { mediaType: "application/pdf"; filename: string; base64: string; /** For the budget only; not sent. */ pages: number };
+
+/** A stretch of video handed to the model as a clip (计划 4.5). Only the native runtime sends it, and only over Chat Completions (`video_url`). */
+export type VideoPart = { mediaType: "video/mp4"; base64: string; /** For the budget only; not sent. */ seconds: number };
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   /** Attached to user messages only. */
   images?: ImagePart[];
+  /** Attached to user messages only. */
+  files?: FilePart[];
+  /** Attached to user messages only; the Responses protocol never carries them (the caller sends frames instead). */
+  videos?: VideoPart[];
   toolCallId?: string;
   toolCalls?: Array<{ id: string; name: string; arguments: string }>;
 };

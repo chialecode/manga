@@ -9,7 +9,7 @@ import { readerContext } from "../../apps/desktop/src/renderer/lib/reader-contex
 import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts";
 import { installHost, stay, type HostItem } from "../helpers/app-host.ts";
 import { installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
-import { focusedTitle, tabTitles } from "../helpers/workspace-ui.ts";
+import { focusedTitle, showTab, tabTitles } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
@@ -55,11 +55,12 @@ describe("AT-111 AT-114 AT-119 the home view of the sidebar", () => {
   it("starts a project from the projects' title, lists the projects before the recent things, and names the one on screen (A-110)", async () => {
     start();
     const sidebar = await screen.findByTestId("sidebar");
+    // The home's own content comes after its first render; under a loaded parallel run that can be a moment later (LOOP-27).
+    const add = await within(sidebar).findByTestId("sidebar-new-project");
     expect(sidebar.getAttribute("data-view")).toBe("home");
     expect(within(sidebar).getByTestId("sidebar-title").textContent).toBe("主页");
     // The home has no "新对话"; "新建项目" is the "+" at the end of the projects' title.
     expect(within(sidebar).queryByTestId("sidebar-new-conversation")).toBeNull();
-    const add = within(sidebar).getByTestId("sidebar-new-project");
     expect(add.getAttribute("aria-label")).toBe("新建项目");
     expect(add.closest(".sidebar-group-head")?.querySelector(".sidebar-group-title")?.textContent).toBe("项目");
     expect(within(sidebar).getByTestId("sidebar-search")).toBeTruthy();
@@ -235,6 +236,28 @@ describe("AT-111 AT-114 AT-119 a view of one kind", () => {
     fireEvent.click(await screen.findByTestId("sidebar-manage"));
     await waitFor(() => expect(tabTitles()).toContain("对话管理"));
     expect(focusedTitle()).toBe("对话管理");
+  });
+
+  it("keeps one library tab in a view: a work and the library pages go to it even with another tab in front (AT-147, LOOP-24 4)", async () => {
+    start({ items: [{ type: "comic", id: "wc2", title: "另一本漫画", contextId: null }] });
+    const libraryTabs = () => [...(document.querySelector("[data-testid='context-host'][data-active='true']") ?? document).querySelectorAll("[data-testid='tab'][data-kind='library']")];
+    await waitFor(() => expect(libraryTabs()).toHaveLength(1));
+    // A conversation tab in front of the home's library tab.
+    fireEvent.click(await screen.findByTestId("nav-conversation"));
+    fireEvent.click(within(screen.getByTestId("sidebar")).getByTestId("sidebar-new-conversation"));
+    await waitFor(() => expect(focusedTitle()).toContain("对话"));
+    // A work from the home's list: the home's library tab goes to it and comes in front, no second one.
+    fireEvent.click(await screen.findByTestId("nav-home"));
+    await showTab(/对话/);
+    fireEvent.click(await screen.findByTestId("sidebar-item-work-wc2"));
+    await waitFor(() => expect(focusedTitle()).toBe("另一本漫画"));
+    expect(libraryTabs()).toHaveLength(1);
+    // Another tab in front again, then the comic view's management entry: in that view a library tab of its own, one.
+    fireEvent.click(await screen.findByTestId("nav-comic"));
+    fireEvent.click(await screen.findByTestId("sidebar-manage"));
+    await waitFor(() => expect(focusedTitle()).not.toBe("另一本漫画"));
+    expect(libraryTabs()).toHaveLength(1);
+    expect(libraryTabs()[0]!.getAttribute("data-focused")).toBe("true");
   });
 
   it("shows the downloads as one list that is not kept in a project", async () => {

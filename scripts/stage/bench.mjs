@@ -14,13 +14,25 @@ import { runNoteFileBench, runRoughcutBench, runSemanticBench, runTraceBench } f
 import { runReaderBench } from "./bench-reader.mjs";
 import { runWorkspaceBench } from "./bench-workspace.mjs";
 import { runVideoImportBench } from "./bench-import.mjs";
+import { watchGateTemp } from "./temp-dirs.mjs";
+import { runAgentMediaBench } from "./bench-agent-media.mjs";
+import { benchProcessNoThrottle } from "./power-throttling.mjs";
 
+// LOOP-13: this process (where the service-layer figures are measured) and the bench windows (apps/desktop/src/main/smoke/power-throttling.ts) ask
+// Windows not to slow them down for power, so a figure does not depend on which application is in front. Only the bench acts on it;
+// MANGA_BENCH_NO_THROTTLE=0 leaves it to Windows (for a comparison).
+process.env.MANGA_BENCH_NO_THROTTLE ??= "1";
+const benchProcessThrottlingOff = process.env.MANGA_BENCH_NO_THROTTLE === "1" ? benchProcessNoThrottle() : false;
 const stage = currentStage();
 const config = loadGate();
+// Taken before measuring: an edit made during the bench leaves the result stale.
+const fingerprints = stageFingerprints(root, config);
 const requiredBenchTargets = config.bench.targets;
 const requiredScale = config.bench.scale;
 const METADATA = requiredScale.metadataCount;
 const BLOCKS = requiredScale.searchBlocks;
+// What this run makes in the system's temporary folder is removed when it passes and kept, by name in the log, when it fails (LOOP-26).
+const tempWatch = watchGateTemp("stage-bench");
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-"));
 const evidence = runDir();
 const app = new MangaProductApp({
@@ -263,6 +275,25 @@ if (!reader.danmaku?.ok || !reader.memory?.ok) process.stderr.write(`reader wind
 const workspace = await runWorkspaceBench({ ...appCommand, ...config.bench.workspace });
 if (workspace.window?.ok !== true || workspace.memory?.ok !== true) process.stderr.write(`workspace window bench incomplete: ${JSON.stringify({ reason: workspace.reason, window: workspace.window && { ok: workspace.window.ok, reason: workspace.window.reason, failures: workspace.window.failures, stderr: workspace.window.stderr, counts: workspace.window.counts }, memory: workspace.memory && { ok: workspace.memory.ok, failures: workspace.memory.failures } })}
 `);
+// The right pane with a conversation of 5000 messages in the real window (LOOP-07), on a Profile of its own the window seeds for itself.
+function runChatBench() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-chat-"));
+  try {
+    const env = { ...process.env, MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(dir, "root"), MANGA_DOCUMENTS_DIR: path.join(dir, "documents"), MANGA_POINTER_FILE: path.join(dir, "launcher", "pointer.json"), MANGA_SMOKE_PHASE: "bench-chat" };
+    delete env.ELECTRON_RUN_AS_NODE;
+    const child = scaleLauncher(env, dir);
+    const file = path.join(dir, "root", "logs", "bench-chat-window.json");
+    const measured = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { ok: false, failures: [`no measurement (status ${child.status})`] };
+    if (child.status !== 0) measured.ok = false;
+    if (measured.ok !== true) process.stderr.write(`chat window bench incomplete: ${JSON.stringify({ status: child.status, failures: measured.failures, stderr: String(child.stderr ?? "").slice(-2000) })}\n`);
+    return measured;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+const chat = runChatBench();
+// A 60 s clip cut without re-encoding, a 4 MB picture frozen for a run; the v13 move and the copy of a 500 MB profile are recorded.
+const agentMedia = await runAgentMediaBench({ clipRuns: config.bench.creative.clip60?.minSamples ?? 8, freezeRuns: config.bench.creative.freeze4mb?.minSamples ?? 20 });
 const canvasRaw = {
   whiteboardOpen: { raw: canvas.whiteboardOpenMs, scale: { cards: canvas.scale?.cards ?? 0 } },
   whiteboardDrag: { raw: canvas.whiteboardDragMs, scale: { cards: canvas.scale?.cards ?? 0 } },
@@ -315,6 +346,12 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
     importRuns ??= await runVideoImportBench({ videos: wanted.scale.videos, runs: wanted.minSamples });
     creative[id] = { kind: "service-video-import", scale: { videos: importRuns.videos }, raw: id === "videoImport" ? importRuns.browsableMs : importRuns.packetReads, detail: importRuns.detail };
   }
+  if (["chatOpen", "chatInput", "chatLateFrame", "chatOlderPage"].includes(id)) {
+    const raw = { chatOpen: chat.openMs, chatInput: chat.inputMs, chatLateFrame: chat.latePct, chatOlderPage: chat.olderMs }[id] ?? [];
+    creative[id] = { kind: "electron-workspace", scale: { messages: chat.ok ? chat.messages : 0 }, raw, detail: { ok: chat.ok === true, failures: chat.failures, wait: chat.waits?.[{ chatOpen: "open", chatInput: "input", chatLateFrame: "late", chatOlderPage: "older" }[id]], usualIntervalMs: id === "chatLateFrame" ? chat.usualIntervalMs : undefined } };
+  }
+  if (id === "clip60") creative[id] = { kind: "service-agent-media", scale: { seconds: agentMedia.clip.ok ? 60 : 0 }, raw: agentMedia.clip.raw, detail: { ok: agentMedia.clip.ok, reason: agentMedia.clip.reason, clipBytes: agentMedia.clip.clipBytes, wait: agentMedia.clip.wait } };
+  if (id === "freeze4mb") creative[id] = { kind: "service-agent-media", scale: { bytes: agentMedia.freeze.ok ? agentMedia.freeze.bytes : 0 }, raw: agentMedia.freeze.raw, detail: { ok: agentMedia.freeze.ok, wait: agentMedia.freeze.wait } };
   if (id === "roughcut") {
     const result = await runRoughcutBench({ clips: wanted.scale.clips, runs: wanted.minSamples });
     creative[id] = { kind: "service-roughcut-export", scale: { clips: wanted.scale.clips }, raw: result.samples, detail: result.detail };
@@ -369,12 +406,14 @@ const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === 
 fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   status: passed ? "passed" : "failed",
   stage,
-  ...stageFingerprints(root, config),
+  ...fingerprints,
   productAcceptance: "not-run",
   platform: process.platform,
   arch: process.arch,
   node: process.version,
   metrics,
+  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open.
+  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null },
   targets: requiredBenchTargets,
   scale: { metadataCount: METADATA, searchBlocks: BLOCKS },
   samples: {
@@ -435,4 +474,9 @@ if (!passed) {
   console.error(JSON.stringify({ status: "failed", check: "stage-bench", metrics, targets: requiredBenchTargets }));
   process.exit(1);
 }
-console.log(JSON.stringify({ status: "passed", check: "stage-bench", ...metrics }));
+const tempDirs = tempWatch.passed();
+if (tempDirs.left > 0) {
+  console.error(JSON.stringify({ status: "failed", check: "stage-bench", reason: "temporary directories left behind", ...tempDirs }));
+  process.exit(1);
+}
+console.log(JSON.stringify({ status: "passed", check: "stage-bench", tempDirs, ...metrics }));

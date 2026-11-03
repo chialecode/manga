@@ -30,6 +30,7 @@ import { CoverService } from "./metadata/covers.ts";
 import { DEFAULT_MODEL_PROFILE } from "@manga/contracts/models";
 import { budgetOf } from "./agent-context.ts";
 import { readAgentSettings } from "./agent-settings.ts";
+import { sweepAgentMedia } from "./agent-media.ts";
 import { ResourceExtras } from "./metadata/extras.ts";
 import { MetadataService } from "./metadata/service.ts";
 import { parseOrdinalName } from "./domain/ordinal.ts";
@@ -75,6 +76,8 @@ import { agentModule } from "./commands/agent.ts";
 import { projectsModule, canvasModules, semanticScope, semanticModule, pluginsModule, acquisitionModule, roughcutModule, researchModule } from "./commands/creative.ts";
 
 export type ProductAppOptions = LaunchRequest & {
+  /** The layout the desktop host resolved before Electron started (it may have moved an old profile to get it); resolved here otherwise. */
+  layout?: LocationLayout;
   hostId?: string;
   crashAt?: string;
   vault?: CredentialVault;
@@ -182,9 +185,10 @@ export class MangaProductApp {
   sealed = false;
   closed = false;
   private layoutTask: Promise<void> | null = null;
+  private readonly mediaSweepTimers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(options: ProductAppOptions) {
-    this.layout = resolveLaunchLayout(options);
+    this.layout = options.layout ?? resolveLaunchLayout(options);
     if (!this.layout.writable) {
       throw new MangaError("LOCATION_UNAVAILABLE", "profile data directory is not writable", {
         details: { recovery: this.layout.recovery },
@@ -296,6 +300,10 @@ export class MangaProductApp {
     this.media.jobs.onChange((job) => {
       if (job.kind === "play-copy" || job.kind === "frame-index" || job.kind === "capture-filter" || job.kind === "capture-asr" || job.kind === "capture-organize") this.notify("job.changed", { jobId: job.id, kind: job.kind, key: job.key, state: job.state, progress: job.progress, error: job.error });
     });
+    // The old place a first start moved the profile from (计划 4.9): remembered so settings can offer to clean it, once the person agrees.
+    if (this.layout.upgrade?.state === "migrated") {
+      this.store.setMeta("legacyLocation", JSON.stringify({ root: this.layout.upgrade.from, carried: this.layout.upgrade.carried, at: new Date().toISOString(), cleaned: false }));
+    }
     this.store.setMeta("layoutConfig", JSON.stringify({
       pointerPath: this.layout.pointerPath,
       partitions: this.layout.overrides,
@@ -417,12 +425,26 @@ export class MangaProductApp {
   /** Start the timed library scans; the desktop host calls this once the window is up. Tests and tools that only read do not. */
   startScheduler(): void {
     this.scan.startScheduler();
+    // The pictures of ended tasks are let go after the retention period: once shortly after the start, when the window has settled, then every day (计划 4.4).
+    const sweep = () => { if (!this.closed) this.sweepAgentMedia(); };
+    this.mediaSweepTimers.push(setTimeout(sweep, 30_000), setInterval(sweep, 86_400_000));
+    for (const timer of this.mediaSweepTimers) timer.unref?.();
+  }
+
+  /** One pass of the clean-up of frozen task pictures; `now` is for the tests and the window observation that move the clock. */
+  sweepAgentMedia(now = Date.now()): { runs: number; removed: number } {
+    try {
+      return sweepAgentMedia(this.store, readAgentSettings(this.store).media, now);
+    } catch {
+      return { runs: 0, removed: 0 };
+    }
   }
 
   close(): void {
     if (this.closed) return;
     this.closed = true;
     this.noteFiles.dispose();
+    for (const timer of this.mediaSweepTimers.splice(0)) clearTimeout(timer);
     this.scan.dispose();
     this.acquisition.dispose();
     void this.roughcuts.dispose();

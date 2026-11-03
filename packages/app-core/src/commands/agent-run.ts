@@ -1,18 +1,21 @@
 /** One agent run: the model calls, the tool calls and the run's history. */
 import { createHash } from "node:crypto";
 import { commandInputJsonSchema, MangaError, createId, type CommandEnvelope, type CommandResult, type ScopeGrant } from "@manga/contracts";
-import { completeText, streamText, type AiRuntimeId, type ChatMessage, type StreamEvent, type TextRequest, type ToolDefinition } from "@manga/model-protocol";
+import { completeText, streamText, type AiRuntimeId, type ChatMessage, type FilePart, type ImagePart, type StreamEvent, type VideoPart, type TextRequest, type ToolDefinition } from "@manga/model-protocol";
 import { budgetOfConnection, calibrate, COMPACTION_PROMPT, contextTokens, fitContext, tailToTokens, toolsTokens, truncateToTokens } from "../agent-context.ts";
 import { readAgentSettings } from "../agent-settings.ts";
 import { requestLimits } from "../model-probe.ts";
 import { withEmptyScopeNote } from "../agent-scope.ts";
 import { AGENT_PROJECT_COMMANDS, agentToolSchema, takesContext, takesProject } from "../creative/agent-access.ts";
-import { recordedRequest } from "../agent-trace.ts";
+import { recordedRequest, type DeliveryNote } from "../agent-trace.ts";
 import { AGENT_COMMANDS, AGENT_OPT_IN_COMMANDS } from "../commands/access.ts";
 import { publicMedia, renderImages, type FrozenImage, type FrozenMedia } from "../agent-materials.ts";
 import type { MangaProductApp } from "../product-app.ts";
 import { VISION_READING_MARK, TOOL_DESCRIPTIONS, toolInputSummary, toolParameters, type AgentLoopBudget, contextShares, clipMaterial, refusedByService, isContextOverflow, type ConnectionRow, redactSnapshot, safeJsonValue } from "../product-helpers.ts";
 import { visionRoute } from "./connections.ts";
+import { readCredential } from "../credentials.ts";
+import { latestRevision, runMedia, sourceStamp } from "../agent-media.ts";
+import { DELIVERY_REASONS, readFrozenFile } from "../agent-native-input.ts";
 import { loadRunMessages, materialContextMessage, startRunLoop } from "./agent.ts";
 
 /** What these commands use of the application. */
@@ -22,11 +25,11 @@ export type AgentRunHost = Pick<MangaProductApp, "agentAccess" | "assertWritable
  * Every request an agent run makes to a model goes through here, and every tool it calls through `toolCall`, so the trace of the run sees all of them (A-83).
  * The trace is made beside the call and never in its way: what the caller gets is what the provider gave.
  */
-export async function* modelStream(app: AgentRunHost, call: { runId: string; step: number; connection: ConnectionRow; apiKey: string; protocol: "openai-responses" | "openai-chat-completions"; runtime: AiRuntimeId; request: TextRequest }): AsyncGenerator<StreamEvent> {
+export async function* modelStream(app: AgentRunHost, call: { runId: string; step: number; connection: ConnectionRow; apiKey: string; protocol: "openai-responses" | "openai-chat-completions"; runtime: AiRuntimeId; request: TextRequest; delivery?: readonly DeliveryNote[] }): AsyncGenerator<StreamEvent> {
   const handle = app.trace.begin({
     runId: call.runId, step: call.step, kind: "model", name: "chat",
     connection: { id: call.connection.id, modelId: call.connection.model_id, protocol: `${call.protocol} · ${call.runtime}` },
-    request: recordedRequest(call.request), secrets: [call.apiKey],
+    request: recordedRequest(call.request), secrets: [call.apiKey], delivery: call.delivery,
   });
   let text = "";
   const toolCalls = new Map<string, { id: string; name: string; arguments: string }>();
@@ -60,11 +63,11 @@ export async function* modelStream(app: AgentRunHost, call: { runId: string; ste
   }
 }
 
-export async function modelComplete(app: AgentRunHost, call: { runId: string; step: number; kind: "model" | "compaction"; name: string; connection: ConnectionRow; apiKey: string; protocol: "openai-responses" | "openai-chat-completions"; runtime: AiRuntimeId; request: TextRequest }) {
+export async function modelComplete(app: AgentRunHost, call: { runId: string; step: number; kind: "model" | "compaction"; name: string; connection: ConnectionRow; apiKey: string; protocol: "openai-responses" | "openai-chat-completions"; runtime: AiRuntimeId; request: TextRequest; delivery?: readonly DeliveryNote[] }) {
   const handle = app.trace.begin({
     runId: call.runId, step: call.step, kind: call.kind, name: call.name,
     connection: { id: call.connection.id, modelId: call.connection.model_id, protocol: `${call.protocol} · ${call.runtime}` },
-    request: recordedRequest(call.request), secrets: [call.apiKey],
+    request: recordedRequest(call.request), secrets: [call.apiKey], delivery: call.delivery,
   });
   try {
     const result = await completeText(call.protocol, call.connection.base_url, call.apiKey, call.request, call.runtime);
@@ -105,7 +108,76 @@ export function persistRunMessage(app: AgentRunHost, runId: string, message: Cha
  * model reads them first and its reading goes in as text, labelled as a reading. With neither, the run stops and says so:
  * it never answers as if it had seen a picture it did not.
  */
-export async function attachImages(app: AgentRunHost, runId: string, textConnection: ConnectionRow, messages: ChatMessage[], images: FrozenImage[], question: string, signal: AbortSignal): Promise<void> {
+/**
+ * The bytes of a run's frozen stills (计划 4.4). A kept picture is sent as it was frozen (the same bytes, checked against its hash). One whose retention
+ * period is over is taken again from its source, but only from the same revision and the same file; when the source changed or is gone the run stops
+ * and says why, instead of sending a different picture (CTX-02). The delivery notes say which was which, for the call record.
+ */
+export async function frozenImageParts(app: AgentRunHost, runId: string, images: FrozenImage[], signal: AbortSignal): Promise<{ parts: ImagePart[]; delivery: DeliveryNote[] }> {
+  const parts: ImagePart[] = [];
+  const delivery: DeliveryNote[] = [];
+  for (const image of images) {
+    if (typeof image.base64 === "string") {
+      parts.push({ mediaType: image.mediaType, base64: image.base64 });
+      delivery.push({ kind: "image", bytes: image.bytes });
+      continue;
+    }
+    const kept = image.expired ? undefined : runMedia(app.store, runId, image.hash);
+    if (kept) {
+      parts.push({ mediaType: image.mediaType, base64: kept.toString("base64") });
+      delivery.push({ kind: "image", bytes: kept.length });
+      continue;
+    }
+    const origin = image.origin;
+    const stamp = sourceStamp(app.store, origin.resourceRevisionId);
+    const same = latestRevision(app.store, origin.resourceId) === origin.resourceRevisionId && stamp !== null
+      && (!image.stamp || (image.stamp.size === stamp.size && image.stamp.mtimeMs === stamp.mtimeMs));
+    const changed = (reason: string) => new MangaError("REVISION_CONFLICT", "这次任务附上的图像已过保留期，而它的来源已经改变或不在了，无法再发送同一画面。请重新发起任务。", { details: { reason, resourceId: origin.resourceId } });
+    if (!same) throw changed("media-source-changed");
+    let again;
+    try {
+      again = await app.materials.extractAgain(origin, image, signal);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      throw changed("media-source-unreadable");
+    }
+    parts.push({ mediaType: again.mediaType, base64: again.base64 });
+    delivery.push({ kind: "image", bytes: again.bytes, reason: "expired-reextracted" });
+  }
+  return { parts, delivery };
+}
+
+/**
+ * The whole PDFs and the clip a run sends (计划 4.5). A PDF is read now and must still be the file the task was sent with. The clip is the kept one; after
+ * the retention period it is cut again from the same file, or the run stops and says why. The delivery notes are the ones decided at send time.
+ */
+export async function frozenNativeParts(app: AgentRunHost, runId: string, media: FrozenMedia, signal: AbortSignal): Promise<{ files: FilePart[]; videos: VideoPart[]; delivery: DeliveryNote[] }> {
+  const files: FilePart[] = (media.files ?? []).map((file) => ({ mediaType: "application/pdf", filename: file.filename, base64: readFrozenFile(app.store, file).toString("base64"), pages: file.pages }));
+  const delivery = [...(media.delivery ?? [])];
+  const videos: VideoPart[] = [];
+  const clip = media.clip;
+  if (clip) {
+    let bytes = clip.expired ? undefined : runMedia(app.store, runId, clip.hash);
+    if (!bytes) {
+      const changed = (reason: string) => new MangaError("REVISION_CONFLICT", "这次任务附上的视频片段已过保留期，而视频文件已经改变或不在了，无法再发送同一段。请重新发起任务。", { details: { reason, resourceId: clip.resourceId } });
+      const stamp = sourceStamp(app.store, clip.revisionId);
+      const same = latestRevision(app.store, clip.resourceId) === clip.revisionId && stamp !== null && (!clip.stamp || (clip.stamp.size === stamp.size && clip.stamp.mtimeMs === stamp.mtimeMs));
+      if (!same) throw changed("media-source-changed");
+      try {
+        bytes = await app.videos.clipBytes(clip.resourceId, clip.revisionId, clip.startMs, clip.endMs - clip.startMs, signal);
+      } catch (error) {
+        if (signal.aborted) throw error;
+        throw changed("media-source-unreadable");
+      }
+      const at = delivery.findIndex((note) => note.kind === "video");
+      if (at >= 0) delivery[at] = { ...delivery[at]!, bytes: bytes.length, reason: DELIVERY_REASONS.expired };
+    }
+    videos.push({ mediaType: "video/mp4", base64: bytes.toString("base64"), seconds: clip.seconds });
+  }
+  return { files, videos, delivery };
+}
+
+export async function attachImages(app: AgentRunHost, runId: string, textConnection: ConnectionRow, messages: ChatMessage[], images: FrozenImage[], parts: ImagePart[], question: string, signal: AbortSignal, delivery?: readonly DeliveryNote[]): Promise<void> {
   const route = visionRoute(app, textConnection);
   if (route.kind === "none") {
     const existing = app.store.sqlite.prepare("SELECT id FROM agent_messages WHERE run_id = ? AND role = 'assistant'").get(runId);
@@ -114,7 +186,6 @@ export async function attachImages(app: AgentRunHost, runId: string, textConnect
     }
     throw new MangaError("MODEL_CAPABILITY_MISSING", route.reason, { details: { capability: "vision" } });
   }
-  const parts = images.map((image) => ({ mediaType: image.mediaType, base64: image.base64 }));
   const lastUser = messages.map((message) => message.role).lastIndexOf("user");
   if (route.kind === "direct") {
     if (lastUser >= 0) messages[lastUser] = { ...messages[lastUser]!, images: parts };
@@ -125,9 +196,9 @@ export async function attachImages(app: AgentRunHost, runId: string, textConnect
   let reading = at >= 0 ? messages.splice(at, 1)[0] : undefined;
   if (!reading) {
     const sight = route.connection;
-    const cred = app.store.sqlite.prepare("SELECT ciphertext FROM credentials WHERE ref = ?").get(sight.credential_ref) as { ciphertext: Buffer } | undefined;
-    if (!cred) throw new MangaError("AUTHENTICATION_FAILED", "vision connection is missing credentials");
-    const result = await modelComplete(app, { runId, step: 0, kind: "model", name: "vision-reading", connection: sight, apiKey: app.vault.decrypt(cred.ciphertext), protocol: sight.protocol, runtime: sight.runtime === "pi" ? "pi" : "native", request: {
+    const sightKey = sight.credential_ref ? await readCredential(app, sight.credential_ref) : undefined;
+    if (sightKey === undefined) throw new MangaError("AUTHENTICATION_FAILED", "vision connection is missing credentials");
+    const result = await modelComplete(app, { runId, step: 0, kind: "model", name: "vision-reading", delivery, connection: sight, apiKey: sightKey, protocol: sight.protocol, runtime: sight.runtime === "pi" ? "pi" : "native", request: {
       model: sight.model_id,
       messages: [{
         role: "user",
@@ -171,9 +242,8 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
   }
   if (connection.purpose !== "text") throw new MangaError("MODEL_CAPABILITY_MISSING", "agent runs require a text connection");
   app.store.sqlite.prepare("UPDATE agent_runs SET model_id = ? WHERE id = ?").run(connection.model_id, runId);
-  const cred = app.store.sqlite.prepare("SELECT ciphertext FROM credentials WHERE ref = ?").get(connection.credential_ref) as { ciphertext: Buffer } | undefined;
-  if (!cred) throw new MangaError("AUTHENTICATION_FAILED", "text connection is missing credentials");
-  const apiKey = app.vault.decrypt(cred.ciphertext);
+  const apiKey = connection.credential_ref ? await readCredential(app, connection.credential_ref) : undefined;
+  if (apiKey === undefined) throw new MangaError("AUTHENTICATION_FAILED", "text connection is missing credentials");
   const protocol = connection.protocol as "openai-responses" | "openai-chat-completions";
   const frozenRuntime = (runtime === "pi" ? "pi" : "native") as AiRuntimeId;
   // The model's profile is read as the loop starts, so a window or an answer length changed in the settings applies to a retry as well (A-82).
@@ -195,7 +265,19 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
   const materialMessage = frozenContext ? { role: "system" as const, content: clipMaterial(frozenContext, shares.material) } : materialContextMessage(app, snapshot, shares.material);
   let messages: ChatMessage[] = [...history, ...(materialMessage ? [materialMessage] : []), ...runMessages];
   const images: FrozenImage[] = snapshot.media?.images ?? [];
-  if (images.length) await attachImages(app, runId, connection, messages, images, clipped, signal);
+  // What this run delivers of its material, for the record of every request it makes (计划 4.5).
+  const delivery: DeliveryNote[] = [];
+  if (images.length) {
+    const resolved = await frozenImageParts(app, runId, images, signal);
+    delivery.push(...resolved.delivery);
+    await attachImages(app, runId, connection, messages, images, resolved.parts, clipped, signal, delivery);
+  }
+  if (snapshot.media?.files?.length || snapshot.media?.clip) {
+    const native = await frozenNativeParts(app, runId, snapshot.media, signal);
+    const lastUser = messages.map((message) => message.role).lastIndexOf("user");
+    if (lastUser >= 0) messages[lastUser] = { ...messages[lastUser]!, ...(native.files.length ? { files: native.files } : {}), ...(native.videos.length ? { videos: native.videos } : {}) };
+    delivery.push(...native.delivery);
+  } else delivery.push(...(snapshot.media?.delivery ?? []));
   const toolResults: Array<{ commandId: string; result: unknown }> = [];
   const usage = runRow?.usage_json ? safeJsonValue(runRow.usage_json) as { costUsd?: number; steps?: number; compactions?: number } : {};
   const checkpoint = runRow?.checkpoint_json ? safeJsonValue(runRow.checkpoint_json) as { step?: number; costUsd?: number; at?: string } : {};
@@ -268,7 +350,7 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
       assistant = "";
       try {
         for await (const event of modelStream(app, {
-          runId, step, connection, apiKey, protocol, runtime: frozenRuntime,
+          runId, step, connection, apiKey, protocol, runtime: frozenRuntime, delivery,
           request: { model: connection.model_id, messages: fitted.messages, tools: offered.length ? offered : undefined, signal, timeoutMs: connection.timeout_ms, ...extras },
         })) {
           if (event.type === "text-delta") {

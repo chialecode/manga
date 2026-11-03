@@ -7,6 +7,7 @@ import { failureOf, modelLimitsOf, parseLastTest } from "../model-probe.ts";
 import type { MangaProductApp } from "../product-app.ts";
 import { PROBE_PICTURE_SIDE, type ModelPurposeName, type ConnectionRow } from "../product-helpers.ts";
 import { currentRuntime } from "./settings.ts";
+import { readCredential, saveCredential } from "../credentials.ts";
 
 /** What these commands use of the application. */
 export type ConnectionsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders">;
@@ -34,7 +35,7 @@ export function listConnections(app: ConnectionsHost) {
   });
 }
 
-export function upsertConnection(app: ConnectionsHost, envelope: CommandEnvelope) {
+export async function upsertConnection(app: ConnectionsHost, envelope: CommandEnvelope) {
   app.assertWritable();
   const input = envelope.input as {
     id?: string;
@@ -63,13 +64,8 @@ export function upsertConnection(app: ConnectionsHost, envelope: CommandEnvelope
   }
   let credentialRef: string | undefined;
   if (input.credentialHandle) {
-    if (!app.vault.available()) throw new MangaError("CREDENTIAL_UNAVAILABLE", "cannot store credentials without platform protection");
-    const secret = app.secrets.get(input.credentialHandle);
-    if (!secret) throw new MangaError("FORBIDDEN", "credential handle is not authorized");
-    app.secrets.delete(input.credentialHandle);
-    credentialRef = createId("cred");
-    const cipher = app.vault.encrypt(secret);
-    app.store.sqlite.prepare("INSERT INTO credentials(ref, ciphertext, created_at) VALUES (?,?,?)").run(credentialRef, cipher, new Date().toISOString());
+    const handle = input.credentialHandle;
+    credentialRef = await saveCredential(app, () => takeSecret(app, handle));
     if (existing?.credential_ref) app.store.sqlite.prepare("DELETE FROM credentials WHERE ref = ?").run(existing.credential_ref);
   }
   app.store.sqlite.prepare(`INSERT INTO provider_connections(id,label,adapter_id,protocol,runtime,base_url,credential_ref,timeout_ms,purpose,model_id,verified_capabilities_json,profile_json,created_at)
@@ -118,9 +114,8 @@ export async function probeConnection(app: ConnectionsHost, envelope: CommandEnv
     );
     return { ...result, profile };
   };
-  const cred = row.credential_ref ? app.store.sqlite.prepare("SELECT ciphertext FROM credentials WHERE ref = ?").get(row.credential_ref) as { ciphertext: Buffer } | undefined : undefined;
-  if (!cred) return save({ at, ok: false, latencyMs: 0, failure: { category: "auth", detail: "no key is saved for app connection" } });
-  const apiKey = app.vault.decrypt(cred.ciphertext);
+  const apiKey = row.credential_ref ? await readCredential(app, row.credential_ref) : undefined;
+  if (apiKey === undefined) return save({ at, ok: false, latencyMs: 0, failure: { category: "auth", detail: "no key is saved for app connection" } });
   const protocol = row.protocol as "openai-responses" | "openai-chat-completions";
   const runtime = (row.runtime === "pi" ? "pi" : "native") as AiRuntimeId;
   const timeoutMs = row.timeout_ms;
@@ -196,14 +191,22 @@ export async function probeConnection(app: ConnectionsHost, envelope: CommandEnv
   }
 }
 
-export function secretFor(app: ConnectionsHost, connectionId: string, purpose: ModelPurposeName | ModelPurposeName[]): { row: ConnectionRow; apiKey: string } {
+/** Takes the secret the page stashed for one save; the handle is used up. */
+export function takeSecret(app: { secrets: Map<string, string> }, handle: string): string {
+  const secret = app.secrets.get(handle);
+  if (!secret) throw new MangaError("FORBIDDEN", "credential handle is not authorized");
+  app.secrets.delete(handle);
+  return secret;
+}
+
+export async function secretFor(app: ConnectionsHost, connectionId: string, purpose: ModelPurposeName | ModelPurposeName[]): Promise<{ row: ConnectionRow; apiKey: string }> {
   const row = app.store.sqlite.prepare("SELECT * FROM provider_connections WHERE id = ?").get(connectionId) as ConnectionRow | undefined;
   if (!row) throw new MangaError("NOT_FOUND", "connection missing");
   if (!(Array.isArray(purpose) ? purpose : [purpose]).includes(row.purpose as ModelPurposeName)) throw new MangaError("MODEL_CAPABILITY_MISSING", "connection purpose does not match the requested model task");
   if (!row.credential_ref) throw new MangaError("AUTHENTICATION_FAILED", "connection has no credential");
-  const cred = app.store.sqlite.prepare("SELECT ciphertext FROM credentials WHERE ref = ?").get(row.credential_ref) as { ciphertext: Buffer } | undefined;
-  if (!cred) throw new MangaError("NOT_FOUND", "credential payload missing");
-  return { row, apiKey: app.vault.decrypt(cred.ciphertext) };
+  const apiKey = await readCredential(app, row.credential_ref);
+  if (apiKey === undefined) throw new MangaError("NOT_FOUND", "credential payload missing");
+  return { row, apiKey };
 }
 
 export async function testConnection(app: ConnectionsHost, envelope: CommandEnvelope, signal: AbortSignal) {
@@ -211,7 +214,7 @@ export async function testConnection(app: ConnectionsHost, envelope: CommandEnve
   const input = envelope.input as { connectionId: string; capability: "text" | "tools" | "streaming" | "transcription" | "embedding" | "vision" };
   // A text model that can look at pictures is tested as text; a model kept only for pictures is its own kind of connection.
   const purpose: ModelPurposeName | ModelPurposeName[] = input.capability === "transcription" ? "transcription" : input.capability === "embedding" ? "embedding" : input.capability === "vision" ? ["text", "vision"] : "text";
-  const { row, apiKey } = secretFor(app, input.connectionId, purpose);
+  const { row, apiKey } = await secretFor(app, input.connectionId, purpose);
   const protocol = row.protocol as "openai-responses" | "openai-chat-completions";
   const runtime = (row.runtime === "pi" ? "pi" : "native") as AiRuntimeId;
   const timeoutMs = row.timeout_ms;

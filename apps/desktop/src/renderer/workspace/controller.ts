@@ -244,7 +244,10 @@ export class WorkspaceController {
         ctx.docks.set(view, emptyDock(view, { ...saved, focusedTab: has(saved.focusedTab) && members.some((tab) => tab.id === saved.focusedTab) ? saved.focusedTab : members[0]?.id ?? null }));
       }
       ctx.extra = extra;
-      if (ctx.tabs.length === 0) {
+      // Only a context that was never saved gets the seeded tabs (the service answers an empty state with `updatedAt: null` then); one saved with
+      // every tab closed stays empty (LOOP-24).
+      const neverSaved = !result.ok || result.value.state == null || result.value.updatedAt == null;
+      if (ctx.tabs.length === 0 && neverSaved) {
         ctx.tabs = (this.env.seed?.(ctx.contextId) ?? []).map((request) => makeTab({ kind: request.kind, target: request.target ?? {}, title: request.title ?? this.env.titleFor({ kind: request.kind, target: request.target ?? {} }) }));
         ctx.docks.get("home")!.focusedTab = ctx.tabs[0]?.id ?? null;
       }

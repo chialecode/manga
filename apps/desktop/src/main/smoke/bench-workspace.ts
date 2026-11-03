@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, closeTabs, DRAWN, openFromShelf, openProjectsPage, PICK, pressChord, railTo, sleep, tabsOf, viaSidebar, waitUntil, type TabFact } from "./driver.ts";
+import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, openProjectsPage, PICK, pressChord, railTo, sleep, tabsOf, viaSidebar, waitUntil, type TabFact } from "./driver.ts";
 import { caller, js, toRail } from "./common.ts";
 import { median, readMemory } from "./bench-reader.ts";
 
@@ -19,7 +19,7 @@ import { median, readMemory } from "./bench-reader.ts";
  * - context switch, after a restart: the page is loaded again (the contexts are made anew from the library), and each context other than the
  *   one the window comes back in is pressed once
  * - readers kept loaded: ten readers opened one after the other and pressed in turn; the readers whose content is in the page, over the columns
- * - late frames: one video of four columns (two videos, a comic, a note) plays, and the frames the page is given are counted against
+ * - late frames: one video of four columns (two videos, a comic, the project's draft page) plays, and the frames the page is given are counted against
  *   the interval of the same playback in a single column
  * - memory: the application's working set with the four columns, over the same with the one video in a single column
  */
@@ -28,7 +28,7 @@ export type WorkspaceBenchSpec = { switchRounds: number; contextRounds: number; 
 export type WorkspaceMemorySpec = { runs: number };
 
 type Sample = { ok: boolean; ms: number; reason?: string };
-type Seeds = { videoA: string; videoB: string; comic: string; novels: string[]; noteId: string; projects: string[] };
+type Seeds = { videoA: string; videoB: string; comic: string; novels: string[]; noteId: string; projects: string[]; draftId: string };
 
 const SAMPLES = { videoA: "video-mp4-h264-aac", videoB: "video-vfr", comic: "cbz-basic" } as const;
 const HOST = `document.querySelector('[data-testid="context-host"][data-active="true"]')`;
@@ -135,7 +135,29 @@ async function openNote(view: BrowserWindow, noteId: string): Promise<boolean> {
   return row && clickTestId(view, `record-open-${noteId}`, 4000);
 }
 
-/** The synthetic resources of the bench: two videos, a comic, ten novels, a note and two projects, all made the way the window's own flows make them. */
+/**
+ * The project's draft page (LOOP-24 item 5): the draft view's list, the project's group opened, then the draft's row. The quad is laid out in the
+ * project's context, so the row opens there without switching.
+ */
+async function openDraft(view: BrowserWindow, seeds: Seeds): Promise<boolean> {
+  const project = seeds.projects[0]!;
+  if (!(await railTo(view, "draft")) || !(await ensureSidebar(view))) return false;
+  if (!(await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="sidebar"][data-view="draft"]'))`, 6000))) return false;
+  const toggle = `document.querySelector('[data-testid="context-toggle-${project}"]')`;
+  if (await js<boolean>(view, `(${toggle}?.getAttribute("aria-expanded") ?? "") !== "true"`)) await clickTestId(view, `context-toggle-${project}`, 4000);
+  if (!(await clickTestId(view, `sidebar-item-draft-${seeds.draftId}`, 6000))) return false;
+  return waitUntil(view, `${DRAWN}(${PICK}("draft-surface"))`, 10_000);
+}
+
+/** The project's context, with nothing open in it: the quad is laid out there so its draft is the project's own page. */
+async function enterProject(view: BrowserWindow, seeds: Seeds): Promise<boolean> {
+  const project = seeds.projects[0]!;
+  await railTo(view, "home");
+  if (!(await clickTestId(view, `context-open-${project}`, 6000))) return false;
+  return waitUntil(view, `${HOST}?.getAttribute("data-context") === ${JSON.stringify(project)}`, 8000);
+}
+
+/** The synthetic resources of the bench: two videos, a comic, ten novels, a note, two projects and a draft, all made the way the window's own flows make them. */
 async function seed(appService: MangaProductApp, call: ReturnType<typeof caller>, wanted: { novels: number }): Promise<Seeds | null> {
   const root = process.env.MANGA_SMOKE_SAMPLES;
   if (!root) return null;
@@ -189,15 +211,20 @@ async function seed(appService: MangaProductApp, call: ReturnType<typeof caller>
     const id = String((made.value as { id?: string } | undefined)?.id ?? "");
     if (id) projects.push(id);
   }
-  if (novels.length < wanted.novels || !noteId || projects.length < 2) return null;
-  return { videoA, videoB, comic, novels, noteId, projects };
+  const drafted = projects[0] ? await call("draft.create", { projectId: projects[0], title: "基准文稿", text: "基准文稿的正文。" }) : null;
+  const draftId = String((drafted?.value as { draft?: { id?: string } } | undefined)?.draft?.id ?? "");
+  if (novels.length < wanted.novels || !noteId || projects.length < 2 || !draftId) return null;
+  return { videoA, videoB, comic, novels, noteId, projects, draftId };
 }
 
-/** The four tabs of the quad and nothing else, in one column: the two videos, the comic, the note. A player already open (`videoA`) is kept. */
-async function openFour(view: BrowserWindow, seeds: Seeds, videoA?: string): Promise<{ ids: Record<"videoA" | "videoB" | "comic" | "note", string>; failures: string[] } | null> {
+/**
+ * The four tabs of the quad and nothing else, in one column of the project's context: the two videos, the comic, the project's draft page. A player
+ * already open (`videoA`, in that context) is kept.
+ */
+async function openFour(view: BrowserWindow, seeds: Seeds, videoA?: string): Promise<{ ids: Record<"videoA" | "videoB" | "comic" | "draft", string>; failures: string[] } | null> {
   const failures: string[] = [];
   if (!videoA) {
-    await railTo(view, "home");
+    if (!(await enterProject(view, seeds))) return { ids: {} as never, failures: ["the project's context could not be entered"] };
     await closeTabs(view, "all");
   }
   const before = new Set((await tabsOf(view)).map((tab) => tab.id));
@@ -210,21 +237,21 @@ async function openFour(view: BrowserWindow, seeds: Seeds, videoA?: string): Pro
     }
     return null;
   };
-  const ids: Partial<Record<"videoA" | "videoB" | "comic" | "note", string>> = videoA ? { videoA } : {};
+  const ids: Partial<Record<"videoA" | "videoB" | "comic" | "draft", string>> = videoA ? { videoA } : {};
   for (const [name, kind, resource] of [["videoA", "video", seeds.videoA], ["videoB", "video", seeds.videoB], ["comic", "comic", seeds.comic]] as const) {
     if (name === "videoA" && videoA) continue;
     if (!(await openFromShelf(view, kind, resource, 12_000, []))) { failures.push(`${name} did not open`); continue; }
     const id = await idOfNew();
     if (id) { ids[name] = id; before.add(id); } else failures.push(`${name} has no tab`);
   }
-  if (await openNote(view, seeds.noteId)) {
+  if (await openDraft(view, seeds)) {
     const id = await idOfNew();
-    if (id) ids.note = id; else failures.push("the note has no tab");
-  } else failures.push("the note did not open");
+    if (id) ids.draft = id; else failures.push("the draft has no tab");
+  } else failures.push("the draft did not open");
   // Each went to its own view; the four columns are laid out in the home, which holds all the tabs of the context (A-107).
   await railTo(view, "home");
   await closeTabs(view, ["library", "records"]);
-  if (!ids.videoA || !ids.videoB || !ids.comic || !ids.note) return { ids: ids as never, failures: [...failures, "a tab is missing"] };
+  if (!ids.videoA || !ids.videoB || !ids.comic || !ids.draft) return { ids: ids as never, failures: [...failures, "a tab is missing"] };
   return { ids: ids as never, failures };
 }
 
@@ -283,7 +310,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   await js(view, PRELUDE);
   await sleep(800);
 
-  // ---- tab switch: eight tabs of one column, three of them readers, pressed in turn ----
+  // ---- tab switch: eight tabs of one column, four of them readers, pressed in turn ----
   note("seeded; tab switch");
   await closeTabs(view, "all");
   // One tab that is neither a reader nor a note stands in the strip first: the projects page, from the home's entry.
@@ -292,6 +319,8 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     await openFromShelf(view, "novel", seeds.novels[0]!, 12_000, []),
     await openFromShelf(view, "comic", seeds.comic, 12_000, []),
     await openFromShelf(view, "video", seeds.videoA, 12_000, []),
+    // The shelves share one library tab now (LOOP-24 item 4), so a second video keeps the strip at the eight tabs the gate names.
+    await openFromShelf(view, "video", seeds.videoB, 12_000, []),
     await openNote(view, seeds.noteId),
   ];
   if (opened.some((ok) => !ok)) failures.push(`tab switch: not every tab opened (${JSON.stringify(opened)})`);
@@ -300,7 +329,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   await sleep(1200);
   const strip = await tabsOf(view);
   const tabMs: number[] = [];
-  if (strip.length < 6) failures.push(`tab switch: only ${strip.length} tabs`);
+  if (strip.length < 8) failures.push(`tab switch: only ${strip.length} tabs`);
   for (let round = 0; round < spec.switchRounds; round += 1) {
     for (const tab of strip) {
       if ((await tabsOf(view)).find((item) => item.id === tab.id)?.focused) continue;
@@ -383,7 +412,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     usual = median(baseline);
     baselineLatePct = baseline.length ? Math.round((baseline.filter((value) => value > usual * 1.5).length / baseline.length) * 10_000) / 100 : -1;
     if (!(usual > 0)) failures.push("quad: no frame interval was measured in one column");
-    if (!(await quadDrawn(view, [ids.videoA, ids.videoB, ids.comic, ids.note]))) failures.push("quad: the four columns were not all drawn");
+    if (!(await quadDrawn(view, [ids.videoA, ids.videoB, ids.comic, ids.draft]))) failures.push("quad: the four columns were not all drawn");
     if (!(await playerReady(view, ids.videoA)) || !(await playerReady(view, ids.videoB))) failures.push("quad: a player has no first frame");
     await sleep(1500);
     for (let run = 0; run < spec.quadRuns; run += 1) {
@@ -454,6 +483,8 @@ export async function measureWorkspaceMemory(appService: MangaProductApp, grant:
   const raw: number[] = [];
   const rows: Array<Record<string, unknown>> = [];
   note("memory: seeded");
+  // The quad is laid out in the project's context (its draft page is one of the four), so the single column is measured there too.
+  if (!(await enterProject(view, seeds))) return { ok: false, failures: ["the project's context could not be entered"] };
   for (let run = 0; run < spec.runs; run += 1) {
     await closeTabs(view, "all");
     const first = await openFromShelf(view, "video", seeds.videoA, 12_000, []) && await waitUntil(view, `${DRAWN}(${PICK}("video-reader"))`, 30_000);
@@ -467,7 +498,7 @@ export async function measureWorkspaceMemory(appService: MangaProductApp, grant:
     note("memory: single read");
     const four = await openFour(view, seeds, playerTab);
     if (!four || four.failures.length > 0) { failures.push(`run ${run + 1}: ${(four?.failures ?? ["the tabs did not open"]).join("; ")}`); break; }
-    if (!(await quadDrawn(view, [four.ids.videoA, four.ids.videoB, four.ids.comic, four.ids.note]))) { failures.push(`run ${run + 1}: the four columns were not all drawn`); break; }
+    if (!(await quadDrawn(view, [four.ids.videoA, four.ids.videoB, four.ids.comic, four.ids.draft]))) { failures.push(`run ${run + 1}: the four columns were not all drawn`); break; }
     note("memory: four columns drawn");
     if (!(await playBriefly(view, four.ids.videoA))) { failures.push(`run ${run + 1}: the player in the four columns did not play`); break; }
     await sleep(1500);

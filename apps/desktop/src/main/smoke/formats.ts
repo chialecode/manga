@@ -42,6 +42,7 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
     { name: "sample.mobi", format: "mobi", marker: "FORMAT-MOBI-MARK", bytes: Buffer.from(buildMobiFixture("FORMAT-MOBI-MARK")) },
   ];
   const opened: Record<string, boolean> = {};
+  const misses: Record<string, unknown> = {};
   let pdfDebug: Record<string, unknown> = {};
   let pdfLayer = "";
   let pdfSpans = 0;
@@ -63,9 +64,11 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   for (const book of books) {
     const resourceId = ids[book.format] ?? "";
     const clicked = await openFromShelf(view, "novel", resourceId);
+    // The focused tab's own panel: a reader restored from an earlier start stays mounted in a hidden panel, and its body comes first in the page.
     const visible = await waitUntil(view, `(() => {
-      const text = document.querySelector('[data-testid="reading-body"]')?.textContent ?? "";
-      const image = [...document.querySelectorAll('[data-testid="reading-page"] img')].some((item) => item.complete && item.naturalWidth > 0);
+      const panel = document.querySelector('[data-testid="tab-panel"][data-focused="true"]');
+      const text = panel?.querySelector('[data-testid="reading-body"]')?.textContent ?? "";
+      const image = [...(panel?.querySelectorAll('[data-testid="reading-page"] img') ?? [])].some((item) => item.complete && item.naturalWidth > 0);
       const tab = document.querySelector('[data-testid="tab"][data-focused="true"]');
       return tab && (text.includes(${JSON.stringify(book.marker)}) || (${JSON.stringify(book.format)} === "pdf" && image));
     })()`, 8000);
@@ -151,6 +154,8 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
       pdfError = atEnd.error;
       pdfReview = atEnd.review;
     } else opened[book.format] = clicked && visible;
+    // A book that did not show is described (the click, the focused tab, the start of what the reading body holds), so a failure can be placed.
+    if (!opened[book.format]) misses[book.format] = { clicked, visible, state: await js<Record<string, unknown>>(view, `(() => { const tab = document.querySelector('[data-testid="tab"][data-focused="true"]'); return { tab: tab?.getAttribute("data-kind") ?? null, title: (tab?.textContent ?? "").slice(0, 40), body: (document.querySelector('[data-testid="tab-panel"][data-focused="true"] [data-testid="reading-body"]')?.textContent ?? null)?.slice(0, 80) ?? null, bodies: document.querySelectorAll('[data-testid="reading-body"]').length }; })()`).catch(() => null) };
   }
   // Context switch: "最近" and a project each keep their own draft and their own tabs. The readers above are tabs of "最近"; a project made in the sidebar becomes the
   // window's context, shows none of them and none of the draft, and going back brings both back as they were.
@@ -179,5 +184,5 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   const failureVisible = await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-last-"]')].some((el) => /失败 [1-9]/.test(el.textContent || ""))`, 20000);
   testHooks.pick = undefined;
   const pages = books.every((book) => opened[book.format]);
-  return { ok: drafted && pages && switched && returned && failureVisible, pages, contexts: switched && returned, failureVisible, opened, pdfDebug, pdfLayer, pdfSpans, pdfError, pdfReview, loop06 };
+  return { ok: drafted && pages && switched && returned && failureVisible, pages, contexts: switched && returned, failureVisible, opened, ...(Object.keys(misses).length ? { misses } : {}), pdfDebug, pdfLayer, pdfSpans, pdfError, pdfReview, loop06 };
 }

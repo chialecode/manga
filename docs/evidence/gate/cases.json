@@ -1,10 +1,14 @@
 {
   "status": "passed",
-  "at": "2026-11-03T14:37:40.680Z",
-  "sourceFingerprint": "243bffd08f65270bacb9d18a3b4f6edf4d188764115c01f3a70e42d9b4c09d74",
-  "lockFingerprint": "b1b59cfe9cec9a65ec3211a39ee6437721fe93fd26bc944e2a181702f21ad791",
-  "testScriptFingerprint": "65a5d2109c884b29d93e736bf5a3c54bc94a718ac4e112685b86aea5be724dd0",
-  "buildScriptFingerprint": "1c0ce66045a98760c8a86b5b1f9bdc66678733c47cf9d33ac0a859cf132ac689",
+  "at": "2026-11-05T17:49:55.341Z",
+  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
+  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
+  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
+  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
+  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
+  "packageScriptFingerprint": "b22c03763c86d4d42a97f5504e787ccfaceb5d0482490b7ad34fe1831c3e5dc2",
+  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
+  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -6496,6 +6500,11 @@
         },
         {
           "file": "tests/library/operations.test.ts",
+          "name": "the message stream of a session reads from a loaded message to the newest for a refresh: the deleted ones gone, older ones still said to exist, at most 5000 (LOOP-07)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/operations.test.ts",
           "name": "the message stream of a session gathers a work's notes from every one of its resources for the work page",
           "status": "passed"
         },
@@ -12973,6 +12982,11 @@
           "file": "tests/agent/models-page.test.tsx",
           "name": "the page of the agent saves a limit when the field is left, in the unit the setting keeps, and puts back one that is out of range",
           "status": "passed"
+        },
+        {
+          "file": "tests/agent/models-page.test.tsx",
+          "name": "the page of the agent keeps the pictures and clips of tasks for the days set, or for ever",
+          "status": "passed"
         }
       ]
     },
@@ -13236,6 +13250,11 @@
         {
           "file": "tests/agent/trace-ui.test.tsx",
           "name": "the timeline of a task (AT-97) shows the model, the times and the tokens of the picked entry, and what was sent, indented",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace-ui.test.tsx",
+          "name": "the timeline of a task (AT-97) says how a request carried its PDF, clip and pictures, and why a richer form was not sent",
           "status": "passed"
         },
         {
@@ -14015,6 +14034,11 @@
         {
           "file": "tests/agent/connection-dialog.test.tsx",
           "name": "each field says what is wrong beside itself, before anything is sent checks the model's numbers beside their own fields",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/connection-dialog.test.tsx",
+          "name": "each field says what is wrong beside itself, before anything is sent asks for the size and length a model takes only once PDF or video is ticked, and checks them beside their fields",
           "status": "passed"
         },
         {
@@ -14823,6 +14847,11 @@
         },
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind keeps one library tab in a view: a work and the library pages go to it even with another tab in front (AT-147, LOOP-24 4)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
           "name": "AT-111 AT-114 AT-119 a view of one kind shows the downloads as one list that is not kept in a project",
           "status": "passed"
         },
@@ -14904,6 +14933,11 @@
         {
           "file": "tests/shell/workspace-controller.test.ts",
           "name": "a context that has nothing yet, and one that is gone (AT-111) does not seed a context that was saved with its tabs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/workspace-controller.test.ts",
+          "name": "a context that has nothing yet, and one that is gone (AT-111) keeps a context that was saved with every tab closed empty, and does not seed it (LOOP-24)",
           "status": "passed"
         },
         {
@@ -15255,6 +15289,11 @@
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
           "name": "AT-111 AT-114 AT-119 a view of one kind opens the management tab of a kind from its entry, in the context on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind keeps one library tab in a view: a work and the library pages go to it even with another tab in front (AT-147, LOOP-24 4)",
           "status": "passed"
         },
         {
@@ -15680,6 +15719,11 @@
         {
           "file": "tests/shell/sidebar-ui.test.tsx",
           "name": "AT-111 AT-114 AT-119 a view of one kind opens the management tab of a kind from its entry, in the context on screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind keeps one library tab in a view: a work and the library pages go to it even with another tab in front (AT-147, LOOP-24 4)",
           "status": "passed"
         },
         {
@@ -16632,6 +16676,371 @@
         {
           "file": "tests/reading/novel-pages.test.tsx",
           "name": "AT-140 contents, search and bookmarks at the reader's left floats over the text in a narrow reader, and a click on the text closes it",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-141-credentials-async",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "reading a credential (AT-141) opens an old ciphertext, writes the renewed one back once, and the renewed one opens without the old key",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "reading a credential (AT-141) still answers when the write-back fails, and keeps the old ciphertext",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "reading a credential (AT-141) does not overwrite a ciphertext saved while it was decrypting",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "reading a credential (AT-141) answers undefined for a missing row and throws for a ciphertext that does not open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "reading a credential (AT-141) refuses to save without platform protection, writes nothing and leaves the handle usable",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "credentials saved under an earlier key, read by the application (AT-141) the model key, the DanDanPlay credentials and the Bangumi token all open and are renewed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/credentials-async.test.ts",
+          "name": "credentials saved under an earlier key, read by the application (AT-141) settings report the vault as unavailable and saving a key fails without writing plain text",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-142-runtime-contract",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/runtime-contract.test.ts",
+          "name": "the two runtimes over openai-chat-completions (AT-142) send the same JSON Schema for a tool and report the same call",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/runtime-contract.test.ts",
+          "name": "the two runtimes over openai-chat-completions (AT-142) answer text, stream it and accept a picture the same way",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/runtime-contract.test.ts",
+          "name": "the two runtimes over openai-chat-completions (AT-142) stop giving events once the request is aborted, and report a cancel",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/runtime-contract.test.ts",
+          "name": "the two runtimes over openai-responses (AT-142) send the same JSON Schema for a tool and report the same call",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/runtime-contract.test.ts",
+          "name": "the two runtimes over openai-responses (AT-142) answer text, stream it and accept a picture the same way",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/runtime-contract.test.ts",
+          "name": "the two runtimes over openai-responses (AT-142) stop giving events once the request is aborted, and report a cancel",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-143-long-session",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) renders the rows near the viewport, not all 5000",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) keeps the message at the top of the viewport in place when an older page is loaded above it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) puts the next message at the top when the one there was deleted before a refresh",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) reads the next older page on its own near the top, and not again while it is on its way",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) brings a message that is not loaded yet into view: the pages above it first, then the message, highlighted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) stays at the very bottom when the newest message grows, and does not undo a scroll up that has not been reported yet",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) stays at the newest message when the browser lowers the position for shorter content (another conversation in the same list), and follows it as it grows",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/chat-long-session.test.tsx",
+          "name": "a long conversation's list (AT-143) says a message that is in no page is not there",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-144-agent-media",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/agent-media.test.ts",
+          "name": "the stills of a task, kept once and let go after the retention period (AT-144) keeps one copy of a still two runs share, and names it by hash in each snapshot",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media.test.ts",
+          "name": "the stills of a task, kept once and let go after the retention period (AT-144) lets the stills of ended runs go after the period, keeps those of running and recent runs, and a retry takes the same still from its unchanged source",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media.test.ts",
+          "name": "the stills of a task, kept once and let go after the retention period (AT-144) stops a retry with the reason when the source of an expired still changed, and sends no other picture",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media.test.ts",
+          "name": "the stills of a task, kept once and let go after the retention period (AT-144) keeps everything when the period is set to for ever, and the setting is checked",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media.test.ts",
+          "name": "the stills of a task, kept once and let go after the retention period (AT-144) a clean-up at the same moment as a retry gives the retry either the kept bytes or the still taken again, never part of one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace-ui.test.tsx",
+          "name": "the pictures a task froze, in its record (AT-144) shows a kept picture by its size and one past the retention period as a placeholder of the same shape, with its source",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace-ui.test.tsx",
+          "name": "the pictures a task froze, in its record (AT-144) shows no picture section when the task froze none",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v13-migration.test.ts",
+          "name": "schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05) moves every inline picture to one copy per content, keeps the hashes, backs up first and does nothing on the next start",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v13-migration.test.ts",
+          "name": "schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05) is interrupted after the first batch: the library is still v12 with its pictures inline, and the next start finishes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v13-migration.test.ts",
+          "name": "schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05) fails without changing anything when a write is refused, and opens normally once the cause is gone",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v13-migration.test.ts",
+          "name": "schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05) an application older than the library refuses to open it",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-145-whole-pdf",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "whole PDFs for a model that reads them (AT-145) sends the PDF the person chose as the file, on both protocols, and records only its size and pages",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "whole PDFs for a model that reads them (AT-145) falls back to text with the reason when any one condition fails",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "whole PDFs for a model that reads them (AT-145) keeps a file or a clip over the profile's size limit out, and says so with the size",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "whole PDFs for a model that reads them (AT-145) stops a retry when the PDF was replaced after the task was sent, and sends no other file",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-146-video-clip",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "the stretch a clip covers (AT-146) is the interval, else the ten seconds before the position, and never passes the position or the watched limit",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "clips of the video for a model that watches them (AT-146) cuts the interval without re-encoding from MKV, HEVC and variable-frame-rate sources, never ending past it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "clips of the video for a model that watches them (AT-146) sends frames with the reason when a condition fails, and keeps the clip inside what was watched",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/agent-media-native.test.ts",
+          "name": "clips of the video for a model that watches them (AT-146) after the retention period cuts the same clip again from the unchanged file, and stops when the file changed",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-147-workspace-rest",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/sidebar-ui.test.tsx",
+          "name": "AT-111 AT-114 AT-119 a view of one kind keeps one library tab in a view: a work and the library pages go to it even with another tab in front (AT-147, LOOP-24 4)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-148-data-locations",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "where a new installation keeps things (AT-148) puts the application's data under LOCALAPPDATA and the person's files under the registered Documents and Downloads folders, per channel",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "where a new installation keeps things (AT-148) writes nothing to the roaming profile or the home folder, and the Documents folder may be on another drive",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "where a new installation keeps things (AT-148) falls back to the home folder when LOCALAPPDATA is missing, keeps the variables and the person's overrides, and a test still needs its own root",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/data-locations-ui.test.tsx",
+          "name": "where the data lives, in the settings (AT-148, AT-149) names every partition exactly once, under the application's data, the person's files or the downloads",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/data-locations-ui.test.tsx",
+          "name": "where the data lives, in the settings (AT-148, AT-149) marks a partition that stayed at the old place, and cleans the old place only after asking",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/data-locations-ui.test.tsx",
+          "name": "where the data lives, in the settings (AT-148, AT-149) offers nothing once the old place was cleaned",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-149-location-upgrade",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "moving a profile from where earlier versions kept it (AT-149) copies the application's data, checks it, names the person's files where they are, marks the old place and deletes nothing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "moving a profile from where earlier versions kept it (AT-149) carries the overrides of the old pointer and moves a root the person had chosen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "moving a profile from where earlier versions kept it (AT-149) keeps the old place working when the copy fails or there is no room, writes no new pointer and tries again next time",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "moving a profile from where earlier versions kept it (AT-149) is killed during the copy: the old place still works, and the next start clears the half copy and finishes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "moving a profile from where earlier versions kept it (AT-149) does not overwrite a library already in the new place that no pointer names",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "moving a profile from where earlier versions kept it (AT-149) stops before copying when the disk has no room",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/data-locations-ui.test.tsx",
+          "name": "where the data lives, in the settings (AT-148, AT-149) names every partition exactly once, under the application's data, the person's files or the downloads",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/data-locations-ui.test.tsx",
+          "name": "where the data lives, in the settings (AT-148, AT-149) marks a partition that stayed at the old place, and cleans the old place only after asking",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/data-locations-ui.test.tsx",
+          "name": "where the data lives, in the settings (AT-148, AT-149) offers nothing once the old place was cleaned",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-150-installer",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150) is right for both channels",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150) keeps the two channels apart in what Windows tells apart",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150) names what is wrong in a configuration that would not do",
           "status": "passed"
         }
       ]

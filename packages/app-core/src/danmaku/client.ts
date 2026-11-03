@@ -11,7 +11,7 @@ export type DandanFetch = (url: string, init?: { method?: string; headers?: Reco
 export type DandanClientOptions = {
   fetch: DandanFetch;
   /** Read for every request, so a change of credentials in the settings applies at once. `null` means there are none: no request is sent. */
-  credentials: () => DandanCredentials | null;
+  credentials: () => DandanCredentials | null | Promise<DandanCredentials | null>;
   userAgent: string;
   origin?: string;
   timeoutMs?: number;
@@ -121,7 +121,7 @@ export class DandanClient {
   }
 
   private async call<T>(method: "GET" | "POST", path: string, query: Record<string, string | number | boolean | undefined>, body: unknown, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
-    const credentials = this.options.credentials();
+    const credentials = await this.options.credentials();
     if (!credentials) throw new MangaError("CREDENTIAL_UNAVAILABLE", "danmaku needs the application credentials of the DanDanPlay open platform", { details: { reason: "no_credentials" } });
     const paused = this.pausedForMs();
     if (paused > 0) throw new MangaError("RATE_LIMITED", "the danmaku service asked for a pause", { retryable: false, details: { reason: "backoff", retryAfterMs: paused } });

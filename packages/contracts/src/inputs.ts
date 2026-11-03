@@ -168,6 +168,7 @@ export const CommandInputs = {
   "inventory.repair": z.object({ id: id, pathHandle: id.optional() }).strict(),
   "settings.get": z.object({}).strict(),
   "settings.skipAi": z.object({}).strict(),
+  "settings.cleanLegacyLocation": z.object({}).strict(),
   "settings.proposeLocations": z.object({
     pathHandle: id.optional(),
     partitions: z.partialRecord(z.enum(LOCATION_PARTITIONS), id).optional(),

@@ -7,6 +7,7 @@ import { DEFAULT_MODEL_PROFILE, type ConnectionTestResult } from "@manga/contrac
 import { ModelsPage } from "../../apps/desktop/src/renderer/pages/settings/models-page.tsx";
 import { validateConnection, type PlainTestResult, type SaveConnectionResult } from "../../apps/desktop/src/renderer/pages/settings/connection-dialog.tsx";
 import { emptyForm, type ConnectionForm } from "../../apps/desktop/src/renderer/lib/types.ts";
+import { profilePatch, type ProfileForm } from "../../apps/desktop/src/renderer/lib/model-profile.ts";
 
 /**
  * AT-103 in the window (A-90): a model is added and changed in one dialog. Every field is checked before saving and says what is wrong beside itself;
@@ -158,6 +159,36 @@ describe("each field says what is wrong beside itself, before anything is sent",
     expect((await screen.findByTestId("field-error-output")).textContent).toContain("最大输出必须小于上下文窗口");
     expect(screen.queryByTestId("field-error-window")).toBeNull();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("asks for the size and length a model takes only once PDF or video is ticked, and checks them beside their fields", async () => {
+    const { save } = mount([]);
+    fireEvent.click(screen.getByTestId("models-add"));
+    fillValid();
+    expect(screen.queryByTestId("profile-file-limit")).toBeNull();
+    expect(screen.queryByTestId("profile-video-limit")).toBeNull();
+    fireEvent.click(screen.getByTestId("profile-input-pdf"));
+    expect((screen.getByTestId("profile-file-limit") as HTMLInputElement).value).toBe("20");
+    expect(screen.queryByTestId("profile-video-seconds")).toBeNull();
+    fireEvent.click(screen.getByTestId("profile-input-video"));
+    expect((screen.getByTestId("profile-video-limit") as HTMLInputElement).value).toBe("5");
+    expect((screen.getByTestId("profile-video-seconds") as HTMLInputElement).value).toBe("60");
+    type("profile-file-limit", "80");
+    submit();
+    expect((await screen.findByTestId("field-error-fileLimit")).textContent).toContain("1 到 50");
+    expect(document.activeElement?.getAttribute("data-testid")).toBe("profile-file-limit");
+    type("profile-file-limit", "8");
+    type("profile-video-seconds", "3");
+    submit();
+    expect((await screen.findByTestId("field-error-videoSeconds")).textContent).toContain("5 到 600");
+    expect(screen.queryByTestId("field-error-fileLimit")).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    type("profile-video-seconds", "30");
+    submit();
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    // What is saved is the patch of the two forms: the changed limits, in bytes and seconds.
+    const sent = save.mock.calls[0]![0] as { profile: ProfileForm; profileBefore: ProfileForm };
+    expect(profilePatch(sent.profileBefore, sent.profile).limits).toEqual({ fileBytes: 8 * 1024 * 1024, videoSeconds: 30 });
   });
 
   it("the same rules hold without the page", () => {

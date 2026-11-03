@@ -96,7 +96,7 @@ export type BangumiOptions = {
   /** Hosts (with port when not 443) the client may reach. Tests add their local fake server here. */
   allowedHosts?: string[];
   /** Access token for restricted content; sent to the API host only, never to image hosts. */
-  token?: () => string | undefined;
+  token?: () => string | undefined | Promise<string | undefined>;
   maxRetries?: number;
   timeoutMs?: number;
   concurrency?: number;
@@ -201,7 +201,7 @@ export class BangumiClient {
       let response: Response | undefined;
       for (let hop = 0; hop < 4; hop += 1) {
         const headers: Record<string, string> = { "user-agent": this.options.userAgent, accept: kind === "api" ? "application/json" : "image/*", ...init.headers };
-        const token = this.options.token?.();
+        const token = await this.options.token?.();
         // Only the API origin gets the token, also after a redirect to another allowed host (an image host, say).
         if (kind === "api" && token && url.origin === this.apiOrigin) headers.authorization = `Bearer ${token}`;
         const signal = init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs);

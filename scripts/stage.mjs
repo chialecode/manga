@@ -3,13 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runStageReport, runStageTest } from "./stage/test.mjs";
 
-// node scripts/stage.mjs test|bench|package|report
+// node scripts/stage.mjs gate|test|bench|package|installer|report
+// gate runs the whole gate in the order that fails soonest and skips a step whose result is still current (scripts/stage/gate.mjs).
 // The stage comes from the document registry (currentStage); the gate definition is scripts/stage/gate.json.
 // Output goes to dist/evidence-runs/<run>/ (run = STAGE_RUN or "current"); only the chosen final results are
 // copied to docs/evidence/gate/ by hand.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [command] = process.argv.slice(2);
-const usage = "usage: node scripts/stage.mjs test|bench|package|report";
+const usage = "usage: node scripts/stage.mjs gate|test|bench|package|installer|report";
 if (!command) {
   console.error(usage);
   process.exit(2);
@@ -21,9 +22,12 @@ function script(name) {
 }
 
 try {
-  if (command === "test") process.exitCode = runStageTest();
+  if (command === "gate") process.exitCode = script("gate");
+  else if (command === "test") process.exitCode = runStageTest();
   else if (command === "bench") process.exitCode = script("bench");
   else if (command === "package") process.exitCode = script("package");
+  // A real installation and removal of both channels (计划 4.10); run on its own, after package.
+  else if (command === "installer") process.exitCode = script("installer");
   else if (command === "report") process.exitCode = runStageReport();
   else {
     console.error(usage);

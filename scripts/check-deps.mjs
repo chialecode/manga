@@ -88,6 +88,32 @@ export function checkTree(base = root) {
   return errors;
 }
 
+// Electron 45 deprecates the synchronous safeStorage interface and 46 removes it (计划 4.1): product and test code use only the asynchronous one.
+// The one exception is the sample that reproduces what the Electron 44 release wrote.
+const SYNC_SAFE_STORAGE = /\b(?:isEncryptionAvailable|encryptString|decryptString)\s*\(/;
+const SYNC_SAFE_STORAGE_ALLOWED = new Set(["scripts/samples/legacy-credentials-e44.ts"]);
+const SOURCE_DIRS = ["packages", "apps", "plugins", "scripts", "tests"];
+
+export function checkSyncSafeStorage(base = root) {
+  const errors = [];
+  const visit = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".vite" || entry.name === "dist") continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else if (/\.(?:ts|tsx|mts|cts|mjs|cjs|js)$/.test(entry.name)) {
+        const relative = path.relative(base, full).replaceAll("\\", "/");
+        if (SYNC_SAFE_STORAGE_ALLOWED.has(relative) || relative === "scripts/check-deps.mjs") continue;
+        const lines = fs.readFileSync(full, "utf8").split("\n");
+        lines.forEach((line, index) => { if (SYNC_SAFE_STORAGE.test(line)) errors.push(`${relative}:${index + 1}: synchronous safeStorage call`); });
+      }
+    }
+  };
+  for (const dir of SOURCE_DIRS) visit(path.join(base, dir));
+  return errors;
+}
+
 function selfTest() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-dep-"));
   fs.mkdirSync(path.join(dir, "packages/contracts/src"), { recursive: true });
@@ -98,8 +124,15 @@ function selfTest() {
   put("packages/contracts/src/ok.ts", ['import { y } from "./bad.ts";']);
   put("plugins/acquisition-bt/src/reach.mjs", ['import { run } from "@manga/app-core";']);
   put("plugins/acquisition-bt/src/fine.mjs", ['import WebTorrent from "webtorrent";', 'import { connect } from "./link.mjs";']);
+  fs.mkdirSync(path.join(dir, "apps/desktop/src"), { recursive: true });
+  put("apps/desktop/src/vault.ts", ["const ok = safeStorage.isEncryptionAvailable();"]);
+  put("apps/desktop/src/async.ts", ["const ok = await safeStorage.isAsyncEncryptionAvailable(); const c = await safeStorage.encryptStringAsync(x);"]);
+  const syncErrors = checkSyncSafeStorage(dir);
   const errors = checkTree(dir);
   fs.rmSync(dir, { recursive: true, force: true });
+  if (!syncErrors.some((item) => item.includes("vault.ts")) || syncErrors.some((item) => item.includes("async.ts"))) {
+    throw new Error("dependency gate self-test did not tell a synchronous safeStorage call from an asynchronous one");
+  }
   if (!errors.some((item) => item.includes("electron"))) {
     throw new Error("dependency gate self-test did not fail on electron import");
   }
@@ -118,7 +151,7 @@ function selfTest() {
 }
 
 selfTest();
-const errors = checkTree(root);
+const errors = [...checkTree(root), ...checkSyncSafeStorage(root)];
 if (process.argv.includes("--self-test-only")) {
   console.log(JSON.stringify({ status: "passed", check: "dependency-boundary-self-test" }));
   process.exit(0);

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fingerprintKeys, p95, p99, readJson } from "./lib.mjs";
+import { fingerprintKeysOf, p95, p99, readJson } from "./lib.mjs";
 
 const REPORT_GENERATOR = "scripts/stage/test.mjs";
 
@@ -14,8 +14,8 @@ function checkP95(errors, bench, values, label, metric, limit) {
 }
 
 /**
- * Evaluate one run directory against the stage configuration. Missing files, results from a different
- * source/lock/test/build state, failed cases and absent measurements are all errors. The report never
+ * Evaluate one run directory against the stage configuration. Missing files, results from a different state of the inputs
+ * they depend on, failed cases and absent measurements are all errors. The report never
  * computes product acceptance.
  */
 export function evaluateStageEvidence(dir, fingerprints, config) {
@@ -25,7 +25,8 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
       errors.push(`${name}: missing or invalid JSON`);
       return false;
     }
-    for (const key of fingerprintKeys) {
+    // Only the inputs this result depends on (gate.json fingerprintOf): a change elsewhere does not make it stale.
+    for (const key of fingerprintKeysOf(config, name)) {
       if (item[key] !== fingerprints[key]) {
         errors.push(`${name}: missing or stale ${key}`);
         return false;
@@ -156,6 +157,13 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
   const pack = readJson(dir, "package.json");
   current("package.json", pack);
   if (pack && pack.status !== "passed") errors.push("package.json: result is not passed");
+  // LOOP-27: consecutive full passes on the same inputs (package.mjs counts them).
+  const streak = config.package.passStreak ?? 1;
+  if (pack && !((pack.passStreak ?? 0) >= streak)) errors.push(`package.json: ${pack.passStreak ?? 0} consecutive passes on these inputs, ${streak} required`);
+  // The real installation and removal (计划 4.10), on the package of these inputs.
+  const installer = readJson(dir, "installer.json");
+  current("installer.json", installer);
+  if (installer && installer.status !== "passed") errors.push("installer.json: result is not passed");
   if (pack) {
     for (const phase of config.package.smoke) {
       if (!(pack.smoke ?? []).includes(phase)) errors.push(`package.json: ${phase} smoke missing`);

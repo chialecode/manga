@@ -2,6 +2,8 @@ import type { Translator } from "@manga/i18n";
 import type { HostState } from "../../lib/api.ts";
 import type { SettingsPageId } from "../../lib/shell-model.ts";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
+import { LocationGroups } from "./location-groups.tsx";
+import { useState } from "react";
 
 type Job = { id: string; kind: string; stage: string; status: string };
 export type MigrationPlan = { handle: string; checkpointId: string; copies: Array<{ partition: string; bytes: number; target: string }> };
@@ -22,19 +24,36 @@ export function GeneralPage(props: {
   onCancelMigration: () => void;
   onRollbackRecovery: () => void;
   onRecoverJobs: () => void;
+  /** Deletes the application data an upgrade left at the old place; resolves to an error message, or null. */
+  onCleanLegacy?: () => Promise<string | null>;
   onGoto: (page: SettingsPageId) => void;
 }) {
   const { i18n, host, migration } = props;
   const t = i18n.t;
   const jobs = (props.settings?.recoveryJobs as Job[] | undefined) ?? [];
+  const legacy = props.settings?.legacyLocation as { root: string; bytes: number; cleaned: boolean } | null | undefined;
+  const [confirming, setConfirming] = useState(false);
+  const [cleanError, setCleanError] = useState("");
   return (
     <SettingsPage id="general" title={t("settings.page.general")}>
       <SettingsSection title={t("general.location")} hint={t("general.locationHint")} testId="general-location">
         <SettingsRow label={t("setup.channel")}><span data-testid="general-channel">{host.layout.channel}</span></SettingsRow>
         <SettingsRow label={t("setup.pointer")}><span className="settings-path" data-testid="general-pointer">{host.layout.pointerPath}</span></SettingsRow>
-        {Object.entries(host.layout.partitions).map(([name, value]) => (
-          <SettingsRow key={name} label={t("settings.partition", { name })}><span className="settings-path">{value}</span></SettingsRow>
-        ))}
+        <LocationGroups t={t} layout={host.layout} />
+        {legacy && !legacy.cleaned ? (
+          <SettingsRow label={t("general.legacy")} hint={t("general.legacyHint", { root: legacy.root, size: i18n.formatNumber(Math.round(legacy.bytes / 1024 / 1024)) })} testId="general-legacy">
+            {confirming ? (
+              <span className="settings-confirm" role="alertdialog" aria-label={t("general.legacyAsk")} data-testid="general-legacy-confirm">
+                <span>{t("general.legacyAsk")}</span>
+                <button type="button" className="danger-button" data-testid="general-legacy-clean-confirm" onClick={() => { setConfirming(false); void props.onCleanLegacy?.().then((error) => setCleanError(error ?? "")); }}>{t("general.legacyConfirm")}</button>
+                <button type="button" className="secondary-button" onClick={() => setConfirming(false)}>{t("chat.cancel")}</button>
+              </span>
+            ) : (
+              <button type="button" className="secondary-button" data-testid="general-legacy-clean" onClick={() => setConfirming(true)}>{t("general.legacyClean")}</button>
+            )}
+            {cleanError ? <span className="review-error" role="alert">{cleanError}</span> : null}
+          </SettingsRow>
+        ) : null}
         <SettingsRow label={t("general.move")} hint={t("general.moveHint")}>
           <button type="button" className="secondary-button" data-testid="general-move" onClick={props.onChooseLocation}>{t("settings.chooseDirectory")}</button>
         </SettingsRow>

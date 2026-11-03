@@ -56,6 +56,18 @@ export function createOpeners(get: () => OpenerDeps): Openers {
     return { ...(given.mode ? { mode: given.mode } : {}), ...(given.background ? { background: true } : {}) };
   };
 
+  /**
+   * The library tab a library page goes to (A-107, LOOP-24 item 4): the one in front if it is a library tab of the view on screen, else the view's
+   * other library tab; none when the page belongs to another feature view than the one on screen, or the view has no library tab yet.
+   */
+  function libraryTabFor(target: Record<string, unknown>) {
+    const view = c().view;
+    const fits = (tab: { kind: string; target: Record<string, unknown> }) => tab.kind === "library" && (view === "home" || viewOfTab(tab as never) === view) && (view === "home" || viewOfTab({ kind: "library", target } as never) === view);
+    const focused = c().focusedTab();
+    if (focused && fits(focused)) return focused;
+    return c().tabsOf().find(fits);
+  }
+
   /** The one question asked before any resource is opened (A-86): can its file be opened? A restore (`silent`) stays quiet. */
   async function gate(resourceId: string, silent = false): Promise<boolean> {
     const result = await attempt<Partial<OpenBlock> & { state?: string }>("library.openable", { resourceId });
@@ -105,10 +117,11 @@ export function createOpeners(get: () => OpenerDeps): Openers {
       const options = withIntent(given);
       const target = { page: "work", workId, ...(options.kind ? { kind: options.kind } : {}), ...(options.tab ? { tab: options.tab } : {}) };
       const title = options.title ?? t("tab.work");
-      const focused = c().focusedTab();
-      // The library tab in front goes to the work, when the work is of the view that tab is in (A-107); else the work opens in a tab of its own view.
-      if (!options.mode && !options.background && focused?.kind === "library" && (c().view === "home" || viewOfTab(focused) === viewOfTab({ kind: "library", target }))) {
-        if (JSON.stringify(focused.target) !== JSON.stringify(target)) c().navigate(focused.id, target, title);
+      // The library tab of the view goes to the work, when the work is of that view (A-107); else the work opens in a tab of its own view.
+      const existing = options.mode ? undefined : libraryTabFor(target);
+      if (existing) {
+        if (JSON.stringify(existing.target) !== JSON.stringify(target)) c().navigate(existing.id, target, title);
+        if (!options.background) c().focusTab(existing.id);
         return;
       }
       c().open({ kind: "library", target, title, mode: "new", ...(options.background ? { background: true } : {}) });
@@ -118,14 +131,12 @@ export function createOpeners(get: () => OpenerDeps): Openers {
       const options = withIntent(given);
       const target = { page };
       const title = libraryTitle(t, page);
-      const focused = c().focusedTab();
-      if (!options.mode && !options.background && focused?.kind === "library" && (c().view === "home" || viewOfTab(focused) === viewOfTab({ kind: "library", target }))) {
-        if (focused.target.page !== page || focused.target.workId) c().navigate(focused.id, target, title);
+      // A view has one library tab (LOOP-24 item 4): the shelf, the sidebar's management entries and the search box navigate it and bring it in front.
+      const existing = options.mode ? undefined : libraryTabFor(target);
+      if (existing) {
+        if (existing.target.page !== page || existing.target.workId) c().navigate(existing.id, target, title);
+        if (!options.background) c().focusTab(existing.id);
         return;
-      }
-      if (!options.mode) {
-        const existing = c().tabsOf().find((tab) => tab.kind === "library" && tab.target.page === page && !tab.target.workId);
-        if (existing) { if (!options.background) c().focusTab(existing.id); return; }
       }
       c().open({ kind: "library", target, title, mode: "new", ...(options.background ? { background: true } : {}) });
     },
