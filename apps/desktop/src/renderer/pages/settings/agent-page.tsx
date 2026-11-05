@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { DEFAULT_AGENT_LIMITS, DEFAULT_AGENT_TRACE_SETTINGS, type AgentLimits, type AgentTraceSettings } from "@manga/contracts/models";
+import { DEFAULT_AGENT_LIMITS, DEFAULT_AGENT_MEDIA_SETTINGS, DEFAULT_AGENT_TRACE_SETTINGS, type AgentLimits, type AgentMediaSettings, type AgentTraceSettings } from "@manga/contracts/models";
 import type { Translator } from "@manga/i18n";
 import { attempt } from "../../lib/api.ts";
 import { sizeLabel } from "../../lib/trace-model.ts";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
 
 type T = Translator["t"];
-type Loaded = { limits: AgentLimits; trace: AgentTraceSettings };
+type Loaded = { limits: AgentLimits; trace: AgentTraceSettings; media: AgentMediaSettings };
 
 /** A whole number the person types; it is kept when the field is left, and a value outside the range is put back with the reason. */
 function NumberField(props: { id: string; label: string; value: number; min: number; max: number; onSave: (value: number) => Promise<string | null> }) {
@@ -37,7 +37,7 @@ function NumberField(props: { id: string; label: string; value: number; min: num
  */
 export function AgentPage(props: { t: T; onError: (message: string) => void; onNotice: (message: string) => void; children?: ReactNode }) {
   const { t } = props;
-  const [settings, setSettings] = useState<Loaded>({ limits: DEFAULT_AGENT_LIMITS, trace: DEFAULT_AGENT_TRACE_SETTINGS });
+  const [settings, setSettings] = useState<Loaded>({ limits: DEFAULT_AGENT_LIMITS, trace: DEFAULT_AGENT_TRACE_SETTINGS, media: DEFAULT_AGENT_MEDIA_SETTINGS });
   const [stats, setStats] = useState<{ count: number; bytes: number } | null>(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -47,14 +47,14 @@ export function AgentPage(props: { t: T; onError: (message: string) => void; onN
   }, []);
 
   useEffect(() => {
-    void attempt<Loaded>("settings.getAgent").then((result) => { if (result.ok) setSettings(result.value); else props.onError(result.error.message); });
+    void attempt<Loaded>("settings.getAgent").then((result) => { if (result.ok) setSettings({ ...result.value, media: result.value.media ?? DEFAULT_AGENT_MEDIA_SETTINGS }); else props.onError(result.error.message); });
     void loadStats();
   }, []);
 
-  const save = useCallback(async (patch: { limits?: Partial<AgentLimits>; trace?: Partial<AgentTraceSettings> }): Promise<string | null> => {
+  const save = useCallback(async (patch: { limits?: Partial<AgentLimits>; trace?: Partial<AgentTraceSettings>; media?: Partial<AgentMediaSettings> }): Promise<string | null> => {
     const result = await attempt<Loaded>("settings.setAgent", patch);
     if (!result.ok) return result.error.message;
-    setSettings(result.value);
+    setSettings({ ...result.value, media: result.value.media ?? DEFAULT_AGENT_MEDIA_SETTINGS });
     props.onNotice(t("agent.saved"));
     // A shorter time or a smaller size cleans what is kept at once.
     if (patch.trace) void loadStats();
@@ -78,6 +78,17 @@ export function AgentPage(props: { t: T; onError: (message: string) => void; onN
         <SettingsRow label={t("agent.minutes")} hint={t("agent.minutesHint")} htmlFor="agent-minutes">
           <NumberField id="agent-minutes" label={t("agent.minutes")} min={1} max={30} value={Math.round(settings.limits.maxDurationMs / 60_000)} onSave={(value) => save({ limits: { maxDurationMs: value * 60_000 } })} />
         </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title={t("agent.media")} hint={t("agent.mediaLead")} testId="agent-media">
+        <SettingsRow label={t("agent.mediaForever")} htmlFor="agent-media-forever">
+          <input id="agent-media-forever" type="checkbox" data-testid="agent-media-forever" checked={settings.media.retentionDays === null}
+            onChange={(event) => { void save({ media: { retentionDays: event.target.checked ? null : DEFAULT_AGENT_MEDIA_SETTINGS.retentionDays } }).then((refused) => { if (refused) props.onError(refused); }); }} />
+        </SettingsRow>
+        {settings.media.retentionDays !== null ? (
+          <SettingsRow label={t("agent.mediaDays")} hint={t("agent.mediaDaysHint")} htmlFor="agent-media-days">
+            <NumberField id="agent-media-days" label={t("agent.mediaDays")} min={1} max={365} value={settings.media.retentionDays} onSave={(value) => save({ media: { retentionDays: value } })} />
+          </SettingsRow>
+        ) : null}
       </SettingsSection>
       <SettingsSection title={t("agent.trace")} hint={t("agent.traceLead")} testId="agent-trace">
         <SettingsRow label={t("agent.traceMode")} htmlFor="agent-trace-mode">

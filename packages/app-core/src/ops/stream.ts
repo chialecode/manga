@@ -6,15 +6,21 @@ import type { StreamItem, VoiceSessionLike } from "./stream-types.ts";
 
 export type { StreamItem } from "./stream-types.ts";
 
+/** The most messages a refresh from an earlier message returns; past it the newest are kept and "older messages" comes back (LOOP-07). */
+export const FROM_CAP = 5000;
+
 type SessionRow = { id: string; kind: string; target_id: string | null };
 
 const parse = <T>(raw: string | null | undefined, fallback: T): T => { if (!raw) return fallback; try { return JSON.parse(raw) as T; } catch { return fallback; } };
 
-export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | null, input: { sessionId: string; limit?: number; before?: string }): { items: StreamItem[]; hasMore: boolean; session: { id: string; kind: string; targetId: string | null; workId: string | null; resourceId: string | null } } {
+export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | null, input: { sessionId: string; limit?: number; before?: string; from?: string }): { items: StreamItem[]; hasMore: boolean; session: { id: string; kind: string; targetId: string | null; workId: string | null; resourceId: string | null } } {
   const session = store.sqlite.prepare("SELECT id, kind, target_id FROM agent_sessions WHERE id = ?").get(input.sessionId) as SessionRow | undefined;
   if (!session) throw new MangaError("NOT_FOUND", "session missing");
-  const limit = Math.min(1000, input.limit ?? 200);
+  // `from` reads every message from that time to the newest, at most FROM_CAP of them (a refresh that keeps the pages already loaded).
+  const from = input.from ?? "";
+  const limit = input.from !== undefined ? FROM_CAP : Math.min(1000, input.limit ?? 200);
   const before = input.before ?? "9999";
+  let older = false;
   const resourceId = session.kind === "resource" ? session.target_id : null;
   const workId = session.kind === "work" ? session.target_id : resourceId
     ? (store.sqlite.prepare("SELECT work_id FROM resources WHERE id = ?").get(resourceId) as { work_id: string | null } | undefined)?.work_id ?? null
@@ -31,13 +37,15 @@ export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | nul
   // Notes: those of this resource, or of the whole work for a work page. Each source is asked for one more than a page, so a source
   // that holds more than a page is seen to hold more; asking for exactly a page would read a full page as "nothing older".
   if (resourceId || (session.kind === "work" && workId)) {
-    const rows = resourceId
+    const noteRows = (upper: string, lower: string, count: number) => resourceId
       ? store.sqlite.prepare(`SELECT o.id, o.title, o.revision, o.payload_json, o.tags_json, o.created_at FROM content_objects o
-          WHERE o.type = 'notes.document' AND o.deleted_at IS NULL AND o.created_at < ?
+          WHERE o.type = 'notes.document' AND o.deleted_at IS NULL AND o.created_at < ? AND o.created_at >= ?
             AND (json_extract(o.scope_json, '$.resourceId') = ? OR EXISTS (SELECT 1 FROM refs f JOIN anchors a ON a.id = f.to_id WHERE f.from_object_id = o.id AND f.to_kind = 'anchor' AND a.resource_id = ?))
-          ORDER BY o.created_at DESC LIMIT ?`).all(before, resourceId, resourceId, limit + 1)
+          ORDER BY o.created_at DESC LIMIT ?`).all(upper, lower, resourceId, resourceId, count)
       : store.sqlite.prepare(`SELECT o.id, o.title, o.revision, o.payload_json, o.tags_json, o.created_at FROM content_objects o
-          WHERE o.type = 'notes.document' AND o.deleted_at IS NULL AND o.created_at < ? AND o.work_id = ? ORDER BY o.created_at DESC LIMIT ?`).all(before, workId, limit + 1);
+          WHERE o.type = 'notes.document' AND o.deleted_at IS NULL AND o.created_at < ? AND o.created_at >= ? AND o.work_id = ? ORDER BY o.created_at DESC LIMIT ?`).all(upper, lower, workId, count);
+    const rows = noteRows(before, from, limit + 1);
+    if (from && noteRows(from, "", 1).length > 0) older = true;
     for (const row of rows as Array<{ id: string; title: string; revision: number; payload_json: string; tags_json: string; created_at: string }>) {
       const document = parse<{ blocks?: Array<{ id: string; type: string; text: string; anchorId?: string }> }>(row.payload_json, {});
       const blocks = document.blocks ?? [];
@@ -59,6 +67,7 @@ export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | nul
     const sessions = voice.list(resourceId ? { resourceId, limit: Math.min(limit, 100) } : { workId: workId!, limit: Math.min(limit, 100) }).sessions;
     for (const view of sessions) {
       if (view.createdAt >= before) continue;
+      if (view.createdAt < from) { older = true; continue; }
       const segments = store.sqlite.prepare("SELECT start_ms, COALESCE(revised_text, text) AS text, anchors_json FROM transcript_segments WHERE session_id = ? AND state = 'done' ORDER BY start_ms, seq").all(view.id) as Array<{ start_ms: number; text: string; anchors_json: string }>;
       items.push({
         kind: "voice", id: view.id, at: view.createdAt, stage: view.stage, audioState: view.audioState, playable: view.playable, durationMs: view.durationMs,
@@ -74,7 +83,8 @@ export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | nul
   }
 
   // The questions asked of the Agent in this session, and its answers.
-  const runs = store.sqlite.prepare("SELECT id, status, input_text, live_text, error_json, created_at, updated_at FROM agent_runs WHERE session_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?").all(session.id, before, limit + 1) as Array<{
+  if (from && store.sqlite.prepare("SELECT 1 FROM agent_runs WHERE session_id = ? AND created_at < ? LIMIT 1").get(session.id, from)) older = true;
+  const runs = store.sqlite.prepare("SELECT id, status, input_text, live_text, error_json, created_at, updated_at FROM agent_runs WHERE session_id = ? AND created_at < ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?").all(session.id, before, from, limit + 1) as Array<{
     id: string; status: string; input_text: string; live_text: string | null; error_json: string | null; created_at: string; updated_at: string;
   }>;
   for (const run of runs) {
@@ -91,6 +101,6 @@ export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | nul
   // Newest `limit` items, oldest first. At equal times a question comes before its answer.
   const order = { note: 0, voice: 1, user: 2, agent: 3 } as const;
   items.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : order[a.kind] - order[b.kind]));
-  const hasMore = items.length > limit;
-  return { items: hasMore ? items.slice(items.length - limit) : items, hasMore, session: { id: session.id, kind: session.kind, targetId: session.target_id, workId, resourceId } };
+  const cut = items.length > limit;
+  return { items: cut ? items.slice(items.length - limit) : items, hasMore: cut || older, session: { id: session.id, kind: session.kind, targetId: session.target_id, workId, resourceId } };
 }

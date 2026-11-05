@@ -6,9 +6,9 @@ import { DrizzleStore } from "@manga/storage-drizzle";
 import { defineModule, type MangaModule } from "@manga/plugin-sdk";
 import type { AiRuntimeId } from "@manga/model-protocol";
 import { readShell, writeShell } from "../reading-service.ts";
-import { comparablePath } from "../domain/file-ownership.ts";
+import { comparablePath, pathsOverlap } from "../domain/file-ownership.ts";
 import { recoverOrRollback } from "../domain/library-package.ts";
-import { assertSafeMigrationTarget, copyOwnedFile, fingerprintTree, listCopyFiles, persistPointer, persistPointerAt, writeRelocationMarker } from "../locations.ts";
+import { APP_PARTITIONS, assertSafeMigrationTarget, copyOwnedFile, directoryStats, fingerprintTree, listCopyFiles, persistPointer, persistPointerAt, writeRelocationMarker } from "../locations.ts";
 import { readAgentSettings, writeAgentSettings } from "../agent-settings.ts";
 import { readMediaSettings, readRecordingSettings, writeMediaSettings, writeRecordingSettings } from "../voice/settings.ts";
 import { usageQuery } from "../ops/usage.ts";
@@ -53,6 +53,7 @@ export function settingsModule(app: SettingsHost): MangaModule {
         return proposeLocations(app, envelope);
       });
       app.runtime.registerCommand("manga.settings", "settings.applyLocations", (envelope) => applyLocations(app, envelope));
+      app.runtime.registerCommand("manga.settings", "settings.cleanLegacyLocation", (envelope) => cleanLegacyLocation(app, envelope));
       app.runtime.registerCommand("manga.settings", "settings.recoverJobs", (envelope) => {
         // A sealed host no longer owns the authoritative library; its stale job rows must not drive deletions.
         app.assertWritable();
@@ -129,20 +130,63 @@ export function settingsModule(app: SettingsHost): MangaModule {
   });
 }
 
-export function settingsSnapshot(app: SettingsHost) {
+export async function settingsSnapshot(app: SettingsHost) {
   return {
     layout: app.publicLayout(),
     pointerPath: app.layout.pointerPath,
     layoutConfig: app.store.getMeta("layoutConfig") ? JSON.parse(app.store.getMeta("layoutConfig")!) : { pointerPath: app.layout.pointerPath, partitions: app.layout.overrides },
     aiSkipped: app.store.getMeta("aiSkipped") === "1",
     aiRuntime: currentRuntime(app),
-    vaultAvailable: app.vault.available(),
+    vaultAvailable: await app.vault.available(),
     connections: listConnections(app),
     recoveryJobs: app.pendingRecoveryJobs(),
     restartRequired: app.sealed,
     needsSetup: app.store.getMeta("aiSkipped") !== "1" && listConnections(app).length === 0,
     shell: readShell(app.store),
+    legacyLocation: legacyLocation(app),
   };
+}
+
+type LegacyRecord = { root: string; carried: string[]; at: string; cleaned: boolean };
+
+/** The application data an upgrade left at the old place (计划 4.9): what the clean-up would delete, never a partition still in use. */
+function legacyTargets(app: SettingsHost, record: LegacyRecord): string[] {
+  const inUse = Object.values(app.layout.partitions);
+  return [...APP_PARTITIONS, "launcher"]
+    .filter((name) => !record.carried.includes(name))
+    .map((name) => path.join(record.root, name))
+    .filter((dir) => fs.existsSync(dir) && !inUse.some((used) => pathsOverlap(used, dir)) && !pathsOverlap(dir, app.layout.defaultRoot));
+}
+
+function legacyRecord(app: SettingsHost): LegacyRecord | null {
+  const raw = app.store.getMeta("legacyLocation");
+  if (!raw) return null;
+  try { return JSON.parse(raw) as LegacyRecord; } catch { return null; }
+}
+
+export function legacyLocation(app: SettingsHost): { root: string; bytes: number; cleaned: boolean } | null {
+  const record = legacyRecord(app);
+  if (!record) return null;
+  const bytes = record.cleaned ? 0 : legacyTargets(app, record).reduce((sum, dir) => sum + directoryStats(dir).bytes, 0);
+  return { root: record.root, bytes, cleaned: record.cleaned };
+}
+
+/**
+ * Delete the application data the move left at the old place, after the person confirmed it (计划 4.9). The person's files there are still in use and
+ * stay; so does the marker that sends an older version to the new place.
+ */
+export function cleanLegacyLocation(app: SettingsHost, envelope: CommandEnvelope) {
+  app.assertWritable();
+  if (app.grantOf(envelope).access !== "owner") throw new MangaError("FORBIDDEN", "only the owner can clean the old location");
+  const record = legacyRecord(app);
+  if (!record || record.cleaned) throw new MangaError("NOT_FOUND", "there is no old location to clean");
+  let bytes = 0;
+  for (const dir of legacyTargets(app, record)) {
+    bytes += directoryStats(dir).bytes;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  app.store.setMeta("legacyLocation", JSON.stringify({ ...record, cleaned: true }));
+  return { root: record.root, bytes, cleaned: true };
 }
 
 export function currentRuntime(app: SettingsHost): AiRuntimeId {

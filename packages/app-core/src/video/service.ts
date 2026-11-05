@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -595,6 +596,41 @@ export class VideoService {
     const row = this.load(resourceId, revisionId);
     const file = this.requireFile(row);
     return this.media.ffmpeg.frameJpeg(file, (timeMs + row.probe.startMs) / 1000, maxEdge, { signal, background });
+  }
+
+  /**
+   * A stretch of the video as an MP4 clip, without re-encoding (计划 4.5): the first video and the first audio stream, no subtitles or data. The seek goes to
+   * the keyframe at or before the start, so the clip may begin a little earlier; it lasts `durationMs` from there, so it never ends after the asked end.
+   * A codec MP4 cannot hold fails here, and the caller sends frames instead.
+   */
+  async clipBytes(resourceId: string, revisionId: string, startMs: number, durationMs: number, signal?: AbortSignal): Promise<Buffer> {
+    const row = this.load(resourceId, revisionId);
+    const file = this.requireFile(row);
+    const dir = path.join(this.media.cacheDir, "agent-clips");
+    fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, `${randomUUID()}.mp4`);
+    const redactPaths = [file, path.dirname(file), out];
+    const hevc = row.probe.streams.find((stream) => stream.type === "video")?.codec === "hevc";
+    const cut = (seconds: number) => this.media.ffmpeg.run("ffmpeg", [
+      "-v", "error", "-nostdin", "-y", "-ss", ((startMs + row.probe.startMs) / 1000).toFixed(3), "-i", file, "-t", seconds.toFixed(3),
+      "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn", "-map_chapters", "-1", "-map_metadata", "-1", "-c", "copy", ...(hevc ? ["-tag:v", "hvc1"] : []),
+      "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-f", "mp4", out,
+    ], { signal, timeoutMs: 120_000, redactPaths });
+    try {
+      await cut(durationMs / 1000);
+      // A copy stops in decode order, so with B-frames the frames shown last can lie past the end by the reorder delay, which the clip's first
+      // presentation time shows; cut again that much shorter, so nothing after the asked end is in it.
+      const probe = await this.media.ffmpeg.run("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=start_time", "-of", "csv=p=0", "-i", out], { signal, timeoutMs: 30_000, redactPaths });
+      const delay = Number.parseFloat(probe.stdout.toString("utf8").trim());
+      if (Number.isFinite(delay) && delay > 0.001) {
+        const shorter = durationMs / 1000 - delay;
+        if (shorter <= 0) throw new MangaError("UNSUPPORTED_FORMAT", "the clip is shorter than the stream's reorder delay");
+        await cut(shorter);
+      }
+      return fs.readFileSync(out);
+    } finally {
+      fs.rmSync(out, { force: true });
+    }
   }
 
   /** A still for the library: about a tenth of the way in, where credits and logos are rarely. */

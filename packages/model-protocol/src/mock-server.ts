@@ -15,6 +15,8 @@ export type MockProviderOptions = {
   onRequest?: (request: { url: string; body: Record<string, unknown> }) => void;
   /** Answers a request in place of the usual answer: an error status with its message, or the words to say (and the input tokens the service claims to have counted). */
   respond?: (request: { url: string; body: Record<string, unknown> }) => undefined | { status: number; message: string } | { text: string; inputTokens?: number };
+  /** The only key the service accepts (`Authorization: Bearer <key>`); any other gets a 401. Without it every key is accepted. */
+  expectKey?: string;
 };
 
 export function startMockProvider(options: MockProviderOptions = {}): Promise<{ url: string; close: () => Promise<void> }> {
@@ -23,6 +25,11 @@ export function startMockProvider(options: MockProviderOptions = {}): Promise<{ 
   const server = http.createServer((req, res) => {
     const url = req.url ?? "";
     if (mode === "timeout") return;
+    if (options.expectKey !== undefined && req.headers.authorization !== `Bearer ${options.expectKey}`) {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { message: "invalid api key" } }));
+      return;
+    }
     if (mode === "disconnect") {
       req.socket.destroy();
       return;

@@ -110,6 +110,11 @@ export function useSettingsActions(s: Services, active: boolean) {
     onCancelMigration: () => setMigration(null),
     onRollbackRecovery: () => void failing("settings.recoverJobs", { action: "rollback" }).then(() => s.refresh()),
     onRecoverJobs: () => void failing("settings.recoverJobs", { action: "recover" }).then(() => s.refresh()),
+    onCleanLegacy: async () => {
+      const result = await attempt("settings.cleanLegacyLocation");
+      await s.refresh();
+      return result.ok ? null : result.error.message;
+    },
   };
   const models: SettingsViewProps["models"] = {
     onRuntime: async (runtime) => { await failing("settings.setRuntime", { runtime }); await s.refresh(); },

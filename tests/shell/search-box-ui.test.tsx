@@ -45,14 +45,20 @@ function start(options: Parameters<typeof installHost>[0] = {}) {
 
 const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(window, { key, ...init });
 const input = () => screen.getByTestId("search-input") as HTMLInputElement;
+const LATE = { timeout: 2000 };
+/**
+ * The window takes up its keys in an effect after the sidebar is drawn; under the load of the whole suite that can be a moment later, and a Ctrl+K
+ * before it is lost (LOOP-27). The box opens in the same act as the key, so the key is pressed again only while the box is not there, until it is.
+ */
 async function openBox(host: ReturnType<typeof installHost>) {
   await screen.findByTestId("sidebar");
-  press("k", { ctrlKey: true });
-  await screen.findByTestId("search-box");
+  await waitFor(() => {
+    if (!screen.queryByTestId("search-box")) press("k", { ctrlKey: true });
+    expect(screen.getByTestId("search-box")).toBeTruthy();
+  }, LATE);
   return host;
 }
 const type = (text: string) => fireEvent.change(input(), { target: { value: text } });
-const LATE = { timeout: 2000 };
 
 describe("AT-121 the search box is a floating box over the window", () => {
   it("has a class of its own: the shelf's search field keeps its rules and the box takes none of them, and no class has its base rule in two stylesheets", () => {

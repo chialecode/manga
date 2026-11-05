@@ -10,6 +10,9 @@ import { frontierConsumed } from "./progress-service.ts";
 import { describeMediaLocator } from "./domain/media-anchors.ts";
 import { makeThumbnail } from "./media/thumbnails.ts";
 import type { Cue } from "./video/cues.ts";
+import type { SourceStamp } from "./agent-media.ts";
+import type { FrozenClip, FrozenFile } from "./agent-native-input.ts";
+import type { DeliveryNote } from "./agent-trace.ts";
 
 /**
  * What an Agent task may be given from comics, videos and recordings, and how much of it.
@@ -54,7 +57,15 @@ export type PreparedImage = {
   extraction: string;
 };
 
-export type FrozenImage = PreparedImage & { id: string };
+/** A prepared still waiting in the stash, with its bytes. */
+export type StashedImage = PreparedImage & { id: string };
+
+/**
+ * A still as a run's snapshot keeps it (计划 4.4): the bytes are in `agent_media` under `hash`; the source, size and how it was made stay here. `stamp` is the
+ * source file as it was, so a retry after the retention period extracts again only from the same file. `expired` is set when the bytes were let go.
+ * `base64` is only ever read: a v12 snapshot that was not moved still carries its picture inline.
+ */
+export type FrozenImage = Omit<PreparedImage, "base64"> & { id: string; hash: string; stamp?: SourceStamp | null; expired?: true; base64?: string };
 
 export type SubtitleGuard = "progress" | "position" | "widened";
 
@@ -109,6 +120,12 @@ export type FrozenMedia = {
   captures?: FrozenCapture[];
   library?: { total: number; works: FrozenLibraryWork[] };
   images?: FrozenImage[];
+  /** Whole PDFs sent as files (计划 4.5). */
+  files?: FrozenFile[];
+  /** The stretch of the video sent as a clip (计划 4.5). */
+  clip?: FrozenClip;
+  /** What was decided at send time for the PDFs and the video: sent whole, or text and frames with the reason. */
+  delivery?: DeliveryNote[];
 };
 
 export type AgentMediaInput = {
@@ -154,10 +171,10 @@ export class ImageStash {
   }
 
   /** The stills for a send, within the count and byte budget. A missing one is an error: a task never silently drops what the user attached. */
-  take(ids: string[], now = Date.now()): FrozenImage[] {
+  take(ids: string[], now = Date.now()): StashedImage[] {
     this.sweep(now);
     if (ids.length > IMAGE_BUDGET.maxImages) throw new MangaError("BUDGET_EXCEEDED", `a task takes at most ${IMAGE_BUDGET.maxImages} images`);
-    const out: FrozenImage[] = [];
+    const out: StashedImage[] = [];
     let total = 0;
     for (const id of new Set(ids)) {
       const entry = this.items.get(id);
@@ -266,6 +283,17 @@ export class AgentMaterials {
   private finish(image: PreparedImage) {
     const materialId = this.stash.put(image);
     return { materialId, ...image };
+  }
+
+  /** The same still taken again from where it first came from (a retry after the retention period, 计划 4.4); it does not stay in the stash. */
+  async extractAgain(origin: ImageOrigin, size: { width: number; height: number }, signal?: AbortSignal): Promise<PreparedImage> {
+    const maxEdge = Math.max(size.width, size.height);
+    const made = origin.kind === "comic_region"
+      ? await this.comicRegion({ resourceId: origin.resourceId, resourceRevisionId: origin.resourceRevisionId, pageId: origin.pageId, region: origin.region, maxEdge }, signal)
+      : await this.videoFrame({ resourceId: origin.resourceId, resourceRevisionId: origin.resourceRevisionId, timeMs: origin.timeMs, maxEdge }, signal);
+    const { materialId, ...image } = made;
+    this.stash.discard([materialId]);
+    return image;
   }
 
   // ------------------------------------------------------------------ subtitles
@@ -535,12 +563,15 @@ export function renderMedia(media: FrozenMedia): string[] {
   for (const capture of media.captures ?? []) parts.push(renderCapture(capture));
   if (media.library) parts.push(renderLibrary(media.library));
   if (media.images?.length) parts.push(renderImages(media.images));
+  for (const file of media.files ?? []) parts.push(`原文件：《${file.filename}》（${file.pages} 页，${Math.round(file.bytes / 1024)} KB）作为 PDF 附在提问里，版面与插图以原文件为准。`);
+  if (media.clip) parts.push(`视频片段：${clockOf(media.clip.startMs)} – ${clockOf(media.clip.endMs)}（${media.clip.seconds} 秒）作为视频附在提问里；片段之后的内容没有给出，不要推测。`);
   return parts;
 }
 
-/** What the renderer may see of a frozen task: the receipt without the picture bytes. */
-export function publicMedia(media: FrozenMedia | undefined): (Omit<FrozenMedia, "images"> & { images?: Array<Omit<FrozenImage, "base64">> }) | undefined {
+/** What the renderer may see of a frozen task: the receipt without the picture bytes or the file stamp; an expired picture says so. */
+export function publicMedia(media: FrozenMedia | undefined): (Omit<FrozenMedia, "images" | "clip"> & { images?: Array<Omit<FrozenImage, "base64" | "stamp">>; clip?: Omit<FrozenClip, "stamp"> }) | undefined {
   if (!media) return undefined;
-  return { ...media, ...(media.images ? { images: media.images.map(({ base64: _base64, ...rest }) => rest) } : {}) };
+  const clip = media.clip ? (({ stamp: _stamp, ...rest }) => rest)(media.clip) : undefined;
+  return { ...media, ...(media.images ? { images: media.images.map(({ base64: _base64, stamp: _stamp, ...rest }) => rest) } : {}), ...(clip ? { clip } : {}) };
 }
 

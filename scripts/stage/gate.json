@@ -12,25 +12,110 @@
     "lock": [
       "pnpm-lock.yaml"
     ],
-    "test": [
-      "tests",
-      "scripts/stage.mjs",
-      "scripts/stage",
-      "scripts/samples",
-      "vitest.config.ts"
-    ],
     "build": [
       "scripts/desktop-paths.ts",
+      "scripts/desktop-assets.ts",
+      "scripts/desktop-plugins.ts",
+      "scripts/pack-plugin.mjs",
       "scripts/verify-electron-sqlite.mjs",
       "scripts/dev-desktop.mjs",
       "apps/desktop/forge.config.ts",
       "apps/desktop/package.json",
       "apps/desktop/vite.main.config.ts",
       "apps/desktop/vite.renderer.config.ts",
-      "apps/desktop/vite.preload.config.ts",
-      "scripts/desktop-assets.ts"
+      "apps/desktop/vite.preload.config.ts"
+    ],
+    "gate": [
+      "scripts/stage.mjs",
+      "scripts/stage/lib.mjs",
+      "scripts/stage/gate.json",
+      "scripts/stage/gate.mjs"
+    ],
+    "test": [
+      "tests",
+      "vitest.config.ts",
+      "scripts/samples",
+      "scripts/stage/test.mjs",
+      "scripts/stage/report.mjs",
+      "scripts/stage/installer-lib.mjs",
+      "scripts/stage-report.test.mjs",
+      "scripts/check-docs.mjs",
+      "scripts/check-docs.test.mjs"
+    ],
+    "package": [
+      "scripts/stage/package.mjs",
+      "scripts/stage/installer-lib.mjs",
+      "scripts/stage/temp-dirs.mjs",
+      "scripts/samples",
+      "tests/helpers"
+    ],
+    "bench": [
+      "scripts/stage/bench.mjs",
+      "scripts/stage/bench-agent-media.mjs",
+      "scripts/stage/bench-bt.mjs",
+      "scripts/stage/bench-canvas.mjs",
+      "scripts/stage/bench-cold-start.mjs",
+      "scripts/stage/bench-creative.mjs",
+      "scripts/stage/bench-import.mjs",
+      "scripts/stage/bench-reader.mjs",
+      "scripts/stage/bench-scale.mjs",
+      "scripts/stage/bench-scan-pane.mjs",
+      "scripts/stage/bench-workspace.mjs",
+      "scripts/stage/power-throttling.mjs",
+      "scripts/stage/temp-dirs.mjs",
+      "scripts/samples",
+      "tests/helpers"
+    ],
+    "installer": [
+      "scripts/stage/installer.mjs",
+      "scripts/stage/installer-lib.mjs"
     ]
   },
+  "fingerprintOf": {
+    "cases.json": [
+      "source",
+      "lock",
+      "build",
+      "gate",
+      "test"
+    ],
+    "test-run.json": [
+      "source",
+      "lock",
+      "build",
+      "gate",
+      "test"
+    ],
+    "package.json": [
+      "source",
+      "lock",
+      "build",
+      "gate",
+      "package"
+    ],
+    "scenarios.json": [
+      "source",
+      "lock",
+      "build",
+      "gate",
+      "package"
+    ],
+    "installer.json": [
+      "source",
+      "lock",
+      "build",
+      "gate",
+      "installer"
+    ],
+    "bench.json": [
+      "source",
+      "lock",
+      "build",
+      "gate",
+      "bench"
+    ]
+  },
+
   "bench": {
     "targets": {
       "searchP95Ms": 500,
@@ -84,7 +169,13 @@
       "novelOpenP95Ms": 500,
       "scaleHomeListP95Ms": 100,
       "scaleMediaGridP95Ms": 120,
-      "scaleScanLateFramePct": 2
+      "scaleScanLateFramePct": 2,
+      "chatOpenP95Ms": 300,
+      "chatInputP95Ms": 50,
+      "chatLateFramePct": 2,
+      "chatOlderPageP95Ms": 150,
+      "clip60P95Ms": 2000,
+      "freeze4mbP95Ms": 200
     },
     "scale": {
       "metadataCount": 10000,
@@ -421,6 +512,60 @@
           "characters": 300000
         },
         "requirement": "AT-139：小说打开一章到第一页画好，30 万字的一章，p95 ≤ 500 ms"
+      },
+      "chatOpen": {
+        "metric": "chatOpenP95Ms",
+        "stat": "p95",
+        "minSamples": 10,
+        "scale": {
+          "messages": 5000
+        },
+        "requirement": "AT-143：5000 条消息的对话，按下停靠栏的开关到最新一屏画出（列表重新挂载并读取），p95 ≤ 300 ms（实际窗口，页面内计时）"
+      },
+      "chatInput": {
+        "metric": "chatInputP95Ms",
+        "stat": "p95",
+        "minSamples": 60,
+        "scale": {
+          "messages": 5000
+        },
+        "requirement": "AT-143：5000 条消息的对话下，输入框的输入到 React 提交后的布局，p95 ≤ 50 ms（实际窗口）"
+      },
+      "chatLateFrame": {
+        "metric": "chatLateFramePct",
+        "stat": "max",
+        "minSamples": 5,
+        "scale": {
+          "messages": 5000
+        },
+        "requirement": "AT-143：5000 条消息的对话每帧向上滚 60 px、持续 3 s（途中载入更早的页），晚于空闲时常规帧间隔 1.5 倍的帧占比，五次取最大，≤ 2 %"
+      },
+      "chatOlderPage": {
+        "metric": "chatOlderPageP95Ms",
+        "stat": "p95",
+        "minSamples": 8,
+        "scale": {
+          "messages": 5000
+        },
+        "requirement": "AT-143：列表到顶后，更早一页的消息进入列表并画出，p95 ≤ 150 ms（实际窗口）"
+      },
+      "clip60": {
+        "metric": "clip60P95Ms",
+        "stat": "p95",
+        "minSamples": 8,
+        "scale": {
+          "seconds": 60
+        },
+        "requirement": "AT-146：从 90 s 的 H.264 文件无转码截取 60 s 片段，到片段的字节在内存里，p95 ≤ 2000 ms"
+      },
+      "freeze4mb": {
+        "metric": "freeze4mbP95Ms",
+        "stat": "p95",
+        "minSamples": 20,
+        "scale": {
+          "bytes": 4194304
+        },
+        "requirement": "AT-144：冻结一张 4 MB 的图像（SHA-256 与存放它的一次事务），p95 ≤ 200 ms"
       }
     },
     "canvas": {
@@ -458,6 +603,7 @@
     }
   },
   "package": {
+    "passStreak": 3,
     "smoke": [
       "initial",
       "restart",
@@ -475,7 +621,15 @@
       "workspace-migrated",
       "creative",
       "trace",
-      "plugins"
+      "plugins",
+      "loop",
+      "credentials-async",
+      "credentials-async-restart",
+      "migrate-v13",
+      "migrate-v13-restart",
+      "migrate-v13-newer",
+      "data-locations-fresh",
+      "data-locations-upgrade"
     ],
     "pluginSteps": [
       "offered-not-installed",
@@ -2546,6 +2700,76 @@
       "tests": [
         "AT-140 "
       ]
+    },
+    {
+      "id": "AT-141-credentials-async",
+      "kind": "automated",
+      "tests": [
+        "AT-141(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-142-runtime-contract",
+      "kind": "automated",
+      "tests": [
+        "AT-142(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-143-long-session",
+      "kind": "automated",
+      "tests": [
+        "AT-143(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-144-agent-media",
+      "kind": "automated",
+      "tests": [
+        "AT-144(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-145-whole-pdf",
+      "kind": "automated",
+      "tests": [
+        "AT-145(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-146-video-clip",
+      "kind": "automated",
+      "tests": [
+        "AT-146(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-147-workspace-rest",
+      "kind": "automated",
+      "tests": [
+        "AT-147(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-148-data-locations",
+      "kind": "automated",
+      "tests": [
+        "AT-148(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-149-location-upgrade",
+      "kind": "automated",
+      "tests": [
+        "AT-149(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-150-installer",
+      "kind": "automated",
+      "tests": [
+        "AT-150(?!\\d)"
+      ]
     }
   ],
   "scenarios": [
@@ -2648,6 +2872,19 @@
     "library-in-locations",
     "scan-incremental",
     "novel-paginate",
-    "novel-side-panel"
+    "novel-side-panel",
+    "workspace-last-tab-empty",
+    "library-tab-single",
+    "chat-long-session",
+    "agent-media-native",
+    "agent-media-retain",
+    "credentials-async",
+    "credentials-async-restart",
+    "migrate-v13",
+    "migrate-v13-restart",
+    "migrate-v13-newer",
+    "data-locations-fresh-release",
+    "data-locations-fresh-development",
+    "data-locations-upgrade"
   ]
 }

@@ -33,6 +33,10 @@
 .chat-log-wide { max-width: 760px; margin: 0 auto; width: 100%; }
 .chat-empty { padding: 28px 10px; text-align: center; }
 .chat-older { align-self: center; }
+/* Only the rows near the viewport are rendered (LOOP-07); each sits at its measured offset and carries the gap below it. */
+.chat-rows { position: relative; width: 100%; flex: none; }
+.chat-row { position: absolute; top: 0; left: 0; width: 100%; display: flex; flex-direction: column; padding-bottom: 12px; }
+.chat-row[data-highlight] > .bubble { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .chat-scroll-bottom { position: absolute; right: 14px; bottom: 12px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-subtle); box-shadow: var(--shadow-control); }
 .chat-scroll-bottom:hover { color: var(--color-accent); }
 
@@ -144,6 +148,9 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .settings-row-control { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
 .settings-row-control select, .settings-row-control input[type="text"], .settings-row-control input[type="number"], .settings-row-control input[type="date"] { padding: 5px 9px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; }
 .settings-empty { padding: 14px 16px; margin: 0; border: 1px dashed var(--color-border); border-radius: 12px; }
+/* A group of locations inside a card of rows: its heading lines up with the rows, and its rows are divided like the card's own. */
+.settings-location-group h4 { margin: 0; padding: 12px 16px 2px; font-size: 12px; font-weight: 600; color: var(--color-subtle); }
+.settings-location-group > .settings-row + .settings-row { border-top: 1px solid var(--color-border); }
 .settings-path { font-size: 12px; font-family: Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; text-align: right; color: var(--color-subtle); }
 .settings-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 4px 0; }
 .settings-pager-label { margin: 0; }
@@ -255,6 +262,9 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 /* ---- the trace of a task ---- */
 .modal-drawer.trace-drawer { width: min(960px, 100vw); }
 .trace-view { display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); gap: 16px; align-items: start; min-height: 0; }
+.trace-stills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.trace-still { margin: 0; width: 96px; display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-muted); color: var(--color-subtle); font-size: 12px; text-align: center; padding: 4px; }
+.trace-still[data-expired] { border-style: dashed; }
 .trace-list { display: flex; flex-direction: column; gap: 4px; list-style: none; margin: 0; padding: 0; position: sticky; top: 0; max-height: 100%; overflow: auto; }
 .trace-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; padding: 7px 10px; text-align: left; border-radius: 8px; border: 1px solid transparent; }
 .trace-item:hover { background: var(--color-muted); }

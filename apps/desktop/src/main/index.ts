@@ -11,7 +11,7 @@ import { RecordingOverlay } from "./overlay.ts";
 import { PACKAGED_PLUGIN_ASSETS, REQUIRED_ASSETS, verifyBundledAssets } from "./bundled-assets.ts";
 import { createNetFetch } from "./net-fetch.ts";
 import { builtInDanmakuCredentials, SMOKE_DANMAKU_CREDENTIALS } from "./danmaku-credentials.ts";
-import { createId, LOCATION_PARTITIONS } from "@manga/contracts";
+import { CHANNELS, createId, LOCATION_PARTITIONS, type Channel } from "@manga/contracts";
 import { safeStorage } from "electron";
 import { utilitySpawner } from "./plugin-process.ts";
 
@@ -39,21 +39,36 @@ function pinPdfjsDir(): void {
 pinPdfjsDir();
 // Must run before the app is ready.
 registerMediaScheme();
-if (process.env.MANGA_DOCUMENTS_DIR === undefined) {
+/** The system's registered folder (Documents or Downloads, which may be redirected to another drive); an explicit variable wins, a failure falls back to the home folder. */
+function systemFolder(name: "documents" | "downloads", variable: string): string | undefined {
+  if (process.env[variable]) return process.env[variable];
+  try { return app.getPath(name); } catch { return undefined; }
+}
+
+/** The channel a package was built for is written into it (计划 4.9), not guessed: a development build installed beside a release keeps its own places. */
+function builtChannel(): Channel | undefined {
+  const named = process.env.MANGA_CHANNEL as Channel | undefined;
+  if (named && (CHANNELS as readonly string[]).includes(named)) return named;
+  if (!app.isPackaged) return "development";
   try {
-    process.env.MANGA_DOCUMENTS_DIR = app.getPath("documents");
-  } catch {
-    // keep homedir fallback inside resolveLaunchLayout
-  }
+    const body = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, "channel.json"), "utf8")) as { channel?: string };
+    if (body.channel === "release" || body.channel === "development") return body.channel;
+  } catch { /* a package made before the channel was written in is a release */ }
+  return "release";
 }
 
 const layout = resolveLaunchLayout({
   packaged: app.isPackaged,
   profileRoot: process.env.MANGA_PROFILE_ROOT,
-  channel: process.env.MANGA_CHANNEL as "release" | "development" | "test" | undefined,
+  channel: builtChannel(),
+  documentsDir: systemFolder("documents", "MANGA_DOCUMENTS_DIR"),
+  downloadsDir: systemFolder("downloads", "MANGA_DOWNLOADS_DIR"),
+  crashAt: process.env.MANGA_UPGRADE_CRASH_AT,
 });
 app.setPath("userData", layout.partitions.runtime);
 app.setPath("sessionData", layout.partitions.runtime);
+// Crash dumps belong with the logs, not in a folder of their own under the roaming profile.
+app.setPath("crashDumps", path.join(layout.partitions.logs, "crashes"));
 if (layout.writable) persistPointer(layout);
 
 let appService: MangaProductApp | undefined;
@@ -74,7 +89,7 @@ function assertCaller(event: Electron.IpcMainInvokeEvent): void {
 async function bootService(): Promise<void> {
   if (!layout.writable) return;
   appService = new MangaProductApp({
-    profileRoot: layout.defaultRoot,
+    layout,
     channel: layout.channel,
     pointerPath: layout.pointerPath,
     documentsDir: layout.documentsRoot,
@@ -90,6 +105,8 @@ async function bootService(): Promise<void> {
     plugins: { spawn: utilitySpawner, bundledDir: app.isPackaged ? path.join(process.resourcesPath, "plugins") : process.env.MANGA_PLUGINS_DIR || path.join(process.resourcesPath, "plugins") },
     // A packaged-window smoke that downloads keeps to the loopback address: no public DHT, no LAN discovery, no port mapping.
     // Danmaku: a release signs with the credentials built in; a smoke run never does, and talks only to the local fake server named by the harness (or to nothing).
+    // The legacy-credentials phases open a Profile an earlier build saved its own DanDanPlay credentials into, and ask a Bangumi stand-in on the loopback address.
+    ...(smoke && process.env.MANGA_SMOKE_BANGUMI_ORIGIN ? { bangumi: { apiOrigin: process.env.MANGA_SMOKE_BANGUMI_ORIGIN, allowedHosts: [new URL(process.env.MANGA_SMOKE_BANGUMI_ORIGIN).host], allowHttp: true, allowPrivate: true, maxRetries: 0, timeoutMs: 4000 } } : {}),
     danmaku: smoke ? { credentials: SMOKE_DANMAKU_CREDENTIALS, origin: process.env.MANGA_SMOKE_DANDAN_ORIGIN || "http://127.0.0.1:9", client: { allowHttp: true } } : { credentials: builtInDanmakuCredentials() },
     ...(smoke && process.env.MANGA_SMOKE_BT_LOOPBACK === "1" ? { acquisition: { network: { dht: false, lsd: false, natUpnp: false, natPmp: false } } } : {}),
     useParseWorker: true,
@@ -233,12 +250,12 @@ app.whenReady().then(async () => {
     if (!payload || typeof payload.commandId !== "string") throw new Error("invalid command");
     return appService.call(actor, payload, ownerGrant, createId("ui"));
   });
-  ipcMain.handle("manga:state", (event) => {
+  ipcMain.handle("manga:state", async (event) => {
     assertCaller(event);
     return {
       layout,
       writable: layout.writable,
-      vaultAvailable: safeStorage.isEncryptionAvailable(),
+      vaultAvailable: await safeStorage.isAsyncEncryptionAvailable(),
       packaged: app.isPackaged,
       appVersion: app.getVersion(),
     };

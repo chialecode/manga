@@ -3,9 +3,13 @@
   "automationStatus": "self-check-passed",
   "engineeringReviewable": true,
   "productAcceptance": "not-run",
-  "sourceFingerprint": "243bffd08f65270bacb9d18a3b4f6edf4d188764115c01f3a70e42d9b4c09d74",
-  "lockFingerprint": "b1b59cfe9cec9a65ec3211a39ee6437721fe93fd26bc944e2a181702f21ad791",
-  "testScriptFingerprint": "65a5d2109c884b29d93e736bf5a3c54bc94a718ac4e112685b86aea5be724dd0",
-  "buildScriptFingerprint": "1c0ce66045a98760c8a86b5b1f9bdc66678733c47cf9d33ac0a859cf132ac689",
-  "at": "2026-11-03T14:59:56.227Z"
+  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
+  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
+  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
+  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
+  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
+  "packageScriptFingerprint": "9f8b9cbda518e731ed9fac2a0c38689b2eae319580fddf9115206af14c3fe27d",
+  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
+  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
+  "at": "2026-11-05T18:43:10.673Z"
 }

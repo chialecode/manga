@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "@manga/contracts": "workspace:*",
-    "@earendil-works/pi-ai": "0.85.1"
+    "@earendil-works/pi-ai": "1.3.0"
   }
 }

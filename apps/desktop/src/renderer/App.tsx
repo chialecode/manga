@@ -174,9 +174,16 @@ export function App() {
     void reconcile();
   }, [reconcile]);
 
+  const upgradeTold = useRef(false);
   const refresh = useCallback(async (): Promise<void> => {
     const state = await window.manga.state();
     setHost(state);
+    // The move of an old profile at this start (计划 4.9) is told once: done, or why the old place is still in use.
+    const upgrade = state.layout.upgrade;
+    if (upgrade && !upgradeTold.current) {
+      upgradeTold.current = true;
+      latest.current.setNotice(upgrade.state === "failed" ? latest.current.t("general.upgradeFailed", { reason: upgrade.reason ?? "—" }) : latest.current.t("general.upgradeMoved"));
+    }
     const ws = await attempt("workspace.get");
     if (ws.ok) setWorkspace(ws.value);
     const st = await attempt("settings.get");

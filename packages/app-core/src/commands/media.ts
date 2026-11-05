@@ -6,6 +6,8 @@ import { assertOpenable } from "../library-locations.ts";
 import type { DandanCredentials } from "../danmaku/sign.ts";
 import { DanmakuService, DANMAKU_MODULE, type CredentialSource } from "../danmaku/service.ts";
 import type { MangaProductApp } from "../product-app.ts";
+import { readCredential, saveCredential } from "../credentials.ts";
+import { takeSecret } from "./connections.ts";
 
 /** What these commands use of the application. */
 export type MediaHost = Pick<MangaProductApp, "assertWritable" | "builtinDanmakuCredentials" | "comics" | "danmaku" | "extras" | "followFiles" | "grantOf" | "grants" | "materials" | "media" | "metadata" | "notify" | "runtime" | "secrets" | "store" | "suggestedQuery" | "uiFacets" | "vault" | "videos" | "voice">;
@@ -212,13 +214,13 @@ export function videoModule(app: MediaHost): MangaModule {
 }
 
 /** The credentials the person typed in the settings (kept in the vault), if any. */
-export function customDanmakuCredentials(app: MediaHost): DandanCredentials | null {
+export async function customDanmakuCredentials(app: MediaHost): Promise<DandanCredentials | null> {
   const ref = app.store.getMeta("danmaku.credentialRef");
   if (!ref) return null;
   try {
-    const row = app.store.sqlite.prepare("SELECT ciphertext FROM credentials WHERE ref = ?").get(ref) as { ciphertext: Buffer } | undefined;
-    if (!row) return null;
-    const value = JSON.parse(app.vault.decrypt(row.ciphertext)) as { appId?: unknown; secret?: unknown };
+    const plain = await readCredential(app, ref);
+    if (plain === undefined) return null;
+    const value = JSON.parse(plain) as { appId?: unknown; secret?: unknown };
     return typeof value.appId === "string" && typeof value.secret === "string" && value.appId && value.secret ? { appId: value.appId, secret: value.secret } : null;
   } catch {
     return null;
@@ -226,13 +228,13 @@ export function customDanmakuCredentials(app: MediaHost): DandanCredentials | nu
 }
 
 /** The person's own credentials win over the ones built into the release. */
-export function danmakuCredentials(app: MediaHost): DandanCredentials | null {
+export async function danmakuCredentials(app: MediaHost): Promise<DandanCredentials | null> {
   const builtin = app.builtinDanmakuCredentials;
-  return customDanmakuCredentials(app) ?? (builtin?.appId && builtin.secret ? builtin : null);
+  return (await customDanmakuCredentials(app)) ?? (builtin?.appId && builtin.secret ? builtin : null);
 }
 
-export function danmakuCredentialSource(app: MediaHost): CredentialSource {
-  if (customDanmakuCredentials(app)) return "custom";
+export async function danmakuCredentialSource(app: MediaHost): Promise<CredentialSource> {
+  if (await customDanmakuCredentials(app)) return "custom";
   return app.builtinDanmakuCredentials?.appId && app.builtinDanmakuCredentials.secret ? "built-in" : "none";
 }
 
@@ -281,7 +283,7 @@ export function danmakuModule(app: MediaHost): MangaModule {
         }
       };
       const reg = app.runtime.registerCommand.bind(app.runtime, moduleId);
-      reg("danmaku.status", (envelope) => {
+      reg("danmaku.status", async (envelope) => {
         owner(envelope);
         const input = envelope.input as { resourceId: string; resourceRevisionId?: string };
         return app.danmaku.status(input.resourceId, input.resourceRevisionId);
@@ -310,37 +312,36 @@ export function danmakuModule(app: MediaHost): MangaModule {
         app.assertWritable();
         return online(signal, (inner) => app.danmaku.load(envelope.input as Parameters<DanmakuService["load"]>[0], inner));
       });
-      reg("danmaku.getSettings", (envelope) => {
+      reg("danmaku.getSettings", async (envelope) => {
         owner(envelope);
-        return { settings: app.danmaku.settings(), credentials: danmakuCredentialSource(app) };
+        return { settings: app.danmaku.settings(), credentials: await danmakuCredentialSource(app) };
       });
-      reg("danmaku.setSettings", (envelope) => {
+      reg("danmaku.setSettings", async (envelope) => {
         owner(envelope);
         app.assertWritable();
-        return { settings: app.danmaku.setSettings(envelope.input as Parameters<DanmakuService["setSettings"]>[0]), credentials: danmakuCredentialSource(app) };
+        return { settings: app.danmaku.setSettings(envelope.input as Parameters<DanmakuService["setSettings"]>[0]), credentials: await danmakuCredentialSource(app) };
       });
-      reg("danmaku.setCredentials", (envelope) => {
+      reg("danmaku.setCredentials", async (envelope) => {
         owner(envelope);
         app.assertWritable();
         const input = envelope.input as { credentialHandle?: string; clear?: boolean };
         const previous = app.store.getMeta("danmaku.credentialRef");
         if (input.credentialHandle) {
-          if (!app.vault.available()) throw new MangaError("CREDENTIAL_UNAVAILABLE", "cannot store credentials without platform protection");
-          const secret = app.secrets.get(input.credentialHandle);
-          if (!secret) throw new MangaError("FORBIDDEN", "credential handle is not authorized");
-          app.secrets.delete(input.credentialHandle);
-          let parsed: { appId?: unknown; secret?: unknown };
-          try { parsed = JSON.parse(secret) as typeof parsed; } catch { throw new MangaError("VALIDATION_ERROR", "the credentials are not in the expected shape"); }
-          const valid = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{4,128}$/.test(value);
-          if (!valid(parsed.appId) || !valid(parsed.secret)) throw new MangaError("VALIDATION_ERROR", "the AppId and the AppSecret are made of letters and digits");
-          const ref = createId("cred");
-          app.store.sqlite.prepare("INSERT INTO credentials(ref, ciphertext, created_at) VALUES (?,?,?)").run(ref, app.vault.encrypt(JSON.stringify({ appId: parsed.appId, secret: parsed.secret })), new Date().toISOString());
+          const handle = input.credentialHandle;
+          const ref = await saveCredential(app, () => {
+            const secret = takeSecret(app, handle);
+            let parsed: { appId?: unknown; secret?: unknown };
+            try { parsed = JSON.parse(secret) as typeof parsed; } catch { throw new MangaError("VALIDATION_ERROR", "the credentials are not in the expected shape"); }
+            const valid = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{4,128}$/.test(value);
+            if (!valid(parsed.appId) || !valid(parsed.secret)) throw new MangaError("VALIDATION_ERROR", "the AppId and the AppSecret are made of letters and digits");
+            return JSON.stringify({ appId: parsed.appId, secret: parsed.secret });
+          });
           app.store.setMeta("danmaku.credentialRef", ref);
         } else if (input.clear) {
           app.store.setMeta("danmaku.credentialRef", "");
         }
         if (previous && previous !== app.store.getMeta("danmaku.credentialRef")) app.store.sqlite.prepare("DELETE FROM credentials WHERE ref = ?").run(previous);
-        return { credentials: danmakuCredentialSource(app) };
+        return { credentials: await danmakuCredentialSource(app) };
       });
       reg("danmaku.clearCache", (envelope) => {
         owner(envelope);
@@ -373,12 +374,11 @@ export function danmakuModule(app: MediaHost): MangaModule {
   });
 }
 
-export function metadataToken(app: MediaHost, providerId: string): string | undefined {
+export async function metadataToken(app: MediaHost, providerId: string): Promise<string | undefined> {
   const ref = app.metadata.credentialRef(providerId);
   if (!ref) return undefined;
   try {
-    const cred = app.store.sqlite.prepare("SELECT ciphertext FROM credentials WHERE ref = ?").get(ref) as { ciphertext: Buffer } | undefined;
-    return cred ? app.vault.decrypt(cred.ciphertext) : undefined;
+    return await readCredential(app, ref);
   } catch {
     return undefined;
   }
@@ -468,18 +468,14 @@ export function metadataModule(app: MediaHost): MangaModule {
         owner(envelope);
         return app.metadata.providers();
       });
-      app.runtime.registerCommand(moduleId, "metadata.setProvider", (envelope) => {
+      app.runtime.registerCommand(moduleId, "metadata.setProvider", async (envelope) => {
         owner(envelope);
         app.assertWritable();
         const input = envelope.input as { providerId: string; enabled: boolean; credentialHandle?: string; clearCredential?: boolean };
         let credentialRef: string | null | undefined;
         if (input.credentialHandle) {
-          if (!app.vault.available()) throw new MangaError("CREDENTIAL_UNAVAILABLE", "cannot store credentials without platform protection");
-          const secret = app.secrets.get(input.credentialHandle);
-          if (!secret) throw new MangaError("FORBIDDEN", "credential handle is not authorized");
-          app.secrets.delete(input.credentialHandle);
-          credentialRef = createId("cred");
-          app.store.sqlite.prepare("INSERT INTO credentials(ref, ciphertext, created_at) VALUES (?,?,?)").run(credentialRef, app.vault.encrypt(secret), new Date().toISOString());
+          const handle = input.credentialHandle;
+          credentialRef = await saveCredential(app, () => takeSecret(app, handle));
         } else if (input.clearCredential) credentialRef = null;
         return app.metadata.setProviderState({ providerId: input.providerId, enabled: input.enabled, credentialRef });
       });

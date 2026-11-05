@@ -18,5 +18,6 @@ allowBuilds:
   utf-8-validate: false
   ip-set: false
   node-datachannel: false
+  electron-winstaller: false
 overrides:
   "@electron/rebuild": "4.2.0"

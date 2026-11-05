@@ -4,17 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { evaluateStageEvidence } from "./stage/report.mjs";
-import { hashTree, loadGate, p95, p99 } from "./stage/lib.mjs";
+import { fingerprintKey, hashTree, loadGate, p95, p99, stageFingerprints } from "./stage/lib.mjs";
 
 // Counterexamples for the stage gate: each mutation of an otherwise complete run must be rejected.
 const config = loadGate();
 const { targets, scale: requiredScale, scaleWindowSamples } = config.bench;
-const fingerprints = {
-  sourceFingerprint: "current",
-  lockFingerprint: "lock-current",
-  testScriptFingerprint: "test-current",
-  buildScriptFingerprint: "build-current",
-};
+// One synthetic fingerprint per group of gate.json (source, lock, build, gate, and each entry's own code).
+const fingerprints = Object.fromEntries(Object.keys(config.fingerprint).map((group) => [fingerprintKey(group), `${group}-current`]));
 
 function write(dir, file, data) {
   fs.writeFileSync(path.join(dir, file), JSON.stringify(data));
@@ -22,7 +18,7 @@ function write(dir, file, data) {
 function read(dir, file) {
   return JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
 }
-const evaluate = (dir) => evaluateStageEvidence(dir, fingerprints, config);
+const evaluate = (dir, now = fingerprints) => evaluateStageEvidence(dir, now, config);
 
 const scratchDirs = [];
 function scratch(prefix) {
@@ -99,9 +95,11 @@ function passing() {
     },
     measurements: Object.fromEntries((config.bench.measurements ?? []).map((item) => [item.id, { raw: Array.from({ length: item.minSamples ?? 3 }, () => 1), p95: 1 }])),
   });
+  write(dir, "installer.json", { ...fingerprints, status: "passed" });
   write(dir, "package.json", {
     ...fingerprints,
     status: "passed",
+    passStreak: config.package.passStreak ?? 1,
     productAcceptance: "not-run",
     output: "dist/desktop/packages/MANGA-win32-x64",
     electron: "44.5.1",
@@ -145,6 +143,40 @@ test("report rejects a stale fingerprint and a failed case", () => {
   const report = evaluate(dir);
   assert.equal(report.engineeringReviewable, false);
   assert.ok(report.errors.some((error) => error.includes("stale")));
+});
+
+test("a result goes stale only with the inputs it depends on (gate.json fingerprintOf)", () => {
+  assert.equal(evaluate(passing()).engineeringReviewable, true);
+  // The bench's own code changed: only the bench is stale.
+  const benchOnly = evaluate(passing(), { ...fingerprints, benchScriptFingerprint: "bench-edited" });
+  assert.deepEqual(benchOnly.errors.filter((error) => error.includes("stale")).map((error) => error.split(":")[0]), ["bench.json"]);
+  // The tests changed: the test results only; the package and the bench were not made from them.
+  const testOnly = evaluate(passing(), { ...fingerprints, testScriptFingerprint: "test-edited" });
+  assert.deepEqual(testOnly.errors.filter((error) => error.includes("stale")).map((error) => error.split(":")[0]).sort(), ["cases.json", "test-run.json"]);
+  // The product source changed: every result is stale.
+  const source = evaluate(passing(), { ...fingerprints, sourceFingerprint: "source-edited" });
+  const stale = new Set(source.errors.filter((error) => error.includes("stale")).map((error) => error.split(":")[0]));
+  for (const file of ["cases.json", "test-run.json", "bench.json", "package.json", "installer.json", ...(config.scenarios?.length ? ["scenarios.json"] : [])]) assert.ok(stale.has(file), file);
+});
+
+test("every file of the gate's code belongs to a fingerprint group", () => {
+  assert.doesNotThrow(() => stageFingerprints(process.cwd(), config));
+  const narrowed = { ...config, fingerprint: { ...config.fingerprint, bench: config.fingerprint.bench.filter((entry) => entry !== "scripts/stage/bench-bt.mjs") } };
+  assert.throws(() => stageFingerprints(process.cwd(), narrowed), /bench-bt.mjs/);
+});
+
+test("report rejects a package short of its consecutive passes, and a missing or failed installation", () => {
+  const short = passing();
+  const pack = read(short, "package.json");
+  pack.passStreak = (config.package.passStreak ?? 1) - 1;
+  write(short, "package.json", pack);
+  assert.ok(evaluate(short).errors.some((error) => error.includes("consecutive passes")));
+  const failed = passing();
+  write(failed, "installer.json", { ...fingerprints, status: "failed" });
+  assert.ok(evaluate(failed).errors.some((error) => error.includes("installer.json")));
+  const missing = passing();
+  fs.rmSync(path.join(missing, "installer.json"));
+  assert.ok(evaluate(missing).errors.some((error) => error.includes("installer.json")));
 });
 
 test("report does not treat a complete self-check as product acceptance", () => {

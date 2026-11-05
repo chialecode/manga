@@ -12,6 +12,10 @@ import { sessionStream } from "../ops/stream.ts";
 import { ConversationService, currentKey } from "../conversations.ts";
 import { AGENT_OPT_IN_COMMANDS } from "../commands/access.ts";
 import { publicMedia, renderMedia, WORKS_BUDGET, type AgentMediaInput, type FrozenMedia } from "../agent-materials.ts";
+import { keepMediaMutations, sha256, sourceStamp } from "../agent-media.ts";
+import { decideClip, decidePdfs } from "../agent-native-input.ts";
+import type { DeliveryNote } from "../agent-trace.ts";
+import type { Mutation } from "@manga/storage-drizzle";
 import type { MangaProductApp } from "../product-app.ts";
 import { codePointSafeEnd, type AgentLoopBudget, contextShares, clipMaterial, type ConnectionRow, safeJsonValue } from "../product-helpers.ts";
 import { cancelRun, retryRun, getRun, sessionHistoryForNewRun, runAgentLoop } from "./agent-run.ts";
@@ -263,6 +267,9 @@ export function captureMaterials(app: AgentHost, resourceIds: string[]): Array<{
   });
 }
 
+/** The place of a run's video clip among its kept media, after the stills. */
+const CLIP_ORDINAL = 1000;
+
 export async function sendAgent(app: AgentHost, envelope: CommandEnvelope, signal?: AbortSignal) {
   app.assertWritable();
   const input = envelope.input as { sessionId: string; text: string; readResourceIds?: string[]; noteObjectIds?: string[]; selection?: { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number } } & AgentMediaInput & { allowCommands?: string[]; quickTask?: { id: string | null; name: string } };
@@ -290,6 +297,8 @@ export async function sendAgent(app: AgentHost, envelope: CommandEnvelope, signa
 
   // Everything that needs the decoder or the disk is prepared before anything is written, so a failure leaves no half-made run.
   const media: FrozenMedia = {};
+  // The bytes of the attached stills, kept once per content beside the run (计划 4.4); the snapshot names them by hash.
+  let keepMedia: Array<{ bytes: Buffer; hash: string; mime: string; width: number; height: number; ordinal: number }> = [];
   const pageNoteIds: string[] = [];
   const mediaInput = input.mediaContext;
   if (mediaInput?.comic) {
@@ -311,7 +320,11 @@ export async function sendAgent(app: AgentHost, envelope: CommandEnvelope, signa
     // A picture is only worth sending to something that can look at it. Without such a model the request says so instead of answering as if it had seen the picture.
     const route = visionRoute(app);
     if (route.kind === "none") throw new MangaError("MODEL_CAPABILITY_MISSING", route.reason, { details: { capability: "vision" } });
-    media.images = images;
+    keepMedia = images.map((image, ordinal) => {
+      const bytes = Buffer.from(image.base64, "base64");
+      return { bytes, hash: sha256(bytes), mime: image.mediaType, width: image.width, height: image.height, ordinal };
+    });
+    media.images = images.map(({ base64: _bytes, ...image }, ordinal) => ({ ...image, hash: keepMedia[ordinal]!.hash, stamp: sourceStamp(app.store, image.origin.resourceRevisionId) }));
   }
   if (input.allowCommands?.includes("metadata.search")) app.requireModule("metadata.search", "online metadata search");
   const agentGrant = app.issueAgentGrant(owner, { kind: "agent", id: `agent:${runId}` }, { sessionId: session.id, runId, readResourceIds: requested, allowCommands: input.allowCommands, projectId });
@@ -335,6 +348,29 @@ export async function sendAgent(app: AgentHost, envelope: CommandEnvelope, signa
   const selection = input.selection && app.grants.canRead(owner, input.selection.resourceId)
     ? selectionQuote(app.store, input.selection, readShell(app.store).spoilerGuard)
     : undefined;
+  // Whole PDFs and the clip of the video, for a model that takes them (计划 4.5): decided here, once, and kept with the run, so a retry sends the same.
+  if (connectionRow) {
+    const native = {
+      store: app.store, videos: app.videos, profile: budgetOfConnection(connectionRow).profile, runtime, protocol: connectionRow.protocol as "openai-responses" | "openai-chat-completions",
+      contextTokens: model.contextTokens, spoilerGuard: readShell(app.store).spoilerGuard, signal,
+    };
+    const used = { tokens: 0 };
+    // Only what the person put into this task goes whole: the materials named in the request, not what a project or a tool reaches. A page or a selection of a book is part of it.
+    const chosen = captureMaterials(app, (input.readResourceIds ?? []).filter((resourceId) => requested.includes(resourceId)));
+    const partial = new Set([input.selection?.resourceId, input.mediaContext?.comic?.resourceId].filter((value): value is string => Boolean(value)));
+    const pdfs = await decidePdfs(native, chosen, partial, used);
+    const delivery: DeliveryNote[] = [...pdfs.delivery];
+    if (pdfs.files.length) media.files = pdfs.files;
+    if (media.video) {
+      const decided = await decideClip(native, media.video, used);
+      delivery.push(...decided.delivery);
+      if (decided.clip && decided.clipBytes) {
+        media.clip = decided.clip;
+        keepMedia.push({ bytes: decided.clipBytes, hash: decided.clip.hash, mime: "video/mp4", width: 0, height: 0, ordinal: CLIP_ORDINAL });
+      }
+    }
+    if (delivery.length) media.delivery = delivery;
+  }
   // Notes are captured by revision with their text, so the model sees what the user saw and a later
   // edit cannot silently change the material under a running task.
   type FrozenNote = { objectId: string; revision: number; title: string; text: string; truncated: boolean; blockCount: number; resourceId?: string; resourceRevisionId?: string };
@@ -382,11 +418,12 @@ export async function sendAgent(app: AgentHost, envelope: CommandEnvelope, signa
   // shows the exact wording the model receives and a retry reuses the same frozen material.
   const contextMessage = materialContextMessage(app, snapshot, shares.material);
   const frozen = { ...snapshot, contextText: contextMessage?.content ?? null };
+  const mutations: Mutation[] = [{
+    sql: "INSERT INTO agent_runs(id, session_id, status, grant_handle, snapshot_id, budget_json, input_text, read_resource_ids_json, snapshot_json, runtime, deadline_at, live_text, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    params: [runId, session.id, "running", agentGrant.handle, envelope.contextSnapshotId ?? null, JSON.stringify(budget), input.text, JSON.stringify(requested), JSON.stringify(frozen), runtime, deadlineAt, "", now, now],
+  }, ...keepMediaMutations(runId, keepMedia, now)];
   app.store.commit({
-    mutations: [{
-      sql: "INSERT INTO agent_runs(id, session_id, status, grant_handle, snapshot_id, budget_json, input_text, read_resource_ids_json, snapshot_json, runtime, deadline_at, live_text, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-      params: [runId, session.id, "running", agentGrant.handle, envelope.contextSnapshotId ?? null, JSON.stringify(budget), input.text, JSON.stringify(requested), JSON.stringify(frozen), runtime, deadlineAt, "", now, now],
-    }],
+    mutations,
     events: [{ type: "agent.run.started", payload: { runId, sessionId: session.id } }],
     idempotencyKey: envelope.idempotencyKey,
     commandId: envelope.commandId,

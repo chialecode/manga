@@ -28,7 +28,8 @@ const setup = (stored: Record<string, WorkspaceState> = {}, seed?: WorkspaceEnv[
         loads.push(contextId);
         if (contextId === "prj_gone") return { ok: false, error: { message: "project does not exist" } };
         const state = stored[contextId ?? ""];
-        return { ok: true, value: state ? { state } : {} };
+        // As the service answers: a context never saved has the empty state and no time it was saved.
+        return { ok: true, value: state ? { state, updatedAt: "2026-11-01T00:00:00.000Z" } : { state: { version: 1, preset: "single", layout: null, focusedTab: null, closed: [], tabs: [] }, updatedAt: null } };
       }
       saved.push({ contextId, state: (input as { state: WorkspaceState }).state });
       return { ok: true, value: {} };
@@ -317,6 +318,16 @@ describe("a context that has nothing yet, and one that is gone (AT-111)", () => 
     const { controller } = setup({ prj_1: stored }, seed);
     await controller.activate("prj_1");
     expect(controller.tabsOf().map((tab) => tab.kind)).toEqual(["settings"]);
+    expect(seed).not.toHaveBeenCalled();
+  });
+
+  it("keeps a context that was saved with every tab closed empty, and does not seed it (LOOP-24)", async () => {
+    const seed = vi.fn(() => [{ kind: "library", target: {}, title: "资源库" }]);
+    const stored = { version: 1, preset: "single", layout: null, focusedTab: null, closed: [], tabs: [] } as unknown as WorkspaceState;
+    const { controller } = setup({ "": stored }, seed);
+    await controller.activate(null);
+    expect(controller.tabsOf()).toEqual([]);
+    expect(controller.focusedTab()).toBeUndefined();
     expect(seed).not.toHaveBeenCalled();
   });
 

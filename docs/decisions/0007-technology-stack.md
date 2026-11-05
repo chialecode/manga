@@ -31,7 +31,7 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 | AI runtime 与模型协议适配 | 自研适配器 + PI（@earendil-works/pi-ai） | BYOK；首版两种实现均须实际接入，可在设置切换；运行时身份独立于 API 协议/模型/连接，工具授权与 Agent 业务规则由 MANGA 宿主管理 |
 | 实时 ASR 传输 | ws | 需要 WebSocket 时接入；文件转录接口独立实现，不强制实时服务 |
 | 图片处理 | sharp | 服务或 worker 侧缩略图与变换，验证大图预算和打包 |
-| 凭据保护 | Electron safeStorage | 主进程适配器；业务配置保存 credentialRef，凭据不进入资料包 |
+| 凭据保护 | Electron safeStorage（异步接口） | 主进程适配器；业务配置保存 credentialRef，凭据不进入资料包；所有读取经同一个异步函数，平台要求时把新密文写回 |
 
 ## 实施与验证
 
@@ -79,7 +79,6 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 
 | 项 | 保留 | 最新稳定 | 原因与复查条件 |
 | --- | --- | --- | --- |
-| @earendil-works/pi-ai | 0.85.1 | 1.4.0 | 升级涉及 runtime 适配器，需重跑 `tests/agent`；随顺延的 Agent 工程循环一起做（A-98） |
 | @types/node | 24.5.2 | 26.6.5 | 类型随运行时（Node 24.x）；Node 升级时同步 |
 | openapi-typescript | 7.13.0（仅在 `dist/tools/openapi-gen` 生成 Bangumi 类型，不进仓库依赖） | — | 它依赖 TypeScript 编译器 API，而 TypeScript 7 不再提供，所以生成器在隔离目录里用 TypeScript 5.9 运行；生成结果 `bangumi-openapi.ts` 入库并固定到官方规格提交与哈希；上游支持 TypeScript 7 后改回常规开发依赖 |
 
@@ -100,6 +99,26 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 | Electron 45.0.0 | — | 不升 | 2026-10-21 发行，太新；下次盘点再试 |
 | 新增 dockview-react | — | 8.6.1 | 见开源选型记录“标签页与分屏” |
 
+## 2026-11-04 依赖刷新（Electron 45、pi-ai 1.x、安装包）
+
+依赖与 Agent 工程循环这一阶段开始时与门禁前各盘点一次（`pnpm outdated -r`），按“满 14 天的最新精确版本”取，最小发行龄不绕过、不接受自动写入的豁免。逐项的验证见[阶段报告](../delivery/stage-report.md#dependencies)。
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| Electron | 44.9.3 | 45.0.0 | 升级（2026-11-04 起满 14 天，当天满龄的只有 45.0.0）。凭据改用异步的 `safeStorage` 接口，同步接口在源码里只留给生成旧版 Profile 的样本脚本（`scripts/check-deps.mjs` 守护）；Electron 44 保存的三种凭据在 45 的打包产物上解得开（打包观察 `credentials-async`）。沙箱预加载没有用到被移除的 `Buffer` / `setImmediate` / Node 模块 |
+| @earendil-works/pi-ai | 0.85.1 | 1.3.0 | 升级到当天满 14 天的最新（1.4.0 在 2026-11-04 22:43 UTC 满龄，晚于本次盘点）。工具参数直接写 JSON Schema，不再从 pi-ai 取 TypeBox，1.4 与 1.5 的入口变化不影响；两个运行时的契约用例（`tests/agent/runtime-contract.test.ts`）覆盖工具 Schema、流式、图片与中止。复查条件：下次盘点取满龄的最新 1.x |
+| electron-builder（新增，开发依赖） | — | 26.18.0 | 只用它的 NSIS 目标、以 `--prepackaged` 把 Forge 打好的目录做成按用户安装的安装包；`electron-winstaller` 的安装脚本在 `pnpm-workspace.yaml` 里关掉（不用 Squirrel） |
+| knip | 6.41.0 | 6.42.1 | 满龄的最新 |
+| @types/node | 24.5.2 | 24.19.2 | 留在 24.x，与 Electron 45 的 Node 24 和 CI 的 Node 一致 |
+| linkedom | 0.18.13 | 保持 0.18.13 | **再次回退。** 复试 0.18.14：`vitest run tests/danmaku/credential-leak.test.ts`（它先做主进程打包）报 `MISSING_EXPORT`：`parse` 不是 `@acemir/cssom` 的导出（CommonJS 的具名导出 Rolldown 认不出）。上游没有新的发行。复查条件同上一次 |
+| dockview-react、@tanstack/react-virtual 与其余补丁 | — | 不变 | 实施时更新的版本都不满 14 天（dockview-react 8.6.2 在 11-08、react-virtual 3.14.22 在 11-05 满龄），门禁前再查一次 |
+
+**长对话的列表（LOOP-07）。** 计划先试“`@tanstack/react-virtual` 的虚拟列表 + use-stick-to-bottom 贴底”，两者共用 use-stick-to-bottom 的滚动容器：虚拟列表用它的 `scrollRef` 作滚动元素，`scrollMargin` 取列表在容器里的偏移；贴底由 use-stick-to-bottom 负责，行高变化时只在“不在底部、变化的行在视口之上”时由虚拟列表修正滚动位置。向上载入更早的一页与主机通知刷新时，视口顶端那条消息由 MANGA 自己按消息 ID 与偏移锚定（删掉时改用相邻的一条）。结论见[阶段报告](../delivery/stage-report.md#stick-to-bottom)：两者没有争夺滚动位置，保留 use-stick-to-bottom，不改为自己贴底。它对内容变高的跟随改为立即（`resize="instant"`）。因为它的尺寸观察晚一帧，列表在提交后的布局阶段把“上次停在最底下、没有被用户解除贴底”的列表放回底部。
+
+**任务图像的存放（LOOP-05）是自写的。** 一张按 SHA-256 为键的 `agent_media` 表与一张运行到图像的引用表，放在现有的 SQLite 里，用 Node 的 `crypto` 求哈希；需要的只是“同样内容只存一份、引用计数为零时删除”，引入对象存储库或另一个数据库得不偿失。
+
+**基准不受节能降速（LOOP-13）。** 用 Windows 的 `SetProcessInformation(ProcessPowerThrottling)` 关闭基准进程的执行速度节流，经系统自带的 PowerShell `Add-Type` 调用，不加依赖；只在 `stage bench` 设 `MANGA_BENCH_NO_THROTTLE=1` 时、只对基准阶段的进程生效。评估与是否启用见[阶段报告](../delivery/stage-report.md#loop-13)。
+
 ## 2026-09-20 接入与构建边界
 
 AI runtime 切换保存为设置，运行开始时固定所选实现；切换只影响后续运行，活动任务继续使用原实现或由用户取消，不静默转接、扩大授权或丢失会话/工具证据。旧配置缺 runtime 字段时兼容自研适配器。自研与 PI 均用相同受控提供者验证文本、工具、流式、取消与错误，安装 PI 依赖不构成接入完成。实现与复验由 `tests/agent` 守护。
@@ -113,7 +132,7 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 
 | 能力 | 采用 | 未采用与理由 |
 | --- | --- | --- |
-| 桌面运行时 | Electron 44.9.3（Chromium 152，Node 24.22），锁定 44 系最新补丁；45.0.0（2026-10-21 发行）太新，下次依赖盘点再试 | 停留 37：Electron 只维护最新三个稳定主版本，37 系已无安全补丁 |
+| 桌面运行时 | Electron 45.0.0（Chromium 156，Node 24.22），2026-11-04 满 14 天后升级；下次盘点取满龄的最新 45.x | 停留 37：Electron 只维护最新三个稳定主版本，37 系已无安全补丁 |
 | 视频播放 | Chromium `<video>`，经自定义 `manga-media:` 协议流式读取；`protocol.handle` + `net.fetch(file:)` 不处理 Range，所以自行返回 206/416。Windows 上 HEVC 走 D3D11 硬件解码，没有软件回退 | libmpv：在 Electron 中需要原生插件和实验性 `sharedTexture`，默认 GPL；播放副本已能覆盖无硬件 HEVC |
 | 探测、帧时间戳、字幕与字体提取、重封装、播放副本 | FFmpeg 8.1 LGPL 构建（BtbN `win64-lgpl-shared-8.1`），子进程调用。LGPL 变体含 HEVC 解码器、AAC 编码器、NVENC/AMF/QSV 硬件编码、SVT-AV1、libvpx、libopus、libass，没有 GPL 专属的 x264/x265；粗剪也用同一工具 | mediabunny 1.61.0（MPL-2.0）不读取 ASS 与字体附件，记为备选；`ffmpeg-static` 是 GPL 构建；openh264 默认不用（自编译二进制不在 Cisco 专利许可范围内，Q-17） |
 | 无硬件 HEVC 与不支持音轨 | 本地播放副本：视频优先用硬件 H.264 编码，没有则用 SVT-AV1 快速预设（Chromium 用 dav1d 软件解码）；音频转 AAC；保持原时间戳（VFR 不改帧率） | — |
@@ -131,7 +150,8 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 大列表 | TanStack Virtual 3.14.21 | — |
 | 标签页与分屏（2026-10-22 查证） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b3b468b/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
-| 消息流贴底 | use-stick-to-bottom 1.1.6（MIT） | 自写滚动判定 |
+| 消息流贴底 | use-stick-to-bottom 1.1.6（MIT），与 @tanstack/react-virtual 的虚拟列表共用滚动容器（2026-11-04 试验） | 自写滚动判定；react-virtuoso（要把列表与贴底整体换掉，两条现有路线可用时不评估） |
+| 安装包（2026-11-04 查证） | electron-builder 26.18.0 的 NSIS 目标（MIT，开发依赖），`--prepackaged` 用 Forge 的产物，按用户安装到 `%LOCALAPPDATA%\Programs\manga` | @electron-forge/maker-squirrel（固定装到 `%LocalAppData%\<应用名>`，不能选目录）；maker-wix（要另装 WiX）；maker-msix（`AppData` 被虚拟化） |
 | 目录遍历与定时扫描 | Node 内置 `fs.promises.opendir`，在 `worker_threads` 中执行，写库仍由单写入宿主按小批次完成；定时用应用内计时器（关闭、30 分钟、1 小时、6 小时、每天）与启动后延迟扫描 | fdir 6.5.0：瓶颈不在遍历本身；croner 10.0.1：用不到 cron 表达式 |
 | 文件变更监听 | 不采用（用户要求的是按间隔扫描） | chokidar 5.0.0 与 @parcel/watcher 2.6.0：大目录树长期监听有句柄与网络盘问题，需要“即时发现新文件”时的候选 |
 | 播放器控件 | 保留原生 `video` 播放器，只改样式与控件布局 | media-chrome 4.19.3：换控件层要重接帧号跳转、JASSUB、A-B 与录音标记；Vidstack 的 React 包 0.6.15 停在 2024-04 |

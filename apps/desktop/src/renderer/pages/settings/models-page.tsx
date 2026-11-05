@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { DEFAULT_MODEL_PROFILE, type ConnectionTestResult, type ModelProfile } from "@manga/contracts/models";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { Modal } from "../../components/modal.tsx";
@@ -68,6 +68,8 @@ export function ModelsPage(props: {
   onTestConnection: (id: string, capability: string) => Promise<PlainTestResult>;
   onProbeConnection: (id: string) => Promise<void>;
   onSkip: () => void;
+  /** On the first start (UI-04), where the data goes, so the person sees it before they begin. */
+  firstRunLocations?: ReactNode;
 }) {
   const { i18n } = props;
   const t = i18n.t;
@@ -127,6 +129,9 @@ export function ModelsPage(props: {
           </SettingsRow>
         ) : null}
       </SettingsSection>
+      {needsSetup && props.firstRunLocations ? (
+        <SettingsSection title={t("setup.locations")} hint={t("setup.locationsHint")} testId="setup-locations">{props.firstRunLocations}</SettingsSection>
+      ) : null}
 
       <SettingsSection
         title={t("settings.connections")}

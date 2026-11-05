@@ -54,21 +54,32 @@ export function hashTree(root, entries) {
   return hash.digest("hex");
 }
 
+/** The key a result file stores a group's fingerprint under: `sourceFingerprint`, `lockFingerprint`, `<group>ScriptFingerprint` for the rest. */
+export const fingerprintKey = (group) => (group === "source" || group === "lock" ? `${group}Fingerprint` : `${group}ScriptFingerprint`);
+
 /**
- * Fingerprints of what a result file belongs to: product source, lock file, test code and build code.
- * Any change to those inputs makes earlier test, bench and package results stale.
+ * Fingerprints of the inputs a result can belong to, one per group of gate.json `fingerprint` (product source, lock file, build code, the gate's
+ * shared code, and the code of each entry: test, package, bench, installer). Every result file stores all of them; the report compares only the
+ * groups gate.json `fingerprintOf` names for that file, so a change to the bench code makes the bench stale and leaves the test and package
+ * results current, while a change to the product source makes every result stale. A file under scripts/stage or scripts/samples that no group
+ * names would change nothing, so it is refused.
  */
 export function stageFingerprints(root, config) {
-  const f = config.fingerprint;
-  return {
-    sourceFingerprint: hashTree(root, f.source),
-    lockFingerprint: hashTree(root, f.lock),
-    testScriptFingerprint: hashTree(root, f.test),
-    buildScriptFingerprint: hashTree(root, f.build),
-  };
+  const groups = config.fingerprint;
+  const named = Object.values(groups).flat();
+  for (const dir of ["scripts/stage", "scripts/samples"]) {
+    for (const name of fs.readdirSync(path.join(root, dir))) {
+      const file = `${dir}/${name}`;
+      if (!named.some((entry) => file === entry || file.startsWith(`${entry}/`))) throw new Error(`gate.json: no fingerprint group names ${file}`);
+    }
+  }
+  return Object.fromEntries(Object.entries(groups).map(([group, entries]) => [fingerprintKey(group), hashTree(root, entries)]));
 }
 
-export const fingerprintKeys = ["sourceFingerprint", "lockFingerprint", "testScriptFingerprint", "buildScriptFingerprint"];
+/** The fingerprint keys a result file must match: the groups gate.json `fingerprintOf` names for it, else every group. */
+export function fingerprintKeysOf(config, file) {
+  return (config.fingerprintOf?.[file] ?? Object.keys(config.fingerprint)).map(fingerprintKey);
+}
 
 export function p95(values) {
   const sorted = [...values].sort((a, b) => a - b);

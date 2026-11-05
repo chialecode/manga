@@ -11,6 +11,7 @@ import type { useKeyBindings } from "../../hooks/use-key-bindings.ts";
 import type { RecordingPatch, RecordingSettings } from "../../voice/use-recorder.ts";
 import { MediaPrefs, Modules, Providers } from "../settings-media.tsx";
 import { GeneralPage, type MigrationPlan } from "./general-page.tsx";
+import { LocationGroups } from "./location-groups.tsx";
 import { LibraryPage } from "./library-page.tsx";
 import { LogsPage } from "./logs-page.tsx";
 import { AgentPage } from "./agent-page.tsx";
@@ -73,6 +74,7 @@ export type SettingsViewProps = {
     onCancelMigration: () => void;
     onRollbackRecovery: () => void;
     onRecoverJobs: () => void;
+    onCleanLegacy: () => Promise<string | null>;
   };
   models: {
     onRuntime: (runtime: string) => Promise<void>;
@@ -145,7 +147,7 @@ export function SettingsView(props: SettingsViewProps) {
       case "shortcuts":
         return <ShortcutsPage t={t} keys={props.keys} recording={props.recording.settings} onGoto={() => props.onGoto("recording")} />;
       case "models":
-        return <ModelsPage i18n={i18n} settings={props.settings} {...props.models} />;
+        return <ModelsPage i18n={i18n} settings={props.settings} firstRunLocations={<LocationGroups t={i18n.t} layout={props.host.layout} />} {...props.models} />;
       case "agent":
         return <AgentPage t={t} onError={props.onError} onNotice={props.onNotice} />;
       case "quick":

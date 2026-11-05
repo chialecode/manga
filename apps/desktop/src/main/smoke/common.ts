@@ -29,7 +29,17 @@ export async function capturePage(view: BrowserWindow, evidenceDir: string | und
   if (!evidenceDir) return;
   fs.mkdirSync(evidenceDir, { recursive: true });
   if (mark) await waitUntil(view, `${DRAWN}(${PICK}(${JSON.stringify(mark)}))`, 4000);
-  await view.webContents.executeJavaScript("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))").catch(() => undefined);
+  // Two frames so the latest layout is painted. A window that is hidden or that Windows reports as covered gets no frames, and a capture then hands back
+  // the last frame it drew (another page): the window is shown without taking the focus and repainted, and the wait is tried again; the wait is bounded.
+  const painted = () => view.webContents.executeJavaScript("new Promise((resolve) => { setTimeout(() => resolve(false), 1000); requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))); })").catch(() => false) as Promise<boolean>;
+  if (!(await painted())) {
+    if (!view.isVisible()) view.showInactive();
+    view.webContents.invalidate();
+    if (!(await painted())) {
+      console.error(`screenshot ${name}: the window gave no frames, so no picture was taken (it would show an earlier frame)`);
+      return;
+    }
+  }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const png = await view.webContents.capturePage(undefined, { stayAwake: true });
