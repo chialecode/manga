@@ -36,10 +36,11 @@ export const OWNER_COMMANDS = [
   "plugin.list", "plugin.bundled", "plugin.inspect", "plugin.install", "plugin.enable", "plugin.disable", "plugin.rollback", "plugin.uninstall", "plugin.exportData", "plugin.deleteData", "plugin.trust.list", "plugin.trust.add", "plugin.trust.remove",
   "acquisition.list", "acquisition.get", "acquisition.add", "acquisition.select", "acquisition.pause", "acquisition.resume", "acquisition.cancel", "acquisition.remove", "acquisition.retryPublish", "acquisition.retryImport", "acquisition.restart", "acquisition.setSeeding",
   "research.search", "webpage.fetch", "webpage.list", "webpage.get", "webpage.delete", "excerpt.create", "excerpt.list", "excerpt.get", "excerpt.update", "excerpt.delete", "excerpt.follow",
+  "proposal.apply", "proposal.reject", "proposal.list",
 ];
 
 /** Commands that change the blocks of a note, after which the note's embeds are reconciled with them. */
 export const NOTE_CONTENT_COMMANDS = new Set(["notes.create", "notes.update", "notes.undo", "notes.split", "notes.merge", "notes.move", "notes.copy", "notes.replace", "notes.insert", "notes.remove", "notes.setType", "notes.restore"]);
-/** Agent commands that reach outside the machine; a task has them only when the user turned them on for that task. */
-export const AGENT_OPT_IN_COMMANDS = ["metadata.search"];
+/** Agent commands turned on by the user for one task only (`metadata.search`, `semantic.search`, `webpage.fetch`). */
+export const AGENT_OPT_IN_COMMANDS = ["metadata.search", "semantic.search", "webpage.fetch"];
 export const AGENT_COMMANDS = ["library.find", "library.list", "library.getResource", "library.read", "library.contextSnapshot", "source.card", "notes.create", "notes.update", "notes.get", "notes.list", "notes.undo", "inventory.overview", "works.list", "works.get", "progress.get", "comic.pages", "material.subtitleWindow", "library.scan.status", "log.query", "screenshot.list", "screenshot.get", "danmaku.around"];

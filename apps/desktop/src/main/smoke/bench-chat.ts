@@ -1,6 +1,6 @@
 import { app, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, DRAWN, openFromShelf, showTab, sleep, waitUntil } from "./driver.ts";
+import { clickTestId, DRAWN, openFromShelf, showTab, sleep, waitFrames, waitUntil } from "./driver.ts";
 import { caller, ensureDock, js, toRail } from "./common.ts";
 import { seedLongSession } from "./loop-walk.ts";
 
@@ -41,13 +41,13 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     if (!drawn) {
       const lists = `[...document.querySelectorAll('[data-testid="chat-log"]')].map((log) => { const s = log.firstElementChild; return { inDock: Boolean(log.closest('[data-testid="shell-dock"]')), top: Math.round(s.scrollTop), height: s.scrollHeight, client: s.clientHeight, count: log.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count"), button: Boolean(log.querySelector('[data-testid="chat-scroll-bottom"]')) }; })`;
       const listsNow = await js<unknown>(view, lists);
-      await sleep(3000);
+      await waitFrames(view, 4);
       const listsLater = await js<unknown>(view, lists);
       failures.push(`lists ${JSON.stringify({ listsNow, listsLater })}`);
       const seen = await js<unknown>(view, `({ page: [...document.querySelectorAll('[data-testid^="page-"]')].map((el) => el.getAttribute("data-testid")).slice(0, 6), dock: Boolean(${DOCK}), rows: Number(${DOCK}?.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? -1), bubbles: [...(${DOCK}?.querySelectorAll('[data-testid^="bubble-user-"]') ?? [])].slice(-2).map((el) => el.getAttribute("data-testid")) })`);
       failures.push(`the conversation of ${label} did not open (${opened ? (docked ? "the newest row not drawn" : "no dock") : "the reader did not open from the shelf"}: ${JSON.stringify(seen)})`);
     }
-    await sleep(1500);
+    await sleep(1500); // real time: 长会话加载后等待渲染进程工作集稳定再采样内存
     memory[label] = rendererMemoryMiB();
   }
 
@@ -58,7 +58,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
   const newest = `bubble-user-${large.runIds.at(-1)}:user`;
   for (let index = 0; index < 12; index += 1) {
     if (!(await showTab(view, { kind: "reader", title: "长对话的书（1000）" })) || !(await waitUntil(view, `${DRAWN}(${DOCK}?.querySelector('[data-testid="bubble-user-${small.runIds.at(-1)}:user"]'))`, 8000))) { failures.push("the other book's conversation did not come back"); break; }
-    await sleep(400);
+    await waitFrames(view, 2);
     await js(view, `(() => { window.__chatOpen = null; document.addEventListener("mousedown", () => { window.__chatOpen = performance.now(); }, { capture: true, once: true }); return true; })()`);
     const pending = js<number>(view, `new Promise((resolve) => {
       const begun = performance.now();
@@ -78,7 +78,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     const ms = await pending;
     openRaw.push(ms < 0 ? ms : Math.round(ms * 10) / 10);
     if (ms >= 0) openMs.push(Math.round(ms * 10) / 10);
-    await sleep(300);
+    await waitFrames(view, 2);
   }
   await waitUntil(view, `${DRAWN}(${DOCK}?.querySelector('[data-testid="${newest}"]'))`, 5000);
 
@@ -126,7 +126,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     olderRaw.push(ms < 0 ? ms : Math.round(ms * 10) / 10);
     if (ms === -2) break;
     if (ms >= 0) olderMs.push(Math.round(ms * 10) / 10);
-    await sleep(500);
+    await waitFrames(view, 2);
   }
 
   // Late frames: back at the bottom, then scrolled upwards a step each frame; five runs.
@@ -134,7 +134,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
   let usualIntervalMs = 0;
   for (let run = 0; run < 5; run += 1) {
     await clickTestId(view, "chat-scroll-bottom", 2000);
-    await sleep(600);
+    await waitUntil(view, `(() => { const s = ${SCROLLER}; return Boolean(s && s.scrollHeight - s.scrollTop - s.clientHeight < 24); })()`, 4000);
     const result = await js<{ usual: number; pct: number; frames: number }>(view, `new Promise((resolve) => {
       const scroller = ${SCROLLER};
       const idle = [];

@@ -1,15 +1,15 @@
 {
   "status": "passed",
-  "stage": "m6",
-  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
-  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
-  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
-  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
-  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
-  "packageScriptFingerprint": "9f8b9cbda518e731ed9fac2a0c38689b2eae319580fddf9115206af14c3fe27d",
-  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
-  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
-  "at": "2026-11-05T18:04:26.833Z",
+  "stage": "m9",
+  "sourceFingerprint": "fbd0b6994c782f5af1a2a32d915fc9b1b8f9a852d6a823e4d74cfefa4170da66",
+  "lockFingerprint": "9e3b406214305808bd8cefcc1a4ee403c62f0c5698c6dc0eb1145cb8774aeb06",
+  "buildScriptFingerprint": "0371340943049a28cf472347c426428b182b3dd697476168f5676e1a163d1282",
+  "gateScriptFingerprint": "5c3459906755130571c5bca29ca612c782f3d4f3fd0e093170c3ba035b5b3881",
+  "testScriptFingerprint": "a681485d94b9b9c02cca3d20d54bf889198fb070120d0ee42c2ba9bab480b7a1",
+  "packageScriptFingerprint": "7802f4511e43de3a92ef28ebb69aa842217abf8f7515e6887d90265396503219",
+  "benchScriptFingerprint": "c73470c4c99069e45da9141f053d6e82507d8b21cf16cd414ef37a9b67f2eac0",
+  "installerScriptFingerprint": "92914f2e9a8b93f5e172a4f2308cdeba51e61b3041fc1f02bc0e905c4bc85d39",
+  "at": "2026-11-08T06:04:53.660Z",
   "format": "unsigned per-user NSIS installer (electron-builder, --prepackaged)",
   "electronBuilder": "26.18.0",
   "steps": [
@@ -21,18 +21,18 @@
       "name": "release: installer built and configured",
       "ok": true,
       "megabytes": 202,
-      "seconds": 47
+      "seconds": 27
     },
     {
       "name": "development: installer built and configured",
       "ok": true,
       "megabytes": 202,
-      "seconds": 48
+      "seconds": 28
     },
     {
       "name": "release: installed per user without elevation into the chosen folder",
       "ok": true,
-      "seconds": 8
+      "seconds": 6
     },
     {
       "name": "release: Start menu and desktop shortcuts",
@@ -41,7 +41,7 @@
     {
       "name": "development: installed per user without elevation into the chosen folder",
       "ok": true,
-      "seconds": 8
+      "seconds": 6
     },
     {
       "name": "development: Start menu and desktop shortcuts",

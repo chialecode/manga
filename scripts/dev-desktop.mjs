@@ -7,8 +7,8 @@ import { packAllPlugins, pluginBuildDir } from "./desktop-plugins.ts";
 
 const prepared = spawnSync(process.execPath, ["scripts/verify-electron-sqlite.mjs"], { cwd: repoRoot, stdio: "inherit", windowsHide: true });
 if (prepared.status !== 0) process.exit(prepared.status ?? 1);
-// A development run is the development channel and keeps to its own places (计划 4.9): %LOCALAPPDATA%\manga-dev, <Documents>\MANGA-dev and
-// <Downloads>\MANGA-dev, beside an installed release and never in its folders. `--isolated` keeps everything under dist/desktop/development instead.
+// A development run is the development channel and keeps to its own places (计划 4.9): %LOCALAPPDATA%\manga-dev, <Documents>\manga-dev and
+// <Downloads>\manga-dev, beside an installed release and never in its folders. `--isolated` keeps everything under dist/desktop/development instead.
 const isolated = process.argv.includes("--isolated");
 const devRoot = path.join(desktopOutput, "development");
 const env = { ...process.env, MANGA_CHANNEL: "development" };
@@ -29,7 +29,7 @@ try {
 } catch (error) {
   console.log(`Bundled plugins were not built: ${error instanceof Error ? error.message : String(error)}`);
 }
-console.log(isolated ? "Development data: dist/desktop/development (isolated)." : "Development data: the development channel's own folders (manga-dev, MANGA-dev), apart from a release.");
+console.log(isolated ? "Development data: dist/desktop/development (isolated)." : "Development data: the development channel's own folders (manga-dev), apart from a release.");
 const require = createRequire(path.join(repoRoot, "apps/desktop/package.json"));
 delete env.ELECTRON_RUN_AS_NODE;
 const result = spawnSync(process.execPath, [require.resolve("@electron-forge/cli/dist/electron-forge.js"), "start", "--", ...process.argv.slice(2).filter((arg) => arg !== "--isolated")], {

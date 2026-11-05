@@ -46,6 +46,11 @@ describe("AT-120 the sidebar's color", () => {
     });
   }
 
+  it("keeps danger text (proposal warnings, \"不能撤销\", failed states) readable on the page in both themes", () => {
+    for (const theme of [light, dark]) expect(contrast(theme["color-danger-text"]!, theme["color-surface"]!)).toBeGreaterThanOrEqual(4.5);
+    expect(readFileSync("apps/desktop/src/renderer/styles-workspace.css", "utf8")).not.toMatch(/\.proposal-[a-z-]+[^{}]*\{[^}]*[{;]\s*color: var\(--color-danger\)/);
+  });
+
   it("is told apart from the frame and from the page by at least a visible step in each theme", () => {
     for (const theme of [light, dark]) {
       expect(contrast(theme["color-sidebar"]!, theme["color-frame"]!)).toBeGreaterThan(1.01);

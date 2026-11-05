@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import {
-  DRAWN, PICK, clickTestId, closeTabs, ensureSidebar, openFromShelf, pointerClick, pressChord, pressKey, railTo, setField, sleep, tabsOf, trustedClick, viaSidebar, waitDrawn, waitUntil, type RailName,
+  DRAWN, PICK, clickTestId, closeTabs, ensureSidebar, openFromShelf, pointerClick, pressChord, pressKey, railTo, setField, sleep, tabsOf, trustedClick, viaSidebar, waitDrawn, waitFrames, waitUntil, type RailName,
 } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller } from "./common.ts";
 import { focusedChip, hostFacts, settledHost, waitContext } from "./workspace-walk.ts";
@@ -91,7 +91,7 @@ function makeKit(view: BrowserWindow, call: Call) {
     attr: (id: string, name: string) => js<string | null>(view, `${at(id)}?.getAttribute(${JSON.stringify(name)}) ?? null`),
     text: (id: string) => js<string>(view, `${at(id)}?.textContent ?? ""`),
     /** The pointer, moved the way the hand moves it (a trusted move: the page sees the hover). */
-    move: async (x: number, y: number) => { view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(x), y: Math.round(y) }); await sleep(70); },
+    move: async (x: number, y: number) => { view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(x), y: Math.round(y) }); await waitFrames(view, 1); },
     centre: async (id: string): Promise<Point | null> => { const r = await rect(id); return r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null; },
     hover: async (id: string): Promise<boolean> => { const p = await kit.centre(id); if (!p) return false; await kit.move(p.x, p.y); return true; },
     /** A place on the page where a press does nothing: not a control, not a link, not a card that opens something. */
@@ -172,7 +172,7 @@ function compare(name: RailName, facts: SidebarFacts, api: ApiView): string[] {
 /** The sidebar of a view once what it draws is what the command answers; the last differences when it never is (a list is filled in from the cache first, and then replaced). */
 async function settle(kit: Kit, name: RailName): Promise<{ facts: SidebarFacts | null; problems: string[] }> {
   let last: { facts: SidebarFacts | null; problems: string[] } = { facts: null, problems: ["the sidebar is not drawn"] };
-  for (let round = 0; round < 30; round += 1) {
+  for (let round = 0; round < 60; round += 1) {
     const facts = await kit.sidebar();
     if (facts && facts.view === name) {
       const open = facts.groups.filter((group) => group.opened).map((group) => (group.key === "recent" ? null : group.key));
@@ -180,7 +180,7 @@ async function settle(kit: Kit, name: RailName): Promise<{ facts: SidebarFacts |
       last = { facts, problems };
       if (problems.length === 0) return last;
     }
-    await sleep(200);
+    await sleep(60); // real time: poll interval while sidebar async command response settles
   }
   return last;
 }
@@ -197,7 +197,7 @@ async function seed(env: RailEnv): Promise<Seeded> {
   for (let n = 1; n <= 6; n += 1) {
     const made = (await call("notes.create", { title: `轨道笔记${"一二三四五六"[n - 1]}`, text: n === 1 ? `轨道笔记正文，其中有一个只在这里出现的词 ${needle}。` : `轨道笔记正文第${n}条。` })).value as { objectId?: string } | undefined;
     noteIds.push(String(made?.objectId ?? ""));
-    await sleep(20);
+    await sleep(2); // real time: ensure strictly increasing millisecond timestamps across seeded notes
   }
   const conversation = async (contextId: string | null, title: string) => {
     const id = String(((await call("conversation.new", { contextId })).value as { sessionId?: string } | undefined)?.sessionId ?? "");
@@ -221,14 +221,14 @@ async function walkViews(env: RailEnv, kit: Kit, seeded: Seeded): Promise<void> 
   const expandedOf = async (key: string) => (await kit.attr(`context-toggle-${key}`, "aria-expanded")) === "true";
   /** A group is open or folded by what it says of itself: the sidebar keeps the state of a group from one view to the next, so a click alone may do either. */
   const openGroup = async (key: string) => { if (!(await expandedOf(key))) await toggle(key); return waitUntil(view, `${kit.at(`context-toggle-${key}`)}?.getAttribute("aria-expanded") === "true"`, 3000); };
-  const foldGroup = async (key: string) => { if (await expandedOf(key) && (await kit.attr(`context-toggle-${key}`, "disabled")) === null) await toggle(key); await sleep(150); };
+  const foldGroup = async (key: string) => { if (await expandedOf(key) && (await kit.attr(`context-toggle-${key}`, "disabled")) === null) { await toggle(key); await waitUntil(view, `${kit.at(`context-toggle-${key}`)}?.getAttribute("aria-expanded") !== "true"`, 2000); } };
 
   // The home: the projects (folded unless it is where the window is) and 最近 (open); the project opens with its things by kind.
   await kit.showView("home");
   await goRecent();
   await kit.showView("home");
   let home = await settle(kit, "home");
-  for (const group of home.facts?.groups ?? []) if (group.key !== "recent" && group.opened && !group.current && await toggle(group.key)) await sleep(150);
+  for (const group of home.facts?.groups ?? []) if (group.key !== "recent" && group.opened && !group.current && await toggle(group.key)) await waitUntil(view, `${kit.at(`context-toggle-${group.key}`)}?.getAttribute("aria-expanded") !== "true"`, 2000);
   home = await settle(kit, "home");
   const folded = home.facts?.groups.find((group) => group.key === projectId);
   const recent = home.facts?.groups.find((group) => group.key === "recent");
@@ -343,7 +343,6 @@ async function walkViews(env: RailEnv, kit: Kit, seeded: Seeded): Promise<void> 
       const before = await totalOf();
       await clickTestId(view, "sidebar-new-object", 3000);
       const made = await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-focused="true"][data-kind="whiteboard"]')`, 6000);
-      await sleep(400);
       const after = await totalOf();
       if (!made || after !== before + 1) problems.push(`whiteboard: 新建 in the project made ${after - before} whiteboard(s) and ${made ? "opened it" : "opened none"}`);
       views.newWhiteboard = { before, after, made };
@@ -415,7 +414,7 @@ async function walkHideMore(env: RailEnv, kit: Kit): Promise<void> {
 
   // The home cannot be taken out: no menu on it.
   await js(view, `(() => { const el = ${kit.at("nav-home")}; const b = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: b.left + 5, clientY: b.top + 5 })); })()`);
-  await sleep(250);
+  await waitFrames(view, 2);
   if (await kit.drawn("rail-menu")) { problems.push("the home has a menu that takes it out"); await pressKey(view, "Escape"); }
 
   // Two icons taken out: gone from the rail, behind "…", saved.
@@ -473,7 +472,7 @@ async function walkHideMore(env: RailEnv, kit: Kit): Promise<void> {
 
   // A window that is short: what does not fit goes behind "…" (the icon taken out stays there with its pin), and the settings button stays in the window.
   await resize("short");
-  await sleep(200);
+  await waitUntil(view, `document.querySelectorAll('[data-testid="rail-views"] > button[data-rail-view]').length < ${noteOut.length + 1}`, 2000);
   const short = await orderOf(view);
   await pointerClick(view, "rail-more", 2000);
   const shortList = await waitDrawn(view, "rail-more-list", 2000) ? await moreItems(view) : [];
@@ -499,7 +498,7 @@ async function walkHideMore(env: RailEnv, kit: Kit): Promise<void> {
   if (short.length === 0) problems.push("the short window shows no icon");
   await shot("rail-short");
   await resize("wide");
-  await sleep(200);
+  await waitUntil(view, `document.querySelectorAll('[data-testid="rail-views"] > button[data-rail-view]:not([data-rail-view="more"])').length === ${noteOut.length}`, 2000);
 
   // The last pin puts the rest back where it was, and "…" goes with the last icon that was out.
   if (!(await pin("note"))) problems.push("the pin of note did not put the icon back");
@@ -533,7 +532,7 @@ async function walkHoverCard(env: RailEnv, kit: Kit): Promise<void> {
   if (!folded) problems.push("the sidebar's switch did not fold the sidebar");
   const savedFolded = await sidebarWidth();
   await away();
-  await sleep(300);
+  await waitFrames(view, 2);
   const mainBefore = await kit.rect("shell-main");
   const dockBefore = await kit.drawn("shell-dock");
 
@@ -588,7 +587,7 @@ async function walkHoverCard(env: RailEnv, kit: Kit): Promise<void> {
   await waitCard("comic");
   const into = await kit.centre("sidebar-manage");
   if (into) await kit.move(into.x, into.y);
-  await sleep(450);
+  await sleep(450); // real time: verify hover card stays open past hover-leave close delay while pointer is inside card
   const stayed = await waitCard("comic", 500);
   if (!stayed) problems.push("the card closed while the pointer was on it");
   await trustedClick(view, "sidebar-manage", 2000);
@@ -625,14 +624,13 @@ async function walkHoverCard(env: RailEnv, kit: Kit): Promise<void> {
     view.webContents.focus();
     view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
     view.webContents.sendInputEvent({ type: "char", keyCode: "Enter" } as never);
-    await sleep(40);
     view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
   };
   await js(view, `${kit.at("nav-comic")}.focus()`);
   await enter();
   const keyCard = await waitCard("comic", 2500);
   const focusIn = await js<boolean>(view, `(() => { const el = ${kit.at("shell-sidebar")}; return Boolean(el) && el.contains(document.activeElement); })()`);
-  await sleep(500);
+  await sleep(500); // real time: verify keyboard-opened card remains open for 500 ms without hover
   const stillThere = await waitCard("comic", 300);
   if (!keyCard || !focusIn || !stillThere) problems.push(`Enter on the comic icon: card ${keyCard}, focus inside ${focusIn}, still there after half a second ${stillThere}`);
   await pressKey(view, "Escape");
@@ -672,8 +670,8 @@ async function walkSearch(env: RailEnv, kit: Kit, seeded: Seeded): Promise<void>
   await closeTabs(view, "all");
   const kinds = () => tabsOf(view).then((tabs) => tabs.map((tab) => tab.kind));
   const results = () => js<string[]>(view, `[...document.querySelectorAll('[data-testid="search-results"] [data-testid^="search-result-"]')].map((el) => (el.getAttribute("data-testid") ?? "").slice("search-result-".length) + ":" + (el.querySelector(".search-row-title")?.textContent ?? ""))`);
-  const settled = (ms = 4000) => waitUntil(view, `(() => { const list = ${kit.at("search-results")}; return Boolean(list) && list.getAttribute("aria-busy") !== "true"; })()`, ms);
-  const type = async (text: string) => { await setField(view, "search-input", text); await sleep(120); await settled(); await sleep(150); };
+  const settled = (ms = 4000) => waitUntil(view, `(() => { const list = ${kit.at("search-results")}; const q = (${kit.at("search-input")}?.value ?? "").trim(); return Boolean(list) && list.getAttribute("aria-busy") !== "true" && (!q || list.getAttribute("data-found") === q) && (list.querySelector('[data-testid^="search-result-"]') || list.querySelector('[data-testid="search-names-none"]')); })()`, ms);
+  const type = async (text: string) => { await setField(view, "search-input", text); await waitFrames(view, 2); await settled(); await waitFrames(view, 1); };
   const gone = () => waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, 3000);
   const opened = (ms = 3000) => waitDrawn(view, "search-input", ms);
   const frontKind = (kind: string, ms = 6000) => waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-focused="true"][data-kind="${kind}"]')`, ms);
@@ -835,7 +833,7 @@ async function walkSettings(env: RailEnv, kit: Kit): Promise<void> {
     v.currentTime = 0.3;
     return v.play().then(() => true, () => false);
   })()`);
-  await sleep(700);
+  await waitUntil(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return Boolean(v) && !v.paused && v.currentTime > 0.35; })()`, 3000);
   const marks = () => js<Marks>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return { same: Boolean(v) && v.__marked === "settings-view" && v.isConnected, emptied: v?.__emptied ?? -1, loads: v?.__loads ?? -1, time: v?.currentTime ?? -1, paused: v?.paused ?? true, ready: v?.readyState ?? 0 }; })()`);
   const playingNow = await marks();
   if (!playing || playingNow.paused) problems.push("the video could not be made to play");
@@ -884,14 +882,13 @@ async function walkSettings(env: RailEnv, kit: Kit): Promise<void> {
 
   // The filter narrows the pages by name; nothing found says so; clearing brings them back.
   await setField(view, "settings-filter", "快捷键");
-  await sleep(250);
+  await waitUntil(view, `document.querySelectorAll('[data-testid^="settings-nav-"]').length < ${directory.pages}`, 2000);
   const filtered = await js<string[]>(view, `[...document.querySelectorAll('[data-testid^="settings-nav-"]')].map((el) => (el.getAttribute("data-testid") ?? "").slice("settings-nav-".length))`);
   if (!filtered.includes("shortcuts") || filtered.length >= directory.pages) problems.push(`the filter "快捷键" leaves ${JSON.stringify(filtered)} of ${directory.pages} pages`);
   await setField(view, "settings-filter", "没有这个名字的设置页zz");
-  await sleep(250);
-  const none = await kit.drawn("settings-filter-none");
+  const none = await waitDrawn(view, "settings-filter-none", 2000);
   await clickTestId(view, "settings-filter-clear", 2000);
-  await sleep(250);
+  await waitUntil(view, `document.querySelectorAll('[data-testid^="settings-nav-"]').length === ${directory.pages}`, 2000);
   const restored = await js<number>(view, `document.querySelectorAll('[data-testid^="settings-nav-"]').length`);
   if (!none || restored !== directory.pages) problems.push(`the filter: nothing found says so ${none}, ${restored} pages after clearing`);
   await shot("settings-view");
@@ -904,20 +901,27 @@ async function walkSettings(env: RailEnv, kit: Kit): Promise<void> {
   await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") === "logs"`, 3000);
   const steps: Array<string | null> = [await pageOf()];
   await clickTestId(view, "nav-back", 2000);
-  await sleep(150);
+  await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") === ${JSON.stringify(target)}`, 2000);
   steps.push(await pageOf());
   const forwardOk = await js<boolean>(view, `!${kit.at("nav-forward")}?.disabled`);
   await clickTestId(view, "nav-forward", 2000);
-  await sleep(150);
+  await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") === "logs"`, 2000);
   steps.push(await pageOf());
-  for (let n = 0; n < 2; n += 1) { await clickTestId(view, "nav-back", 2000); await sleep(150); }
+  for (let n = 0; n < 2; n += 1) {
+    const prevPage = await pageOf();
+    await clickTestId(view, "nav-back", 2000);
+    await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") !== ${JSON.stringify(prevPage)}`, 2000);
+  }
   steps.push(await pageOf());
   const stillIn = await kit.drawn("settings-area");
   await clickTestId(view, "nav-back", 2000);
-  await sleep(150);
+  await waitFrames(view, 2);
   steps.push(await pageOf());
   const stillInAtFirst = await kit.drawn("settings-area");
-  if (stillInAtFirst) { await clickTestId(view, "nav-back", 2000); await sleep(150); }
+  if (stillInAtFirst) {
+    await clickTestId(view, "nav-back", 2000);
+    await waitUntil(view, `!${DRAWN}(${kit.at("settings-area")})`, 2000);
+  }
   const outAfter = !(await kit.drawn("settings-area"));
   detail.back = { steps, forwardOk, stillIn, stillInAtFirst, outAfter };
   if (steps[0] !== "logs" || steps[1] !== target || steps[2] !== "logs" || steps[3] !== firstPage || !forwardOk || !stillIn || !outAfter) problems.push(`back and forward walked ${JSON.stringify(steps)} (first page ${firstPage}, forward offered ${forwardOk}, still inside at the first page ${stillIn}, out after ${outAfter})`);
@@ -926,7 +930,7 @@ async function walkSettings(env: RailEnv, kit: Kit): Promise<void> {
   // Out: the workspace as it was; the player is the element that was left, was not loaded again, and is at the second it was at.
   const outMarks = await waitUntil(view, `(() => { const area = ${kit.at("workspace-area")}; return area?.getAttribute("data-suspended") === "false" && !area.hasAttribute("inert"); })()`, 4000);
   await waitUntil(view, `${DRAWN}(${kit.at("video-reader")})`, 4000);
-  await sleep(400);
+  await waitFrames(view, 2);
   const after = await marks();
   const tabsAfter = (await tabsOf(view)).map((tab) => `${tab.id}|${tab.kind}|${tab.title}|${tab.focused}`);
   const hostAfter = await settledHost(view);
@@ -958,10 +962,10 @@ async function walkSettings(env: RailEnv, kit: Kit): Promise<void> {
   // The sidebar's color in the dark theme too: one picture.
   await kit.showView("home");
   await js(view, `document.documentElement.setAttribute("data-theme", "dark")`);
-  await sleep(300);
+  await waitFrames(view, 2);
   await shot("sidebar-dark");
   await js(view, `document.documentElement.removeAttribute("data-theme")`);
-  await sleep(200);
+  await waitFrames(view, 2);
   await closeTabs(view, "all");
   observe("settings-view", problems.length === 0, { problems, ...detail });
 }
@@ -1012,7 +1016,14 @@ async function walkLegacy(env: RailEnv, kit: Kit): Promise<void> {
   // The command gives the same, and the next save of the window writes the library's row without them and with nothing else changed.
   const loaded = ((await call("workspace.loadContext", { contextId: legacy })).value as { state?: { tabs?: Array<{ id: string; kind: string }>; closed?: unknown[]; preset?: string } } | undefined)?.state;
   if (!loaded || loaded.tabs?.some((item) => ["search", "settings", "plugins", "keys"].includes(item.kind)) || (loaded.closed?.length ?? 0) !== 0 || loaded.preset !== "two") problems.push(`the command answers ${JSON.stringify(loaded)?.slice(0, 200)}`);
-  if (chips.some((item) => item.id === "lg-records") && await js(view, `(() => { const el = document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-tab="lg-records"]'); if (!el) return false; el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })); return true; })()`)) await sleep(1800);
+  if (chips.some((item) => item.id === "lg-records") && await js(view, `(() => { const el = document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-tab="lg-records"]'); if (!el) return false; el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })); return true; })()`)) {
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      const checkRow = appService.store.sqlite.prepare("SELECT state_json FROM workspace_contexts WHERE context_id = ?").get(legacy) as { state_json: string } | undefined;
+      if (checkRow && !checkRow.state_json.includes('"settings"')) break;
+      await sleep(50); // real time: poll SQLite for debounced workspace context save
+    }
+  }
   const row = appService.store.sqlite.prepare("SELECT state_json FROM workspace_contexts WHERE context_id = ?").get(legacy) as { state_json: string } | undefined;
   const rewritten = row ? (JSON.parse(row.state_json) as { tabs: Array<{ id: string; kind: string }>; closed: unknown[]; preset: string }) : null;
   if (!rewritten || rewritten.tabs.some((item) => ["search", "settings", "plugins", "keys"].includes(item.kind)) || rewritten.closed.length !== 0 || rewritten.preset !== "two" || rewritten.tabs.length !== 2) problems.push(`the saved row after the window's own save is ${row?.state_json.slice(0, 200) ?? "missing"}`);

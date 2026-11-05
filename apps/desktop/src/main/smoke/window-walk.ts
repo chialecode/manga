@@ -4,7 +4,7 @@ import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
 import { productWindow } from "../window-options.ts";
-import { clickTestId, closeTabs, openFromShelf, openShelf, revealNovelControls, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, closeTabs, openFromShelf, openShelf, revealNovelControls, setField, setSelect, sleep, waitDrawn, waitForTestId, waitFrames, waitText, waitUntil } from "./driver.ts";
 import { READER_CONTROL_OBSERVATIONS, walkComicControls, walkNovelControls, walkPlayerControls } from "./reader-controls-walk.ts";
 import { PLAYER_MENU_OBSERVATIONS, walkPlayerFullscreen, walkPlayerMenus } from "./player-menus-walk.ts";
 import { DANMAKU_OBSERVATIONS, walkDanmaku } from "./danmaku-walk.ts";
@@ -102,7 +102,13 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   const resize = async (size: SizeName) => {
     const [width, height] = WINDOW_SIZES[size];
     view.setContentSize(width, height);
-    await sleep(450);
+    await waitUntil(view, `(() => {
+      if (window.innerWidth !== ${width} || window.innerHeight !== ${height}) return false;
+      const panel = document.querySelector('[data-testid="tab-panel"][data-focused="true"]')?.getBoundingClientRect();
+      return !panel || (panel.top >= 0 && Math.abs(panel.bottom - window.innerHeight) <= 4);
+    })()`, 3000);
+    await waitUntil(view, `document.documentElement.scrollWidth <= window.innerWidth + 1`, 2000);
+    await waitFrames(view, 4);
   };
   // The floating capsule (microphone and quick note) shows while the dock is folded. On a page with a bar of controls it must not sit on
   // any of them, with its note box open or closed: the dock is folded for the check when it is open, then put back as it was.
@@ -136,17 +142,17 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     const wake = async () => {
       await js(view, `document.querySelector('[data-testid="video-reader"]')?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 40, clientY: 40 }))`);
       await revealNovelControls(view);
-      await sleep(150);
+      await waitFrames(view);
     };
     await wake();
     const closed = await measure();
     await clickTestId(view, "capsule-note");
-    await sleep(200);
+    await waitFrames(view, 2);
     await wake();
     const open = await measure();
     await clickTestId(view, "capsule-note");
     capsuleRows.push({ label, shown: true, checked: closed.checked, covered: [...closed.covered, ...open.covered.map((item) => `note-open:${item}`)] });
-    if (paneWasOpen) { await clickTestId(view, "shell-dock-toggle", 1500); await sleep(250); }
+    if (paneWasOpen) { await clickTestId(view, "shell-dock-toggle", 1500); await waitDrawn(view, "shell-dock", 3000); }
   };
   await call("settings.skipAi", {});
 
@@ -181,15 +187,15 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     const clicked = chosen && await clickTestId(view, "library-path-add");
     const row = clicked && await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-text-"]')].some((el) => (el.textContent || "").endsWith(${JSON.stringify(path.basename(folders[kind]))}))`, 8000);
     if (row) added.push(kind);
-    await sleep(300);
+    await waitFrames(view);
   }
   testHooks.pick = undefined;
   // Five works are expected: two single files and one folder of two chapters (novel), one comic archive, one video.
   let total = 0;
-  for (let attempt = 0; attempt < 480 && total < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 2400 && total < 5; attempt += 1) {
     const listed = await call("works.list", { limit: 50 });
     total = Number((listed.value as { total?: number } | undefined)?.total ?? 0);
-    if (total < 5) await sleep(250);
+    if (total < 5) await sleep(50); // real time: background scan polling interval
   }
   const scanMs = Date.now() - startedAt;
   const settledScan = await waitUntil(view, `!document.querySelector('[data-testid="scan-cancel"]') && document.querySelectorAll('[data-testid^="library-path-text-"]').length === 3`, 60_000);
@@ -216,7 +222,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   const pane = await ensureDock(view);
   await clickTestId(view, "chat-mode-note");
   await setField(view, "agent-composer", "作品页笔记");
-  await sleep(100);
+  await waitUntil(view, `!document.querySelector('[data-testid="agent-send"]')?.disabled`, 2000);
   const sent = pane && await clickTestId(view, "agent-send");
   const bubble = sent && await waitUntil(view, `[...document.querySelectorAll('[data-testid^="bubble-note-"]')].some((el) => (el.textContent || "").includes("作品页笔记")) || (document.querySelector('[data-testid="chat-log"]')?.textContent ?? "").includes("作品页笔记")`, 15_000);
   const workspace = await call("workspace.get", {});
@@ -278,13 +284,14 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   const zoomTo = async (percent: number) => {
     // From 100%: the value button resets, then in or out by whole steps.
     await clickTestId(view, "comic-zoom-value");
-    await sleep(200);
+    await waitText(view, "comic-zoom-value", "100%", 2000);
     const steps = Math.round((percent - 100) / 25);
     for (let step = 0; step < Math.abs(steps); step += 1) {
+      const targetPct = 100 + (step + 1) * (steps > 0 ? 25 : -25);
       await clickTestId(view, steps > 0 ? "comic-zoom-in" : "comic-zoom-out");
-      await sleep(80);
+      await waitText(view, "comic-zoom-value", `${targetPct}%`, 2000);
     }
-    await sleep(350);
+    await waitFrames(view, 2);
   };
   for (const size of Object.keys(WINDOW_SIZES) as SizeName[]) {
     await resize(size);
@@ -293,6 +300,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
       const name = `comic-layout-${size}-${fit}`;
       if (!comicReady) { observe(name, false, { reason: "the comic did not open" }); continue; }
       await setSelect(view, "comic-fit", fit);
+      await waitFrames(view, 3);
       const rows: Array<Record<string, unknown>> = [];
       let base: Rect | null = null;
       let stage0: Rect | null = null;
@@ -327,7 +335,8 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     }
     await clickTestId(view, "comic-zoom-value");
     await setSelect(view, "comic-fit", "page");
-    await sleep(300);
+    await waitText(view, "comic-zoom-value", "100%", 2000);
+    await waitFrames(view, 2);
     // The region tool's bar sits right under the header, where the capsule floats on this page; it is measured too.
     if (comicReady) {
       await clickTestId(view, "comic-region-tool");
@@ -357,14 +366,15 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     await checkFill(size, "player", "video-reader");
     // The controls fade while idle; a mouse move over the player brings them back.
     await js(view, `document.querySelector('[data-testid="video-reader"]').dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 40, clientY: 40 }))`);
-    await sleep(200);
+    await waitDrawn(view, "video-controls", 2000);
+    await waitFrames(view);
     const controls = await js<{ controls: Rect | null; toggle: Rect | null; more: Rect | null; viewport: { w: number; h: number }; docOverflow: number }>(view, `(() => {
       const rect = ${RECT};
       const get = (id) => { const el = document.querySelector('[data-testid="' + id + '"]'); return el ? rect(el) : null; };
       return { controls: get("video-controls"), toggle: get("video-toggle"), more: get("video-more"), viewport: { w: window.innerWidth, h: window.innerHeight }, docOverflow: document.documentElement.scrollWidth - window.innerWidth };
     })()`);
     await clickTestId(view, "video-more");
-    await sleep(200);
+    await waitDrawn(view, "video-more-panel", 2000);
     const panel = await js<Rect | null>(view, `(() => { const rect = ${RECT}; const el = document.querySelector('[data-testid="video-more-panel"]'); return el ? rect(el) : null; })()`);
     await clickTestId(view, "video-more");
     const problems: string[] = [];
@@ -412,16 +422,16 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
       return { foot: get("reading-footer"), viewport: { w: window.innerWidth, h: window.innerHeight }, docOverflow: document.documentElement.scrollWidth - window.innerWidth };
     })()`);
     await clickTestId(view, "reading-settings");
-    await sleep(200);
+    await waitDrawn(view, "reading-settings-panel", 2000);
     const panel = await js<Rect | null>(view, `(() => { const rect = ${RECT}; const el = document.querySelector('[data-testid="reading-settings-panel"]'); return el ? rect(el) : null; })()`);
     await clickTestId(view, "reading-settings");
     // The real pointer rests wherever a hand left it, and one on the bar holds the bar on screen; this one is put in the middle of the page.
     view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(bar.viewport.w / 2), y: Math.round(bar.viewport.h / 2) });
     // Hidden, the controls are out of sight and the text keeps its place: a window with nothing but reading.
-    await sleep(2800);
+    await sleep(2800); // real time: novel reader idle auto-hide timer (3 s)
     const hideWait = Date.now();
     await waitUntil(view, `document.querySelector('[data-testid="reading-page"]')?.getAttribute("data-controls") === "hidden"`, 3200);
-    await sleep(350);
+    await sleep(350); // real time: reading-footer CSS slide-out transition duration
     const hideLateMs = Date.now() - hideWait - 350;
     const hidden = await js<{ state: string | null; gap: number | null; text: boolean; active: string | null; activeInFoot: boolean; settings: boolean; side: boolean }>(view, `(() => {
       const root = document.querySelector('[data-testid="reading-page"]');

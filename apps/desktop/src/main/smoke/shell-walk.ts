@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { DRAWN, PICK, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, pressKey, railTo, sleep, waitUntil, type RailName } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, pressKey, railTo, sleep, waitFrames, waitUntil, type RailName } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller } from "./common.ts";
 import { boxOf, centreOf, cssColor, hex, mouse, near3, parseRgb, pixelsOf, type Box, type Point, type Rgb } from "./input.ts";
 import type { Observe } from "./reader-controls-walk.ts";
@@ -83,14 +83,14 @@ async function walkCorner(env: ShellEnv): Promise<void> {
   };
   await closeTabs(view, "all");
   await openLibrary(view);
-  await sleep(300);
+  await waitFrames(view, 2);
   const before = await saved(call);
   if (!before.sidebar.visible) await clickTestId(view, "shell-sidebar-toggle");
   await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]'))`, 3000);
   await measure("sidebar-shown");
   await clickTestId(view, "shell-sidebar-toggle");
   await waitUntil(view, `!document.querySelector('[data-testid="shell-sidebar"]')`, 3000);
-  await sleep(200);
+  await waitFrames(view, 2);
   await measure("sidebar-folded");
   await clickTestId(view, "shell-sidebar-toggle");
   await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]'))`, 3000);
@@ -99,7 +99,8 @@ async function walkCorner(env: ShellEnv): Promise<void> {
     if (await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`, 4000)) {
       // The pointer away from the top edge, so the floating top stays up.
       view.webContents.sendInputEvent({ type: "mouseMove", x: 400, y: 400 });
-      await sleep(500);
+      await waitUntil(view, `(document.querySelector('[data-testid="shell-top"]')?.getBoundingClientRect().bottom ?? 36) <= 0.5`, 2000);
+      await waitFrames(view, 2);
       await measure("window-full-screen");
       await shot("shell-corner-window-full");
       await pressKey(view, "Escape");
@@ -129,7 +130,7 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
   if (!start.sidebar.visible) await clickTestId(view, "shell-sidebar-toggle");
   if (!start.dock.visible) await clickTestId(view, "shell-dock-toggle");
   await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-resize-sidebar"]')) && ${DRAWN}(document.querySelector('[data-testid="shell-resize-dock"]'))`, 4000);
-  await sleep(300);
+  await waitFrames(view, 2);
   start = await saved(call);
   const width0 = Math.round((await widthOf(view, "shell-sidebar")) ?? start.sidebar.width);
   const grip = await centreOf(view, "shell-resize-sidebar");
@@ -142,22 +143,22 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
   await mouse(view, "mouseDown", grip);
   await mouse(view, "mouseMove", at(width0 - 20), { held: true });
   await mouse(view, "mouseMove", at(200), { held: true });
-  await sleep(120);
+  await waitFrames(view, 2);
   const atLeast = { width: await widthOf(view, "shell-sidebar"), collapsing: await collapsing() };
   await mouse(view, "mouseMove", at(140), { held: true });
-  await sleep(120);
+  await waitFrames(view, 2);
   const stopped = { width: await widthOf(view, "shell-sidebar"), collapsing: await collapsing() };
   await mouse(view, "mouseMove", at(80), { held: true });
-  await sleep(150);
+  await waitFrames(view, 2);
   const folding = { collapsing: await collapsing(), sidebar: await drawn(view, "shell-sidebar"), valuenow: await attr(view, "shell-resize-sidebar", "aria-valuenow") };
   await shot("sidebar-drag-collapsing");
   await mouse(view, "mouseMove", at(160), { held: true });
-  await sleep(150);
+  await waitFrames(view, 2);
   const back = { collapsing: await collapsing(), width: await widthOf(view, "shell-sidebar") };
   await mouse(view, "mouseMove", at(60), { held: true });
-  await sleep(120);
+  await waitFrames(view, 2);
   await mouse(view, "mouseUp", at(60));
-  await sleep(400);
+  await waitUntil(view, `!document.querySelector('[data-testid="shell-sidebar"]')`, 2000);
   const after = await saved(call);
   detail.drag = { width0, atLeast, stopped, folding, back, after: after.sidebar };
   if (!near(atLeast.width, 200, 2) || atLeast.collapsing) problems.push(`at the least width the sidebar is ${atLeast.width} wide (collapsing ${atLeast.collapsing})`);
@@ -178,15 +179,15 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
     await mouse(view, "mouseMove", { x: pull.x + 40, y: pull.y }, { held: true });
     await mouse(view, "mouseMove", { x: edge.x + 70, y: pull.y }, { held: true });
     await mouse(view, "mouseUp", { x: edge.x + 70, y: pull.y });
-    await sleep(300);
+    await waitFrames(view, 2);
     const short = (await saved(call)).sidebar.visible;
     await mouse(view, "mouseMove", edge);
     await mouse(view, "mouseDown", edge);
     for (const dx of [60, 140, 240, 280]) await mouse(view, "mouseMove", { x: edge.x + dx, y: pull.y }, { held: true });
-    await sleep(120);
+    await waitFrames(view, 2);
     const during = await widthOf(view, "shell-sidebar");
     await mouse(view, "mouseUp", { x: edge.x + 280, y: pull.y });
-    await sleep(400);
+    await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]'))`, 2000);
     const pulled = await saved(call);
     detail.pull = { short, during, pulled: pulled.sidebar };
     if (short) problems.push("a pull shorter than half the least width showed the sidebar");
@@ -201,12 +202,12 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
       await mouse(view, "mouseMove", now);
       await mouse(view, "mouseDown", now);
       await mouse(view, "mouseMove", { x: now.x - (width - 60), y: now.y }, { held: true });
-      await sleep(100);
+      await waitFrames(view, 2);
       const was = await collapsing();
       await js(view, `window.dispatchEvent(new Event("blur")); true`);
-      await sleep(150);
+      await waitFrames(view, 2);
       await mouse(view, "mouseUp", { x: now.x - (width - 60), y: now.y });
-      await sleep(300);
+      await waitFrames(view, 2);
       const kept = await saved(call);
       detail.blurred = { was, kept: kept.sidebar, width };
       if (was !== "true") problems.push("the drag for the lost focus did not reach the threshold");
@@ -225,16 +226,16 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
       await mouse(view, "mouseDown", dockGrip);
       await mouse(view, "mouseMove", { x: dockGrip.x + (dockWidth - 320), y: dockGrip.y }, { held: true });
       await mouse(view, "mouseMove", { x: dockGrip.x + (dockWidth - 120), y: dockGrip.y }, { held: true });
-      await sleep(120);
+      await waitFrames(view, 2);
       const dockFolding = await attr(view, "shell-resize-dock", "data-collapsing");
       await mouse(view, "mouseUp", { x: dockGrip.x + (dockWidth - 120), y: dockGrip.y });
-      await sleep(400);
+      await waitUntil(view, `!document.querySelector('[data-testid="shell-dock"]')`, 2000);
       const dockAfter = (await saved(call)).dock;
       detail.dock = { dockWidth, dockFolding, before, dockAfter };
       if (dockFolding !== "true") problems.push("the dock did not say it folds away past half its least width");
       if (dockAfter.visible || !near(dockAfter.width, before.width, 1)) problems.push(`the dock let go past the threshold is ${dockAfter.visible ? "shown" : "hidden"} at ${dockAfter.width} (was ${before.width})`);
       await clickTestId(view, "shell-dock-toggle");
-      await sleep(300);
+      await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-dock"]'))`, 2000);
     }
   }
 
@@ -242,14 +243,13 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
   {
     await js(view, `${PICK}("shell-resize-sidebar")?.focus(); true`);
     await pressKey(view, "Enter");
-    await sleep(350);
+    await waitUntil(view, `!document.querySelector('[data-testid="shell-sidebar"]')`, 2000);
     const folded = !(await saved(call)).sidebar.visible;
     const focus = await activeId(view);
     view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
     view.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
-    await sleep(40);
     view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
-    await sleep(350);
+    await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]'))`, 2000);
     const back = (await saved(call)).sidebar.visible;
     detail.keys = { folded, focus, back };
     if (!folded) problems.push("Enter on the sidebar's divider did not fold the sidebar");
@@ -264,7 +264,7 @@ async function walkDragCollapse(env: ShellEnv): Promise<void> {
     await mouse(view, "mouseUp", restore, { clickCount: 1 });
     await mouse(view, "mouseDown", restore, { clickCount: 2 });
     await mouse(view, "mouseUp", restore, { clickCount: 2 });
-    await sleep(300);
+    await waitUntil(view, `Math.abs((document.querySelector('[data-testid="shell-sidebar"]')?.getBoundingClientRect().width ?? 0) - 260) <= 4`, 2000);
   }
   observe("sidebar-drag-collapse", problems.length === 0, { ...detail, problems });
 }
@@ -304,7 +304,7 @@ async function walkMenuHover(env: ShellEnv): Promise<void> {
       else {
         const row: Box = { x: list.x + 1, y: item.y, w: list.w - 2, h: item.h, r: list.r - 1, b: item.b };
         await mouse(view, "mouseMove", { x: item.x + item.w / 2, y: item.y + item.h / 2 });
-        await sleep(200);
+        await waitFrames(view, 2);
         const [left, right] = await rowEnds(view, row);
         detail.contextMenu = { left: hex(left), right: hex(right), item: [Math.round(item.x - list.x), Math.round(list.r - item.r)] };
         if (!near3(left, pink, 10) || !near3(right, pink, 10)) problems.push(`the hovered row of the right-click menu is ${hex(left)} at its left end and ${hex(right)} at its right end, not pink from end to end`);
@@ -324,13 +324,13 @@ async function walkMenuHover(env: ShellEnv): Promise<void> {
     if (!item || !rowBox) problems.push("the hidden icon is not in \"…\"");
     else {
       await mouse(view, "mouseMove", { x: item.x + 12, y: item.y + item.h / 2 });
-      await sleep(250);
+      await waitFrames(view, 2);
       const [left, right] = await rowEnds(view, rowBox);
       const pinBox = await boxOf(view, "rail-pin-mindmap");
       const pinIdle = await js<{ color: string; background: string }>(view, `(() => { const pin = document.querySelector('[data-testid="rail-pin-mindmap"]'); const s = getComputedStyle(pin); return { color: s.color, background: s.backgroundColor }; })()`);
       await shot("menu-hover-more");
       if (pinBox) await mouse(view, "mouseMove", { x: pinBox.x + pinBox.w / 2, y: pinBox.y + pinBox.h / 2 });
-      await sleep(250);
+      await waitFrames(view, 2);
       const pinHover = await js<{ color: string; background: string }>(view, `(() => { const pin = document.querySelector('[data-testid="rail-pin-mindmap"]'); const s = getComputedStyle(pin); return { color: s.color, background: s.backgroundColor }; })()`);
       const [leftOnPin, rightOnPin] = await rowEnds(view, rowBox);
       const luminance = (text: string) => { const c = parseRgb(text); return c ? 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] : -1; };
@@ -343,7 +343,7 @@ async function walkMenuHover(env: ShellEnv): Promise<void> {
       if (!(luminance(pinHover.color) < luminance(pinIdle.color) - 4)) problems.push(`the pin's icon does not go darker under the pointer (${pinIdle.color} → ${pinHover.color})`);
       // Put back with the pin: it comes back where it was.
       if (pinBox) await clickReal(view, "rail-pin-mindmap");
-      await sleep(400);
+      await waitUntil(view, `document.querySelector('[data-testid="nav-mindmap"]')`, 2000);
     }
     await pressKey(view, "Escape");
   }
@@ -360,7 +360,7 @@ async function clickReal(view: BrowserWindow, id: string, button: "left" | "righ
   await mouse(view, "mouseMove", at);
   await mouse(view, "mouseDown", at, { button });
   await mouse(view, "mouseUp", at, { button });
-  await sleep(120);
+  await waitFrames(view, 2);
   return true;
 }
 
@@ -384,8 +384,9 @@ async function dragIcon(view: BrowserWindow, name: string, to: Point, options: {
   for (const point of options.through ?? []) await mouse(view, "mouseMove", point, { held: true });
   const steps = 4;
   for (let step = 1; step <= steps; step += 1) await mouse(view, "mouseMove", { x: from.x + (to.x - from.x) * step / steps, y: from.y + (to.y - from.y) * step / steps }, { held: true });
+  await waitFrames(view, 2);
   if (options.release !== false) await mouse(view, "mouseUp", to);
-  await sleep(300);
+  await waitFrames(view, 3);
   return true;
 }
 
@@ -428,7 +429,7 @@ async function walkRailReorder(env: ShellEnv): Promise<void> {
     await dragIcon(view, "comic", { x: comic.x, y: comic.y + 90 }, { release: false });
     await pressKey(view, "Escape");
     await mouse(view, "mouseUp", { x: comic.x, y: comic.y + 90 });
-    await sleep(300);
+    await waitFrames(view, 2);
   }
   const afterEsc = await railOrderDrawn(view);
   if (JSON.stringify(afterEsc) !== JSON.stringify(afterCut)) problems.push(`Esc in the middle of a drag did not put the icon back: ${afterEsc.join(",")}`);
@@ -440,7 +441,7 @@ async function walkRailReorder(env: ShellEnv): Promise<void> {
     for (const dy of [8, 40, 90]) await mouse(view, "mouseMove", { x: homeAt.x + homeAt.w / 2, y: homeAt.y + homeAt.h / 2 + dy }, { held: true });
     const draggingHome = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="rail-views"][data-dragging="true"]'))`);
     await mouse(view, "mouseUp", { x: homeAt.x + homeAt.w / 2, y: homeAt.y + homeAt.h / 2 + 90 });
-    await sleep(300);
+    await waitFrames(view, 2);
     const homeAfter = await boxOf(view, "nav-home");
     detail.home = { draggingHome, moved: homeAfter ? Math.round(homeAfter.y - homeAt.y) : null };
     if (draggingHome || !homeAfter || Math.abs(homeAfter.y - homeAt.y) > 1) problems.push("the home icon moved with a drag");
@@ -455,7 +456,7 @@ async function walkRailReorder(env: ShellEnv): Promise<void> {
   const comicAt = afterCut.indexOf("comic");
   if (await clickReal(view, "nav-comic", "right") && await waitUntil(view, `document.querySelector('[data-testid="rail-menu-up"]')`, 2000)) {
     await clickReal(view, "rail-menu-up");
-    await sleep(300);
+    await waitFrames(view, 2);
     const afterUp = await railOrderDrawn(view);
     const focus = await js<string | null>(view, `document.activeElement?.getAttribute("data-rail-view") ?? null`);
     const said = await js<string>(view, `document.querySelector('[data-testid="rail-said"]')?.textContent ?? ""`);
@@ -475,9 +476,9 @@ async function walkRailReorder(env: ShellEnv): Promise<void> {
   const hidden = await hideIcon(view, "draft");
   if (hidden && await clickReal(view, "rail-more") && await waitUntil(view, `document.querySelector('[data-testid="rail-pin-draft"]')`, 2000)) {
     await mouse(view, "mouseMove", (await centreOf(view, "rail-more-draft")) ?? { x: 100, y: 100 });
-    await sleep(150);
+    await waitFrames(view, 2);
     await clickReal(view, "rail-pin-draft");
-    await sleep(400);
+    await waitUntil(view, `document.querySelector('[data-testid="nav-draft"]')`, 2000);
     await pressKey(view, "Escape");
   } else problems.push("the draft icon could not be taken out and pinned back");
   const orderAfterPin = await railOrderDrawn(view);
@@ -545,15 +546,16 @@ async function walkHomeList(env: ShellEnv): Promise<void> {
   // Something new in the project, so it has a newest row: a note written now and put in it.
   const fresh = (await call("notes.create", { title: "主页混排的新笔记", text: "最新的一条" })).value as { objectId?: string } | undefined;
   if (fresh?.objectId) await call("project.addMaterial", { projectId, kind: "note", targetId: fresh.objectId }).catch(() => null);
-  await sleep(300);
+  await waitFrames(view, 2);
   const expand = async (key: string) => {
     if ((await attr(view, `context-toggle-${key}`, "aria-expanded")) !== "true" && (await attr(view, `context-toggle-${key}`, "disabled")) === null) await clickTestId(view, `context-toggle-${key}`);
-    await waitUntil(view, `${PICK}("context-toggle-${key}")?.getAttribute("aria-expanded") === "true"`, 3000);
-    await sleep(400);
+    await waitUntil(view, `${PICK}("context-toggle-${key}")?.getAttribute("aria-expanded") === "true" && document.querySelector('[data-testid="context-${key}"] .sidebar-row')`, 3000);
   };
   const fold = async (key: string) => {
-    if ((await attr(view, `context-toggle-${key}`, "aria-expanded")) === "true" && (await attr(view, `context-toggle-${key}`, "disabled")) === null) await clickTestId(view, `context-toggle-${key}`);
-    await sleep(300);
+    if ((await attr(view, `context-toggle-${key}`, "aria-expanded")) === "true" && (await attr(view, `context-toggle-${key}`, "disabled")) === null) {
+      await clickTestId(view, `context-toggle-${key}`);
+      await waitUntil(view, `${PICK}("context-toggle-${key}")?.getAttribute("aria-expanded") === "false"`, 2000);
+    }
   };
   await fold(projectId);
   const foldedFacts = await homeFacts(view);
@@ -609,7 +611,7 @@ async function walkHomeList(env: ShellEnv): Promise<void> {
   // Dark: the same page in the dark theme, for the picture.
   const theme = await js<string | null>(view, `document.documentElement.getAttribute("data-theme")`);
   await js(view, `document.documentElement.setAttribute("data-theme", "dark"); true`);
-  await sleep(250);
+  await waitFrames(view, 2);
   await shot("sidebar-home-dark");
   await js(view, theme === null ? `document.documentElement.removeAttribute("data-theme"); true` : `document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)}); true`);
   // At 200 px: the pills whole, the names cut.
@@ -622,7 +624,7 @@ async function walkHomeList(env: ShellEnv): Promise<void> {
     await mouse(view, "mouseDown", grip);
     await mouse(view, "mouseMove", { x: grip.x - (width0 - 200), y: grip.y }, { held: true });
     await mouse(view, "mouseUp", { x: grip.x - (width0 - 200), y: grip.y });
-    await sleep(400);
+    await waitUntil(view, `Math.abs((document.querySelector('[data-testid="shell-sidebar"]')?.getBoundingClientRect().width ?? 0) - 200) <= 3`, 2000);
     await js(view, `(() => { getSelection()?.removeAllRanges(); return true; })()`);
     const narrow = await homeFacts(view);
     const rows = narrow.groups.flatMap((group) => group.rows);
@@ -637,7 +639,7 @@ async function walkHomeList(env: ShellEnv): Promise<void> {
       await mouse(view, "mouseDown", back);
       await mouse(view, "mouseMove", { x: back.x + (width0 - 200), y: back.y }, { held: true });
       await mouse(view, "mouseUp", { x: back.x + (width0 - 200), y: back.y });
-      await sleep(300);
+      await waitUntil(view, `Math.abs((document.querySelector('[data-testid="shell-sidebar"]')?.getBoundingClientRect().width ?? 0) - ${width0}) <= 3`, 2000);
     }
   }
   await fold(projectId);
@@ -665,10 +667,10 @@ async function walkCounts(env: ShellEnv): Promise<void> {
   fs.copyFileSync(comicSource, comicFile);
   fs.writeFileSync(novelFile, `${"计数用的合成文字。".repeat(120)}`);
   await call("library.scan.start", {});
-  for (let waited = 0; waited < 30_000; waited += 250) {
+  for (let waited = 0; waited < 30_000; waited += 50) {
     const status = (await call("library.scan.status", {})).value as { running?: unknown } | undefined;
     if (!status?.running) break;
-    await sleep(250);
+    await sleep(50); // real time: poll library.scan.status until background scan finishes
   }
   type Work = { id: string; title: string; mediaKind: string; lastResource: { id: string } | null };
   const works = ((await call("works.list", { limit: 200 })).value as { items: Work[] }).items;
@@ -682,7 +684,11 @@ async function walkCounts(env: ShellEnv): Promise<void> {
   // The comic is opened once in 最近, so 最近 has read it; the novel is a material of the project.
   await toRail(view);
   const comicOpened = await openFromShelf(view, "comic", comicId, 8000) && await waitUntil(view, `document.querySelector('.comic-page[data-state="ready"]')`, 15_000);
-  await sleep(1500);
+  for (let i = 0; i < 40; i += 1) {
+    const check = (await call("workspace.sidebar", { view: "home", open: [null] })).value as { groups: Array<{ contextId: string | null; sections: Array<{ items: Array<{ open: { id: string } }> }> }> };
+    if (check.groups.some((g) => g.contextId === null && g.sections.some((s) => s.items.some((item) => item.open.id === comicId)))) break;
+    await sleep(50); // real time: poll until reader progress write registers comic in recent list
+  }
   await closeTabs(view, ["reader"]);
   const material = (await call("project.addMaterial", { projectId, kind: "resource", targetId: novelId }).catch(() => null))?.value as { id?: string } | undefined;
   const ids = [comicId, novelId];
@@ -719,7 +725,8 @@ async function walkCounts(env: ShellEnv): Promise<void> {
   // As drawn: the comic view's 最近 has neither an empty title nor a number without rows.
   await railTo(view, "comic");
   await ensureSidebar(view);
-  await sleep(600);
+  await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-view="comic"] [data-testid="context-recent"]') && !document.querySelector('[data-testid="sidebar-loading"]')`, 4000);
+  await waitFrames(view, 2);
   const drawnFacts = await js<{ more: string[]; empty: boolean; rows: number; ids: string[] }>(view, `(() => {
     const group = document.querySelector('[data-testid="sidebar"][data-view="comic"] [data-testid="context-recent"]');
     if (!group) return { more: [], empty: false, rows: 0, ids: [] };
@@ -765,8 +772,8 @@ async function walkCovers(env: ShellEnv): Promise<void> {
     await railTo(view, name);
     await ensureSidebar(view);
     if ((await attr(view, "context-toggle-recent", "aria-expanded")) !== "true" && (await attr(view, "context-toggle-recent", "disabled")) === null) await clickTestId(view, "context-toggle-recent");
-    await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-view="${name}"]') && !document.querySelector('[data-testid="sidebar-loading"]')`, 6000);
-    await sleep(700);
+    await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-view="${name}"] .sidebar-cover') && !document.querySelector('[data-testid="sidebar-loading"]')`, 6000);
+    await waitFrames(view, 2);
     const got = await facts(name);
     // 最近 merged by work: the command's items of 最近 are one per work.
     const answer = (await call("workspace.sidebar", { view: name, open: [null] })).value as { groups: Array<{ contextId: string | null; sections: Array<{ items: Array<{ key: string; open: { workId?: string | null; id: string } }> }> }> };
@@ -788,11 +795,11 @@ async function walkCovers(env: ShellEnv): Promise<void> {
   await railTo(view, "video");
   await ensureSidebar(view);
   await clickTestId(view, "sidebar-display");
-  await sleep(400);
+  await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-view="video"] [data-testid="sidebar-display"]')?.getAttribute("data-display") === "list"`, 2000);
   const listed = await facts("video");
   await railTo(view, "comic");
   await railTo(view, "video");
-  await sleep(400);
+  await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-view="video"] [data-testid="sidebar-display"]')?.getAttribute("data-display") === "list"`, 2000);
   const kept = await facts("video");
   const stored = (await saved(call)).rail.display;
   detail.switch = { listed: { display: listed.display, rows: listed.rows, covers: listed.covers }, kept: { display: kept.display, rows: kept.rows }, stored };
@@ -800,7 +807,7 @@ async function walkCovers(env: ShellEnv): Promise<void> {
   if (kept.display !== "list") problems.push("the video view is covers again after it was left");
   if (stored.video !== "list") problems.push(`the preferences keep ${stored.video ?? "nothing"} for the video view`);
   await clickTestId(view, "sidebar-display");
-  await sleep(300);
+  await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-view="video"] [data-testid="sidebar-display"]')?.getAttribute("data-display") === "cover"`, 2000);
   // The card of a view that comes out of the rail with the sidebar folded: covers too.
   await clickTestId(view, "shell-sidebar-toggle");
   await waitUntil(view, `!document.querySelector('[data-testid="shell-sidebar"]')`, 2000);
@@ -808,10 +815,10 @@ async function walkCovers(env: ShellEnv): Promise<void> {
   if (comicIcon) {
     // From a place off the rail, the way a hand comes to an icon (no button is down).
     view.webContents.sendInputEvent({ type: "mouseMove", x: 700, y: 500 });
-    await sleep(350);
+    await waitFrames(view, 2);
     view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(comicIcon.x), y: Math.round(comicIcon.y) });
-    await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-variant="card"][data-view="comic"]')`, 3000);
-    await sleep(500);
+    await waitUntil(view, `document.querySelector('[data-testid="sidebar"][data-variant="card"][data-view="comic"] .sidebar-cover')`, 3000);
+    await waitFrames(view, 2);
     const card = await js<{ covers: number; box: Box | null; viewport: { w: number; h: number } }>(view, `(() => {
       const root = document.querySelector('[data-testid="sidebar"][data-variant="card"]');
       const b = root?.getBoundingClientRect();
@@ -821,7 +828,7 @@ async function walkCovers(env: ShellEnv): Promise<void> {
     if (card.covers === 0) problems.push("the card of the comic view shows no covers");
     if (card.box && (card.box.r > card.viewport.w + 1 || card.box.b > card.viewport.h + 1)) problems.push("the card with covers goes out of the window");
     await mouse(view, "mouseMove", { x: 700, y: 500 });
-    await sleep(500);
+    await waitUntil(view, `!document.querySelector('[data-testid="sidebar"][data-variant="card"]')`, 2000);
   } else problems.push("the comic icon is not on the rail");
   await clickTestId(view, "shell-sidebar-toggle");
   await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]'))`, 2000);

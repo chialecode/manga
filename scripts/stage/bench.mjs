@@ -10,7 +10,7 @@ import { runScaleWindowBench, spawnWindow } from "./bench-scale.mjs";
 import { runScanPaneBench } from "./bench-scan-pane.mjs";
 import { runBtBench } from "./bench-bt.mjs";
 import { runCanvasBench } from "./bench-canvas.mjs";
-import { runNoteFileBench, runRoughcutBench, runSemanticBench, runTraceBench } from "./bench-creative.mjs";
+import { runNoteFileBench, runProposalBench, runRoughcutBench, runSemanticBench, runTraceBench } from "./bench-creative.mjs";
 import { runReaderBench } from "./bench-reader.mjs";
 import { runWorkspaceBench } from "./bench-workspace.mjs";
 import { runVideoImportBench } from "./bench-import.mjs";
@@ -301,6 +301,7 @@ const canvasRaw = {
   mindmapFold: { raw: canvas.mindmapFoldMs, scale: { nodes: canvas.scale?.nodes ?? 0 } },
 };
 let importRuns;
+let proposalRuns;
 for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
   if (id === "semantic" || id === "semanticFallback") {
     const result = await runSemanticBench({ segments: wanted.scale.segments, runs: wanted.minSamples, vec: wanted.engine === "vec0" });
@@ -355,6 +356,15 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
   if (id === "roughcut") {
     const result = await runRoughcutBench({ clips: wanted.scale.clips, runs: wanted.minSamples });
     creative[id] = { kind: "service-roughcut-export", scale: { clips: wanted.scale.clips }, raw: result.samples, detail: result.detail };
+  }
+  if (id === "proposalPropose" || id === "proposalApply") {
+    proposalRuns ??= await runProposalBench({
+      objects: wanted.scale.objects ?? 500,
+      proposeRuns: config.bench.creative.proposalPropose?.minSamples ?? 30,
+      applyRuns: config.bench.creative.proposalApply?.minSamples ?? 20,
+    });
+    const part = id === "proposalPropose" ? proposalRuns.propose : proposalRuns.apply;
+    creative[id] = { kind: "service-agent-proposal", scale: { objects: proposalRuns.objects }, raw: part.samples, detail: part.detail };
   }
 }
 const creativeMetrics = Object.fromEntries(Object.entries(config.bench.creative ?? {}).map(([id, wanted]) => [wanted.metric, creative[id]?.raw?.length ? (wanted.stat === "max" ? Math.max(...creative[id].raw) : p95(creative[id].raw)) : Number.POSITIVE_INFINITY]));
@@ -412,8 +422,8 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   arch: process.arch,
   node: process.version,
   metrics,
-  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open.
-  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null },
+  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the v14 proposal table migration, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open.
+  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, migrationV14: proposalRuns?.migrationV14 ?? null, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null },
   targets: requiredBenchTargets,
   scale: { metadataCount: METADATA, searchBlocks: BLOCKS },
   samples: {

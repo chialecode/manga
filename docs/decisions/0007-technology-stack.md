@@ -84,7 +84,7 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 
 ## 2026-10-22 依赖刷新与分屏库
 
-单一工作区那一阶段开始时按 A-35 再盘点一次（`pnpm outdated -r`，最小发行龄不绕过，没有写入任何豁免），并把上面保留旧版本的例外逐个复试。结果与每项的验证记录在[阶段报告](https://github.com/chialecode/manga/blob/b3b468b/docs/delivery/stage-report.md#dependencies)。
+单一工作区那一阶段开始时按 A-35 再盘点一次（`pnpm outdated -r`，最小发行龄不绕过，没有写入任何豁免），并把上面保留旧版本的例外逐个复试。结果与每项的验证记录在[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dependencies)。
 
 | 项 | 前 | 后 | 结果 |
 | --- | --- | --- | --- |
@@ -101,7 +101,7 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 
 ## 2026-11-04 依赖刷新（Electron 45、pi-ai 1.x、安装包）
 
-依赖与 Agent 工程循环这一阶段开始时与门禁前各盘点一次（`pnpm outdated -r`），按“满 14 天的最新精确版本”取，最小发行龄不绕过、不接受自动写入的豁免。逐项的验证见[阶段报告](../delivery/stage-report.md#dependencies)。
+依赖与 Agent 工程循环这一阶段开始时与门禁前各盘点一次（`pnpm outdated -r`），按“满 14 天的最新精确版本”取，最小发行龄不绕过、不接受自动写入的豁免。逐项的验证见[阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md#dependencies)。
 
 | 项 | 前 | 后 | 结果 |
 | --- | --- | --- | --- |
@@ -113,11 +113,28 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 | linkedom | 0.18.13 | 保持 0.18.13 | **再次回退。** 复试 0.18.14：`vitest run tests/danmaku/credential-leak.test.ts`（它先做主进程打包）报 `MISSING_EXPORT`：`parse` 不是 `@acemir/cssom` 的导出（CommonJS 的具名导出 Rolldown 认不出）。上游没有新的发行。复查条件同上一次 |
 | dockview-react、@tanstack/react-virtual 与其余补丁 | — | 不变 | 实施时更新的版本都不满 14 天（dockview-react 8.6.2 在 11-08、react-virtual 3.14.22 在 11-05 满龄），门禁前再查一次 |
 
-**长对话的列表（LOOP-07）。** 计划先试“`@tanstack/react-virtual` 的虚拟列表 + use-stick-to-bottom 贴底”，两者共用 use-stick-to-bottom 的滚动容器：虚拟列表用它的 `scrollRef` 作滚动元素，`scrollMargin` 取列表在容器里的偏移；贴底由 use-stick-to-bottom 负责，行高变化时只在“不在底部、变化的行在视口之上”时由虚拟列表修正滚动位置。向上载入更早的一页与主机通知刷新时，视口顶端那条消息由 MANGA 自己按消息 ID 与偏移锚定（删掉时改用相邻的一条）。结论见[阶段报告](../delivery/stage-report.md#stick-to-bottom)：两者没有争夺滚动位置，保留 use-stick-to-bottom，不改为自己贴底。它对内容变高的跟随改为立即（`resize="instant"`）。因为它的尺寸观察晚一帧，列表在提交后的布局阶段把“上次停在最底下、没有被用户解除贴底”的列表放回底部。
+**长对话的列表（LOOP-07）。** 计划先试“`@tanstack/react-virtual` 的虚拟列表 + use-stick-to-bottom 贴底”，两者共用 use-stick-to-bottom 的滚动容器：虚拟列表用它的 `scrollRef` 作滚动元素，`scrollMargin` 取列表在容器里的偏移；贴底由 use-stick-to-bottom 负责，行高变化时只在“不在底部、变化的行在视口之上”时由虚拟列表修正滚动位置。向上载入更早的一页与主机通知刷新时，视口顶端那条消息由 MANGA 自己按消息 ID 与偏移锚定（删掉时改用相邻的一条）。结论见[阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md#stick-to-bottom)：两者没有争夺滚动位置，保留 use-stick-to-bottom，不改为自己贴底。它对内容变高的跟随改为立即（`resize="instant"`）。因为它的尺寸观察晚一帧，列表在提交后的布局阶段把“上次停在最底下、没有被用户解除贴底”的列表放回底部。
 
 **任务图像的存放（LOOP-05）是自写的。** 一张按 SHA-256 为键的 `agent_media` 表与一张运行到图像的引用表，放在现有的 SQLite 里，用 Node 的 `crypto` 求哈希；需要的只是“同样内容只存一份、引用计数为零时删除”，引入对象存储库或另一个数据库得不偿失。
 
-**基准不受节能降速（LOOP-13）。** 用 Windows 的 `SetProcessInformation(ProcessPowerThrottling)` 关闭基准进程的执行速度节流，经系统自带的 PowerShell `Add-Type` 调用，不加依赖；只在 `stage bench` 设 `MANGA_BENCH_NO_THROTTLE=1` 时、只对基准阶段的进程生效。评估与是否启用见[阶段报告](../delivery/stage-report.md#loop-13)。
+**基准不受节能降速（LOOP-13）。** 用 Windows 的 `SetProcessInformation(ProcessPowerThrottling)` 关闭基准进程的执行速度节流，经系统自带的 PowerShell `Add-Type` 调用，不加依赖；只在 `stage bench` 设 `MANGA_BENCH_NO_THROTTLE=1` 时、只对基准阶段的进程生效。评估与是否启用见[阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md#loop-13)。
+
+## 2026-11-07 依赖刷新与待审操作自研说明
+
+Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点一次（`pnpm outdated -r`），按“实施当天满 14 天的最新精确版本”升级，最小发行龄不绕过。逐项验证见[阶段报告](../delivery/stage-report.md#dependencies)。
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| @earendil-works/pi-ai | 1.3.0 | 1.4.0 | 升级（官方 npm registry 的 `time`：2026-10-21 22:43 UTC，已满 14 天；最新 1.5.0 于 11-02 发行未满龄）。类型检查与双运行时契约用例（`tests/agent/runtime-contract.test.ts`）通过 |
+| @tanstack/react-virtual | 3.14.21 | 3.14.22 | 升级（2026-10-22 12:04 UTC，已满 14 天；最新 3.14.26 于 11-03 发行未满龄）。5000 条消息虚拟列表与带提议卡片的动态行高测量（`tests/shell/proposals-ui.test.tsx`、`chat-long-session`）通过 |
+| linkedom | 0.18.13 | 保持 0.18.13 | **复试后回退。** 尝试 0.18.14（官方发行日期为 2026-10-21，已满龄），主进程打包报 `MISSING_EXPORT`：`parse` 不是其依赖 `@acemir/cssom` 的具名导出。该依赖是 CommonJS，现有打包路线不能识别此导出。复查条件：linkedom 或该依赖发布可识别的 ESM 导出，或打包器支持该 CommonJS 导出；保持现版本并由主进程构建用例覆盖 |
+| dockview-react 与其余补丁 | 8.6.1 等 | 不变 | 2026-11-07 对 65 个直接依赖读取官方 npm registry 的发行时间，除 linkedom 的已登记例外外，当前版本均为同主版本中满 14 天的最新。`dockview-react` 8.8.3、Electron 45.2.3、Vitest 5.1.0 等更新尚未满龄；Tiptap 3.32.0、Vite 8.3.5 与 Vitest 5.0.5 的现版本已经满龄。`@types/node` 留在 24.x，保持与 Electron/CI 运行时一致 |
+
+**待审操作状态机、提议卡片与烟测条件等待为仓内自写（A-40、A-121）：**
+
+- **待审操作状态机与原子消费：** 复用 SQLite、命令网关与成功回执。创建提议与工具回执一起保存；确认原子抢占后，同步效果与回执在最后一次修订核对的事务里一起提交，项目包用发布摘要恢复，粗剪按持久任务完成状态恢复。A 已核对的人工审批候选、官方来源与适配理由见[阶段计划第 3 节](../delivery/stage-plan.md#31-候选)：需要不暂停任务、在下一轮带回结果，现有 SDK 的运行状态与本项目的双运行时不同；只补五种已有命令的确认入口，保留一份状态源。
+- **提议卡片界面：** 在 `apps/desktop/src/renderer/components/chat/messages.tsx` 中用现有的卡片、按钮、危险按钮样式与语义 token 渲染，随 `session.stream` 装入对应的助手消息并参与 `@tanstack/react-virtual` 的 `measureElement` 动态行高测量，不引入独立聊天 UI 框架（如 `@assistant-ui/react`）。
+- **打包烟测的条件等待（LOOP-29）：** 复用 `apps/desktop/src/main/smoke/driver.ts` 的 `waitUntil`、`waitForTestId`，补充 `waitText`、`waitFrames`、`waitDrawn`，通过 `webContents.executeJavaScript` 等待实际状态；无需另换测试运行器。
 
 ## 2026-09-20 接入与构建边界
 
@@ -147,8 +164,8 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 人声筛选 | Silero VAD v6.2.3（MIT）的 ONNX 模型，在独立 worker 中用 onnxruntime-web 1.30.0 的 WASM 后端运行；模型约 2 MB，随包离线 | onnxruntime-node（原生插件，性能不足时备选）；@ricky0123/vad-web 面向浏览器实时流；WebRTC VAD 在音乐与噪声上误检更多 |
 | 录音保存与上传 | 保留模式用 FFmpeg（libopus）把 PCM 转为 Opus 存入附件；上传给 ASR 的块用 WAV（16 kHz 单声道） | — |
 | 视觉与 OCR 路由 | 沿用 OpenAI 格式协议的图像输入（Responses `input_image`、Chat Completions `image_url`），不新增依赖 | tesseract.js 7.0.0：竖排日文漫画效果差，且本地 OCR 不是需求 |
-| 大列表 | TanStack Virtual 3.14.21 | — |
-| 标签页与分屏（2026-10-22 查证） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b3b468b/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
+| 大列表 | TanStack Virtual 3.14.22 | — |
+| 标签页与分屏（2026-10-22 查证） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
 | 消息流贴底 | use-stick-to-bottom 1.1.6（MIT），与 @tanstack/react-virtual 的虚拟列表共用滚动容器（2026-11-04 试验） | 自写滚动判定；react-virtuoso（要把列表与贴底整体换掉，两条现有路线可用时不评估） |
 | 安装包（2026-11-04 查证） | electron-builder 26.18.0 的 NSIS 目标（MIT，开发依赖），`--prepackaged` 用 Forge 的产物，按用户安装到 `%LOCALAPPDATA%\Programs\manga` | @electron-forge/maker-squirrel（固定装到 `%LocalAppData%\<应用名>`，不能选目录）；maker-wix（要另装 WiX）；maker-msix（`AppData` 被虚拟化） |

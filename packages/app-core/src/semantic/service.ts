@@ -508,7 +508,7 @@ export class SemanticService {
 
   // ------------------------------------------------------------------ searching
 
-  async search(input: { text: string; limit?: number; kinds?: SemanticKind[]; projectId?: string; resourceId?: string; withinProgress?: boolean }, signal?: AbortSignal): Promise<SemanticSearch> {
+  async search(input: { text: string; limit?: number; kinds?: SemanticKind[]; projectId?: string; resourceId?: string; withinProgress?: boolean; scope?: { resourceIds: string[]; noteIds: string[]; recordingIds: string[]; excerptIds: string[] } }, signal?: AbortSignal): Promise<SemanticSearch> {
     const config = this.config();
     const empty = (state: SemanticSearch["state"], version: VersionRow | undefined = undefined): SemanticSearch => ({ state, results: [], version: version ? { id: version.id, model: version.model, segmentation: version.segmentation, dim: version.dim } : null });
     if (!config.enabled) return empty("off");
@@ -523,7 +523,7 @@ export class SemanticService {
     if (!raw) return empty("unavailable", active);
     const query = normalize(raw);
     if (active.dim !== null && query.length !== active.dim) return empty("needsRebuild", active);
-    const scope = input.projectId ? this.hooks.projectScope(input.projectId) : null;
+    const scope = input.scope ?? (input.projectId ? this.hooks.projectScope(input.projectId) : null);
     const hits: SemanticHit[] = [];
     const seen = new Set<number>();
     const total = this.chunkCount(active.id);

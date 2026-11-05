@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
-import { pressKey, sleep, waitUntil } from "./driver.ts";
-import { js } from "./common.ts";
+import { PICK, pressKey, sleep, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
+import { exitScreenFullscreen, js } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
 /**
@@ -17,7 +17,7 @@ type Box = { x: number; y: number; w: number; h: number };
 export type PopupReport = { found: boolean; topLayer: boolean; box: Box | null; viewport: { w: number; h: number }; items: Array<{ id: string; hit: boolean; inView: boolean }> };
 
 export const centreOf = (view: BrowserWindow, testId: string) => js<Point | null>(view, `(() => {
-  const el = document.querySelector('[data-testid="${testId}"]');
+  const el = ${PICK}(${JSON.stringify(testId)});
   if (!el) return null;
   const box = el.getBoundingClientRect();
   return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
@@ -29,10 +29,24 @@ export async function realClick(view: BrowserWindow, testId: string): Promise<bo
   const at = await centreOf(view, testId);
   if (!at) return false;
   view.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
-  await sleep(120);
-  view.webContents.sendInputEvent({ type: "mouseDown", x: at.x, y: at.y, button: "left", clickCount: 1 });
-  view.webContents.sendInputEvent({ type: "mouseUp", x: at.x, y: at.y, button: "left", clickCount: 1 });
-  await sleep(200);
+  const reached = `(() => {
+    const el = ${PICK}(${JSON.stringify(testId)});
+    if (!el || el.disabled || getComputedStyle(el).pointerEvents === "none") return null;
+    const bar = el.closest('[data-testid="video-controls"]');
+    if (bar && getComputedStyle(bar).opacity !== "1") return null;
+    const b = el.getBoundingClientRect();
+    if (b.width <= 0 || b.height <= 0) return null;
+    const x = Math.round(b.left + b.width / 2), y = Math.round(b.top + b.height / 2);
+    const hit = document.elementFromPoint(x, y);
+    return hit && (hit === el || el.contains(hit)) ? { x, y } : null;
+  })()`;
+  if (!(await waitUntil(view, reached, 2000))) return false;
+  const point = await js<Point | null>(view, reached);
+  if (!point) return false;
+  view.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
+  view.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  view.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  await waitFrames(view, 2);
   return true;
 }
 
@@ -72,7 +86,7 @@ type Walk = { problems: string[]; detail: Record<string, unknown>; shot?: (name:
 async function walkMenu(view: BrowserWindow, walk: Walk, trigger: string, pick: string | null): Promise<boolean> {
   if (!await realClick(view, trigger)) { walk.detail[trigger] = "absent"; return false; }
   await waitUntil(view, `document.querySelector('.popup[role="menu"]')`, 2000);
-  await sleep(120);
+  await waitFrames(view, 2);
   const report = await hitTestOpenPopup(view);
   walk.detail[trigger] = { items: report.items.length, topLayer: report.topLayer, box: report.box };
   walk.problems.push(...complaints(trigger, report));
@@ -83,7 +97,7 @@ async function walkMenu(view: BrowserWindow, walk: Walk, trigger: string, pick: 
     if (!closed) walk.problems.push(`${trigger}: picking ${pick} did not close the menu`);
   } else if (report.found) {
     await pressKey(view, "Escape");
-    await sleep(150);
+    await waitUntil(view, `!document.querySelector('.popup[role="menu"]')`, 2000);
   }
   return true;
 }
@@ -97,7 +111,7 @@ const stateOf = (view: BrowserWindow) => js<{ rate: number; volumeText: string |
 async function walkVolume(view: BrowserWindow, walk: Walk, closeWith: "escape" | "click"): Promise<void> {
   if (!await realClick(view, "video-volume-button")) { walk.problems.push("the volume button was not found"); return; }
   await waitUntil(view, `document.querySelector('[data-testid="video-volume-pop"]')`, 2000);
-  await sleep(150);
+  await waitFrames(view, 2);
   const report = await hitTestOpenPopup(view, '[data-testid="video-volume-pop"]');
   walk.detail.volume = { items: report.items.length, topLayer: report.topLayer, box: report.box };
   walk.problems.push(...complaints("the volume popup", report));
@@ -110,10 +124,10 @@ async function walkVolume(view: BrowserWindow, walk: Walk, closeWith: "escape" |
   if (button && Number.isFinite(before)) {
     // The input path counts a wheel the other way round from the page's `deltaY`: +120 here is a notch up.
     view.webContents.sendInputEvent({ type: "mouseWheel", x: button.x, y: button.y, deltaX: 0, deltaY: 120, canScroll: true });
-    await sleep(350);
+    await waitUntil(view, `Number(document.querySelector('[data-testid="video-volume-value"]')?.textContent ?? -1) === ${Math.min(100, before + 5)}`, 2000);
     const up = Number((await stateOf(view)).volumeText);
     view.webContents.sendInputEvent({ type: "mouseWheel", x: button.x, y: button.y, deltaX: 0, deltaY: -120, canScroll: true });
-    await sleep(350);
+    await waitUntil(view, `Number(document.querySelector('[data-testid="video-volume-value"]')?.textContent ?? -1) !== ${up}`, 2000);
     const down = Number((await stateOf(view)).volumeText);
     walk.detail.wheel = { before, up, down };
     if (!(up === Math.min(100, before + 5))) walk.problems.push(`the wheel up moved the volume from ${before} to ${up}, not by 5`);
@@ -149,12 +163,12 @@ export async function walkPlayerMenus(view: BrowserWindow, observe: Observe, sho
   await walkMenu(view, walk, "video-audio", null);
   await walkMenu(view, walk, "video-episodes", null);
   if (!await walkMenu(view, walk, "video-rate", "video-rate-1_5")) walk.problems.push("the bar has no rate menu");
-  await sleep(500);
+  await waitUntil(view, `document.querySelector('[data-testid="video-element"]')?.playbackRate === 1.5`, 2000);
   const picked = await stateOf(view);
   walk.detail.rate = picked.rate;
   if (picked.rate !== 1.5) walk.problems.push(`picking 1.5× from the rate menu left the rate at ${picked.rate}`);
   await walkMenu(view, walk, "video-rate", "video-rate-1");
-  await sleep(300);
+  await waitUntil(view, `document.querySelector('[data-testid="video-element"]')?.playbackRate === 1`, 2000);
   if ((await stateOf(view)).rate !== 1) walk.problems.push("picking 1× did not put the rate back");
   await walkVolume(view, walk, "escape");
   // The right button's menu is inside the stage; it must be reachable too.
@@ -172,18 +186,19 @@ export async function walkPlayerMenus(view: BrowserWindow, observe: Observe, sho
       if (bad.length) walk.problems.push(`the right-button menu items ${bad.join(", ")} cannot be reached`);
     }
     await pressKey(view, "Escape");
-    await sleep(150);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-context"]')`, 2000);
   }
   // The "…" panel, if this walk opened it.
   if (!inBar && await js<boolean>(view, `Boolean(document.querySelector('[data-testid="video-more-panel"]'))`)) await realClick(view, "video-more");
   observe("player-menus", walk.problems.length === 0, { ...walk.detail, problems: walk.problems });
 }
 
-const pictureOf = (view: BrowserWindow) => js<{ video: Box | null; stage: Box | null; shell: string | null; idle: boolean; barShown: boolean }>(view, `(() => {
+const pictureOf = (view: BrowserWindow) => js<{ video: Box | null; stage: Box | null; shell: string | null; idle: boolean; barShown: boolean; barHovered: boolean; popovers: number; paused: boolean; ended: boolean; time: number }>(view, `(() => {
   const box = (id) => { const el = document.querySelector('[data-testid="' + id + '"]'); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
   const shell = document.querySelector('[data-testid="video-shell"]');
   const controls = document.querySelector('[data-testid="video-controls"]');
-  return { video: box("video-element"), stage: box("video-stage"), shell: shell?.getAttribute("data-full") ?? null, idle: shell?.hasAttribute("data-idle") ?? false, barShown: Boolean(controls) && getComputedStyle(controls).opacity === "1" };
+  const video = document.querySelector('[data-testid="video-element"]');
+  return { video: box("video-element"), stage: box("video-stage"), shell: shell?.getAttribute("data-full") ?? null, idle: shell?.hasAttribute("data-idle") ?? false, barShown: Boolean(controls) && getComputedStyle(controls).opacity === "1", barHovered: controls?.matches(":hover") ?? false, popovers: document.querySelectorAll(":popover-open").length, paused: video?.paused ?? true, ended: video?.ended ?? true, time: video?.currentTime ?? -1 };
 })()`);
 
 const sameBox = (a: Box | null, b: Box | null, tolerance = 1) => Boolean(a && b) && Math.abs(a!.x - b!.x) <= tolerance && Math.abs(a!.y - b!.y) <= tolerance && Math.abs(a!.w - b!.w) <= tolerance && Math.abs(a!.h - b!.h) <= tolerance;
@@ -196,22 +211,26 @@ export async function walkPlayerFullscreen(view: BrowserWindow, observe: Observe
   if (!await realClick(view, "video-fullscreen")) { observe("player-fullscreen-bar", false, { problems: ["the full screen button was not found"] }); return; }
   const entered = await waitUntil(view, `document.fullscreenElement !== null`, 4000);
   if (!entered) { observe("player-fullscreen-bar", false, { problems: ["screen full screen did not start"] }); return; }
-  await sleep(700);
+  if (!(await waitWindowFullscreen(view, true))) walk.problems.push("the native window did not enter screen full screen");
+  await waitFrames(view, 3);
   try {
     const viewport = await js<{ w: number; h: number }>(view, `({ w: window.innerWidth, h: window.innerHeight })`);
     // The bar is shown now. Play so that it can fade, and read the picture with it shown and with it hidden.
-    await js(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); v.muted = true; return v.play().then(() => true, () => false); })()`);
-    await sleep(500);
+    const playing = await js<boolean>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); v.muted = true; v.currentTime = 0; return v.play().then(() => true, () => false); })()`);
+    if (!playing) walk.problems.push("the video did not play for the idle check");
+    await sleep(300); // real time: video playback progression before idle check
     view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(viewport.w / 2), y: Math.round(viewport.h / 2) });
-    await sleep(300);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-shell"]')?.hasAttribute("data-idle")`, 2000);
+    await waitFrames(view, 2);
     const shown = await pictureOf(view);
     const faded = await waitUntil(view, `document.querySelector('[data-testid="video-shell"]')?.hasAttribute("data-idle")`, 6000);
-    await sleep(350);
+    await sleep(350); // real time: CSS opacity transition after data-idle appears
     const hidden = await pictureOf(view);
     view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(viewport.w / 2) + 7, y: Math.round(viewport.h / 2) + 5 });
-    await sleep(500);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-shell"]')?.hasAttribute("data-idle") && getComputedStyle(document.querySelector('[data-testid="video-controls"]')).opacity === "1"`, 2000);
     const back = await pictureOf(view);
     walk.detail.picture = { viewport, shown: shown.video, hidden: hidden.video, back: back.video, faded };
+    walk.detail.idle = { shown, hidden, back };
     if (!shown.video || !near(shown.video.w, viewport.w, 1) || !near(shown.video.h, viewport.h, 1)) walk.problems.push(`the picture does not fill the screen (${JSON.stringify(shown.video)} of ${viewport.w}x${viewport.h})`);
     if (!faded) walk.problems.push("the bar did not hide after the pointer stopped");
     if (!sameBox(shown.video, hidden.video)) walk.problems.push(`the picture changed size when the bar hid (${JSON.stringify(shown.video)} → ${JSON.stringify(hidden.video)})`);
@@ -222,19 +241,16 @@ export async function walkPlayerFullscreen(view: BrowserWindow, observe: Observe
     if (!overlay) walk.problems.push("the bar does not float over the picture");
     if (shot) await shot("player-fullscreen-bar");
     await js(view, `document.querySelector('[data-testid="video-element"]').pause(); true`);
-    await sleep(200);
+    await waitFrames(view, 2);
     view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(viewport.w / 2), y: Math.round(viewport.h) - 30 });
-    await sleep(300);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-shell"]')?.hasAttribute("data-idle")`, 2000);
+    await waitFrames(view, 2);
     // The menus open above the bar in screen full screen too, and every item is reachable there.
     await walkMenu(view, walk, "video-subtitles", "video-subtitles-off");
     await walkMenu(view, walk, "video-rate", "video-rate-1");
     await walkVolume(view, walk, "click");
   } finally {
-    view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
-    view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
-    await waitUntil(view, `document.fullscreenElement === null`, 3000);
-    if (view.isFullScreen() !== wasFull) { await realClick(view, "video-fullscreen"); await waitUntil(view, `document.fullscreenElement === null`, 3000); }
-    await sleep(400);
+    if (!(await exitScreenFullscreen(view, wasFull, "video-fullscreen")).restored) walk.problems.push("screen full screen did not restore the native window");
   }
   observe("player-fullscreen-bar", walk.problems.length === 0, { ...walk.detail, problems: walk.problems });
 }

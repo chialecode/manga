@@ -145,7 +145,7 @@ export async function runRealVideoTrial(input: TrialInput): Promise<TrialResult 
     result.shape[text.replace(/缺失字体.*$/, "缺失字体 …").slice(0, 40)] = 1;
     const decodedBefore = await js<number>(`document.querySelector('[data-testid="video-element"]').getVideoPlaybackQuality().totalVideoFrames`);
     await js(`document.querySelector('[data-testid="video-element"]').play().catch(() => undefined); true`);
-    await sleep(PLAY_MS);
+    await sleep(PLAY_MS); // real time: 真实播放 4 秒以统计解码帧数与掉帧
     const after = await js<{ decoded: number; dropped: number; banner: boolean }>(`(() => { const q = document.querySelector('[data-testid="video-element"]').getVideoPlaybackQuality(); return { decoded: q.totalVideoFrames, dropped: q.droppedVideoFrames, banner: Boolean(document.querySelector('[data-testid="video-health"]')) }; })()`);
     await js(`document.querySelector('[data-testid="video-element"]').pause(); true`);
     result.decodedIn4s.push(after.decoded - decodedBefore);
@@ -163,7 +163,7 @@ export async function runRealVideoTrial(input: TrialInput): Promise<TrialResult 
       let saved: ReturnType<typeof appService.screenshots.list>["items"][number] | undefined;
       for (let waited = 0; clicked && !saved && waited < 20_000; waited += 250) {
         saved = appService.screenshots.list({ limit: 500 }).items.find((item) => !known.has(item.id));
-        if (!saved) await sleep(250);
+        if (!saved) await sleep(250); // real time: 后台轮询定时器节流，等待截图记录落盘
       }
       if (!saved) { result.shotMissing += 1; (result.shotWhy ??= []).push(clicked ? "no record within 20 s" : "button not clicked"); return; }
       result.shotMs.push(Date.now() - clickedAt);
@@ -177,7 +177,10 @@ export async function runRealVideoTrial(input: TrialInput): Promise<TrialResult 
     };
     await shoot("start");
     const moved = await js<boolean>(`(async () => { const v = document.querySelector('[data-testid="video-element"]'); const to = v.duration * 0.35; await new Promise((resolve) => { v.addEventListener("seeked", resolve, { once: true }); v.currentTime = to; setTimeout(resolve, 10000); }); return v.readyState >= 2; })()`);
-    if (moved) { await sleep(1200); await shoot("middle"); }
+    if (moved) {
+      await until<boolean>(`(() => { const v = document.querySelector('[data-testid="video-element"]'); return Boolean(v && !v.seeking && v.readyState >= 2); })()`, 4000);
+      await shoot("middle");
+    }
     const line = text ?? "";
     const renderer = /jassub/i.test(line) ? "jassub" : /text|文本/i.test(line) ? "text" : "none";
     const font = /bundled:/.test(line) ? "bundled" : /system:/.test(line) ? "system" : /jassub-default/.test(line) ? "jassub-default" : "-";

@@ -1,10 +1,9 @@
 import { measurePolish } from "./bench-polish.ts";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, openProjectsPage, PICK, pressChord, railTo, sleep, tabsOf, viaSidebar, waitUntil, type TabFact } from "./driver.ts";
+import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, openProjectsPage, PICK, pressChord, railTo, sleep, tabsOf, viaSidebar, waitFrames, waitUntil, type TabFact } from "./driver.ts";
 import { caller, js, toRail } from "./common.ts";
 import { median, readMemory } from "./bench-reader.ts";
 
@@ -166,7 +165,7 @@ async function seed(appService: MangaProductApp, call: ReturnType<typeof caller>
     const entry = manifest.samples.find((item) => item.id === id && item.status === "generated");
     return entry ? path.join(root, entry.path) : null;
   };
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-workspace-"));
+  const base = fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-bench-workspace-"));
   const place = (kind: "video" | "comic", folder: string, name: string, from: string | null) => {
     if (!from) return null;
     const dir = path.join(base, folder);
@@ -230,10 +229,10 @@ async function openFour(view: BrowserWindow, seeds: Seeds, videoA?: string): Pro
   const before = new Set((await tabsOf(view)).map((tab) => tab.id));
   // The strip adds a tab's title a moment after the page of the tab is drawn, so the new title is waited for (setup only; nothing is timed here).
   const idOfNew = async (): Promise<string | null> => {
-    for (let waited = 0; waited <= 5000; waited += 100) {
+    for (let waited = 0; waited <= 50; waited += 1) {
       const found = (await tabsOf(view)).find((tab: TabFact) => !before.has(tab.id) && tab.kind !== "library" && tab.kind !== "records")?.id;
       if (found) return found;
-      await sleep(100);
+      await waitFrames(view, 2);
     }
     return null;
   };
@@ -308,7 +307,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   await view.webContents.reload();
   await toRail(view);
   await js(view, PRELUDE);
-  await sleep(800);
+  await waitFrames(view, 2);
 
   // ---- tab switch: eight tabs of one column, four of them readers, pressed in turn ----
   note("seeded; tab switch");
@@ -326,7 +325,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   if (opened.some((ok) => !ok)) failures.push(`tab switch: not every tab opened (${JSON.stringify(opened)})`);
   // Each of them went to its own view; the home holds all the tabs of the context (A-107).
   await railTo(view, "home");
-  await sleep(1200);
+  await waitUntil(view, `document.querySelectorAll('[data-testid="context-host"][data-active="true"] [data-testid="tab"]').length >= 8`, 8000);
   const strip = await tabsOf(view);
   const tabMs: number[] = [];
   if (strip.length < 8) failures.push(`tab switch: only ${strip.length} tabs`);
@@ -346,9 +345,9 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     if (!(await clickTestId(view, rowFor(key), 6000)) || !(await waitUntil(view, `${HOST}?.getAttribute("data-context") === ${JSON.stringify(key)}`, 8000))) { failures.push(`context ${index}: could not be entered`); continue; }
     await closeTabs(view, "all");
     if (!(await openFromShelf(view, "novel", readerOf(index), 12_000, []))) failures.push(`context ${index}: its book did not open`);
-    await sleep(500);
+    await waitUntil(view, contextShown(key), 8000);
   }
-  await sleep(1500);
+  await waitFrames(view, 2);
   const contextMs: number[] = [];
   for (let round = 0; round < spec.contextRounds; round += 1) {
     for (const key of [keys[1]!, keys[2]!, keys[0]!]) keep(`context ${key || "recent"}`, await timedPress(view, rowOf(rowFor(key)), contextShown(key), 10_000), contextMs, failures);
@@ -362,7 +361,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     await toRail(view);
     await js(view, PRELUDE);
     await waitUntil(view, `${HOST}`, 10_000);
-    await sleep(2000);
+    await waitUntil(view, `Boolean(${HOST}?.querySelector('[data-testid="tab-panel"][data-focused="true"] [data-testid="reading-body"]'))`, 10_000);
     const active = await js<string>(view, `${HOST}?.getAttribute("data-context") ?? ""`);
     for (const key of keys.filter((item) => item !== active)) keep(`restore ${key || "recent"}`, await timedPress(view, rowOf(rowFor(key)), contextShown(key), 20_000), restoreMs, failures);
   }
@@ -384,7 +383,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     const moved = await waitUntil(view, `(${HOST}?.querySelector('[data-testid="tab"][data-focused="true"]')?.getAttribute("data-tab") ?? "") !== ${JSON.stringify(was)}`, 4000);
     if (!moved || !(await waitUntil(view, tabShown(await front()), 10_000))) failures.push(`readers: step ${step + 1} did not bring a tab to the front`);
   }
-  await sleep(800);
+  await waitFrames(view, 2);
   const loaded = await js<{ loaded: number; columns: number; tabs: number }>(view, `(() => {
     const host = ${HOST};
     const chips = [...host.querySelectorAll('[data-testid="tab"][data-kind="reader"]')];
@@ -414,14 +413,14 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     if (!(usual > 0)) failures.push("quad: no frame interval was measured in one column");
     if (!(await quadDrawn(view, [ids.videoA, ids.videoB, ids.comic, ids.draft]))) failures.push("quad: the four columns were not all drawn");
     if (!(await playerReady(view, ids.videoA)) || !(await playerReady(view, ids.videoB))) failures.push("quad: a player has no first frame");
-    await sleep(1500);
+    await waitFrames(view, 4);
     for (let run = 0; run < spec.quadRuns; run += 1) {
       const got = await playAndCount(view, ids.videoA, spec.playMs);
       const late = got.intervals.filter((value) => value > usual * 1.5).length;
       lateRaw.push(Math.round((late / Math.max(1, got.intervals.length)) * 10_000) / 100);
       runs.push({ frames: got.intervals.length, late, decoded: got.decoded, dropped: got.dropped, medianMs: Math.round(median(got.intervals) * 100) / 100 });
       if (got.intervals.length < 30) failures.push(`quad run ${run + 1}: only ${got.intervals.length} frames`);
-      await sleep(400);
+      await waitFrames(view, 2);
     }
     await chooseMenu(view, "layout-menu", "layout-single");
   }
@@ -493,7 +492,7 @@ export async function measureWorkspaceMemory(appService: MangaProductApp, grant:
     const playerTab = (await tabsOf(view)).find((tab) => tab.kind === "reader")?.id;
     if (!playerTab || !(await playBriefly(view, playerTab))) { failures.push(`run ${run + 1}: the player in one column did not play`); break; }
     await closeTabs(view, ["library"]);
-    await sleep(1500);
+    await sleep(1500); // real time: 单栏播放后等待进程工作集稳定再采样内存
     const single = await readMemory();
     note("memory: single read");
     const four = await openFour(view, seeds, playerTab);
@@ -501,7 +500,7 @@ export async function measureWorkspaceMemory(appService: MangaProductApp, grant:
     if (!(await quadDrawn(view, [four.ids.videoA, four.ids.videoB, four.ids.comic, four.ids.draft]))) { failures.push(`run ${run + 1}: the four columns were not all drawn`); break; }
     note("memory: four columns drawn");
     if (!(await playBriefly(view, four.ids.videoA))) { failures.push(`run ${run + 1}: the player in the four columns did not play`); break; }
-    await sleep(1500);
+    await sleep(1500); // real time: 四分栏播放后等待进程工作集稳定再采样内存
     const quad = await readMemory();
     const grew = Math.round((quad.total - single.total) * 10) / 10;
     const grewBy = Object.fromEntries(Object.keys({ ...quad.byType, ...single.byType }).sort().map((type) => [type, Math.round(((quad.byType[type] ?? 0) - (single.byType[type] ?? 0)) * 10) / 10]));

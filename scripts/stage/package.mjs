@@ -36,7 +36,11 @@ if (!onlyPhases) {
   if (before?.status === "passed" && fingerprintKeysOf(config, "package.json").every((key) => before[key] === fingerprints[key])) passStreak = (before.passStreak ?? 1) + 1;
   for (const name of ["package.json", "scenarios.json"]) fs.rmSync(path.join(runDir(), name), { force: true });
 }
+const outDir = desktopPackageDir;
 if (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases) {
+  if (fs.existsSync(outDir)) {
+    for (const entry of fs.readdirSync(outDir)) if (entry.toLowerCase().startsWith("manga")) fs.rmSync(path.join(outDir, entry), { recursive: true, force: true });
+  }
   const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform", "win32", "--arch", "x64"], {
     cwd: path.join(root, "apps/desktop"),
     stdio: "inherit",
@@ -44,8 +48,7 @@ if (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases) {
   });
   if (pnpm.status !== 0) process.exit(pnpm.status ?? 1);
 }
-const outDir = desktopPackageDir;
-const built = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((name) => name.startsWith("MANGA")) : undefined;
+const built = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((name) => name.startsWith("manga")) : undefined;
 if (!built) throw new Error("electron-forge package output missing");
 const appPath = path.join(outDir, built);
 const evidence = runDir();
@@ -191,7 +194,7 @@ async function smoke(phase) {
   let result;
   let traffic = null;
   try {
-    result = await spawnAsync(path.join(appPath, "MANGA.exe"), ["--manga-smoke"], {
+    result = await spawnAsync(path.join(appPath, "manga.exe"), ["--manga-smoke"], {
       cwd: home,
       env: {
         ...process.env,
@@ -312,7 +315,7 @@ function packagedEnv(extra) {
   for (const name of Object.keys(env)) if (name.startsWith("MANGA_DIR_")) delete env[name];
   return env;
 }
-const launch = (cwd, env, timeout = 180_000) => spawnAsync(path.join(appPath, "MANGA.exe"), ["--manga-smoke"], { cwd, env, timeout });
+const launch = (cwd, env, timeout = 180_000) => spawnAsync(path.join(appPath, "manga.exe"), ["--manga-smoke"], { cwd, env, timeout });
 const readJson = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null);
 const under = (child, parent) => { const rel = path.relative(parent, child); return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel)); };
 const filesIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).map(String).filter((name) => fs.statSync(path.join(dir, name)).isFile()) : []);
@@ -323,7 +326,7 @@ async function migrateNewer() {
   if (!home) throw new Error("migrate-v13-newer needs the Profile of migrate-v13");
   const file = path.join(home, "root", "data", "manga.sqlite");
   const db = new Database(file);
-  db.prepare("UPDATE schema_meta SET value = '14' WHERE key = 'schemaVersion'").run();
+  db.prepare("UPDATE schema_meta SET value = '15' WHERE key = 'schemaVersion'").run();
   db.pragma("wal_checkpoint(TRUNCATE)");
   db.close();
   const result = await launch(home, packagedEnv({ MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(home, "root"), MANGA_POINTER_FILE: path.join(home, "launcher", "pointer.json"), MANGA_DOCUMENTS_DIR: path.join(home, "documents"), MANGA_SMOKE_PHASE: "migrate-v13-newer" }), 90_000);
@@ -331,7 +334,7 @@ async function migrateNewer() {
   const after = new Database(file, { readonly: true });
   const version = after.prepare("SELECT value FROM schema_meta WHERE key = 'schemaVersion'").get()?.value;
   after.close();
-  const refused = result.status !== 0 && /newer than this application/.test(String(report.error ?? "")) && version === "14";
+  const refused = result.status !== 0 && /newer than this application/.test(String(report.error ?? "")) && version === "15";
   const observation = { name: "migrate-v13-newer", status: refused ? "passed" : "failed", detail: { exitStatus: result.status, refused, versionAfter: version } };
   if (!refused) throw new Error(`a library newer than the build was not refused: ${JSON.stringify(observation.detail)}`);
   return { ok: true, observations: [observation] };
@@ -341,7 +344,7 @@ async function migrateNewer() {
 function tempMachine(name, onDriveRoot) {
   let base;
   if (onDriveRoot) {
-    try { base = fs.mkdtempSync(path.join(path.parse(os.tmpdir()).root, `MANGA-GATE-`)); } catch { base = undefined; }
+    try { base = fs.mkdtempSync(path.join(path.parse(os.tmpdir()).root, `manga-gate-`)); } catch { base = undefined; }
   }
   base ??= fs.mkdtempSync(path.join(os.tmpdir(), `manga-package-${name}-`));
   const machine = { base, local: path.join(base, "AppData", "Local"), roaming: path.join(base, "AppData", "Roaming"), home: path.join(base, "home"), documents: path.join(base, "Docs"), downloads: path.join(base, "Downloads"), onDriveRoot: Boolean(onDriveRoot && !under(base, os.tmpdir())) };
@@ -359,8 +362,8 @@ async function dataLocationsFresh() {
       const shot = channel === "release" && machine.onDriveRoot;
       const result = await launch(machine.base, machineEnv(machine, channel, { MANGA_SMOKE_PHASE: "locations", ...(shot ? { MANGA_SMOKE_EVIDENCE_DIR: evidence, MANGA_SMOKE_LOCATIONS_SHOT: "1" } : {}) }));
       const appRoot = path.join(machine.local, channel === "release" ? "manga" : "manga-dev");
-      const files = path.join(machine.documents, channel === "release" ? "MANGA" : "MANGA-dev");
-      const downloads = path.join(machine.downloads, channel === "release" ? "MANGA" : "MANGA-dev");
+      const files = path.join(machine.documents, channel === "release" ? "manga" : "manga-dev");
+      const downloads = path.join(machine.downloads, channel === "release" ? "manga" : "manga-dev");
       const report = readJson(path.join(appRoot, "logs", "smoke-locations.json")) ?? {};
       const parts = report.locations?.partitions ?? {};
       const problems = [];
@@ -370,7 +373,10 @@ async function dataLocationsFresh() {
       if (!parts.downloads || !under(parts.downloads, downloads)) problems.push("downloads are not under Downloads");
       for (const file of [path.join("data", "manga.sqlite"), path.join("launcher", "pointer.json")]) if (!fs.existsSync(path.join(appRoot, file))) problems.push(`${file.replaceAll("\\", "/")} is not in the application's folder`);
       if (!fs.existsSync(path.join(appRoot, "runtime"))) problems.push("the browser runtime is not in the application's folder");
-      const strays = [...filesIn(machine.roaming), ...filesIn(machine.home)];
+      // The Windows D3D11 user-mode driver (e.g. nvwgf2umx.dll) resolves its DirectX shader cache from %USERPROFILE%\appdata\local\NVIDIA\DXCache
+      // even when LOCALAPPDATA points outside USERPROFILE; that driver cache is not application data written to Roaming or the home folder.
+      const driverCache = (name) => /^appdata[\\/]+local[\\/]+(nvidia|amd|intel)[\\/]/i.test(name);
+      const strays = [...filesIn(machine.roaming), ...filesIn(machine.home).filter((name) => !driverCache(name))];
       if (strays.length) problems.push(`${strays.length} files were written to the roaming profile or the home folder`);
       if (report.locations?.groups !== true) problems.push("the settings did not show three groups");
       observations.push({ name: `data-locations-fresh-${channel}`, status: problems.length ? "failed" : "passed", detail: { channel, screenshot: shot, strays: strays.length, problems } });
@@ -387,7 +393,7 @@ async function dataLocationsUpgrade() {
   const problems = [];
   const detail = {};
   try {
-    const oldRoot = path.join(machine.documents, "MANGA", "release");
+    const oldRoot = path.join(machine.documents, "manga", "release");
     const oldPointer = path.join(oldRoot, "launcher", "pointer.json");
     const kept = path.join(machine.base, "E", "Downloads-kept");
     fs.mkdirSync(kept, { recursive: true });
@@ -451,16 +457,20 @@ async function dataLocationsUpgrade() {
 const DRIVEN = { "migrate-v13-newer": migrateNewer, "data-locations-fresh": dataLocationsFresh, "data-locations-upgrade": dataLocationsUpgrade };
 
 const smokeReports = {};
+const phaseTimings = {};
 for (const phase of phases) {
+  const phaseStarted = Date.now();
   smokeReports[phase] = DRIVEN[phase] ? await DRIVEN[phase]() : await smoke(phase);
+  phaseTimings[phase] = Math.round((Date.now() - phaseStarted) / 1000);
   if (DRIVEN[phase] && smokeReports[phase].ok !== true) {
     console.error(JSON.stringify(smokeReports[phase].observations, null, 2));
     throw new Error(`${phase} failed`);
   }
 }
 if (onlyPhases) {
+  const tempDirs = tempWatch.passed();
   const rows = Object.values(smokeReports).flatMap((report) => report?.observations ?? []);
-  console.log(JSON.stringify({ status: "partial", phases, observations: rows.length, failed: rows.filter((row) => row.status !== "passed").map((row) => row.name) }));
+  console.log(JSON.stringify({ status: "partial", phases, observations: rows.length, failed: rows.filter((row) => row.status !== "passed").map((row) => row.name), tempDirs }));
   process.exit(0);
 }
 
@@ -488,7 +498,7 @@ function missingAssetCheck() {
   const profileMissing = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-missing-"));
   fs.renameSync(target, hidden);
   try {
-    const result = spawnSync(path.join(appPath, "MANGA.exe"), ["--manga-smoke"], {
+    const result = spawnSync(path.join(appPath, "manga.exe"), ["--manga-smoke"], {
       cwd: profileMissing,
       env: { ...process.env, MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(profileMissing, "root"), MANGA_DOCUMENTS_DIR: path.join(profileMissing, "documents"), MANGA_POINTER_FILE: path.join(profileMissing, "launcher", "pointer.json"), MANGA_SMOKE_PHASE: "initial" },
       encoding: "utf8",
@@ -541,6 +551,7 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   electron: electronVersion,
   output: path.relative(root, appPath).replaceAll("\\", "/"),
   smoke: phases,
+  phaseTimings,
   formats: {
     pages: smokeReports.formats?.pages ?? false,
     contexts: smokeReports.formats?.contexts ?? false,
@@ -551,7 +562,7 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   // LOOP-06: the PDF page's paints around the selection, from the real window.
   loop06: smokeReports.formats?.loop06 ?? null,
   agent: { runningShown: smokeReports.agent?.runningShown ?? false, stoppedShown: smokeReports.agent?.stoppedShown ?? false, conversationShown: smokeReports["agent-restart"]?.conversationShown ?? false },
-  windowWalk: { ok: smokeReports["window-walk"]?.ok ?? false, observations: observations.length },
+  windowWalk: { ok: smokeReports["window-walk"]?.ok ?? false, observations: observations.length, seconds: phaseTimings["window-walk"] ?? null },
   // The workspace over a restart of the window walk's Profile, the start after that restart closed its window for real, and on a synthetic v11 library of the two-mode shell started on for the first time (plan 4.8).
   workspace: { restart: smokeReports["workspace-restart"]?.ok ?? false, closed: smokeReports["workspace-closed"]?.ok ?? false, migrated: smokeReports["workspace-migrated"]?.ok ?? false },
   creative: { ok: smokeReports.creative?.ok ?? false, observations: (smokeReports.creative?.observations ?? []).length },

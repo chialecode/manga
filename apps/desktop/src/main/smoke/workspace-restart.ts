@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { app, ipcMain, type BrowserWindow } from "electron";
-import { clickTestId, closeTabs, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressKey, railTo, showTab, sleep, tabsOf, waitDrawn, waitForTestId, waitUntil, type TabFact } from "./driver.ts";
+import { clickTestId, closeTabs, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressKey, railTo, showTab, sleep, tabsOf, waitDrawn, waitForTestId, waitFrames, waitUntil, type TabFact } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller, type FlowResult } from "./common.ts";
 import { chooseMenu, hostFacts, waitContext } from "./workspace-walk.ts";
 import { hideRailIcon, railHidden, railOrder } from "./rail-walk.ts";
@@ -64,17 +64,25 @@ export async function prepareRestart(env: { view: BrowserWindow; call: Call; obs
   if (!(await openLibrary(view, 4000))) problems.push("the library did not open in 最近");
   await clickTestId(view, "layout-menu", 3000);
   if (!(await clickTestId(view, "layout-two", 3000))) problems.push("the two-column layout was not offered");
-  await sleep(700);
+  for (let i = 0; i < 40; i += 1) {
+    const p = await persistedOf(call, "");
+    if (p.preset === "two" && p.kinds.includes("reader") && p.kinds.includes("library")) break;
+    await sleep(50); // real time: poll until debounced two-column layout of recent context saves to store
+  }
   // The project: its own page, in one column, and the window is left in it.
   if (!(await clickTestId(view, `context-open-${projectId}`, 5000)) || !(await waitContext(view, projectId))) problems.push("the window did not go to the project");
   await closeTabs(view, "all");
   await openProjectsPage(view, 4000);
   await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-kind="project"]')`, 6000);
-  await sleep(1200);
+  for (let i = 0; i < 40; i += 1) {
+    const p = await persistedOf(call, projectId);
+    if (p.kinds.length === 1 && p.kinds[0] === "project") break;
+    await sleep(50); // real time: poll until debounced project context layout saves to store
+  }
   const contexts = [await shapeOf(view, projectId)];
   if (await clickTestId(view, "context-open-recent", 5000) && await waitContext(view, "")) contexts.unshift(await shapeOf(view, ""));
   if (await clickTestId(view, `context-open-${projectId}`, 5000)) await waitContext(view, projectId);
-  await sleep(1200);
+  await waitFrames(view, 2);
   const active = (await hostFacts(view))?.key ?? "";
   const persisted = [await persistedOf(call, ""), await persistedOf(call, projectId)];
   for (const shape of contexts) {
@@ -92,7 +100,7 @@ export async function prepareRestart(env: { view: BrowserWindow; call: Call; obs
   const comicRows = await waitUntil(view, `document.querySelector('[data-testid="sidebar-display"]')?.getAttribute("data-display") === "list"`, 2000);
   if (!comicRows) problems.push("the comic view could not be turned to rows");
   await railTo(view, "home");
-  await sleep(700);
+  await waitFrames(view, 2);
   // An icon taken out of the rail with its menu is still out at the next start (A-99); the shell kept it, and "…" lists it.
   const iconsAll = await railOrder(view);
   if (!(await hideRailIcon(view, "whiteboard"))) problems.push("the whiteboard icon could not be taken out of the rail");
@@ -134,7 +142,8 @@ export async function runRestartSmoke(input: { view: BrowserWindow; call: Call; 
       if (!switched) { problems.push(`${wanted.key ? "the project" : "最近"} could not be opened after the restart`); continue; }
       at = wanted.key;
     }
-    await sleep(900);
+    await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"]')`, 4000);
+    await waitFrames(view, 2);
     const shape = await shapeOf(view, wanted.key);
     now.push(shape);
     if (!sameShape(wanted, shape)) problems.push(`${wanted.key ? "the project's" : "最近's"} tabs are not as they were (${JSON.stringify(shape.tabs.map((tab) => tab.kind))}, ${shape.columns} columns, in front ${shape.focused?.kind ?? "nothing"})`);
@@ -158,11 +167,13 @@ export async function runRestartSmoke(input: { view: BrowserWindow; call: Call; 
     }
     // Each view has its own layout after the restart (AT-130): the novels' view holds the book and not the home's other tabs, the home still holds all of them in two columns.
     await railTo(view, "novel");
-    await sleep(900);
+    await waitUntil(view, `Boolean(document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="view-dock"][data-view="novel"] [data-testid="tab"]'))`, 4000);
+    await waitFrames(view, 2);
     const novelTabs = (await tabsOf(view)).map((tab) => tab.kind);
     const novelMain = await js<string | null>(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="view-dock"]')?.getAttribute("data-view") ?? null`);
     await railTo(view, "home");
-    await sleep(900);
+    await waitUntil(view, `Boolean(document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="view-dock"][data-view="home"] [data-testid="tab"]'))`, 4000);
+    await waitFrames(view, 2);
     const homeNow = await shapeOf(view, "");
     detail.views = { novelMain, novelTabs, homeColumns: homeNow.columns, homeTabs: homeNow.tabs.map((tab) => tab.kind) };
     if (novelMain !== "novel" || !novelTabs.includes("reader") || novelTabs.length >= recent.tabs.length) problems.push(`after the restart the novels' view shows ${novelMain} with ${JSON.stringify(novelTabs)}, not its own part of the ${recent.tabs.length} tabs of the home`);
@@ -171,7 +182,7 @@ export async function runRestartSmoke(input: { view: BrowserWindow; call: Call; 
   // The view turned to rows is rows after the restart.
   if (before.comicRows) {
     await railTo(view, "comic");
-    await sleep(500);
+    await waitUntil(view, `document.querySelector('[data-testid="sidebar-display"]')?.getAttribute("data-display") === "list"`, 3000);
     const display = await js<string | null>(view, `document.querySelector('[data-testid="sidebar-display"]')?.getAttribute("data-display") ?? null`);
     detail.comicDisplay = display;
     if (display !== "list") problems.push(`after the restart the comic view is ${display}, it was left as rows`);
@@ -215,12 +226,12 @@ export async function closeForReal(input: { view: BrowserWindow; call: Call; log
   const problems: string[] = [];
   await railTo(view, "home");
   // Whatever the phase changed last has been saved by the usual pause.
-  await sleep(1200);
+  await sleep(600); // real time: wait past renderer layout save debounce before changing layout
   const key = (await hostFacts(view))?.key ?? "";
   const from = (await persistedOf(call, key)).preset;
   const to = from === "single" ? "two" : "single";
   if (!(await chooseMenu(view, "layout-menu", `layout-${to}`))) problems.push(`the layout ${to} could not be chosen`);
-  await sleep(60);
+  await sleep(60); // real time: 60 ms window between layout change and window.close() inside debounce window
   // Not yet saved by the pause: otherwise this would not show that the close saves.
   const storedBeforeClose = (await persistedOf(call, key)).preset;
   const contents = view.webContents;
@@ -262,7 +273,8 @@ export async function runClosedSmoke(input: { view: BrowserWindow; call: Call; l
   await toRail(view);
   const back = await waitContext(view, before.key, 10_000);
   if (!back) problems.push("the window did not come back in the context it was closed in");
-  await sleep(900);
+  await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="view-dock"]')`, 4000);
+  await waitFrames(view, 2);
   const stored = (await persistedOf(call, before.key)).preset;
   const columns = (await hostFacts(view))?.columns ?? 0;
   if (stored !== before.to) problems.push(`the layout chosen just before the close is stored as ${stored}, not ${before.to}`);
@@ -295,7 +307,8 @@ export async function runMigratedSmoke(input: { view: BrowserWindow; call: Call;
   detail.startedInProject = inProject;
   if (!inProject) problems.push("the window did not open in the project the person was working in");
   else {
-    await sleep(600);
+    const projectTabMounted = await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"]')`, 4000);
+    if (!projectTabMounted) problems.push("the project tab did not mount in the active context host");
     const tabs = await tabsOf(view);
     detail.projectTabs = tabs.map((tab) => tab.kind);
     if (tabs.length !== 1 || tabs[0]!.kind !== "project" || !tabs[0]!.title.includes("项目甲")) problems.push(`the project's tabs are ${JSON.stringify(tabs.map((tab) => `${tab.kind}:${tab.title}`))}, not its page`);
@@ -324,7 +337,8 @@ export async function runMigratedSmoke(input: { view: BrowserWindow; call: Call;
   // In 最近: the book that was open comes back as a tab, and the conversations are on the sidebar.
   if (!(await clickTestId(view, "context-open-recent", 5000)) || !(await waitContext(view, ""))) problems.push("最近 could not be opened");
   else {
-    await sleep(700);
+    const projectTabMounted = await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"]')`, 4000);
+    if (!projectTabMounted) problems.push("the project tab did not mount in the active context host");
     const tabs = await tabsOf(view);
     detail.recentTabs = tabs.map((tab) => `${tab.kind}`);
     const book = tabs.find((tab) => tab.kind === "reader");

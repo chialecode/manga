@@ -161,4 +161,47 @@ describe("grants and lifecycle", () => {
     expect(live.parseWorker?.pid()).toBeGreaterThan(0);
     app.close();
   });
+
+  it("grants semantic.search and webpage.fetch only when explicitly opted in via allowCommands, without widening resource scope (AT-11, AT-155)", async () => {
+    const { app, actor, grant } = await startApp();
+    const secret = await app.call(actor, {
+      commandId: "library.importText",
+      idempotencyKey: "optin-secret",
+      input: { title: "secret", bytes: [...Buffer.from("秘密正文")] },
+    }, grant.handle);
+    expect(secret.status).toBe("ok");
+    const defaultAgent = app.issueAgentGrant(grant, { kind: "agent", id: "agent-default" }, { readResourceIds: [] });
+    expect(defaultAgent.allowedCommands).not.toContain("semantic.search");
+    expect(defaultAgent.allowedCommands).not.toContain("webpage.fetch");
+    const deniedSem = await app.call({ kind: "agent", id: "agent-default" }, {
+      commandId: "semantic.search",
+      idempotencyKey: "sem-denied",
+      input: { text: "秘密" },
+    }, defaultAgent.handle);
+    expect(deniedSem.status).toBe("error");
+    expect(deniedSem.error?.code).toBe("FORBIDDEN");
+
+    const project = await app.call(actor, { commandId: "project.create", idempotencyKey: "optin-proj", input: { name: "研究项目" } }, grant.handle);
+    const session = await app.call(actor, { commandId: "session.open", idempotencyKey: "optin-ses", input: { kind: "project", targetId: project.value?.id, contextId: project.value?.id } }, grant.handle);
+    const optedGrant = app.issueAgentGrant(grant, { kind: "agent", id: "agent-opted" }, {
+      sessionId: String(session.value?.id),
+      runId: "run-opted",
+      projectId: String(project.value?.id),
+      readResourceIds: [],
+      allowCommands: ["semantic.search", "webpage.fetch"],
+    });
+    expect(optedGrant.allowedCommands).toContain("semantic.search");
+    expect(optedGrant.allowedCommands).toContain("webpage.fetch");
+    // Shared/recent conversation refuses webpage.fetch even if requested.
+    const sharedSession = await app.call(actor, { commandId: "agent.createSession", idempotencyKey: "optin-shared", input: {} }, grant.handle);
+    const sharedGrant = app.issueAgentGrant(grant, { kind: "agent", id: "agent-shared" }, {
+      sessionId: String(sharedSession.value?.id),
+      runId: "run-shared",
+      readResourceIds: [],
+      allowCommands: ["semantic.search", "webpage.fetch"],
+    });
+    expect(sharedGrant.allowedCommands).toContain("semantic.search");
+    expect(sharedGrant.allowedCommands).not.toContain("webpage.fetch");
+    app.close();
+  });
 });

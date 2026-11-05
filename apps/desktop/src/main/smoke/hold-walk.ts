@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { clickTestId, sleep, waitUntil } from "./driver.ts";
+import { clickTestId, sleep, waitFrames, waitUntil } from "./driver.ts";
 import { js } from "./common.ts";
 import { realClick } from "./player-menus-walk.ts";
 import type { Observe } from "./reader-controls-walk.ts";
@@ -71,11 +71,8 @@ const keyAfter = (view: BrowserWindow, mark: number, kind: "down" | "up") => js<
  * the player was `expected` at that moment by the page's own record, and how long after the key it got there (page clock).
  */
 async function byPageClock(view: BrowserWindow, mark: number, kind: "down" | "up", expected: "in" | "out", within: number, waitMs = 4000): Promise<{ ok: boolean; ms: number | null }> {
-  let key: KeyMark | null = null;
-  for (let waited = 0; waited <= waitMs && !key; waited += 25) {
-    key = await keyAfter(view, mark, kind);
-    if (!key) await sleep(25);
-  }
+  await waitUntil(view, `(window.__holdClock?.keys ?? []).some((e) => e.k === "${kind}" && e.t > ${mark})`, waitMs);
+  const key = await keyAfter(view, mark, kind);
   if (!key) return { ok: false, ms: null };
   const at = key.t;
   await waitUntil(view, `performance.now() > ${at + within + 20}`, waitMs);
@@ -99,7 +96,7 @@ async function pointerAt(view: BrowserWindow, where: "middle" | "bar"): Promise<
     return { x: Math.round(b.left + b.width / 2), y: Math.round(${where === "bar" ? "b.top + b.height / 2" : "b.top + b.height * 0.4"}) };
   })()`);
   if (point) view.webContents.sendInputEvent({ type: "mouseMove", x: point.x + Math.round(Math.random() * 6), y: point.y });
-  await sleep(120);
+  await waitFrames(view);
 }
 
 export async function walkHoldKeys(view: BrowserWindow, observe: Observe): Promise<void> {
@@ -132,7 +129,7 @@ async function walkHintOnly(view: BrowserWindow, observe: Observe): Promise<void
     keyUp(view, "Right");
     const after = await byPageClock(view, mark, "up", "out", 300);
     const afterState = await playerOf(view);
-    await sleep(500);
+    await sleep(500); // real time: 100ms bar sampler post-hold samples (at least 12 total)
     const seen = await sampler.stop();
     detail.hold = { judged: "page clock", during: { ok: during.ok, enteredMs: during.ms, rate: duringState.rate, holding: duringState.holding }, after: { ok: after.ok, backMs: after.ms, rate: afterState.rate, holding: afterState.holding }, samples: seen.length, barSeen: seen.filter(Boolean).length };
     if (!during.ok) problems.push(`holding → in window full screen: not at rate 2 with the hint 900 ms into the hold by the page's clock (entered after ${during.ms} ms; rate ${duringState.rate}, hint ${duringState.holding})`);
@@ -145,14 +142,14 @@ async function walkHintOnly(view: BrowserWindow, observe: Observe): Promise<void
     keyDown(view, "Right");
     const faded = await idle(view, 800);
     keyUp(view, "Right");
-    await sleep(300);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-holding"]')`, 1000);
     await pointerAt(view, "bar");
     const onBar = await shown(view);
     keyDown(view, "Right");
-    await sleep(800);
+    await sleep(800); // real time: hold duration while pointer is on bar to verify bar stays visible
     const keptOnBar = !(await playerOf(view)).idle;
     keyUp(view, "Right");
-    await sleep(300);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-holding"]')`, 1000);
     detail.showing = { woke, faded, onBar, keptOnBar };
     if (!woke) problems.push("moving the pointer did not bring the bar back");
     if (!faded) problems.push("holding → did not fade the bar that was showing");
@@ -163,10 +160,10 @@ async function walkHintOnly(view: BrowserWindow, observe: Observe): Promise<void
     await idle(view);
     const before = await playerOf(view);
     keyDown(view, "Right");
-    await sleep(60);
+    await sleep(60); // real time: tap press duration below hold threshold
     const downIdle = (await playerOf(view)).idle;
     keyUp(view, "Right");
-    await sleep(200);
+    await shown(view, 1500);
     const tapped = await playerOf(view);
     const step = tapped.time - before.time;
     detail.tap = { from: Number(before.time.toFixed(2)), step: Number(step.toFixed(2)), downIdle, upIdle: tapped.idle };
@@ -178,10 +175,10 @@ async function walkHintOnly(view: BrowserWindow, observe: Observe): Promise<void
     await idle(view);
     await sampler.start();
     keyDown(view, "Left");
-    await sleep(1100);
+    await sleep(1100); // real time: hold Left duration and 100ms bar sampler
     const rewinding = (await playerOf(view)).rewinding;
     keyUp(view, "Left");
-    await sleep(500);
+    await sleep(500); // real time: 100ms bar sampler post-rewind samples (at least 12 total)
     const leftSeen = await sampler.stop();
     detail.rewind = { rewinding, samples: leftSeen.length, barSeen: leftSeen.filter(Boolean).length };
     if (!rewinding) problems.push("holding ← in window full screen did not rewind");
@@ -192,7 +189,7 @@ async function walkHintOnly(view: BrowserWindow, observe: Observe): Promise<void
     await shown(view);
     await realClick(view, "video-window-fullscreen");
     await waitUntil(view, `!document.querySelector('[data-testid="video-reader"]')?.hasAttribute("data-window-full")`, 4000);
-    await sleep(300);
+    await waitFrames(view);
   }
   observe("hold-rate-hint-only", problems.length === 0, { ...detail, problems });
 }
@@ -211,26 +208,31 @@ async function walkRecovers(view: BrowserWindow, observe: Observe): Promise<void
   try {
     if (!wasAttached) debug.attach("1.3");
     const send = (type: "rawKeyDown" | "keyUp", repeat = false) => debug.sendCommand("Input.dispatchKeyEvent", { type, key: "ArrowRight", code: "ArrowRight", windowsVirtualKeyCode: 39, nativeVirtualKeyCode: 39, autoRepeat: repeat });
-    const repeats = async (ms: number) => { for (let at = 0; at < ms; at += 33) { await send("rawKeyDown", true); await sleep(33); } };
+    const repeats = async (ms: number) => {
+      for (let at = 0; at < ms; at += 33) {
+        await send("rawKeyDown", true);
+        await sleep(33); // real time: OS keyboard auto-repeat cadence (30 Hz)
+      }
+    };
     view.webContents.focus();
     await js(view, holdClock(base));
     await js(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); v.pause(); v.currentTime = 2; return true; })()`);
-    await sleep(300);
+    await waitFrames(view);
 
     // 1. Down, held, and the key-up never comes; then down again (not a repeat) and held: the old hold ends without a step, the new one takes the rate.
     const start = (await playerOf(view)).time;
     let mark = await pageNow(view);
     await send("rawKeyDown");
     const firstHold = await reached(mark, "first hold");
-    await sleep(300);
+    await waitFrames(view);
     mark = await pageNow(view);
     await send("rawKeyDown");
     const secondHold = await reached(mark, "second hold");
-    await sleep(400);
+    await waitUntil(view, `document.querySelector('[data-testid="video-element"]').currentTime > ${start + 0.3}`, 1500);
     mark = await pageNow(view);
     await send("keyUp");
     const firstBack = await restored(mark, "after the lost key-up");
-    await sleep(200);
+    await waitFrames(view);
     const end = await playerOf(view);
     const moved = end.time - start;
     detail.lostKeyUp = { firstHold, secondHold, firstBack, moved: Number(moved.toFixed(2)), paused: end.paused };
@@ -249,7 +251,7 @@ async function walkRecovers(view: BrowserWindow, observe: Observe): Promise<void
     if (!menu) menu = await js<boolean>(view, `(() => { const b = document.querySelector('[data-testid="video-rate"]'); if (!b) return false; b.click(); return true; })()`) && await menuOpen();
     detail.rateButton = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="video-rate"]'))`);
     await send("rawKeyDown");
-    await sleep(100);
+    await waitFrames(view);
     view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
     view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
     const menuClosed = await waitUntil(view, `!document.querySelector('[role="menu"]')`, 2000);
@@ -273,7 +275,7 @@ async function walkRecovers(view: BrowserWindow, observe: Observe): Promise<void
     const thirdHold = await reached(mark, "before the change of source");
     await js(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); const at = v.currentTime; v.load(); v.addEventListener("loadedmetadata", () => { v.currentTime = at; }, { once: true }); return true; })()`);
     const reloaded = await waitUntil(view, `document.querySelector('[data-testid="video-element"]').readyState >= 1`, 6000);
-    await sleep(300);
+    await waitUntil(view, `document.querySelector('[data-testid="video-element"]').playbackRate === 2 && Boolean(document.querySelector('[data-testid="video-holding"]'))`, 2000);
     const afterLoad = await playerOf(view);
     mark = await pageNow(view);
     await send("keyUp");

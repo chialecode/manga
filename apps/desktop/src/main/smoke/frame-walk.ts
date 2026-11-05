@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { DRAWN, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, pressChord, pressKey, railTo, sleep, trustedClick, waitDrawn, waitUntil } from "./driver.ts";
+import { DRAWN, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, pressChord, pressKey, railTo, sleep, trustedClick, waitDrawn, waitFrames, waitUntil } from "./driver.ts";
 import { js, leaveSettings, openSettingsPage, toRail, type caller } from "./common.ts";
 
 /**
@@ -55,14 +55,14 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
       type, x: Math.round(at.x), y: Math.round(at.y), button: options.button ?? "left", clickCount: options.clickCount ?? 1,
       ...(options.held ? { modifiers: ["leftButtonDown" as const] } : {}),
     } as never);
-    await sleep(45);
+    await waitFrames(view, 1);
   };
   const widthOf = (testId: string) => js<number | null>(view, `(() => { const el = document.querySelector('[data-testid="${testId}"]'); return el ? el.getBoundingClientRect().width : null; })()`);
   /** The width once the page has taken the last input: it renders after the event that moved it, so the first sample can still be one step behind. */
   const settledWidth = async (testId: string) => {
     let last = await widthOf(testId);
-    for (let still = 0, waited = 0; still < 3 && waited < 2000; waited += 60) {
-      await sleep(60);
+    for (let still = 0, waited = 0; still < 3 && waited < 30; waited += 1) {
+      await waitFrames(view, 1);
       const now = await widthOf(testId);
       still = now === last ? still + 1 : 0;
       last = now;
@@ -88,7 +88,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
       for (const step of [left * 0.25, left * 0.6, left]) await mouse("mouseMove", { x: at.x + step, y: at.y }, { held: true });
       during = await settledWidth(column);
       await mouse("mouseUp", { x: at.x + left, y: at.y });
-      await sleep(350);
+      await waitFrames(view);
       if (start === null || during === null) break;
       const wanted = start + (column === "shell-dock" ? -dx : dx);
       // A drag past the limit stops at the limit: only a column that did not move at all is dragged again then.
@@ -106,7 +106,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     await mouse("mouseUp", at, { clickCount: 1 });
     await mouse("mouseDown", at, { clickCount: 2 });
     await mouse("mouseUp", at, { clickCount: 2 });
-    await sleep(350);
+    await waitFrames(view);
   };
   const shellSaved = async () => {
     const got = (await call("settings.getShell", {})).value as { version: number; sidebar: { visible: boolean; width: number }; dock: { visible: boolean; width: number } };
@@ -117,7 +117,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     await leaveSettings(view);
     await closeTabs(view, "all");
     await openLibrary(view);
-    await sleep(250);
+    await waitFrames(view);
   };
 
   await resize("wide");
@@ -174,10 +174,11 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
       const at = await center(testId);
       if (!at) return "";
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        if (attempt > 0 || !view.isFocused()) { view.focus(); view.webContents.focus(); await sleep(200); }
+        if (attempt > 0) { view.focus(); view.webContents.focus(); await waitFrames(view); }
+        else { view.webContents.focus(); await waitFrames(view); }
         await mouse("mouseMove", { x: at.x + attempt, y: at.y });
-        await sleep(250);
-        const ready = view.isFocused() && await hits(testId, at) && await hovered(testId);
+        await sleep(160); // real time: 90ms CSS background-color transition on window-control hover
+        const ready = (attempt === 0 || view.isFocused()) && await hits(testId, at) && await hovered(testId);
         if (ready) return paint(testId);
         retries.push({ button: testId, focused: view.isFocused(), hovered: await hovered(testId) });
       }
@@ -185,6 +186,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     };
     const hoverMinimize = await hoverPaint("window-minimize");
     const hoverClose = await hoverPaint("window-close");
+    if (retries.length > 0 && view.isFocused()) view.blur();
     controlsDetail.hoverRetries = retries;
     const danger = await js<string>(view, `(() => { const probe = document.createElement("i"); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--color-danger"); document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; })()`);
     await mouse("mouseMove", { x: Math.round(viewportW / 2), y: 300 });
@@ -201,18 +203,22 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     const windowSays = view.isMaximized();
     const clickedRestore = await trustedClick(view, "window-maximize");
     const restored = clickedRestore && await waitFor(`document.querySelector('[data-testid="window-controls"]')?.getAttribute("data-maximized") === "${wasMaximized}"`, 4000);
-    await sleep(500);
+    if (view.isFocused()) view.blur();
+    await waitFrames(view);
     controlsDetail.maximize = { wasMaximized, labelBefore, labelAfter, maximized, windowSays, restored, after: view.isMaximized() };
     if (!maximized || windowSays === wasMaximized) controlsProblems.push("the middle button did not change the window's state");
     if (labelAfter === labelBefore) controlsProblems.push("the middle button's name does not follow the window's state");
     if (!restored || view.isMaximized() !== wasMaximized) controlsProblems.push("the middle button did not put the window back");
     await resize("wide");
-    // Minimize with a real click, then bring the window back from the main process.
+    // Minimize with a real click, then bring the window back from the main process without stealing focus.
     const clickedMinimize = await trustedClick(view, "window-minimize");
-    await sleep(600);
+    for (let i = 0; i < 30 && !view.isMinimized(); i += 1) await waitFrames(view, 1);
     const minimized = view.isMinimized();
-    view.restore();
-    await sleep(600);
+    view.showInactive();
+    if (view.isMinimized()) view.restore();
+    for (let i = 0; i < 30 && view.isMinimized(); i += 1) await waitFrames(view, 1);
+    if (view.isFocused()) view.blur();
+    await waitFrames(view);
     controlsDetail.minimize = { clicked: clickedMinimize, minimized, back: !view.isMinimized() };
     if (!clickedMinimize || !minimized) controlsProblems.push("the minimize button did not minimize the window");
     if (view.isMinimized()) controlsProblems.push("the window did not come back from the minimized state");
@@ -309,7 +315,8 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   await library();
   // A wide window, so both columns can be dragged a good way before the page's own room stops them.
   view.setContentSize(1600, 900);
-  await sleep(450);
+  await waitUntil(view, `Math.abs(window.innerWidth - 1600) <= 2 && Math.abs(window.innerHeight - 900) <= 2`, 2000);
+  await waitFrames(view);
   await waitDrawn(view, "agent-composer", 6000);
   const resizeProblems: string[] = [];
   const first = await shellSaved();
@@ -341,7 +348,8 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   const narrowState = await js<{ sidebar: string | null; divider: boolean; main: number; viewport: number }>(view, `({ sidebar: document.querySelector('[data-testid="shell-sidebar"]')?.getAttribute("data-shell-state") ?? null, divider: Boolean(document.querySelector('[data-testid="shell-resize-sidebar"]')), main: document.querySelector('[data-testid="shell-main"]').getBoundingClientRect().width, viewport: window.innerWidth })`);
   if (narrowState.sidebar === "dock" || narrowState.divider || narrowState.main < narrowState.viewport - 49) resizeProblems.push(`a narrow window keeps a docked column (${JSON.stringify(narrowState)})`);
   view.setContentSize(1600, 900);
-  await sleep(450);
+  await waitUntil(view, `Math.abs(window.innerWidth - 1600) <= 2 && Math.abs(window.innerHeight - 900) <= 2`, 2000);
+  await waitFrames(view);
   const back = await settledWidth("shell-sidebar");
   if (back === null || !near(back, savedSidebar, 3)) resizeProblems.push(`the sidebar came back ${back === null ? "?" : Math.round(back)}px wide, not ${savedSidebar}`);
   await doubleClick("shell-resize-sidebar");
@@ -394,20 +402,20 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   if (railBefore.rows !== 5) railProblems.push(`${railBefore.rows} conversations are listed under 最近 before "more", not 5`);
   // "More" shows the rest of the list: the sidebar is then longer than the short window and scrolls on its own, the icons and the settings button staying where they are.
   const more = await clickTestId(view, "sidebar-more-recent");
-  await sleep(250);
+  await waitUntil(view, `document.querySelectorAll('[data-testid="sidebar-recent"] [data-testid^="session-open-"]').length > ${railBefore.rows}`, 2000);
   const expanded = await railFacts();
   if (!more || expanded.rows <= railBefore.rows) railProblems.push(`"more" did not list more conversations (${railBefore.rows} → ${expanded.rows})`);
   const longer = Boolean(expanded.scroll && expanded.scroll.scrollHeight > expanded.scroll.clientHeight + 1);
   if (!longer) railProblems.push("the sidebar does not scroll in the short window with its conversations");
   await js(view, `(() => { const el = document.querySelector('[data-testid="shell-sidebar"] .sidebar-scroll'); if (el) el.scrollTop = el.scrollHeight; })()`);
-  await sleep(200);
+  await waitFrames(view);
   const railScrolled = await railFacts();
   if (railScrolled.scroll && !(railScrolled.scroll.top > 0)) railProblems.push("the sidebar did not scroll");
   if (railBefore.settings && railScrolled.settings && (!near(railBefore.settings.y, railScrolled.settings.y, 0.5) || !near(railBefore.settings.b, railScrolled.settings.b, 0.5))) railProblems.push("the settings button moved when the sidebar scrolled");
   if (railBefore.library && railScrolled.library && !near(railBefore.library.y, railScrolled.library.y, 0.5)) railProblems.push("the rail's icons moved when the sidebar scrolled");
   // The list only grows ("more" has no "less"): asking again lists no fewer, and the icons and the settings button stay where they were.
   await clickTestId(view, "sidebar-more-recent", 1500);
-  await sleep(200);
+  await waitFrames(view);
   const folded = await railFacts();
   if (folded.rows < expanded.rows) railProblems.push(`"more" asked again left ${folded.rows} conversations listed, fewer than ${expanded.rows}`);
   if (railBefore.settings && folded.settings && (!near(railBefore.settings.y, folded.settings.y, 0.5) || !near(railBefore.settings.b, folded.settings.b, 0.5))) railProblems.push("the settings button moved when the list grew again");
@@ -434,13 +442,13 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   let shortPage = await gutterOf();
   for (const candidate of ["shortcuts", "usage", "appearance", "logs"]) {
     if (!(await openSettingsPage(view, candidate))) continue;
-    await sleep(350);
+    await waitFrames(view);
     shortPage = await gutterOf();
     if (!shortPage.overflowing) break;
   }
   await resize("short");
   await openSettingsPage(view, "general");
-  await sleep(400);
+  await waitFrames(view);
   const longPage = await gutterOf();
   const gutterProblems: string[] = [];
   if (shortPage.overflowing) gutterProblems.push("every settings page scrolls in the wide window, so there is nothing to compare with");
@@ -461,7 +469,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   for (const size of ["wide", "narrow", "short"] as const) {
     await resize(size);
     await openLibrary(view);
-    await sleep(350);
+    await waitFrames(view);
     const fit = await js<{ viewport: { w: number; h: number }; rects: Record<string, Rect | null>; docOverflow: number; barOverflow: number }>(view, `(() => {
       const rect = ${RECT};
       const out = {};
@@ -494,7 +502,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   if (env.comicId && await openFromShelf(view, "comic", env.comicId, 10_000, ["library", "reader"]) && await waitFor(`document.querySelector('[data-testid="tab-panel"][data-focused="true"] .comic-page[data-state="ready"]')`, 25_000)) {
     const key = async (name: string) => {
       for (const type of ["keyDown", "keyUp"] as const) view.webContents.sendInputEvent({ type, keyCode: name } as never);
-      await sleep(350);
+      await waitFrames(view, 2);
     };
     const immersive = () => js<boolean>(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`);
     const topState = async () => rects(["shell-top", "comic-reader", "shell-main", "immersive-hotzone", "immersive-drag", "window-controls", "window-close", "shell-rail", "shell-sidebar", "shell-dock"]);
@@ -502,7 +510,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     if (!ordinary["shell-rail"] || !ordinary["shell-sidebar"]) fullProblems.push("the rail or the sidebar is not there before window full screen");
     await clickTestId(view, "comic-window-fullscreen");
     const entered = await waitFor(`document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`, 4000);
-    await sleep(500);
+    await waitUntil(view, `(document.querySelector('[data-testid="shell-top"]')?.getBoundingClientRect().bottom ?? 100) <= 1`, 2000);
     const full = await topState();
     fullDetail.entered = entered;
     const vw = await js<number>(view, `window.innerWidth`);
@@ -526,7 +534,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     // The pointer at the top edge brings the top down over the page; the page keeps its size.
     await mouse("mouseMove", { x: Math.round(vw / 2), y: 600 });
     await mouse("mouseMove", { x: Math.round(vw / 2), y: 12 });
-    await sleep(500);
+    await waitUntil(view, `(document.querySelector('[data-testid="shell-top"]')?.getBoundingClientRect().top ?? -36) >= -0.5`, 2000);
     const shownTop = await topState();
     if (!shownTop["shell-top"] || shownTop["shell-top"].y < -1 || shownTop["shell-top"].b < 30) fullProblems.push(`the top does not come down at the top edge (${JSON.stringify(shownTop["shell-top"])})`);
     if (!shownTop["window-controls"] || shownTop["window-controls"].y < -1 || shownTop["window-controls"].b < 30 || !near(shownTop["window-controls"].r, vw, 1)) fullProblems.push(`the window's buttons do not come down with the top (${JSON.stringify(shownTop["window-controls"])})`);
@@ -536,39 +544,45 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     if (!shownTop["comic-reader"] || !full["comic-reader"] || !near(shownTop["comic-reader"].h, full["comic-reader"].h, 1) || !near(shownTop["comic-reader"].w, full["comic-reader"].w, 1)) fullProblems.push("the page changed size when the top came down");
     await shot("frame-window-fullscreen");
     await mouse("mouseMove", { x: Math.round(vw / 2), y: Math.round(vh / 2) });
-    await sleep(500);
+    await waitUntil(view, `(document.querySelector('[data-testid="shell-top"]')?.getBoundingClientRect().bottom ?? 100) <= 1`, 2000);
     const hiddenTop = await topState();
     if (!hiddenTop["shell-top"] || hiddenTop["shell-top"].b > 1) fullProblems.push("the top stays down when the pointer leaves the edge");
     // Screen full screen on top of it: Esc leaves the screen state first, and the window stays full until the next Esc.
     await mouse("mouseMove", { x: Math.round(vw / 2), y: Math.round(vh / 2) });
     // The comic's bar floats and is seen when the pointer is on it: move there first, then click as a person would (full screen needs a real click).
     const fullscreenButton = await center("comic-fullscreen");
-    if (fullscreenButton) { await mouse("mouseMove", fullscreenButton); await sleep(350); }
+    if (fullscreenButton) { await mouse("mouseMove", fullscreenButton); await waitFrames(view); }
     const clicked = await trustedClick(view, "comic-fullscreen");
     const screenOn = clicked && await waitFor(`document.fullscreenElement !== null`, 3000);
     fullDetail.screenFullscreen = { clicked, screenOn };
     if (screenOn) {
-      await sleep(400);
+      await waitFrames(view);
       await shot("frame-screen-fullscreen");
       await key("Escape");
-      const screenLeft = await js<boolean>(view, `document.fullscreenElement === null`);
+      const screenLeft = await waitFor(`document.fullscreenElement === null && window.innerWidth === ${vw}`, 3000);
       const stillWindow = await immersive();
       fullDetail.screenFullscreen = { clicked, screenOn, screenLeft, stillWindow };
       if (!screenLeft) fullProblems.push("Esc did not leave screen full screen");
       if (!stillWindow) fullProblems.push("the Esc that left screen full screen also left window full screen");
-      await sleep(500);
+      await sleep(420); // real time: exceed ESC_AFTER_SCREEN_EXIT_MS (400ms) guard after leaving screen fullscreen
+      await waitFrames(view);
     } else fullProblems.push("screen full screen did not start in the window");
     // W and Esc leave and enter it from the keyboard.
     await key("w");
-    const leftByKey = !(await immersive());
+    const leftByKey = await waitFor(`document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") !== "true"`, 2000);
     await key("w");
-    const enteredByKey = await immersive();
+    const enteredByKey = await waitFor(`document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`, 2000);
     await key("Escape");
-    const leftByEsc = !(await immersive());
+    const leftByEsc = await waitFor(`document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") !== "true"`, 2000);
     fullDetail.keys = { leftByKey, enteredByKey, leftByEsc };
     if (!leftByKey) fullProblems.push("W did not leave window full screen");
     if (!enteredByKey) fullProblems.push("W did not enter window full screen");
     if (!leftByEsc) fullProblems.push("Esc did not leave window full screen");
+    await waitUntil(
+      view,
+      `Boolean(document.querySelector('[data-testid="shell-rail"]')) && Boolean(document.querySelector('[data-testid="shell-sidebar"]')) && Math.abs((document.querySelector('[data-testid="comic-reader"]')?.getBoundingClientRect().width ?? 0) - ${ordinary["comic-reader"]?.w ?? 0}) <= 1`,
+      3000,
+    );
     const back = await topState();
     if (!back["shell-rail"] || !back["shell-sidebar"] || !back["comic-reader"] || !ordinary["comic-reader"] || !near(back["comic-reader"].w, ordinary["comic-reader"].w, 1)) fullProblems.push("the window does not come back as it was");
     await closeTabs(view, ["reader"]);

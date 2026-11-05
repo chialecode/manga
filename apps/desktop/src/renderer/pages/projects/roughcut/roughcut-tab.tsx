@@ -119,6 +119,12 @@ function CutView({ ctx, cutId, onChanged }: { ctx: ProjectTabContext; cutId: str
   // The export reports each step as a notice; the list follows it, and when it ends the sequence is free again.
   useEffect(() => {
     const off = window.manga.onNotice?.((notice) => {
+      if (notice.topic === "proposal.changed" && notice.payload.status === "applied") {
+        void load();
+        void loadExports();
+        void runPlan();
+        return;
+      }
       if (notice.topic !== "roughcut.export") return;
       const view = notice.payload as unknown as ExportView;
       if (view.cutId !== cutId) return;
@@ -126,7 +132,7 @@ function CutView({ ctx, cutId, onChanged }: { ctx: ProjectTabContext; cutId: str
       if (TERMINAL.has(view.state)) { void load(); }
     });
     return () => { off?.(); };
-  }, [cutId, load]);
+  }, [cutId, load, loadExports, runPlan]);
 
   const commit = useCallback((actions: Action[], label?: string): Promise<EditResult | null> => {
     const run = async (): Promise<EditResult | null> => {

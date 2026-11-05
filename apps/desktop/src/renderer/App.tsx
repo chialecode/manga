@@ -250,12 +250,20 @@ export function App() {
   useEffect(() => {
     let timer: number | undefined;
     const off = window.manga.onNotice?.((item) => {
+      if (item.topic === "settings.changed" || item.topic === "semantic.progress") {
+        void refresh();
+        return;
+      }
+      if (item.topic === "proposal.changed" && item.payload.status === "applied") {
+        changedProjects();
+        return;
+      }
       if (item.topic !== "work.updated" && item.topic !== "import.progress" && item.topic !== "job.changed" && item.topic !== "scan.finished") return;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => setShelfKey((key) => key + 1), 300);
     });
     return () => { window.clearTimeout(timer); off?.(); };
-  }, []);
+  }, [changedProjects, refresh]);
 
   // A library path was removed: what was open from it closes with a word about it, and the shelves are read again (A-86).
   // Conversations were deleted (A-89): the tabs that showed them close, and the sidebar and the history stop listing them.

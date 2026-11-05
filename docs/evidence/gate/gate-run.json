@@ -1,7 +1,7 @@
 {
   "status": "passed",
-  "at": "2026-11-05T17:52:22.886Z",
-  "seconds": 3048,
+  "at": "2026-11-08T08:02:10.934Z",
+  "seconds": 25,
   "steps": [
     {
       "name": "verify",
@@ -15,28 +15,18 @@
     },
     {
       "name": "package",
-      "outcome": "passed",
-      "seconds": 699
+      "outcome": "current, kept",
+      "seconds": 0
     },
     {
       "name": "installer",
-      "outcome": "passed",
-      "seconds": 150
+      "outcome": "current, kept",
+      "seconds": 0
     },
     {
       "name": "bench",
-      "outcome": "passed",
-      "seconds": 769
-    },
-    {
-      "name": "package (pass 2 of 3)",
-      "outcome": "passed",
-      "seconds": 701
-    },
-    {
-      "name": "package (pass 3 of 3)",
-      "outcome": "passed",
-      "seconds": 703
+      "outcome": "current, kept",
+      "seconds": 0
     },
     {
       "name": "report",

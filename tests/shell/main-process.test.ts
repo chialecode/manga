@@ -6,7 +6,7 @@ import { WINDOW_ACTIONS, parseWindowAction, productWindow, windowControlsDrawn }
 
 // Built from parts: the publication check refuses literal drive paths in a public file.
 const DRIVE = ["C", ":"].join("");
-const FILE_APP = `file:///${DRIVE}/Program%20Files/MANGA/resources/app.asar/.vite/renderer/main_window/index.html`;
+const FILE_APP = `file:///${DRIVE}/Program%20Files/manga/resources/app.asar/.vite/renderer/main_window/index.html`;
 const DEV_APP = "http://localhost:5173/";
 const facts = (patch: Partial<Parameters<typeof permissionAllowed>[0]> = {}) => ({ permission: "media", requestingUrl: FILE_APP, mediaTypes: ["audio"], appUrl: FILE_APP, fromAppWindow: true, ...patch });
 

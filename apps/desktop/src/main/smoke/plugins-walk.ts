@@ -3,7 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, setField, setSelect, sleep, viaSidebar, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, setField, setSelect, viaSidebar, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -127,7 +127,7 @@ export async function runPluginsSmoke(input: { appService: MangaProductApp; gran
   const afterOff = (await call("plugin.list", {})).value as { plugins?: Array<{ id: string; state: string; enabled: boolean }> } | undefined;
   const offPlugin = afterOff?.plugins?.find((item) => item.id === PLUGIN_ID);
   record("disabled-from-the-page", Boolean(stopped) && offPlugin?.enabled === false && offPlugin?.state !== "running", { state: offPlugin?.state, enabled: offPlugin?.enabled });
-  await sleep(300);
+  await waitUntil(view, `!document.querySelector('[data-testid="plugin-${PLUGIN_ID}-toggle"]')?.disabled`, 4000);
   const on = await clickTestId(view, `plugin-${PLUGIN_ID}-toggle`, 4000);
   const again = on && await waitUntil(view, `(document.querySelector('[data-testid="plugin-${PLUGIN_ID}-toggle"]')?.textContent || "").includes("停用")`, 30_000);
   const afterOn = (await call("plugin.list", {})).value as { plugins?: Array<{ id: string; state: string; enabled: boolean }> } | undefined;

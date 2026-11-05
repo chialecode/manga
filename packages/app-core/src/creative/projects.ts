@@ -162,6 +162,7 @@ export class ProjectService {
       const materials = Number(sqlite.prepare("DELETE FROM project_materials WHERE project_id = ?").run(projectId).changes);
       const terms = Number(sqlite.prepare("DELETE FROM project_terms WHERE project_id = ?").run(projectId).changes);
       sqlite.prepare("DELETE FROM project_snapshots WHERE project_id = ?").run(projectId);
+      sqlite.prepare("DELETE FROM agent_proposals WHERE project_id = ?").run(projectId);
       // The project's conversations become conversations of "最近": the one about the project itself is a general conversation there, the rest keep their targets.
       sqlite.prepare("UPDATE agent_sessions SET kind = 'shared', target_id = NULL WHERE project_id = ? AND kind = 'project'").run(projectId);
       const kept = Number(sqlite.prepare("UPDATE agent_sessions SET project_id = NULL WHERE project_id = ?").run(projectId).changes);

@@ -44,6 +44,10 @@ export type ComposerState = {
   recordings: string[];
   /** The user turned online metadata search on for the next task only. */
   allowOnline: boolean;
+  /** The user turned semantic search on for the next task only. */
+  allowSemantic: boolean;
+  /** The user turned webpage fetching on for the next task only. */
+  allowWebpage: boolean;
   /** How many minutes past the spoiler limit the next task may read subtitles; 0 keeps the default limit. */
   subtitleAheadMin: number;
 };
@@ -61,7 +65,7 @@ export type AttachedImage = {
   region?: { x: number; y: number; width: number; height: number };
 };
 
-export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], noteMaterials: [], images: [], recordings: [], allowOnline: false, subtitleAheadMin: 0 });
+export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], noteMaterials: [], images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, subtitleAheadMin: 0 });
 
 export type AgentSelection = { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number; quote: string };
 

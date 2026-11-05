@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
-import { pressKey, setField, sleep, waitUntil } from "./driver.ts";
-import { js } from "./common.ts";
+import { pressKey, setField, sleep, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
+import { exitScreenFullscreen, js } from "./common.ts";
 import { realClick } from "./player-menus-walk.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
@@ -75,7 +75,7 @@ class Walk {
 const rest = async (view: BrowserWindow, fx = 0.5, fy = 0.5) => {
   const size = await js<{ w: number; h: number }>(view, `({ w: window.innerWidth, h: window.innerHeight })`);
   view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(size.w * fx), y: Math.round(size.h * fy) });
-  await sleep(250);
+  await waitFrames(view);
 };
 
 /** Put the reader into the state, run the work, and put the window back as it was. */
@@ -84,11 +84,12 @@ async function inState(view: BrowserWindow, walk: Walk, state: State, buttons: {
   if (state === "window") {
     if (!await realClick(view, buttons.window)) { walk.problems.push(`window: ${buttons.window} was not found`); return; }
     if (!await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`, 4000)) { walk.problems.push("window: the window did not fill with the page"); return; }
-    await sleep(700);
+    await waitFrames(view);
   } else if (state === "screen") {
     if (!await realClick(view, buttons.screen)) { walk.problems.push(`screen: ${buttons.screen} was not found`); return; }
     if (!await waitUntil(view, `document.fullscreenElement !== null`, 4000)) { walk.problems.push("screen: the screen did not fill with the page"); return; }
-    await sleep(800);
+    if (!(await waitWindowFullscreen(view, true))) walk.problems.push("screen: the native window did not enter full screen");
+    await waitFrames(view);
   }
   try {
     await work();
@@ -97,11 +98,9 @@ async function inState(view: BrowserWindow, walk: Walk, state: State, buttons: {
       await pressKey(view, "Escape");
       await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") !== "true"`, 3000);
     } else if (state === "screen") {
-      await pressKey(view, "Escape");
-      await waitUntil(view, `document.fullscreenElement === null`, 3000);
-      if (view.isFullScreen() !== wasFull) { await realClick(view, buttons.screen); await waitUntil(view, `document.fullscreenElement === null`, 3000); }
+      if (!(await exitScreenFullscreen(view, wasFull, buttons.screen)).restored) walk.problems.push("screen: leaving full screen did not restore the native window");
     }
-    await sleep(500);
+    await waitFrames(view);
   }
 }
 
@@ -122,12 +121,12 @@ export async function walkComicOverlays(view: BrowserWindow, observe: Observe, s
       await walk.expectReached(state, "page field", ["comic-page-input"]);
       await setField(view, "comic-page-input", String(last));
       await pressKey(view, "Enter");
-      await sleep(300);
+      await waitUntil(view, `!document.querySelector('[data-testid="comic-page-input"]')`, 2000);
       // The button for the next page is disabled on the last one; the step that goes past it is the key.
       await pressKey(view, "PageDown");
       const ended = await waitUntil(view, `document.querySelector('[data-testid="comic-end"]')`, 3000);
       if (!ended) { walk.problems.push(`${state}: the prompt at the last page did not appear`); return; }
-      await sleep(300);
+      await waitFrames(view);
       // The pointer is on the bar (which is what brought it): the hardest case, a floating bar fully shown over the bottom of the page.
       await walk.expectReached(state, "last-page prompt, bar shown", ["comic-end", "comic-end-back"]);
       if (state !== "ordinary") await walk.expectAbove(state, "last-page prompt, bar shown", "comic-end", "comic-footer");
@@ -145,10 +144,10 @@ export async function walkComicOverlays(view: BrowserWindow, observe: Observe, s
         await walk.expectReached(state, "region tool", ["comic-region-bar", "comic-region-cancel"]);
         if (state === "window") {
           view.webContents.sendInputEvent({ type: "mouseMove", x: 400, y: 4 });
-          await sleep(120);
+          await waitFrames(view, 1);
           view.webContents.sendInputEvent({ type: "mouseMove", x: 400, y: 11 });
           await waitUntil(view, `document.querySelector('[data-testid="shell-top"]')?.getAttribute("data-revealed") === "true"`, 1500);
-          await sleep(300);
+          await waitUntil(view, `(document.querySelector('[data-testid="shell-top"]')?.getBoundingClientRect().bottom ?? 0) >= 30`, 1500);
           await walk.expectReached(state, "region tool, page's top down", ["comic-region-bar", "comic-region-cancel"]);
           await walk.shotAs("overlays-comic-window-region");
         }
@@ -161,7 +160,7 @@ export async function walkComicOverlays(view: BrowserWindow, observe: Observe, s
         await waitUntil(view, `document.querySelector('[data-testid="comic-more-panel"]')`, 2000);
         await walk.expectReached(state, "more panel", ["comic-more-panel", "comic-layout-single", "comic-direction", "comic-autoflip"]);
         await realClick(view, "comic-more-settings");
-        await sleep(150);
+        await waitUntil(view, `!document.querySelector('[data-testid="comic-more-panel"]')`, 2000);
       } else walk.problems.push(`${state}: the settings button was not found`);
     });
   }
@@ -179,7 +178,7 @@ export async function walkPlayerOverlays(view: BrowserWindow, observe: Observe, 
     await inState(view, walk, state, { window: "video-window-fullscreen", screen: "video-fullscreen" }, async () => {
       await still();
       await rest(view, 0.5, 0.45);
-      await sleep(300);
+      await waitUntil(view, `document.querySelector('[data-testid="video-big-play"]')`, 2000);
       await walk.expectReached(state, "big play", ["video-big-play"]);
 
       // Play to the end: the prompt to play again, and the bar that stays shown.
@@ -187,7 +186,7 @@ export async function walkPlayerOverlays(view: BrowserWindow, observe: Observe, 
       const ended = await waitUntil(view, `document.querySelector('[data-testid="video-end"]')`, 12_000);
       if (!ended) { walk.problems.push(`${state}: the prompt at the end did not appear`); return; }
       await rest(view, 0.5, 0.3);
-      await sleep(3200);
+      await sleep(3200); // real time: exceed 3s player idle timer to verify controls stay visible on video end
       const bar = await js<{ idle: boolean; opacity: string }>(view, `(() => { const shell = document.querySelector('[data-testid="video-shell"]'); const bar = document.querySelector('[data-testid="video-controls"]'); return { idle: shell?.hasAttribute("data-idle") ?? true, opacity: bar ? getComputedStyle(bar).opacity : "?" }; })()`);
       if (bar.idle || bar.opacity !== "1") walk.problems.push(`${state}: the bar did not stay shown at the end (${JSON.stringify(bar)})`);
       await walk.expectReached(state, "end prompt with the bar shown", ["video-end", "video-replay", "video-controls"]);
@@ -197,7 +196,7 @@ export async function walkPlayerOverlays(view: BrowserWindow, observe: Observe, 
       const replayed = await waitUntil(view, `!document.querySelector('[data-testid="video-end"]')`, 3000);
       if (!replayed) walk.problems.push(`${state}: the replay button did not play again`);
       await still();
-      await sleep(200);
+      await waitFrames(view);
     });
   }
   observe("overlays-player", walk.problems.length === 0 && walk.rows.length >= 3 * 2, { rows: walk.rows.length, states: STATES, problems: walk.problems, sample: walk.rows.filter((row) => row.step.startsWith("end prompt")).slice(0, 3) });
@@ -213,14 +212,20 @@ export async function walkNovelOverlays(view: BrowserWindow, observe: Observe, s
     await inState(view, walk, state, { window: "reading-window-fullscreen", screen: "reading-fullscreen" }, async () => {
       const size = await js<{ w: number; h: number }>(view, `({ w: window.innerWidth, h: window.innerHeight })`);
       view.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(size.w / 2), y: size.h - 14 });
-      await sleep(400);
+      await waitUntil(view, `(document.querySelector('[data-testid="reading-footer"]')?.getBoundingClientRect().width ?? 0) > 0`, 2000);
+      await waitUntil(
+        view,
+        `(() => { const foot = document.querySelector('[data-testid="reading-footer"]'); if (!foot) return false; const fb = foot.getBoundingClientRect(); const tf = getComputedStyle(foot).transform; return fb.bottom <= window.innerHeight + 0.5 && (tf === "none" || tf === "matrix(1, 0, 0, 1, 0, 0)"); })()`,
+        2000,
+      );
+      await waitFrames(view);
       await walk.expectReached(state, "bar", bar);
       if (await realClick(view, "reading-settings")) {
         await waitUntil(view, `document.querySelector('[data-testid="reading-settings-panel"]')`, 2000);
         await walk.expectReached(state, "settings panel", ["reading-settings-panel"]);
         await walk.shotAs(`overlays-novel-${state}-settings`);
         await realClick(view, "reading-settings");
-        await sleep(200);
+        await waitUntil(view, `!document.querySelector('[data-testid="reading-settings-panel"]')`, 2000);
       } else walk.problems.push(`${state}: the settings button was not found`);
     });
   }

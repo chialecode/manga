@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { clickTestId, openFromShelf, railTo, revealNovelControls, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, openFromShelf, railTo, revealNovelControls, sleep, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { js, type caller } from "./common.ts";
 import { longChaptersEpub } from "./novel-walk.ts";
 
@@ -63,16 +63,16 @@ async function drag(view: BrowserWindow, selector: string, dx: number, dy: numbe
   for (let step = 1; step <= steps; step += 1) {
     const move = { x: Math.round(at.x + (dx * step) / steps), y: Math.round(at.y + (dy * step) / steps) };
     view.webContents.sendInputEvent({ type: "mouseMove", ...move, button: "left" });
-    await sleep(16);
+    await sleep(16); // real time: 60Hz 拖拽指针移动采样步长（16ms）
   }
   // Back where it started, so that a run leaves the layout as it found it.
   for (let step = steps; step >= 0; step -= 1) {
     const move = { x: Math.round(at.x + (dx * step) / steps), y: Math.round(at.y + (dy * step) / steps) };
     view.webContents.sendInputEvent({ type: "mouseMove", ...move, button: "left" });
-    await sleep(16);
+    await sleep(16); // real time: 60Hz 拖拽指针回移采样步长（16ms）
   }
   view.webContents.sendInputEvent({ type: "mouseUp", x: at.x, y: at.y, button: "left", clickCount: 1 });
-  await sleep(150);
+  await waitFrames(view, 2);
   return true;
 }
 
@@ -89,20 +89,20 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
   if (!(await openFromShelf(view, "video", seeds.videoA, 8000, [])) || !(await waitForTestId(view, "video-element", "data-present", null, 10_000))) failures.push("polish: the video did not open");
   await js(view, `document.querySelector('[data-testid="video-element"]')?.pause(); true`);
   await railTo(view, "video");
-  await sleep(600);
+  await waitUntil(view, viewShown("video"), 5000);
   for (let round = 0; round < POLISH.switchRounds; round += 1) {
     for (const name of ["novel", "video"]) keep(`view ${name}`, await timedPress(view, NAV(name), viewShown(name), 5000), figures.viewSwitchMs);
-    await sleep(40);
+    await waitFrames(view, 1);
   }
 
   // ---- the first press on a view after the page was loaded again, and the covers ----
   const reload = async (front: "novel" | "video") => {
     await railTo(view, front);
-    await sleep(350);
+    await waitUntil(view, viewShown(front), 5000);
     await view.webContents.reload();
     await waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 15_000);
     await js(view, prelude);
-    await sleep(500);
+    await waitUntil(view, viewShown(front), 8000);
   };
   for (let round = 0; round < POLISH.restoreRounds; round += 1) {
     const [from, to] = (round % 2 === 0 ? ["novel", "video"] : ["video", "novel"]) as ["novel" | "video", "novel" | "video"];
@@ -118,8 +118,10 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
 
   // ---- a drag: the divider of the sidebar and an icon of the rail ----
   await railTo(view, "home");
-  await sleep(500);
-  const idle = await framesDuring(view, async () => { await sleep(Math.round((POLISH.idleFrames * 1000) / 60)); });
+  await waitFrames(view, 2);
+  const idle = await framesDuring(view, async () => {
+    await sleep(Math.round((POLISH.idleFrames * 1000) / 60)); // real time: 空闲基线帧间隔采样时长（2 秒）
+  });
   const usual = median(idle);
   for (let run = 0; run < POLISH.dragRuns; run += 1) {
     const intervals = await framesDuring(view, async () => {
@@ -141,21 +143,21 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
   await js(view, prelude);
   if (!(await openFromShelf(view, "novel", book, 15_000)) || !(await waitForTestId(view, "reading-body", "data-present", null, 20_000))) { failures.push("long book: it did not open"); return figures; }
   figures.novelCharacters = LONG_CHAPTER_CHARACTERS;
-  await sleep(1200);
+  await waitUntil(view, `Number(document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-end") ?? 0) > 0`, 8000);
   view.setContentSize(1280, 820);
-  await sleep(900);
+  await waitUntil(view, `window.innerWidth === 1280 && Number(document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-end") ?? 0) > 0`, 8000);
 
   for (let turn = 0; turn < POLISH.turns; turn += 1) {
     await revealNovelControls(view);
     const page = await js<number>(view, `${pageNumbers}(${pageLabel})[0]`);
     keep("turn", await timedPress(view, `document.querySelector('[data-testid="reading-page-next"]')`, `${pageNumbers}(${pageLabel})[0] === ${page + 1}`, 4000), figures.novelTurnMs);
-    await sleep(220);
+    await waitFrames(view, 1);
   }
 
   await revealNovelControls(view);
   await clickTestId(view, "reading-settings", 3000);
   await waitUntil(view, `document.querySelector('[data-testid="reading-settings-panel"]')`, 3000);
-  await sleep(300);
+  await waitFrames(view, 1);
   // Where the reader is: the first character of the page the turns above brought. Every change of letter must come back to the page that holds it,
   // so that changing and changing back does not walk back a page each time.
   const point = await js<number>(view, `Number(document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-start") ?? -1)`);
@@ -165,23 +167,22 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
     // The new pages are laid out, the total has moved, and the page holds the character the reader is at.
     const placed = `(() => { const body = document.querySelector('[data-testid="reading-body"]'); const from = Number(body?.getAttribute("data-page-start")); const to = Number(body?.getAttribute("data-page-end")); return ${pageNumbers}(${pageLabel})[1] !== ${now.total} && from <= ${point} && ${point} < to; })()`;
     keep("larger letter", await timedPress(view, `document.querySelector('[data-testid="${button}"]')`, placed, 5000), figures.novelRefontMs);
-    await sleep(300);
+    await waitFrames(view, 1);
   }
   await revealNovelControls(view);
   await clickTestId(view, "reading-settings", 3000);
-  await sleep(400);
+  await waitUntil(view, `!document.querySelector('[data-testid="reading-settings-panel"]')`, 3000);
 
   const row = (title: string) => `[...document.querySelectorAll('[data-testid="reading-panel"] button')].find((el) => (el.textContent ?? "").includes(${JSON.stringify(title)}))`;
   for (let open = 0; open < POLISH.opens; open += 1) {
     // Choosing a chapter closes the contents, as it does for a person.
     await revealNovelControls(view);
     await clickTestId(view, "reading-panel-toc", 3000);
-    await waitUntil(view, `document.querySelector('[data-testid="reading-panel"]')`, 3000);
-    await sleep(300);
+    await waitUntil(view, `document.querySelectorAll('[data-testid="reading-panel"] button').length >= 2`, 3000);
     const title = open % 2 === 0 ? "第2章" : "第1章";
     const shown = `(document.querySelector('[data-testid="reading-chapter"]')?.textContent ?? "").includes(${JSON.stringify(title)}) && document.querySelector('[data-testid="reading-body"]')?.hasAttribute("data-page-start") && ${pageNumbers}(${pageLabel})[0] === 1`;
     keep("chapter", await timedPress(view, row(title), shown, 8000), figures.novelOpenMs);
-    await sleep(300);
+    await waitUntil(view, `!document.querySelector('[data-testid="reading-panel"]')`, 3000);
   }
   return figures;
 }

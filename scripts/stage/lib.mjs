@@ -102,8 +102,29 @@ export function readJson(dir, name) {
 export function packagedExecutable() {
   const outDir = process.env.MANGA_DESKTOP_PACKAGE_DIR ? path.resolve(repoRoot, process.env.MANGA_DESKTOP_PACKAGE_DIR) : path.join(repoRoot, "dist/desktop/packages");
   if (!fs.existsSync(outDir)) return undefined;
-  const built = fs.readdirSync(outDir).find((name) => name.startsWith("MANGA"));
+  const built = fs.readdirSync(outDir).find((name) => name.startsWith("manga"));
   if (!built) return undefined;
-  const exe = path.join(outDir, built, process.platform === "win32" ? "MANGA.exe" : "MANGA");
+  const exe = path.join(outDir, built, process.platform === "win32" ? "manga.exe" : "manga");
   return fs.existsSync(exe) ? exe : undefined;
+}
+
+/**
+ * Every `sleep(` call in `apps/desktop/src/main/smoke/` (other than the definition of `sleep` itself) must carry an adjacent single-line
+ * `// real time: <reason>` comment explaining why wall-clock elapsed time is what is being tested (LOOP-29).
+ */
+export function findUncommentedSmokeSleeps(smokeDir = path.join(repoRoot, "apps/desktop/src/main/smoke")) {
+  if (!fs.existsSync(smokeDir)) return [];
+  const uncommented = [];
+  for (const file of fs.readdirSync(smokeDir).sort()) {
+    if (!file.endsWith(".ts")) continue;
+    const lines = fs.readFileSync(path.join(smokeDir, file), "utf8").split(/\r?\n/);
+    lines.forEach((line, index) => {
+      if (!/\bsleep\(/.test(line) || /export\s+function\s+sleep\(/.test(line)) return;
+      const prev = index > 0 ? lines[index - 1] : "";
+      if (!/\/\/\s*real time:\s*\S+/.test(line) && !/^\s*\/\/\s*real time:\s*\S+/.test(prev)) {
+        uncommented.push(`${file}:${index + 1}: ${line.trim()}`);
+      }
+    });
+  }
+  return uncommented;
 }

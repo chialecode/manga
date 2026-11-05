@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { nativeImage, type BrowserWindow } from "electron";
 import { readPngText, type MangaProductApp } from "@manga/app-core";
-import { clickTestId, sleep } from "./driver.ts";
+import { clickTestId, sleep, waitUntil } from "./driver.ts";
 import { differenceMask, glyphCells } from "./glyph-cells.ts";
 import type { Measure } from "./subtitle-check.ts";
 
@@ -20,12 +20,12 @@ export async function takeShot(view: BrowserWindow, appService: MangaProductApp)
   let found: { id: string } | undefined;
   for (let attempt = 0; attempt < 100 && !found; attempt += 1) {
     found = appService.screenshots.list({ limit: 500 }).items.find((item) => !known.has(item.id));
-    if (!found) await sleep(150);
+    if (!found) await sleep(150); // real time: 后台轮询定时器节流，等待截图文件保存
   }
   if (!found) return null;
   // The notice that says the picture was kept sits over the right end of the player's bar and over the corner of the picture; a window capture taken
   // next (the frame as the window shows it, or a click on the bar's buttons) would hold it, so it is closed as a person closes it.
-  if (await clickTestId(view, "toast-notice-close", 3000)) await sleep(300);
+  if (await clickTestId(view, "toast-notice-close", 3000)) await waitUntil(view, `!document.querySelector('[data-testid="toast-notice-close"]')`, 3000);
   const file = appService.screenshots.pathOf(found.id);
   const bytes = fs.readFileSync(file);
   const image = nativeImage.createFromBuffer(bytes);

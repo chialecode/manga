@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { clickTestId, pressKey, setField, sleep, waitUntil } from "./driver.ts";
+import { clickTestId, pressKey, setField, sleep, waitFrames, waitUntil } from "./driver.ts";
 import { js } from "./common.ts";
 import { PLAYER_MENU_OBSERVATIONS } from "./player-menus-walk.ts";
 
@@ -50,7 +50,7 @@ export async function walkComicControls(view: BrowserWindow, observe: Observe, n
   const target = total >= 3 ? 3 : 2;
   const opened = await clickTestId(view, "comic-position") && await waitUntil(view, `document.querySelector('[data-testid="comic-page-input"]')`, 2000);
   await setField(view, "comic-page-input", String(target));
-  await sleep(60);
+  await waitFrames(view, 1);
   await pressKey(view, "Enter");
   const went = await waitUntil(view, `${PAGE_EXPR} === ${target} && !document.querySelector('[data-testid="comic-page-input"]')`, 4000);
   detail.position = { total, target, opened, went };
@@ -61,7 +61,7 @@ export async function walkComicControls(view: BrowserWindow, observe: Observe, n
   await clickTestId(view, "comic-position");
   await setField(view, "comic-page-input", "1");
   await pressKey(view, "Escape");
-  await sleep(150);
+  await waitUntil(view, `!document.querySelector('[data-testid="comic-page-input"]')`, 2000);
   const stayed = (await comicPage(view)) === before && await js<boolean>(view, `!document.querySelector('[data-testid="comic-page-input"]')`);
   detail.escape = { stayed };
   if (!stayed) problems.push("Esc did not leave the position field where it was");
@@ -76,9 +76,9 @@ export async function walkComicControls(view: BrowserWindow, observe: Observe, n
     wheel(-120);
     const down = await waitUntil(view, `${PAGE_EXPR} !== ${start}`, 3000);
     const afterDown = await comicPage(view);
-    await sleep(450);
+    await sleep(450); // real time: comic wheel page-turn cooldown between notches
     wheel(120);
-    await sleep(500);
+    await waitUntil(view, `${PAGE_EXPR} === ${start}`, 3000);
     const afterUp = await comicPage(view);
     const events = await js<Array<{ dy: number; ctrl: boolean }>>(view, `window.__smokeWheel`);
     detail.wheel = { start, afterDown, afterUp, down, events };
@@ -89,14 +89,14 @@ export async function walkComicControls(view: BrowserWindow, observe: Observe, n
     const zoom0 = await js<string>(view, `document.querySelector('[data-testid="comic-zoom-value"]')?.textContent ?? ""`);
     const pageBefore = await comicPage(view);
     wheel(-120, true);
-    await sleep(250);
+    await waitUntil(view, `(document.querySelector('[data-testid="comic-zoom-value"]')?.textContent ?? "") !== ${JSON.stringify(zoom0)}`, 2000);
     const zoom1 = await js<string>(view, `document.querySelector('[data-testid="comic-zoom-value"]')?.textContent ?? ""`);
     const pageAfter = await comicPage(view);
     detail.zoom = { zoom0, zoom1, pageBefore, pageAfter };
     if (zoom1 === zoom0) problems.push("Ctrl and the wheel did not change the size");
     if (pageAfter !== pageBefore) problems.push("Ctrl and the wheel turned the page");
     await clickTestId(view, "comic-zoom-value");
-    await sleep(250);
+    await waitUntil(view, `(document.querySelector('[data-testid="comic-zoom-value"]')?.textContent ?? "") === ${JSON.stringify(zoom0)}`, 2000);
   }
   observe("reader-controls-comic", problems.length === 0, { ...detail, problems });
 }
@@ -113,31 +113,31 @@ export async function walkPlayerControls(view: BrowserWindow, observe: Observe, 
   const stateOf = () => js<{ time: number; paused: boolean; rate: number; duration: number }>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return { time: v.currentTime, paused: v.paused, rate: v.playbackRate, duration: v.duration }; })()`);
   // Start still, at the beginning.
   await js(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); v.pause(); v.currentTime = 0; return true; })()`);
-  await sleep(300);
+  await waitFrames(view, 2);
   const start = await stateOf();
   detail.start = start;
 
   // A tap is a step: nothing happens while the key is down, and the time moves by the step when it is let go.
   await pressKey(view, "Right", 60);
-  await sleep(300);
+  await waitUntil(view, `document.querySelector('[data-testid="video-element"]').currentTime > ${start.time + 0.4}`, 2000);
   const tapped = await stateOf();
   detail.tap = tapped;
   if (!(tapped.time > start.time + 0.4)) problems.push("a tap on → did not step forward");
   if (!tapped.paused || tapped.rate !== start.rate) problems.push("a tap on → started playing or changed the rate");
   await pressKey(view, "Left", 60);
-  await sleep(300);
+  await waitUntil(view, `document.querySelector('[data-testid="video-element"]').currentTime < ${tapped.time - 0.4}`, 2000);
   const back = await stateOf();
   detail.tapBack = back;
   if (!(back.time < tapped.time - 0.4)) problems.push("a tap on ← did not step back");
 
   // A hold on → plays at the temporary rate while it is down and goes back, still paused, when it is let go; it does not step.
   await js(view, `document.querySelector('[data-testid="video-element"]').currentTime = 0; true`);
-  await sleep(200);
+  await waitUntil(view, `document.querySelector('[data-testid="video-element"]').currentTime < 0.1`, 2000);
   view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Right" });
-  await sleep(700);
+  await sleep(700); // real time: hold Right arrow key to trigger temporary fast-forward rate
   const holding = await js<{ shown: boolean; rate: number; paused: boolean }>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return { shown: Boolean(document.querySelector('[data-testid="video-holding"]')), rate: v.playbackRate, paused: v.paused }; })()`);
   view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Right" });
-  await sleep(300);
+  await waitUntil(view, `!document.querySelector('[data-testid="video-holding"]') && document.querySelector('[data-testid="video-element"]').paused`, 2000);
   const released = await stateOf();
   detail.hold = { holding, released };
   if (!holding.shown || holding.paused || !(holding.rate > start.rate)) problems.push("holding → did not play at the temporary rate");
@@ -148,13 +148,13 @@ export async function walkPlayerControls(view: BrowserWindow, observe: Observe, 
   if (start.duration > 3) {
     const from = Math.max(start.duration - 0.3, 3);
     await js(view, `document.querySelector('[data-testid="video-element"]').currentTime = ${from}; true`);
-    await sleep(300);
+    await waitUntil(view, `Math.abs(document.querySelector('[data-testid="video-element"]').currentTime - ${from}) < 0.2`, 2000);
     const at = (await stateOf()).time;
     view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Left" });
-    await sleep(1100);
+    await sleep(1100); // real time: hold Left arrow key to rewind continuously
     const rewinding = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="video-rewinding"]'))`);
     view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Left" });
-    await sleep(300);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-rewinding"]') && document.querySelector('[data-testid="video-element"]').paused`, 2000);
     const after = await stateOf();
     detail.rewind = { at, after: after.time, rewinding };
     if (!rewinding || !(after.time < at - 1)) problems.push("holding ← did not rewind");
@@ -168,7 +168,7 @@ export async function walkPlayerControls(view: BrowserWindow, observe: Observe, 
     const rateBefore = (await stateOf()).rate;
     view.webContents.sendInputEvent({ type: "mouseMove", x: stage.x, y: stage.y });
     view.webContents.sendInputEvent({ type: "mouseDown", x: stage.x, y: stage.y, button: "right", clickCount: 1 });
-    await sleep(800);
+    await sleep(800); // real time: long right-click hold duration to verify rate does not change
     const during = await js<{ rate: number; holding: boolean }>(view, `(() => ({ rate: document.querySelector('[data-testid="video-element"]').playbackRate, holding: Boolean(document.querySelector('[data-testid="video-holding"]')) }))()`);
     view.webContents.sendInputEvent({ type: "mouseUp", x: stage.x, y: stage.y, button: "right", clickCount: 1 });
     const menu = await waitUntil(view, `document.querySelector('[data-testid="video-context"]')`, 2500);
@@ -177,7 +177,7 @@ export async function walkPlayerControls(view: BrowserWindow, observe: Observe, 
     if (!menu) problems.push("the right button did not open the menu");
     if (during.rate !== rateBefore || during.holding || afterRate !== rateBefore) problems.push("a long press of the right button changed the rate");
     await pressKey(view, "Escape");
-    await sleep(150);
+    await waitUntil(view, `!document.querySelector('[data-testid="video-context"]')`, 1000);
     if (await js<boolean>(view, `Boolean(document.querySelector('[data-testid="video-context"]'))`)) await clickTestId(view, "video-stage");
   }
   observe("reader-controls-player", problems.length === 0, { ...detail, problems });

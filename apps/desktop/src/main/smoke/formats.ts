@@ -3,7 +3,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { buildEpubFixture, buildMobiFixture, buildPdfFixture, type MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
-import { clickTestId, openFromShelf, pressKey, setField, setSelect, sleep, tabsOf, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, openFromShelf, pressKey, setField, setSelect, tabsOf, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, ensureDock, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -126,7 +126,7 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
       if (tagged) {
         await clickTestId(view, "chat-mode-note");
         await setField(view, "agent-composer", "格式样本笔记");
-        await sleep(100);
+        await waitUntil(view, `(document.querySelector('[data-testid="agent-composer"]')?.value ?? "") === "格式样本笔记"`, 3000);
         noted = await clickTestId(view, "agent-send");
         excerpt = noted && await waitUntil(view, `(document.querySelector('[data-testid="chat-log"]')?.textContent ?? "").includes("FORMAT-PDF-MARK")`, 8000);
       }

@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, DRAWN, openProjectsPage, PICK, sleep, waitUntil } from "./driver.ts";
+import { clickTestId, DRAWN, openProjectsPage, PICK, waitFrames, waitUntil } from "./driver.ts";
 import { caller, js, toRail } from "./common.ts";
 
 /**
@@ -20,7 +20,12 @@ const PRELUDE = `(() => {
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, cancelable: true }));
     el.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, cancelable: true }));
   };
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const frame = () => new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearTimeout(timer); void document.body?.offsetHeight; resolve(true); } };
+    const timer = setTimeout(finish, 32);
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+  });
   const timed = (act, check, timeoutMs = 15000) => new Promise((resolve) => {
     let done = false;
     let observer = null;
@@ -47,7 +52,7 @@ const PRELUDE = `(() => {
     try { act(); } catch (error) { finish(false, String(error)); return; }
     test();
   });
-  window.__bc = { q, press, sleep, timed };
+  window.__bc = { q, press, frame, timed };
   return true;
 })()`;
 
@@ -144,7 +149,7 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
   for (let run = 0; run < spec.openRuns; run += 1) {
     if (!await openProject("whiteboard")) { failures.push("whiteboard: the project did not open"); break; }
     keep(`whiteboard open ${run}`, await timedClick("project-tab-whiteboard", boardHas(settledCards)), openMs, failures);
-    await sleep(700);
+    await waitFrames(view, 2);
     shownByRun.push(await js<number>(view, shownCards));
     if (run < spec.openRuns - 1) await back();
   }
@@ -169,7 +174,7 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
 
   /** A wheel over the middle of the canvas, `count` times, each timed to the DOM commit of the new viewport. `overview` first zooms out to the smallest scale, so the most cards are in view. */
   const zoomSeries = (overview: boolean) => js<{ samples: Sample[]; missing?: string }>(view, `(async () => {
-    const { timed, sleep } = window.__bc;
+    const { timed, frame } = window.__bc;
     const pane = document.querySelector('[data-testid="whiteboard-canvas"] .react-flow__pane');
     const viewport = () => document.querySelector('[data-testid="whiteboard-canvas"] .react-flow__viewport');
     if (!pane || !viewport()) return { samples: [], missing: "canvas" };
@@ -179,8 +184,11 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
     const wheel = (deltaY) => pane.dispatchEvent(new WheelEvent("wheel", { deltaY, deltaMode: 0, clientX: x, clientY: y, bubbles: true, cancelable: true, view: window }));
     const scale = () => Number((viewport().style.transform.match(/scale\\(([0-9.]+)\\)/) || [])[1] || 1);
     if (${overview}) {
-      for (let guard = 0; guard < 30 && scale() > 0.105; guard += 1) { wheel(100); await sleep(60); }
-      await sleep(400);
+      for (let guard = 0; guard < 30 && scale() > 0.105; guard += 1) {
+        const prev = viewport().style.transform;
+        await timed(() => wheel(100), () => viewport().style.transform !== prev || scale() <= 0.105, 500);
+      }
+      await frame();
     }
     const samples = [];
     for (let i = 0; i < ${spec.zoomSamples}; i += 1) {
@@ -188,14 +196,14 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
       // Two steps in, two steps out, so the scale stays where the series began.
       const deltaY = Math.floor(i / 2) % 2 === 0 ? -100 : 100;
       samples.push(await timed(() => wheel(deltaY), () => viewport().style.transform !== before, 3000));
-      await sleep(30);
+      await frame();
     }
     return { samples };
   })()`);
 
   /** A card in view is taken with the mouse and moved a step at a time; a move is over when the card has been put at its new place on screen. */
   const dragSeries = () => js<{ samples: Sample[]; id?: string; missing?: string }>(view, `(async () => {
-    const { timed, sleep } = window.__bc;
+    const { timed, frame } = window.__bc;
     const canvas = document.querySelector('[data-testid="whiteboard-canvas"]');
     const pane = canvas && canvas.querySelector(".react-flow__pane");
     if (!pane) return { samples: [], missing: "canvas" };
@@ -216,7 +224,7 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
     x += 12;
     y += 8;
     mouse("mousemove", window, { x, y });
-    await sleep(60);
+    await frame();
     const samples = [];
     for (let i = 0; i < ${spec.dragSamples}; i += 1) {
       const before = node().style.transform;
@@ -225,13 +233,13 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
       x += 7 * sign;
       y += 4 * sign;
       samples.push(await timed(() => mouse("mousemove", window, { x, y }), () => node() && node().style.transform !== before, 3000));
-      await sleep(16);
+      await frame();
     }
     // The card is put down a good way from where it was taken.
     x += 48;
     y += 30;
     mouse("mousemove", window, { x, y });
-    await sleep(60);
+    await frame();
     mouse("mouseup", window, { x, y });
     return { samples, id };
   })()`);
@@ -257,16 +265,18 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
     zoomMs.push(...zooms);
     dragMs.push(...drags);
     series.push({ name, shownCards: shown, zoomMs: zooms, dragMs: drags });
-    await sleep(300);
+    await waitFrames(view, 2);
   }
   // Every drop is saved: each card is somewhere else than where it was taken.
-  await sleep(700);
-  let dropSaved = droppedIds.length === 2;
-  const doc = await ok<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId: board.id });
-  for (const id of droppedIds) {
-    const moved = doc.nodes.find((node) => node.id === id);
-    const origin = cardAt(Number(id.replace("card", "")), columns);
-    if (!moved || (Math.abs(moved.x - origin.x) <= 1 && Math.abs(moved.y - origin.y) <= 1)) dropSaved = false;
+  let dropSaved = false;
+  for (let attempt = 0; attempt < 30 && !dropSaved; attempt += 1) {
+    const doc = await ok<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId: board.id });
+    dropSaved = droppedIds.length === 2 && droppedIds.every((id) => {
+      const moved = doc.nodes.find((node) => node.id === id);
+      const origin = cardAt(Number(id.replace("card", "")), columns);
+      return Boolean(moved && (Math.abs(moved.x - origin.x) > 1 || Math.abs(moved.y - origin.y) > 1));
+    });
+    if (!dropSaved) await waitFrames(view, 2);
   }
   if (!dropSaved) failures.push("drag: a dropped card was not saved at a new place");
   await back();
@@ -282,13 +292,13 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
     if (opened.ok) mapOpenMs = opened.ms;
     else failures.push(`mind map open: ${opened.reason ?? "failed"}`);
   } else failures.push("mind map: the project did not open");
-  await sleep(800);
+  await waitUntil(view, `document.querySelectorAll('[data-testid="mindmap-board"] .react-flow__node').length > 0`, 4000);
   const renderedTopics = await js<number>(view, `document.querySelectorAll('[data-testid="mindmap-board"] .react-flow__node').length`);
 
   const foldMs: number[] = [];
   const unfoldMs: number[] = [];
   const foldRun = await js<{ rows: Array<{ kind: string; level: string; sample: Sample }>; missing?: string }>(view, `(async () => {
-    const { q, press, timed, sleep } = window.__bc;
+    const { q, press, timed, frame } = window.__bc;
     const gone = (id) => !q("mm-node-" + id);
     const here = (id) => Boolean(q("mm-node-" + id));
     const collapsed = (id) => (q("mm-node-" + id)?.getAttribute("data-collapsed") === "true");
@@ -307,7 +317,7 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
         8000,
       );
       rows.push({ kind: down ? "fold" : "unfold", level, sample });
-      await sleep(150);
+      await frame();
     };
     for (let round = 0; round < ${spec.foldRounds}; round += 1) {
       for (const [id, first, last, level] of targets) {

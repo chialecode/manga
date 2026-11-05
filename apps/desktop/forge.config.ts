@@ -55,8 +55,8 @@ export default {
       // Native files, the worker bundles, and the whole canvas package and its platform build (PDF.js looks for them next to the unpacked PDF.js files).
       unpack: "{**/{.**,**}/**/{*.node,*.dll,icudtl.dat,parse-worker.cjs,vad-worker.cjs},**/node_modules/@napi-rs/**}",
     },
-    name: "MANGA",
-    executableName: "MANGA",
+    name: "manga",
+    executableName: "manga",
     // The Electron zip is checked against the checksums the installed electron package carries, not a SHASUMS256.txt fetched from GitHub on every
     // package: a GitHub error (a 504 once ended a gate run) no longer fails a build whose zip is already in the cache (LOOP-27).
     download: { checksums: JSON.parse(readFileSync(path.join(repoRoot, "node_modules", "electron", "checksums.json"), "utf8")) as Record<string, string> },

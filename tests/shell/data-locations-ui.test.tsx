@@ -14,7 +14,7 @@ const i18n = createTranslator("zh-CN");
 afterEach(() => { cleanup(); });
 
 const app = "/x/Local/manga";
-const files = "/x/Docs/MANGA";
+const files = "/x/Docs/manga";
 const host = (overrides: Record<string, string> = {}): HostState => ({
   writable: true,
   vaultAvailable: true,
@@ -23,7 +23,7 @@ const host = (overrides: Record<string, string> = {}): HostState => ({
     partitions: {
       data: `${app}/data`, backups: `${app}/backups`, logs: `${app}/logs`, cache: `${app}/cache`, runtime: `${app}/runtime`,
       works: overrides.works ?? `${files}/works`, projects: `${files}/projects`, attachments: `${files}/attachments`, resources: `${files}/resources`, exports: `${files}/exports`,
-      downloads: "/x/Downloads/MANGA",
+      downloads: "/x/Downloads/manga",
     },
   },
 });
@@ -40,7 +40,7 @@ describe("where the data lives, in the settings (AT-148, AT-149)", () => {
     mount({});
     expect(within(screen.getByTestId("location-group-app")).getByTestId("location-path-data").textContent).toBe(`${app}/data`);
     expect(within(screen.getByTestId("location-group-files")).getByTestId("location-path-works").textContent).toBe(`${files}/works`);
-    expect(within(screen.getByTestId("location-group-downloads")).getByTestId("location-path-downloads").textContent).toBe("/x/Downloads/MANGA");
+    expect(within(screen.getByTestId("location-group-downloads")).getByTestId("location-path-downloads").textContent).toBe("/x/Downloads/manga");
     expect(screen.getByRole("group", { name: "应用数据" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "你的文件" })).toBeTruthy();
     expect(screen.getByTestId("location-path-works").getAttribute("data-override")).toBeNull();
@@ -48,10 +48,10 @@ describe("where the data lives, in the settings (AT-148, AT-149)", () => {
   });
 
   it("marks a partition that stayed at the old place, and cleans the old place only after asking", async () => {
-    const { onCleanLegacy } = mount({ legacyLocation: { root: "/x/Docs/MANGA/release", bytes: 50 * 1024 * 1024, cleaned: false } }, host({ works: "/x/Docs/MANGA/release/works" }));
-    expect(screen.getByTestId("location-path-works").textContent).toBe("/x/Docs/MANGA/release/works");
+    const { onCleanLegacy } = mount({ legacyLocation: { root: "/x/Docs/manga/release", bytes: 50 * 1024 * 1024, cleaned: false } }, host({ works: "/x/Docs/manga/release/works" }));
+    expect(screen.getByTestId("location-path-works").textContent).toBe("/x/Docs/manga/release/works");
     expect(screen.getByTestId("location-path-works").getAttribute("data-override")).toBe("true");
-    expect(screen.getByTestId("general-legacy").textContent).toContain("/x/Docs/MANGA/release");
+    expect(screen.getByTestId("general-legacy").textContent).toContain("/x/Docs/manga/release");
     expect(screen.getByTestId("general-legacy").textContent).toContain("50 MB");
     fireEvent.click(screen.getByTestId("general-legacy-clean"));
     expect(onCleanLegacy).not.toHaveBeenCalled();
@@ -61,7 +61,7 @@ describe("where the data lives, in the settings (AT-148, AT-149)", () => {
   });
 
   it("offers nothing once the old place was cleaned", () => {
-    mount({ legacyLocation: { root: "/x/Docs/MANGA/release", bytes: 0, cleaned: true } });
+    mount({ legacyLocation: { root: "/x/Docs/manga/release", bytes: 0, cleaned: true } });
     expect(screen.queryByTestId("general-legacy")).toBeNull();
   });
 });

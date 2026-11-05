@@ -232,4 +232,5 @@ export const zhCNCreative = {
   "voice.organize": "整理与润色",
   "voice.organizeGlossary": "术语表",
   "voice.organizeHint": "整理时，作品词典和项目术语表会作为术语表交给文本模型，用词保持一致。",
+  "log.proposal.apply": "执行了待审提议（{origin} · {title}）",
 } as const;

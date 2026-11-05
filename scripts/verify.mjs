@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { findUncommentedSmokeSleeps } from './stage/lib.mjs';
 
 // One offline entry point shared by developers, the optional hook and CI.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,6 +41,11 @@ run(process.execPath, ['--test', 'scripts/check-docs.test.mjs']);
 run(process.execPath, ['--test', 'scripts/stage-report.test.mjs']);
 run(process.execPath, ['--test', 'scripts/pre-push.test.mjs']);
 run(process.execPath, ['scripts/check-publication.mjs']);
+const uncommentedSleeps = findUncommentedSmokeSleeps();
+if (uncommentedSleeps.length > 0) {
+  console.error(`FAILED smoke sleep check: ${uncommentedSleeps.length} uncommented sleep( calls in apps/desktop/src/main/smoke:\n  ${uncommentedSleeps.join('\n  ')}`);
+  failed = true;
+}
 if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
   run(process.execPath, ['scripts/check-deps.mjs']);
   const tscJs = path.join(root, 'node_modules/typescript/bin/tsc');

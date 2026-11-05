@@ -72,6 +72,8 @@
   --column-top-h: 36px;
   --shadow-control: 0 1px 3px #3036470B;
   --color-danger: #B42318;
+  /* Danger as text on the page (warnings, "不能撤销", failed states); the fill above stays the ground of danger buttons. */
+  --color-danger-text: #B42318;
   --color-focus: #A83267;
   --color-background: #F3F4F7;
   --color-foreground: #303647;
@@ -94,6 +96,7 @@
   --color-border: #343A4A;
   --color-text: #E6E9F2;
   --color-subtle: #9AA3B8;
+  --color-danger-text: #F97066;
   --color-accent: #E27AA8;
   --color-accent-soft: #3A2230;
   --color-accent-deep: #F5B3D0;

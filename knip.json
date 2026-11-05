@@ -3,7 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.{mjs,ts}", "tests/helpers/acquisition-crash-child.ts", "tests/helpers/bt-swarm.mjs"],
+      "entry": ["scripts/**/*.{mjs,ts}", "tests/helpers/acquisition-crash-child.ts", "tests/helpers/proposal-crash-child.ts", "tests/helpers/bt-swarm.mjs"],
       "project": ["scripts/**/*.{mjs,ts}", "tests/**/*.{ts,tsx,mjs}"],
       "ignoreDependencies": ["sharp", "fflate", "@napi-rs/canvas", "@tiptap/core", "bencode", "create-torrent", "bittorrent-tracker", "webtorrent", "@electron-forge/cli", "electron"]
     },

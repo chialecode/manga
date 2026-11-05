@@ -114,6 +114,38 @@ describe.each(["native", "pi"] as const)("the trace of a task under the %s runti
     expect(entries[1]!.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)", async () => {
+    const t = await scenario({
+      runtime,
+      script: [{ name: "proposal.rename", arguments: JSON.stringify({ kind: "project", targetId: "PLACEHOLDER", title: "新名字" }) }],
+      respond: (body) => (JSON.stringify(body.messages).includes("proposal.rename") ? { text: "已提交重命名提议。" } : undefined),
+    });
+    const proj = ok<{ id: string }>(await run(t.ctx, "project.create", { name: "旧名字" }));
+    const projSes = ok<{ id: string }>(await run(t.ctx, "session.open", { kind: "project", targetId: proj.id, contextId: proj.id }));
+    // Replace script targetId with actual project id.
+    const server2 = await startMockProvider({
+      streamToolScript: [{ name: "proposal.rename", arguments: JSON.stringify({ kind: "project", targetId: proj.id, title: "新名字" }) }],
+      respond: ({ body }) => (JSON.stringify(body.messages).includes("proposal.rename") ? { text: "已提交重命名提议。" } : undefined),
+    });
+    closers.push(server2.close);
+    ok(await run(t.ctx, "connections.upsert", {
+      id: t.connection.id, label: "m", protocol: "openai-chat-completions", baseUrl: server2.url, modelId: "demo", purpose: "text", runtime,
+      credentialHandle: t.ctx.app.stashSecret(KEY), profile,
+    }));
+    const sent = ok<{ runId: string }>(await run(t.ctx, "agent.send", {
+      sessionId: projSes.id,
+      text: "把项目改名为新名字",
+      allowCommands: ["semantic.search", "webpage.fetch"],
+    }));
+    const finished = await waitForRun(t.ctx.app, t.ctx.actor, t.ctx.grant.handle, sent.runId, 30_000);
+    expect(finished.value?.status).toBe("succeeded");
+    const entries = await t.list(sent.runId);
+    expect(entries.map((entry) => `${entry.kind}:${entry.name}:${entry.status}`)).toEqual(["model:chat:ok", "tool:proposal.rename:ok", "model:chat:ok"]);
+    const firstReq = await t.whole(entries[0]!.id, "request");
+    const toolNames = ((firstReq?.tools ?? []) as Array<{ function?: { name?: string }; name?: string }>).map((tool) => tool.function?.name ?? tool.name);
+    expect(toolNames).toEqual(expect.arrayContaining(["proposal.rename", "semantic.search", "webpage.fetch"]));
+  });
+
   it("keeps the context, the parameters and the tools that were sent, and what came back", async () => {
     const t = await scenario({ runtime, script: [{ name: "library.find", arguments: '{"text":"x"}' }] });
     const { runId } = await t.send(task);

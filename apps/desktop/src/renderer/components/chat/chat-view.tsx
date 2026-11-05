@@ -18,6 +18,10 @@ export type ChatViewProps = ChatDeps & {
   onRetry: (runId: string) => void;
   /** Whether online search can be offered for the next task (the metadata module). */
   online: boolean;
+  /** Whether semantic search can be offered for the next task (the semantic module is on and an embedding connection is configured). */
+  semantic?: boolean;
+  /** Whether webpage fetching can be offered for the next task (the research module is on and the conversation belongs to a project). */
+  webpage?: boolean;
   resources: Array<{ id: string; title: string }>;
   /** The open resource whose recordings can be taken along, when the voice module is on. */
   recordingsOf?: string | null;
@@ -76,9 +80,22 @@ export function useChatView(props: ChatViewProps) {
     onStop: props.onStop,
     onSend: () => { void chat.send(); },
     sending: chat.sending,
-    plus: { attach, online: props.online, subtitle: context?.kind === "video", allowOnline: composer.allowOnline, subtitleAheadMin: composer.subtitleAheadMin, materials: composer.materials.length + composer.noteMaterials.length + composer.recordings.length },
+    plus: {
+      attach,
+      online: props.online,
+      semantic: Boolean(props.semantic),
+      webpage: Boolean(props.webpage),
+      subtitle: context?.kind === "video",
+      allowOnline: composer.allowOnline,
+      allowSemantic: Boolean(composer.allowSemantic) && Boolean(props.semantic),
+      allowWebpage: Boolean(composer.allowWebpage) && Boolean(props.webpage),
+      subtitleAheadMin: composer.subtitleAheadMin,
+      materials: composer.materials.length + composer.noteMaterials.length + composer.recordings.length,
+    },
     onAttach: props.onAttach,
     onToggleOnline: () => props.updateComposer((current) => ({ allowOnline: !current.allowOnline })),
+    onToggleSemantic: () => props.updateComposer((current) => ({ allowSemantic: !current.allowSemantic })),
+    onToggleWebpage: () => props.updateComposer((current) => ({ allowWebpage: !current.allowWebpage })),
     onSubtitleAhead: (minutes) => props.patchComposer({ subtitleAheadMin: minutes }),
     onMaterials: () => setMaterials(true),
     mic,
@@ -104,6 +121,7 @@ export function useChatView(props: ChatViewProps) {
           onOpenRecording: props.onOpenRecording,
           onRetry: props.onRetry,
           onOpenTrace: setTraceRun,
+          onProposalChanged: () => { void chat.stream.reload(); props.bump(); },
         }}
       />
       {materials ? (

@@ -1,4 +1,4 @@
-import type { SourceLocator } from "@manga/contracts";
+import type { ProposalCard, SourceLocator } from "@manga/contracts";
 
 /**
  * The right pane's message stream (A-48): one list, oldest first, that merges what the user wrote down, what they said and
@@ -36,7 +36,7 @@ export type StreamVoice = {
   resourceId: string | null;
 };
 export type StreamUser = { kind: "user"; id: string; at: string; runId: string; text: string; quickTask: { id: string | null; name: string } | null };
-export type StreamAgent = { kind: "agent"; id: string; at: string; runId: string; status: string; text: string; error: { code: string; message: string } | null };
+export type StreamAgent = { kind: "agent"; id: string; at: string; runId: string; status: string; text: string; error: { code: string; message: string } | null; proposals?: ProposalCard[] };
 export type StreamItem = StreamNote | StreamVoice | StreamUser | StreamAgent;
 
 /** The slice of the capture service the message stream reads; kept narrow so the stream stays a plain query. */

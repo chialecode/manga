@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { PICK, sleep } from "./driver.ts";
+import { PICK, waitFrames } from "./driver.ts";
 import { js } from "./common.ts";
 
 /** The real pointer and the screen's own pixels, for the walks that check what a person sees and does with the hand (packaged-window smoke only). */
@@ -14,7 +14,7 @@ export async function mouse(view: BrowserWindow, type: "mouseMove" | "mouseDown"
     type, x: Math.round(at.x), y: Math.round(at.y), button: options.button ?? "left", clickCount: options.clickCount ?? 1,
     ...(options.held ? { modifiers: ["leftButtonDown" as const] } : {}),
   } as never);
-  await sleep(45);
+  await waitFrames(view, 2);
 }
 
 /** The drawn box of the element with this test id (the one on screen when the page has several). */

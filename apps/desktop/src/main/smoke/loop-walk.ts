@@ -3,7 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, pressChord, railTo, setField, sleep, tabsOf, viaSidebar, waitUntil } from "./driver.ts";
+import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, pressChord, railTo, setField, sleep, tabsOf, viaSidebar, waitFrames, waitUntil } from "./driver.ts";
 import { caller, capturePage, ensureDock, js, openSettingsPage, leaveSettings, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -115,7 +115,8 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     const opened = await openFromShelf(view, "novel", seeded.resourceId, 12_000) && await ensureDock(view);
     const drawn = opened && await waitUntil(view, `${DRAWN}(${DOCK}?.querySelector('[data-testid="chat-rows"] .chat-row')) && ${loadedCountExpr()} >= 200`, 15_000);
     detail.firstScreenMs = Date.now() - started;
-    await sleep(800);
+    await waitUntil(view, `(() => { const s = ${SCROLLER}; return Boolean(s) && s.scrollHeight - s.scrollTop - s.clientHeight <= 8; })()`, 4000);
+    await waitFrames(view, 2);
     const nodes = await js<number>(view, `${DOCK}?.querySelectorAll('[data-testid="chat-rows"] .chat-row').length ?? 0`);
     detail.firstScreen = { drawn, nodes, loaded: await loadedCount(view), gap: await bottomGap(view) };
     if (!drawn) problems.push("the newest screen of the long conversation was not drawn");
@@ -124,11 +125,11 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
 
     // Up to the top: the next older page comes on its own, and the message at the top of the viewport stays where it was.
     await js(view, `(() => { const s = ${SCROLLER}; s.scrollTop = 600; s.dispatchEvent(new Event("scroll")); return true; })()`);
-    await sleep(500);
+    await waitFrames(view, 2);
     const before = await topRow(view);
     await js(view, `(() => { const s = ${SCROLLER}; s.scrollTop = 100; return true; })()`);
     const grew = await waitUntil(view, `${loadedCountExpr()} >= 400`, 8000);
-    await sleep(600);
+    await waitFrames(view, 2);
     const afterOlder = await topRow(view);
     detail.older = { grew, loaded: await loadedCount(view), before, after: afterOlder };
     if (!grew) problems.push("scrolling to the top did not load the older page");
@@ -137,7 +138,7 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     const anchor = await topRow(view);
     const loadedBefore = await loadedCount(view);
     appService.notify("work.updated", { resourceId: seeded.resourceId });
-    await sleep(1500);
+    await sleep(600); // real time: host notification refresh window to verify viewport stays still
     const afterNotice = await topRow(view);
     const loadedAfterNotice = await loadedCount(view);
     detail.notice = { anchor, after: afterNotice, loadedBefore, loadedAfterNotice };
@@ -153,7 +154,8 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
       const count = await loadedCount(view);
       appService.notify("work.updated", { resourceId: seeded.resourceId });
       const dropped = await waitUntil(view, `${loadedCountExpr()} === ${count - 1}`, 5000);
-      await sleep(400);
+      await waitUntil(view, `Boolean(${SCROLLER}?.querySelector(".chat-row"))`, 2000);
+      await waitFrames(view, 2);
       const afterDelete = await topRow(view);
       detail.deleted = { dropped, before: beforeDelete, after: afterDelete };
       if (!dropped) problems.push("the deleted message is still in the list after the refresh");
@@ -163,19 +165,20 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
 
     // Back at the bottom, a reply streams: the list stays at the bottom; scrolled up in the middle of it, the list is not pulled back.
     await clickTestId(view, "chat-scroll-bottom", 3000);
-    await waitUntil(view, `(() => { const s = ${SCROLLER}; return s.scrollHeight - s.scrollTop - s.clientHeight <= 8; })()`, 5000);
+    await waitUntil(view, `(() => { const s = ${SCROLLER}; return s.scrollHeight - s.scrollTop - s.clientHeight <= 1; })()`, 5000);
+    await waitFrames(view, 2);
     await clickTestId(view, "chat-mode-ask", 3000);
     await setField(view, "agent-composer", "流式回答的时候贴着底部吗？");
     const sent = await clickTestId(view, "agent-send", 3000);
     const live = sent && await waitUntil(view, `${DOCK}?.querySelector('[data-testid^="bubble-agent-"][data-status="running"]')`, 10_000);
     const stuck: boolean[] = [];
     const gaps: number[] = [];
-    for (let i = 0; i < 12; i += 1) { const gap = await bottomGap(view); gaps.push(gap); stuck.push(gap >= 0 && gap <= 8); await sleep(150); }
+    for (let i = 0; i < 12; i += 1) { const gap = await bottomGap(view); gaps.push(gap); stuck.push(gap >= 0 && gap <= 8); await sleep(150); } // real time: streaming chunk interval while checking bottom stickiness
     await js(view, `(() => { const s = ${SCROLLER}; s.dispatchEvent(new WheelEvent("wheel", { deltaY: -400, bubbles: true })); s.scrollTop = s.scrollTop - 400; return true; })()`);
-    await sleep(200);
+    await waitFrames(view, 2);
     const upAt = await js<number>(view, `${SCROLLER}.scrollTop`);
     const held: number[] = [];
-    for (let i = 0; i < 8; i += 1) { await sleep(150); held.push(await js<number>(view, `${SCROLLER}.scrollTop`)); }
+    for (let i = 0; i < 8; i += 1) { await sleep(150); held.push(await js<number>(view, `${SCROLLER}.scrollTop`)); } // real time: streaming chunk interval while checking scrolled-up position holds
     const stillRunning = await js<boolean>(view, `Boolean(${DOCK}?.querySelector('[data-testid^="bubble-agent-"][data-status="running"]'))`);
     detail.stream = { live, stuck, gaps, upAt, held, stillRunning };
     if (!live) problems.push("the reply did not start streaming");
@@ -205,16 +208,20 @@ async function lastTabEmpty(call: Call, view: BrowserWindow, observe: (name: str
     await waitUntil(view, `${HOST}?.getAttribute("data-context") === ""`, 6000);
     await closeTabs(view, "all");
     const closed = await tabCount();
-    await sleep(1500);
+    for (let i = 0; i < 40; i += 1) {
+      const got = (await call("workspace.loadContext", { contextId: null })).value as { state?: { tabs?: unknown[] } } | undefined;
+      if ((got?.state?.tabs ?? []).length === 0) break;
+      await sleep(50); // real time: poll workspace layout debounce save before reload
+    }
     await view.webContents.reload();
     await toRail(view);
     await waitUntil(view, `${HOST}`, 8000);
-    await sleep(1200);
+    await waitFrames(view, 2);
     const afterReload = await tabCount();
     await railTo(view, "home");
     const intoProject = await clickTestId(view, `context-open-${project}`, 6000) && await waitUntil(view, `${HOST}?.getAttribute("data-context") === ${JSON.stringify(project)}`, 6000);
     const back = await clickTestId(view, "context-open-recent", 6000) && await waitUntil(view, `${HOST}?.getAttribute("data-context") === ""`, 6000);
-    await sleep(800);
+    await waitFrames(view, 2);
     const afterSwitch = await tabCount();
     if (closed !== 0) problems.push(`${closed} tabs left after closing all of them`);
     if (afterReload !== 0) problems.push(`the page came back with ${afterReload} tabs after a reload`);
@@ -250,7 +257,7 @@ async function libraryTabSingle(call: Call, view: BrowserWindow, observe: (name:
     for (const book of books) {
       if (!(await openFromShelf(view, "novel", book, 12_000, []))) problems.push("a reader did not open from the shelf");
       await railTo(view, "novel");
-      await sleep(400);
+      await waitFrames(view, 2);
       counts.push(await libraryTabs());
     }
     // The management entry of the view, then the search box choosing a work.
@@ -261,20 +268,21 @@ async function libraryTabSingle(call: Call, view: BrowserWindow, observe: (name:
     if (box) await setField(view, "search-input", "单个资源库标签乙");
     const row = box && await waitUntil(view, `[...document.querySelectorAll('[data-testid="search-results"] [data-testid^="search-result-"]')].find((el) => el.textContent.includes("单个资源库标签乙"))`, 6000);
     if (row) await js(view, `[...document.querySelectorAll('[data-testid="search-results"] [data-testid^="search-result-"]')].find((el) => el.textContent.includes("单个资源库标签乙")).click()`);
-    await sleep(800);
+    await waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, 4000);
+    await waitFrames(view, 2);
     counts.push(await libraryTabs());
     // In another column: the library tab and a reader side by side, the reader in front; the management entry brings the library tab in front there.
     const split = await chooseMenu(view, "layout-menu", "layout-two") && await waitUntil(view, `${HOST}?.getAttribute("data-columns") === "2"`, 4000);
     const tabs = await tabsOf(view);
     const reader = tabs.find((tab) => tab.kind === "reader");
     if (reader) await js(view, `document.querySelector('[data-testid="tab"][data-tab="${reader.id}"]')?.click()`);
-    await sleep(400);
+    await waitFrames(view, 2);
     const switched = await viaSidebar(view, "novel", "sidebar-manage", 6000) && await waitUntil(view, `${HOST}?.querySelector('[data-testid="view-dock"] [data-testid="tab"][data-kind="library"][data-focused="true"]')`, 6000);
     counts.push(await libraryTabs());
     await chooseMenu(view, "layout-menu", "layout-single");
     // The home holds every tab of the context: there too, one library tab.
     await railTo(view, "home");
-    await sleep(400);
+    await waitFrames(view, 2);
     const home = await libraryTabs();
     Object.assign(detail, { counts, manage, box, row, split, switched, home });
     if (counts.some((count) => count !== 1)) problems.push(`the novel view had ${JSON.stringify(counts)} library tabs over the steps, not one`);
@@ -295,7 +303,25 @@ async function screens(view: BrowserWindow, evidenceDir: string | undefined, pro
     if (opened) {
       for (const id of ["profile-input-pdf", "profile-input-video"]) await js(view, `(() => { const box = document.querySelector('[data-testid="${id}"]'); if (box && !box.checked) box.click(); return true; })()`);
       const limits = await waitUntil(view, `document.querySelector('[data-testid="profile-file-limit"]') && document.querySelector('[data-testid="profile-video-limit"]') && document.querySelector('[data-testid="profile-video-seconds"]')`, 4000);
-      if (!limits) problems.push("the model dialog did not show the PDF and video limits");
+      await js(view, `(() => {
+        const group = document.querySelector('[data-testid="profile-fields"]');
+        group?.scrollIntoView({ block: "start" });
+        document.querySelector('[data-testid="profile-video-seconds"]')?.scrollIntoView({ block: "nearest" });
+        return true;
+      })()`);
+      const limitsInView = await waitUntil(view, `(() => {
+        const body = document.querySelector('[data-testid="connection-dialog"] .modal-body');
+        if (!body) return false;
+        const b = body.getBoundingClientRect();
+        return ["profile-file-limit", "profile-video-limit", "profile-video-seconds"].every((id) => {
+          const el = document.querySelector('[data-testid="' + id + '"]');
+          if (!el) return false;
+          const r = el.getBoundingClientRect();
+          return r.top >= b.top - 1 && r.bottom <= b.bottom + 1;
+        });
+      })()`, 2000);
+      await waitFrames(view, 2);
+      if (!limits || !limitsInView) problems.push("the model dialog did not show the PDF and video limits");
       await capturePage(view, evidenceDir, "ui-model-limits.png");
       await pressChord(view, "Escape", []);
     } else problems.push("the model dialog did not open");
@@ -329,6 +355,12 @@ export async function runLoopSmoke(input: { appService: MangaProductApp; grant: 
     await runMediaObservations({ appService, call, view, evidenceDir, samples: input.samples, observe });
   } catch (error) {
     observe("loop-media", false, { problems: [`the media walk stopped: ${error instanceof Error ? error.message : String(error)}`] });
+  }
+  const { runProposalObservations } = await import("./proposals-walk.ts");
+  try {
+    await runProposalObservations({ appService, call, view, evidenceDir, logsDir: input.logsDir, samples: input.samples, observe });
+  } catch (error) {
+    observe("loop-proposals", false, { problems: [`the proposals walk stopped: ${error instanceof Error ? error.message : String(error)}`] });
   }
   const screenProblems: string[] = [];
   await screens(view, evidenceDir, screenProblems);

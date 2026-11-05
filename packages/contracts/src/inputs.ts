@@ -10,6 +10,7 @@ import { CreativeCommandInputs } from "./inputs-creative.ts";
 import { PluginCommandInputs } from "./inputs-plugins.ts";
 import { AcquisitionCommandInputs } from "./inputs-acquisition.ts";
 import { RoughcutCommandInputs } from "./inputs-roughcut.ts";
+import { ProposalCommandInputs } from "./inputs-proposals.ts";
 import { WorkFileCommandInputs } from "./inputs-works.ts";
 import { DanmakuCommandInputs } from "./inputs-danmaku.ts";
 import { ModelInputs, ModelProfilePatchSchema } from "./inputs-models.ts";
@@ -243,8 +244,8 @@ export const CommandInputs = {
     captureSessionIds: z.array(id).max(3).optional(),
     /** Stills prepared with `material.region` / `material.frame`; at most four. */
     imageMaterialIds: z.array(id).max(4).optional(),
-    /** Network commands this task may use. Metadata search reaches an outside service, so it is off unless the user turns it on for the task. */
-    allowCommands: z.array(z.enum(["metadata.search"])).max(1).optional(),
+    /** Opt-in commands enabled for this run only (`metadata.search`, `semantic.search`, `webpage.fetch`). */
+    allowCommands: z.array(z.enum(["metadata.search", "semantic.search", "webpage.fetch"])).max(3).optional(),
     /** Set when the message was made by a quick task: the chat shows the task as a tag and the debug panel names it. The task changes nothing about what the run may use. */
     quickTask: z.object({ id: id.nullable(), name: z.string().min(1).max(80) }).strict().optional(),
   }).strict(),
@@ -261,6 +262,7 @@ export const CommandInputs = {
   ...PluginCommandInputs,
   ...AcquisitionCommandInputs,
   ...RoughcutCommandInputs,
+  ...ProposalCommandInputs,
   ...WorkFileCommandInputs,
   ...DanmakuCommandInputs,
   ...ModelInputs,

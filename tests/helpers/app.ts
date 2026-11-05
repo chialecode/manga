@@ -3,12 +3,22 @@ import os from "node:os";
 import path from "node:path";
 import { MangaProductApp, TestVault, type ProductAppOptions } from "@manga/app-core";
 import { syntheticWav } from "@manga/model-protocol";
+import { testTempRoot } from "./global-temp.ts";
 
 let seq = 0;
+const startedApps = new Set<MangaProductApp>();
+process.once("exit", () => {
+  for (const app of startedApps) {
+    try {
+      app.close();
+    } catch {}
+  }
+  startedApps.clear();
+});
 
 export function tempProfile(): string {
   seq += 1;
-  return mkdtempSync(path.join(os.tmpdir(), "manga-test-"));
+  return mkdtempSync(path.join(testTempRoot(), "manga-test-"));
 }
 
 export async function startApp(overrides: { useParseWorker?: boolean; profileRoot?: string; hostId?: string; options?: Partial<ProductAppOptions> } = {}) {
@@ -25,6 +35,7 @@ export async function startApp(overrides: { useParseWorker?: boolean; profileRoo
     ...overrides.options,
   });
   await app.start();
+  startedApps.add(app);
   const actor = { kind: "user" as const, id: "tester" };
   const grant = app.issueOwnerGrant(actor);
   return { app, actor, grant, profileRoot };

@@ -5,7 +5,7 @@ import { MangaError } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { applyBundle, bundleConflicts, checkBundle, collectBundle, type BundleHooks, type BundleOutcome, type ProjectBundle, type Row, type Snapshot } from "./bundle.ts";
 import { describeObject, isObjectKind } from "./objects.ts";
-import { writeExportFile } from "./export-file.ts";
+import { writeExportFile, type ExportFileHooks, type ExportFileIntent } from "./export-file.ts";
 
 /**
  * The project package (CRE-01, AT-25, AT-28): one zip that holds a project. Its manifest names the format and its version, and lists every file
@@ -65,9 +65,16 @@ export function buildProjectPackage(store: DrizzleStore, projectId: string, now 
 }
 
 /** Writes a project's package into a folder the user picked, under a name that does not overwrite anything. Only the file name comes back. */
-export function writeProjectPackage(store: DrizzleStore, projectId: string, dir: string, now?: string): { fileName: string; bytes: number; counts: Record<string, number> } {
+export function writeProjectPackage(store: DrizzleStore, projectId: string, dir: string, now?: string, hooks?: {
+  beforePublish: (intent: ExportFileIntent, counts: Record<string, number>) => void;
+  afterPublish: (intent: ExportFileIntent, counts: Record<string, number>) => void;
+}): { fileName: string; bytes: number; counts: Record<string, number> } {
   const { data, manifest } = buildProjectPackage(store, projectId, now);
-  return { ...writeExportFile(dir, manifest.projectName, PROJECT_PACKAGE_EXTENSION, data, "project"), counts: manifest.counts };
+  const fileHooks: ExportFileHooks | undefined = hooks ? {
+    beforePublish: (intent) => hooks.beforePublish(intent, manifest.counts),
+    afterPublish: (intent) => hooks.afterPublish(intent, manifest.counts),
+  } : undefined;
+  return { ...writeExportFile(dir, manifest.projectName, PROJECT_PACKAGE_EXTENSION, data, "project", fileHooks), counts: manifest.counts };
 }
 
 // ---------------------------------------------------------------------------------------------------------- reading

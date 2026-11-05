@@ -1,220 +1,171 @@
-# 阶段交付报告：依赖升级与 Agent 工程循环
+# 阶段交付报告：Agent 的待审操作与门禁提速
 
-日期：2026-11-04 至 2026-11-06。角色：B 实施与自检；A 2026-11-06 集中审查（[第 11 节](#review)）。计划见[当前阶段计划](stage-plan.md)；本报告按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射。产品验收保持 not-run；人工检查 H-80—H-87 与需重测的 H-07、H-09、H-12、H-16—H-18、H-25、H-42、H-43、H-46、H-47、H-53 在[用户待办](../../USER-ACTIONS.md#checks)。
+日期：2026-11-08。角色：B 实施、重新检查与修复。唯一计划为[当前阶段计划](stage-plan.md)。基线 `main @ fd32430`，分支 `feat/m9-next`；继续已有的一个阶段提交，保留本轮开始前的改动，最终版本在聊天交付消息中给出。未 push、未创建 PR、未合并；A 已于 2026-11-08 集中审查并收敛（[第 11 节](#a-review)），`productAcceptance` 保持 `not-run`。
+
+本次复查修复了确认与所有者执行之间的竞态、提议创建重放、导出发布与完成恢复、任务范围外的预览泄露、上下文预算下结果丢失，以及批量确认和失败提示。没有缩减计划的验收或把实现缺口改成人工检查。最终源码的正式门禁已通过，证据与复用范围见第 9 节，等待 A 复核。
 
 <a id="cleanup"></a>
 ## 1. 阶段开始的整理（C0）
 
-- A 在计划所在的提交里已做：上一阶段报告提炼后删除、登记表 `currentStage` 改为 `m6`、确认记录与需求的同步、删除 `dist/gate-package/`、87 份零散日志与构建缓存（计划 5.1）。
-- B 复核计划 5.1 的两张表：`.env.local`、`dist/design-refs/`、`dist/tools/`、`dist/samples/`、`dist/keys/`、`dist/plugins/` 原样保留；`dist/desktop/` 先用来生成 4.1 的旧版凭据 Profile（`dist/samples/legacy-e44-credentials/`，Electron 44.9.3），之后被本阶段的打包覆盖；`dist/evidence-runs/current/` 由本阶段的门禁覆盖。
-- 系统临时目录里上一阶段留下的 `manga-*` 目录：确认没有 MANGA、Electron 或 Vitest 进程在运行后删除 126 个，剩 0 个（只记数量）。
-- 以前阶段的标签：文档检查报出的只有 `tests/shell/chat-long-session.test.tsx` 里形如 `m10` 的消息编号（检查把它认成阶段标签），改为 `msg-10` 这类写法，断言不变；文档检查通过。
+- 复用 A 的阶段整理：以前的计划与报告改为固定 Git 归档链接，仍有效的结论保留在正本；登记表的当前阶段为 `m9`，计划和报告只保留这一份。文档治理检查仍校验过期文件和旧阶段标签。
+- 保留 `.env.local`、`dist/design-refs/`、`dist/tools/`、`dist/samples/`、`dist/keys/` 与已有本地分支；它们是配置、参考、工具、样本或签名材料。未读取与任务无关的配置和私钥。
+- `dist/desktop/`、`dist/plugins/` 与 `dist/evidence-runs/current/` 由最终门禁重建；[`docs/evidence/gate/`](../evidence/gate/) 只在全部通过后替换，截图检查后才入库。依赖查询的本地记录保留在被忽略的 `dist/evidence-runs/deps/`。
+- 保留用户已要求的小写 `manga` 路径、目录升级与安装行为（A-118、A-119），由本阶段全套打包、安装和位置走查重新验证。
+- 本次故意改坏选择器的超时反例留下两个合成 `manga-package-*` 现场。清理已核对其绝对路径限于系统临时目录，但执行环境自动审批拒绝了递归删除（只返回 `blocked by policy`），现场保留供诊断。随后完整包的媒体失败留下七个现场，完整包和局部包的窗口失败各留下两个；没有把这十三个既有失败现场写成已清理。正式门禁统计各次运行新增目录，旧现场不混入新增计数；反例的可公开摘要为 `timeout-check.json`。
 
 <a id="dependencies"></a>
 ## 2. 依赖盘点（D1）
 
-实施开始（2026-11-03）与门禁前（2026-11-04）各跑一次 `pnpm outdated -r`，按“满 14 天的最新精确版本”取，最小发行龄不绕过、没有写入豁免。门禁前逐个查了 npm registry 的发行时间：所有依赖都已是满 14 天的最新版本。
+2026-11-07 重新执行 `pnpm outdated -r`，并对 65 个直接依赖并行查询官方 npm registry 的 `versions` 与 `time`，全部查询成功。按当天满 14 天的稳定版本判断，不绕过发行龄；查询快照位于忽略目录，公开结论写入 [ADR-0007](../decisions/0007-technology-stack.md)。`outdated` 的非零结果表示有新版，不能写成检查失败。
 
-| 依赖 | 前 | 后 | 说明 |
-| --- | --- | --- | --- |
-| electron | 44.9.3 | 45.0.0 | W1；当天满龄的只有 45.0.0（45.1.0 在 11-10、45.2.x 更晚） |
-| @earendil-works/pi-ai | 0.85.1 | 1.3.0 | W2；1.4.0 在 2026-11-04 22:43 UTC 满龄，晚于门禁前的盘点；下次盘点取满龄的最新 1.x |
-| electron-builder（新增，开发依赖） | — | 26.18.0 | W11；26.18.1 未满龄 |
-| knip | 6.41.0 | 6.42.1 | 满龄的最新 |
-| @types/node | 24.5.2 | 24.19.2 | 留在 24.x（Electron 45 与 CI 用 Node 24） |
-| linkedom | 0.18.13 | 0.18.13 | 复试 0.18.14 失败后回退，见 ADR-0007 的例外；0.18.15 未满龄 |
-| 其余（tiptap、@xyflow/react、dockview-react、@tanstack/react-virtual、lucide-react、pdfjs-dist、onnxruntime-web、vitest、tailwindcss 等） | — | 不变 | 有新版的都不满 14 天 |
+| 依赖 | 本阶段版本 | 官方发行证据与处理 |
+| --- | --- | --- |
+| `@earendil-works/pi-ai` | 1.3.0 → 1.4.0 | [npm registry](https://registry.npmjs.org/@earendil-works%2Fpi-ai)：1.4.0 为 2026-10-21 22:43 UTC，已满龄；最新 1.5.0 为 11-02，未满龄。保留升级，双运行时契约纳入完整回归 |
+| `@tanstack/react-virtual` | 3.14.21 → 3.14.22 | [npm registry](https://registry.npmjs.org/@tanstack%2Freact-virtual)：3.14.22 为 2026-10-22 12:04 UTC，已满龄；最新 3.14.26 为 11-03，未满龄。长对话、卡片动态行高和窗口基准继续覆盖 |
+| `linkedom` | 保持 0.18.13 | [npm registry](https://registry.npmjs.org/linkedom)：满龄的 0.18.14 实际发行于 2026-10-21。此前试升时主进程打包报 `MISSING_EXPORT`（依赖 `@acemir/cssom` 的 CommonJS `parse` 导出不能识别），已回退；复查条件与保留理由见 ADR-0007。最新版 0.18.15 未满龄 |
+| Electron、dockview、Vitest、Vite、Tiptap、PDF、ONNX、其余直接依赖 | 保持现版本 | 除上述 linkedom 例外，已安装版本均为同主版本中满龄的最新；后续发行未满龄。修正了旧报告把已安装的 Vite 8.3.5、Tiptap 3.32.0、Vitest 5.0.5 写成未满龄的错误 |
+| `@types/node` | 保持 24.19.2 | 留在与 Electron/CI 相同的 Node 24 主版本；最新 26.x 不据此自动切换运行时 |
 
-**Electron 45 的破坏性变更逐条核对（计划 3.1）。** 同步的 `safeStorage` 接口废弃：凭据改用异步接口（W1），源码里只有生成旧版 Profile 的样本脚本 `scripts/samples/legacy-credentials-e44.ts` 用同步接口，`scripts/check-deps.mjs` 守护别处不用；沙箱预加载里不再有 `Buffer`、`setImmediate` 与 Node 模块：预加载没有用到；ASAR 里的文件描述符只能经 `fs`：没有直接的文件描述符用法。原生模块（better-sqlite3、sharp、@napi-rs/canvas、onnxruntime）按 Electron 45 的 ABI 重建，打包烟测通过。
-
-**pi-ai 1.x 的破坏性变更逐条核对（计划 3.1）。** 0.86 自定义提供者的输入改为 `TranscriptContext`：MANGA 不注册自定义提供者；0.99 图像模型并入 `Provider` / `Models`：只用文字模型的流接口，不受影响；1.0.3 Azure 提供者改名：不用；1.1 流函数必须返回 `AssistantMessageEventStream`：适配器按新类型消费事件；1.4 `telemetryContext` 改名、删除 `getPiUserAgent()`：不用；1.5 主入口不再转出 TypeBox：工具参数直接写 JSON Schema（`packages/model-protocol/src/pi-ai.ts`），不再导入 `Type`，所以 1.4、1.5 都能直接用。
+没有新增生产依赖。A 已查证的人工审批候选和整合路线见[计划第 3 节](stage-plan.md#31-候选)。本地功能参考索引未提供对应的工具审批实现，没有从外部工程复制代码。
 
 <a id="mapping"></a>
 ## 3. 工作包映射
 
-| 包 | 需求 / 验收 | 实现位置 | 验证证据 | 状态与限制 |
-| --- | --- | --- | --- | --- |
-| W1 Electron 45 与凭据 | NFR-03、NFR-05；AT-141 | `packages/app-core/src/credentials.ts`（唯一的读取函数、合并同时的读取、只在密文未变时写回、不可用时 `CREDENTIAL_UNAVAILABLE`）、`apps/desktop/src/main/index.ts` 的 `ElectronSafeStorageVault`、模型连接、弹幕、Bangumi 与视觉读取的六处调用、`scripts/check-deps.mjs` | `tests/runtime/credentials-async.test.ts`（AT-141）；打包观察 `credentials-async` 与重启（Electron 44 的产物保存的 Profile） | 已实现 |
-| W2 pi-ai 1.x | MODEL-05、NFR-05；AT-142 | `packages/model-protocol/src/pi-ai.ts`、`openai-http.ts`、`mock-server.ts` | `tests/agent/runtime-contract.test.ts`（AT-142，两个协议 × 两个运行时） | 已实现 |
-| W3 长对话 | AGENT-06、NFR-01；AT-143 | `apps/desktop/src/renderer/components/chat/messages.tsx`（虚拟列表、锚点、自动载入、跳转机制）、`hooks/use-session-stream.ts`（`from` 刷新、一次一个更早页的请求）、`packages/app-core/src/ops/stream.ts`（`from`，上限 5000） | `tests/shell/chat-long-session.test.tsx`（AT-143）、`tests/library/operations.test.ts`；打包观察 `chat-long-session`；基准 `chatOpen`、`chatInput`、`chatLateFrame`、`chatOlderPage` | 已实现；“从笔记跳到一条消息”的产品入口还没有，见第 10 节 |
-| W4 图像的存放与保留 | CTX-02、DATA-01；AT-144 | `packages/app-core/src/agent-media.ts`、`commands/agent.ts`、`commands/agent-run.ts`、`agent-settings.ts`、`packages/storage-drizzle/src/migrate-agent-media.ts`、`store.ts`、`sql.ts`（v13）、`apps/desktop/src/renderer/components/trace-dialog.tsx`（图像与过期占位）、`pages/settings/agent-page.tsx` | `tests/agent/agent-media.test.ts`、`tests/library/schema-v13-migration.test.ts`（AT-144）、`tests/agent/trace-ui.test.tsx`；打包观察 `agent-media-retain`、`migrate-v13`、重启与 `migrate-v13-newer`；基准 `freeze4mb` | 已实现 |
-| W5 PDF 与视频输入 | MODEL-05、AGENT-07；AT-145、AT-146 | `packages/app-core/src/agent-native-input.ts`、`agent-materials.ts`、`agent-trace.ts`（发送记录）、`video/service.ts`（`clipBytes`）、`packages/model-protocol/src/http.ts`、`openai-http.ts`、`packages/contracts/src/inputs-models.ts`（`limits`）、`connection-dialog.tsx`、`lib/model-profile.ts` | `tests/agent/agent-media-native.test.ts`（AT-145、AT-146）、`tests/agent/models-page.test.tsx`、`connection-dialog.test.tsx`；打包观察 `agent-media-native`；基准 `clip60` | 已实现 |
-| W6 工作区余项 | UI-09；AT-147 | `apps/desktop/src/renderer/workspace/controller.ts`（只给没有保存过布局的上下文放默认标签）、`openers.ts`（`libraryTabFor`）、`apps/desktop/src/main/smoke/bench-workspace.ts`（四宫格用项目的文稿页） | `tests/shell/sidebar-ui.test.tsx`（AT-147）、`tests/shell/workspace-controller.test.ts`；打包观察 `workspace-last-tab-empty`、`library-tab-single`；基准 `quadLateFrame`、`quadMemory` | 已实现；第 1 项（最后一个标签）的缺陷由新的窗口观察发现：保存过、但所有标签都已关掉的上下文在重新载入时又被放上默认标签，现在只有从没保存过的上下文才放 |
-| W7 门禁工程 | LOOP-26、LOOP-13、LOOP-27 | `scripts/stage/temp-dirs.mjs`、`package.mjs`、`bench.mjs`、`apps/desktop/src/main/smoke/power-throttling.ts`、`hold-walk.ts`、`frame-walk.ts`、`tests/shell/search-box-ui.test.tsx` | 证据里的 `tempDirs`；第 6、7 节 | 已实现 |
-| W8 走查、测试与基准 | — | `apps/desktop/src/main/smoke/{loop-walk,loop-media,stage-walks,bench-chat}.ts`、`scripts/stage/bench-agent-media.mjs`、`gate.json` | 第 8、9 节 | 已实现 |
-| W9 文档 | — | 需求、路线图、领域模型、数据与安全、Agent 与插件协议、交互设计、质量门禁、仓库地图、ADR-0007、执行状态、用户待办 | 文档检查 | 已实现 |
-| W10 数据的存放位置 | DATA-04；AT-148、AT-149、AT-51 | `packages/app-core/src/locations.ts`（两个根、系统登记的文件夹、新指针、旧位置的升级）、`library-locations.ts`、`commands/settings.ts`（`settings.cleanLegacyLocation`）、`apps/desktop/src/main/index.ts`（通道写进产物、崩溃转储）、`pages/settings/location-groups.tsx`、`general-page.tsx` | `tests/runtime/data-locations.test.ts`（AT-148、AT-149）、`tests/shell/data-locations-ui.test.tsx`；打包观察 `data-locations-fresh`、`data-locations-upgrade` | 已实现；见第 5 节 |
-| W11 安装包 | DATA-06；AT-150 | `scripts/stage/installer-lib.mjs`（NSIS 配置、默认目录）、`installer.mjs`（真实安装与卸载）、`apps/desktop/forge.config.ts`（通道） | `tests/runtime/installer-config.test.ts`（AT-150）；`node scripts/stage.mjs installer` | 已实现；不签名、不发布 |
+| 包 | 需求 / 验收 | 实现位置 | 实际验证与边界 |
+| --- | --- | --- | --- |
+| C0 阶段整理 | A-45、A-56、A-57 | 文档登记表、阶段计划/报告、导航 | 文档治理与公开内容检查；反例现场因执行环境拒绝清理而保留 |
+| D1 依赖盘点 | A-35、NFR-05 | 两个依赖清单、锁文件、ADR-0007 | 官方发行时间；双 runtime、长会话、完整包回归 |
+| W1 存放与 schema v14 | DATA-01；AT-156 | `packages/storage-drizzle/src/sql.ts`、`store.ts`；`packages/app-core/src/conversations.ts`、`creative/projects.ts`、`creative/proposals.ts` | `tests/library/schema-v14-migration.test.ts` 的 4 个场景涵盖备份、数据不变、实际退出、写失败、回滚重试、第二次打开与较新资料拒绝；`migrate-v14` 窗口观察 |
+| W2 五种提议 | AGENT-01、03；AT-151、153、154、85 | `packages/contracts/src/inputs-proposals.ts`；`commands/creative.ts`、`creative/proposals.ts`、`creative/agent-access.ts` | `proposals.test.ts`、`creative-tools.test.ts`、`proposal-integrity.test.ts`；提出不改对象、归属限制、创建重放、预览边界 |
+| W3 决定、执行与恢复 | AGENT-01、03、DATA-01；AT-151、152 | `creative/proposals.ts`、`commands/creative.ts`、`product-app.ts`、`commands/agent.ts`、`ops/stream.ts`；项目包与粗剪导出服务 | 同步事务、实际崩溃、成功回执与仅开始请求、文件发布恢复、取消/失败、预算延后通知；详见第 4 节 |
+| W4 对话卡片 | AGENT-03、UI-02；AT-151、154 | `apps/desktop/src/renderer/components/chat/messages.tsx`、`hooks/use-session-stream.ts`、中文文案与样式 | `tests/shell/proposals-ui.test.tsx`；批量清单固定、错误提示、目录取消、导出进度/取消；窗口与截图 |
+| W5 按任务能力 | AGENT-04、05；AT-155、11、13、44、129 | `contracts/src/inputs.ts`；`commands/access.ts`、`commands/creative.ts`、`commands/agent.ts`、`product-app.ts`；`workspace/agent.tsx`、`components/chat/composer.tsx` | 原授权、模块、追踪与空范围测试全部保留并扩充；假 Embedding 与回环网页，重试沿用且不放宽范围 |
+| W6 条件等待 | NFR-01；LOOP-29 | `apps/desktop/src/main/smoke/driver.ts` 与走查文件；`scripts/stage/lib.mjs`、`package.mjs`、`report.mjs`、`gate.json` | helper 超时正反例、真实打包反例、未注明原因的固定等待为 0；记录并强制 `window-walk ≤ 240 s` |
+| W7 测试临时目录 | LOOP-28 | `tests/helpers/global-temp.ts`、`app.ts`、`plugin-fixtures.ts`；`scripts/stage/test.mjs`、`report.mjs` | 每轮独立根、成功清理、失败保留；新尝试立即作废旧通过结果；缺失计数和残留反例 |
+| W8 测试、走查与基准 | AT-151—156 与既有回归 | `smoke/proposals-walk.ts`、`scripts/stage/bench-creative.mjs`、`gate.json`、新增/扩充测试 | 必需用例、所有既有窗口观察与 60 项性能目标保留；最终结果见第 9 节 |
+| W9 文档与门禁 | 受影响正本 | 需求、验收、设计、开发规则、ADR、状态、用户待办、证据 | 修正与代码不符的字段、路径与状态说明；A 复核待执行，产品验收 `not-run` |
 
-<a id="stick-to-bottom"></a>
-## 4. 贴底的路线试验（W3）
+<a id="proposals"></a>
+## 4. 本次复查的问题、修复与依据（W1—W4）
 
-按计划 4.3 先试“`@tanstack/react-virtual` 的虚拟列表 + use-stick-to-bottom 贴底”。两者共用 use-stick-to-bottom 的滚动容器，虚拟列表的 `scrollMargin` 取列表在容器里的偏移。
+以下是 B 已修复、交 A 核实的稳定编号，不宣称 A 已关闭。
 
-**窗口里发现的两处问题与处理**（打包观察 `chat-long-session`，5000 条消息）：
-
-| 现象 | 原因 | 处理 |
+| 编号 / 严重度 | 触发与原问题 | 修复与定向证据 |
 | --- | --- | --- |
-| 打开后第一屏不在最底下；回答流式输出时，12 次取样里有 9 次离底部几十到几百像素 | `resize="smooth"`：内容变高时 use-stick-to-bottom 用弹簧动画追到底部。虚拟列表在行量出实际高度后改总高，打开时还会先载入一页更早的消息，动画一直落后 | 改为 `resize="instant"`，内容变高时直接到底 |
-| 改成 `instant` 后，回答期间 12 次取样仍有 1 次离底部 157 px | use-stick-to-bottom 的 ResizeObserver 挂在被量行的祖先上，按 ResizeObserver 的规则要到下一帧才收到，收到后滚动又要再等一帧（`wait: true`）；新的一段字在这一帧画出时列表还没到底 | 列表在每次提交后的布局阶段补一步：上一次滚动停在最底下、且 use-stick-to-bottom 没有因为用户上滚而解除贴底时，把滚动位置放回底部，画出前就到位。用户上滚（滚轮立即解除）与回到记住的位置（滚动事件记下“不在底部”）不受影响 |
-| 基准里从另一本书切回 5000 条的对话时，列表停在最早载入的一页 | 同一个列表换了会话，内容先变短，浏览器把滚动位置往上压，补的那一步把这当成了用户上滚 | 只有内容没有变短时，滚动位置变高才算用户上滚；换会话时重新从“贴底”开始（记住的位置仍由滚动记忆放回）。新增列表用例 |
+| B-01 / P1 | 确认抢占之后、所有者处理函数运行之前，用户仍可能修改目标；仅在抢占时核对会按旧预览删掉新内容。效果与回执分开保存也会留下无法判断的退出窗口 | 在所有者处理函数中重新核对，同步删除、改名与粗剪编辑的效果和成功回执在同一 SQLite 事务里提交。实际子进程分别在抢占后、效果写入后但事务未提交、命令已提交后退出；恢复与只执行一次均通过 |
+| B-02 / P1 | 已添加的新引用与项目子对象改动未必改变目标行，旧删除/导出预览仍可执行；完整卡片返回模型会泄露任务范围外的引用标题或原始失败诊断 | 删除修订附加反向引用摘要（含项目材料），项目包修订附加实际导出内容/快照摘要；工具只返回 `{proposalId,status,summary}`，完整卡片限所有者；新引用、文稿修改、私人笔记隔离及超长含路径诊断的分类通知测试通过 |
+| B-03 / P1 | 提议是直接插入而创建回执依赖后续网关提交，重放或重启可能多建卡片；只有 `command_requests` 的退出记录不能证明对象已修改 | 提议与最小创建回执同事务保存，重放仍返回同一编号；恢复要求命令一致且成功的 `operations` 回执，未完成请求清除后回到待确认；创建重放/重启与仅开始请求测试通过 |
+| B-04 / P1 | 项目包已经发布但回执未写时重启会再导出一份；粗剪登记任务就把卡片标为已执行，随后取消或 FFmpeg 失败仍被报告为成功 | 项目包采用唯一临时文件与不可覆盖发布，发布前记录大小/哈希/目标，发布后退出可核对成品补回执；粗剪任务关联与回执一起登记，按持久任务的真正完成状态更新卡片。发布前/后、任务登记时的实际崩溃与导出取消/失败测试通过 |
+| B-05 / P1 | 下一轮先消费所有决定，再裁剪材料上下文，预算不足会把未发送结果标成已汇报 | 只消费实际预算可容纳的结果，放在材料前部，在创建运行的事务里标记 `reportedRunId`；余项保留后续轮次。小预算、多结果、长项目说明与重试冻结测试覆盖 |
+| B-06 / P2 | 批量确认弹窗打开后，新卡片可能被加入执行；选择器或命令失败静默，粗剪兼容性代码直接显示英文 | 批量清单固定为弹窗展示时的卡片，每条失败可见且继续其他条；目录取消保留待确认；进度和取消入口按真实任务状态展示，复用粗剪的中文问题说明。新增 UI 场景通过 |
+| B-07 / P2 | 门禁把缺失临时计数当作 0，没有强制窗口用时；新测试尝试早退时旧通过结果仍可被复用 | 新尝试先写 `running` 并删除旧用例结果，缺 Vitest/缺报告记失败；临时计数必须实际存在，窗口用时必须有效、与阶段样本相同且不超过 240 秒。22 个脚本自测包括残留、缺失计数、陈旧结果与用时反例 |
+| B-08 / P2 | 原报告引用不存在的服务/命令/helper，虚构表字段、动作、撤销与回执键，部分依赖日期错误 | 按实际源码重写本报告并同步设计、状态、规则与用户待办；`knip.json` 登记真实崩溃子进程入口；文档与公开检查不替代产品验收 |
+| B-09 / P2 | 媒体走查等到虚拟行后，在另一次渲染脚本中无保护地重新查找并点击；行在两次调用间移除会抛错，Electron 原来只返回通用异常 | `loop-media.ts` 复用 `clickTestId`，在同一查找中等待并点击，超时仍报失败；`common.ts` 保留渲染器错误和失败脚本，监听器随调用清除。原完整包的具体抛错行未重现，不把推测写成根因；诊断构建的两次局部走查均通过，修复构建和三次完整包结果见第 9 节 |
+| B-10 / P2 | 退出全屏时，浏览器已退出、原生窗口仍在退出的短暂状态会触发再次点击而重新进入全屏；弹幕走查仅等视口和图层相对父容器一致，分屏面板还未布局时会在旧尺寸上读数与截图 | `waitWindowFullscreen` 等原生事件，`exitScreenFullscreen` 只在浏览器未退出时才用按钮退回，所有相关媒体/覆盖层走查复用；真实点击等命中并重读坐标，弹幕尺寸等待同时核对面板与当前容器/视口。新增延迟退出与超时测试，辅助件 7/7；重建包 `media` 通过、`window-walk` 85/85，保留全部宽窗口、像素、截图与全屏断言 |
+| B-11 / P2 | 基准仍要求 Agent 的 `proposal.delete` 返回完整卡片，与只返回精简回执的安全契约不一致，导致基准在 597 秒失败 | 基准核对 `{proposalId,status,summary}`，再通过宿主 `app.proposals.getCard()` 验证预览与反向引用。单独重跑 bench 通过，提出/确认 p95 为 1.63/6.93 ms；本轮临时目录清理 7 个、剩余 0 个 |
 
-**结论**：两者没有争夺滚动位置（虚拟列表只在“不在底部、变化的行在视口之上”时修正位置），保留 use-stick-to-bottom 管“是否贴底”的判断、滚动到底的按钮与用户上滚的识别，只补上面这一步，不改为整套自己贴底。贴底的判断方式与门槛没有改；窗口观察每 150 ms 取一次与底部的距离，要求全部 ≤ 8 px。
+### 4.1 实际存储与生命周期
 
-<a id="locations"></a>
-## 5. 位置迁移与安装、卸载的验证（W10、W11）
+`PRODUCT_SCHEMA_VERSION = 14`。提议表为 `agent_proposals(id, session_id, run_id, project_id, kind, command_id, input_json, preview_json, target_json, reason, status, result_json, created_at, decided_at)`，索引为 `agent_proposals_session_status(session_id, status, created_at)`。没有另外的消息/工具事件列、修订列、布尔 `unreported` 列或三个虚构索引；会话流按 `run_id` 把提议挂到助手消息。
 
-全部在系统临时目录与合成 Profile 上进行，没有碰本机真实的 Profile 和真实安装。
+`target_json` 是 `{kind,targetId,title,revision}`。白板/导图/粗剪的摘要包括对象行、内容与历史操作状态；文稿包括实际版本、正文与标题；项目包括当前行。删除附加反向引用，项目导出附加 `collectBundle` 的内容与快照（固定导出时间用于比较）。列表刷新和确认都核对修订，最后执行点再核对一次。
 
-**位置迁移**：打包烟测 `data-locations-fresh-*` 与 `data-locations-upgrade`，在最终源码上连续三次 `stage package` 都通过。
+状态为 `pending → applying → applied / failed`、`pending → rejected / stale`；确认后发现变化可从 `applying` 成为 `stale`。同一对话最多 20 条待确认。删除对话或项目连同提议清除；完整备份保留提议，可移植项目/资料包不包含提议。实际所有者命令使用提议编号作为幂等键，没有 `proposal:` 前缀。
 
-| 检查 | 结果（最后一次） |
+### 4.2 预览与恢复
+
+| 提议 | 已实现预览与执行 |
 | --- | --- |
-| 两个频道全新启动 | 应用数据在 `LOCALAPPDATA` 之下，文稿在“文档”、下载在“下载”；设置页分三组显示；没有写到其他地方的文件（0 个） |
-| 中断 | 复制过程中让进程退出（`MANGA_UPGRADE_CRASH_AT=upgrade-copy`，退出码 99）：没有写新指针，旧根也没有标记 |
-| 下一次启动继续 | 搬了应用数据（61 个文件），复制后校验再切换；作品、项目、附件、资源、导出、下载 6 个分区记成覆盖，留在原处；笔记文件与截图仍从原位置打开；旧根留下 `RELOCATED.json`，旧位置的文件一个都没少（旧文件不自动删除） |
-| 再次启动 | 不再搬动 |
-| 旧版本按旧指针启动 | 跟着标记打开新位置（1.5 s）。这一步用本版本模拟旧指针，见第 10 节 |
+| 删除 | 白板卡片/连线、导图节点、文稿版本/字数、粗剪片段/时长；引用来源标题与总数（最多展开 5 处）；明确不能撤销 |
+| 改名 | 原名、新名、同名提醒；调用既有 rename 或 `project.update`，可再次改名，不虚构独立撤销记录 |
+| 项目包 | 实际对象/材料计数、估计大小与建议 `.manga-project.zip` 文件名；没有 `includeMedia` 开关。确认先由宿主选择目录，取消不调用 apply；输出与所有者直接导出相同 |
+| 粗剪编辑 | `add/update/move/remove`，1—200 步；内存试跑，每步说明与前后片段数/时长。确认调用 `roughcut.edit`，`Agent：` 标签的一步记录保存在 `creative_ops`，一次撤销可整步复原 |
+| 粗剪导出 | 原有 `roughcut.plan` 的请求/实际区间、关键帧偏移、模式与兼容性；任务登记后保持执行中，校验成品后成功，取消/失败/中断有明确失败原因 |
 
-**v13 迁移**（同一组烟测）：合成 v12 库里有 300 次运行、340 张图像，去重后 201 份，迁移耗时 16 ms；迁移前后图像的哈希集合相等，运行快照里不再内嵌图像；一次刚失败的旧运行在迁移后重试成功。schema 为 14 的库被本版本拒绝打开，库本身没有被改动。
+同步操作按成功 `operations` 回执恢复；仅开始请求返回待确认。项目包发布意图仅限主进程（公开卡片移除 `_exportIntent`），重启核对成品的文件类型、大小与 SHA-256，恢复时只处理本次命名的临时文件。粗剪按任务的持久完成状态恢复，不能用“非空文件”替代其输出校验。已失败的提议不会自动重试。
 
-**安装与卸载**：`stage installer`，21 步，在最终打包产物上通过。
-- 两个频道各生成一个不签名的按用户 NSIS 安装包（约 202 MB），不需要管理员权限，装到所选的临时文件夹；两个频道可以同时安装。
-- 首次启动后，数据、文稿、下载都在对应位置；漫游配置文件（roaming）里没有写入任何东西。
-- 程序正在运行时可以覆盖安装。
-- 卸载后，开始菜单项、桌面快捷方式、注册表卸载项与按用户的注册表键都已清掉；用户的数据与文件保留。
-- 结束时残留的注册表卸载项与快捷方式数量都是 0。
-- 安装包没有发布。
+`commands/agent.ts` 在本轮实际材料预算下准备决定摘要，置于其他材料之前，和运行一起提交 `reportedRunId`；不能容纳的结果不消费。模型收到简短中文失败类别，原始所有者诊断不进入通知，避免本机路径泄露与超长结果阻塞。Agent 直接删除/改名/导出/粗剪编辑仍拒绝，内部误发所有者 grant 也不能令 Agent 越权。
 
-<a id="loop-13"></a>
-## 6. 节能降速的评估（LOOP-13）
+### 4.3 schema v14
 
-计划 4.7 要比较三种办法：（1）Chromium 开关；（2）对基准的 Electron 进程调用 `SetProcessInformation(ProcessPowerThrottling)`，关闭执行速度节流；（3）什么都不做。
+`store.ts` 沿用现有迁移：检查 `schema_meta.schemaVersion`，较新版本以 `API_INCOMPATIBLE` 拒绝；迁移前 checkpoint 并生成 `manga.sqlite.premigrate-v13`（调用追踪 `agent_requests` 不进入备份），DDL 与版本发布在同一事务。退出或写失败回滚，再启动可继续；第二次打开不再迁移。4 个 v14 测试场景覆盖多个断言，不写成 8 个测试。
 
-- **办法（1）**：基准窗口本来就带有 Chromium 的后台节流开关。下表 C 那次就带着它跑，导图折叠与白板打开仍接近门槛，所以单靠它不够。
-- **办法（2）**：通过 PowerShell `Add-Type` 调用，没有加依赖，不需要 koffi。实现在 `apps/desktop/src/main/smoke/power-throttling.ts`：只有 `bench*` 阶段、并且 `MANGA_BENCH_NO_THROTTLE=1` 时才会执行；它每 2 秒取一次本应用新出现的进程，跑完把处理过的进程数写进日志。产品本身从不调用它。
+<a id="opt-in"></a>
+## 5. 按任务加上的能力（W5）
 
-同一份源码、同一时段，用完整基准测的结果如下（ms；“导图折叠”是 1000 个节点折叠展开的 p95，门槛 100；“EPUB 末尾”是 30 MiB EPUB 末尾，门槛 2000）：
+`allowCommands` 的枚举与上限为 `metadata.search / semantic.search / webpage.fetch`、至多 3 项。本轮临时 grant 和快照冻结授权，重试沿用，发送成功清空输入框选择。语义项只在模块开启且有 Embedding 连接时显示；网页项只在研究模块开启、当前上下文是项目时显示。关闭模块或未勾选时，工具清单与命令层都拒绝。
 
-| 运行 | 会话 | 节流 | 导图折叠 p95 | 白板打开 | EPUB 末尾 | 扫描事件循环 p99 |
-| --- | --- | --- | --- | --- | --- | --- |
-| A | 工作站锁定 | 交给 Windows | 95.1 | 81.9 | 746 | 99.6 |
-| C | 解锁、启动它的应用在前台 | 交给 Windows | 92.4 | 80.0 | 728 | 103.2 |
-| B | 解锁、启动它的应用在前台 | 基准进程关闭 | 43.1 | 53.0 | 720 | 101.0 |
+`semantic.search` 仍限制当前允许资源、笔记、录音、摘录与防剧透边界，`webpage.fetch` 的目标项目由任务提供。验证使用假 Embedding 与本机回环网页，未调用真实模型、Embedding、网页、Bangumi 或其他产品服务。真实配置与手感在[用户待办](../../USER-ACTIONS.md#checks)保持未执行。
 
-**结论**：办法（2）有效。窗口这边接近门槛的两项（导图折叠、白板打开）降到约一半；EPUB 末尾三次都远低于门槛，几乎不受影响。所以 `scripts/stage/bench.mjs` 默认设置 `MANGA_BENCH_NO_THROTTLE=1`，只作用于基准自己的进程，`bench.json` 的 `records.powerThrottling` 记录当次的设置；设为 `0` 时交给 Windows 管理，用于对照。门槛和测量方法都没有改。
+<a id="w6-waits"></a>
+## 6. 条件等待与计时（W6）
 
-**与计划的偏差**：计划要求前台、后台各跑 3 次完整基准。本次只跑了上表 3 次：其中一段时间工作站处于锁定状态，那段数据（A）不能当作“后台”对照；而且在这台已经长时间运行的机器上，每次完整基准都要很久。
+实际 helper 是 `smoke/driver.ts`：复用 `waitUntil`、`waitForTestId`，补充 `waitText`、`waitFrames`、`waitDrawn`、`waitWindowFullscreen`；没有 `smoke/helpers.ts` 或报告原列出的 selector helper。条件超时返回 false，由走查保留的业务断言记失败。UI 等待改为属性、文本、元素是否绘制、布局和原生窗口完成；保留的 `sleep` 仅限真实按住、播放/录音、计时器/动画窗口、内存/帧采样或轮询节流，每处有 `// real time:` 原因。
 
-**服务层的数字也受节流影响**：5000 个文件的扫描、调用追踪开销等服务层数字，是在 `stage bench` 自己的 Node 进程里测的，前面那步不覆盖它。最终门禁的前几次完整基准里，扫描吞吐约 72 文件/秒（上一阶段 207—214），事件循环 p99 为 102—105 ms，调用追踪开销 p95 为 9.7—10.2 ms（上一阶段 3.1），慢了约 3 倍，与 LOOP-13 记录的节能降速幅度一致。上一阶段的提交在同一时段也测得这么慢，起初我把它归为机器长时间运行后的状态。随后在同一时段、同一个 Node 进程里只测扫描，并切换节流设置：交给 Windows 时为 72.4 文件/秒、p99 101.8 ms；关闭节流后为 180.1 文件/秒、p99 37.8 ms。现在 `stage bench` 也为自己的进程关闭节流（`scripts/stage/power-throttling.mjs`），`records.powerThrottling` 分别记录进程与窗口两边的结果。最终基准的结果见[第 9 节](#gate)。
+- `findUncommentedSmokeSleeps` 接入 `verify`，未注明原因的调用必须为 0；自测可抓出故意的无注释等待。
+- `tests/package/smoke-isolation.test.ts` 实际执行 helper，缺失 selector 超时为 false，可匹配表达式为 true。
+- 2026-11-07 临时把 `runMigratedSmoke` 的项目标签条件改为不存在的 `nonexistent-spot-check-tab`，重建后只运行 `workspace-migrated`。烟测超时并失败，唯一问题为 `the project tab did not mount in the active context host`；原选择器与后续所有断言已恢复。可公开反例摘要为 `timeout-check.json`。
+- `package.json.phaseTimings` 记录实际各阶段秒数，`windowWalk.seconds` 必须与 `phaseTimings["window-walk"]` 一致、有效且 `≤ 240`；缺失、负数、不一致和超限都会被报告拒绝。
+- 模型弹窗先滚动到“模型能力”，等待三个上限输入框全部在 modal 可视区后拍照；正式包产生最终截图。
+- 第一次跑到打包的正式门禁中 `loop-media` 返回 Electron 通用渲染异常，提议与迁移观察都通过。补充诊断的同一构建两次只跑 `loop`，12 项观察均通过，原具体抛错行未复现。代码检查同时修复了虚拟行查找与点击分离的竞态；没有删除媒体投递、调用记录、过期重提取和源变化拒绝断言。局部通过不写为完整包证据。
+- 后续完整包发现 `danmaku-layer` 的全屏失败与 `danmaku-window-top` 的旧几何读数；修复全屏往返后，局部包再现了窗口已到 `1500×520`、内部面板却仍保持旧尺寸的情况。Dockview 的 `ResizeObserver` 在下一帧布局，图层与旧父容器一致不能证明布局完成。补齐面板条件后，重建包的 `window-walk` 85 项观察全部通过。真实点击必须命中当前元素；原生退出超时和面板未布局均明确失败，不通过扩大容差或删除断言修复。
 
-<a id="loop-27"></a>
-## 7. 三条观察的判断方式（LOOP-27）
+<a id="w7-tempdirs"></a>
+## 7. 测试临时目录与门禁结果（W7）
 
-| 观察 | 以前 | 现在 |
-| --- | --- | --- |
-| `hold-rate-hint-only` | 脚本这边按住按键后用自己的时钟等待（按住时长 + 150 ms），再看页面上有没有进入临时倍速 | 页面记下按键与倍速变化的时刻（`performance.now()`，`window.__holdClock`），按页面时间判断：按住 900 ms 内只出提示、不进入临时倍速，松开后 300 ms 内提示消失；脚本的等待（最多 4 s）只用来等结果出现。记录 `judged: "page clock"` |
-| `hold-rate-recovers` | 同上 | 进入临时倍速在按下后 450 ms 内、松开后恢复原倍速在 600 ms 内，都按页面时间判断，记下实际的时刻 |
-| `frame-window-controls` | 悬停后直接取色 | 取色前确认窗口有焦点、指针命中按钮、按钮处于 `:hover`；不满足时重新聚焦重做一次，记下 `hoverRetries` |
+全局辅助件实际使用 `MANGA_TEST_TMP_ROOT`，并给 worker/子进程设置同根的 `TMP/TEMP/TMPDIR`；`app.ts` 与 `plugin-fixtures.ts` 经 `testTempRoot()` 建目录。`stage test` 给每次尝试一个独立 `manga-vitest-*` 根，global setup 与 JSON reporter 都放在里面。Vitest、脚本自测和必需用例都通过后才删该根，失败保留合成 Profile 与报告用于定位。
 
-按住时长、门槛与取色的判定都没有改。`tests/shell/search-box-ui.test.tsx`：先在测试里把按键监听的注册推迟 300 ms 复现了“找不到 `search-box`”，再把 `openBox` 改为等搜索框出现、只在没出现时再按一次 `Ctrl+K`；在放慢的环境里通过后去掉了复现代码，14 条用例通过，断言不变。
+新尝试开始先将 `test-run.json` 写为 `running` 并删除旧 `cases.json`；Vitest 缺失或没生成报告不能复用旧通过结果。前后实际统计系统临时目录的 `manga-*`，写 `{before,after,removed,left,prefixes}`；`left` 是本轮新增而未清理的目录数，必须为 0。报告拒绝缺失计数和残留。既有故意失败现场在 `before/after` 中如实保留，不写成已清理。
 
-<a id="walks"></a>
-## 8. 走查与测试的迁移
+<a id="migration-map"></a>
+## 8. 测试与走查的覆盖（W8）
 
-断言不减。改写与替代：
+既有直接所有者命令拒绝、metadata 临时授权、模块停用、任务范围、追踪、迁移回滚、虚拟列表/贴底与全部窗口业务断言保留。新增五工具与两个 opt-in 的断言补在现有文件，没有用提议测试替代原安全测试。
 
-| 原来 | 现在 | 替代的断言 |
-| --- | --- | --- |
-| `measurePaneBench` 数页面里的 `bubble-note-*` 节点作为“已载入的消息数” | 读虚拟列表的 `data-count` | 列表只画看得见的行，节点数不再等于载入数；“载入 ≥ 1000 条”的断言照旧，改由列表自己报的数目判断。页面节点数另由 `chat-long-session` 断言不超过 60 |
-| 四宫格基准的第四栏是一篇笔记标签（`openNote`、`ids.note`） | 项目的文稿页（`openDraft`、`ids.draft`，在项目上下文里） | “四栏都画出”“晚到帧 ≤ 2 %”“内存增量 ≤ 600 MiB”的断言不变 |
-| v7—v12 迁移用例断言 `PRODUCT_SCHEMA_VERSION` 为 12、迁移到 12 | 断言为 13、迁移到 13 | 各自的转换断言不变；v12 → v13 另有 `schema-v13-migration.test.ts` |
-| 模型档案的默认值 | 多出 `fileMiB`、`videoMiB`、`videoSeconds` | 原有字段的断言不变，新增上限的校验断言 |
-| “设置 › 智能体”的用例宿主只有 `limits` 与 `trace` | 加 `media` | 原有断言不变，新增保留天数的用例 |
-| 命令注册快照 | 加 `settings.cleanLegacyLocation` | 快照比较不变 |
-| `search-box-ui` 的 `openBox` 只按一次 `Ctrl+K` | 等搜索框出现，没出现时再按 | 14 条用例的断言不变 |
-| 同步的 `CredentialVault` 与内联的 `FrozenImage.base64` | 异步接口与哈希引用 | 原有凭据与冻结图像的用例按新接口调用（`await`），断言不变；新增写回、并发、v13 迁移的用例 |
+新增 `tests/agent/proposal-integrity.test.ts` 的 14 个场景和 `tests/helpers/proposal-crash-child.ts` 实际验证执行竞态、任务外预览隔离、创建重放/重启、引用/导出依赖、三个同步退出点、两个文件发布退出点、粗剪任务登记退出、取消/失败与预算延期结果。子进程确实退出 99 后重新打开合成资料，不只手改提议状态。`knip.json` 登记此独立入口。
 
-新增的走查（`loop` 阶段、`credentials-async`、`migrate-v13`、`data-locations-*`）与它们核对的内容见[质量门禁](../dev-rules/quality-gates.md#2-阶段证据入口)。
+正式门禁仍要求 AT-151—156 与全部既有必需用例，7 条新增窗口观察（删除改名、失效一次、粗剪、项目包、重启、按次授权与迁移）及全部既有观察；提议提出/确认两个性能指标和 v14 迁移记录来自实际样本。定向验证已通过：先前 6 个受影响文件 81/81，随后竞态与 UI 回归 24/24，再补粗剪登记退出后 integrity 文件 14/14；最终全量结果以第 9 节为准。
 
 <a id="gate"></a>
-## 9. 门禁与基准
+## 9. 最终门禁与源码指纹（W8、W9）
 
-最终源码上的门禁由 A 在审查时（2026-11-06）用 `node scripts/stage.mjs gate` 跑完（Windows 开发机，Node 26.12.1，不是基准参考机；第 11 节）。整套用时约 51 分钟：verify 24 s、test 69 s（同一组输入上已通过，这次沿用）、package 699 s、installer 150 s、bench 769 s、第 2、3 次 package 701 s 与 703 s、report。
+状态：最终源码的 `node scripts/stage.mjs gate` passed。依次执行 verify（不重复跑 Vitest）→ test → package → installer → bench → package 至同指纹连续 3 次 → report；中途失败先修复，按各步骤的依赖指纹复用仍有效的结果。
 
-| 检查 | 结果 |
-| --- | --- |
-| `node scripts/verify.mjs` | passed（最终源码，审查的文档改动之后整套再跑一次）：类型检查、knip、文档检查、发布检查、依赖边界与全部 Vitest 用例 |
-| `node scripts/stage.mjs test` | passed：必需用例 184/184；Vitest 2818 个用例，2808 passed、10 skipped（默认关闭的真实服务与真实样本探针） |
-| `node scripts/stage.mjs package` | 连续三次 passed（`passStreak` 3）：Electron 45.0.0 未签名本地包，25 个烟测阶段，117 个窗口观察全部通过；临时目录删除 26 个、剩 0 个 |
-| `node scripts/stage.mjs installer` | passed（见第 5 节） |
-| `node scripts/stage.mjs bench` | passed：58 项门槛全部在目标内；基准自己的进程与窗口都关闭了节能降速（`records.powerThrottling`） |
-| `node scripts/stage.mjs report` | passed；`productAcceptance` 恒为 not-run |
+本次第一次正式 gate 在公开内容检查阶段检出了新增诊断测试中的写死合成盘符路径（`machine-path`），尚未运行测试、包或基准。已改为由 `tempProfile()` 生成同样的隔离路径，泄露与预算断言不变，再运行正式 gate；未豁免公开检查。
 
-与本阶段相关或靠近门槛的数字（ms，门槛在括号里）：对话 5000 条打开 p95 56.7（300）、输入 3.2（50）、连续滚动晚到帧 0 %（2 %）、翻出更早一页 24.2（150）；截取 60 s 片段 131.5（2000）；冻结 4 MB 图像 28.7（200）；导图 1000 个节点折叠 p95 43.7（100）、白板打开 36.1（1500）、30 MiB EPUB 末尾 712.4（2000）、扫描期间事件循环 p99 40.2（100）、调用追踪开销 p95 2.6（10）、笔记文件写入 3.5（25）。记录项：扫描吞吐 164—167 文件/秒；v12 → v13 迁移（300 次运行、340 张图像去重为 201 份）16 ms，数据库 3.5 MiB → 2.5 MiB；从旧位置升级复制 501 MiB（51 个文件）1.5 s。
+随后 gate 的 verify 通过（24 秒），全量测试通过（94 秒，2855 项：2845 通过、10 跳过、0 失败），打包在 `loop-media` 失败（265 秒）并停止，未继续安装与基准。这些通过结果在烟测源码修复后按指纹过期，最终证据重新生成；没有把失败的完整包算进连续通过次数。
 
-B 交付时的情况：最终源码上 verify、test、连续三次 package 与 installer 已通过；bench 与 report 那一轮被用户叫停，最后一次跑完的基准（只比最终源码少 BT 基准删除临时目录的几行）58 项全部通过。之前几轮的失败：网络 504 一次；`formats` 读错了隐藏面板的正文两次，`frame-resize` 的拖动丢了移动一次，`split-focus-keys` 一次（后两次失败时机器正被使用）；修正见第 10 节。
+媒体修复后的 gate 中 verify 通过（24 秒）、测试通过（70 秒，同样 2855 项），完整包在窗口弹幕走查失败（205 秒）并停止。诊断与修复采用局部包：原生退出和真实点击修复后媒体通过，窗口中的旧布局读数仍失败；补齐面板条件后，局部窗口 85/85 通过。局部结果不计连续完整包次数，最终源码的正式 gate 结果见下文。
 
-证据：`docs/evidence/gate/` 已整体替换为这次的结果（约 2 MiB）：各入口的 JSON、`gate-run.json`（每步用时），以及四张截图：长对话列表、运行详情里过期的图像占位、设置的位置页（三组，路径是合成的临时目录、不含账户名）、用 Electron 44 保存的凭据在新版本上测试连接通过。模型弹窗那张截图停在弹窗顶部、没有拍到 PDF 与视频的上限（走查截图前没有滚动到那一节，断言本身核对了上限的输入框），所以没有入库，见第 10 节。
+新增原生等待辅助件的第一次静态检查发现 Electron 事件字符串联合不能匹配其重载类型（26 秒即停止，未跑测试或包）。已改成分别注册具体事件，`node node_modules/typescript/bin/tsc --noEmit -p apps/desktop/tsconfig.json` 通过，再运行完整 gate。
+
+最终源码的首次完整尝试：verify 25 秒通过；test 74 秒通过，2857 项中 2847 通过、10 跳过、0 失败；第一次 package 335 秒通过；installer 146 秒通过；bench 运行 597 秒后因 B-11 失败。修正基准后单独重跑 bench 通过，保留原有计时边界与目标。最终 gate 耗时 682 秒：verify 24 秒通过，test、第一次 package、installer 和 bench 因各自依赖指纹未变而复用；第二、第三次 package 分别 321、335 秒通过，连续通过次数为 3；report 通过。最终包的 `window-walk` 为 114 秒。
+
+另行执行不跳过测试的 `node scripts/verify.mjs`，退出成功：Vitest 2857 项中 2845 通过、12 跳过、0 失败；与 stage test 的跳过数量分别按各自运行结果记录。`node scripts/stage.mjs report` 在文档与证据同步后再次通过，产品验收仍为 `not-run`。
+
+test 的临时目录前后均为 15，本轮清理 1、剩余 0；最后一次 package 清理 9、剩余 0；bench 清理 7、剩余 0。既有失败现场计入前后基数，仍然保留。基准全部门槛通过，v14 迁移 100 次运行样本耗时 24.82 ms 且有备份；原始样本见 [`bench.json`](../evidence/gate/bench.json)。源码指纹为 `6b4dfa571c828cec4a8203b602a984e4797fa914554095376fed2abdb224041e`，bench 脚本指纹为 `c73470c4c99069e45da9141f053d6e82507d8b21cf16cd414ef37a9b67f2eac0`。报告为 `self-check-passed`、`engineeringReviewable=true`，`productAcceptance=not-run`。
+
+[`docs/evidence/gate/`](../evidence/gate/) 已替换为最终结果与超时反例摘要，总计 2,278,527 字节。提议卡片、已决定状态、任务能力菜单和模型上限的五张截图已查看；深色删除卡片的红色警告对比偏暗，留给 A 视觉复核。截图检查不等于人工产品验收。
 
 <a id="limits"></a>
-## 10. 偏差、限制与后续
+## 10. 交付边界与下一步
 
-- **“从笔记跳到一条还没载入的消息”没有产品入口。** 列表的跳转机制（先载入更早的页、再居中并高亮）已实现并有单元用例；产品里还没有从笔记或别处请求它的入口，所以 `chat-long-session` 的跳转一步记为 not-run，人工检查 H-81 写明了这一点。
-- **5000 条消息的样本里没有录音条目**，只有提问、回答与笔记。
-- **“旧版本跟着标记打开新位置”用本版本模拟。** 没有保留上一版本的打包产物可以启动；`data-locations-upgrade` 用本版本按旧指针启动，这条路径（旧指针 → 旧根 → `authoritativeRoot` 跟随标记）在 `e05fda3` 里就已存在。这一步只核对应用数据跟到新位置：用户文件留在原处是新指针里的覆盖，旧版本不读新指针；而且迁移后的库是 v13，旧版本本来就拒绝打开（`migrate-v13-newer`）。
-- **新走查发现并修复的问题。** 这些问题都是首次在打包窗口里跑本阶段的新走查时发现的：
-  - 保存过、但所有标签都已关掉的上下文，重新载入时又被放上默认标签（LOOP-24 第 1 项，控制器只在从没保存过时放默认标签，新增控制器用例）。
-  - 长对话贴底的两处问题，见第 4 节，新增列表用例。
-- **走查本身的修正**（都不减断言）：
-  - 搜索框结果行的选择器。
-  - “最近”重新载入后先回到主页再切换上下文。
-  - 被删的旧笔记按时间戳选在已载入页里。
-  - 回退为帧图时不要求请求里有图（帧图由模型经工具取，替身模型不取；判断依据是发送记录的类型与原因，与单元用例 AT-146 相同）。
-  - 运行详情的入口先把列表滚到那条消息（列表虚拟化后，旧消息不在页面里）。
-  - 凭据走查改按页面上的“测试连接”（`connections.probe`，结果留在连接上），打开页面前重新载入，因为连接是在主进程里改的。重启后把两条连接重新指向这次启动的替身模型，密钥不动。
-  - v13 迁移的重试改用一条“刚失败”的旧运行。种子里的运行是成功的、授权是占位的、没有预算，成功的运行重试时什么也不发。
-  - 位置走查先把资源库目录加为资源库路径。
-  - 临时目录的删除在 Windows 晚释放句柄时重试。
-  - 对话栏基准（`bench-chat`，本阶段新增）第一次完整运行时没有取到样本。修正：等带 `:user` 后缀的消息节点；停靠栏选问答模式（笔记模式只列笔记）；切换时点阅读器标签（作品主页的标签与书同名）；载入更早一页前先用滚轮向上（贴底的库把没有滚轮的程序滚动当成内容变化，又贴回底部）。已有基准的测量方法不变。
-  - 工作区基准的标签切换：以前三个书架各开一个资源库标签；现在资源库标签至多一个（LOOP-24 第 4 项），这一栏只剩 7 个标签，低于门禁要求的 8 个。现在多开第二个视频，这一栏有 8 个标签，其中 4 个是阅读器；测量方法与门槛不变。
-  - `frame-resize` 的拖动：以前只在列宽完全没动时重拖一次。最终门禁里有一次只动了 1 px（后面的移动丢了，当时机器正被使用、负载约 34%）。现在没到指针的位置也重拖一次，只拖还差的距离；判断（拖动中与保存后的宽度在 ±3 px 内）不变。
-  - BT 回环基准（`bench-bt.mjs`）用的测试辅助件会在系统临时目录建 `manga-test-*` 与 `manga-plugin-*`，用完没删。以前的基准都因为别的指标失败而保留现场，这个问题被盖住了；指标全部通过后，LOOP-26 的检查把它查了出来。现在基准结束时只删这次新建的同类目录，原有的不动。
-  - trace 走查读剪贴板改为等到内容出现（最多 4 s），断言不变。
-  - 截图前等两帧，最多等 1 s。被遮住的窗口不出帧，`reading-loop` 曾因此在写完报告后卡到超时。但只设上限，截到的就是窗口上一次画出的画面：`ui-settings-locations.png` 截成了先前的“资源库”页，而页面上其实已经是“常规”。现在等不到帧时，先不抢焦点地显示窗口并要求重画，再等一次；仍然没有帧就不截图，只记错误。位置走查记录截图前后各是哪一页，不是“常规”时算失败。
-- **截图发现的界面问题**：“常规”页的三组位置，组名贴着卡片左边、组内的行没有分隔线（本阶段新增的界面）。现在组名与行对齐，组内的行有分隔线（`styles-workspace.css`）。
-- **运行详情显示冻结的图像**：本阶段新增的界面，为了让过期占位在窗口里可见。
-- **`formats` 阶段在最终源码上失败了两次。** 两次都是重新载入后第一个打开的 TXT 判为没有显示。补记的诊断表明：获得焦点的就是 `sample.txt` 的阅读器，但检查读到的正文是前一阶段留下的另一本书。前一阶段恢复的阅读器仍挂在隐藏的面板里，`document.querySelector` 先找到了它。单独跑这个阶段时没有恢复的阅读器，所以不出现。现在只读获得焦点的面板里的正文与页面图像，判断更严，没有放宽；失败时仍记录 `misses`。
-- **Vitest 仍在系统临时目录留下少量目录。** 一次完整 `stage test` 约留 4 个（`manga-plugin-*` 来自 `tests/helpers/plugin-fixtures.ts` 的 `tmpDir()`，`manga-test-*` 来自 `tests/helpers/app.ts`；个别用例没有删）。上一阶段就有，不影响门禁；LOOP-26 只覆盖打包烟测与基准。登记为执行状态的后续项。
-- **模型弹窗的截图没有拍到上限一节。** `ui-model-limits.png` 停在弹窗顶部；上限输入框由走查的断言核对，截图前没有滚动到“模型能力”一节。下次改这条走查时先滚动再截图（[LOOP-29](status.md#loop-29) 一并处理），人工检查 H-82 照常覆盖。
-- 真实模型对 PDF 与视频输入的试验需要 [ACT-14](../../USER-ACTIONS.md#act-14)；真实 Profile 的迁移重放归 [ACT-11](../../USER-ACTIONS.md#act-11)。
+B 的重新检查和局部补测不等于 A 审查或产品验收。真实模型/Embedding、显示器/DPI、输入法与用户手感未由本次自动门禁验收，H-33、H-88—H-91 继续在[用户待办](../../USER-ACTIONS.md#checks)保持 `not-run`；Q-37 仍按推荐默认实现，已更正粗剪默认位置并补充执行中/取消的预期。未授权 push、PR、合并或发布。
 
-<a id="review"></a>
-## 11. A 的集中审查（2026-11-06）
+首选下一步：把同一分支、最终提交、唯一计划、本报告和 B-01—B-11 交给 Agent A 集中复核。A 核实修复、检查证据并直接处理可确定的局部问题；审查收敛后才在用户待办登记远端操作授权请求。人工检查不是 A 复核或后续授权的前提。
 
-**按计划第 9 节逐项核对，结论：可以合并，没有需要退回 B 的缺口。**
+<a id="a-review"></a>
+## 11. A 集中审查（2026-11-08）
 
-| 审查点 | 结论 |
-| --- | --- |
-| 凭据 | 六处解密都经 `readCredential`；同一凭据同时读取只解一次；平台换钥后只在密文未变时写回（`UPDATE … WHERE ciphertext = ?`），写回失败不影响读取；没有平台保护时先拒绝、不取走秘密、不写明文。源码里没有同步的 `safeStorage` 调用（`check-deps` 守护） |
-| v13 迁移 | 在迁移事务里分批移出内联图像，迁移前后按字节重算的哈希多重集合不等就抛错、整个事务回滚；备份、中断与较新版本拒绝由既有迁移框架与 `migrate-v13`、`migrate-v13-newer` 覆盖 |
-| 保留期与重试 | 清理只动已结束的运行，在事务里再确认一次状态，重试中的运行不会被清；读取图像一条语句取出并校验哈希；过期后按来源重新提取前核对修订与文件戳 |
-| PDF 与视频 | 四个条件（模型档案、运行时与协议、整份且由用户放入并读完、大小与预算）都满足才发原文件或片段，否则退回并记原因代码，调用记录不含内容；片段终点取区间终点、当前位置与防剧透上限的最小值，PDF 发送时再核对哈希 |
-| 位置迁移 | 只复制应用数据的分区（不含 `cache`），逐分区比对指纹、数据库做完整性检查后才写新指针；失败或中断时删掉已复制的部分、不写指针、本次用旧位置，下次重试；旧文件不删，旧根写标记与 `relocatedRoot`；“文档”“下载”取系统登记的位置。旧指针指向自选的根时也会搬到新位置，这是计划 4.9 第一段的约定 |
-| 安装与卸载 | 只装到临时目录，结束时核对开始菜单、快捷方式与卸载项都清掉 |
-| 门禁里的走查修正 | 第 8 个标签（多开一个视频）、等不到帧就不截图、`formats` 只读获得焦点的面板、`frame-resize` 补拖剩余距离、BT 基准只删本次新建的同类临时目录：都只改走查本身，断言、门槛与测量方法不变 |
-| LOOP-13 | `power-throttling.mjs` 只由 `stage bench` 调用；`power-throttling.ts` 只在 `--manga-smoke` 的 `bench*` 阶段且 `MANGA_BENCH_NO_THROTTLE=1` 时执行，产品不调用 |
+角色：A。范围：同一分支的阶段提交、B-01—B-11、W1—W9 的实现与证据。做法：通读提议服务（`creative/proposals.ts`）的创建、核对、执行、恢复与结果回传，授权表（`commands/access.ts`、`creative/agent-access.ts`）、任务能力的开启条件（`commands/agent.ts`）、网页抓取的网络边界（`net/broker.ts`）与对话卡片（`components/chat/messages.tsx`），对照 `proposal-integrity`、`proposals` 与 `proposals-ui` 的用例；B-01—B-11 的修复在源码里都能找到对应处，相关用例在本次门禁里通过。A 直接修了下面两处，没有需要交回 B 的缺口。
 
-**A 在审查中直接做的改动（门禁的效率，LOOP-27）。** 用户指出 B 的门禁太慢：最终门禁一轮约 68 分钟（verify 8、test 8、package 3 × 12、installer 2、bench 与 report 13），B 在约 5 小时里开了 7 轮。原因与处理：
+| 编号 / 严重度 | 问题 | 修复与证据 |
+| --- | --- | --- |
+| A-01 / P1 | 项目包导出提议的修订用 `collectBundle` 的全部内容算摘要，其中包括项目保存的标签与布局（`workspace_contexts.updated_at`）、阅读进度和白板视口。界面上任何切换标签、调整分屏、翻页或平移白板都会重存这些状态，提议随即被标为“已失效”；用户在查看卡片的过程中就可能让它失效，AT-154 的路径在实际使用里基本走不通。试验：只把同一份布局原样保存一次，待确认的导出提议就变成 `stale` | 修订只算项目行、内容表与快照，去掉 `project_progress`、`project_workspace` 与白板的 `viewport_json`；内容改动仍让提议失效（原用例保留）。新增 `proposal-integrity` 用例：保存布局、平移白板后提议仍待确认，确认后导出一个包；去掉修复时该用例失败 |
+| A-02 / P2 | 深色主题没有覆盖 `--color-danger`，提议卡片的警告、“不能撤销”与失败状态是 12 px 的 `#B42318` 文字，落在 `#1F232E` 上对比度 2.39:1，低于设计规则对次要文字 4.5:1 的要求（B 在第 9 节留给 A 的视觉复核） | 新增语义 token `--color-danger-text`（浅色 `#B42318`，6.57:1；深色 `#F97066`，5.63:1），卡片的警告、不可撤销与失效/失败状态改用它；危险按钮的底色不变。`sidebar-tokens` 用例断言两种主题都 ≥ 4.5:1，并拒绝提议样式再把文字写成 `--color-danger`；新的深色截图已核对 |
 
-| 原因 | 处理 |
-| --- | --- |
-| 任何改动都让全部结果过期（四类指纹，每份结果都比全部） | 指纹按输入分组（产品源码、锁文件、构建、门禁公共代码，以及测试、打包、基准、安装各自的脚本），报告只比较这份结果依赖的组（`gate.json` 的 `fingerprintOf`）；`scripts/stage` 与 `scripts/samples` 下没有归组的文件直接报错。指纹在运行开始时取，运行期间的修改让结果判为过期 |
-| 测试逐个文件跑（`fileParallelism: false`，从最早的阶段沿用、没有记录原因），而且 verify 与 stage test 各跑一遍 | Vitest 按文件并行、用一半逻辑处理器：约 70 s（原约 480 s）；8 次完整运行里只有改之前的第一次失败一处，是 `sidebar-ui` 的一处用例在首次渲染后同步取元素，改为等它出现（断言不变）。`stage gate` 里的 verify 带 `--skip-tests`，测试只跑一遍 |
-| 基准排在最后，问题最晚暴露 | `node scripts/stage.mjs gate`：verify → test → package → installer → bench → 把 package 补到连续 3 次 → report，第一个失败就停，结果仍有效的步骤不重跑 |
-| 连续三次打包靠人数 | `package.json` 记 `passStreak`，报告要求 ≥ 3；`installer` 只接受当前输入打出的包，`installer.json` 也由报告核对 |
-| 打包时联网取 Electron 的校验和，GitHub 504 让一轮作废 | 改用已安装的 `electron` 包自带的 `checksums.json` |
+**看过、不改的地方。** 网页抓取对 Agent 开放后仍经网络代理，回环、内网与链路本地地址一律拒绝（测试用的回环服务走显式白名单）。批量确认的清单在打开确认框时固定，一条失败不阻止其余，失败逐条显示。粗剪模块在重启时被关掉的极端情况下，执行中的粗剪导出提议要等模块重新开启才会变成“失败”，影响只是卡片多停留在“执行中”，记为观察项，不在本阶段处理。
 
-新增的报告自测：只改基准代码时只有 `bench.json` 过期；只改测试时只有测试结果过期；改产品源码时全部过期；未归组的脚本报错；连续通过不足与安装失败或缺失都被拒绝。窗口走查里约 430 处固定等待登记为 [LOOP-29](status.md#loop-29)，下一阶段处理。
+**门禁。** A 修复后在最终源码上运行 `node scripts/stage.mjs gate`，全部通过：verify 24 s；test 69 s，Vitest 2859 项，2849 passed、10 skipped、0 failed（多出的 2 项是 A-01、A-02 的回归用例），临时目录前后 22、清理 1、剩余 0；package 连续三次 319、333、307 s，`window-walk` 113 s（124 项观察）；installer 101 s；bench 589 s，60 项门槛全部达标，提出与确认提议 p95 为 2.32、7.16 ms；report 为 `self-check-passed`、`engineeringReviewable=true`，`productAcceptance=not-run`。源码指纹 `fbd0b6994c782f5af1a2a32d915fc9b1b8f9a852d6a823e4d74cfefa4170da66`。[`docs/evidence/gate/`](../evidence/gate/) 已换成这次的结果（2,273,178 字节）。第 9 节保留 B 那一轮的数字作为过程记录。
 
-**最终源码上的门禁**：见[第 9 节](#gate)。
+**结论。** 审查收敛，Agent 侧完成，可以请求用户授权远端操作（[ACT-16](../../USER-ACTIONS.md#act-16)）。人工检查 H-33、H-88—H-91 与 Q-37 仍为 not-run 或当前默认，不是授权的前提；产品验收保持 `not-run`。

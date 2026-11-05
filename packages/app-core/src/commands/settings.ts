@@ -8,7 +8,7 @@ import type { AiRuntimeId } from "@manga/model-protocol";
 import { readShell, writeShell } from "../reading-service.ts";
 import { comparablePath, pathsOverlap } from "../domain/file-ownership.ts";
 import { recoverOrRollback } from "../domain/library-package.ts";
-import { APP_PARTITIONS, assertSafeMigrationTarget, copyOwnedFile, directoryStats, fingerprintTree, listCopyFiles, persistPointer, persistPointerAt, writeRelocationMarker } from "../locations.ts";
+import { APP_PARTITIONS, assertSafeMigrationTarget, copyOwnedFile, directoryStats, fingerprintTree, listCopyFiles, lowercaseMangaPath, persistPointer, persistPointerAt, writeRelocationMarker } from "../locations.ts";
 import { readAgentSettings, writeAgentSettings } from "../agent-settings.ts";
 import { readMediaSettings, readRecordingSettings, writeMediaSettings, writeRecordingSettings } from "../voice/settings.ts";
 import { usageQuery } from "../ops/usage.ts";
@@ -20,7 +20,7 @@ import { listConnections, upsertConnection, testConnection, deleteConnection, se
 import { indexRootRecord } from "./inventory.ts";
 
 /** What these commands use of the application. */
-export type SettingsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders">;
+export type SettingsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "notify" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders">;
 
 export function settingsModule(app: SettingsHost): MangaModule {
   return defineModule({
@@ -161,7 +161,12 @@ function legacyTargets(app: SettingsHost, record: LegacyRecord): string[] {
 function legacyRecord(app: SettingsHost): LegacyRecord | null {
   const raw = app.store.getMeta("legacyLocation");
   if (!raw) return null;
-  try { return JSON.parse(raw) as LegacyRecord; } catch { return null; }
+  try {
+    const parsed = JSON.parse(raw) as LegacyRecord;
+    return { ...parsed, root: lowercaseMangaPath(parsed.root, [app.layout.documentsRoot]) };
+  } catch {
+    return null;
+  }
 }
 
 export function legacyLocation(app: SettingsHost): { root: string; bytes: number; cleaned: boolean } | null {

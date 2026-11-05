@@ -31,6 +31,9 @@ export const ERROR_CODES = [
   "LOCATION_UNAVAILABLE",
   "CREDENTIAL_UNAVAILABLE",
   "GRANT_REVOKED",
+  "PROPOSAL_DECIDED",
+  "PROPOSAL_STALE",
+  "PROPOSAL_LIMIT",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

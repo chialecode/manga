@@ -61,6 +61,10 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
   const testRun = readJson(dir, "test-run.json");
   current("test-run.json", testRun);
   if (testRun && testRun.status !== "passed") errors.push("test-run.json: result is not passed");
+  if (!testRun?.tempDirs || !Number.isInteger(testRun.tempDirs.before) || testRun.tempDirs.before < 0
+    || !Number.isInteger(testRun.tempDirs.after) || testRun.tempDirs.after < 0 || testRun.tempDirs.left !== 0) {
+    errors.push("test-run.json: temporary directories left behind or counts missing");
+  }
 
   const bench = readJson(dir, "bench.json");
   current("bench.json", bench);
@@ -186,6 +190,9 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
     if (loop?.settled?.stable !== true || loop?.tagged !== true || loop?.repainted !== false || loop?.atEnd?.nodeConnected !== true) errors.push("package.json: the PDF selection was not kept through the settled page (LOOP-06)");
     if (pack.agent?.runningShown !== true || pack.agent?.stoppedShown !== true || pack.agent?.conversationShown !== true) errors.push("package.json: agent smoke did not show the stop control, the send control after it, and the conversation after a restart");
     if (pack.windowWalk?.ok !== true || !(pack.windowWalk?.observations >= (config.scenarios ?? []).length)) errors.push("package.json: the window walk did not run to its end");
+    if (!Number.isFinite(pack.windowWalk?.seconds) || pack.windowWalk.seconds <= 0 || pack.windowWalk.seconds > config.package.windowWalkMaxSeconds
+      || pack.phaseTimings?.["window-walk"] !== pack.windowWalk.seconds) errors.push("package.json: window walk timing missing, inconsistent or over target");
+    if (pack.tempDirs?.left !== 0) errors.push("package.json: temporary directories missing or left behind");
     // The creative walk and the plugin walk: every step of the plugin walk is named by the gate and passed.
     if (pack.creative?.ok !== true || !(pack.creative?.observations > 0)) errors.push("package.json: the creative walk did not run to its end");
     if (pack.trace?.ok !== true || !(pack.trace?.observations > 0)) errors.push("package.json: the trace walk did not run to its end");

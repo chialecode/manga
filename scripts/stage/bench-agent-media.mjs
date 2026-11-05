@@ -103,7 +103,7 @@ function migrationRecord(dir) {
 async function upgradeCopyRecord(dir) {
   const machine = { documents: path.join(dir, "Docs"), local: path.join(dir, "Local"), downloads: path.join(dir, "Downloads") };
   for (const folder of Object.values(machine)) fs.mkdirSync(folder, { recursive: true });
-  const oldRoot = path.join(machine.documents, "MANGA", "release");
+  const oldRoot = path.join(machine.documents, "manga", "release");
   const app = new MangaProductApp({ profileRoot: oldRoot, channel: "release", pointerPath: path.join(oldRoot, "launcher", "pointer.json"), documentsDir: machine.documents, hostId: "old", vault: new TestVault("old") });
   await app.start();
   app.close();

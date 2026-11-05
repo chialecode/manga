@@ -1,10 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { createId } from "@manga/contracts";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, PICK, pressKey, railTo, sleep, viaSidebar, waitDrawn, waitForTestId, waitUntil, type RailName } from "./driver.ts";
+import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, PICK, pressKey, railTo, sleep, viaSidebar, waitDrawn, waitForTestId, waitFrames, waitUntil, type RailName } from "./driver.ts";
 import { actor, caller, ensureDock, js, toRail } from "./common.ts";
 
 /**
@@ -241,7 +240,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   const scanLateFramePct: number[] = [];
   {
     const scanCall = caller(appService, grant);
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-scan-"));
+    const folder = fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-bench-scan-"));
     try {
       for (let series = 0; series < 50; series += 1) {
         const dir = path.join(folder, `基准系列${String(series).padStart(2, "0")}`);
@@ -249,17 +248,17 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
         for (let file = 1; file <= 10; file += 1) fs.writeFileSync(path.join(dir, `第${file}章.txt`), `第${file}章\n\n${"用于扫描基准的一段合成文字。".repeat(30)}\n`);
       }
       await railTo(view, "novel");
-      await sleep(500);
+      await waitFrames(view, 2);
       const framing = `(() => { const box = (window.__frames = { on: true, times: [] }); const tick = (at) => { if (!box.on) return; box.times.push(at); requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`;
       const frames = async () => { const times = await js<number[]>(view, `(() => { window.__frames.on = false; return window.__frames.times; })()`); return times.slice(1).map((at, index) => at - times[index]!); };
       await js(view, framing);
-      await sleep(2000);
+      await sleep(2000); // real time: 扫描前空闲帧间隔基线采样时长（2 秒）
       const idle = (await frames()).sort((a, b) => a - b);
       const usual = idle[Math.floor(idle.length / 2)] ?? 16.7;
       await js(view, framing);
       const added = await scanCall("library.paths.add", { pathHandle: appService.registerPath("directory", folder), mediaKind: "novel", autoScan: true });
       if (added.status !== "ok") failures.push(`scan: ${JSON.stringify(added.error)}`);
-      await sleep(200);
+      await waitFrames(view, 1);
       await appService.scan.whenIdle();
       const during = await frames();
       const late = during.filter((value) => value > usual * 1.5).length;
@@ -311,9 +310,9 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   const workspaceBack = `!document.querySelector('[data-testid="settings-area"]') && document.querySelector('[data-testid="workspace-area"]')?.getAttribute("data-suspended") === "false" && ${DRAWN}(document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab-panel"][data-focused="true"]'))`;
   for (let round = 0; round < 6; round += 1) {
     keep(`settings in ${round}`, await timed("nav-settings", settingsUp, 15_000, 1), settingsMs);
-    await sleep(300);
+    await waitFrames(view, 1);
     keep(`settings out ${round}`, await timed("nav-back", workspaceBack, 15_000, 1), settingsMs);
-    await sleep(300);
+    await waitFrames(view, 1);
   }
 
   // Indexed large books: reopening restores the stored tail position, which must be the visible text. The home's library entry lands on a library tab, whose shelf is the way in.

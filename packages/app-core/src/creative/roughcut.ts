@@ -172,6 +172,61 @@ export class RoughcutService {
 
   // ------------------------------------------------------------------ editing
 
+  /** Dry-run `actions` on a copy of the sequence without writing to the database; validates every clip and range and returns the step descriptions and before/after totals. */
+  previewEdit(cutId: string, actions: RoughcutActionInput[]): { title: string; beforeClips: number; afterClips: number; beforeMs: number; afterMs: number; steps: string[] } {
+    const row = this.cut(cutId);
+    const before = this.rows(row.id);
+    const draft = new Draft(row.id, before);
+    const created: string[] = [];
+    const steps: string[] = [];
+    const fmt = (ms: number) => {
+      const totalSec = Math.floor(Math.max(0, ms) / 1000);
+      const min = String(Math.floor(totalSec / 60)).padStart(2, "0");
+      const sec = String(totalSec % 60).padStart(2, "0");
+      const tenths = Math.floor((Math.max(0, ms) % 1000) / 100);
+      return tenths > 0 ? `${min}:${sec}.${tenths}` : `${min}:${sec}`;
+    };
+    const titleOf = (resourceId: string) =>
+      (this.sqlite.prepare("SELECT title FROM resources WHERE id = ?").get(resourceId) as { title: string } | undefined)?.title ?? resourceId;
+    for (const action of actions) {
+      if (action.type === "add") {
+        const resTitle = titleOf(action.resourceId);
+        this.apply(draft, action, created);
+        steps.push(`加入片段《${resTitle}》 ${fmt(action.inMs)}–${fmt(action.outMs)}${action.label ? `（${action.label}）` : ""}`);
+      } else if (action.type === "update") {
+        const ordered = draft.ordered();
+        const idx = ordered.findIndex((item) => item.id === action.clipId) + 1;
+        const clip = draft.clip(action.clipId);
+        const resTitle = titleOf(clip.resource_id);
+        const nextIn = action.inMs ?? clip.in_ms;
+        const nextOut = action.outMs ?? clip.out_ms;
+        this.apply(draft, action, created);
+        steps.push(`调整第 ${idx} 段《${resTitle}》区间为 ${fmt(nextIn)}–${fmt(nextOut)}${action.label !== undefined ? `（备注：${action.label || "无"}）` : ""}`);
+      } else if (action.type === "move") {
+        const ordered = draft.ordered();
+        const fromIdx = ordered.findIndex((item) => item.id === action.clipId) + 1;
+        const clip = draft.clip(action.clipId);
+        const resTitle = titleOf(clip.resource_id);
+        this.apply(draft, action, created);
+        const afterIdx = draft.ordered().findIndex((item) => item.id === action.clipId) + 1;
+        steps.push(`移动片段《${resTitle}》：第 ${fromIdx} 位 → 第 ${afterIdx} 位`);
+      } else {
+        const ordered = draft.ordered();
+        const idx = ordered.findIndex((item) => item.id === action.clipId) + 1;
+        const clip = draft.clip(action.clipId);
+        const resTitle = titleOf(clip.resource_id);
+        const inMs = clip.in_ms;
+        const outMs = clip.out_ms;
+        this.apply(draft, action, created);
+        steps.push(`移除第 ${idx} 段《${resTitle}》（${fmt(inMs)}–${fmt(outMs)}）`);
+      }
+    }
+    if (draft.clips.size > MAX_CLIPS) throw bad("the sequence has too many clips", "limit");
+    const beforeMs = before.reduce((sum, clip) => sum + (clip.out_ms - clip.in_ms), 0);
+    const afterMs = [...draft.clips.values()].reduce((sum, clip) => sum + (clip.out_ms - clip.in_ms), 0);
+    return { title: row.title, beforeClips: before.length, afterClips: draft.clips.size, beforeMs, afterMs, steps };
+  }
+
   edit(input: { cutId: string; label?: string; actions: RoughcutActionInput[] }): { doc: CutDoc; created: string[] } {
     const row = this.cut(input.cutId);
     if (this.exports.busy(row.id)) throw new MangaError("VALIDATION_ERROR", "this sequence is being exported", { details: { reason: "busy" } });
@@ -358,9 +413,14 @@ export class RoughcutService {
    * Plans, and when the plan holds, starts the export. With `dir` the files go there; without it, into the folder of the work of the first clip
    * (the sub-folder for rough cuts), and each is written down as a file of that work.
    */
-  async startExport(input: { cutId: string; dir?: string; fileName?: string; options?: RoughcutExportOptions }, signal?: AbortSignal): Promise<RoughcutExportView> {
+  async startExport(input: { cutId: string; dir?: string; fileName?: string; options?: RoughcutExportOptions }, signal?: AbortSignal, hooks?: {
+    validate: () => void;
+    registered: (view: RoughcutExportView) => void;
+  }): Promise<RoughcutExportView> {
     if (!this.o.ffmpeg.available) throw new MangaError("CAPABILITY_UNAVAILABLE", "the media tool is not installed");
     const { plan, sources, streams } = await this.plan(input.cutId, input.options, signal);
+    signal?.throwIfAborted();
+    hooks?.validate();
     const chapterTitles = new Map<string, string>();
     for (const clip of this.rows(input.cutId)) {
       const view = this.clipView(clip);
@@ -384,7 +444,7 @@ export class RoughcutService {
         }),
       };
     }
-    return this.exports.start({ plan, sources, streams, chapterTitles, destination, fileName: input.fileName });
+    return this.exports.start({ plan, sources, streams, chapterTitles, destination, fileName: input.fileName, onRegistered: hooks?.registered });
   }
 
   /** The keyframes of a clip's video as the frame table has them, for a timeline to show and for marks to land on. */

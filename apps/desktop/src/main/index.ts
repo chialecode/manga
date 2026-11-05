@@ -25,6 +25,7 @@ if (smoke) {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
   app.commandLine.appendSwitch("disable-background-timer-throttling");
+  app.commandLine.appendSwitch("mute-audio");
 }
 // The recording smoke uses Chromium's fake capture device, which plays a synthetic speech clip instead of a microphone.
 if (smoke && process.env.MANGA_SMOKE_PHASE === "voice" && process.env.MANGA_SMOKE_AUDIO) {
@@ -106,6 +107,7 @@ async function bootService(): Promise<void> {
     // A packaged-window smoke that downloads keeps to the loopback address: no public DHT, no LAN discovery, no port mapping.
     // Danmaku: a release signs with the credentials built in; a smoke run never does, and talks only to the local fake server named by the harness (or to nothing).
     // The legacy-credentials phases open a Profile an earlier build saved its own DanDanPlay credentials into, and ask a Bangumi stand-in on the loopback address.
+    ...(smoke ? { network: { allowPrivate: (host: string) => host === "127.0.0.1" } } : {}),
     ...(smoke && process.env.MANGA_SMOKE_BANGUMI_ORIGIN ? { bangumi: { apiOrigin: process.env.MANGA_SMOKE_BANGUMI_ORIGIN, allowedHosts: [new URL(process.env.MANGA_SMOKE_BANGUMI_ORIGIN).host], allowHttp: true, allowPrivate: true, maxRetries: 0, timeoutMs: 4000 } } : {}),
     danmaku: smoke ? { credentials: SMOKE_DANMAKU_CREDENTIALS, origin: process.env.MANGA_SMOKE_DANDAN_ORIGIN || "http://127.0.0.1:9", client: { allowHttp: true } } : { credentials: builtInDanmakuCredentials() },
     ...(smoke && process.env.MANGA_SMOKE_BT_LOOPBACK === "1" ? { acquisition: { network: { dht: false, lsd: false, natUpnp: false, natPmp: false } } } : {}),
@@ -161,12 +163,14 @@ app.whenReady().then(async () => {
     throw error;
   }
   handleMediaProtocol(() => appService);
+  const hideWindow = smoke || process.env.MANGA_WINDOW_HIDDEN === "1";
   window = new BrowserWindow({
     width: productWindow.width,
     height: productWindow.height,
     minWidth: productWindow.minWidth,
     minHeight: productWindow.minHeight,
-    show: !smoke,
+    show: !hideWindow,
+    skipTaskbar: hideWindow,
     backgroundColor: productWindow.backgroundColor,
     titleBarStyle: productWindow.titleBarStyle,
     webPreferences: {
@@ -176,11 +180,17 @@ app.whenReady().then(async () => {
       sandbox: true,
       // Lets <video> expose its audio tracks so the player can switch them without re-muxing.
       enableBlinkFeatures: "AudioVideoTracks",
-      // A hidden smoke window is throttled to about one frame per second; timing phases must see real frames.
-      ...(smoke && (process.env.MANGA_SMOKE_PHASE?.startsWith("bench") || (process.env.MANGA_SMOKE_PHASE === "media" || process.env.MANGA_SMOKE_PHASE === "voice")) ? { backgroundThrottling: false } : {}),
+      // A hidden smoke window is throttled to about one frame per second; smoke runs keep real frames without needing to bring the window up.
+      ...(smoke ? { backgroundThrottling: false } : {}),
     },
   });
   window.setMenuBarVisibility(false);
+  if (hideWindow) {
+    window.webContents.setAudioMuted(true);
+    const yieldFocus = () => { if (window && !window.isDestroyed()) window.blur(); };
+    window.on("show", yieldFocus);
+    window.on("leave-full-screen", yieldFocus);
+  }
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const appUrl = rendererUrl();
   // The window stays on the app's own page; links open only through `manga:open-external`.
@@ -364,7 +374,11 @@ app.whenReady().then(async () => {
       plugin: [{ name: "MANGA plugin package", extensions: ["manga-plugin", "zip"] }],
       torrent: [{ name: "Torrent", extensions: ["torrent"] }],
     };
-    let chosen = testHooks.pick?.({ mode: request.mode });
+    let chosen: string | null | undefined;
+    if (testHooks.pick) {
+      chosen = testHooks.pick({ mode: request.mode });
+      if (chosen === null) return null;
+    }
     if (!chosen) {
       // The dialog opens where the page says (a library path, a folder to add); an absolute folder that exists, nothing else.
       const start = typeof request.defaultPath === "string" && path.isAbsolute(request.defaultPath) && fs.existsSync(request.defaultPath) ? request.defaultPath : undefined;

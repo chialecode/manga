@@ -1,9 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { app, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, closeTabs, DRAWN, openFromShelf, PICK, pressKey, showTab, sleep, waitUntil } from "./driver.ts";
+import { clickTestId, closeTabs, DRAWN, openFromShelf, PICK, pressKey, showTab, sleep, waitFrames, waitUntil } from "./driver.ts";
 import { caller, js, leaveSettings, toRail } from "./common.ts";
 
 /**
@@ -22,6 +21,8 @@ export type MemoryBenchSpec = { runs: number };
 
 const SAMPLE = "video-mp4-h264-aac";
 
+const seedFolders: string[] = [];
+
 /** A library path with the synthetic video in it, scanned; the resource of its work. */
 async function seedVideo(appService: MangaProductApp, call: ReturnType<typeof caller>): Promise<string | null> {
   const root = process.env.MANGA_SMOKE_SAMPLES;
@@ -29,7 +30,8 @@ async function seedVideo(appService: MangaProductApp, call: ReturnType<typeof ca
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8")) as { samples: Array<{ id: string; path: string; status: string }> };
   const entry = manifest.samples.find((item) => item.id === SAMPLE && item.status === "generated");
   if (!entry) return null;
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-reader-"));
+  const folder = fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-bench-reader-"));
+  seedFolders.push(folder);
   fs.copyFileSync(path.join(root, entry.path), path.join(folder, "合成动画.mp4"));
   const added = await call("library.paths.add", { pathHandle: appService.registerPath("directory", folder), mediaKind: "video", autoScan: true });
   if (added.status !== "ok") return null;
@@ -92,7 +94,7 @@ export async function measureDanmakuBench(appService: MangaProductApp, grant: st
   const opened = await openFromShelf(view, "video", resourceId, 10_000) && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 30_000);
   if (!opened) return { ok: false, failures: [...failures, "the player did not open"], comments: count };
   view.webContents.focus();
-  await sleep(600);
+  await waitFrames(view, 2);
 
   // The layer is on from the settings; it is shown once the comments are in.
   const shown = await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"][data-visible="true"]')`, 15_000);
@@ -101,7 +103,7 @@ export async function measureDanmakuBench(appService: MangaProductApp, grant: st
 
   // Layer off for the usual interval, then layer on. D turns it off and on again.
   await pressKey(view, "D");
-  await sleep(300);
+  await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"]')?.getAttribute("data-visible") === "false"`, 3000);
   const baseline: number[] = [];
   const baselineDropped: number[] = [];
   for (let run = 0; run < spec.baselineRuns; run += 1) {
@@ -112,7 +114,7 @@ export async function measureDanmakuBench(appService: MangaProductApp, grant: st
   const usual = median(baseline);
   const baselineLatePct = Math.round((baseline.filter((value) => value > usual * 1.5).length / Math.max(1, baseline.length)) * 10_000) / 100;
   await pressKey(view, "D");
-  await sleep(500);
+  await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"]')?.getAttribute("data-visible") === "true"`, 3000);
   const raw: number[] = [];
   const runs: Array<Record<string, unknown>> = [];
   for (let run = 0; run < spec.runs; run += 1) {
@@ -123,6 +125,9 @@ export async function measureDanmakuBench(appService: MangaProductApp, grant: st
     if (got.ink <= 40) failures.push(`run ${run + 1} drew nothing on the layer (${got.ink} pixels)`);
   }
   if (!(usual > 0)) failures.push("no frame interval was measured without the layer");
+  for (const folder of seedFolders.splice(0)) {
+    try { fs.rmSync(folder, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
   return {
     ok: failures.length === 0 && raw.length === spec.runs,
     failures,
@@ -153,7 +158,10 @@ const snapshot = (): { total: number; byType: Record<string, number> } => {
 /** Several readings a short while apart; the middle one, so that a moment of garbage collection does not decide. */
 export async function readMemory(): Promise<{ total: number; byType: Record<string, number> }> {
   const values: Array<ReturnType<typeof snapshot>> = [];
-  for (let i = 0; i < 5; i += 1) { values.push(snapshot()); await sleep(300); }
+  for (let i = 0; i < 5; i += 1) {
+    values.push(snapshot());
+    await sleep(300); // real time: 多次进程工作集内存采样的固定间隔
+  }
   return values.sort((a, b) => a.total - b.total)[Math.floor(values.length / 2)]!;
 }
 
@@ -175,19 +183,19 @@ export async function measureMemoryBench(appService: MangaProductApp, grant: str
     await toRail(view);
     await clickTestId(view, "nav-settings");
     await waitUntil(view, `${DRAWN}(${PICK}("settings-nav"))`, 6000);
-    await sleep(1200);
+    await sleep(1200); // real time: 无播放器状态下等待 GC 与工作集稳定后再采样内存
     const without = await readMemory();
     // One player kept: opened, played a little, paused in the middle, and settings opened over it.
     const opened = await openFromShelf(view, "video", resourceId, 10_000) && await waitUntil(view, `document.querySelector('[data-testid="video-reader"][data-ready]')`, 30_000);
     if (!opened) { failures.push(`run ${run + 1}: the player did not open`); break; }
     await js(view, `(async () => { const v = document.querySelector('[data-testid="video-element"]'); v.muted = true; await v.play(); await new Promise((r) => setTimeout(r, 1500)); v.pause(); v.currentTime = (v.duration || 4) / 2; return true; })()`);
-    await sleep(500);
+    await waitUntil(view, `document.querySelector('[data-testid="video-element"]')?.paused === true`, 3000);
     await clickTestId(view, "nav-settings");
     await waitUntil(view, `${DRAWN}(${PICK}("settings-nav"))`, 6000);
     const kept = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="video-element"]'))`);
     const mountedReaders = await js<number>(view, `document.querySelectorAll('[data-testid="context-host"][data-active="true"] [data-testid="video-reader"]').length`);
     if (!kept) failures.push(`run ${run + 1}: the player was not kept behind settings`);
-    await sleep(1200);
+    await sleep(1200); // real time: 后台保留播放器状态下等待工作集稳定后再采样内存
     const withReader = await readMemory();
     const grew = Math.round((withReader.total - without.total) * 10) / 10;
     const grewBy = Object.fromEntries(Object.keys({ ...withReader.byType, ...without.byType }).sort().map((type) => [type, Math.round(((withReader.byType[type] ?? 0) - (without.byType[type] ?? 0)) * 10) / 10]));
@@ -200,7 +208,10 @@ export async function measureMemoryBench(appService: MangaProductApp, grant: str
     await closeTabs(view, ["reader"]);
     const closed = await waitUntil(view, `!document.querySelector('[data-testid="video-element"]')`, 6000);
     if (!closed) { failures.push(`run ${run + 1}: the player could not be closed again`); break; }
-    await sleep(800);
+    await sleep(800); // real time: 关闭播放器标签后等待资源释放再进入下一轮内存测量
+  }
+  for (const folder of seedFolders.splice(0)) {
+    try { fs.rmSync(folder, { recursive: true, force: true }); } catch { /* ignore */ }
   }
   return { ok: failures.length === 0 && raw.length === spec.runs, failures, raw, rows, unit: "MiB", processes: app.getAppMetrics().map((item) => item.type).sort() };
 }

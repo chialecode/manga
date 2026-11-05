@@ -381,7 +381,7 @@ interface CapturePositionEvent {
 
 ## 11. SQLite 与文件存储
 
-正式存储适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 better-sqlite3 + Drizzle（产品已使用，当前库结构版本 12）。驱动/ORM 替换须保持本文对象身份、修订、事务事件、迁移与资料包协议，不能因更换库重建用户数据或直接采用其他产品的数据表。
+正式存储适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 better-sqlite3 + Drizzle（产品已使用，当前库结构版本 14）。驱动/ORM 替换须保持本文对象身份、修订、事务事件、迁移与资料包协议，不能因更换库重建用户数据或直接采用其他产品的数据表。
 
 ### 11.1 建议逻辑表
 
@@ -392,7 +392,7 @@ interface CapturePositionEvent {
 | 内容 | content_object、object_revision、anchor、reference | 权威业务数据 |
 | 项目 | project、project_material | 权威业务数据 |
 | 采集 | capture_session、capture_position_event、transcript、derived_artifact | 原始记录与明确来源的派生结果 |
-| 运行 | agent_session、agent_run、job、job_attempt、operation、domain_event | 运行恢复与审计 |
+| 运行 | agent_session、agent_run、agent_proposal、job、job_attempt、operation、domain_event | 运行恢复与审计 |
 | 配置 | module_config、provider_connection、model_profile、task_binding | 不含明文凭据的配置 |
 | 附件 | attachment、attachment_reference | 文件身份与引用关系 |
 | 索引 | text_fragment、fts_index、embedding_index_metadata | 可重建投影 |
@@ -471,6 +471,14 @@ interface CapturePositionEvent {
 
 迁移的用例（`tests/library/schema-v13-migration.test.ts`，v12 资料由 `tests/helpers/legacy-v12.ts` 造出）：迁移后被引用的图像的哈希多重集合与迁移前相同、备份就是原样的 v12、第二次启动不再改动、第一批之后中断能续上、写入被拒时回滚、v14 的资料被拒绝打开；打包观察 `migrate-v13` 在打包产物上重做一遍，并重试一次旧运行，核对发送的字节。
 
+**库结构增量（版本 13 → 14，A-74、A-121、LOOP-09）。** 一次迁移完成，做法同上（迁移前备份 `manga.sqlite.premigrate-v13`、单事务、失败回滚、中断后重做、较旧的版本拒绝打开）：
+
+| 分组 | 新增或改动 | 说明 |
+| --- | --- | --- |
+| 待审操作提议 | `agent_proposals(id PRIMARY KEY, session_id, run_id, project_id, kind, command_id, input_json, preview_json, target_json, reason, status, result_json, created_at, decided_at)`；索引 `agent_proposals_session_status(session_id, status, created_at)` | 项目里的 Agent 提出的待确认操作（`delete`、`rename`、`exportProject`、`editRoughcut`、`exportRoughcut`）。状态为 `pending` → `applying` → `applied` / `failed`，或 `pending` → `rejected` / `stale`；确认时目标变化也可由 `applying` 进入 `stale`。`target_json` 记录 `{kind, targetId, title, revision}`，修订是对象行、内容与历史操作的摘要字符串；删除附加反向引用摘要，项目导出附加包内数据与快照摘要。同步操作的修订核对、效果与 `operations` 回执一起提交。`result_json` 保存结果、原因与下一轮已汇报标记 `reportedRunId`；导出期间可保存主进程私有的 `_exportIntent`，不进入公开卡片，粗剪保存导出任务关联，实际完成后才记为已执行。创建回执与提议一起保存，结果只在上下文实际容纳时消费。同一对话最多 20 条 `pending`（Q-37 默认值）。删除对话或项目连同提议一并清除；提议进入完整备份，不进项目包（`.manga-project.zip`） |
+
+迁移的用例（`tests/library/schema-v14-migration.test.ts`，v13 资料由 `tests/helpers/legacy-v12.ts` 建出后补入项目、会话与创作对象并去掉 v14 产物）：迁移前有 `manga.sqlite.premigrate-v13` 备份、迁移后 `agent_proposals` 表与索引存在且其余数据不变、中断后再次启动能完成、写入失败回滚到 v13、第二次启动不再改动、v15 的资料被拒绝打开；打包观察 `migrate-v14` 在打包产物上验证。
+
 创作对象的规范载荷初期可以保存在 content_object 的版本化 JSON 中，附件另存文件；文本块和检索关系建立派生投影。以后迁移为规范化子表时，保持公共对象和导出格式兼容。
 
 reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系变化在统一事务内提交。列表查询只读取摘要，不加载所有大载荷。
@@ -485,9 +493,9 @@ reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系�
 - `jobs`：尚未完成的导出临时文件与检查点。
 - `backups`：用户触发或策略生成的备份。
 
-这些是逻辑分区，不要求固定在同一物理目录。用户可配置资源（小说/漫画/视频）、工程（笔记/剪辑等）、数据库与配置、附件/录音、下载/暂存、缓存/索引、日志/崩溃报告、备份、导出与运行时下载资产的根位置。默认分两个根与一个下载位置（A-118）：应用自己的数据（`data`、`cache`、`logs`、`backups`、`runtime`，含 Electron 的 userData/sessionData 与崩溃转储）在 `%LOCALAPPDATA%\manga`（开发版 `manga-dev`）；用户的文件（`works`、`projects`、`attachments`、`resources`、`exports`）在系统登记的“文档”下的 `MANGA`（开发版 `MANGA-dev`）；下载在系统登记的“下载”下的 `MANGA`（开发版 `MANGA-dev`）。启动指针在 `<应用数据根>\launcher\pointer.json`，记着根、通道、修订与分区覆盖。测试通道没有默认位置，必须给出独立的临时根。安装目录只放程序文件（按用户安装时默认 `%LOCALAPPDATA%\Programs\manga`，A-119）。
+这些是逻辑分区，不要求固定在同一物理目录。用户可配置资源（小说/漫画/视频）、工程（笔记/剪辑等）、数据库与配置、附件/录音、下载/暂存、缓存/索引、日志/崩溃报告、备份、导出与运行时下载资产的根位置。默认分两个根与一个下载位置（A-118）：应用自己的数据（`data`、`cache`、`logs`、`backups`、`runtime`，含 Electron 的 userData/sessionData 与崩溃转储）在 `%LOCALAPPDATA%\manga`（开发版 `manga-dev`）；用户的文件（`works`、`projects`、`attachments`、`resources`、`exports`）在系统登记的“文档”下的 `manga`（开发版 `manga-dev`）；下载在系统登记的“下载”下的 `manga`（开发版 `manga-dev`）。所有路径统一用小写的 `manga`，已有的大写 `MANGA` 目录在启动时自动改名为小写。启动指针在 `<应用数据根>\launcher\pointer.json`，记着根、通道、修订与分区覆盖。测试通道没有默认位置，必须给出独立的临时根。安装目录只放程序文件（按用户安装时默认 `%LOCALAPPDATA%\Programs\manga`，A-119）。
 
-以前的版本把整个 Profile 放在 `<文档>\MANGA\<通道>`。新版本第一次启动时（没有新指针、有旧 Profile）只把应用数据复制到新位置、核对文件数与大小后写新指针；用户文件的分区记成指向原处的覆盖，不搬；旧根写下 `RELOCATED.json` 与数据库里的 `relocatedRoot`，旧版本按旧指针打开时跟着标记到新位置。复制失败或空间不够时这次照常用旧位置、不写新指针，下次再试；中途结束后，下次先清掉复制了一半的分区再来。旧位置的应用数据只在用户于设置里点“清理旧位置”后删除。
+以前的版本把整个 Profile 放在 `<文档>\manga\<通道>`。新版本第一次启动时（没有新指针、有旧 Profile）只把应用数据复制到新位置、核对文件数与大小后写新指针；用户文件的分区记成指向原处的覆盖，不搬；旧根写下 `RELOCATED.json` 与数据库里的 `relocatedRoot`，旧版本按旧指针打开时跟着标记到新位置。复制失败或空间不够时这次照常用旧位置、不写新指针，下次再试；中途结束后，下次先清掉复制了一半的分区再来。旧位置的应用数据只在用户于设置里点“清理旧位置”后删除。
 
 位置配置记录配置修订、发布通道、逻辑分区、目录句柄和实际解析位置；默认根与分区覆盖均在设置可见、可改。系统 Documents 可能重定向或不可用，不能猜测用户目录或静默改写到另一个位置；不可写时提供选目录/重试入口。凭据用系统保护机制加密，应用拥有的密文载荷随所配置 Profile 存放，开发/正式使用独立命名空间；不承诺迁移平台密钥本身。
 

@@ -126,9 +126,22 @@ export type ComposerProps = {
   onSend: () => void;
   sending: boolean;
   /** What the "+" menu can offer here: the attach buttons need an open reader, the others a module. */
-  plus: { attach: "page" | "frame" | null; online: boolean; subtitle: boolean; allowOnline: boolean; subtitleAheadMin: number; materials: number };
+  plus: {
+    attach: "page" | "frame" | null;
+    online: boolean;
+    semantic?: boolean;
+    webpage?: boolean;
+    subtitle: boolean;
+    allowOnline: boolean;
+    allowSemantic?: boolean;
+    allowWebpage?: boolean;
+    subtitleAheadMin: number;
+    materials: number;
+  };
   onAttach: (what: "page" | "frame") => void;
   onToggleOnline: () => void;
+  onToggleSemantic?: () => void;
+  onToggleWebpage?: () => void;
   onSubtitleAhead: (minutes: number) => void;
   onMaterials: () => void;
   mic: Parameters<typeof MicButton>[0] | null;
@@ -145,6 +158,8 @@ export function Composer(props: ComposerProps) {
   const plus: MenuItem[] = [];
   if (props.plus.attach) plus.push({ id: "attach", label: props.plus.attach === "page" ? t("rp.attach.page") : t("rp.attach.frame"), onSelect: () => props.onAttach(props.plus.attach!), disabled: props.images.length >= 4 });
   if (props.plus.online) plus.push({ id: "online", label: t("chat.plus.online"), checked: props.plus.allowOnline, onSelect: props.onToggleOnline });
+  if (props.plus.semantic && props.onToggleSemantic) plus.push({ id: "semantic", label: t("chat.plus.semantic"), checked: Boolean(props.plus.allowSemantic), onSelect: props.onToggleSemantic });
+  if (props.plus.webpage && props.onToggleWebpage) plus.push({ id: "webpage", label: t("chat.plus.webpage"), checked: Boolean(props.plus.allowWebpage), onSelect: props.onToggleWebpage });
   if (props.plus.subtitle) for (const minutes of SUBTITLE_AHEAD) plus.push({ id: `ahead-${minutes}`, label: minutes === 0 ? t("rp.subtitle.default") : t("rp.subtitle.ahead", { minutes }), checked: props.plus.subtitleAheadMin === minutes, onSelect: () => props.onSubtitleAhead(minutes) });
   plus.push({ id: "materials", label: props.plus.materials ? t("chat.plus.materialsCount", { count: props.plus.materials }) : t("chat.plus.materials"), onSelect: props.onMaterials });
 
@@ -178,6 +193,28 @@ export function Composer(props: ComposerProps) {
             }
           }}
         />
+        {(props.plus.allowOnline || props.plus.allowSemantic || props.plus.allowWebpage) ? (
+          <ul className="chat-tags" data-testid="chat-opt-in-tags" aria-label={t("chat.optIn")}>
+            {props.plus.allowOnline ? (
+              <li className="chat-tag" data-testid="chat-opt-in-online">
+                <span className="chat-tag-label">{t("chat.optIn.online")}</span>
+                <button type="button" className="icon-button" data-testid="chat-opt-in-remove-online" aria-label={t("chat.optIn.remove", { label: t("chat.optIn.online") })} onClick={props.onToggleOnline}><X size={12} /></button>
+              </li>
+            ) : null}
+            {props.plus.allowSemantic && props.onToggleSemantic ? (
+              <li className="chat-tag" data-testid="chat-opt-in-semantic">
+                <span className="chat-tag-label">{t("chat.optIn.semantic")}</span>
+                <button type="button" className="icon-button" data-testid="chat-opt-in-remove-semantic" aria-label={t("chat.optIn.remove", { label: t("chat.optIn.semantic") })} onClick={props.onToggleSemantic}><X size={12} /></button>
+              </li>
+            ) : null}
+            {props.plus.allowWebpage && props.onToggleWebpage ? (
+              <li className="chat-tag" data-testid="chat-opt-in-webpage">
+                <span className="chat-tag-label">{t("chat.optIn.webpage")}</span>
+                <button type="button" className="icon-button" data-testid="chat-opt-in-remove-webpage" aria-label={t("chat.optIn.remove", { label: t("chat.optIn.webpage") })} onClick={props.onToggleWebpage}><X size={12} /></button>
+              </li>
+            ) : null}
+          </ul>
+        ) : null}
         <div className="chat-bar">
           {props.canNote !== false ? (
             <div className="chat-switch" role="group" aria-label={t("chat.mode")}>
