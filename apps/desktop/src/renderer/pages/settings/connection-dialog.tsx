@@ -12,10 +12,10 @@ export type SaveConnectionResult = { ok: true; id: string } | { ok: false; messa
 /** What a test of a connection that is not asked questions (transcription, vectors) answered. */
 export type PlainTestResult = { ok: boolean; message: string };
 
-export type FieldName = "label" | "baseUrl" | "modelId" | "secret" | "timeout" | "window" | "output";
+export type FieldName = "label" | "baseUrl" | "modelId" | "secret" | "timeout" | "window" | "output" | "fileLimit" | "videoLimit" | "videoSeconds";
 type Errors = Partial<Record<FieldName, string>>;
 
-const FIELD_ORDER: FieldName[] = ["label", "baseUrl", "modelId", "secret", "timeout", "window", "output"];
+const FIELD_ORDER: FieldName[] = ["label", "baseUrl", "modelId", "secret", "timeout", "window", "output", "fileLimit", "videoLimit", "videoSeconds"];
 const MAX_TIMEOUT_SECONDS = 300;
 
 export const protocolName = (t: T, protocol: string) => (protocol === "openai-responses" ? t("models.protocol.openai-responses") : t("models.protocol.openai-chat-completions"));
@@ -44,6 +44,9 @@ export function validateConnection(t: T, form: ConnectionForm, timeoutText: stri
     if (problem === "window") errors.window = t("models.problem.window");
     else if (problem === "output") errors.output = t("models.problem.output");
     else if (problem === "order") errors.output = t("models.problem.order");
+    else if (problem === "fileLimit") errors.fileLimit = t("models.problem.fileLimit");
+    else if (problem === "videoLimit") errors.videoLimit = t("models.problem.videoLimit");
+    else if (problem === "videoSeconds") errors.videoSeconds = t("models.problem.videoSeconds");
   }
   return errors;
 }
@@ -126,7 +129,7 @@ export function ConnectionDialog(props: {
   const changeProfile = (next: ProfileForm) => {
     setForm((current) => ({ ...current, profile: next }));
     setFailure(null);
-    setErrors((current) => { const { window: _w, output: _o, ...rest } = current; return rest; });
+    setErrors((current) => { const { window: _w, output: _o, fileLimit: _f, videoLimit: _v, videoSeconds: _s, ...rest } = current; return rest; });
   };
   const toggle = (field: "inputTypes" | "capabilities", item: string, on: boolean) => {
     if (!form.profile) return;
@@ -264,6 +267,27 @@ export function ConnectionDialog(props: {
                   </span>
                 </div>
                 <p className="detail-muted">{t("models.inputsHint")}</p>
+                {profile.inputTypes.includes("pdf") ? (
+                  <label className="msettings-field" title={t("models.fileLimitHint")}>
+                    <span>{t("models.fileLimit")}</span>
+                    <input {...field("fileLimit")} type="number" inputMode="decimal" min={1} max={50} step={0.5} data-testid="profile-file-limit" aria-label={t("models.fileLimit")} value={profile.fileMiB} onChange={(event) => changeProfile({ ...profile, fileMiB: event.target.value })} />
+                    {problem("fileLimit")}
+                  </label>
+                ) : null}
+                {profile.inputTypes.includes("video") ? (
+                  <>
+                    <label className="msettings-field" title={t("models.videoLimitHint")}>
+                      <span>{t("models.videoLimit")}</span>
+                      <input {...field("videoLimit")} type="number" inputMode="decimal" min={1} max={20} step={0.5} data-testid="profile-video-limit" aria-label={t("models.videoLimit")} value={profile.videoMiB} onChange={(event) => changeProfile({ ...profile, videoMiB: event.target.value })} />
+                      {problem("videoLimit")}
+                    </label>
+                    <label className="msettings-field" title={t("models.videoSecondsHint")}>
+                      <span>{t("models.videoSeconds")}</span>
+                      <input {...field("videoSeconds")} type="number" inputMode="numeric" min={5} max={600} data-testid="profile-video-seconds" aria-label={t("models.videoSeconds")} value={profile.videoSeconds} onChange={(event) => changeProfile({ ...profile, videoSeconds: event.target.value })} />
+                      {problem("videoSeconds")}
+                    </label>
+                  </>
+                ) : null}
                 <div className="msettings-field">
                   <span>{t("models.caps")}</span>
                   <span className="profile-checks">

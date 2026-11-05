@@ -1,0 +1,47 @@
+{
+  "status": "passed",
+  "at": "2026-11-05T17:52:22.886Z",
+  "seconds": 3048,
+  "steps": [
+    {
+      "name": "verify",
+      "outcome": "passed",
+      "seconds": 24
+    },
+    {
+      "name": "test",
+      "outcome": "current, kept",
+      "seconds": 0
+    },
+    {
+      "name": "package",
+      "outcome": "passed",
+      "seconds": 699
+    },
+    {
+      "name": "installer",
+      "outcome": "passed",
+      "seconds": 150
+    },
+    {
+      "name": "bench",
+      "outcome": "passed",
+      "seconds": 769
+    },
+    {
+      "name": "package (pass 2 of 3)",
+      "outcome": "passed",
+      "seconds": 701
+    },
+    {
+      "name": "package (pass 3 of 3)",
+      "outcome": "passed",
+      "seconds": 703
+    },
+    {
+      "name": "report",
+      "outcome": "passed",
+      "seconds": 0
+    }
+  ]
+}

@@ -77,16 +77,24 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   const drag = async (divider: string, column: string, dx: number): Promise<{ during: number | null }> => {
     const start = await widthOf(column);
     let during: number | null = null;
+    // A drag whose moves were lost on a busy machine (the column did not move, or stopped short of where the pointer went) is done once more, for the
+    // distance still missing; what is judged afterwards (the width during the drag, the width saved) is unchanged.
+    let left = dx;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const at = await center(divider);
       if (!at) return { during: null };
       await mouse("mouseMove", at);
       await mouse("mouseDown", at);
-      for (const step of [dx * 0.25, dx * 0.6, dx]) await mouse("mouseMove", { x: at.x + step, y: at.y }, { held: true });
+      for (const step of [left * 0.25, left * 0.6, left]) await mouse("mouseMove", { x: at.x + step, y: at.y }, { held: true });
       during = await settledWidth(column);
-      await mouse("mouseUp", { x: at.x + dx, y: at.y });
+      await mouse("mouseUp", { x: at.x + left, y: at.y });
       await sleep(350);
-      if (start === null || during === null || Math.abs(during - start) > 0.5) break;
+      if (start === null || during === null) break;
+      const wanted = start + (column === "shell-dock" ? -dx : dx);
+      // A drag past the limit stops at the limit: only a column that did not move at all is dragged again then.
+      if (Math.abs(dx) >= 1000 ? Math.abs(during - start) > 0.5 : Math.abs(during - wanted) <= 3) break;
+      // The dock grows as the pointer goes left, the sidebar as it goes right.
+      left = column === "shell-dock" ? during - wanted : wanted - during;
     }
     return { during };
   };
@@ -157,12 +165,27 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     // Hover paints a button; the close button turns the danger color.
     const paint = async (testId: string) => js<string>(view, `getComputedStyle(document.querySelector('[data-testid="${testId}"]')).backgroundColor`);
     const rest = { minimize: await paint("window-minimize"), close: await paint("window-close") };
-    const overMinimize = await center("window-minimize");
-    const overClose = await center("window-close");
-    if (overMinimize) { await mouse("mouseMove", overMinimize); await sleep(250); }
-    const hoverMinimize = await paint("window-minimize");
-    if (overClose) { await mouse("mouseMove", overClose); await sleep(250); }
-    const hoverClose = await paint("window-close");
+    // LOOP-27: the colour is read only once the window is in front and the pointer is really over the button (the page's hit test and `:hover`);
+    // when another window took the front, the window is focused again and the hover done once more, and the retry is part of the result.
+    const hovered = (testId: string) => js<boolean>(view, `(() => { const el = document.querySelector('[data-testid="${testId}"]'); return Boolean(el && el.matches(":hover")); })()`);
+    const hits = (testId: string, at: { x: number; y: number }) => js<boolean>(view, `(() => { const el = document.querySelector('[data-testid="${testId}"]'); const hit = document.elementFromPoint(${at.x}, ${at.y}); return Boolean(el && hit && (hit === el || el.contains(hit))); })()`);
+    const retries: Array<{ button: string; focused: boolean; hovered: boolean }> = [];
+    const hoverPaint = async (testId: string): Promise<string> => {
+      const at = await center(testId);
+      if (!at) return "";
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (attempt > 0 || !view.isFocused()) { view.focus(); view.webContents.focus(); await sleep(200); }
+        await mouse("mouseMove", { x: at.x + attempt, y: at.y });
+        await sleep(250);
+        const ready = view.isFocused() && await hits(testId, at) && await hovered(testId);
+        if (ready) return paint(testId);
+        retries.push({ button: testId, focused: view.isFocused(), hovered: await hovered(testId) });
+      }
+      return paint(testId);
+    };
+    const hoverMinimize = await hoverPaint("window-minimize");
+    const hoverClose = await hoverPaint("window-close");
+    controlsDetail.hoverRetries = retries;
     const danger = await js<string>(view, `(() => { const probe = document.createElement("i"); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--color-danger"); document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; })()`);
     await mouse("mouseMove", { x: Math.round(viewportW / 2), y: 300 });
     controlsDetail.paint = { rest, hoverMinimize, hoverClose, danger };

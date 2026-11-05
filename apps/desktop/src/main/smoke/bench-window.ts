@@ -503,7 +503,8 @@ export async function measurePaneBench(view: BrowserWindow, resourceId: string, 
     pages += 1;
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
-  const loaded = await js<number>(view, `document.querySelectorAll('[data-testid^="bubble-note-"]').length`);
+  // The list is virtual (LOOP-07): only the rows near the viewport are in the page, so what is loaded is the list's own count.
+  const loaded = await js<number>(view, `Number(document.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? 0)`);
   const measured = await js<{ scrollMs: number[]; inputMs: number[]; domNodes: number; height: number; client: number }>(view, `new Promise((resolve) => {
     const log = document.querySelector('[data-testid="chat-log"]');
     const area = document.querySelector('[data-testid="agent-composer"]');

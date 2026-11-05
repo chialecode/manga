@@ -16,6 +16,8 @@ export function runStageTest({ withReport = false } = {}) {
     return 1;
   }
   const evidence = runDir();
+  // Taken before the tests run: an edit made during the run leaves the result stale.
+  const fingerprints = stageFingerprints(root, config);
   const leftoversBefore = testTempEntries();
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "manga-vitest-"));
   const reporterFile = path.join(scratch, "vitest.json");
@@ -51,7 +53,6 @@ export function runStageTest({ withReport = false } = {}) {
     executed.push({ file, name: file, status: run.status === 0 ? "passed" : "failed" });
   }
 
-  const fingerprints = stageFingerprints(root, config);
   const cases = config.cases.map((def) => {
     const tests = [];
     for (const pattern of def.tests ?? []) {

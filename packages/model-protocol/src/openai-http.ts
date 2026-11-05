@@ -67,8 +67,12 @@ function responseInput(messages: ChatMessage[]): Array<Record<string, unknown>> 
       return [{ type: "function_call_output", call_id: message.toolCallId, output: message.content }];
     }
     const items: Array<Record<string, unknown>> = [];
-    if (message.role === "user" && message.images?.length) {
-      items.push({ role: "user", content: [{ type: "input_text", text: message.content }, ...message.images.map((image) => ({ type: "input_image", image_url: `data:${image.mediaType};base64,${image.base64}` }))] });
+    if (message.role === "user" && (message.images?.length || message.files?.length)) {
+      items.push({ role: "user", content: [
+        { type: "input_text", text: message.content },
+        ...(message.images ?? []).map((image) => ({ type: "input_image", image_url: `data:${image.mediaType};base64,${image.base64}` })),
+        ...(message.files ?? []).map((file) => ({ type: "input_file", filename: file.filename, file_data: `data:${file.mediaType};base64,${file.base64}` })),
+      ] });
     } else if (message.content || !message.toolCalls?.length) items.push({ role: message.role, content: message.content });
     for (const call of message.toolCalls ?? []) {
       items.push({ type: "function_call", call_id: call.id, name: call.name, arguments: call.arguments });
@@ -102,8 +106,13 @@ function chatMessages(messages: ChatMessage[]) {
     if (message.role === "tool") {
       return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
     }
-    if (message.role === "user" && message.images?.length) {
-      return { role: "user", content: [{ type: "text", text: message.content }, ...message.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.base64}` } }))] };
+    if (message.role === "user" && (message.images?.length || message.files?.length || message.videos?.length)) {
+      return { role: "user", content: [
+        { type: "text", text: message.content },
+        ...(message.images ?? []).map((image) => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.base64}` } })),
+        ...(message.files ?? []).map((file) => ({ type: "file", file: { filename: file.filename, file_data: `data:${file.mediaType};base64,${file.base64}` } })),
+        ...(message.videos ?? []).map((video) => ({ type: "video_url", video_url: { url: `data:${video.mediaType};base64,${video.base64}` } })),
+      ] };
     }
     return { role: message.role, content: message.content };
   })];

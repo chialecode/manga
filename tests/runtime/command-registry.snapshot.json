@@ -2449,6 +2449,15 @@
       "noteContent": false
     },
     {
+      "commandId": "settings.cleanLegacyLocation",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "settings.get",
       "moduleId": "manga.settings",
       "owner": true,

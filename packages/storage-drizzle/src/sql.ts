@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 12;
+export const PRODUCT_SCHEMA_VERSION = 13;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -1374,4 +1374,33 @@ CREATE VIEW IF NOT EXISTS progress_latest AS
   SELECT p.* FROM progress p WHERE p.rowid = (
     SELECT q.rowid FROM progress q WHERE q.resource_id = p.resource_id AND q.resource_revision_id = p.resource_revision_id
     ORDER BY q.last_interaction_at DESC, q.context_id LIMIT 1);
+`;
+
+/**
+ * v13: the pictures and video clips frozen for an Agent task are kept once per content (LOOP-05, 计划 4.4). A run's snapshot names them by hash; the bytes
+ * live here, and a run's references go with the run. The record of a model request says what was delivered (a picture, a file, a video clip, text or
+ * frames instead, and why), without the content.
+ */
+export const V13_SCHEMA_SQL = `
+ALTER TABLE agent_requests ADD COLUMN delivery_json TEXT;
+`;
+
+/** The same on every start. */
+export const V13_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS agent_media (
+  hash TEXT PRIMARY KEY,
+  mime TEXT NOT NULL,
+  width INTEGER,
+  height INTEGER,
+  size INTEGER NOT NULL,
+  bytes BLOB NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agent_run_media (
+  run_id TEXT NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+  hash TEXT NOT NULL REFERENCES agent_media(hash),
+  ordinal INTEGER NOT NULL,
+  PRIMARY KEY (run_id, hash, ordinal)
+);
+CREATE INDEX IF NOT EXISTS agent_run_media_hash ON agent_run_media(hash);
 `;

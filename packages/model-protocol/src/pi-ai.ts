@@ -1,4 +1,7 @@
-import { createModels, createProvider, Type, type Context, type Model, type Tool } from "@earendil-works/pi-ai";
+// The model runtime comes from the `models` entry, which does not load TypeBox (pi-ai 1.x); the types come from the root as types only.
+// Tool parameters are plain JSON Schema (pi-ai 1.5 dropped the TypeBox re-exports and validates tool parameters as JSON Schema).
+import { createModels, createProvider } from "@earendil-works/pi-ai/models";
+import type { Context, JsonObject, Model, Tool } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { MangaError } from "@manga/contracts";
@@ -66,7 +69,7 @@ function piTools(tools?: ToolDefinition[]): Tool[] | undefined {
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
-    parameters: Type.Unsafe<Record<string, unknown>>(tool.parameters),
+    parameters: tool.parameters as Tool["parameters"],
   }));
 }
 
@@ -122,10 +125,11 @@ function piContext(request: TextRequest, api: "openai-responses" | "openai-compl
   return { messages, tools: piTools(request.tools) };
 }
 
-function safeJson(text: string): Record<string, unknown> {
+/** A tool call's arguments as pi-ai 1.x wants them: a JSON object (the text came from JSON.parse, so every value is JSON). */
+function safeJson(text: string): JsonObject {
   try {
     const parsed = JSON.parse(text) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : { value: parsed };
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as JsonObject : { value: parsed as JsonObject[string] };
   } catch {
     return {};
   }

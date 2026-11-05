@@ -7,7 +7,7 @@ export const OWNER_COMMANDS = [
   "reader.resolveAnchor", "reader.ui.present", "source.card",
   "reading.bookmarks", "reading.setBookmark", "reading.removeBookmark",
   "inventory.overview", "inventory.scan", "inventory.cancelScan", "inventory.reveal", "inventory.repair", "settings.get", "settings.skipAi",
-  "settings.proposeLocations", "settings.applyLocations", "settings.recoverJobs", "settings.setRuntime", "settings.setLayout", "settings.getShell", "settings.setShell",
+  "settings.proposeLocations", "settings.applyLocations", "settings.cleanLegacyLocation", "settings.recoverJobs", "settings.setRuntime", "settings.setLayout", "settings.getShell", "settings.setShell",
   "connections.list", "connections.upsert", "connections.test", "connections.delete", "connections.setProfile", "connections.probe", "settings.getAgent", "settings.setAgent", "agent.trace.list", "agent.trace.get", "agent.trace.export", "agent.trace.stats", "agent.trace.clear",
   "agent.createSession", "agent.send", "agent.cancel", "agent.retry", "agent.getRun",
   "library.inspectFile", "works.importDirectory", "comic.pages", "comic.pageHandle", "comic.pageHandles",

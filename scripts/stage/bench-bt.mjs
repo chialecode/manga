@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import bencode from "bencode";
@@ -33,7 +34,13 @@ function verifyPieces(file, torrentFile) {
   return { pieces, verified, firstBad, pieceLength };
 }
 
+// The rig and the swarm come from the test helpers, which make their folders in the system's temporary folder (manga-test-*, manga-plugin-*) and
+// leave them; the ones made during this bench are removed when it ends (LOOP-26), the ones that were there before are not touched.
+const HELPER_TEMP = /^manga-(test|plugin-\d+)-/;
+const helperTemp = () => new Set(fs.readdirSync(os.tmpdir()).filter((name) => HELPER_TEMP.test(name)));
+
 export async function runBtBench({ bytes }) {
+  const before = helperTemp();
   const swarm = await startSwarm();
   const rig = await boot();
   try {
@@ -63,5 +70,6 @@ export async function runBtBench({ bytes }) {
   } finally {
     rig.app.close();
     await swarm.close();
+    for (const name of helperTemp()) if (!before.has(name)) fs.rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   }
 }

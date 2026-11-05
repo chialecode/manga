@@ -6,17 +6,36 @@ import { spawn, spawnSync } from "node:child_process";
 import { startSwarm } from "../../tests/helpers/bt-swarm.ts";
 import { FakeDandan } from "../../tests/helpers/fake-dandan.ts";
 import { seedV11 } from "../../tests/helpers/legacy-v11.ts";
+import { seedV12 } from "../../tests/helpers/legacy-v12.ts";
+import { startFakeBangumi } from "../../tests/helpers/fake-bangumi.ts";
+import { LEGACY_CREDENTIALS } from "../../tests/helpers/legacy-credentials.ts";
+import { startMockProvider } from "../../packages/model-protocol/src/index.ts";
+import { frozenImageHashes } from "../../packages/storage-drizzle/src/migrate-agent-media.ts";
+import Database from "better-sqlite3";
+import sharp from "sharp";
 import { desktopPackageDir, latestDesktopPackage } from "../desktop-paths.ts";
-import { currentStage, loadGate, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
+import { buildInstaller, CHANNEL_INSTALL } from "./installer-lib.mjs";
+import { watchGateTemp } from "./temp-dirs.mjs";
+import { currentStage, fingerprintKeysOf, loadGate, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
 
 const stage = currentStage();
 const config = loadGate();
+// Taken before anything is built: an edit made while the run goes on leaves its results stale instead of passing them off as the edited state's.
+const fingerprints = stageFingerprints(root, config);
 if (process.platform !== "win32") throw new Error("package verification targets Windows x64");
 const sqlite = spawnSync(process.execPath, ["scripts/verify-electron-sqlite.mjs"], { cwd: root, stdio: "inherit" });
 if (sqlite.status !== 0) process.exit(sqlite.status ?? 1);
 // Iterating on one walk: MANGA_PACKAGE_PHASES=window-walk,workspace-restart runs only those phases (in the order of the gate) and writes no evidence;
 // MANGA_PACKAGE_REUSE_BUILD=1 also skips building the package again when nothing under src changed. Neither is used for the gate's run.
 const onlyPhases = process.env.MANGA_PACKAGE_PHASES ? process.env.MANGA_PACKAGE_PHASES.split(",").map((name) => name.trim()).filter(Boolean) : null;
+// LOOP-27: the gate asks for consecutive full passes on the same inputs. A full run counts on from the result before it when that one passed on the
+// same inputs, and removes it first, so a run that fails leaves no result and the count starts again.
+let passStreak = 1;
+if (!onlyPhases) {
+  const before = readEvidence(runDir(), "package.json");
+  if (before?.status === "passed" && fingerprintKeysOf(config, "package.json").every((key) => before[key] === fingerprints[key])) passStreak = (before.passStreak ?? 1) + 1;
+  for (const name of ["package.json", "scenarios.json"]) fs.rmSync(path.join(runDir(), name), { force: true });
+}
 if (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases) {
   const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform", "win32", "--arch", "x64"], {
     cwd: path.join(root, "apps/desktop"),
@@ -30,20 +49,28 @@ const built = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((name) => name
 if (!built) throw new Error("electron-forge package output missing");
 const appPath = path.join(outDir, built);
 const evidence = runDir();
+// What this run makes in the system's temporary folder is removed when it passes and kept, by name in the log, when it fails (LOOP-26).
+const tempWatch = watchGateTemp("stage-package");
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-"));
 const phases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
 // The window walk starts from an empty library (the app must open on the library paths), so it gets a Profile of its own; the creative walk and
 // the plugin walk make their own projects, library path and plugin, and do not share a Profile with the phases before them.
-const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated"]);
+const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13"]);
 // The restart of the workspace is the next start of the Profile the window walk used (it left two contexts in a known shape); the upgrade check starts on a
 // synthetic v11 library made here, before the application has seen it.
-const SAME_PROFILE_AS = { "workspace-restart": "window-walk", "workspace-closed": "window-walk" };
+const SAME_PROFILE_AS = { "workspace-restart": "window-walk", "workspace-closed": "window-walk", "credentials-async-restart": "credentials-async", "migrate-v13-restart": "migrate-v13" };
+// The Profile an Electron 44 build saved three credentials into (计划 4.1), made by node scripts/samples/build-legacy-credentials.mjs.
+const legacyCredentials = path.join(root, "dist/samples/legacy-e44-credentials");
+// The model key this build saves in the credentials phase, opened again after the restart.
+const RENEWED_MODEL_KEY = "saved-by-e45-synthetic-model-key";
+const v12Seeds = {};
 const homes = {};
 // The media and recording phases drive the real window with synthetic samples; they have to exist for the gate to mean anything.
 const samplesRoot = path.join(root, "dist/samples/media");
 const speechClip = path.join(samplesRoot, "voice/tts-clips/zh-CN-1.wav");
 for (const phase of phases) {
-  if ((phase === "media" || phase === "voice" || phase === "window-walk" || phase === "creative") && !fs.existsSync(path.join(samplesRoot, "manifest.json"))) throw new Error("synthetic samples are missing; run: node scripts/samples/generate-media-samples.mjs");
+  if (phase === "credentials-async" && !fs.existsSync(path.join(legacyCredentials, "legacy.json"))) throw new Error("the legacy credentials Profile is missing; run: node --experimental-strip-types scripts/samples/build-legacy-credentials.mjs");
+  if ((phase === "media" || phase === "voice" || phase === "window-walk" || phase === "creative" || phase === "loop") && !fs.existsSync(path.join(samplesRoot, "manifest.json"))) throw new Error("synthetic samples are missing; run: node scripts/samples/generate-media-samples.mjs");
 }
 if (phases.includes("voice") && !fs.existsSync(speechClip)) throw new Error("the synthetic speech clip is missing; run: node scripts/samples/generate-media-samples.mjs");
 const electronVersion = fs.readFileSync(path.join(appPath, "version"), "utf8").trim();
@@ -91,16 +118,76 @@ function dandanTraffic(fake) {
   if (all.some((request) => request.body !== "")) problems.push("a request carried a body");
   return { status: problems.length === 0 ? "passed" : "failed", detail: { requests: all.length, paths: [...new Set(all.map((request) => request.path))], problems } };
 }
+// The stand-ins the legacy credentials are checked against: one model that takes only the legacy key, one that takes only the key saved now, the
+// DanDanPlay service accepting only the legacy credentials, and Bangumi recording the token it is sent.
+async function startCredentialServices() {
+  const legacy = await startMockProvider({ expectKey: LEGACY_CREDENTIALS.modelKey });
+  const renewed = await startMockProvider({ expectKey: RENEWED_MODEL_KEY });
+  const dandan = await new FakeDandan().start();
+  dandan.accepts = { ...LEGACY_CREDENTIALS.dandan };
+  const bangumi = await startFakeBangumi();
+  return {
+    dandan, bangumi,
+    env: { MANGA_SMOKE_MODEL_ORIGIN: legacy.url, MANGA_SMOKE_MODEL_ORIGIN_RENEWED: renewed.url, MANGA_SMOKE_BANGUMI_ORIGIN: bangumi.origin },
+    stop: async () => { await legacy.close(); await renewed.close(); await bangumi.stop(); },
+  };
+}
+function credentialTraffic(services, phase) {
+  const problems = [];
+  const signed = services.dandan.requests;
+  if (signed.length === 0) problems.push("the DanDanPlay stand-in was never asked");
+  if (signed.some((request) => !request.signed)) problems.push("a DanDanPlay request was not signed with the legacy credentials");
+  const api = services.bangumi.requests.filter((request) => request.path.startsWith("/v0/"));
+  if (phase === "credentials-async") {
+    if (api.length === 0) problems.push("the Bangumi stand-in was never asked");
+    if (api.some((request) => request.headers.authorization !== `Bearer ${LEGACY_CREDENTIALS.bangumiToken}`)) problems.push("a Bangumi request did not carry the legacy token");
+  }
+  return { status: problems.length === 0 ? "passed" : "failed", detail: { dandan: signed.length, bangumi: api.length, problems } };
+}
+// A synthetic v12 library (计划 4.4): 300 runs with their pictures inline, one real JPEG shared by every third run; its runs dated yesterday so the
+// retention clean-up of this start leaves them alone. What was seeded is written for the walk; the size and hashes stay here for the checks after it.
+async function seedMigration(home) {
+  const bytes = await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 70, g: 110, b: 150 } } }).jpeg({ quality: 80 }).toBuffer();
+  const seeded = seedV12({ root: path.join(home, "root"), runs: 300, image: { bytes, mediaType: "image/jpeg", width: 640, height: 480, origin: { kind: "video_frame", resourceId: "res-v12", resourceRevisionId: "rev-v12", timeMs: 4000 } } });
+  const db = new Database(path.join(seeded.data, "manga.sqlite"));
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+  db.prepare("UPDATE agent_runs SET created_at = ?, updated_at = ?").run(yesterday, yesterday);
+  db.prepare("UPDATE agent_sessions SET created_at = ?, updated_at = ?").run(yesterday, yesterday);
+  db.close();
+  const shared = crypto.createHash("sha256").update(bytes).digest("hex");
+  fs.writeFileSync(path.join(home, "v12-spec.json"), JSON.stringify({ hashes: seeded.hashes, shared }));
+  return { data: seeded.data, hashes: seeded.hashes, images: seeded.images, unique: seeded.unique, bytesBefore: fs.statSync(path.join(seeded.data, "manga.sqlite")).size };
+}
+// The backup the move left is the v12 library as it was, with every picture inline; the sizes before and after go into the evidence.
+function migrationFiles(seed) {
+  const backup = path.join(seed.data, "manga.sqlite.premigrate-v12");
+  const out = { backup: fs.existsSync(backup), backupHashesEqual: false, bytesBefore: seed.bytesBefore, bytesAfter: fs.statSync(path.join(seed.data, "manga.sqlite")).size, images: seed.images, unique: seed.unique };
+  if (out.backup) {
+    const old = new Database(backup, { readonly: true, fileMustExist: true });
+    try { out.backupHashesEqual = JSON.stringify(frozenImageHashes(old)) === JSON.stringify(seed.hashes); } finally { old.close(); }
+    for (const suffix of ["-wal", "-shm"]) fs.rmSync(`${backup}${suffix}`, { force: true });
+  }
+  if (!out.backup || !out.backupHashesEqual) throw new Error(`the v13 move left no faithful backup: ${JSON.stringify(out)}`);
+  return out;
+}
 async function smoke(phase) {
   const sameAs = SAME_PROFILE_AS[phase];
   if (sameAs && !homes[sameAs]) throw new Error(`smoke ${phase} needs the Profile of ${sameAs}, which was not a phase of this run`);
   const home = sameAs ? homes[sameAs] : OWN_PROFILE.has(phase) ? fs.mkdtempSync(path.join(os.tmpdir(), `manga-package-${phase}-`)) : profile;
   homes[phase] = home;
   if (phase === "workspace-migrated") seedV11(path.join(home, "root"));
+  if (phase === "credentials-async") {
+    // A copy of the legacy Profile (the browser runtime's Local State holds the key its ciphertexts depend on), its pointer naming the copy.
+    fs.cpSync(path.join(legacyCredentials, "root"), path.join(home, "root"), { recursive: true });
+    fs.mkdirSync(path.join(home, "launcher"), { recursive: true });
+    fs.writeFileSync(path.join(home, "launcher", "pointer.json"), JSON.stringify({ profileRoot: path.join(home, "root"), channel: "test", revision: 1 }));
+  }
+  if (phase === "migrate-v13") v12Seeds[phase] = await seedMigration(home);
+  const credentialServices = phase.startsWith("credentials-async") ? await startCredentialServices() : null;
   const bt = phase === "plugins" ? await prepareBt(home) : null;
   // The window walk's danmaku step talks to a stand-in for the DanDanPlay service on the loopback address; it accepts only the credentials a smoke run uses.
-  const dandan = phase === "window-walk" ? await new FakeDandan().start() : null;
-  if (dandan) dandan.accepts = { appId: "smokeapp01", secret: "smoke-secret-for-the-local-fake-server" };
+  const dandan = phase === "window-walk" ? await new FakeDandan().start() : credentialServices?.dandan ?? null;
+  if (phase === "window-walk") dandan.accepts = { appId: "smokeapp01", secret: "smoke-secret-for-the-local-fake-server" };
   let result;
   let traffic = null;
   try {
@@ -119,13 +206,17 @@ async function smoke(phase) {
         ELECTRON_ENABLE_LOGGING: "1",
         ...(bt?.env ?? {}),
         ...(dandan ? { MANGA_SMOKE_DANDAN_ORIGIN: dandan.origin } : {}),
+        ...(credentialServices?.env ?? {}),
+        ...(phase.startsWith("migrate-v13") ? { MANGA_SMOKE_V12_SPEC: path.join(home, "v12-spec.json") } : {}),
       },
-      timeout: phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
+      timeout: phase === "loop" ? 900_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
     });
   } finally {
     await bt?.swarm.close();
-    if (dandan) traffic = dandanTraffic(dandan);
+    if (dandan && phase === "window-walk") traffic = dandanTraffic(dandan);
+    if (credentialServices) traffic = credentialTraffic(credentialServices, phase);
     await dandan?.stop();
+    await credentialServices?.stop();
   }
   process.stdout.write(result.stdout || "");
   process.stderr.write(result.stderr || "");
@@ -134,7 +225,16 @@ async function smoke(phase) {
   if (result.status !== 0) throw new Error(`smoke ${phase} failed status=${result.status}`);
   const report = fs.existsSync(smokeLog) ? JSON.parse(fs.readFileSync(smokeLog, "utf8")) : undefined;
   if (!report || report.status !== "passed") throw new Error(`smoke ${phase} did not report passed`);
-  if (traffic) report.danmakuNetwork = traffic;
+  if (traffic && phase === "window-walk") report.danmakuNetwork = traffic;
+  if (traffic && credentialServices) {
+    report.credentialNetwork = traffic;
+    if (traffic.status !== "passed") throw new Error(`smoke ${phase}: ${traffic.detail.problems.join("; ")}`);
+  }
+  if (phase === "migrate-v13" || phase === "migrate-v13-restart") report.migrationFiles = migrationFiles(v12Seeds["migrate-v13"]);
+  if (phase === "loop" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
+    if (report.notRun) throw new Error(`${phase} smoke did not run`);
+    if (report.ok !== true) throw new Error(`${phase} smoke failed: ${(report.observations ?? []).filter((row) => row.status !== "passed").map((row) => row.name).join(", ")}`);
+  }
   if (phase === "restart" && report.markerRestored !== true) throw new Error("restart did not restore the marker note");
   if (phase === "agent") {
     if (report.revoked !== true) throw new Error("agent smoke did not revoke the module");
@@ -204,8 +304,160 @@ async function smoke(phase) {
   }
   return report;
 }
+// Starts of the packaged application that the harness drives from outside: on a library newer than this build, and with the system folders of a
+// machine replaced by temporary ones (计划 4.9, 4.10). The packaged build is started with the variables a person's machine would give it.
+function packagedEnv(extra) {
+  const env = { ...process.env, ELECTRON_ENABLE_LOGGING: "1", ...extra };
+  for (const name of ["MANGA_PROFILE_ROOT", "MANGA_POINTER_FILE", "MANGA_DOCUMENTS_DIR", "MANGA_DOWNLOADS_DIR", "MANGA_UPGRADE_CRASH_AT", "MANGA_SMOKE_EVIDENCE_DIR"]) if (!(name in extra)) delete env[name];
+  for (const name of Object.keys(env)) if (name.startsWith("MANGA_DIR_")) delete env[name];
+  return env;
+}
+const launch = (cwd, env, timeout = 180_000) => spawnAsync(path.join(appPath, "MANGA.exe"), ["--manga-smoke"], { cwd, env, timeout });
+const readJson = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null);
+const under = (child, parent) => { const rel = path.relative(parent, child); return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel)); };
+const filesIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).map(String).filter((name) => fs.statSync(path.join(dir, name)).isFile()) : []);
+
+// AT-145: a build older than the library refuses to open it (the library of the migration phase, its version raised past this build's).
+async function migrateNewer() {
+  const home = homes["migrate-v13"];
+  if (!home) throw new Error("migrate-v13-newer needs the Profile of migrate-v13");
+  const file = path.join(home, "root", "data", "manga.sqlite");
+  const db = new Database(file);
+  db.prepare("UPDATE schema_meta SET value = '14' WHERE key = 'schemaVersion'").run();
+  db.pragma("wal_checkpoint(TRUNCATE)");
+  db.close();
+  const result = await launch(home, packagedEnv({ MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(home, "root"), MANGA_POINTER_FILE: path.join(home, "launcher", "pointer.json"), MANGA_DOCUMENTS_DIR: path.join(home, "documents"), MANGA_SMOKE_PHASE: "migrate-v13-newer" }), 90_000);
+  const report = readJson(path.join(home, "root", "logs", "smoke-migrate-v13-newer.json")) ?? {};
+  const after = new Database(file, { readonly: true });
+  const version = after.prepare("SELECT value FROM schema_meta WHERE key = 'schemaVersion'").get()?.value;
+  after.close();
+  const refused = result.status !== 0 && /newer than this application/.test(String(report.error ?? "")) && version === "14";
+  const observation = { name: "migrate-v13-newer", status: refused ? "passed" : "failed", detail: { exitStatus: result.status, refused, versionAfter: version } };
+  if (!refused) throw new Error(`a library newer than the build was not refused: ${JSON.stringify(observation.detail)}`);
+  return { ok: true, observations: [observation] };
+}
+
+/** A temporary machine: LocalAppData, the roaming profile, the home folder, Documents and Downloads. The release one sits on a drive root so its screenshot names no account. */
+function tempMachine(name, onDriveRoot) {
+  let base;
+  if (onDriveRoot) {
+    try { base = fs.mkdtempSync(path.join(path.parse(os.tmpdir()).root, `MANGA-GATE-`)); } catch { base = undefined; }
+  }
+  base ??= fs.mkdtempSync(path.join(os.tmpdir(), `manga-package-${name}-`));
+  const machine = { base, local: path.join(base, "AppData", "Local"), roaming: path.join(base, "AppData", "Roaming"), home: path.join(base, "home"), documents: path.join(base, "Docs"), downloads: path.join(base, "Downloads"), onDriveRoot: Boolean(onDriveRoot && !under(base, os.tmpdir())) };
+  for (const dir of [machine.local, machine.roaming, machine.home, machine.documents, machine.downloads]) fs.mkdirSync(dir, { recursive: true });
+  return machine;
+}
+const machineEnv = (machine, channel, extra = {}) => packagedEnv({ MANGA_CHANNEL: channel, LOCALAPPDATA: machine.local, APPDATA: machine.roaming, USERPROFILE: machine.home, HOME: machine.home, MANGA_DOCUMENTS_DIR: machine.documents, MANGA_DOWNLOADS_DIR: machine.downloads, MANGA_SMOKE_SAMPLES: samplesRoot, ...extra });
+
+// AT-148: a fresh release and a fresh development build put the application's data under LocalAppData, the person's files under Documents and downloads under Downloads.
+async function dataLocationsFresh() {
+  const observations = [];
+  for (const channel of ["release", "development"]) {
+    const machine = tempMachine(`fresh-${channel}`, channel === "release");
+    try {
+      const shot = channel === "release" && machine.onDriveRoot;
+      const result = await launch(machine.base, machineEnv(machine, channel, { MANGA_SMOKE_PHASE: "locations", ...(shot ? { MANGA_SMOKE_EVIDENCE_DIR: evidence, MANGA_SMOKE_LOCATIONS_SHOT: "1" } : {}) }));
+      const appRoot = path.join(machine.local, channel === "release" ? "manga" : "manga-dev");
+      const files = path.join(machine.documents, channel === "release" ? "MANGA" : "MANGA-dev");
+      const downloads = path.join(machine.downloads, channel === "release" ? "MANGA" : "MANGA-dev");
+      const report = readJson(path.join(appRoot, "logs", "smoke-locations.json")) ?? {};
+      const parts = report.locations?.partitions ?? {};
+      const problems = [];
+      if (result.status !== 0 || report.status !== "passed") problems.push(`the start did not pass (status ${result.status})`);
+      for (const name of ["data", "cache", "logs", "backups", "runtime"]) if (!parts[name] || !under(parts[name], appRoot)) problems.push(`${name} is not under LocalAppData`);
+      for (const name of ["works", "projects", "attachments", "resources", "exports"]) if (!parts[name] || !under(parts[name], files)) problems.push(`${name} is not under Documents`);
+      if (!parts.downloads || !under(parts.downloads, downloads)) problems.push("downloads are not under Downloads");
+      for (const file of [path.join("data", "manga.sqlite"), path.join("launcher", "pointer.json")]) if (!fs.existsSync(path.join(appRoot, file))) problems.push(`${file.replaceAll("\\", "/")} is not in the application's folder`);
+      if (!fs.existsSync(path.join(appRoot, "runtime"))) problems.push("the browser runtime is not in the application's folder");
+      const strays = [...filesIn(machine.roaming), ...filesIn(machine.home)];
+      if (strays.length) problems.push(`${strays.length} files were written to the roaming profile or the home folder`);
+      if (report.locations?.groups !== true) problems.push("the settings did not show three groups");
+      observations.push({ name: `data-locations-fresh-${channel}`, status: problems.length ? "failed" : "passed", detail: { channel, screenshot: shot, strays: strays.length, problems } });
+    } finally {
+      fs.rmSync(machine.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    }
+  }
+  return { ok: observations.every((row) => row.status === "passed"), observations };
+}
+
+// AT-149: an installation of the version before the split, moved on the first start; a start cut short during the copy; a second start; an older build.
+async function dataLocationsUpgrade() {
+  const machine = tempMachine("upgrade", false);
+  const problems = [];
+  const detail = {};
+  try {
+    const oldRoot = path.join(machine.documents, "MANGA", "release");
+    const oldPointer = path.join(oldRoot, "launcher", "pointer.json");
+    const kept = path.join(machine.base, "E", "Downloads-kept");
+    fs.mkdirSync(kept, { recursive: true });
+    const seed = await launch(machine.base, machineEnv(machine, "release", { MANGA_PROFILE_ROOT: oldRoot, MANGA_POINTER_FILE: oldPointer, MANGA_SMOKE_PHASE: "locations-seed", MANGA_SMOKE_LIBRARY_DIR: path.join(machine.base, "library") }));
+    const seeded = readJson(path.join(oldRoot, "logs", "smoke-locations-seed.json")) ?? {};
+    if (seed.status !== 0 || seeded.status !== "passed") throw new Error(`the old installation was not made (status ${seed.status}): ${JSON.stringify(seeded.observations ?? seeded.error ?? null).slice(0, 400)}`);
+    const noteFile = seeded.locations?.noteFile;
+    const screenshot = seeded.locations?.screenshot;
+    if (!noteFile || !fs.existsSync(noteFile) || !screenshot || !fs.existsSync(screenshot)) throw new Error("the old installation has no note file or screenshot");
+    // The person had moved downloads elsewhere.
+    fs.writeFileSync(oldPointer, JSON.stringify({ ...readJson(oldPointer), partitions: { downloads: kept } }));
+    const before = filesIn(oldRoot).filter((name) => !/-(wal|shm)$/.test(name)).sort();
+    const appRoot = path.join(machine.local, "manga");
+    const newPointer = path.join(appRoot, "launcher", "pointer.json");
+
+    // Cut short during the copy: the old place stays as it was and no new pointer is written.
+    const cut = await launch(machine.base, machineEnv(machine, "release", { MANGA_SMOKE_PHASE: "locations", MANGA_UPGRADE_CRASH_AT: "upgrade-copy" }));
+    detail.cut = { exitStatus: cut.status, newPointer: fs.existsSync(newPointer), marker: fs.existsSync(path.join(oldRoot, "RELOCATED.json")) };
+    if (cut.status !== 99 || detail.cut.newPointer || detail.cut.marker) problems.push(`the start cut during the copy changed the old place or wrote a pointer (${JSON.stringify(detail.cut)})`);
+
+    // The next start finishes the move.
+    const moved = await launch(machine.base, machineEnv(machine, "release", { MANGA_SMOKE_PHASE: "locations" }));
+    const report = readJson(path.join(appRoot, "logs", "smoke-locations.json")) ?? {};
+    const loc = report.locations ?? {};
+    detail.move = { exitStatus: moved.status, state: loc.upgrade?.state ?? null, files: loc.upgrade?.files ?? 0, carried: loc.upgrade?.carried ?? [] };
+    if (moved.status !== 0 || report.status !== "passed") problems.push(`the start after the cut did not pass (status ${moved.status})`);
+    if (loc.upgrade?.state !== "migrated") problems.push("the application's data was not moved");
+    if (!loc.partitions?.data || !under(loc.partitions.data, appRoot)) problems.push("the database is not in the new place");
+    if (loc.partitions?.works !== path.join(oldRoot, "works")) problems.push("the works folder did not stay where it was");
+    if (loc.partitions?.downloads !== kept) problems.push("the download override was not kept");
+    if (loc.noteFile !== noteFile || loc.noteOpens !== true) problems.push("the note file is not opened from where it was");
+    if (loc.screenshot !== screenshot || !fs.existsSync(screenshot)) problems.push("the screenshot is not where it was");
+    if (!fs.existsSync(path.join(oldRoot, "RELOCATED.json"))) problems.push("the old root has no RELOCATED.json");
+    const after = filesIn(oldRoot);
+    const lost = before.filter((name) => !after.includes(name));
+    if (lost.length) problems.push(`${lost.length} files went from the old place`);
+    if (loc.groups !== true) problems.push("the settings did not show three groups");
+
+    // A second start moves nothing.
+    const again = await launch(machine.base, machineEnv(machine, "release", { MANGA_SMOKE_PHASE: "locations" }));
+    const second = readJson(path.join(appRoot, "logs", "smoke-locations.json")) ?? {};
+    detail.second = { exitStatus: again.status, upgrade: second.locations?.upgrade ?? null };
+    if (again.status !== 0 || second.locations?.upgrade) problems.push("the second start moved again");
+
+    // An older build follows its own pointer to the old root, finds the marker and opens the new place (the current build started on the old
+    // pointer, the code path the earlier release shares; no earlier package is kept to start).
+    // Only the application data is checked: the user files stay where the new pointer says, which an older build never reads, and an older
+    // build refuses the v13 library anyway (migrate-v13-newer).
+    const olderStarted = Date.now();
+    const older = await launch(machine.base, machineEnv(machine, "release", { MANGA_POINTER_FILE: oldPointer, MANGA_SMOKE_PHASE: "locations" }));
+    const followed = readJson(path.join(appRoot, "logs", "smoke-locations.json")) ?? {};
+    detail.older = { exitStatus: older.status, ms: Date.now() - olderStarted, data: followed.locations?.partitions?.data ? under(followed.locations.partitions.data, appRoot) : false, emulated: true, ...(older.status === 0 ? {} : { stderr: String(older.stderr).slice(-1500) }) };
+    if (older.status !== 0 || detail.older.data !== true) problems.push("a start on the old pointer did not follow the marker");
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    fs.rmSync(machine.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  }
+  return { ok: problems.length === 0, observations: [{ name: "data-locations-upgrade", status: problems.length ? "failed" : "passed", detail: { ...detail, problems } }] };
+}
+const DRIVEN = { "migrate-v13-newer": migrateNewer, "data-locations-fresh": dataLocationsFresh, "data-locations-upgrade": dataLocationsUpgrade };
+
 const smokeReports = {};
-for (const phase of phases) smokeReports[phase] = await smoke(phase);
+for (const phase of phases) {
+  smokeReports[phase] = DRIVEN[phase] ? await DRIVEN[phase]() : await smoke(phase);
+  if (DRIVEN[phase] && smokeReports[phase].ok !== true) {
+    console.error(JSON.stringify(smokeReports[phase].observations, null, 2));
+    throw new Error(`${phase} failed`);
+  }
+}
 if (onlyPhases) {
   const rows = Object.values(smokeReports).flatMap((report) => report?.observations ?? []);
   console.log(JSON.stringify({ status: "partial", phases, observations: rows.length, failed: rows.filter((row) => row.status !== "passed").map((row) => row.name) }));
@@ -224,6 +476,9 @@ const observations = [
   ...(smokeReports["workspace-migrated"]?.observations ?? []),
   ...(smokeReports.creative?.observations ?? []),
   ...(smokeReports.trace?.observations ?? []),
+  // The dependency and Agent loop stage (计划第 7 节).
+  ...(smokeReports.loop?.observations ?? []),
+  ...["credentials-async", "credentials-async-restart", "migrate-v13", "migrate-v13-restart", "migrate-v13-newer", "data-locations-fresh", "data-locations-upgrade"].flatMap((name) => smokeReports[name]?.observations ?? []),
 ];
 
 // A package that is missing a bundled tool must stop at start, naming it, instead of failing in the middle of a recording.
@@ -251,10 +506,17 @@ function missingAssetCheck() {
   }
 }
 const missingAsset = missingAssetCheck();
+// The per-user installer of the package's own channel (计划 4.10): made from this directory and its configuration checked; installing it for real is
+// node scripts/stage.mjs installer, run on its own.
+const installerDir = path.join(path.dirname(desktopPackageDir), "installer");
+fs.rmSync(installerDir, { recursive: true, force: true });
+const packagedChannel = JSON.parse(fs.readFileSync(path.join(appPath, "resources", "channel.json"), "utf8")).channel;
+const madeInstaller = await buildInstaller({ appDir: appPath, channel: packagedChannel, workDir: installerDir, version: JSON.parse(fs.readFileSync(path.join(root, "apps/desktop/package.json"), "utf8")).version });
+const installerSummary = { channel: packagedChannel, output: path.relative(root, madeInstaller.installer).replaceAll("\\", "/"), megabytes: Math.round(madeInstaller.bytes / 1024 / 1024), seconds: Math.round(madeInstaller.ms / 1000), appId: madeInstaller.config.appId, perMachine: madeInstaller.config.nsis.perMachine, oneClick: madeInstaller.config.nsis.oneClick, deleteAppDataOnUninstall: madeInstaller.config.nsis.deleteAppDataOnUninstall, defaultFolder: CHANNEL_INSTALL[packagedChannel].dirName, signed: false };
 fs.writeFileSync(path.join(evidence, "scenarios.json"), `${JSON.stringify({
   status: observations.length > 0 && observations.every((row) => row.status === "passed") ? "passed" : "failed",
   stage,
-  ...stageFingerprints(root, config),
+  ...fingerprints,
   productAcceptance: "not-run",
   at: new Date().toISOString(),
   source: "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
@@ -262,10 +524,17 @@ fs.writeFileSync(path.join(evidence, "scenarios.json"), `${JSON.stringify({
   observations: observations.map((row) => ({ name: row.name, status: row.status, detail: row.detail ?? null })),
 }, null, 2)}\n`);
 const readingLoopTimings = smokeReports["reading-loop"]?.timings ?? {};
+const tempDirs = tempWatch.passed();
+if (tempDirs.left > 0) {
+  console.error(JSON.stringify({ status: "failed", check: "stage-package", reason: "temporary directories left behind", ...tempDirs }));
+  process.exit(1);
+}
 fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
+  tempDirs,
   status: "passed",
+  passStreak,
   stage,
-  ...stageFingerprints(root, config),
+  ...fingerprints,
   productAcceptance: "not-run",
   at: new Date().toISOString(),
   format: "unsigned local Electron package",
@@ -291,6 +560,7 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   // The bundled BitTorrent plugin in the packaged window: offered, installed with confirmed permissions, run in a process of its own, a loopback download imported, stopped and started again.
   plugins: { ok: smokeReports.plugins?.ok ?? false, steps: smokeReports.plugins?.steps ?? [] },
   missingAsset,
+  installer: installerSummary,
   media: smokeReports.media ? { steps: smokeReports.media.steps, matrix: smokeReports.media.matrix, timings: smokeReports.media.timings } : null,
   voice: smokeReports.voice ? { steps: smokeReports.voice.steps } : null,
   // Operation-level timing from the real reading-loop run, not from click dispatch.
@@ -312,5 +582,5 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
     timings: readingLoopTimings,
   },
 }, null, 2)}\n`);
-console.log(JSON.stringify({ status: "passed", check: "stage-package", output: appPath }));
-fs.writeFileSync(latestDesktopPackage, `${JSON.stringify({ target: path.relative(root, appPath).replaceAll("\\", "/"), evidence: path.relative(root, evidence).replaceAll("\\", "/"), stage, ...stageFingerprints(root, config) }, null, 2)}\n`);
+console.log(JSON.stringify({ status: "passed", check: "stage-package", passStreak, output: appPath }));
+fs.writeFileSync(latestDesktopPackage, `${JSON.stringify({ target: path.relative(root, appPath).replaceAll("\\", "/"), evidence: path.relative(root, evidence).replaceAll("\\", "/"), stage, ...fingerprints }, null, 2)}\n`);

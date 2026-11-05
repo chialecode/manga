@@ -28,7 +28,7 @@ export function asrPort(app: VoiceHost): AsrPort {
       return row?.credential_ref ? { id: row.id, model: row.model_id, timeoutMs: row.timeout_ms } : null;
     },
     transcribe: async (connection, request) => {
-      const { row, apiKey } = secretFor(app, connection.id, "transcription");
+      const { row, apiKey } = await secretFor(app, connection.id, "transcription");
       return transcribeAudio(row.base_url, apiKey, {
         model: row.model_id, fileName: request.fileName, bytes: request.bytes, mimeType: request.mimeType,
         prompt: request.prompt, language: request.language, timestamps: request.timestamps, signal: request.signal, timeoutMs: row.timeout_ms,
@@ -46,7 +46,7 @@ export function llmPort(app: VoiceHost): LlmPort {
       return row?.credential_ref ? { id: row.id, model: row.model_id } : null;
     },
     complete: async (connection, request) => {
-      const { row, apiKey } = secretFor(app, connection.id, "text");
+      const { row, apiKey } = await secretFor(app, connection.id, "text");
       const answer = await completeText(row.protocol as "openai-responses" | "openai-chat-completions", row.base_url, apiKey, {
         model: row.model_id,
         messages: [{ role: "system", content: request.system }, { role: "user", content: request.user }],
@@ -68,7 +68,7 @@ export function embeddingPort(app: VoiceHost): EmbeddingPort {
     },
     list: () => rows().map((row) => ({ id: row.id, model: row.model_id, label: row.label })),
     embed: async (connection, request) => {
-      const { row, apiKey } = secretFor(app, connection.id, "embedding");
+      const { row, apiKey } = await secretFor(app, connection.id, "embedding");
       return embedTexts(row.base_url, apiKey, { model: row.model_id, inputs: request.inputs, signal: request.signal, timeoutMs: row.timeout_ms });
     },
   };
@@ -225,7 +225,7 @@ export async function transcribeAuthorizedFile(app: VoiceHost, envelope: Command
   if (!app.store.sqlite.prepare("SELECT 1 FROM works WHERE id = ?").get(input.workId)) throw new MangaError("NOT_FOUND", "work missing");
   const connectionId = input.connectionId ?? (app.store.sqlite.prepare("SELECT id FROM provider_connections WHERE purpose = 'transcription' LIMIT 1").get() as { id: string } | undefined)?.id;
   if (!connectionId) throw new MangaError("MODEL_CAPABILITY_MISSING", "no transcription connection is configured");
-  const { row, apiKey } = secretFor(app, connectionId, "transcription");
+  const { row, apiKey } = await secretFor(app, connectionId, "transcription");
   // The audio comes into the folder of the work first and is transcribed from there; the file the person picked is not touched (A-79).
   const copy = app.workFolders.put(input.workId, { kind: "audio-import", fileName: path.basename(original), sourcePath: original, copy: true });
   const bytes = new Uint8Array(fs.readFileSync(copy.path));

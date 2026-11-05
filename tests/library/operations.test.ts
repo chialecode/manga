@@ -407,6 +407,43 @@ describe("the message stream of a session", () => {
     } finally { ctx.app.close(); }
   });
 
+  it("reads from a loaded message to the newest for a refresh: the deleted ones gone, older ones still said to exist, at most 5000 (LOOP-07)", async () => {
+    const ctx = await startApp();
+    try {
+      const comic = seedComic(ctx.app, { title: "从这条起", pageCount: 2 });
+      const ids: string[] = [];
+      for (let index = 0; index < 7; index += 1) ids.push(ok<{ objectId: string }>(await run(ctx, "notes.create", { title: `笔记${index}`, text: `第${index}条`, resourceId: comic.resourceId })).objectId);
+      const update = sql(ctx).prepare("UPDATE content_objects SET created_at = ? WHERE id = ?");
+      sql(ctx).transaction(() => { ids.forEach((id, index) => update.run(new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(), id)); })();
+      const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "resource", targetId: comic.resourceId, contextId: null }));
+      type Page = { items: Array<{ id: string; at: string }>; hasMore: boolean };
+      const from = new Date(Date.UTC(2026, 0, 1, 0, 0, 2)).toISOString();
+      const kept = ok<Page>(await run(ctx, "session.stream", { sessionId: session.id, from }));
+      expect(kept.items.map((item) => item.id)).toEqual(ids.slice(2));
+      expect(kept.hasMore).toBe(true);
+      // A note deleted in between is not in the next refresh; the oldest loaded one stays the start.
+      ok(await run(ctx, "notes.delete", { objectId: ids[4]! }));
+      expect(ok<Page>(await run(ctx, "session.stream", { sessionId: session.id, from })).items.map((item) => item.id)).toEqual([ids[2], ids[3], ids[5], ids[6]]);
+      // From the very first one: nothing older.
+      expect(ok<Page>(await run(ctx, "session.stream", { sessionId: session.id, from: new Date(Date.UTC(2026, 0, 1)).toISOString() })).hasMore).toBe(false);
+
+      // Past 5000 the newest 5000 are kept and "older messages" comes back. Each run is a question and an answer.
+      const insert = sql(ctx).prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, created_at, updated_at) VALUES (?, ?, 'succeeded', 'h', '{}', '问', ?, ?)");
+      sql(ctx).transaction(() => {
+        for (let index = 0; index < 2501; index += 1) {
+          const at = new Date(Date.UTC(2026, 1, 1) + index * 1000).toISOString();
+          insert.run(`run-${String(index).padStart(5, "0")}`, session.id, at, at);
+        }
+      })();
+      const capped = ok<Page>(await run(ctx, "session.stream", { sessionId: session.id, from: new Date(Date.UTC(2026, 0, 1)).toISOString() }));
+      expect(capped.items).toHaveLength(5000);
+      expect(capped.hasMore).toBe(true);
+      expect(capped.items.at(-1)!.id).toBe("run-02500:agent");
+      expect(capped.items[0]!.id).toBe("run-00001:user");
+      expect((await run(ctx, "session.stream", { sessionId: session.id, from: "yesterday" })).error?.code).toBe("VALIDATION_ERROR");
+    } finally { ctx.app.close(); }
+  });
+
   it("gathers a work's notes from every one of its resources for the work page", async () => {
     const ctx = await startApp();
     try {

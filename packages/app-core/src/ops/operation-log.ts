@@ -66,7 +66,7 @@ export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "connections.upsert": "connections", "connections.delete": "connections", "connections.test": "connections", "connections.setProfile": "connections", "connections.probe": "connections",
   "settings.setAgent": "settings", "agent.trace.clear": "settings",
   "library.exportPackage": "backup", "library.importPackage": "backup", "package.importResolved": "backup",
-  "settings.proposeLocations": "backup", "settings.applyLocations": "backup", "settings.setLayout": "backup", "settings.recoverJobs": "backup",
+  "settings.proposeLocations": "backup", "settings.applyLocations": "backup", "settings.setLayout": "backup", "settings.cleanLegacyLocation": "backup", "settings.recoverJobs": "backup",
   "inventory.repair": "backup", "inventory.scan": "backup",
   "video.playCopy": "library",
   "project.create": "projects", "project.update": "projects", "project.delete": "projects", "project.addMaterial": "projects", "project.removeMaterial": "projects", "project.importTerms": "projects", "project.exportPackage": "projects", "project.importPackage": "projects",

@@ -29,7 +29,7 @@ const ENTRIES: TraceEntry[] = [
 const PRETTY_REQUEST = { model: "demo", messages: [{ role: "user", content: "在资料里找一下 x" }], maxOutputTokens: 2_048 };
 const REQUEST_TEXT = JSON.stringify(PRETTY_REQUEST);
 
-function host(options: { entries?: TraceEntry[]; stats?: { count: number; bytes: number }; pageChars?: number } = {}) {
+function host(options: { entries?: TraceEntry[]; stats?: { count: number; bytes: number }; pageChars?: number; images?: unknown[] } = {}) {
   const calls: Array<{ commandId: string; input: Record<string, any> }> = [];
   let stats = options.stats ?? { count: 5, bytes: 2_500 };
   let settings = { limits: { maxSteps: 24, maxDurationMs: 600_000 }, trace: { mode: "full", retentionDays: 30, maxMegabytes: 500 } };
@@ -48,6 +48,7 @@ function host(options: { entries?: TraceEntry[]; stats?: { count: number; bytes:
           const chars = [...text];
           return { status: "ok", value: { entryId: input.entryId, part: input.part, available: true, text: chars.slice(input.offset, input.offset + (options.pageChars ?? input.limit)).join(""), offset: input.offset, total: chars.length, truncated: input.entryId === "req_5", bytes: text.length } };
         }
+        case "agent.getRun": return { status: "ok", value: { runId: input.runId, status: "succeeded", media: { images: options.images ?? [] } } };
         case "agent.trace.export": return { status: "ok", value: { json: "{\"runId\":\"run_1\"}", entries: 5, omitted: 0 } };
         case "agent.trace.stats": return { status: "ok", value: stats };
         case "agent.trace.clear": { const removed = stats.count; stats = { count: 0, bytes: 0 }; return { status: "ok", value: { removed } }; }
@@ -118,6 +119,27 @@ describe("the timeline of a task (AT-97)", () => {
     await waitFor(() => expect(screen.getByTestId("trace-text-request").textContent).toBe(JSON.stringify(PRETTY_REQUEST, null, 2)));
     expect(screen.getByTestId("trace-text-response").textContent).toContain("maxOutputTokens");
     expect(screen.queryByTestId("trace-more-request")).toBeNull();
+    // An entry from before the delivery record says nothing about it.
+    expect(screen.queryByTestId("trace-delivery")).toBeNull();
+  });
+
+  it("says how a request carried its PDF, clip and pictures, and why a richer form was not sent", async () => {
+    host({ entries: [entry({ id: "req_1", delivery: [
+      { kind: "file", bytes: 107_360, pages: 5 },
+      { kind: "frames", seconds: 9, reason: "protocol-no-video" },
+      { kind: "image", bytes: 2_048, reason: "expired-reextracted" },
+      { kind: "text", bytes: 20_000_000, reason: "something-new" },
+    ] })] });
+    open();
+    await screen.findByTestId("trace-detail");
+    const lines = screen.getAllByTestId("trace-delivery");
+    expect(lines.map((line) => line.getAttribute("data-kind"))).toEqual(["file", "frames", "image", "text"]);
+    expect(lines[0]!.textContent).toBe("整份 PDF 5 页 · 104.8 KB");
+    expect(lines[1]!.textContent).toBe("视频改发画面（9 秒的区间）：这个接口协议不接受视频");
+    expect(lines[2]!.textContent).toContain("已过保留期，从未改动的原文件重新截取");
+    expect(lines[2]!.getAttribute("data-reason")).toBe("expired-reextracted");
+    // A code this build does not know is shown as it is rather than hidden.
+    expect(lines[3]!.textContent).toBe("PDF 改发文字：something-new");
   });
 
   it("opens another entry from the list, and says what is missing when a part has no content", async () => {
@@ -178,6 +200,32 @@ describe("the timeline of a task (AT-97)", () => {
     open();
     expect((await screen.findByTestId("trace-empty")).textContent).toContain("没有留下调用记录");
     expect(screen.queryByTestId("trace-copy")).toBeNull();
+  });
+});
+
+describe("the pictures a task froze, in its record (AT-144)", () => {
+  it("shows a kept picture by its size and one past the retention period as a placeholder of the same shape, with its source", async () => {
+    host({ images: [
+      { hash: "a".repeat(64), width: 640, height: 480, origin: { kind: "video_frame", timeMs: 4000 } },
+      { hash: "b".repeat(64), width: 300, height: 450, expired: true, origin: { kind: "comic_region", pageId: "p001.png" } },
+    ] });
+    render(<TraceDialog t={t} runId="run_1" formatNumber={i18n.formatNumber} onNotice={vi.fn()} onClose={vi.fn()} />);
+    const stills = await screen.findByTestId("trace-stills");
+    const kept = within(stills).getByTestId("trace-image");
+    expect(kept.textContent).toBe("640 × 480");
+    expect(kept.getAttribute("aria-label")).toBe("来自视频的一帧，640 × 480 像素");
+    expect(kept.style.aspectRatio).toBe("640 / 480");
+    const expired = within(stills).getByTestId("trace-image-expired");
+    expect(expired.textContent).toBe("已过保留期");
+    expect(expired.getAttribute("aria-label")).toBe("已过保留期，来自漫画页面的一块区域，300 × 450 像素");
+    expect(expired.style.aspectRatio).toBe("300 / 450");
+  });
+
+  it("shows no picture section when the task froze none", async () => {
+    host();
+    render(<TraceDialog t={t} runId="run_1" formatNumber={i18n.formatNumber} onNotice={vi.fn()} onClose={vi.fn()} />);
+    await screen.findAllByTestId(/^trace-item-/);
+    expect(screen.queryByTestId("trace-stills")).toBeNull();
   });
 });
 

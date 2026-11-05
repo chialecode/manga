@@ -1,12 +1,16 @@
 {
   "status": "passed",
-  "stage": "m5",
-  "sourceFingerprint": "243bffd08f65270bacb9d18a3b4f6edf4d188764115c01f3a70e42d9b4c09d74",
-  "lockFingerprint": "b1b59cfe9cec9a65ec3211a39ee6437721fe93fd26bc944e2a181702f21ad791",
-  "testScriptFingerprint": "65a5d2109c884b29d93e736bf5a3c54bc94a718ac4e112685b86aea5be724dd0",
-  "buildScriptFingerprint": "1c0ce66045a98760c8a86b5b1f9bdc66678733c47cf9d33ac0a859cf132ac689",
+  "stage": "m6",
+  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
+  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
+  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
+  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
+  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
+  "packageScriptFingerprint": "9f8b9cbda518e731ed9fac2a0c38689b2eae319580fddf9115206af14c3fe27d",
+  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
+  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
   "productAcceptance": "not-run",
-  "at": "2026-11-03T14:48:09.225Z",
+  "at": "2026-11-05T18:43:09.334Z",
   "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
@@ -41,7 +45,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 1109,
+        "scanMs": 1117,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -1178,7 +1182,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.604421,
+            "time": 0.659149,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1327,11 +1331,16 @@
       "status": "passed",
       "detail": {
         "hold": {
+          "judged": "page clock",
           "during": {
+            "ok": true,
+            "enteredMs": 301,
             "rate": 2,
             "holding": true
           },
           "after": {
+            "ok": true,
+            "backMs": 1,
             "rate": 1,
             "holding": false
           },
@@ -1345,7 +1354,7 @@
           "keptOnBar": true
         },
         "tap": {
-          "from": 10.82,
+          "from": 10.89,
           "step": 5.22,
           "downIdle": true,
           "upIdle": false
@@ -1366,7 +1375,7 @@
           "firstHold": true,
           "secondHold": true,
           "firstBack": true,
-          "moved": 1.44,
+          "moved": 2.09,
           "paused": true
         },
         "rateButton": true,
@@ -1384,6 +1393,37 @@
           "holding": true,
           "thirdBack": true
         },
+        "judged": "page clock",
+        "timings": [
+          {
+            "step": "first hold",
+            "ms": 309
+          },
+          {
+            "step": "second hold",
+            "ms": 0
+          },
+          {
+            "step": "after the lost key-up",
+            "ms": 1
+          },
+          {
+            "step": "from the repeats",
+            "ms": 1
+          },
+          {
+            "step": "after the repeats",
+            "ms": 1
+          },
+          {
+            "step": "before the change of source",
+            "ms": 314
+          },
+          {
+            "step": "after the change of source",
+            "ms": 2
+          }
+        ],
         "problems": []
       }
     },
@@ -1506,8 +1546,8 @@
         },
         "aboveThePicture": {
           "bar": 192,
-          "canvasInk": 2544,
-          "screenBright": 5936,
+          "canvasInk": 2535,
+          "screenBright": 5933,
           "reach": true
         },
         "screenshot": {
@@ -1626,7 +1666,7 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 328,
+        "searchMs": 327,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
@@ -1653,7 +1693,7 @@
           "count": 5,
           "visible": true
         },
-        "ink": 2466,
+        "ink": 2459,
         "small": {
           "layer": {
             "x": 308.66668701171875,
@@ -1830,7 +1870,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 10,
+        "hideLateMs": 2,
         "problems": []
       }
     },
@@ -1867,7 +1907,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 11,
+        "hideLateMs": 2,
         "problems": []
       }
     },
@@ -1904,7 +1944,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 8,
+        "hideLateMs": 13,
         "problems": []
       }
     },
@@ -2254,6 +2294,7 @@
             true
           ]
         },
+        "hoverRetries": [],
         "paint": {
           "rest": {
             "minimize": "rgba(0, 0, 0, 0)",
@@ -3051,8 +3092,8 @@
             "reader:合成长篇 第一章",
             "library:合成漫画"
           ],
-          "focusedBefore": "tmw0ssytjbcd",
-          "focusedAfter": "tmw0ssytjbcd",
+          "focusedBefore": "tmw3w0zmmbhg",
+          "focusedAfter": "tmw3w0zmmbhg",
           "context": ""
         },
         "stored": 4
@@ -3108,15 +3149,15 @@
         "problems": [],
         "other-column": {
           "before": 12,
-          "after": 13.769715,
+          "after": 13.759386,
           "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 13.820186,
-          "after": 15.636087,
+          "before": 13.826954,
+          "after": 15.642103,
           "column": 3,
           "paused": false,
           "loadstart": 0,
@@ -3173,8 +3214,8 @@
             "key": "2",
             "code": "Digit2",
             "ctrl": true,
-            "at": "tab-panel",
-            "within": "tmw0ssytjbcd",
+            "at": "DIV",
+            "within": null,
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3185,7 +3226,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0ssytjbcd",
+            "within": "tmw3w0zmmbhg",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3196,7 +3237,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0ssytjbcd",
+            "within": "tmw3w0zmmbhg",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3218,7 +3259,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0ssyol91k",
+            "within": "tmw3w0zhq9o3",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3229,7 +3270,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmw0ssyol91k",
+            "within": "tmw3w0zhq9o3",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3240,7 +3281,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0ssyol91k",
+            "within": "tmw3w0zhq9o3",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3251,7 +3292,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw0ssyol91k",
+            "within": "tmw3w0zhq9o3",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3261,20 +3302,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmw0ssytjbcd",
-            "at": 8156,
+            "tab": "tmw3w0zmmbhg",
+            "at": 8196,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmw0ssytjbcd",
-            "at": 8844,
+            "tab": "tmw3w0zmmbhg",
+            "at": 8847,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmw0ssytjbcd",
-            "at": 10098,
+            "tab": "tmw3w0zmmbhg",
+            "at": 10109,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3595,8 +3636,8 @@
         "views": {
           "home": {
             "groups": [
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:3",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:3",
               "recent:8"
             ],
             "entries": [
@@ -3610,8 +3651,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:1",
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:1",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:1",
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3622,8 +3663,8 @@
           },
           "novel": {
             "rows": [
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
               "recent:2"
             ],
             "flat": 0,
@@ -3633,8 +3674,8 @@
           },
           "comic": {
             "rows": [
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:1",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3644,8 +3685,8 @@
           },
           "video": {
             "rows": [
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3659,8 +3700,8 @@
           },
           "note": {
             "rows": [
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded",
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:folded",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3675,8 +3716,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:2",
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:2",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3686,8 +3727,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3697,8 +3738,8 @@
           },
           "draft": {
             "rows": [
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3708,8 +3749,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:0",
-              "prj_536bee47-1a64-4987-8221-ad69753fa38d:folded"
+              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
+              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3869,7 +3910,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 1.289246,
+            "time": 1.291991,
             "paused": true,
             "ready": 4
           }
@@ -3921,8 +3962,8 @@
           "boardOpen": true,
           "videoReady": true,
           "marked": [
-            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15",
-            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15"
+            "sidebar-item-resource-res_c9886b0c-51a6-42a4-96f4-887ba59718ae",
+            "sidebar-item-resource-res_c9886b0c-51a6-42a4-96f4-887ba59718ae"
           ]
         },
         "atBoard": {
@@ -3930,7 +3971,7 @@
           "focused": "whiteboard",
           "video": {
             "same": true,
-            "time": 1.482038,
+            "time": 1.480396,
             "paused": true,
             "loads": 0,
             "emptied": 0
@@ -3947,13 +3988,13 @@
           "main": "video",
           "video": {
             "same": true,
-            "time": 1.482038,
+            "time": 1.480396,
             "paused": true,
             "loads": 0,
             "emptied": 0
           },
           "dock": "合成动画",
-          "left": 1.482038,
+          "left": 1.480396,
           "episodeDock": "合成动画"
         },
         "home": {
@@ -3967,7 +4008,7 @@
           ]
         },
         "fromCard": {
-          "card": "wb-open-wbn_c5413f12-f8d0-4dd2-99bc-9f6b7fd5b298",
+          "card": "wb-open-wbn_4cf4dfea-75c8-4683-b494-28919c2a5f0b",
           "switched": true,
           "there": "video"
         },
@@ -4361,7 +4402,7 @@
         ],
         "guides": {
           "current": "recent:rgb(173, 50, 104)",
-          "other": "prj_b6cfe33f-8b79-4832-a4f1-969e99beed80:rgb(221, 225, 232)"
+          "other": "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:rgb(221, 225, 232)"
         },
         "narrow": {
           "width": 200,
@@ -4384,8 +4425,8 @@
           "novel/project/novel": "0=0"
         },
         "samples": {
-          "comic": "res_6fdbb46e-63e3-4089-9fe8-df83270322e3",
-          "novel": "res_84946f7e-0afa-440b-9259-d876c7657983"
+          "comic": "res_9c559edc-087d-43dd-9f6c-e10a7ffd9638",
+          "novel": "res_0e447da7-b487-45da-b924-997c8a7bf57a"
         },
         "before": {
           "comicOpened": true,
@@ -4413,14 +4454,14 @@
           "placeholders": 2,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_00deb5bb-4c83-4064-b507-b72899eec530",
-            "sidebar-item-resource-res_8f8e7659-ff6b-4c87-b270-f6787fddc6d0"
+            "sidebar-item-resource-res_7fbbcf7b-3cff-4ccf-b08c-d266cc38b74d",
+            "sidebar-item-resource-res_7362ee2d-f679-4cdc-9760-7b4b9608207d"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_1962017a-b244-4261-a12f-b8be082d91cd",
-            "work:work_ee3123e1-572c-49f2-927b-8a9c46d8dc7d"
+            "work:work_d74a428d-5428-4e16-b6b4-1fe43d79965c",
+            "work:work_0a0656fb-d6c5-4c36-8eaf-25ed9c70eaf7"
           ]
         },
         "comic": {
@@ -4430,12 +4471,12 @@
           "placeholders": 1,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_c786fa0a-8c9f-461a-8942-42b946337eff"
+            "sidebar-item-resource-res_6ba6a4f6-31b1-45da-98b0-63d3cfcd8863"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "resource:res_c786fa0a-8c9f-461a-8942-42b946337eff"
+            "resource:res_6ba6a4f6-31b1-45da-98b0-63d3cfcd8863"
           ]
         },
         "video": {
@@ -4445,12 +4486,12 @@
           "placeholders": 0,
           "images": 1,
           "keys": [
-            "sidebar-item-resource-res_fec9e256-f066-4c1e-9a04-586745574c15"
+            "sidebar-item-resource-res_c9886b0c-51a6-42a4-96f4-887ba59718ae"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_157d1078-2fe4-4223-9bc3-ca7b1e7f9cb1"
+            "work:work_bd05e4ed-3aae-400d-9672-649429b24e91"
           ]
         },
         "switch": {
@@ -4658,9 +4699,9 @@
       "name": "scan-incremental",
       "status": "passed",
       "detail": {
-        "progressAt": 1274,
-        "cardAt": 1280,
-        "cardAfterProgressMs": 6,
+        "progressAt": 1349,
+        "cardAt": 1408,
+        "cardAfterProgressMs": 59,
         "runningAtCard": true,
         "opened": {
           "read": true,
@@ -4668,9 +4709,9 @@
         },
         "works": 20,
         "afterImport": {
-          "calls": 8,
-          "first": 1273,
-          "finishedAt": 7555
+          "calls": 7,
+          "first": 1349,
+          "finishedAt": 7512
         },
         "cardsShown": 15,
         "problems": []
@@ -4738,12 +4779,12 @@
           {
             "key": "recent",
             "columns": 2,
-            "tabs": 3
+            "tabs": 2
           },
           {
             "key": "project",
             "columns": 1,
-            "tabs": 1
+            "tabs": 5
           }
         ]
       }
@@ -4772,8 +4813,7 @@
             "columns": 2,
             "tabs": [
               "library",
-              "reader",
-              "library"
+              "reader"
             ],
             "focused": "library"
           },
@@ -4781,6 +4821,10 @@
             "key": "project",
             "columns": 1,
             "tabs": [
+              "whiteboard",
+              "objects",
+              "mindmap",
+              "objects",
               "project"
             ],
             "focused": "project"
@@ -4790,14 +4834,12 @@
         "views": {
           "novelMain": "novel",
           "novelTabs": [
-            "library",
             "reader"
           ],
           "homeColumns": 2,
           "homeTabs": [
             "library",
-            "reader",
-            "library"
+            "reader"
           ]
         },
         "comicDisplay": "list",
@@ -4817,7 +4859,7 @@
         "problems": [],
         "from": "two",
         "to": "single",
-        "answeredMs": 7,
+        "answeredMs": 6,
         "closedMs": 15,
         "stored": "single",
         "columns": 1
@@ -4972,7 +5014,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 3
+        "overheadMs": 5
       }
     },
     {
@@ -5436,7 +5478,7 @@
           "firstToken": true,
           "duration": true
         },
-        "copied": 56082,
+        "copied": 56155,
         "holdersChecked": 8,
         "leaks": [],
         "problems": []
@@ -5457,6 +5499,454 @@
         "renamed": {
           "again": true,
           "kept": "我自己起的名字"
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "workspace-last-tab-empty",
+      "status": "passed",
+      "detail": {
+        "closed": 0,
+        "afterReload": 0,
+        "intoProject": true,
+        "back": true,
+        "afterSwitch": 0,
+        "problems": []
+      }
+    },
+    {
+      "name": "library-tab-single",
+      "status": "passed",
+      "detail": {
+        "counts": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "manage": true,
+        "box": true,
+        "row": true,
+        "split": true,
+        "switched": true,
+        "home": 1,
+        "problems": []
+      }
+    },
+    {
+      "name": "chat-long-session",
+      "status": "passed",
+      "detail": {
+        "firstScreenMs": 461,
+        "firstScreen": {
+          "drawn": true,
+          "nodes": 9,
+          "loaded": 200,
+          "gap": 1
+        },
+        "older": {
+          "grew": true,
+          "loaded": 400,
+          "before": {
+            "id": "bubble-user-run_long_02355:user",
+            "offset": -39
+          },
+          "after": {
+            "id": "bubble-agent-run_long_02352:agent",
+            "offset": -60
+          }
+        },
+        "notice": {
+          "anchor": {
+            "id": "bubble-agent-run_long_02352:agent",
+            "offset": -60
+          },
+          "after": {
+            "id": "bubble-agent-run_long_02352:agent",
+            "offset": -61
+          },
+          "loadedBefore": 400,
+          "loadedAfterNotice": 401
+        },
+        "deleted": {
+          "dropped": true,
+          "before": {
+            "id": "bubble-agent-run_long_02352:agent",
+            "offset": -61
+          },
+          "after": {
+            "id": "bubble-agent-run_long_02352:agent",
+            "offset": -61
+          }
+        },
+        "stream": {
+          "live": true,
+          "stuck": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "gaps": [
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "upAt": 49686,
+          "held": [
+            49686,
+            49686,
+            49686,
+            49686,
+            49686,
+            49686,
+            49686,
+            49686
+          ],
+          "stillRunning": true
+        },
+        "jump": {
+          "status": "not-run",
+          "reason": "no entry of the product asks the list to show a message yet"
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "agent-media-native",
+      "status": "passed",
+      "detail": {
+        "rows": [
+          {
+            "model": "chat, PDF and video",
+            "pdf": {
+              "status": "succeeded",
+              "sent": true,
+              "note": {
+                "kind": "file",
+                "bytes": 107360,
+                "pages": 5
+              }
+            },
+            "video": {
+              "status": "succeeded",
+              "sent": true,
+              "frames": false,
+              "note": {
+                "kind": "video",
+                "bytes": 184794,
+                "seconds": 3
+              }
+            }
+          },
+          {
+            "model": "responses, PDF only",
+            "pdf": {
+              "status": "succeeded",
+              "sent": true,
+              "note": {
+                "kind": "file",
+                "bytes": 107360,
+                "pages": 5
+              }
+            },
+            "video": {
+              "status": "succeeded",
+              "sent": false,
+              "frames": false,
+              "note": {
+                "kind": "frames",
+                "seconds": 3,
+                "reason": "model-no-video"
+              }
+            }
+          },
+          {
+            "model": "neither",
+            "pdf": {
+              "status": "succeeded",
+              "sent": false,
+              "note": {
+                "kind": "text",
+                "bytes": 107360,
+                "reason": "model-no-pdf"
+              }
+            },
+            "video": {
+              "status": "succeeded",
+              "sent": false,
+              "frames": false,
+              "note": {
+                "kind": "frames",
+                "seconds": 3,
+                "reason": "model-no-video"
+              }
+            }
+          },
+          {
+            "model": "pi runtime",
+            "pdf": {
+              "status": "succeeded",
+              "sent": false,
+              "note": {
+                "kind": "text",
+                "bytes": 107360,
+                "reason": "runtime-unsupported"
+              }
+            },
+            "video": {
+              "status": "succeeded",
+              "sent": false,
+              "frames": false,
+              "note": {
+                "kind": "frames",
+                "seconds": 3,
+                "reason": "runtime-unsupported"
+              }
+            }
+          },
+          {
+            "over": {
+              "pdf": {
+                "kind": "text",
+                "bytes": 22127456,
+                "reason": "over-size-limit"
+              },
+              "clip": {
+                "kind": "video",
+                "bytes": 184794,
+                "seconds": 4
+              }
+            }
+          },
+          {
+            "traceShown": true
+          }
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "agent-media-retain",
+      "status": "passed",
+      "detail": {
+        "kept": {
+          "media": 2,
+          "refs": 4,
+          "shared": 1
+        },
+        "swept": {
+          "swept": {
+            "runs": 4,
+            "removed": 2
+          },
+          "left": 0,
+          "expired": {
+            "mediaType": "image/jpeg",
+            "width": 300,
+            "height": 450,
+            "bytes": 5552,
+            "origin": {
+              "kind": "comic_region",
+              "resourceId": "res_fea1a941-d023-46ce-9c92-3026378ecf64",
+              "resourceRevisionId": "rev_d161077b-cc37-40b7-bb46-e953d3bfa547",
+              "pageId": "002.png",
+              "region": {
+                "x": 0,
+                "y": 0,
+                "width": 0.5,
+                "height": 0.5
+              }
+            },
+            "extraction": "第 2 页的选定区域，从原页面裁剪",
+            "id": "img_dccca35a324d4a16a4f1",
+            "hash": "e16c6a6b785ec666b58f330ee777f08c99a31ead5f1c01c074b6e7d719726ccf",
+            "expired": true
+          }
+        },
+        "placeholder": true,
+        "retry": {
+          "status": "succeeded",
+          "note": {
+            "kind": "image",
+            "bytes": 5552,
+            "reason": "expired-reextracted"
+          },
+          "images": 1
+        },
+        "changed": {
+          "status": "failed",
+          "code": "REVISION_CONFLICT",
+          "reason": "media-source-changed",
+          "images": 0
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "credentials-async",
+      "status": "passed",
+      "detail": {
+        "phase": "credentials-async",
+        "firstDecrypt": {
+          "ms": 0.1,
+          "opened": true
+        },
+        "legacyModel": true,
+        "danmakuCredentials": "custom",
+        "danmakuSearch": "ok",
+        "bangumiSearch": "ok",
+        "renewedModel": true,
+        "window": true,
+        "stored": {
+          "rows": 4,
+          "plain": 0
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "credentials-async-restart",
+      "status": "passed",
+      "detail": {
+        "phase": "credentials-async-restart",
+        "legacyModel": true,
+        "renewedModel": true,
+        "danmakuSearch": "ok",
+        "window": true,
+        "stored": {
+          "rows": 4,
+          "plain": 0
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "migrate-v13",
+      "status": "passed",
+      "detail": {
+        "phase": "migrate-v13",
+        "schemaVersion": "13",
+        "migration": {
+          "from": 12,
+          "to": 13,
+          "coversImported": 0,
+          "agentMedia": {
+            "runs": 300,
+            "images": 340,
+            "unique": 201,
+            "ms": 17
+          }
+        },
+        "agentMedia": 201,
+        "agentRunMedia": 340,
+        "inline": 0,
+        "hashesEqual": true,
+        "runImages": 1,
+        "window": true,
+        "retry": {
+          "status": "succeeded",
+          "sentHashes": 1
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "migrate-v13-restart",
+      "status": "passed",
+      "detail": {
+        "phase": "migrate-v13-restart",
+        "schemaVersion": "13",
+        "migration": null,
+        "agentMedia": 201,
+        "agentRunMedia": 340,
+        "inline": 0,
+        "hashesEqual": true,
+        "runImages": 1,
+        "window": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "migrate-v13-newer",
+      "status": "passed",
+      "detail": {
+        "exitStatus": 1,
+        "refused": true,
+        "versionAfter": "14"
+      }
+    },
+    {
+      "name": "data-locations-fresh-release",
+      "status": "passed",
+      "detail": {
+        "channel": "release",
+        "screenshot": true,
+        "strays": 0,
+        "problems": []
+      }
+    },
+    {
+      "name": "data-locations-fresh-development",
+      "status": "passed",
+      "detail": {
+        "channel": "development",
+        "screenshot": false,
+        "strays": 0,
+        "problems": []
+      }
+    },
+    {
+      "name": "data-locations-upgrade",
+      "status": "passed",
+      "detail": {
+        "cut": {
+          "exitStatus": 99,
+          "newPointer": false,
+          "marker": false
+        },
+        "move": {
+          "exitStatus": 0,
+          "state": "migrated",
+          "files": 61,
+          "carried": [
+            "works",
+            "projects",
+            "attachments",
+            "resources",
+            "exports",
+            "downloads"
+          ]
+        },
+        "second": {
+          "exitStatus": 0,
+          "upgrade": null
+        },
+        "older": {
+          "exitStatus": 0,
+          "ms": 1512,
+          "data": true,
+          "emulated": true
         },
         "problems": []
       }
