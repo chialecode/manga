@@ -6,8 +6,8 @@ import { buildEpubFixture, buildPdfFixture } from "@manga/app-core";
 import { startApp, tempProfile } from "../helpers/app.ts";
 
 /**
- * Rework coverage for the reading→record→source→return loop, progress restore, resource-bound
- * sessions, frozen agent materials and the conflicting-package import. Synthetic data only.
+ * The reading→record→source→return loop, progress restore, resource-bound sessions, frozen agent materials
+ * and the conflicting-package import. Synthetic data only.
  */
 describe("reading notes closure", () => {
   it("returns from a note to its source and resolves the exact stored range", async () => {
@@ -108,6 +108,7 @@ describe("reading notes closure", () => {
       commandId: "progress.set",
       idempotencyKey: "progress-set",
       input: {
+        contextId: null,
         resourceId,
         resourceRevisionId: revisionId,
         consumed: true,
@@ -208,11 +209,11 @@ describe("reading notes closure", () => {
     const resourceA = String(one.value?.resourceId);
     const resourceB = String(two.value?.resourceId);
 
-    const sessionA = await app.call(actor, { commandId: "session.open", idempotencyKey: "open-a", input: { kind: "resource", targetId: resourceA, mode: "enthusiast" } }, grant.handle);
-    const sessionB = await app.call(actor, { commandId: "session.open", idempotencyKey: "open-b", input: { kind: "resource", targetId: resourceB, mode: "enthusiast" } }, grant.handle);
+    const sessionA = await app.call(actor, { commandId: "session.open", idempotencyKey: "open-a", input: { kind: "resource", targetId: resourceA, contextId: null } }, grant.handle);
+    const sessionB = await app.call(actor, { commandId: "session.open", idempotencyKey: "open-b", input: { kind: "resource", targetId: resourceB, contextId: null } }, grant.handle);
     expect((sessionA.value as { id: string }).id).not.toBe((sessionB.value as { id: string }).id);
     // Reopening the same target reuses its session instead of starting a second task context.
-    const again = await app.call(actor, { commandId: "session.open", idempotencyKey: "open-a2", input: { kind: "resource", targetId: resourceA } }, grant.handle);
+    const again = await app.call(actor, { commandId: "session.open", idempotencyKey: "open-a2", input: { kind: "resource", targetId: resourceA, contextId: null } }, grant.handle);
     expect((again.value as { id: string; reused: boolean }).id).toBe((sessionA.value as { id: string }).id);
     expect((again.value as { reused: boolean }).reused).toBe(true);
 
@@ -248,7 +249,7 @@ describe("reading notes closure", () => {
     expect(value.noteMaterials[0]?.objectId).toBe(objectId);
     expect(value.selection.quote).toContain("正文甲");
 
-    const sessions = await app.call(actor, { commandId: "workspace.sessions", idempotencyKey: "sess-list", input: {} }, grant.handle);
+    const sessions = await app.call(actor, { commandId: "workspace.sessions", idempotencyKey: "sess-list", input: { contextId: null } }, grant.handle);
     const rows = sessions.value as unknown as Array<{ sessionId: string; targetId: string | null; kind: string }>;
     expect(rows.filter((row) => row.kind === "resource").length).toBeGreaterThanOrEqual(2);
     await app.call(actor, { commandId: "agent.cancel", idempotencyKey: "sess-stop", input: { runId: String(sent.value?.runId) } }, grant.handle);

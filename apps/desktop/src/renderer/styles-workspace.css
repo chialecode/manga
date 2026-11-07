@@ -1,6 +1,5 @@
 /* ---- Workspace surfaces: short notices, the right pane's conversation, the work home page, settings pages, the debug panel ---- */
 
-.shell-content { position: relative; }
 .danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border-radius: 9px; font-size: 13px; color: var(--color-destructive-foreground); background: var(--color-danger); border: 1px solid var(--color-danger); }
 .danger-button:hover:not(:disabled) { filter: brightness(1.08); }
 .chip-quiet { color: var(--color-subtle); background: var(--color-muted); }
@@ -18,13 +17,6 @@
 .toast-danger { border-left-color: var(--color-danger); color: var(--color-danger); }
 .toast[data-rich] { flex-wrap: wrap; row-gap: 6px; }
 .toast-thumb { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface-muted, #eef0f4); flex: none; }
-
-/* ---- the rail: project sessions, opened resources, conversations of no project ---- */
-.shell-session { cursor: pointer; }
-.shell-session:hover { background: var(--color-muted); }
-.shell-session > .session-cover img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
-.session-title { font-size: 13px; color: var(--color-text); }
-.session-position { font-size: 11px; }
 
 /* ---- title-bar actions ---- */
 .scan-indicator { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: 12px; color: var(--color-accent); background: var(--color-accent-soft); border-radius: 12px; white-space: nowrap; }
@@ -102,13 +94,6 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .chat-capsule { position: absolute; right: 18px; bottom: 18px; z-index: 30; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
 /* Only the bar and the note box take the pointer; the space around and between them (the box may open further down) does not. */
 .chat-capsule > * { pointer-events: auto; }
-/* A page with a bar along its bottom edge (the player's controls, the comic's and the novel reader's footer) would have the capsule over the bar's right end, on
-   top of the volume, full-screen and "…" controls. There it takes the top right corner, and its note box opens downward from it. */
-.shell-content:has(.video-shell:not(:fullscreen)) .chat-capsule, .shell-content:has(.comic-footer) .chat-capsule, .shell-content:has(.reader-foot) .chat-capsule { top: 12px; bottom: auto; flex-direction: column-reverse; }
-/* Up there, the strips at the top of a reader (the region tool's hint, warnings, a note's source card) and the player's subtitle notice keep
-   clear of the capsule's corner, so it never sits on one of their buttons. */
-.shell-content:has(> .chat-capsule):has(.video-shell:not(:fullscreen), .comic-footer, .reader-foot) :is(.reader-notice, .reader-source) { margin-right: 104px; }
-.shell-content:has(> .chat-capsule) .video-shell:not(:fullscreen) .video-subtitle-notice { right: 104px; }
 .capsule-bar { display: inline-flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 22px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 6px 20px #30364726; }
 .capsule-note { display: flex; flex-direction: column; gap: 6px; width: min(320px, calc(100vw - 48px)); padding: 10px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 8px 24px #30364730; }
 .capsule-note textarea { width: 100%; resize: none; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; line-height: 1.6; }
@@ -139,15 +124,7 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .note-page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 
 /* ---- settings: layout ---- */
-.settings-nav { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; }
-.settings-back { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 8px; border-radius: 9px; text-align: left; color: var(--color-text); }
-.settings-back:hover { background: var(--color-muted); }
-.settings-nav-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
-.settings-nav-title { padding: 4px 12px; font-size: 11px; font-weight: 600; letter-spacing: .3px; color: var(--color-subtle); }
-.settings-nav-group ul { display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; margin: 0; }
-.settings-nav-group button { width: 100%; text-align: left; padding: 8px 12px; border-radius: 8px; font-size: 13px; color: var(--color-subtle); }
-.settings-nav-group button:hover { background: var(--color-muted); color: var(--color-text); }
-.settings-nav-group button[aria-current="page"] { color: var(--color-accent); background: var(--color-accent-soft); font-weight: 600; }
+.settings-nav { display: flex; flex-direction: column; }
 .settings-view { flex: 1; min-height: 0; overflow: auto; padding: 24px 28px 40px; scrollbar-gutter: stable; }
 .settings-page { width: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
 .settings-page-wide { max-width: 980px; }

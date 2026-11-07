@@ -117,20 +117,21 @@ describe("settings for media, recording and metadata", () => {
     expect(screen.queryByTestId("msettings-metadata")).toBeNull();
   });
 
-  it("leaves a page out of the settings navigation only when its module is off, and keeps the others reachable", () => {
+  it("leaves a page out of the settings navigation only when its module is off, and keeps the others reachable; the records are no page of it (A-101)", () => {
     const listed = (facets: string[]) => {
-      const view = render(<SettingsNav t={i18n.t} page="general" hidden={hiddenSettingsPages(new Set(facets))} onPage={() => undefined} onBack={() => undefined} />);
+      const view = render(<SettingsNav t={i18n.t} page="general" hidden={hiddenSettingsPages(new Set(facets))} onPage={() => undefined} />);
       const ids = [...view.container.querySelectorAll("[data-testid^='settings-nav-']")].map((node) => node.getAttribute("data-testid")!.replace("settings-nav-", ""));
       view.unmount();
       return ids;
     };
     const everything = listed(["agent", "comic", "video", "metadata", "voice", "notes"]);
-    expect(everything).toEqual(expect.arrayContaining(["general", "appearance", "reading", "recording", "library", "sources", "storage", "modules", "shortcuts", "models", "quick", "usage", "records", "logs"]));
+    expect(everything).toEqual(expect.arrayContaining(["general", "appearance", "reading", "recording", "library", "sources", "storage", "modules", "shortcuts", "models", "quick", "usage", "logs"]));
+    expect(everything).not.toContain("records");
     const minimal = listed(["agent"]);
     expect(minimal).not.toContain("recording");
     expect(minimal).not.toContain("sources");
-    // The pages that hold the switches and the records stay, so a module that was turned off can always be turned on again.
-    expect(minimal).toEqual(expect.arrayContaining(["general", "library", "modules", "records", "logs"]));
+    // The pages that hold the switches and the logs stay, so a module that was turned off can always be turned on again.
+    expect(minimal).toEqual(expect.arrayContaining(["general", "library", "modules", "logs"]));
     expect(listed([])).not.toEqual(expect.arrayContaining(["models", "quick", "usage"]));
   });
 

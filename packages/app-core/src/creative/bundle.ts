@@ -1,20 +1,21 @@
-import { EMBED_KINDS, MangaError, PROJECT_MATERIAL_KINDS, createId } from "@manga/contracts";
+import { EMBED_KINDS, MATERIAL_ORIGINS, MangaError, PROJECT_MATERIAL_KINDS, WorkspaceStateSchema, createId } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { describeObject, isObjectKind, type ObjectKind } from "./objects.ts";
 
 /**
  * A project as plain rows (CRE-01, the project package): the project, what it owns (boards, maps, drafts, excerpts, cuts and their parts), the
- * references it holds, the embeds its boards and maps hold, and a readable snapshot of every piece of personal material they point at. A bundle
+ * references it holds, the embeds its boards and maps hold, where the person had got to in the library resources while working in it (its own
+ * reading positions) and how its tabs were laid out, and a readable snapshot of every piece of personal material they point at. A bundle
  * is what a package carries; applying one to a profile makes a project there, remapping ids when the profile already has them.
  */
 
 /** A column's type: text, integer or real, each with `?` when it may be null, and `j` for text that holds JSON. */
 type Code = "t" | "t?" | "i" | "i?" | "r" | "j" | "j?";
-type TableSpec = { key: string; columns: Record<string, Code> };
+type TableSpec = { key: string | readonly string[]; columns: Record<string, Code> };
 
 const SPECS = {
   projects: { key: "id", columns: { id: "t", name: "t", goal: "t", status: "t", model_connection_id: "t?", created_at: "t", updated_at: "t" } },
-  project_materials: { key: "id", columns: { id: "t", project_id: "t", kind: "t", target_id: "t", label: "t", sort_order: "i", added_at: "t" } },
+  project_materials: { key: "id", columns: { id: "t", project_id: "t", kind: "t", target_id: "t", label: "t", sort_order: "i", added_at: "t", origin: "t" } },
   project_terms: { key: "id", columns: { id: "t", project_id: "t", term: "t", heard: "t?", note: "t?", created_at: "t" } },
   whiteboards: { key: "id", columns: { id: "t", project_id: "t?", title: "t", viewport_json: "j", created_at: "t", updated_at: "t" } },
   whiteboard_nodes: { key: "id", columns: { id: "t", board_id: "t", kind: "t", x: "r", y: "r", w: "r", h: "r", z: "i", parent_id: "t?", data_json: "j", created_at: "t", updated_at: "t" } },
@@ -35,6 +36,13 @@ const SPECS = {
     key: "id",
     columns: { id: "t", source_kind: "t", source_id: "t", slot: "t", target_kind: "t", target_id: "t", locator_json: "j", mode: "t", snapshot_json: "j?", snapshot_version: "t?", created_at: "t", updated_at: "t" },
   },
+  /** The reading positions kept while working in the project (its context): the project's own, apart from the ones in "最近" and in other projects. */
+  project_progress: {
+    key: ["resource_id", "resource_revision_id"],
+    columns: { resource_id: "t", resource_revision_id: "t", last_locator_json: "j?", consumed_ranges_json: "j", completion_state: "t", last_interaction_at: "t", percent: "r" },
+  },
+  /** The saved tabs and layout of the project: at most one row, whose id is the project's. */
+  project_workspace: { key: "id", columns: { id: "t", state_json: "j", updated_at: "t" } },
 } as const satisfies Record<string, TableSpec>;
 
 export type BundleTable = keyof typeof SPECS;
@@ -43,14 +51,19 @@ export type Row = Record<string, string | number | null>;
 /** The order rows are written in: a table after the ones it points at. */
 const ORDER: BundleTable[] = [
   "projects", "project_materials", "project_terms", "whiteboards", "whiteboard_nodes", "whiteboard_edges", "mindmaps", "mindmap_nodes", "drafts", "draft_versions", "draft_suggestions",
-  "excerpt_pages", "excerpts", "rough_cuts", "rough_cut_clips", "embeds",
+  "excerpt_pages", "excerpts", "rough_cuts", "rough_cut_clips", "embeds", "project_progress", "project_workspace",
 ];
+/** Tables that are not tables of the profile as they are: the project's share of the progress table, and of the saved workspaces. */
+const STATE_TABLES: readonly BundleTable[] = ["project_progress", "project_workspace"];
 /** Tables whose rows have an id of their own that a copy replaces; pages are decided separately. */
-const OWNED: BundleTable[] = ORDER.filter((table) => table !== "excerpt_pages");
+const OWNED: BundleTable[] = ORDER.filter((table) => table !== "excerpt_pages" && !STATE_TABLES.includes(table));
+/** What a column holds in a package written before the column existed (the package keeps working; the row is read as if it said this). */
+const DEFAULTS: Partial<Record<BundleTable, Record<string, string | number | null>>> = { project_materials: { origin: "manual" } };
 /** The prefix an id of each table starts with, kept when a copy makes new ids. */
 const PREFIX: Record<BundleTable, string> = {
   projects: "prj", project_materials: "pmt", project_terms: "ptm", whiteboards: "wb", whiteboard_nodes: "wbn", whiteboard_edges: "wbe", mindmaps: "mm", mindmap_nodes: "mmn",
   drafts: "drf", draft_versions: "drv", draft_suggestions: "drs", excerpt_pages: "pgv", excerpts: "exc", rough_cuts: "rc", rough_cut_clips: "rcc", embeds: "emb",
+  project_progress: "", project_workspace: "",
 };
 /** The kind of object a table's rows are, in the words references use. */
 const KIND_OF: Partial<Record<BundleTable, ObjectKind>> = { whiteboards: "whiteboard", mindmaps: "mindmap", drafts: "draft", excerpts: "excerpt", rough_cuts: "roughcut" };
@@ -71,9 +84,32 @@ const bad = (message: string, reason: string, extra: Record<string, unknown> = {
 
 // ---------------------------------------------------------------------------------------------------------- collecting
 
-export function selectRows(store: DrizzleStore, table: BundleTable, where: string, params: unknown[]): Row[] {
+export function selectRows(store: DrizzleStore, table: Exclude<BundleTable, "project_progress" | "project_workspace">, where: string, params: unknown[]): Row[] {
   const columns = Object.keys(SPECS[table].columns).join(", ");
   return store.sqlite.prepare(`SELECT ${columns} FROM ${table} ${where}`).all(...params) as Row[];
+}
+
+/** The project's own reading positions (its context is its id). */
+function progressRows(store: DrizzleStore, projectId: string): Row[] {
+  const columns = Object.keys(SPECS.project_progress.columns).join(", ");
+  return store.sqlite.prepare(`SELECT ${columns} FROM progress WHERE context_id = ? ORDER BY last_interaction_at, resource_id, resource_revision_id`).all(projectId) as Row[];
+}
+
+/**
+ * The project's saved tabs and layout. A conversation tab is left out, because conversations do not travel in a package; when any tab is left out the
+ * saved arrangement is dropped too, and the tabs that remain are placed by the preset.
+ */
+function workspaceRows(store: DrizzleStore, projectId: string): Row[] {
+  const row = store.sqlite.prepare("SELECT context_id AS id, state_json, updated_at FROM workspace_contexts WHERE context_id = ?").get(projectId) as Row | undefined;
+  if (!row) return [];
+  const parsed = WorkspaceStateSchema.safeParse((() => { try { return JSON.parse(String(row.state_json)); } catch { return null; } })());
+  if (!parsed.success) return [];
+  const state = parsed.data;
+  const tabs = state.tabs.filter((tab) => tab.kind !== "conversation");
+  const closed = state.closed.filter((tab) => tab.kind !== "conversation");
+  const left = tabs.length !== state.tabs.length;
+  const focused = tabs.some((tab) => tab.id === state.focusedTab) ? state.focusedTab : tabs[0]?.id ?? null;
+  return [{ id: String(row.id), state_json: JSON.stringify({ ...state, tabs, closed, focusedTab: focused, layout: left ? null : state.layout }), updated_at: String(row.updated_at) }];
 }
 
 /** Walks a value and calls `visit` on every `{ kind, targetId }`-like pair the boards and maps store, so the personal material they point at can be found. */
@@ -117,6 +153,8 @@ export function collectBundle(store: DrizzleStore, projectId: string, now = new 
   tables.embeds = sources.length
     ? selectRows(store, "embeds", `WHERE ${sources.map(() => "(source_kind = ? AND source_id = ?)").join(" OR ")} ORDER BY created_at, id`, sources.flat())
     : [];
+  tables.project_progress = progressRows(store, projectId);
+  tables.project_workspace = workspaceRows(store, projectId);
 
   // What the project points at that it does not own: each such thing is described once.
   const owned = new Map<string, Set<string>>();
@@ -131,6 +169,8 @@ export function collectBundle(store: DrizzleStore, projectId: string, now = new 
   for (const row of tables.whiteboard_nodes) { try { referencesIn(JSON.parse(String(row.data_json)), want); } catch { /* the row is kept as it is */ } }
   for (const row of tables.mindmap_nodes) { try { referencesIn(JSON.parse(String(row.refs_json)), want); } catch { /* the row is kept as it is */ } }
   for (const row of tables.rough_cut_clips) want("resource", String(row.resource_id));
+  // The project's reading positions are described by the same snapshots as the other references to resources, so a package read elsewhere can say what they were.
+  for (const row of tables.project_progress) want("resource", String(row.resource_id));
   const snapshots: Snapshot[] = [];
   for (const { kind, id } of wanted.values()) {
     if (snapshots.length >= BUNDLE_LIMITS.snapshots) break;
@@ -183,17 +223,23 @@ export function checkRows(table: BundleTable, rows: unknown): Row[] {
   if (!Array.isArray(rows) || rows.length > BUNDLE_LIMITS.rowsPerTable) throw bad(`${table} is not a list of a fitting size`, "schema", { table });
   const spec = SPECS[table] as TableSpec;
   const names = Object.keys(spec.columns);
+  const defaults = DEFAULTS[table] ?? {};
+  const keyColumns = typeof spec.key === "string" ? [spec.key] : spec.key;
   const seen = new Set<string>();
-  rows.forEach((row, index) => {
-    if (!row || typeof row !== "object" || Array.isArray(row)) throw bad(`${table}[${index}] is not a row`, "schema", { table });
+  const checked = rows.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw bad(`${table}[${index}] is not a row`, "schema", { table });
+    // A package from before a column existed lacks it: the row is read as if it held the column's default.
+    const row = { ...(item as Row) };
+    for (const [name, value] of Object.entries(defaults)) if (!(name in row)) row[name] = value;
     const keys = Object.keys(row);
     if (keys.length !== names.length || keys.some((key) => !(key in spec.columns))) throw bad(`${table}[${index}] does not have the columns of a ${table} row`, "schema", { table });
-    for (const name of names) checkValue(table, name, spec.columns[name]!, (row as Row)[name], index);
-    const key = String((row as Row)[spec.key]);
-    if (!key || seen.has(key)) throw bad(`${table} has a row without an id, or an id twice`, "schema", { table });
+    for (const name of names) checkValue(table, name, spec.columns[name]!, row[name], index);
+    const key = JSON.stringify(keyColumns.map((column) => row[column]));
+    if (keyColumns.some((column) => !String(row[column])) || seen.has(key)) throw bad(`${table} has a row without an id, or an id twice`, "schema", { table });
     seen.add(key);
+    return row;
   });
-  return rows as Row[];
+  return checked;
 }
 
 /** Checks a bundle read from a file: every row has exactly its columns with the right kinds of value, and every row points at a row that is in the bundle. */
@@ -218,6 +264,9 @@ export function checkBundle(raw: unknown): ProjectBundle {
     for (const row of tables[table]) if (row.project_id !== null && row.project_id !== project.id) throw bad(`${table} holds a row of another project`, "schema", { table });
   }
   for (const row of tables.project_materials) if (!(PROJECT_MATERIAL_KINDS as readonly string[]).includes(String(row.kind))) throw bad("a reference is of a kind a project cannot hold", "schema", { table: "project_materials" });
+  for (const row of tables.project_materials) if (!(MATERIAL_ORIGINS as readonly string[]).includes(String(row.origin))) throw bad("a reference has an origin a project cannot hold", "schema", { table: "project_materials" });
+  if (tables.project_workspace.length > 1 || tables.project_workspace.some((row) => row.id !== project.id)) throw bad("the package holds the layout of a project other than its own", "schema", { table: "project_workspace" });
+  for (const row of tables.project_workspace) if (!WorkspaceStateSchema.safeParse(JSON.parse(String(row.state_json))).success) throw bad("the saved layout of the project is not one this version can read", "schema", { table: "project_workspace" });
   for (const row of tables.embeds) {
     if (!(EMBED_KINDS as readonly string[]).includes(String(row.source_kind)) || !(EMBED_KINDS as readonly string[]).includes(String(row.target_kind))) throw bad("an embed is of a kind that cannot be embedded", "schema", { table: "embeds" });
     if (!(row.source_kind === "whiteboard" ? boards : row.source_kind === "mindmap" ? maps : new Set<string>()).has(String(row.source_id))) throw bad("an embed starts from an object the package does not hold", "schema", { table: "embeds" });
@@ -276,6 +325,35 @@ function rewriteJson(text: string, mapId: (id: string) => string, mapRef: (kind:
   return JSON.stringify(walk(JSON.parse(text)));
 }
 
+const STATE_REFERENCES: Readonly<Record<string, string>> = { workId: "work", resourceId: "resource", revisionId: "revision", noteId: "note", anchorId: "anchor", recordingId: "recording" };
+
+/** Renames what a saved layout holds: ids of objects the bundle owns, and the library things its tabs open (by the keys a tab's target uses). */
+function rewriteState(value: unknown, mapId: (id: string) => string, mapRef: (kind: string, id: string) => string): unknown {
+  if (typeof value === "string") return mapId(value);
+  if (Array.isArray(value)) return value.map((item) => rewriteState(item, mapId, mapRef));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+      key, typeof child === "string" && STATE_REFERENCES[key] ? mapRef(STATE_REFERENCES[key]!, child) : rewriteState(child, mapId, mapRef),
+    ]));
+  }
+  return value;
+}
+
+/** A locator names the revision it was made on (`representationId`); when the revision got another id here, the locator follows it. */
+function remapRepresentation(locatorJson: string, from: string, to: string): string {
+  if (from === to) return locatorJson;
+  try {
+    const walk = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(walk);
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, key === "representationId" && item === from ? to : walk(item)]));
+      return value;
+    };
+    return JSON.stringify(walk(JSON.parse(locatorJson)));
+  } catch {
+    return locatorJson;
+  }
+}
+
 /** Writes a bundle into the profile in one transaction: all of it, or nothing. */
 export function applyBundle(store: DrizzleStore, bundle: ProjectBundle, hooks: BundleHooks, now = new Date().toISOString()): BundleOutcome {
   const sqlite = store.sqlite;
@@ -295,7 +373,7 @@ export function applyBundle(store: DrizzleStore, bundle: ProjectBundle, hooks: B
   const projectId = mapId(String(bundle.project.id));
 
   sqlite.transaction(() => {
-    const insert = (table: BundleTable, row: Record<string, string | number | null>) => {
+    const insert = (table: Exclude<BundleTable, "project_progress" | "project_workspace">, row: Record<string, string | number | null>) => {
       const columns = Object.keys(row);
       sqlite.prepare(`INSERT INTO ${table}(${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).run(...columns.map((column) => row[column]));
       counts[table] = (counts[table] ?? 0) + 1;
@@ -316,7 +394,7 @@ export function applyBundle(store: DrizzleStore, bundle: ProjectBundle, hooks: B
       counts.excerpt_pages = (counts.excerpt_pages ?? 0) + 1;
     }
 
-    const remap = (table: Exclude<BundleTable, "projects" | "excerpt_pages">, source: Row): Row => {
+    const remap = (table: Exclude<BundleTable, "projects" | "excerpt_pages" | "project_progress" | "project_workspace">, source: Row): Row => {
       const row: Row = { ...source, id: mapId(String(source.id)) };
       const parent = (column: string) => { if (row[column] !== null) row[column] = mapId(String(row[column])); };
       const json = (column: string) => { const value = row[column]; if (value !== null && value !== undefined) row[column] = mapJson(value); };
@@ -347,12 +425,32 @@ export function applyBundle(store: DrizzleStore, bundle: ProjectBundle, hooks: B
       return row;
     };
     for (const table of ORDER) {
-      if (table === "projects" || table === "excerpt_pages") continue;
-      for (const source of bundle.tables[table]) {
-        const row = remap(table, source);
-        insert(table, row);
+      if (table === "projects" || table === "excerpt_pages" || STATE_TABLES.includes(table)) continue;
+      for (const source of bundle.tables[table as Exclude<BundleTable, "projects" | "excerpt_pages" | "project_progress" | "project_workspace">]) {
+        const row = remap(table as Exclude<BundleTable, "projects" | "excerpt_pages" | "project_progress" | "project_workspace">, source);
+        insert(table as Exclude<BundleTable, "project_progress" | "project_workspace">, row);
         if (table === "excerpts") hooks.indexExcerpt({ id: String(row.id), title: String(row.title), text: String(row.text), note: String(row.note) });
       }
+    }
+
+    // Where the person had got to while working in the project, under the project's id here (a copy has a new one). A position in a resource this
+    // profile does not have is left out: it would point at nothing.
+    for (const source of bundle.tables.project_progress) {
+      const resourceId = mapRef("resource", String(source.resource_id));
+      const revisionId = hooks.mapTarget?.("revision", String(source.resource_revision_id)) ?? String(source.resource_revision_id);
+      if (!rowExists(store, "resource_revisions", revisionId)) continue;
+      const locator = typeof source.last_locator_json === "string" ? remapRepresentation(source.last_locator_json, source.resource_revision_id as string, revisionId) : null;
+      sqlite.prepare("INSERT OR REPLACE INTO progress(context_id, resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent) VALUES (?,?,?,?,?,?,?,?)")
+        .run(projectId, resourceId, revisionId, locator, source.consumed_ranges_json, source.completion_state, source.last_interaction_at, source.percent);
+      counts.project_progress = (counts.project_progress ?? 0) + 1;
+    }
+
+    // The tabs and layout: what a tab shows is renamed the way the rest was, so a copy's tabs open the copy's boards and drafts.
+    for (const source of bundle.tables.project_workspace) {
+      const state = JSON.parse(String(source.state_json));
+      sqlite.prepare("INSERT OR REPLACE INTO workspace_contexts(context_id, state_json, updated_at) VALUES (?,?,?)")
+        .run(projectId, JSON.stringify(rewriteState(state, mapId, mapRef)), now);
+      counts.project_workspace = 1;
     }
 
     // What the project points at that this profile does not have: shown as missing, with what the package said about it.

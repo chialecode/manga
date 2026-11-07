@@ -52,6 +52,8 @@ export type ShelfProps = {
   onChanged?: () => void;
   onNotice?: (message: string) => void;
   onError?: (message: string) => void;
+  /** The context the shelf is in (a project id, null for "最近"); cards note a position that comes from another one. */
+  context?: string | null;
 };
 
 /** What the views need to list the resources that are in no work, or null when a filter is on that they do not answer. */
@@ -244,8 +246,8 @@ function KindView(props: ShelfProps & { kind: WorkMediaKind; query: WorksQuery; 
   const cover = useCovers(paged.items.map((item) => item.coverId), "grid");
   const layout = props.view === "list" ? LIST : kind === "video" ? LANDSCAPE : PORTRAIT;
   const render = useCallback((work: WorkSummary, index: number, tabbable: boolean) => (
-    <WorkCard t={t} work={work} coverUrl={cover(work.coverId)} actions={props.actions} index={index} tabbable={tabbable} layout={props.view === "list" ? "row" : "card"} />
-  ), [t, cover, props.actions, props.view]);
+    <WorkCard t={t} work={work} coverUrl={cover(work.coverId)} actions={props.actions} index={index} tabbable={tabbable} layout={props.view === "list" ? "row" : "card"} context={props.context} />
+  ), [t, cover, props.actions, props.view, props.context]);
   return (
     <div className="shelf-body" data-status={paged.status}>
       <p className="shelf-count" data-testid="shelf-count">{t("shelf.count", { count: paged.total, unit: t(`shelf.unit.${kind}` as "shelf.unit.novel") })}</p>
@@ -303,11 +305,12 @@ function ShelfSection(props: ShelfProps & { kind: WorkMediaKind; query: WorksQue
   useEffect(() => { props.onCount(kind, paged.status === "ready" ? paged.total : undefined); }, [paged.status, paged.total, kind, props.onCount]);
   if (props.hideWhenEmpty) return null;
   const facet = KIND_FACET[kind];
+  // The way to a medium's shelf stays while the medium has no works: what was taken out of a work (not in a work) is listed on that shelf and nowhere else.
   return (
     <section className="shelf-section" data-testid={`section-${kind}`} data-status={paged.status} aria-label={kindName(t, kind)}>
       <header>
         <h2><Icon size={18} aria-hidden="true" />{kindName(t, kind)}<span className="section-count" data-testid={`section-count-${kind}`}>{t("shelf.count", { count: paged.total, unit: t(`shelf.unit.${kind}` as "shelf.unit.novel") })}</span></h2>
-        {paged.total > 0 ? <button type="button" className="link-button" data-testid={`section-all-${kind}`} onClick={() => props.onViewAll(kind)}>{t("shelf.viewAll")}<ChevronRight size={14} aria-hidden="true" /></button> : null}
+        {paged.total > 0 || !(facet && !props.facets.has(facet)) ? <button type="button" className="link-button" data-testid={`section-all-${kind}`} onClick={() => props.onViewAll(kind)}>{t("shelf.viewAll")}<ChevronRight size={14} aria-hidden="true" /></button> : null}
       </header>
       <StatusLine t={t} kind={kind} status={paged.status} error={paged.error} onRetry={paged.reload} />
       {paged.status === "ready" && paged.items.length === 0 ? (
@@ -317,7 +320,7 @@ function ShelfSection(props: ShelfProps & { kind: WorkMediaKind; query: WorksQue
         <div className="section-row" ref={row} data-kind={kind} role="list" aria-label={kindName(t, kind)}>
           {paged.items.map((work, index) => (
             <div key={work.id} role="listitem" className="section-cell" data-kind={kind}>
-              <WorkCard t={t} work={work} coverUrl={cover(work.coverId)} actions={props.actions} index={index} tabbable layout="card" />
+              <WorkCard t={t} work={work} coverUrl={cover(work.coverId)} actions={props.actions} index={index} tabbable layout="card" context={props.context} />
             </div>
           ))}
           {paged.nextCursor ? <button type="button" className="section-more" onClick={() => props.onViewAll(kind)} aria-label={t("shelf.viewAll")}><ChevronRight size={20} /></button> : null}

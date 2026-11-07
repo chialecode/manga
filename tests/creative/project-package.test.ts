@@ -71,7 +71,7 @@ describe("a project package: what it holds and how it is written (AT-25, AT-28)"
 
     const files = unzipSync(fs.readFileSync(out.file));
     const manifest = JSON.parse(strFromU8(files["manifest.json"]!)) as { format: string; formatVersion: number; dataVersion: number; projectId: string; entries: Array<{ path: string; sha256: string; bytes: number; kind: string }> };
-    expect(manifest).toMatchObject({ format: "manga-project-package-v1", formatVersion: 1, dataVersion: 9, projectId: made.projectId });
+    expect(manifest).toMatchObject({ format: "manga-project-package-v1", formatVersion: 1, dataVersion: 12, projectId: made.projectId });
     expect(new Set(manifest.entries.map((entry) => entry.path))).toEqual(new Set(Object.keys(files).filter((name) => name !== "manifest.json")));
     for (const entry of manifest.entries) {
       expect(createHash("sha256").update(files[entry.path]!).digest("hex")).toBe(entry.sha256);
@@ -349,7 +349,7 @@ describe("a package that cannot be trusted is refused before anything is written
       files["manifest.json"] = strToU8(JSON.stringify(manifest));
     }, false);
     expect(await attempt(ctx, withManifest((manifest) => { manifest.formatVersion = 2; }))).toMatchObject({ reason: "newer" });
-    expect(await attempt(ctx, withManifest((manifest) => { manifest.dataVersion = 10; }))).toMatchObject({ reason: "newer" });
+    expect(await attempt(ctx, withManifest((manifest) => { manifest.dataVersion = 13; }))).toMatchObject({ reason: "newer" });
     expect(await attempt(ctx, withManifest((manifest) => { manifest.formatVersion = 0; }))).toMatchObject({ reason: "format" });
     expect(await attempt(ctx, withManifest((manifest) => { manifest.format = "manga-library-package-v1"; }))).toMatchObject({ reason: "format" });
   });
@@ -403,5 +403,117 @@ describe("a package that cannot be trusted is refused before anything is written
     expect(read.manifest.createdAt).toBe("2026-10-05T00:00:00.000Z");
     expect(read.bundle.project.id).toBe(made.projectId);
     expect(read.bundle.tables.whiteboard_nodes).toHaveLength(5);
+  });
+});
+
+describe("a project carries where it was being read and how it was laid out (A-94, A-96)", () => {
+  /** A project that was read in and laid out: a position of its own in the book, and tabs that open its board, its map and its draft. */
+  async function laidOut(ctx: App) {
+    const made = await makeProject(ctx);
+    const locator = { kind: "text", partId: "body", representationId: made.book.revisionId, normalizationVersion: "text-nfc-lf-v1", range: { start: 4, end: 8 }, quote: { exact: "撑着伞走" } };
+    ok(await run(ctx, "progress.set", { contextId: made.projectId, resourceId: made.book.resourceId, resourceRevisionId: made.book.revisionId, locator, consumed: true }));
+    const tab = (id: string, kind: string, target: Record<string, unknown>, title: string) => ({ id, kind, target, title, view: {} });
+    const state = {
+      version: 1, preset: "two", layout: null, focusedTab: "t-board", closed: [],
+      tabs: [
+        tab("t-board", "whiteboard", { projectId: made.projectId, objectId: made.boardId }, "素材墙"),
+        tab("t-map", "mindmap", { projectId: made.projectId, objectId: made.mapId }, "结构导图"),
+        tab("t-draft", "draft", { projectId: made.projectId, objectId: made.draftId }, "解说词"),
+        tab("t-book", "reader", { resourceId: made.book.resourceId, mediaKind: "novel", workId: made.book.workId }, "雨夜行人"),
+      ],
+    };
+    ok(await run(ctx, "workspace.saveContext", { contextId: made.projectId, state }));
+    return { made, locator };
+  }
+  const tabsOf = async (ctx: App, contextId: string) => ok<{ state: { tabs: Array<{ id: string; kind: string; target: Record<string, any> }>; preset: string; focusedTab: string } }>(await run(ctx, "workspace.loadContext", { contextId })).state;
+
+  it("writes the project's own positions and its layout, and nothing of the positions kept elsewhere", async () => {
+    const ctx = await boot();
+    const { made } = await laidOut(ctx);
+    ok(await run(ctx, "progress.set", { contextId: null, resourceId: made.book.resourceId, resourceRevisionId: made.book.revisionId, locator: { kind: "text", partId: "body", representationId: made.book.revisionId, normalizationVersion: "text-nfc-lf-v1", range: { start: 0, end: 2 }, quote: { exact: "雨夜" } }, consumed: true }));
+    const out = await exportTo(ctx, made.projectId);
+    const files = unzipSync(fs.readFileSync(out.file));
+    const progress = table(files, "project_progress");
+    expect(progress).toHaveLength(1);
+    expect(progress[0]).toMatchObject({ resource_id: made.book.resourceId, resource_revision_id: made.book.revisionId, completion_state: "reading" });
+    expect(JSON.parse(String(progress[0]!.last_locator_json))).toMatchObject({ range: { start: 4, end: 8 } });
+    const workspace = table(files, "project_workspace");
+    expect(workspace).toHaveLength(1);
+    expect(workspace[0]!.id).toBe(made.projectId);
+    expect((JSON.parse(String(workspace[0]!.state_json)) as { tabs: unknown[] }).tabs).toHaveLength(4);
+    expect(out.counts).toMatchObject({ project_progress: 1, project_workspace: 1 });
+  });
+
+  it("restores them under the project's own id when the project was deleted, with the same tabs and the same position", async () => {
+    const ctx = await boot();
+    const { made, locator } = await laidOut(ctx);
+    const out = await exportTo(ctx, made.projectId);
+    const before = await tabsOf(ctx, made.projectId);
+    ok(await run(ctx, "project.delete", { projectId: made.projectId }));
+    expect(one<{ n: number }>(ctx, "SELECT COUNT(*) AS n FROM progress WHERE context_id = ?", made.projectId).n).toBe(0);
+    expect(one<{ n: number }>(ctx, "SELECT COUNT(*) AS n FROM workspace_contexts WHERE context_id = ?", made.projectId).n).toBe(0);
+    ok(await importFrom(ctx, out.file));
+    expect(await tabsOf(ctx, made.projectId)).toEqual(before);
+    const restored = ok<{ locator: unknown; contextId: string }>(await run(ctx, "progress.get", { contextId: made.projectId, resourceId: made.book.resourceId }));
+    expect(restored.contextId).toBe(made.projectId);
+    expect(restored.locator).toEqual(locator);
+  });
+
+  it("makes a copy whose tabs open the copy's own objects and whose position is the copy's, and leaves the original as it was", async () => {
+    const ctx = await boot();
+    const { made, locator } = await laidOut(ctx);
+    const before = await tabsOf(ctx, made.projectId);
+    const out = await exportTo(ctx, made.projectId);
+    const imported = ok<{ projectId: string; mode: string }>(await importFrom(ctx, out.file));
+    expect(imported.mode).toBe("copy");
+    const copyBoard = one<{ id: string }>(ctx, "SELECT id FROM whiteboards WHERE project_id = ?", imported.projectId).id;
+    const copyMap = one<{ id: string }>(ctx, "SELECT id FROM mindmaps WHERE project_id = ?", imported.projectId).id;
+    const copyDraft = one<{ id: string }>(ctx, "SELECT id FROM drafts WHERE project_id = ?", imported.projectId).id;
+
+    const tabs = await tabsOf(ctx, imported.projectId);
+    expect(tabs).toMatchObject({ preset: "two", focusedTab: "t-board" });
+    const byId = Object.fromEntries(tabs.tabs.map((item) => [item.id, item]));
+    expect(byId["t-board"]!.target).toEqual({ projectId: imported.projectId, objectId: copyBoard });
+    expect(byId["t-map"]!.target).toEqual({ projectId: imported.projectId, objectId: copyMap });
+    expect(byId["t-draft"]!.target).toEqual({ projectId: imported.projectId, objectId: copyDraft });
+    // The book is the same book in this profile, so its tab still opens it.
+    expect(byId["t-book"]!.target).toMatchObject({ resourceId: made.book.resourceId, mediaKind: "novel" });
+    expect(ok<{ locator: unknown }>(await run(ctx, "progress.get", { contextId: imported.projectId, resourceId: made.book.resourceId })).locator).toEqual(locator);
+    // The original is as it was.
+    expect(await tabsOf(ctx, made.projectId)).toEqual(before);
+    expect(ok<{ locator: unknown }>(await run(ctx, "progress.get", { contextId: made.projectId, resourceId: made.book.resourceId })).locator).toEqual(locator);
+  });
+
+  it("leaves out a position in a book the other profile does not have, and keeps the tab that would open it", async () => {
+    const source = await boot();
+    const { made } = await laidOut(source);
+    const out = await exportTo(source, made.projectId);
+    const other = await boot();
+    const imported = ok<{ projectId: string; counts: Record<string, number> }>(await importFrom(other, out.file));
+    expect(one<{ n: number }>(other, "SELECT COUNT(*) AS n FROM progress WHERE context_id = ?", imported.projectId).n).toBe(0);
+    expect(imported.counts.project_progress ?? 0).toBe(0);
+    const tabs = await tabsOf(other, imported.projectId);
+    expect(tabs.tabs.map((item) => item.kind)).toEqual(["whiteboard", "mindmap", "draft", "reader"]);
+  });
+
+  it("imports a package written before positions and layouts were carried, as it did then", async () => {
+    const ctx = await boot();
+    const { made } = await laidOut(ctx);
+    const out = await exportTo(ctx, made.projectId);
+    const old = repack(fs.readFileSync(out.file), (files) => {
+      delete files["tables/project_progress.json"];
+      delete files["tables/project_workspace.json"];
+      const manifest = JSON.parse(strFromU8(files["manifest.json"]!)) as { dataVersion: number; entries: Array<{ path: string }> };
+      manifest.dataVersion = 9;
+      manifest.entries = manifest.entries.filter((entry) => !entry.path.includes("project_progress") && !entry.path.includes("project_workspace"));
+      files["manifest.json"] = strToU8(JSON.stringify(manifest));
+    });
+    const file = path.join(tmp(), "old.manga-project.zip");
+    fs.writeFileSync(file, old);
+    const imported = ok<{ projectId: string; mode: string }>(await importFrom(ctx, file));
+    expect(imported.mode).toBe("copy");
+    expect(one<{ n: number }>(ctx, "SELECT COUNT(*) AS n FROM progress WHERE context_id = ?", imported.projectId).n).toBe(0);
+    expect((await tabsOf(ctx, imported.projectId)).tabs).toEqual([]);
+    expect(one<{ n: number }>(ctx, "SELECT COUNT(*) AS n FROM whiteboards WHERE project_id = ?", imported.projectId).n).toBe(1);
   });
 });

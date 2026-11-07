@@ -1,4 +1,5 @@
 /** The renderer's one door to the main process: typed `window.manga`, and `call` for commands that throw on failure. */
+import { announceCommand } from "./lists-changed.ts";
 
 export type CommandResult<T = Record<string, unknown>> = {
   status: "ok" | "error";
@@ -87,10 +88,11 @@ export class CommandError extends Error {
   }
 }
 
-/** Run a command and return its value; a failed command throws a `CommandError` the caller can show. */
+/** Run a command and return its value; a failed command throws a `CommandError` the caller can show. One that changed what the lists show says so. */
 export async function call<T = Record<string, unknown>>(commandId: string, input: unknown = {}, options: { key?: string } = {}): Promise<T> {
   const result = await window.manga.command({ commandId, idempotencyKey: options.key ?? uid(), input });
   if (result.status === "error") throw new CommandError(result.error);
+  announceCommand(commandId, input);
   return (result.value ?? {}) as T;
 }
 

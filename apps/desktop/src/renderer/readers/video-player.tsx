@@ -5,6 +5,8 @@ import { Menu, type MenuGroup, type MenuItem } from "../components/menu.tsx";
 import { popupOpen } from "../components/popup.tsx";
 import type { SourceCard } from "../lib/types.ts";
 import { readerContext } from "../lib/reader-context.ts";
+import { useTab } from "../workspace/tab-context.tsx";
+import { tabMarks } from "../workspace/marks.ts";
 import { useKeyTable } from "../lib/key-table.tsx";
 import { quoteTags, useQuoteTags } from "../lib/quote-tags.ts";
 import { SourceBanner } from "./source-banner.tsx";
@@ -105,6 +107,7 @@ export function VideoPlayer(props: {
   onDanmakuSettings?: () => void;
 }) {
   const { t, doc, settings } = props;
+  const tab = useTab();
   const target = useMemo(() => ({ resourceId: doc.resourceId, revisionId: doc.revisionId }), [doc.resourceId, doc.revisionId]);
   const [element, setElement] = useState<HTMLVideoElement | null>(null);
   const shell = useRef<HTMLDivElement>(null);
@@ -132,7 +135,17 @@ export function VideoPlayer(props: {
     onEnded: () => { if (settings.autoNext && props.next) props.onNext(); },
     onMediaError: source.reportMediaError,
   });
-  useVideoCapture(element, target, playback.ready, originMs);
+  useVideoCapture(element, target, playback.ready, originMs, tab.tabId);
+  // A video that is playing shows on the tab's title (A-95).
+  useEffect(() => {
+    tabMarks.set(tab.tabId, "playing", playback.playing);
+    return () => tabMarks.set(tab.tabId, "playing", false);
+  }, [playback.playing, tab.tabId]);
+  // A tab that cannot be seen does not keep playing; one that is only not in focus plays on as the person left it (A-94).
+  useEffect(() => {
+    if (!tab.visible && playback.playing) playback.pause();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.visible]);
   // While a recording runs with "pause" chosen, a playing video waits and carries on when the recording ends.
   const pausedForRecording = useRef(false);
   const ducking = props.duck?.active === true && props.duck.mode === "pause";
@@ -166,6 +179,10 @@ export function VideoPlayer(props: {
   const [more, setMore] = useState(false);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  // The menu is placed by window coordinates; on the top layer no tab, column or stacking context of the workspace shifts or hides it.
+  const showOnTopLayer = useCallback((node: HTMLDivElement | null) => {
+    try { if (node && typeof node.showPopover === "function" && !node.matches(":popover-open")) node.showPopover(); } catch { /* shown in place */ }
+  }, []);
   const [idle, setIdle] = useState(false);
   const [inputError, setInputError] = useState("");
   // The T key asks the clock to open for typing.
@@ -317,9 +334,11 @@ export function VideoPlayer(props: {
       if (event.defaultPrevented) return;
       if (act(event)) event.preventDefault();
     };
+    // Only the focused tab answers the keys (A-94).
+    if (!tab.focused) return;
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [act]);
+  }, [act, tab.focused]);
   // Letting go of an arrow ends a step or a hold wherever the focus is; a window that lost focus never sees the key go up.
   useEffect(() => {
     const onUp = (event: KeyboardEvent) => {
@@ -424,9 +443,9 @@ export function VideoPlayer(props: {
       kind: "video", resourceId: doc.resourceId, revisionId: doc.revisionId, title: doc.episodeLabel ? `${doc.title} ${doc.episodeLabel}` : doc.title, workId: doc.workId ?? null,
       positionMs: Math.round(playback.currentMs), durationMs: doc.durationMs, frame: frameNow,
       interval: intervalStart !== undefined && intervalEnd !== undefined ? { startMs: intervalStart, endMs: intervalEnd } : null,
-    });
-  }, [playback.currentMs, frameNow, intervalStart, intervalEnd, doc.resourceId, doc.revisionId, doc.title, doc.episodeLabel, doc.durationMs, doc.workId]);
-  useEffect(() => () => { readerContext.clear(doc.resourceId); quoteTags.clearFor(doc.resourceId); }, [doc.resourceId]);
+    }, tab.tabId);
+  }, [playback.currentMs, frameNow, intervalStart, intervalEnd, doc.resourceId, doc.revisionId, doc.title, doc.episodeLabel, doc.durationMs, doc.workId, tab.tabId]);
+  useEffect(() => () => { readerContext.clear(doc.resourceId, tab.tabId); quoteTags.clearFor(doc.resourceId); }, [doc.resourceId, tab.tabId]);
 
   // A marked stretch (A-B) is a quote tag for the right pane; the player only reads. Removing the tag there clears the marks here.
   const tags = useQuoteTags(doc.resourceId);
@@ -532,7 +551,7 @@ export function VideoPlayer(props: {
             </div>
           ) : null}
           {menuAt ? (
-            <div className="video-context" role="menu" aria-label={t("video.menu")} data-testid="video-context" style={{ left: menuAt.x, top: menuAt.y }} onMouseDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+            <div ref={showOnTopLayer} popover="manual" className="video-context" role="menu" aria-label={t("video.menu")} data-testid="video-context" style={{ left: menuAt.x, top: menuAt.y, right: "auto", bottom: "auto" }} onMouseDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
               <button type="button" role="menuitem" onClick={() => { setMenuAt(null); playback.toggle(); }}>{playback.playing ? t("video.pause") : t("video.play")}</button>
               {settings.rates.map((preset) => (
                 <button key={preset} type="button" role="menuitemradio" aria-checked={preset === rate} onClick={() => { setMenuAt(null); props.onSettings({ rate: preset }); }}>{t("video.rateValue", { rate: preset })}</button>

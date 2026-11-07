@@ -8,110 +8,31 @@ import { readerContext } from "../../apps/desktop/src/renderer/lib/reader-contex
 import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts";
 import { resetVideoSupport } from "../../apps/desktop/src/renderer/readers/video-support.ts";
 import { installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
+import { installHost, stay, workDetail } from "../helpers/app-host.ts";
+import { closeFocusedTab, focusedTitle, goBack, openShelf, openWorkPage, settle, showTab, tabTitles } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
-type Call = { commandId: string; input: Record<string, unknown> };
 type Handler = (input: Record<string, unknown>) => unknown;
 
-const work = (id: string, kind: "video" | "comic", resourceId: string) => ({
-  id, title: `作品 ${id}`, author: "合成作者", mediaKind: kind, shelf: "reading", coverId: null,
-  lastResource: { id: resourceId, title: `作品 ${id}`, ordinalLabel: null, revisionId: `rev_${resourceId}` },
-  progress: 0.25, finishedCount: 0, resourceCount: 2, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null,
-});
+/** The saved position the player opens at unless a test says otherwise. */
+const SAVED_65S: Record<string, Handler> = { "progress.get": () => ({ locator: { kind: "temporal", startMs: 65_000 }, completion: "in_progress" }) };
+const NEW_READER: Record<string, Handler> = { "progress.get": () => ({ locator: null, completion: "new" }) };
 
-/** The work's own page needs the whole record: fields, override, links, resources. */
-const workDetail = (id: string, kind: "video" | "comic", title: string, resources: Array<Record<string, unknown>>) => ({
-  ...work(id, kind, String(resources[0]!.id)), title, originalTitle: title, fields: {}, override: { fields: {}, locked: [], cleared: [] }, links: [], snapshots: [], coverState: "auto", coverCount: 0, resources,
-});
-
-function installHost(overrides: Record<string, Handler> = {}) {
-  const calls: Call[] = [];
-  // The sessions the host knows: one conversation, plus one for each target the app opened ("session.open" keeps the one it made).
-  const sessions: Array<Record<string, unknown>> = [{ sessionId: "ses_shared", title: "会话 1", kind: "shared", targetId: null, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null }];
-  const handlers: Record<string, Handler> = {
-    "workspace.get": () => ({ uiFacets: ["agent", "library", "settings", "comic", "video", "notes"], sessions: [], runs: [], notes: [], resources: [] }),
-    "workspace.sessions": () => sessions,
-    "inventory.overview": () => ({ items: [], totals: {} }),
-    "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
-    "notes.list": () => [],
-    "quickTasks.list": () => ({ tasks: [] }),
-    "session.open": (input) => {
-      const id = `ses_${String(input.kind)}_${String(input.targetId)}`;
-      if (!sessions.some((row) => row.sessionId === id)) sessions.push({ sessionId: id, title: String(input.targetId), kind: input.kind, targetId: input.targetId, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null });
-      return { id, kind: input.kind, targetId: input.targetId };
-    },
-    "session.stream": () => ({ items: [], hasMore: false, session: { id: "ses", kind: "work", targetId: null, workId: null, resourceId: null } }),
-    "works.list": (input) => {
-      // The start-up probe (no kind) finds a work, so the app opens on the shelf and not on the library paths page.
-      const items = input.kind === "video" || !input.kind ? [work("wv", "video", "res_v1")] : input.kind === "comic" ? [work("wc", "comic", "res_c1")] : [];
-      return { items, total: items.length, nextCursor: null };
-    },
-    "works.open": () => ({ workId: "wv", shelf: "reading", promoted: false }),
-    "works.get": (input) => input.workId === "wc"
-      ? workDetail("wc", "comic", "合成漫画", [{ id: "res_c1", title: "漫画一", kind: "comic", ordinalLabel: "第 1 话", available: true }])
-      : workDetail("wv", "video", "合成动画", [
-        { id: "res_v1", title: "开场", kind: "video", ordinalLabel: "第 1 话", available: true },
-        { id: "res_v2", title: "后续", kind: "video", ordinalLabel: "第 2 话", available: true },
-        { id: "res_c1", title: "漫画一", kind: "comic", ordinalLabel: "第 1 话", available: true },
-      ]),
-    "covers.list": () => ({ workId: "wv", state: "auto", coverId: null, covers: [] }),
-    "video.probe": (input) => ({ resourceId: input.resourceId, revisionId: `rev_${input.resourceId}`, available: true, probe: { durationMs: 120_000 } }),
-    "video.audioTracks": () => ({ audio: [] }),
-    "video.subtitles": () => ({ subtitles: [] }),
-    "video.playbackPlan": () => ({ available: true, plan: { decision: "direct", reasons: [], detail: "" }, copy: null }),
-    "video.handle": () => ({ url: "manga-media://h/v", mediaType: "video/mp4", bytes: 1, startMs: 0 }),
-    "video.frameIndex": () => { throw Object.assign(new Error("none"), { code: "CAPABILITY_UNAVAILABLE" }); },
-    "settings.getMedia": () => ({}),
-    "progress.get": () => ({ locator: { kind: "temporal", startMs: 65_000 }, completion: "in_progress" }),
-    "comic.pages": (input) => ({
-      resourceId: input.resourceId, revisionId: "rev_res_c1", title: "合成漫画", direction: null, available: true, warnings: [],
-      pages: Array.from({ length: 6 }, (_, index) => ({ id: `p${index}`, index, name: `${index}.png`, width: 800, height: 1200, spread: false, ok: true })),
-    }),
-    "comic.pageHandles": (input) => ({ pages: (input.pageIds as string[]).map((pageId) => ({ pageId, available: true, kind: "image", url: `manga-media://h/${pageId}`, handle: pageId, mediaType: "image/png", width: 800, height: 1200 })) }),
-    ...overrides,
-  };
-  (window as unknown as { manga: unknown }).manga = {
-    async state() { return { layout: { channel: "test", pointerPath: "pointer.json", partitions: { data: "d" }, writable: true, recovery: "none" }, writable: true, vaultAvailable: true }; },
-    async command(payload: { commandId: string; input?: Record<string, unknown> }) {
-      const input = payload.input ?? {};
-      calls.push({ commandId: payload.commandId, input });
-      const handler = handlers[payload.commandId];
-      if (!handler) return { status: "ok", value: {} };
-      try { return { status: "ok", value: handler(input) }; } catch (error) {
-        const failure = error as { code?: string; message?: string };
-        return { status: "error", error: { code: failure.code ?? "INTERNAL", message: failure.message ?? "failed" } };
-      }
-    },
-    onNotice: () => () => undefined,
-    async chooseDirectory() { return null; }, async chooseFile() { return null; }, async chooseAudio() { return null; }, async stashSecret() { return null; },
-    async reveal() { return { status: "ok", value: {} }; },
-  };
-  return { calls, of: (id: string) => calls.filter((call) => call.commandId === id) };
-}
+const host = (overrides: Record<string, Handler> = {}, facets?: string[]) => installHost({ overrides: { ...SAVED_65S, ...overrides }, ...(facets ? { facets } : {}) });
 
 let media: ReturnType<typeof installMediaElement>;
 const element = () => screen.getByTestId("video-element") as HTMLVideoElement;
 
-/** A card opens the work's own page; only "watch" opens the file. */
-/** The page history keeps a place the person stayed on for a moment; a test that goes back stays on each place for that moment. */
-const stay = () => new Promise<void>((resolve) => { setTimeout(resolve, 140); });
-
-async function openWork(nav: "nav-video" | "nav-comic", cardId: string) {
+/** From a window that has just come up to a work's own page: the library tab's overview, the medium's shelf, the card. */
+async function openWork(kind: "video" | "comic", cardId: string) {
   render(<App />);
-  await waitFor(() => expect(screen.getByTestId(nav)).toBeTruthy());
-  await stay();
-  fireEvent.click(screen.getByTestId(nav));
-  await waitFor(() => expect(screen.getByTestId(cardId)).toBeTruthy());
-  await stay();
-  fireEvent.click(screen.getByTestId(cardId));
-  await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
-  await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
-  await stay();
+  await openShelf(kind);
+  await openWorkPage(cardId);
 }
 
 async function openVideo() {
-  await openWork("nav-video", "open-res_v1");
+  await openWork("video", "open-res_v1");
   fireEvent.click(screen.getByTestId("work-read"));
   await waitFor(() => expect(screen.getByTestId("video-reader")).toBeTruthy());
   await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
@@ -133,19 +54,13 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); media.restore(); vi.restoreAllMocks(); removeMatchMedia(); quoteTags.reset(); readerContext.reset(); });
 
-/** The title bar's back button: it is ready once the page the reader was opened from has settled into the history. */
-async function goBack() {
-  await waitFor(() => expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false));
-  fireEvent.click(screen.getByTestId("nav-back"));
-}
-
 describe("media pages in the app", () => {
   it("opens a video from its work's page at the saved position and gives the work's episodes", async () => {
-    const host = installHost();
-    await openWork("nav-video", "open-res_v1");
+    const calls = host();
+    await openWork("video", "open-res_v1");
     // The card opened the work, not the file: nothing has played and the work's own record was read.
     expect(screen.queryByTestId("video-reader")).toBeNull();
-    expect(host.of("works.open")).toHaveLength(0);
+    expect(calls.of("works.open")).toHaveLength(0);
     expect(screen.getByTestId("detail-title").textContent).toBe("合成动画");
     expect(screen.getByTestId("work-read").textContent).toContain("继续观看");
     fireEvent.click(screen.getByTestId("work-read"));
@@ -153,13 +68,14 @@ describe("media pages in the app", () => {
     await waitFor(() => expect(element().getAttribute("src")).toBeTruthy());
     act(() => media.loaded(element(), 120));
     await waitFor(() => expect(screen.getByTestId("video-reader").getAttribute("data-ready")).toBe("true"));
-    // The title and the episode are the title bar's now; the player has no bar of its own.
-    expect(screen.getByTestId("shell-title").textContent).toBe("合成动画 第 1 话 开场");
+    // The title and the episode are the tab's now; the player has no bar of its own, and the work's page stays in the library tab.
+    expect(focusedTitle()).toBe("合成动画 第 1 话 开场");
+    expect(tabTitles()).toEqual(["合成动画", "合成动画 第 1 话 开场"]);
     expect(screen.queryByTestId("video-title")).toBeNull();
     expect(screen.queryByTestId("video-episode")).toBeNull();
     expect(media.state(element()).seeks).toContain(65);
     expect(media.state(element()).rate).toBe(1);
-    expect(host.of("works.open")[0]!.input).toMatchObject({ resourceId: "res_v1" });
+    expect(calls.of("works.open")[0]!.input).toMatchObject({ resourceId: "res_v1" });
     fireEvent.click(screen.getByTestId("video-more"));
     fireEvent.click(screen.getByTestId("video-episodes"));
     expect(screen.getByTestId("video-episodes-res_v2").textContent).toContain("第 2 话");
@@ -167,39 +83,49 @@ describe("media pages in the app", () => {
     expect(screen.queryByTestId("video-episodes-res_c1")).toBeNull();
   });
 
-  it("records the position on the video that was playing when the user goes back, then shows the work's page and then the shelf", async () => {
-    const host = installHost();
+  it("records the position on the video that was playing when its tab is closed, then shows the work's page and then the shelf", async () => {
+    const calls = host();
     await openVideo();
     act(() => media.advance(element(), 20));
-    // Back from the player is the title bar's back button, which goes back through the pages that were visited.
+    // The player has no way back of its own: leaving it is closing its tab, and the library tab under it is where it was.
     expect(screen.queryByTestId("video-back")).toBeNull();
-    await goBack();
-    await waitFor(() => expect(host.of("progress.setTime").length).toBeGreaterThan(0));
-    expect(host.of("progress.setTime").at(-1)!.input).toMatchObject({ resourceId: "res_v1", resourceRevisionId: "rev_res_v1" });
-    expect(host.of("progress.setTime").at(-1)!.input.timeMs).toBe(85_000);
-    // Back from the player is the work's page; back from the work's page is the shelf it came from.
+    closeFocusedTab();
+    await waitFor(() => expect(calls.of("progress.setTime").length).toBeGreaterThan(0));
+    expect(calls.of("progress.setTime").at(-1)!.input).toMatchObject({ resourceId: "res_v1", resourceRevisionId: "rev_res_v1" });
+    expect(calls.of("progress.setTime").at(-1)!.input.timeMs).toBe(85_000);
+    // The tab in front is the library tab again, on the work's page; back from the work's page is the shelf it came from.
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
-    expect(screen.getByTestId("nav-video").getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByTestId("video-reader")).toBeNull();
+    // The rail marks the view of the sidebar, which closing a tab does not change; the library tab is the one in front.
+    expect(screen.getByTestId("nav-home").getAttribute("aria-current")).toBe("page");
+    expect(tabTitles()).toEqual(["合成动画"]);
+    expect(focusedTitle()).toBe("合成动画");
     fireEvent.click(screen.getByTestId("work-back"));
     await waitFor(() => expect(screen.getByTestId("shelf-video")).toBeTruthy());
   });
 
-  it("goes back from a reader that has only just opened to the page it was opened from, not to the one before that", async () => {
-    installHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
-    await openWork("nav-comic", "open-res_c1");
+  it("keeps the page a reader was opened from in its own tab: the reader's history starts with the reader, and the library tab walks back and forth by itself", async () => {
+    host(NEW_READER);
+    await openWork("comic", "open-res_c1");
     fireEvent.click(screen.getByTestId("work-read"));
     await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
-    // No pause on the reader: it has not settled into the history, and back still starts from it.
+    // The reader is a tab of its own with nothing before it: back has nowhere to go from it, and the work's page did not change under it.
+    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", true);
+    expect(screen.getByTestId("nav-forward")).toHaveProperty("disabled", true);
+    // The library tab is where it was: on the work's page, with the shelf behind it and nothing ahead of it.
+    await showTab("合成漫画");
+    await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
     expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false);
     fireEvent.click(screen.getByTestId("nav-back"));
-    await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
-    expect(screen.queryByTestId("comic-reader")).toBeNull();
-    // And forward comes back to the reader.
+    await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
+    // And forward comes back to the work's page.
     expect(screen.getByTestId("nav-forward")).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByTestId("nav-forward"));
+    await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
   });
 
   it("switching episode saves the old one's position on the old one and opens the new one from its own", async () => {
-    const host = installHost({
+    const calls = host({
       "progress.get": (input) => ({ locator: { kind: "temporal", startMs: input.resourceId === "res_v2" ? 7_000 : 65_000 }, completion: "in_progress" }),
     });
     await openVideo();
@@ -207,15 +133,15 @@ describe("media pages in the app", () => {
     fireEvent.click(screen.getByTestId("video-more"));
     fireEvent.click(screen.getByTestId("video-episodes"));
     fireEvent.click(screen.getByTestId("video-episodes-res_v2"));
-    await waitFor(() => expect(host.of("video.probe").some((call) => call.input.resourceId === "res_v2")).toBe(true));
-    await waitFor(() => expect(screen.getByTestId("shell-title").textContent).toContain("第 2 话"));
-    const saved = host.of("progress.setTime");
+    await waitFor(() => expect(calls.of("video.probe").some((call) => call.input.resourceId === "res_v2")).toBe(true));
+    await waitFor(() => expect(focusedTitle()).toContain("第 2 话"));
+    const saved = calls.of("progress.setTime");
     expect(saved.some((call) => call.input.resourceId === "res_v1" && call.input.timeMs === 75_000)).toBe(true);
     expect(saved.some((call) => call.input.resourceId === "res_v2" && call.input.timeMs === 75_000)).toBe(false);
   });
 
   it("opens a note's time source in the player with its interval, and returns to the note", async () => {
-    const host = installHost({
+    const calls = host({
       "records.list": () => ({ total: 1, items: [{ kind: "note", id: "n1", title: "时间笔记", preview: "", at: "2026-01-01T00:00:00.000Z", deleted: false, workId: "wv", workTitle: "合成动画", mediaKind: "video", resourceId: "res_v1", resourceTitle: "开场", tags: [], stage: null, audioState: null, durationMs: null, hasSource: true }] }),
       "notes.get": () => ({ objectId: "n1", revision: 1, title: "时间笔记", tags: [], blocks: [] }),
       "notes.openSource": () => ({
@@ -224,10 +150,9 @@ describe("media pages in the app", () => {
       }),
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-settings")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-settings"));
-    await waitFor(() => expect(screen.getByTestId("settings-nav-records")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("settings-nav-records"));
+    await waitFor(() => expect(screen.getByTestId("nav-note")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("nav-note"));
+    fireEvent.click(await screen.findByTestId("sidebar-manage"));
     await waitFor(() => expect(screen.getByTestId("record-source-n1")).toBeTruthy());
     fireEvent.click(screen.getByTestId("record-source-n1"));
     await waitFor(() => expect(screen.getByTestId("video-reader")).toBeTruthy());
@@ -239,15 +164,15 @@ describe("media pages in the app", () => {
     expect(screen.getByTestId("video-marker-source")).toBeTruthy();
     // The saved position of the video does not pull the player away from the note's time.
     expect(media.state(element()).seeks).not.toContain(65);
-    expect(host.of("notes.openSource")[0]!.input).toMatchObject({ objectId: "n1" });
+    expect(calls.of("notes.openSource")[0]!.input).toMatchObject({ objectId: "n1" });
     fireEvent.click(screen.getByTestId("video-source-back"));
     await waitFor(() => expect(screen.getByTestId("notes-page")).toBeTruthy());
   });
 
-  it("turns a marked interval into a tag in the right pane, and a note typed there into a time-located note, without leaving the player", async () => {
-    const host = installHost({ "notes.create": () => ({ objectId: "n9" }) });
+  it("turns a marked interval into a tag in the dock, and a note typed there into a time-located note, without leaving the player", async () => {
+    const calls = host({ "notes.create": () => ({ objectId: "n9" }) });
     await openVideo();
-    const pane = () => within(screen.getByTestId("shell-right"));
+    const pane = () => within(screen.getByTestId("shell-dock"));
     act(() => { media.state(element()).time = 10; media.advance(element(), 0); });
     fireEvent.keyDown(window, { key: "i" });
     act(() => { media.state(element()).time = 20; media.advance(element(), 0); });
@@ -256,8 +181,8 @@ describe("media pages in the app", () => {
     // Note is the default mode; the tag alone is enough to make a note, and the text goes with it.
     fireEvent.change(pane().getByTestId("agent-composer"), { target: { value: "这里的演出很好" } });
     fireEvent.click(pane().getByTestId("agent-send"));
-    await waitFor(() => expect(host.of("notes.create")).toHaveLength(1));
-    expect(host.of("notes.create")[0]!.input).toMatchObject({
+    await waitFor(() => expect(calls.of("notes.create")).toHaveLength(1));
+    expect(calls.of("notes.create")[0]!.input).toMatchObject({
       resourceId: "res_v1", resourceRevisionId: "rev_res_v1", locator: { kind: "temporal", startMs: 10_000, endMs: 20_000 }, quoteText: "0:10—0:20", text: "这里的演出很好",
     });
     // The player stays; the tag is spent and the marks go with it.
@@ -267,41 +192,40 @@ describe("media pages in the app", () => {
   });
 
   it("opens a comic from its work's page at its first page and goes back to the work and then the shelf", async () => {
-    installHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
-    await openWork("nav-comic", "open-res_c1");
+    host(NEW_READER);
+    await openWork("comic", "open-res_c1");
     expect(screen.getByTestId("work-read").textContent).toContain("继续阅读");
     fireEvent.click(screen.getByTestId("work-read"));
     await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
-    expect(screen.getByTestId("shell-title").textContent).toBe("合成漫画");
+    expect(focusedTitle()).toBe("合成漫画");
     expect(screen.queryByTestId("comic-title")).toBeNull();
     expect(screen.getByTestId("comic-position").textContent).toContain("1 / 6");
     expect(screen.queryByTestId("comic-back")).toBeNull();
-    await goBack();
+    closeFocusedTab();
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
+    expect(screen.queryByTestId("comic-reader")).toBeNull();
     fireEvent.click(screen.getByTestId("work-back"));
     await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
   });
 
   it("words a work's page by its medium: the way back, the tab of its files and the episodes (AT-100)", async () => {
-    installHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
-    await openWork("nav-comic", "open-res_c1");
+    host(NEW_READER);
+    await openWork("comic", "open-res_c1");
     expect(screen.getByTestId("work-back").textContent).toBe("返回漫画");
     expect(screen.getByTestId("page-work").textContent).not.toMatch(/书架|书籍/);
     expect(within(screen.getByTestId("page-work")).getByRole("tab", { name: "卷与话" })).toBeTruthy();
     cleanup();
-    installHost({});
-    await openWork("nav-video", "open-res_v1");
+    host();
+    await openWork("video", "open-res_v1");
     expect(screen.getByTestId("work-back").textContent).toBe("返回动漫");
     expect(within(screen.getByTestId("page-work")).getByRole("tab", { name: "剧集" })).toBeTruthy();
     expect(screen.getByTestId("page-work").textContent).not.toMatch(/书架|书籍/);
   });
 
   it("keeps the shelf as it was left when the user comes back from a work's page", async () => {
-    installHost();
+    host();
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-video")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-video"));
-    await waitFor(() => expect(screen.getByTestId("shelf-search")).toBeTruthy());
+    await openShelf("video");
     fireEvent.click(screen.getByTestId("shelf-tab-reading"));
     fireEvent.change(screen.getByTestId("shelf-search"), { target: { value: "合成" } });
     await waitFor(() => expect(screen.getByTestId("open-res_v1")).toBeTruthy());
@@ -312,9 +236,26 @@ describe("media pages in the app", () => {
     expect((screen.getByTestId("shelf-search") as HTMLInputElement).value).toBe("合成");
     expect(screen.getByTestId("shelf-tab-reading").getAttribute("aria-selected")).toBe("true");
   });
+
+  it("opens a new tab at the library's overview and leaves the first library tab where it was, on the work's page", async () => {
+    host();
+    render(<App />);
+    await openShelf("video");
+    await openWorkPage("open-res_v1");
+    expect(tabTitles()).toEqual(["合成动画"]);
+    fireEvent.click(screen.getByTestId("tab-new"));
+    await waitFor(() => expect(tabTitles()).toEqual(["合成动画", "资源库"]));
+    expect(focusedTitle()).toBe("资源库");
+    await showTab("合成动画");
+    expect(screen.getByTestId("page-work")).toBeTruthy();
+    // The new tab's own page is still the overview, and the first tab's history was not touched by it.
+    expect(screen.getAllByTestId("shelf-all").length).toBe(1);
+    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false);
+    await settle();
+  });
 });
 
-const voiceFacets = () => ({ uiFacets: ["agent", "library", "settings", "comic", "video", "notes", "voice"], sessions: [], runs: [], notes: [], resources: [] });
+const voiceFacets = ["agent", "library", "settings", "comic", "video", "notes", "voice"];
 const captureSession = (patch: Record<string, unknown> = {}) => ({
   id: "cap_1", mode: "toggle", retention: "keep", stage: "done", audioState: "retained", playable: true, durationMs: 20_000,
   createdAt: "2026-10-01T08:00:00.000Z", workId: "wv", resourceId: "res_v1", error: null, segments: { total: 1, done: 1, failed: 0, pending: 0, noSpeech: 0 }, speechMs: 4000, ...patch,
@@ -333,8 +274,8 @@ const voiceBubble = () => ({
 });
 
 describe("recording in the app", () => {
-  it("has no microphone in the right pane, the player or the title bar while the voice module is off", async () => {
-    installHost();
+  it("has no microphone in the dock, the player or the top row while the voice module is off", async () => {
+    host();
     await openVideo();
     expect(screen.queryByTestId("record-control")).toBeNull();
     expect(screen.queryByTestId("review-open")).toBeNull();
@@ -342,16 +283,15 @@ describe("recording in the app", () => {
     expect(screen.queryByTestId("record-start")).toBeNull();
   });
 
-  it("puts the microphone in the right pane, not in the player or the title bar, and shows a recording as a bubble that opens its review", async () => {
-    const host = installHost({
-      "workspace.get": voiceFacets,
+  it("puts the microphone in the dock, not in the player or the top row, and shows a recording as a bubble that opens its review", async () => {
+    const calls = host({
       "settings.getRecording": () => ({}),
       "capture.list": () => ({ sessions: [captureSession()] }),
       "capture.review": voiceReview,
       "session.stream": () => ({ items: [voiceBubble()], hasMore: false, session: { id: "ses", kind: "resource", targetId: "res_v1", workId: "wv", resourceId: "res_v1" } }),
-    });
+    }, voiceFacets);
     await openVideo();
-    const pane = () => within(screen.getByTestId("shell-right"));
+    const pane = () => within(screen.getByTestId("shell-dock"));
     expect(screen.queryByTestId("record-control")).toBeNull();
     expect(screen.queryByTestId("review-open")).toBeNull();
     expect(pane().getByTestId("chat-mic").getAttribute("aria-label")).toContain("F8");
@@ -359,21 +299,20 @@ describe("recording in the app", () => {
     await waitFor(() => expect(pane().getByTestId("bubble-voice-cap_1")).toBeTruthy());
     fireEvent.click(pane().getByTestId("bubble-voice-open-cap_1"));
     await waitFor(() => expect(screen.getByTestId("review-drawer")).toBeTruthy());
-    await waitFor(() => expect(host.of("capture.review").length).toBeGreaterThan(0));
-    expect(host.of("capture.review")[0]!.input).toMatchObject({ sessionId: "cap_1" });
+    await waitFor(() => expect(calls.of("capture.review").length).toBeGreaterThan(0));
+    expect(calls.of("capture.review")[0]!.input).toMatchObject({ sessionId: "cap_1" });
   });
 
   it("jumps from a recorded sentence to the video time it was said at", async () => {
-    installHost({
-      "workspace.get": voiceFacets,
+    host({
       "settings.getRecording": () => ({}),
       "capture.list": () => ({ sessions: [captureSession()] }),
       "capture.review": voiceReview,
       "session.stream": () => ({ items: [voiceBubble()], hasMore: false, session: { id: "ses", kind: "shared", targetId: null, workId: null, resourceId: null } }),
-    });
+    }, voiceFacets);
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("shell-right")).toBeTruthy());
-    const pane = () => within(screen.getByTestId("shell-right"));
+    await waitFor(() => expect(screen.getByTestId("shell-dock")).toBeTruthy());
+    const pane = () => within(screen.getByTestId("shell-dock"));
     await waitFor(() => expect(pane().getByTestId("bubble-voice-open-cap_1")).toBeTruthy());
     fireEvent.click(pane().getByTestId("bubble-voice-open-cap_1"));
     await waitFor(() => expect(screen.getByTestId("review-jump-seg_1-0")).toBeTruthy());
@@ -386,18 +325,16 @@ describe("recording in the app", () => {
   });
 
   it("opens one recording of a work from the work's records tab", async () => {
-    installHost({
+    host({
       "works.get": () => ({
         ...workDetail("wv", "video", "合成动画", [{ id: "res_v1", title: "开场", kind: "video", ordinalLabel: "第 1 话", available: true }]),
       }),
-      "workspace.get": voiceFacets,
       "settings.getRecording": () => ({}),
       "capture.list": () => ({ sessions: [captureSession()] }),
       "capture.review": voiceReview,
-    });
+    }, voiceFacets);
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-video")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-video"));
+    await openShelf("video");
     await waitFor(() => expect(screen.getByTestId("work-wv")).toBeTruthy());
     fireEvent.click(screen.getByTestId("open-res_v1"));
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());

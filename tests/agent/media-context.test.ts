@@ -161,7 +161,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("video context and the spoiler limit",
     return ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "字幕样例", kind: "video", pathHandle: ctx.app.registerPath("file", inLibrary(ctx.app, samplePath("video-mkv-ass-fonts"))) }));
   }
   const watched = (ctx: App, video: { resourceId: string; revisionId: string }, endMs: number, at = endMs) =>
-    run(ctx, "progress.setTime", { resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: at, played: [{ startMs: 0, endMs }] });
+    run(ctx, "progress.setTime", { contextId: null, resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: at, played: [{ startMs: 0, endMs }] });
 
   it("gives subtitles only up to the watched position, and widens only when the user asks", async () => {
     const ctx = await boot();

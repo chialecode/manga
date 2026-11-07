@@ -25,7 +25,7 @@ const rows = {
   objectRevisions: z.object({object_id:id, revision:z.number().int().positive(), payload_json:json, ...created}),
   anchors: z.object({id, resource_id:id, resource_revision_id:id, locator_json:json, preview_json:json.nullable(), ...created}),
   refs: z.object({id, from_object_id:id, from_block_id:id.nullable(), to_kind:id, to_id:id, mode:id, instance_layout_json:json.nullable(), ...created}),
-  progress: z.object({resource_id:id, resource_revision_id:id, last_locator_json:json.nullable(), consumed_ranges_json:json, completion_state:id, last_interaction_at:z.string(), percent: z.number().optional()}),
+  progress: z.object({/** The project this position was kept for; "" or left out is "最近". Optional so packages written before contexts still import (their positions go to "最近"). */ context_id: z.string().optional(), resource_id:id, resource_revision_id:id, last_locator_json:json.nullable(), consumed_ranges_json:json, completion_state:id, last_interaction_at:z.string(), percent: z.number().optional()}),
   captures: z.object({
     id, clock_json:json, status:id, attachment_id:PackageAttachmentNameSchema.nullable(), ...created,
     mode: id.nullable().optional(), retention: id.optional(), audio_state: id.optional(), stage: id.optional(), duration_ms: z.number().int().nonnegative().optional(),

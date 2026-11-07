@@ -72,21 +72,33 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 | Tiptap | 2.26.1 | 3.31.4 | 唯一的代码迁移是 `setContent` 的选项写法；未使用的 `extension-history` 已移除（历史在文档级维护） |
 | 测试工具 | Testing Library 16.3.0 / 14.6.1、playwright-core 1.55.0 | 16.3.3 / 14.6.7、1.63.0 | |
 | 新增（媒介能力） | — | sharp 0.35.5、yauzl 3.4.0、anitomy 0.0.35、onnxruntime-web 1.30.0、`@napi-rs/canvas` 1.0.10、jassub 2.5.16；随包 FFmpeg 8.1 LGPL 共享构建、Silero VAD 模型与 ASS 字幕默认字体（Noto Sans CJK 2.004 简体中文子集，OFL-1.1；版本与哈希锁定在 `scripts/tools/*.lock.json`） | 用途见[开源选型记录](#open-source-record)，许可见 Q-17 |
-| 新增（右栏聊天） | — | use-stick-to-bottom 1.1.6（MIT，2026-06-04 发行，无依赖，精确固定） | 右栏消息流在流式输出时贴底、用户上滚后不被拉回；聊天界面结构参照 Vercel ai-elements（Apache-2.0）为 MANGA 的消息类型重写，源码注明来源与许可，不引入其运行时。选型证据与未采用方案见[开源选型记录](#open-source-record)；1000 条消息的滚动与输入延迟在基准中记录 |
+| 新增（停靠栏聊天） | — | use-stick-to-bottom 1.1.6（MIT，2026-06-04 发行，无依赖，精确固定） | 停靠栏消息流在流式输出时贴底、用户上滚后不被拉回；聊天界面结构参照 Vercel ai-elements（Apache-2.0）为 MANGA 的消息类型重写，源码注明来源与许可，不引入其运行时。选型证据与未采用方案见[开源选型记录](#open-source-record)；1000 条消息的滚动与输入延迟在基准中记录 |
 | 移除 | epubjs 0.3.93、@readium/shared 2.5.1 | — | 只服务已完成的引擎对比（C4） |
 
 **保留旧版本的例外与复查条件**（pnpm 的最小发行龄策略不绕过：版本太新时 pnpm 会自动写入豁免，U1 一律回退而不是接受豁免）。A 审查（2026-10-05）按完整回归与打包烟测关闭该升级批次；同时指出前四项只试了最新版、未满发行龄就退回旧版。下次依赖盘点复查时改取满足发行龄的最新版本，不必等最新版本本身满龄：
 
 | 项 | 保留 | 最新稳定 | 原因与复查条件 |
 | --- | --- | --- | --- |
-| jsdom | 26.1.0 | 30.1.2 | 发行时间不满足最小发行龄；下次依赖盘点复试，复试时跑全部 jsdom 用例 |
-| lucide-react | 0.544.0 | 1.52.0 | 同上 |
-| @earendil-works/pi-ai | 0.85.1 | 1.0.2 | 同上；升级涉及 runtime 适配器，需重跑 `tests/agent` |
-| jassub | 2.5.16 | 2.5.18 | 同上 |
-| pdfjs-dist | 6.3.289（精确固定） | 6.4.299 | 代码断言版本，文本层与资产清单、拖选行为按它验证；升级需重测 PDF 文本层并让用户复核 H-01 |
-| @codemirror/state、view、commands | 6.5.2、6.38.1、6.8.1 | 6.7.6、6.43.13、6.11.1 | 只升这三者会与 `codemirror` 元包产生两份实例，类型不兼容；随下一次元包升级一起处理 |
-| @types/node | 24.5.2 | 26.6.4 | 类型随运行时（Node 24.19）；Node 升级时同步 |
+| @earendil-works/pi-ai | 0.85.1 | 1.4.0 | 升级涉及 runtime 适配器，需重跑 `tests/agent`；随顺延的 Agent 工程循环一起做（A-98） |
+| @types/node | 24.5.2 | 26.6.5 | 类型随运行时（Node 24.x）；Node 升级时同步 |
 | openapi-typescript | 7.13.0（仅在 `dist/tools/openapi-gen` 生成 Bangumi 类型，不进仓库依赖） | — | 它依赖 TypeScript 编译器 API，而 TypeScript 7 不再提供，所以生成器在隔离目录里用 TypeScript 5.9 运行；生成结果 `bangumi-openapi.ts` 入库并固定到官方规格提交与哈希；上游支持 TypeScript 7 后改回常规开发依赖 |
+
+## 2026-10-22 依赖刷新与分屏库（M4）
+
+阶段 M4 开始时按 A-35 再盘点一次（`pnpm outdated -r`，最小发行龄不绕过，没有写入任何豁免），并把上面保留旧版本的例外逐个复试。结果与每项的验证记录在[阶段报告](../delivery/stage-report.md#dependencies)。
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| Electron | 44.5.1 | 44.9.3 | 同一主版本补丁；打包烟测核验原生模块与 asar |
+| React / react-dom、Vite、Vitest、@vitejs/plugin-react、Zod、drizzle-orm、Tiptap、Radix、@tanstack/react-virtual、@napi-rs/canvas、playwright-core、user-event、mdast-util-to-markdown | 各自上一补丁 | 见报告 | 同一主版本内精确固定 |
+| jsdom | 26.1.0 | 30.1.3 | 复试通过。共享的 `tests/helpers/setup-dom.ts` 补一条 `[popover]` 显示规则（jsdom 30 带默认隐藏规则而没有 Popover API），`:focus-visible` 的用例改用显式替身；断言不变 |
+| lucide-react | 0.544.0 | 1.61.0 | 复试通过；代码里用到的 114 个图标名在 1.x 全部存在，类型检查与全量用例通过 |
+| pdfjs-dist | 6.3.289 | 6.4.299 | 复试通过；断言版本的常量随之更新，PDF 文本层、字体宽度与拖选用例通过。H-01 的复核在新版本上做 |
+| jassub | 2.5.16 | 2.5.23 | 复试通过 |
+| @codemirror/state、view、commands | 6.5.2、6.38.1、6.8.1 | 6.7.6、6.43.15、6.11.1 | 与 `codemirror` 元包（6.0.2，已是最新）合并为一份实例；`pnpm dedupe` |
+| linkedom | 0.18.13 | 保持 0.18.13 | **回退。** 0.18.14 依赖 `@acemir/cssom`，主进程打包报 `"parse" is not exported by "node_modules/@acemir/cssom/build/CSSOM.js"`（CommonJS 的具名导出 Rolldown 认不出）。复查条件：linkedom 或 `@acemir/cssom` 发行带 ESM 入口，或主进程打包能识别该导出 |
+| Electron 45.0.0 | — | 不升 | 2026-10-21 发行，太新；下次盘点再试 |
+| 新增 dockview-react | — | 8.6.1 | 见开源选型记录“标签页与分屏” |
 
 ## 2026-09-20 接入与构建边界
 
@@ -101,7 +113,7 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 
 | 能力 | 采用 | 未采用与理由 |
 | --- | --- | --- |
-| 桌面运行时 | Electron 44.5.1（Chromium 152，Node 24.21，2026-09-29 发行），锁定 44 系最新补丁 | 停留 37：Electron 只维护最新三个稳定主版本，37 系已无安全补丁 |
+| 桌面运行时 | Electron 44.9.3（Chromium 152，Node 24.22），锁定 44 系最新补丁；45.0.0（2026-10-21 发行）太新，下次依赖盘点再试 | 停留 37：Electron 只维护最新三个稳定主版本，37 系已无安全补丁 |
 | 视频播放 | Chromium `<video>`，经自定义 `manga-media:` 协议流式读取；`protocol.handle` + `net.fetch(file:)` 不处理 Range，所以自行返回 206/416。Windows 上 HEVC 走 D3D11 硬件解码，没有软件回退 | libmpv：在 Electron 中需要原生插件和实验性 `sharedTexture`，默认 GPL；播放副本已能覆盖无硬件 HEVC |
 | 探测、帧时间戳、字幕与字体提取、重封装、播放副本 | FFmpeg 8.1 LGPL 构建（BtbN `win64-lgpl-shared-8.1`），子进程调用。LGPL 变体含 HEVC 解码器、AAC 编码器、NVENC/AMF/QSV 硬件编码、SVT-AV1、libvpx、libopus、libass，没有 GPL 专属的 x264/x265；粗剪也用同一工具 | mediabunny 1.61.0（MPL-2.0）不读取 ASS 与字体附件，记为备选；`ffmpeg-static` 是 GPL 构建；openh264 默认不用（自编译二进制不在 Cisco 专利许可范围内，Q-17） |
 | 无硬件 HEVC 与不支持音轨 | 本地播放副本：视频优先用硬件 H.264 编码，没有则用 SVT-AV1 快速预设（Chromium 用 dav1d 软件解码）；音频转 AAC；保持原时间戳（VFR 不改帧率） | — |
@@ -116,7 +128,8 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 人声筛选 | Silero VAD v6.2.3（MIT）的 ONNX 模型，在独立 worker 中用 onnxruntime-web 1.30.0 的 WASM 后端运行；模型约 2 MB，随包离线 | onnxruntime-node（原生插件，性能不足时备选）；@ricky0123/vad-web 面向浏览器实时流；WebRTC VAD 在音乐与噪声上误检更多 |
 | 录音保存与上传 | 保留模式用 FFmpeg（libopus）把 PCM 转为 Opus 存入附件；上传给 ASR 的块用 WAV（16 kHz 单声道） | — |
 | 视觉与 OCR 路由 | 沿用 OpenAI 格式协议的图像输入（Responses `input_image`、Chat Completions `image_url`），不新增依赖 | tesseract.js 7.0.0：竖排日文漫画效果差，且本地 OCR 不是需求 |
-| 大列表 | TanStack Virtual 3.14.13 | — |
+| 大列表 | TanStack Virtual 3.14.21 | — |
+| 标签页与分屏（2026-10-22 查证，M4） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](../delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
 | 消息流贴底 | use-stick-to-bottom 1.1.6（MIT） | 自写滚动判定 |
 | 目录遍历与定时扫描 | Node 内置 `fs.promises.opendir`，在 `worker_threads` 中执行，写库仍由单写入宿主按小批次完成；定时用应用内计时器（关闭、30 分钟、1 小时、6 小时、每天）与启动后延迟扫描 | fdir 6.5.0：瓶颈不在遍历本身；croner 10.0.1：用不到 cron 表达式 |

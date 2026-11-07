@@ -4,7 +4,6 @@ export const zhCNMedia = {
   "nav.novel": "小说",
   "nav.comic": "漫画",
   "nav.video": "动漫",
-  "nav.overview": "总览",
 
   // shelf (library page)
   // A page is titled as the left column names it.

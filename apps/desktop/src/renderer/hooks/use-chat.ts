@@ -4,6 +4,7 @@ import type { QuickTask } from "@manga/contracts/quick-tasks";
 import { asArray, attempt, call, messageOf } from "../lib/api.ts";
 import { anchorFromContext, anchorFromTag, intervalLabel, noteTitleOf, quickPageFor, quickValues, renderQuick } from "../lib/chat-model.ts";
 import { quoteTags, useQuoteTags, type QuoteTag } from "../lib/quote-tags.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
 import { mediaContextFor, readerContext, useReaderContext, type ReaderContext } from "../lib/reader-context.ts";
 import type { AttachedImage, ComposerState } from "../lib/types.ts";
 import type { ChatMode } from "../components/chat/composer.tsx";
@@ -44,6 +45,8 @@ export type ChatDeps = {
   workTitle?: string | null;
   author?: string | null;
   prepareImage: (live: ReaderContext) => Promise<AttachedImage | null>;
+  /** The context the pane is in: a note written there becomes a material of the project. */
+  contextId: string | null;
 };
 
 /**
@@ -93,12 +96,13 @@ export function useChat(deps: ChatDeps) {
       const place = live && live.resourceId === target.resourceId ? live : null;
       const anchor = tag ? anchorFromTag(tag, t) : place ? anchorFromContext(place, t) : null;
       const title = noteTitleOf(body, target.title ?? deps.workTitle ?? t("notes.newTitle"));
-      await call("notes.create", {
+      const created = await call<{ objectId?: string }>("notes.create", {
         title,
         text: body,
         ...(anchor ? { resourceId: anchor.resourceId, resourceRevisionId: anchor.resourceRevisionId, locator: anchor.locator, ...(anchor.quoteText ? { quoteText: anchor.quoteText } : {}) } : {}),
         ...(target.workId ? { workId: target.workId } : {}),
       });
+      if (created.objectId) void autoAddMaterial(deps.contextId, "note", created.objectId);
       if (tag) quoteTags.remove(tag.id);
       deps.patchComposer({ draft: "" });
       deps.setError(undefined);

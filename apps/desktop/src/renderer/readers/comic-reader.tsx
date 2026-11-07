@@ -17,6 +17,7 @@ import { captureBus } from "../voice/capture-bus.ts";
 import { captureImage, captureSpread, type PageDrawing } from "./screenshot-capture.ts";
 import type { ScreenshotPort } from "../hooks/use-screenshots.tsx";
 import { readerContext } from "../lib/reader-context.ts";
+import { useTab } from "../workspace/tab-context.tsx";
 import { useKeyTable } from "../lib/key-table.tsx";
 import { quoteTags, useQuoteTags } from "../lib/quote-tags.ts";
 
@@ -101,6 +102,7 @@ export function ComicReader(props: {
   const [footerH, setFooterH] = useState(0);
   const { fullscreen, toggle: toggleFullscreen } = useFullscreen(root);
   const windowFull = useWindowFullscreen();
+  const tab = useTab();
   const [viewport, setViewport] = useState<Size>(FALLBACK_VIEWPORT);
   const [scrollTop, setScrollTop] = useState(0);
   const [pageIndex, setPageIndex] = useState(() => {
@@ -182,16 +184,16 @@ export function ComicReader(props: {
     if (!currentPageId) return;
     const first = announcedPage.current === null;
     announcedPage.current = currentPageId;
-    captureBus.emit({ reason: first ? "resource_change" : "page", resourceId: doc.resourceId, resourceRevisionId: doc.revisionId, locator: { kind: "image", pageId: currentPageId } });
-  }, [currentPageId, doc.resourceId, doc.revisionId]);
-  useEffect(() => () => captureBus.clear(doc.resourceId), [doc.resourceId]);
+    captureBus.emit({ reason: first ? "resource_change" : "page", resourceId: doc.resourceId, resourceRevisionId: doc.revisionId, locator: { kind: "image", pageId: currentPageId } }, tab.tabId);
+  }, [currentPageId, doc.resourceId, doc.revisionId, tab.tabId]);
+  useEffect(() => () => captureBus.clear(doc.resourceId, tab.tabId), [doc.resourceId, tab.tabId]);
 
   // ---- the Agent's right pane hears the page too, to offer it as context ----
   useEffect(() => {
     if (!currentPageId) return;
-    readerContext.set({ kind: "comic", resourceId: doc.resourceId, revisionId: doc.revisionId, title: doc.title, workId: doc.workId ?? null, pageId: currentPageId, pageNumber: pageIndex + 1, pageCount: pages.length });
-  }, [currentPageId, pageIndex, pages.length, doc.resourceId, doc.revisionId, doc.title, doc.workId]);
-  useEffect(() => () => { readerContext.clear(doc.resourceId); quoteTags.clearFor(doc.resourceId); }, [doc.resourceId]);
+    readerContext.set({ kind: "comic", resourceId: doc.resourceId, revisionId: doc.revisionId, title: doc.title, workId: doc.workId ?? null, pageId: currentPageId, pageNumber: pageIndex + 1, pageCount: pages.length }, tab.tabId);
+  }, [currentPageId, pageIndex, pages.length, doc.resourceId, doc.revisionId, doc.title, doc.workId, tab.tabId]);
+  useEffect(() => () => { readerContext.clear(doc.resourceId, tab.tabId); quoteTags.clearFor(doc.resourceId); }, [doc.resourceId, tab.tabId]);
 
   // ---- loading: the shown pages first, then a few ahead and one behind ----
   useEffect(() => {
@@ -363,9 +365,11 @@ export function ComicReader(props: {
       else return;
       event.preventDefault();
     };
+    // Only the focused tab answers the keys (A-94).
+    if (!tab.focused) return;
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [reading, layout, pages.length]);
+  }, [reading, layout, pages.length, tab.focused]);
 
   // ---- wheel: one page per gesture; Ctrl and the wheel change the size around the pointer ----
   // A page that is bigger than the window scrolls first, and turns once the wheel is turned again at its edge. The strip is a plain scrolling page.

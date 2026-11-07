@@ -4,7 +4,7 @@
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.danmaku`（Feature `danmaku`）/ 弹幕 / 开发者 |
 | 文档状态 / 实现状态 | 已实现并自检：假服务下的匹配、缓存、显示与设置、凭据隔离都有自动化验证，打包窗口里走过一遍；真实服务尚未验证（发行方的 AppId 还没有通过审核，见[用户待办 ACT-10](../../USER-ACTIONS.md#act-10)），产品验收 not-run，见[执行状态](../delivery/status.md) |
-| 需求 / 阶段 / 设计依据 | READ-04；AT-94；A-81、Q-28；[阶段计划第 15 节](../delivery/stage-plan.md#review-rework-2)、[交互设计 3.7](../design/interaction-and-workflows.md) |
+| 需求 / 阶段 / 设计依据 | READ-04；AT-94；A-81、Q-28；[阶段计划第 15 节](https://github.com/chialecode/manga/blob/c22d886/docs/delivery/stage-plan.md#review-rework-2)、[交互设计 3.7](../design/interaction-and-workflows.md) |
 | 包与公开入口 | `packages/app-core/src/danmaku/`（`sign.ts` 签名、`client.ts` 客户端、`parse.ts` 解析、`service.ts` 匹配与缓存）；`packages/contracts/src/inputs-danmaku.ts`；渲染进程 `apps/desktop/src/renderer/readers/danmaku-*.ts(x)`、`hooks/use-danmaku*.ts`、`pages/settings/danmaku-page.tsx`；主进程的凭据 `apps/desktop/src/main/danmaku-credentials.ts` 与构建注入 `apps/desktop/danmaku-define.ts`；命令 `danmaku.status`、`danmaku.match`、`danmaku.search`、`danmaku.choose`、`danmaku.setOffset`、`danmaku.load`、`danmaku.getSettings`、`danmaku.setSettings`、`danmaku.setCredentials`、`danmaku.clearCache`、`danmaku.around` |
 
 ## 1. 责任与依赖
@@ -43,5 +43,5 @@
 ## 5. 验证与未决
 
 - 自动化：`tests/danmaku/` 下的客户端（签名、跳转、403/429）、模块（匹配、同意、缓存、刷新限频、设置、偏移、Agent 读取）、凭据（构建注入、渲染进程产物与日志里搜不到假凭据）、显示层与设置页；窗口检查 `danmaku-layer`、`danmaku-privacy`、`danmaku-network`（假服务看到的全是用假凭据签的请求、没有本地路径）。
-- 基准：3000 条弹幕的一集在打包窗口里播放时晚到帧的占比；见[阶段报告](../delivery/stage-report.md#rework-2)。
+- 基准：3000 条弹幕的一集在打包窗口里播放时晚到帧的占比；见[阶段报告](https://github.com/chialecode/manga/blob/c22d886/docs/delivery/stage-report.md#rework-2)。
 - 限制：未用真实服务验证；未关联作品的匹配准确度取决于文件名；后续 loop：弹幕密度曲线与高能位置、相似弹幕的模糊合并，见[执行状态](../delivery/status.md#followup-loops)。

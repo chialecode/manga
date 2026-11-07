@@ -96,7 +96,7 @@ function passing() {
     output: "dist/desktop/packages/MANGA-win32-x64",
     electron: "44.5.1",
     smoke: config.package.smoke,
-    formats: { pages: true, modes: true, failureVisible: true },
+    formats: { pages: true, contexts: true, failureVisible: true },
     viewports: { wide: { innerWidth: 1280 }, narrow: { innerWidth: 720 } },
     loop06: { settled: { stable: true }, tagged: true, repainted: false, atEnd: { nodeConnected: true } },
     agent: { runningShown: true, stoppedShown: true, conversationShown: true },

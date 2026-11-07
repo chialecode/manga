@@ -285,7 +285,7 @@ export function PdfPageView(props: {
         getDocument: (src: Record<string, unknown>) => PdfTask;
       };
       if (dead) return;
-      if (pdfjs.version !== "6.3.289") throw new Error(`pdf.js ${pdfjs.version} does not match 6.3.289`);
+      if (pdfjs.version !== "6.4.299") throw new Error(`pdf.js ${pdfjs.version} does not match 6.4.299`);
       // The viewer module reads globalThis.pdfjsLib, which the build module above has just defined.
       const viewer = await import("pdfjs-dist/legacy/web/pdf_viewer.mjs") as unknown as {
         TextLayerBuilder: new (options: { pdfPage: PdfPage; onAppend: (div: HTMLDivElement) => void; abortSignal: AbortSignal }) => TextLayerBuilder;
@@ -311,7 +311,7 @@ export function PdfPageView(props: {
       const unscaled = page.getViewport({ scale: 1 });
       const scale = Math.max(0.2, (width / unscaled.width) * zoom);
       const viewport = page.getViewport({ scale });
-      // PDF.js 6.3.289 sizes the text layer from these variables. The span font-size and scaleX consume them.
+      // PDF.js 6.4.299 sizes the text layer from these variables. The span font-size and scaleX consume them.
       box.style.setProperty("--scale-factor", String(viewport.scale));
       box.style.setProperty("--user-unit", String(page.userUnit || 1));
       box.style.setProperty("--total-scale-factor", "calc(var(--scale-factor) * var(--user-unit))");
@@ -399,7 +399,7 @@ export function PdfPageView(props: {
   );
 }
 
-// Official PDF.js 6.3.289 text-layer rules (pdf_viewer.css). Span size comes from --font-height, --scale-x and --total-scale-factor.
+// Official PDF.js 6.4.299 text-layer rules (pdf_viewer.css). Span size comes from --font-height, --scale-x and --total-scale-factor.
 const TEXT_LAYER_CSS = `
 .pdf-page { --user-unit: 1; --scale-round-x: 1px; --scale-round-y: 1px; --total-scale-factor: calc(var(--scale-factor) * var(--user-unit)); }
 .textLayer {

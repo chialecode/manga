@@ -282,7 +282,8 @@ function* exportSteps(store: DrizzleStore, destDir: string, options: PackageExpo
     objectRevisions: query("SELECT object_id, revision, payload_json, created_at FROM object_revisions"),
     anchors: query("SELECT * FROM anchors"),
     refs: query("SELECT * FROM refs"),
-    progress: query("SELECT * FROM progress"),
+    // The positions of "最近"; the ones kept inside a project travel with the project (creative section), so they come back under the project's own id.
+    progress: query("SELECT * FROM progress WHERE context_id = ''"),
     captures: captureRows,
     metadataSnapshots: query("SELECT * FROM metadata_snapshots"),
     metadataOverrides: query("SELECT * FROM metadata_overrides"),
@@ -386,8 +387,8 @@ export function planPackageImport(store: DrizzleStore, manifest: LibraryPackageM
   for (const row of manifest.refs) check("ref", row.id, row.id, "SELECT id FROM refs WHERE id = ?", "reference id already exists");
   for (const row of manifest.captures) check("capture", row.id, row.id, "SELECT id FROM capture_sessions WHERE id = ?", "capture id already exists");
   for (const row of manifest.progress) {
-    if (has("SELECT resource_id FROM progress WHERE resource_id = ? AND resource_revision_id = ?", row.resource_id, row.resource_revision_id)) {
-      conflicts.push({ kind: "progress", id: `${row.resource_id}:${row.resource_revision_id}`, label: row.resource_id, reason: "progress row already exists" });
+    if (has("SELECT resource_id FROM progress WHERE context_id = ? AND resource_id = ? AND resource_revision_id = ?", row.context_id ?? "", row.resource_id, row.resource_revision_id)) {
+      conflicts.push({ kind: "progress", id: progressRowId(row), label: row.resource_id, reason: "progress row already exists" });
     }
   }
   // Revisions may collide without their owner colliding, and a client must be able to decide on them by id.
@@ -824,9 +825,15 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         if (skippedResource.has(row.resource_id) || !revisionIds.has(row.resource_revision_id)) continue;
         const resourceId = revisionOwnerResource(row.resource_revision_id, row.resource_id);
         const revisionId = revisionIds.get(row.resource_revision_id) ?? row.resource_revision_id;
-        if (actionOr("progress", `${row.resource_id}:${row.resource_revision_id}`) === "skip") continue;
+        if (actionOr("progress", progressRowId(row)) === "skip") continue;
         const lastLocator = row.last_locator_json ? remapLocator(row.last_locator_json, revisionIds) : row.last_locator_json;
-        run("INSERT OR REPLACE INTO progress(resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent) VALUES (?,?,?,?,?,?,?)", resourceId, revisionId, lastLocator, row.consumed_ranges_json, row.completion_state, row.last_interaction_at, row.percent ?? 0);
+        // A position kept for a project this profile does not have goes to "最近"; there, the later one of two positions for the same revision stays.
+        const contextId = row.context_id && hasRow(store, "projects", row.context_id) ? row.context_id : "";
+        if (contextId !== (row.context_id ?? "")) {
+          const there = store.sqlite.prepare("SELECT last_interaction_at AS at FROM progress WHERE context_id = '' AND resource_id = ? AND resource_revision_id = ?").get(resourceId, revisionId) as { at: string } | undefined;
+          if (there && there.at >= row.last_interaction_at) continue;
+        }
+        run("INSERT OR REPLACE INTO progress(context_id, resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent) VALUES (?,?,?,?,?,?,?,?)", contextId, resourceId, revisionId, lastLocator, row.consumed_ranges_json, row.completion_state, row.last_interaction_at, row.percent ?? 0);
       }
       for (const row of manifest.bookmarks ?? []) {
         if (skippedResource.has(row.resource_id) || !revisionIds.has(row.resource_revision_id)) continue;
@@ -1115,6 +1122,11 @@ function packageResourceOf(manifest: LibraryPackageManifest, revisionId: string)
 
 function hasRow(store: DrizzleStore, table: string, id: string): boolean {
   return Boolean(store.sqlite.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id));
+}
+
+/** The id a decision about a progress row names: the resource and revision, with the project in front when the position was kept for one. */
+function progressRowId(row: { context_id?: string; resource_id: string; resource_revision_id: string }): string {
+  return `${row.context_id ? `${row.context_id}:` : ""}${row.resource_id}:${row.resource_revision_id}`;
 }
 
 function remap(ids: string[], exists: (id: string) => boolean, actionFor: (kind: PackageRowKind, id: string) => PackageImportStrategy, kind: PackageRowKind): Map<string, string> {

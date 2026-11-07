@@ -72,7 +72,7 @@ describe("the work mode's overview (A-77)", () => {
   it("is not something a project's conversation can ask for", async () => {
     const ctx = await boot();
     const project = ok<{ id: string }>(await run(ctx, "project.create", { name: "只看自己" }));
-    const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, mode: "creator" }));
+    const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, contextId: project.id }));
     const denied = await ctx.app.call({ kind: "agent", id: session.id }, { commandId: "project.overview", idempotencyKey: "ov-agent", input: {} }, ctx.grant.handle);
     expect(denied.status).toBe("error");
   });
@@ -159,18 +159,21 @@ describe("projects (AT-25)", () => {
     expect(ok<{ terms: unknown[] }>(await run(ctx, "project.terms", { projectId: project.id })).terms).toHaveLength(2);
   });
 
-  it("keeps a conversation for each project and each mode, and a deleted project leaves its conversation behind", async () => {
+  it("keeps a conversation for each project, and a deleted project leaves its conversation behind", async () => {
     const ctx = await boot();
     const alpha = ok<{ id: string }>(await run(ctx, "project.create", { name: "阿尔法" }));
     const beta = ok<{ id: string }>(await run(ctx, "project.create", { name: "贝塔" }));
-    const a = ok<{ id: string; title: string; kind: string; projectId: string; reused: boolean }>(await run(ctx, "session.open", { kind: "project", targetId: alpha.id, mode: "creator" }));
-    const b = ok<{ id: string; projectId: string }>(await run(ctx, "session.open", { kind: "project", targetId: beta.id, mode: "creator" }));
-    expect(a).toMatchObject({ title: "阿尔法", kind: "project", projectId: alpha.id, reused: false });
+    const a = ok<{ id: string; title: string; kind: string; contextId: string; reused: boolean }>(await run(ctx, "session.open", { kind: "project", targetId: alpha.id, contextId: alpha.id }));
+    const b = ok<{ id: string; contextId: string }>(await run(ctx, "session.open", { kind: "project", targetId: beta.id, contextId: beta.id }));
+    expect(a).toMatchObject({ title: "阿尔法", kind: "project", contextId: alpha.id, reused: false });
     expect(b.id).not.toBe(a.id);
-    expect(ok<{ id: string; reused: boolean }>(await run(ctx, "session.open", { kind: "project", targetId: alpha.id, mode: "creator" }))).toMatchObject({ id: a.id, reused: true });
+    expect(ok<{ id: string; reused: boolean }>(await run(ctx, "session.open", { kind: "project", targetId: alpha.id, contextId: alpha.id }))).toMatchObject({ id: a.id, reused: true });
 
-    const listed = ok<unknown>(await run(ctx, "workspace.sessions", { mode: "creator" })) as Array<{ sessionId: string; projectId: string | null; kind: string }>;
-    expect(listed.filter((row) => row.kind === "project").map((row) => [row.sessionId, row.projectId]).sort()).toEqual([[a.id, alpha.id], [b.id, beta.id]].sort());
+    type Row = { sessionId: string; contextId: string | null; kind: string };
+    const listedA = ok<unknown>(await run(ctx, "workspace.sessions", { contextId: alpha.id })) as Row[];
+    const listedB = ok<unknown>(await run(ctx, "workspace.sessions", { contextId: beta.id })) as Row[];
+    expect(listedA.filter((row) => row.kind === "project").map((row) => [row.sessionId, row.contextId])).toEqual([[a.id, alpha.id]]);
+    expect(listedB.filter((row) => row.kind === "project").map((row) => [row.sessionId, row.contextId])).toEqual([[b.id, beta.id]]);
     expect(ok<{ projects: Array<{ counts: { sessions: number } }> }>(await run(ctx, "project.list", {})).projects.map((item) => item.counts.sessions)).toEqual([1, 1]);
 
     const removed = ok<{ keptSessions: number }>(await run(ctx, "project.delete", { projectId: alpha.id }));
@@ -193,7 +196,7 @@ describe("projects (AT-25)", () => {
     const project = ok<{ id: string }>(await run(ctx, "project.create", { name: "范围", goal: "只谈项目里的东西" }));
     ok(await run(ctx, "project.addMaterial", { projectId: project.id, kind: "work", targetId: inside.workId }));
     ok(await run(ctx, "project.addTerm", { projectId: project.id, term: "专有名词甲" }));
-    const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, mode: "creator" }));
+    const session = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, contextId: project.id }));
 
     // Asking for something outside the project reads nothing of it; the project's own material is what the conversation looks through.
     const sent = ok<{ runId: string; materials: Array<{ resourceId: string }>; contextText: string | null }>(await run(ctx, "agent.send", { sessionId: session.id, text: "说说这两部", readResourceIds: [inside.resourceId, outside.resourceId] }));
@@ -227,6 +230,6 @@ describe("projects (AT-25)", () => {
     expect((await run(ctx, "project.update", { projectId: project.id, modelConnectionId: voice.id })).status).toBe("error");
     // Another project's conversation is untouched by this one's connection.
     const other = ok<{ id: string }>(await run(ctx, "project.create", { name: "另一个" }));
-    expect(ok<{ id: string; projectId: string }>(await run(ctx, "session.open", { kind: "project", targetId: other.id, mode: "creator" })).projectId).toBe(other.id);
+    expect(ok<{ id: string; contextId: string }>(await run(ctx, "session.open", { kind: "project", targetId: other.id, contextId: other.id })).contextId).toBe(other.id);
   });
 });

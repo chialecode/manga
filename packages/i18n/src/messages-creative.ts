@@ -28,7 +28,6 @@ export const zhCNCreative = {
   "log.dictionary.importMetadata": "从资料加入了词典词条",
 
   // ---- the work mode's overview ----
-  "nav.projectOverview": "项目总览",
   "overview.title": "项目总览",
   "overview.recent": "最近的项目",
   "overview.recent.empty": "还没有项目。项目把一次创作用到的材料、白板、导图、文稿和对话放在一起，先新建一个。",
@@ -46,7 +45,6 @@ export const zhCNCreative = {
   "overview.archivedHint": "另有 {n} 个已归档的项目",
 
   // ---- the projects page ----
-  "nav.projects": "项目",
   "projects.title": "项目",
   "projects.empty": "还没有项目。项目把一次创作用到的材料、白板、导图、文稿和对话放在一起。",
   "projects.new": "新建项目",
@@ -141,19 +139,12 @@ export const zhCNCreative = {
   "projects.model": "对话使用的模型",
   "projects.model.default": "使用默认文本连接",
   "projects.model.hint": "只影响这个项目的对话；没有文本连接时，对话不可用，其他功能照常。",
-  "projects.sessions": "项目会话",
-  "projects.unattached": "未归属项目",
   "projects.pickWork": "选择作品",
   "projects.limit": "项目数量已到上限，请先归档或删除一些。",
   "projects.missing": "这个项目已经不存在。",
   "projects.archivedEmpty": "没有已归档的项目。",
 
   // ---- deleting conversations, in the settings records page (A-89) ----
-  "records.typeConversation": "对话",
-  "records.conv.mode": "模式",
-  "records.conv.modeAll": "全部模式",
-  "records.conv.mode.enthusiast": "娱乐模式",
-  "records.conv.mode.creator": "工作模式",
   "records.conv.kind": "对话类型",
   "records.conv.kindAll": "全部类型",
   "records.conv.kind.shared": "全局对话",

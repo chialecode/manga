@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
 import { relinkNotice, relinkResource } from "../lib/relink.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
+import { mediaPrefs } from "../lib/media-prefs.ts";
+import type { Elsewhere } from "../workspace/elsewhere.ts";
 import type { SourceCard } from "../lib/types.ts";
 import { nextResource, resourceLabel } from "../lib/works.ts";
 import type { ProgressReport } from "../readers/use-video-playback.ts";
@@ -12,11 +15,13 @@ export type VideoDeps = {
   i18n: Translator;
   setError: (message?: string) => void;
   setNotice: (message?: string, action?: { label: string; onClick: () => void }) => void;
-  setPage: (page: string) => void;
-  viewRequest: MutableRefObject<number>;
-  ensureBoundSession: (kind: "resource" | "project" | "note", targetId: string, request?: number) => Promise<string | undefined>;
-  openNote: (objectId: string, focusBlockId?: string) => Promise<void>;
+  /** The context the video is watched in: its position and watched stretches are that context's (A-96). */
+  contextId: string | null;
+  tabId: string;
+  openNote: (objectId: string, focusBlockId?: string) => void | Promise<void>;
   refresh: () => Promise<void>;
+  /** The player knows more about what it shows than the tab was opened with. */
+  onFacts?: (facts: { workId: string | null; heading: string }) => void;
 };
 
 export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {
@@ -49,12 +54,15 @@ const FINISHED_WITHIN_MS = 5000;
 const SAVE_DELAY_MS = 400;
 
 /**
- * The video player's state: the open resource, the player settings, where to start, the episodes of its work and the
- * round trip to a note. Like the comic reader, every await re-checks `viewRequest` so a late answer for a video the
+ * The video player's state in one tab: the open resource, the player settings, where to start, the episodes of its work and the
+ * round trip to a note. Like the comic reader, every await re-checks the request counter so a late answer for a video the
  * user already left is dropped.
  */
 export function useVideo(deps: VideoDeps) {
-  const { i18n, setError, setNotice, setPage, viewRequest, ensureBoundSession, openNote, refresh } = deps;
+  const { i18n, setError, setNotice, contextId, openNote, refresh } = deps;
+  const viewRequest = useRef(0);
+  /** Where another context has been in this video when this one has not started, for the offer to jump there. */
+  const [elsewhere, setElsewhere] = useState<Elsewhere | null>(null);
   const [doc, setDoc] = useState<VideoDoc | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [startMs, setStartMs] = useState(0);
@@ -67,6 +75,8 @@ export function useVideo(deps: VideoDeps) {
     });
     return () => { cancelled = true; };
   }, []);
+  // The settings page and the other video tabs change the same preferences; this player follows them.
+  useEffect(() => mediaPrefs.subscribe((kind, patch) => { if (kind === "video") setSettings((current) => ({ ...current, ...patch })); }), []);
   const [next, setNext] = useState<{ resourceId: string; title: string } | null>(null);
   const [focus, setFocus] = useState<VideoFocus | null>(null);
   const [sourceCard, setSourceCard] = useState<SourceCard | null>(null);
@@ -109,7 +119,7 @@ export function useVideo(deps: VideoDeps) {
     const [tracks, saved, progress, touched] = await Promise.all([
       attempt<{ audio: AudioTrackInfo[] }>("video.audioTracks", { resourceId, revisionId: value.revisionId }),
       attempt<{ video?: Partial<VideoSettings> }>("settings.getMedia"),
-      attempt<{ locator: { kind?: string; startMs?: number } | null; completion?: string }>("progress.get", { resourceId, resourceRevisionId: value.revisionId }),
+      attempt<{ locator: { kind?: string; startMs?: number } | null; completion?: string; elsewhere?: Elsewhere | null }>("progress.get", { contextId, resourceId, resourceRevisionId: value.revisionId }),
       attempt<{ workId: string | null }>("works.open", { resourceId }),
     ]);
     if (request !== viewRequest.current) return;
@@ -136,6 +146,7 @@ export function useVideo(deps: VideoDeps) {
     const at = locator?.kind === "temporal" && typeof locator.startMs === "number" ? locator.startMs : 0;
     const finished = progress.ok && progress.value.completion === "completed" && loaded.durationMs > 0 && at >= loaded.durationMs - FINISHED_WITHIN_MS;
     setStartMs(options.focus ? options.focus.startMs : finished ? 0 : at);
+    setElsewhere(progress.ok && !options.focus ? progress.value.elsewhere ?? null : null);
     reached.current = null;
     docRef.current = loaded;
     setDoc(loaded);
@@ -145,8 +156,8 @@ export function useVideo(deps: VideoDeps) {
     const following = nextResource(rows, resourceId);
     setNext(following ? { resourceId: following.id, title: resourceLabel(following) } : null);
     setStatus("ready");
-    setPage("video");
-    await ensureBoundSession("resource", resourceId, request);
+    deps.onFacts?.({ workId: workId.current, heading: [loaded.title, loaded.episodeLabel].filter(Boolean).join(" ") });
+    void autoAddMaterial(contextId, "resource", resourceId);
   }
 
   /** A note's source at a time: open that video there, with the interval it framed. */
@@ -177,6 +188,7 @@ export function useVideo(deps: VideoDeps) {
     setReturnTo(null);
     setFocus(null);
     setNext(null);
+    setElsewhere(null);
   }
 
   /** The player went to the stretch a note pointed at; a player mounted again must not go there a second time. */
@@ -189,7 +201,6 @@ export function useVideo(deps: VideoDeps) {
     setSourceCard(null);
     setReturnTo(null);
     setFocus(null);
-    setPage("notes");
   }
 
   /** Re-point a stale source at the file the user picks; the resource identity, its notes and its recordings stay. */
@@ -210,6 +221,7 @@ export function useVideo(deps: VideoDeps) {
   /** The value changes at once; the saved copy follows a moment later, so dragging the volume is one write. */
   function changeSettings(patch: Partial<VideoSettings>) {
     setSettings((current) => ({ ...current, ...patch }));
+    mediaPrefs.publish("video", patch);
     pending.current = { ...pending.current, ...patch };
     if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(flushSettings, SAVE_DELAY_MS);
@@ -220,7 +232,7 @@ export function useVideo(deps: VideoDeps) {
     const { resourceId, revisionId } = report;
     reached.current = { resourceId, ms: report.ended ? 0 : Math.max(0, report.timeMs) };
     progressChain.current = progressChain.current.then(async () => {
-      const result = await attempt("progress.setTime", { resourceId, resourceRevisionId: revisionId, timeMs: Math.max(0, report.timeMs), played: report.ranges });
+      const result = await attempt("progress.setTime", { contextId, resourceId, resourceRevisionId: revisionId, timeMs: Math.max(0, report.timeMs), played: report.ranges });
       if (!result.ok) setError(result.error.message);
     });
   }
@@ -230,7 +242,7 @@ export function useVideo(deps: VideoDeps) {
 
   const resumeMs = reached.current && doc && reached.current.resourceId === doc.resourceId ? reached.current.ms : startMs;
 
-  return { doc, status, startMs: resumeMs, focusApplied, settings, next, focus, sourceCard, visible: doc !== null, open, openFromNote, playRange, close, backToNote, repair, changeSettings, recordProgress, settled };
+  return { doc, status, elsewhere, dismissElsewhere: () => setElsewhere(null), startMs: resumeMs, focusApplied, settings, next, focus, sourceCard, visible: doc !== null, open, openFromNote, playRange, close, backToNote, repair, changeSettings, recordProgress, settled };
 }
 
 export type VideoState = ReturnType<typeof useVideo>;

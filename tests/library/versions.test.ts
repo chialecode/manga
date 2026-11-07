@@ -137,7 +137,7 @@ describe("two releases of one title are one entry with versions (AT-78)", () => 
       const a = release(ctx, "[字幕组甲] 样例动画", [24_000, 24_000, 24_000]);
       const b = release(ctx, "[字幕组乙] 样例动画", [20_000, 20_000]);
       const ep2 = a.resources[1]!;
-      ok(await run(ctx, "progress.setTime", { resourceId: ep2.resourceId, resourceRevisionId: ep2.revisionId, timeMs: 12_000 }));
+      ok(await run(ctx, "progress.setTime", { contextId: null, resourceId: ep2.resourceId, resourceRevisionId: ep2.revisionId, timeMs: 12_000 }));
       // Saved progress says halfway through episode 2: the other release's episode 2 opens halfway through its own length.
       const same = ok<Record<string, any>>(await run(ctx, "works.counterpart", { resourceId: ep2.resourceId, toWorkId: b.workId }));
       expect(same).toMatchObject({ resourceId: b.resources[1]!.resourceId, workId: b.workId, ordinalLabel: "第 2 话", position: { kind: "temporal", startMs: 10_000 } });
@@ -159,7 +159,7 @@ describe("two releases of one title are one entry with versions (AT-78)", () => 
     try {
       const a = seedComic(ctx.app, { title: "[汉化组甲] 样例漫画 01", pageCount: 10, ordinal: { number: 1, type: "volume", label: "第 1 卷" } });
       const b = seedComic(ctx.app, { title: "[汉化组乙] 样例漫画 01", pageCount: 20, ordinal: { number: 1, type: "volume", label: "第 1 卷" } });
-      ok(await run(ctx, "progress.setPage", { resourceId: a.resourceId, resourceRevisionId: a.revisionId, pageId: a.pageIds[4] }));
+      ok(await run(ctx, "progress.setPage", { contextId: null, resourceId: a.resourceId, resourceRevisionId: a.revisionId, pageId: a.pageIds[4] }));
       const at = ok<Record<string, any>>(await run(ctx, "works.counterpart", { resourceId: a.resourceId, toWorkId: b.workId }));
       // Page 5 of 10 is half way: page 10 of 20.
       expect(at).toMatchObject({ resourceId: b.resourceId, position: { kind: "image", pageId: b.pageIds[9] } });
@@ -173,14 +173,14 @@ describe("two releases of one title are one entry with versions (AT-78)", () => 
       const b = release(ctx, "[字幕组乙] 样例动画", [23_000, 23_000]);
       await link(ctx, a.workId, "201");
       await link(ctx, b.workId, "201");
-      ok(await run(ctx, "progress.setTime", { resourceId: b.resources[0]!.resourceId, resourceRevisionId: b.resources[0]!.revisionId, timeMs: 5_000 }));
+      ok(await run(ctx, "progress.setTime", { contextId: null, resourceId: b.resources[0]!.resourceId, resourceRevisionId: b.resources[0]!.revisionId, timeMs: 5_000 }));
       expect((await list(ctx)).total).toBe(1);
       ok(await run(ctx, "metadata.unlink", { workId: b.workId, providerId: "bangumi" }));
       const after = await list(ctx);
       expect(after.total).toBe(2);
       expect(after.items.every((item) => item.versionCount === 1 && item.resourceCount === 2)).toBe(true);
       expect(ok<Detail>(await run(ctx, "works.get", { workId: a.workId })).versions).toHaveLength(1);
-      const kept = ok<{ percent: number }>(await run(ctx, "progress.get", { resourceId: b.resources[0]!.resourceId }));
+      const kept = ok<{ percent: number }>(await run(ctx, "progress.get", { contextId: null, resourceId: b.resources[0]!.resourceId }));
       expect(kept.percent).toBeGreaterThan(0);
     } finally { ctx.app.close(); }
   });

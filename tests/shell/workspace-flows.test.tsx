@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createTranslator } from "@manga/i18n";
 import { BUILTIN_QUICK_TASKS, type QuickTask } from "@manga/contracts";
+import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts/reading";
 import { App } from "../../apps/desktop/src/renderer/App.tsx";
 import { Capsule } from "../../apps/desktop/src/renderer/components/chat/capsule.tsx";
 import { MessageList, type BubbleActions } from "../../apps/desktop/src/renderer/components/chat/messages.tsx";
@@ -18,11 +19,13 @@ import { WorkHome } from "../../apps/desktop/src/renderer/pages/work-home.tsx";
 import type { StreamNote } from "../../apps/desktop/src/renderer/hooks/use-session-stream.ts";
 import { resetVideoSupport } from "../../apps/desktop/src/renderer/readers/video-support.ts";
 import { installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
+import { contextHandlers } from "../helpers/app-host.ts";
+import { closeFocusedTab, focusedTitle, openShelf, openWorkPage, tabTitles } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
 /**
- * The rework's pages that the older flow tests do not reach (A-47…A-52): the work's profile with its blanks, the match dialog's
+ * The pages that the other flow tests do not reach (A-47…A-52): the work's profile with its blanks, the match dialog's
  * reference and preview, the four kinds of note in the message list and the jump from each, the capsule, the debug panel, the
  * settings pages and what the records list asks for.
  */
@@ -35,8 +38,7 @@ type Call = { commandId: string; input: Record<string, unknown> };
 function installHost(handlers: Record<string, Handler> = {}) {
   const calls: Call[] = [];
   const base: Record<string, Handler> = {
-    "workspace.get": () => ({ uiFacets: ["agent", "library", "settings", "comic", "video", "notes", "metadata"], sessions: [], runs: [], notes: [], resources: [] }),
-    "workspace.sessions": () => [{ sessionId: "ses_shared", title: "会话 1", kind: "shared", targetId: null, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null }],
+    ...contextHandlers({ facets: ["agent", "library", "settings", "comic", "video", "notes", "metadata"] }).handlers,
     "inventory.overview": () => ({ items: [], totals: {} }),
     "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
     "notes.list": () => [],
@@ -498,8 +500,8 @@ describe("notes in the message list: four kinds of source (A-48)", () => {
         "metadata.candidates": () => ({ candidates: [] }),
       });
       render(<App />);
-      await waitFor(() => expect(within(screen.getByTestId("shell-right")).getByTestId("bubble-source-reg")).toBeTruthy());
-      fireEvent.click(within(screen.getByTestId("shell-right")).getByTestId("bubble-source-reg"));
+      await waitFor(() => expect(within(screen.getByTestId("shell-dock")).getByTestId("bubble-source-reg")).toBeTruthy());
+      fireEvent.click(within(screen.getByTestId("shell-dock")).getByTestId("bubble-source-reg"));
       await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
     };
 
@@ -528,17 +530,19 @@ describe("notes in the message list: four kinds of source (A-48)", () => {
     it("opens the comic page of a region note and leaves the reader back to where it was", async () => {
       comicHost([region]);
       render(<App />);
-      await waitFor(() => expect(screen.getByTestId("shell-right")).toBeTruthy());
-      const pane = () => within(screen.getByTestId("shell-right"));
+      await waitFor(() => expect(screen.getByTestId("shell-dock")).toBeTruthy());
+      const pane = () => within(screen.getByTestId("shell-dock"));
       await waitFor(() => expect(pane().getByTestId("bubble-source-reg")).toBeTruthy());
-      // The page history keeps a place the person stayed on for a moment.
-      await new Promise<void>((resolve) => { setTimeout(resolve, 140); });
+      const before = tabTitles();
       fireEvent.click(pane().getByTestId("bubble-source-reg"));
       await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
       await waitFor(() => expect(screen.getByTestId("comic-position").textContent).toContain("3 / 6"));
-      await waitFor(() => expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false));
-      fireEvent.click(screen.getByTestId("nav-back"));
+      // The reader is a tab of its own, with nothing before it; leaving it is closing it, and the tab it was opened from is where it was.
+      expect(tabTitles().length).toBe(before.length + 1);
+      expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", true);
+      closeFocusedTab();
       await waitFor(() => expect(screen.queryByTestId("comic-reader")).toBeNull());
+      expect(tabTitles()).toEqual(before);
     });
   });
 });
@@ -635,10 +639,8 @@ describe("where a note can be written: a resource or a work, never nowhere (A-48
     window.localStorage.setItem("manga.chat.mode", "note");
     const calls = host();
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-comic")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-comic"));
-    await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
-    const pane = () => within(screen.getByTestId("shell-right"));
+    await openShelf("comic");
+    const pane = () => within(screen.getByTestId("shell-dock"));
     await waitFor(() => expect(pane().getByTestId("agent-composer")).toBeTruthy());
     expect(pane().queryByTestId("chat-mode-note")).toBeNull();
     expect(pane().getByTestId("agent-send").getAttribute("aria-label")).toBe(t("agent.send"));
@@ -648,47 +650,42 @@ describe("where a note can be written: a resource or a work, never nowhere (A-48
     expect(calls.of("notes.create")).toEqual([]);
     // The remembered choice was left alone: on the work's own page a note is what the input writes again.
     expect(window.localStorage.getItem("manga.chat.mode")).toBe("note");
-    fireEvent.click(screen.getByTestId("open-res_c1"));
-    await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
+    await openWorkPage("open-res_c1");
     await waitFor(() => expect(pane().getByTestId("chat-mode-note").getAttribute("aria-pressed")).toBe("true"));
     expect(pane().getByTestId("agent-send").getAttribute("aria-label")).toBe(t("chat.send.note"));
   });
 });
 
-describe("the left rail follows the place a resource was left (A-47)", () => {
-  it("shows the page a comic was left at once the reader closes, even when the last page was written as it closed", async () => {
+describe("the place a resource was left is written as its reader closes (A-47)", () => {
+  it("writes the page a comic was left at as the reader's tab closes, even when the last page was written as it closed, and the next opening goes to it", async () => {
     let saved = 0;
     const pageIds = Array.from({ length: 6 }, (_, index) => `p${index}`);
     const work = { id: "wc", title: "合成漫画", author: "合成作者", mediaKind: "comic", shelf: "reading", coverId: null, lastResource: { id: "res_c1", title: "合成漫画", ordinalLabel: null, revisionId: "rev_res_c1" }, progress: 0, finishedCount: 0, resourceCount: 1, linked: false, createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null };
     installHost({
-      "workspace.sessions": () => [
-        { sessionId: "ses_shared", title: "会话 1", kind: "shared", targetId: null, mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null },
-        { sessionId: "ses_resource_res_c1", title: "合成漫画", kind: "resource", targetId: "res_c1", workId: "wc", mediaKind: "comic", mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null, ordinalLabel: null, progress: { percent: (saved + 1) / 6, locator: { kind: "image", pageId: pageIds[saved] }, unit: "page", total: 6 } },
-      ],
       "works.list": (input) => ({ items: !input.kind || input.kind === "comic" ? [work] : [], total: 1, nextCursor: null }),
       "works.get": () => ({ ...work, originalTitle: "合成漫画", fields: {}, override: { fields: {}, locked: [], cleared: [] }, links: [], snapshots: [], coverState: "auto", coverCount: 0, resources: [{ id: "res_c1", title: "漫画一", kind: "comic", ordinalLabel: null, available: true }] }),
-      "progress.get": () => ({ locator: null, completion: "new" }),
+      "progress.get": () => (saved > 0 ? { locator: { kind: "image", pageId: pageIds[saved] }, completion: "in_progress" } : { locator: null, completion: "new" }),
       "progress.setPage": (input) => { saved = pageIds.indexOf(String(input.pageId)); return {}; },
       "comic.pages": (input) => ({ resourceId: input.resourceId, revisionId: "rev_res_c1", title: "合成漫画", direction: null, available: true, warnings: [], pages: pageIds.map((id, index) => ({ id, index, name: `${index}.png`, width: 800, height: 1200, spread: false, ok: true })) }),
       "comic.pageHandles": (input) => ({ pages: (input.pageIds as string[]).map((pageId) => ({ pageId, available: true, kind: "image", url: `manga-media://h/${pageId}`, handle: pageId, mediaType: "image/png", width: 800, height: 1200 })) }),
       "settings.getMedia": () => ({}),
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-comic")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-comic"));
-    await waitFor(() => expect(screen.getByTestId("session-position-ses_resource_res_c1").textContent).toBe("1/6"));
-    fireEvent.click(screen.getByTestId("open-res_c1"));
-    await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
+    await openShelf("comic");
+    await openWorkPage("open-res_c1");
     fireEvent.click(screen.getByTestId("work-read"));
     await waitFor(() => expect(screen.getByTestId("comic-position").textContent).toContain("1 / 6"));
     fireEvent.click(screen.getByTestId("comic-next"));
     fireEvent.click(screen.getByTestId("comic-next"));
     await waitFor(() => expect(screen.getByTestId("comic-position").textContent).toContain("3 / 6"));
-    // Straight back to the shelf: page 3 has not been written yet, so it is written as the reader closes.
-    fireEvent.click(screen.getByTestId("nav-comic"));
+    // Straight out of the reader: page 3 has not been written yet, so it is written as the reader's tab closes.
+    closeFocusedTab();
     await waitFor(() => expect(screen.queryByTestId("comic-reader")).toBeNull());
-    await waitFor(() => expect(screen.getByTestId("session-position-ses_resource_res_c1").textContent).toBe("3/6"));
-    expect(saved).toBe(2);
+    await waitFor(() => expect(saved).toBe(2));
+    // The way back reads the place that was left.
+    await waitFor(() => expect((screen.getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId("work-read"));
+    await waitFor(() => expect(screen.getByTestId("comic-position").textContent).toContain("3 / 6"));
   });
 });
 
@@ -841,18 +838,25 @@ describe("settings pages inside the app (A-49, A-52)", () => {
   it("opens settings from a shelf, reaches the quick-task page, and goes back to the same shelf", async () => {
     shelfHost();
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-comic")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-comic"));
-    await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
+    await openShelf("comic");
+    const library = tabTitles()[0]!;
     fireEvent.click(screen.getByTestId("nav-settings"));
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
-    expect(screen.queryByTestId("nav-comic")).toBeNull();
+    const first = screen.getByTestId("settings-area").getAttribute("data-page");
     fireEvent.click(screen.getByTestId("settings-nav-quick"));
     await waitFor(() => expect(screen.getByTestId("quick-task-summarize-page")).toBeTruthy());
     expect(screen.getByTestId("settings-nav-quick").getAttribute("aria-current")).toBe("page");
-    fireEvent.click(screen.getByTestId("settings-back"));
-    await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
-    expect(screen.queryByTestId("settings-nav")).toBeNull();
+    // The settings are over the workspace and not a tab: the shelf is still in the page under them, and the tabs are the ones there were.
+    expect(tabTitles()).toEqual([library]);
+    expect(screen.getByTestId("shelf-comic")).toBeTruthy();
+    // Back walks the pages that were visited; from the first page it leaves the settings, and the shelf is where it was.
+    fireEvent.click(screen.getByTestId("nav-back"));
+    await waitFor(() => expect(screen.getByTestId("settings-area").getAttribute("data-page")).toBe(first));
+    fireEvent.click(screen.getByTestId("nav-back"));
+    await waitFor(() => expect(screen.queryByTestId("settings-nav")).toBeNull());
+    expect(screen.getByTestId("shelf-comic")).toBeTruthy();
+    expect(screen.getByTestId("workspace-area").getAttribute("data-suspended")).toBe("false");
+    expect(tabTitles()).toEqual([library]);
   });
 
   it("checks a quick task's wording before it can be saved, and sends what was written", async () => {
@@ -899,11 +903,12 @@ describe("settings pages inside the app (A-49, A-52)", () => {
       "notes.undelete": () => ({}),
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-settings")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-settings"));
-    await waitFor(() => expect(screen.getByTestId("settings-nav-records")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("settings-nav-records"));
+    await waitFor(() => expect(screen.getByTestId("nav-note")).toBeTruthy());
+    // The notes and recordings are managed from the notes view of the sidebar (A-101), in a tab of the context.
+    fireEvent.click(screen.getByTestId("nav-note"));
+    fireEvent.click(await screen.findByTestId("sidebar-manage"));
     await waitFor(() => expect(screen.getByTestId("record-n1")).toBeTruthy());
+    expect(screen.getByTestId("records-tab").getAttribute("data-type")).toBe("note");
     const last = () => host.of("records.list").at(-1)!.input;
     expect(last()).toEqual({ type: "all", limit: 30, offset: 0 });
     fireEvent.change(screen.getByTestId("records-kind"), { target: { value: "comic" } });
@@ -938,38 +943,49 @@ describe("settings pages inside the app (A-49, A-52)", () => {
       "records.list": () => ({ items: [{ kind: "note", id: "obj_n1", title: "作品里的笔记", preview: "正文", at: "2026-01-01T00:00:00.000Z", deleted: false, workId: "wc", workTitle: "合成漫画", mediaKind: "comic", resourceId: "res_c1", resourceTitle: "漫画一", tags: [], stage: null, audioState: null, durationMs: null, hasSource: false }], total: 1 }),
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("nav-comic")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("nav-comic"));
-    await waitFor(() => expect(screen.getByTestId("open-res_c1")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("open-res_c1"));
+    await openShelf("comic");
+    await openWorkPage("open-res_c1");
     await waitFor(() => expect(screen.getByTestId("detail-tab-records")).toBeTruthy());
     fireEvent.click(screen.getByTestId("detail-tab-records"));
     await waitFor(() => expect(screen.getByTestId("detail-note-obj_n1")).toBeTruthy());
+    const before = tabTitles();
     fireEvent.click(screen.getByTestId("detail-note-obj_n1"));
-    await waitFor(() => expect(screen.getByTestId("note-back")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-back"));
-    await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
+    // A note is a tab of its own, and the work's page stays where it was in the tab it is in; closing the note is the way back.
+    await waitFor(() => expect(tabTitles().length).toBe(before.length + 1));
+    expect(focusedTitle()).not.toBe(before[0]);
+    closeFocusedTab();
+    await waitFor(() => expect(focusedTitle()).toBe(before[0]));
+    expect(screen.getByTestId("page-work")).toBeTruthy();
+    expect(tabTitles()).toEqual(before);
     expect(screen.queryByTestId("settings-nav")).toBeNull();
 
-    // From the records list in settings, back is the records list.
-    fireEvent.click(screen.getByTestId("nav-settings"));
-    await waitFor(() => expect(screen.getByTestId("settings-nav-records")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("settings-nav-records"));
+    // From the notes' management tab, the way back is that tab.
+    fireEvent.click(screen.getByTestId("nav-note"));
+    fireEvent.click(await screen.findByTestId("sidebar-manage"));
     await waitFor(() => expect(screen.getByTestId("record-open-obj_n1")).toBeTruthy());
+    const inRecords = tabTitles();
+    expect(focusedTitle()).toBe("笔记管理");
     fireEvent.click(screen.getByTestId("record-open-obj_n1"));
-    await waitFor(() => expect(screen.getByTestId("note-back")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-back"));
-    await waitFor(() => expect(screen.getByTestId("record-open-obj_n1")).toBeTruthy());
-    expect(screen.getByTestId("settings-nav-records").getAttribute("aria-current")).toBe("page");
+    await waitFor(() => expect(tabTitles().length).toBe(inRecords.length + 1));
+    closeFocusedTab();
+    await waitFor(() => expect(tabTitles()).toEqual(inRecords));
+    expect(focusedTitle()).toBe("笔记管理");
+    expect(screen.getByTestId("records-tab").getAttribute("data-type")).toBe("note");
   });
 
-  it("leaves the pages that need a module out of the navigation, and keeps modules, records and logs reachable", async () => {
-    shelfHost({ "workspace.get": () => ({ uiFacets: ["library", "settings", "comic"], sessions: [], runs: [], notes: [], resources: [] }) });
+  it("leaves the pages that need a module out of the navigation, keeps modules and logs reachable, and has no records page among the settings", async () => {
+    shelfHost({ "workspace.get": () => ({ uiFacets: ["library", "settings", "comic"], sessions: [], runs: [], notes: [], resources: [], shell: DEFAULT_SHELL_PREFERENCE }) });
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("nav-settings")).toBeTruthy());
     fireEvent.click(screen.getByTestId("nav-settings"));
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
-    for (const page of ["general", "library", "modules", "records", "logs"]) expect(screen.getByTestId(`settings-nav-${page}`)).toBeTruthy();
-    for (const page of ["models", "quick", "usage", "recording", "sources"]) expect(screen.queryByTestId(`settings-nav-${page}`)).toBeNull();
+    for (const page of ["general", "library", "modules", "logs"]) expect(screen.getByTestId(`settings-nav-${page}`)).toBeTruthy();
+    for (const page of ["models", "quick", "usage", "recording", "sources", "records"]) expect(screen.queryByTestId(`settings-nav-${page}`)).toBeNull();
+    // The records are the views of the conversations and the notes (A-101): a window without those modules has no entry for them, and one with them has.
+    fireEvent.click(screen.getByTestId("nav-home"));
+    await waitFor(() => expect(screen.queryByTestId("settings-nav")).toBeNull());
+    expect(screen.queryByTestId("nav-note")).toBeNull();
+    expect(screen.queryByTestId("nav-conversation")).toBeNull();
+    expect(screen.getByTestId("nav-comic")).toBeTruthy();
   });
 });

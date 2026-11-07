@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import type { Translator } from "@manga/i18n";
 import { attempt } from "../lib/api.ts";
+import { autoAddMaterial } from "../lib/materials.ts";
 import { ScreenshotTargetDialog, type ShotRef } from "../components/screenshot-targets.tsx";
 import type { CaptureFailure } from "../readers/screenshot-capture.ts";
 
@@ -29,8 +30,10 @@ export function useScreenshots(deps: {
   setError: (message?: string) => void;
   setRichNotice: (message: string, rich: RichNotice) => void;
   setNotice: (message?: string) => void;
+  /** The context the readers on screen belong to: a picture taken there becomes a material of the project. */
+  contextId: string | null;
 }): { port: ScreenshotPort; dialog: ReactNode } {
-  const { i18n, setError, setRichNotice, setNotice } = deps;
+  const { i18n, setError, setRichNotice, setNotice, contextId } = deps;
   const { t } = i18n;
   const [target, setTarget] = useState<{ shot: ShotRef; target: "note" | "board" } | null>(null);
 
@@ -38,6 +41,7 @@ export function useScreenshots(deps: {
     const saved = await attempt<{ screenshot: { id: string; title: string } }>("screenshot.save", input);
     if (!saved.ok) { setError(t("screenshot.failed", { reason: saved.error.message })); return false; }
     const shot = saved.value.screenshot;
+    void autoAddMaterial(contextId, "screenshot", shot.id, shot.title);
     const image = await attempt<{ url: string }>("screenshot.image", { screenshotId: shot.id });
     const ref: ShotRef = { id: shot.id, title: shot.title };
     setRichNotice(t("screenshot.saved", { title: shot.title }), {
@@ -49,7 +53,7 @@ export function useScreenshots(deps: {
       ],
     });
     return true;
-  }, [setError, setRichNotice, t]);
+  }, [setError, setRichNotice, t, contextId]);
 
   const fail = useCallback((failure: CaptureFailure) => {
     setError(t(failure === "no-frame" ? "screenshot.noFrame" : failure === "tainted" ? "screenshot.tainted" : "screenshot.encode"));
@@ -60,6 +64,7 @@ export function useScreenshots(deps: {
       t={t}
       shot={target.shot}
       target={target.target}
+      contextId={contextId}
       onClose={() => setTarget(null)}
       onError={(message) => { setTarget(null); setError(message); }}
       onDone={(message) => { setTarget(null); setNotice(message); }}

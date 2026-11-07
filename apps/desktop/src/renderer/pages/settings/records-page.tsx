@@ -36,13 +36,15 @@ const RETRYABLE = ["awaiting_asr", "pending", "failed", "recorded"];
 type Filter = { type: "all" | "note" | "recording" | "conversation"; mediaKind: string; state: string; q: string; deleted: boolean; workId: string | null };
 
 /**
- * Every note and recording in one filterable, paged list (交互设计 3.5, "记录"). A note can be opened, deleted (it is only hidden:
- * the "deleted" view lists it and brings it back) or followed to its source; a recording can be reviewed, retried, or have its
- * waiting audio cleaned. The list is paged on the server, so it stays quick with many records.
+ * What the records tab manages (交互设计 2.10, A-101, A-102): the conversations, or the notes with the recordings. Every note and recording is in one
+ * filterable, paged list. A note can be opened, deleted (it is only hidden: the "deleted" view lists it and brings it back) or followed to its source; a
+ * recording can be reviewed, retried, or have its waiting audio cleaned. The list is paged on the server, so it stays quick with many records.
  */
 export function RecordsPage(props: {
   t: T;
   formatDate: (value: string) => string;
+  /** Which kind of thing the tab manages: the conversations, or the notes and recordings. */
+  scope: "conversation" | "notes";
   /** Opens only the records of one work, as from its page. */
   initialWorkId?: string | null;
   onOpenNote: (objectId: string) => void;
@@ -52,7 +54,7 @@ export function RecordsPage(props: {
   onNotice: (message: string) => void;
 }) {
   const { t } = props;
-  const [filter, setFilter] = useState<Filter>({ type: "all", mediaKind: "", state: "", q: "", deleted: false, workId: props.initialWorkId ?? null });
+  const [filter, setFilter] = useState<Filter>({ type: props.scope === "conversation" ? "conversation" : "all", mediaKind: "", state: "", q: "", deleted: false, workId: props.initialWorkId ?? null });
   const [text, setText] = useState("");
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<RecordItem[]>([]);
@@ -60,7 +62,7 @@ export function RecordsPage(props: {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const latest = useRef(0);
 
-  const conversations = filter.type === "conversation";
+  const conversations = props.scope === "conversation";
   const load = useCallback(async () => {
     if (filter.type === "conversation") return;
     const request = ++latest.current;
@@ -102,14 +104,13 @@ export function RecordsPage(props: {
   const stateLabel = (state: string) => (CAPTURE_AUDIO_STATES as readonly string[]).includes(state) ? t(`review.audio.${state}` as MessageKey) : t(`review.stage.${state}` as MessageKey);
 
   return (
-    <SettingsPage id="records" title={t("settings.page.records")} hint={t("records.hint")} wide>
+    <SettingsPage id="records" title={t(conversations ? "sidebar.manage.conversation" : "sidebar.manage.note")} hint={t(conversations ? "records.hintConversation" : "records.hint")} wide>
       <div className="records-filters" role="search" data-testid="records-filters">
-        <select aria-label={t("records.type")} data-testid="records-type" value={filter.type} onChange={(event) => patch({ type: event.target.value as Filter["type"], state: event.target.value === "note" || event.target.value === "conversation" ? "" : filter.state })}>
+        {conversations ? null : <select aria-label={t("records.type")} data-testid="records-type" value={filter.type} onChange={(event) => patch({ type: event.target.value as Filter["type"], state: event.target.value === "note" ? "" : filter.state })}>
           <option value="all">{t("records.typeAll")}</option>
           <option value="note">{t("records.typeNote")}</option>
           <option value="recording">{t("records.typeRecording")}</option>
-          <option value="conversation">{t("records.typeConversation")}</option>
-        </select>
+        </select>}
         {conversations ? null : <><select aria-label={t("records.kind")} data-testid="records-kind" value={filter.mediaKind} onChange={(event) => patch({ mediaKind: event.target.value })}>
           <option value="">{t("records.kindAll")}</option>
           {KINDS.map((kind) => <option key={kind} value={kind}>{t(`shelf.kind.${kind}`)}</option>)}

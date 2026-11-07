@@ -11,7 +11,9 @@ export type ConversationRecord = {
   sessionId: string;
   title: string;
   kind: ConversationKindId;
-  mode: "enthusiast" | "creator";
+  /** The context the conversation belongs to: a project id, null for "最近". */
+  contextId: string | null;
+  contextName: string | null;
   targetId: string | null;
   ownerTitle: string | null;
   runCount: number;
@@ -27,13 +29,14 @@ const PAGE = 30;
 const KINDS: ConversationKindId[] = ["shared", "resource", "work", "project", "note"];
 const DAY = 86_400_000;
 type Time = "" | "week" | "month" | "older";
-type Filter = { mode: "" | "enthusiast" | "creator"; kind: "" | ConversationKindId; time: Time; q: string };
+/** `project`: all, "recent" for the conversations outside every project, or a project id. */
+type Filter = { project: string; kind: "" | ConversationKindId; time: Time; q: string };
 
 /** The part of a filter the main process understands; the same object lists and deletes, so what is deleted is what the list shows. */
 function wireFilter(filter: Filter): Record<string, unknown> {
   const now = Date.now();
   return {
-    ...(filter.mode ? { mode: filter.mode } : {}),
+    ...(filter.project ? { contextId: filter.project === "recent" ? null : filter.project } : {}),
     ...(filter.kind ? { kind: filter.kind } : {}),
     ...(filter.time === "week" ? { after: new Date(now - 7 * DAY).toISOString() } : {}),
     ...(filter.time === "month" ? { after: new Date(now - 30 * DAY).toISOString() } : {}),
@@ -53,7 +56,7 @@ export function ConversationRecords(props: {
   onNotice: (message: string) => void;
 }) {
   const { t } = props;
-  const [filter, setFilter] = useState<Filter>({ mode: "", kind: "", time: "", q: "" });
+  const [filter, setFilter] = useState<Filter>({ project: "", kind: "", time: "", q: "" });
   const [text, setText] = useState("");
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<ConversationRecord[]>([]);
@@ -62,7 +65,18 @@ export function ConversationRecords(props: {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [asking, setAsking] = useState<{ scope: "ids"; ids: string[]; count: number } | { scope: "all"; count: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [contexts, setContexts] = useState<Array<{ value: string; name: string }>>([]);
   const latest = useRef(0);
+
+  // The contexts to filter by: "最近" and the projects, archived ones included (their conversations are still there).
+  useEffect(() => {
+    let live = true;
+    void attempt<{ contexts: Array<{ contextId: string | null; name: string }> }>("workspace.contexts", { includeArchived: true }).then((result) => {
+      if (live && result.ok) setContexts(asArray<{ contextId: string | null; name: string }>(result.value.contexts).map((item) => ({ value: item.contextId ?? "recent", name: item.contextId === null ? t("sidebar.recent") : item.name })));
+    });
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(async () => {
     const request = ++latest.current;
@@ -86,7 +100,7 @@ export function ConversationRecords(props: {
   useEffect(() => window.manga.onNotice?.((notice) => { if (notice.topic === "conversation.deleted") void load(); }), [load]);
 
   const patch = (next: Partial<Filter>) => { setFilter((current) => ({ ...current, ...next })); setOffset(0); setPicked(new Set()); };
-  const filtered = Boolean(filter.mode || filter.kind || filter.time || filter.q);
+  const filtered = Boolean(filter.project || filter.kind || filter.time || filter.q);
   const pageIds = items.map((item) => item.sessionId);
   const allOnPage = pageIds.length > 0 && pageIds.every((id) => picked.has(id));
   const toggle = (id: string) => setPicked((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -107,15 +121,19 @@ export function ConversationRecords(props: {
     await load();
   }
 
-  const place = (item: ConversationRecord) => (item.kind === "shared" ? t(`records.conv.mode.${item.mode}` as MessageKey) : item.ownerTitle || t("records.conv.ownerGone"));
+  /** Where a conversation belongs: the context it is in, and for a conversation about a file, a work or a note, what it is about. */
+  const place = (item: ConversationRecord) => {
+    const context = item.contextId === null ? t("sidebar.recent") : item.contextName || t("records.conv.ownerGone");
+    if (item.kind === "shared" || item.kind === "project") return context;
+    return [item.ownerTitle || t("records.conv.ownerGone"), context].join(" · ");
+  };
 
   return (
     <>
       <div className="records-filters" role="search" data-testid="conv-filters">
-        <select aria-label={t("records.conv.mode")} data-testid="conv-mode" value={filter.mode} onChange={(event) => patch({ mode: event.target.value as Filter["mode"] })}>
-          <option value="">{t("records.conv.modeAll")}</option>
-          <option value="enthusiast">{t("records.conv.mode.enthusiast")}</option>
-          <option value="creator">{t("records.conv.mode.creator")}</option>
+        <select aria-label={t("records.conv.project")} data-testid="conv-project" value={filter.project} onChange={(event) => patch({ project: event.target.value })}>
+          <option value="">{t("records.conv.projectAll")}</option>
+          {contexts.map((item) => <option key={item.value} value={item.value}>{item.name}</option>)}
         </select>
         <select aria-label={t("records.conv.kind")} data-testid="conv-kind" value={filter.kind} onChange={(event) => patch({ kind: event.target.value as Filter["kind"] })}>
           <option value="">{t("records.conv.kindAll")}</option>

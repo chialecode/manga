@@ -31,7 +31,7 @@
         "suggested": "comic",
         "decoded": true,
         "turned": 3,
-        "landed": "page-comic",
+        "landed": "page-work",
         "reopened": true,
         "restored": true,
         "position": "第 1 / 5 页",
@@ -46,7 +46,7 @@
         "suggested": "comic",
         "decoded": true,
         "turned": 2,
-        "landed": "page-comic",
+        "landed": "page-work",
         "reopened": true,
         "restored": true,
         "position": "第 1 / 6 页",
@@ -61,7 +61,7 @@
         "suggested": "comic",
         "decoded": true,
         "turned": 3,
-        "landed": "page-comic",
+        "landed": "page-work",
         "reopened": true,
         "restored": true,
         "position": "第 1 / 5 页",
@@ -102,7 +102,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.608639,
+        "playedTo": 0.619228,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -122,7 +122,7 @@
             "expectedMs": 1500,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 33
           },
           {
             "after": {
@@ -137,7 +137,7 @@
             "expectedMs": 7500,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 31
           },
           {
             "after": {
@@ -152,17 +152,17 @@
             "expectedMs": 14875,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 31
           }
         ],
         "subtitles": {
           "loadFailedNotice": false,
-          "differingPixels": 117040,
+          "differingPixels": 114569,
           "rect": {
-            "x": 225,
-            "y": 36,
-            "width": 694,
-            "height": 737
+            "x": 309,
+            "y": 71,
+            "width": 610,
+            "height": 702
           }
         },
         "result": "passed"
@@ -225,7 +225,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.614957,
+        "playedTo": 0.604737,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -275,7 +275,7 @@
             "expectedMs": 23875,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 32
           }
         ],
         "result": "passed"
@@ -316,7 +316,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.612957,
+        "playedTo": 0.6023,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -336,7 +336,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 31
           },
           {
             "after": {
@@ -366,7 +366,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 28
+            "ms": 32
           }
         ],
         "result": "passed"
@@ -407,7 +407,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.617418,
+        "playedTo": 0.611729,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -427,7 +427,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 34
           },
           {
             "after": {
@@ -442,7 +442,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 31
           },
           {
             "after": {
@@ -457,7 +457,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 32
           }
         ],
         "result": "passed"
@@ -502,7 +502,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.601982,
+        "playedTo": 0.613948,
         "picture": {
           "decodedFrames": 19,
           "droppedFrames": 0,
@@ -522,7 +522,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 34
           },
           {
             "after": {
@@ -537,7 +537,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 32
           },
           {
             "after": {
@@ -552,7 +552,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 32
+            "ms": 33
           }
         ],
         "result": "passed"
@@ -591,7 +591,7 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.620796,
+        "playedTo": 0.622633,
         "picture": {
           "decodedFrames": 23,
           "droppedFrames": 0,
@@ -611,7 +611,7 @@
             "expectedMs": 1066.667,
             "landed": true,
             "verified": "true",
-            "ms": 31
+            "ms": 34
           },
           {
             "after": {
@@ -626,7 +626,7 @@
             "expectedMs": 5333.333,
             "landed": true,
             "verified": "true",
-            "ms": 28
+            "ms": 33
           },
           {
             "after": {
@@ -641,7 +641,7 @@
             "expectedMs": 15700,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 32
           }
         ],
         "result": "passed"
@@ -680,9 +680,9 @@
           "hidden": false,
           "visibility": "visible"
         },
-        "playedTo": 0.6247409999999998,
+        "playedTo": 0.604654,
         "picture": {
-          "decodedFrames": 19,
+          "decodedFrames": 18,
           "droppedFrames": 0,
           "notice": false
         },
@@ -700,7 +700,7 @@
             "expectedMs": 1000,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 31
           },
           {
             "after": {
@@ -715,7 +715,7 @@
             "expectedMs": 5000,
             "landed": true,
             "verified": "true",
-            "ms": 29
+            "ms": 33
           },
           {
             "after": {
@@ -730,7 +730,7 @@
             "expectedMs": 9875,
             "landed": true,
             "verified": "true",
-            "ms": 30
+            "ms": 32
           }
         ],
         "result": "passed"
@@ -740,13 +740,13 @@
       "id": "subtitles:layout:wide",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": []
       }
@@ -755,13 +755,13 @@
       "id": "subtitles:layout:narrow",
       "ok": true,
       "detail": {
-        "pictureW": 360,
-        "pictureH": 202.5,
+        "pictureW": 311,
+        "pictureH": 174.9,
         "place": "inside",
-        "zoneW": 324,
-        "zoneH": 20.3,
-        "zoneBottomGap": 10.3,
-        "typeSize": 10.1,
+        "zoneW": 279.9,
+        "zoneH": 17.5,
+        "zoneBottomGap": 8.9,
+        "typeSize": 8.8,
         "typeShare": 0.05,
         "failures": []
       }
@@ -770,13 +770,13 @@
       "id": "subtitles:layout:short",
       "ok": true,
       "detail": {
-        "pictureW": 631.7,
-        "pictureH": 355.3,
+        "pictureW": 571.3,
+        "pictureH": 321.3,
         "place": "inside",
-        "zoneW": 568,
-        "zoneH": 35.5,
-        "zoneBottomGap": 18.1,
-        "typeSize": 17.8,
+        "zoneW": 513.6,
+        "zoneH": 32.1,
+        "zoneBottomGap": 16.4,
+        "typeSize": 16.1,
         "typeShare": 0.05,
         "failures": []
       }
@@ -785,13 +785,13 @@
       "id": "subtitles:two-speakers",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": []
       }
@@ -800,13 +800,13 @@
       "id": "subtitles:long-line",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": [],
         "wrapped": true
@@ -816,12 +816,12 @@
       "id": "subtitles:drawn-pixels",
       "ok": true,
       "detail": {
-        "differingPixels": 3058,
+        "differingPixels": 2576,
         "zone": {
-          "x": 260,
-          "y": 540,
-          "width": 625,
-          "height": 39
+          "x": 339,
+          "y": 541,
+          "width": 549,
+          "height": 34
         }
       }
     },
@@ -829,13 +829,13 @@
       "id": "subtitles:bilingual",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": [],
         "order": [
@@ -848,8 +848,8 @@
       "id": "subtitles:top-caption-srt",
       "ok": true,
       "detail": {
-        "captionSize": 14.4,
-        "captionTop": 38.9,
+        "captionSize": 12.7,
+        "captionTop": 34.1,
         "failures": []
       }
     },
@@ -857,13 +857,13 @@
       "id": "subtitles:top-caption-with-dialogue",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": []
       }
@@ -872,8 +872,8 @@
       "id": "subtitles:top-caption-vtt",
       "ok": true,
       "detail": {
-        "captionSize": 14.4,
-        "captionTop": 38.9,
+        "captionSize": 12.7,
+        "captionTop": 34.1,
         "failures": []
       }
     },
@@ -896,13 +896,13 @@
       "id": "subtitles:widescreen:wide",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 290.1,
+        "pictureW": 610,
+        "pictureH": 255,
         "place": "below",
-        "zoneW": 624.6,
-        "zoneH": 29,
-        "zoneBottomGap": -28.8,
-        "typeSize": 14.5,
+        "zoneW": 549,
+        "zoneH": 25.5,
+        "zoneBottomGap": -25.3,
+        "typeSize": 12.8,
         "typeShare": 0.05,
         "failures": [],
         "expectedPlace": "below"
@@ -912,13 +912,13 @@
       "id": "subtitles:widescreen:narrow",
       "ok": true,
       "detail": {
-        "pictureW": 360,
-        "pictureH": 150.5,
+        "pictureW": 311,
+        "pictureH": 130,
         "place": "below",
-        "zoneW": 324,
-        "zoneH": 15,
-        "zoneBottomGap": -14.9,
-        "typeSize": 7.5,
+        "zoneW": 279.9,
+        "zoneH": 13,
+        "zoneBottomGap": -12.8,
+        "typeSize": 6.5,
         "typeShare": 0.05,
         "failures": [],
         "expectedPlace": "below"
@@ -928,13 +928,13 @@
       "id": "subtitles:widescreen:short",
       "ok": true,
       "detail": {
-        "pictureW": 850.1,
-        "pictureH": 355.3,
+        "pictureW": 768.8,
+        "pictureH": 321.3,
         "place": "inside",
-        "zoneW": 764.4,
-        "zoneH": 35.5,
-        "zoneBottomGap": 18.1,
-        "typeSize": 17.8,
+        "zoneW": 691.2,
+        "zoneH": 32.1,
+        "zoneBottomGap": 16.4,
+        "typeSize": 16.1,
         "typeShare": 0.05,
         "failures": [],
         "expectedPlace": "inside"
@@ -960,8 +960,8 @@
       "id": "subtitles:embedded-top-caption",
       "ok": true,
       "detail": {
-        "captionSize": 14.4,
-        "captionTop": 38.9,
+        "captionSize": 12.7,
+        "captionTop": 34.1,
         "failures": []
       }
     },
@@ -969,13 +969,13 @@
       "id": "subtitles:embedded-dialogue",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": []
       }
@@ -995,13 +995,13 @@
       "id": "subtitles:secondary-track",
       "ok": true,
       "detail": {
-        "pictureW": 694,
-        "pictureH": 390.4,
+        "pictureW": 610,
+        "pictureH": 343.1,
         "place": "inside",
-        "zoneW": 624.6,
-        "zoneH": 39,
-        "zoneBottomGap": 19.7,
-        "typeSize": 19.5,
+        "zoneW": 549,
+        "zoneH": 34.3,
+        "zoneBottomGap": 17.3,
+        "typeSize": 17.2,
         "typeShare": 0.05,
         "failures": [],
         "order": [
@@ -1019,7 +1019,7 @@
         "dialogueInk": 2093,
         "inkBottom": 0.942,
         "inkCentre": 0.5,
-        "screenBottom": 0.953,
+        "screenBottom": 0.951,
         "screenCentre": 0.5,
         "captionInk": 564,
         "fewerInk": 1368,
@@ -1053,8 +1053,8 @@
           "items": 7,
           "topLayer": true,
           "box": {
-            "x": 255.86459350585938,
-            "y": 441.16668701171875,
+            "x": 255.53125,
+            "y": 440.8333435058594,
             "w": 311.8020935058594,
             "h": 243.83334350585938
           }
@@ -1073,8 +1073,8 @@
           "items": 7,
           "topLayer": true,
           "box": {
-            "x": 255.86459350585938,
-            "y": 441.16668701171875,
+            "x": 255.53125,
+            "y": 440.8333435058594,
             "w": 311.8020935058594,
             "h": 243.83334350585938
           }
@@ -1083,23 +1083,23 @@
           "items": 7,
           "topLayer": true,
           "box": {
-            "x": 255.86459350585938,
-            "y": 441.16668701171875,
+            "x": 255.53125,
+            "y": 440.8333435058594,
             "w": 311.8020935058594,
             "h": 243.83334350585938
           }
         },
         "episodes-picked": {
-          "from": "res_e26bc70e-3f56-46dc-98cb-b529b2929171",
-          "to": "res_880adf49-7bba-4e4f-bb70-bbf48a47a89d",
-          "now": "res_880adf49-7bba-4e4f-bb70-bbf48a47a89d"
+          "from": "res_189dfa36-0094-4260-b349-4676eeffc7db",
+          "to": "res_8c721b05-8a3b-4376-ba75-f57eedf938e8",
+          "now": "res_8c721b05-8a3b-4376-ba75-f57eedf938e8"
         },
         "audio": {
           "items": 2,
           "topLayer": true,
           "box": {
-            "x": 407.66668701171875,
-            "y": 608.6666870117188,
+            "x": 407.3333435058594,
+            "y": 608.3333740234375,
             "w": 160,
             "h": 76.33333587646484
           }
@@ -1118,8 +1118,8 @@
           "items": 2,
           "topLayer": true,
           "box": {
-            "x": 407.66668701171875,
-            "y": 608.6666870117188,
+            "x": 407.3333435058594,
+            "y": 608.3333740234375,
             "w": 160,
             "h": 76.33333587646484
           }
@@ -1129,8 +1129,8 @@
           "items": 2,
           "topLayer": true,
           "box": {
-            "x": 407.66668701171875,
-            "y": 608.6666870117188,
+            "x": 407.3333435058594,
+            "y": 608.3333740234375,
             "w": 160,
             "h": 76.33333587646484
           }
@@ -1147,23 +1147,23 @@
       "id": "picture:missing-font-glyphs",
       "ok": true,
       "detail": {
-        "inkPixels": 25108,
+        "inkPixels": 19426,
         "cells": {
           "box": {
-            "x": 294,
-            "y": 756,
-            "w": 454,
-            "h": 50
+            "x": 257,
+            "y": 704,
+            "w": 399,
+            "h": 45
           },
           "cells": 10,
           "inked": 10,
           "distinct": 10
         },
         "rect": {
-          "x": 225,
-          "y": 36,
-          "width": 694,
-          "height": 735
+          "x": 309,
+          "y": 71,
+          "width": 610,
+          "height": 700
         }
       }
     },
@@ -1173,13 +1173,13 @@
       "detail": {
         "width": 640,
         "height": 360,
-        "ink": 9493,
+        "ink": 9570,
         "inkBottom": 0.939,
         "inkCentre": 0.501,
         "inkedCells": 10,
-        "distinctShapes": 9,
-        "screenBottom": 0.935,
-        "screenCentre": 0.5,
+        "distinctShapes": 10,
+        "screenBottom": 0.936,
+        "screenCentre": 0.499,
         "recordedChars": 18,
         "failures": [],
         "screenMeasured": true
@@ -1230,7 +1230,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.608639,
+      "playedTo": 0.619228,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1250,7 +1250,7 @@
           "expectedMs": 1500,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 33
         },
         {
           "after": {
@@ -1265,7 +1265,7 @@
           "expectedMs": 7500,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 31
         },
         {
           "after": {
@@ -1280,17 +1280,17 @@
           "expectedMs": 14875,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 31
         }
       ],
       "subtitles": {
         "loadFailedNotice": false,
-        "differingPixels": 117040,
+        "differingPixels": 114569,
         "rect": {
-          "x": 225,
-          "y": 36,
-          "width": 694,
-          "height": 737
+          "x": 309,
+          "y": 71,
+          "width": 610,
+          "height": 702
         }
       },
       "result": "passed"
@@ -1325,7 +1325,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.614957,
+      "playedTo": 0.604737,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1375,7 +1375,7 @@
           "expectedMs": 23875,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 32
         }
       ],
       "result": "passed"
@@ -1412,7 +1412,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.612957,
+      "playedTo": 0.6023,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1432,7 +1432,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 31
         },
         {
           "after": {
@@ -1462,7 +1462,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 28
+          "ms": 32
         }
       ],
       "result": "passed"
@@ -1499,7 +1499,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.617418,
+      "playedTo": 0.611729,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1519,7 +1519,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 34
         },
         {
           "after": {
@@ -1534,7 +1534,7 @@
           "expectedMs": 5000,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 31
         },
         {
           "after": {
@@ -1549,7 +1549,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 32
         }
       ],
       "result": "passed"
@@ -1590,7 +1590,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.601982,
+      "playedTo": 0.613948,
       "picture": {
         "decodedFrames": 19,
         "droppedFrames": 0,
@@ -1610,7 +1610,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 34
         },
         {
           "after": {
@@ -1625,7 +1625,7 @@
           "expectedMs": 5000,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 32
         },
         {
           "after": {
@@ -1640,7 +1640,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 32
+          "ms": 33
         }
       ],
       "result": "passed"
@@ -1675,7 +1675,7 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.620796,
+      "playedTo": 0.622633,
       "picture": {
         "decodedFrames": 23,
         "droppedFrames": 0,
@@ -1695,7 +1695,7 @@
           "expectedMs": 1066.667,
           "landed": true,
           "verified": "true",
-          "ms": 31
+          "ms": 34
         },
         {
           "after": {
@@ -1710,7 +1710,7 @@
           "expectedMs": 5333.333,
           "landed": true,
           "verified": "true",
-          "ms": 28
+          "ms": 33
         },
         {
           "after": {
@@ -1725,7 +1725,7 @@
           "expectedMs": 15700,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 32
         }
       ],
       "result": "passed"
@@ -1760,9 +1760,9 @@
         "hidden": false,
         "visibility": "visible"
       },
-      "playedTo": 0.6247409999999998,
+      "playedTo": 0.604654,
       "picture": {
-        "decodedFrames": 19,
+        "decodedFrames": 18,
         "droppedFrames": 0,
         "notice": false
       },
@@ -1780,7 +1780,7 @@
           "expectedMs": 1000,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 31
         },
         {
           "after": {
@@ -1795,7 +1795,7 @@
           "expectedMs": 5000,
           "landed": true,
           "verified": "true",
-          "ms": 29
+          "ms": 33
         },
         {
           "after": {
@@ -1810,7 +1810,7 @@
           "expectedMs": 9875,
           "landed": true,
           "verified": "true",
-          "ms": 30
+          "ms": 32
         }
       ],
       "result": "passed"
@@ -1819,71 +1819,71 @@
   "timings": {
     "comicPageTurnMs": {
       "n": 8,
-      "p50": 27,
-      "p95": 29,
-      "max": 29,
-      "samples": [
-        28,
-        28,
-        29,
-        29,
-        27,
-        3,
-        4,
-        2
-      ]
-    },
-    "videoFirstFrameMs": {
-      "n": 7,
-      "p50": 75,
-      "p95": 483,
-      "max": 483,
-      "samples": [
-        182,
-        79,
-        71,
-        44,
-        483,
-        75,
-        47
-      ]
-    },
-    "videoFrameSeekMs": {
-      "n": 21,
-      "p50": 30,
+      "p50": 28,
       "p95": 32,
       "max": 32,
       "samples": [
         29,
-        29,
-        29,
+        28,
         32,
         29,
-        30,
         29,
-        30,
-        28,
-        30,
-        30,
-        30,
-        30,
-        30,
+        7,
+        5,
+        4
+      ]
+    },
+    "videoFirstFrameMs": {
+      "n": 7,
+      "p50": 227,
+      "p95": 806,
+      "max": 806,
+      "samples": [
+        235,
+        221,
+        207,
+        226,
+        806,
+        235,
+        227
+      ]
+    },
+    "videoFrameSeekMs": {
+      "n": 21,
+      "p50": 32,
+      "p95": 34,
+      "max": 34,
+      "samples": [
+        33,
+        31,
+        31,
+        32,
+        29,
         32,
         31,
-        28,
         30,
-        30,
-        29,
-        30
+        32,
+        34,
+        31,
+        32,
+        34,
+        32,
+        33,
+        34,
+        33,
+        32,
+        31,
+        33,
+        32
       ]
     },
     "copyBuildMs": {
       "n": 1,
-      "p50": 439,
-      "p95": 439,
-      "max": 439,
+      "p50": 605,
+      "p95": 605,
+      "max": 605,
       "samples": [
-        439
+        605
       ]
     }
   }

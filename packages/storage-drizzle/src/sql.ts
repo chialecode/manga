@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 11;
+export const PRODUCT_SCHEMA_VERSION = 12;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -1116,12 +1116,6 @@ CREATE TABLE IF NOT EXISTS semantic_chunks (
   UNIQUE (version_id, source_kind, source_id, seq)
 );
 CREATE INDEX IF NOT EXISTS semantic_chunks_source ON semantic_chunks(source_kind, source_id);
--- A conversation closed from the left rail (A-74): only removed from the list. The session, its runs and the place in the file are untouched,
--- and opening the same target again takes it back.
-CREATE TABLE IF NOT EXISTS closed_sessions (
-  session_id TEXT PRIMARY KEY,
-  closed_at TEXT NOT NULL
-);
 -- The works that share one online entry are the versions of a title (A-68); the lookup is by entry, not by work.
 CREATE INDEX IF NOT EXISTS work_links_external ON work_links(provider_id, external_id);
 `;
@@ -1330,4 +1324,54 @@ CREATE TABLE IF NOT EXISTS removed_works (
   media_kind TEXT NOT NULL,
   removed_at TEXT NOT NULL
 );
+`;
+
+/**
+ * Schema v12 (A-94, A-96): one workspace, so what was kept per mode is kept per context (a project, or "最近", which is the empty string here). The
+ * progress table is rebuilt with the context in its key, every existing row going to "最近". The conversations, the shell preference, the tabs and the
+ * layouts are converted by `migrateWorkspace` in the same transaction. A conversation was "closed from the left rail" in the old shell; there is no
+ * rail any more, so `migrateWorkspace` reads that mark once, for the tabs, and drops the table (its backup is the pre-migration copy).
+ */
+export const V12_SCHEMA_SQL = `
+CREATE TABLE progress_v12 (
+  context_id TEXT NOT NULL DEFAULT '',
+  resource_id TEXT NOT NULL,
+  resource_revision_id TEXT NOT NULL,
+  last_locator_json TEXT,
+  consumed_ranges_json TEXT NOT NULL,
+  completion_state TEXT NOT NULL,
+  last_interaction_at TEXT NOT NULL,
+  percent REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (context_id, resource_id, resource_revision_id)
+);
+INSERT INTO progress_v12(context_id, resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent)
+  SELECT '', resource_id, resource_revision_id, last_locator_json, consumed_ranges_json, completion_state, last_interaction_at, percent FROM progress;
+DROP TABLE progress;
+ALTER TABLE progress_v12 RENAME TO progress;
+CREATE INDEX IF NOT EXISTS progress_by_interaction ON progress(resource_id, last_interaction_at);
+CREATE INDEX IF NOT EXISTS progress_context ON progress(context_id);
+
+ALTER TABLE project_materials ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual';
+`;
+
+/** The same on every start: the saved tabs and layout of each context, and the things a person took out of a project that are not added again by opening them. */
+export const V12_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS workspace_contexts (
+  context_id TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS project_material_exclusions (
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  removed_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, kind, target_id)
+);
+CREATE INDEX IF NOT EXISTS agent_sessions_context ON agent_sessions(project_id, kind, target_id);
+-- The latest position of each revision in any context: what a library card, "recently opened" and the continue button show (A-96).
+CREATE VIEW IF NOT EXISTS progress_latest AS
+  SELECT p.* FROM progress p WHERE p.rowid = (
+    SELECT q.rowid FROM progress q WHERE q.resource_id = p.resource_id AND q.resource_revision_id = p.resource_revision_id
+    ORDER BY q.last_interaction_at DESC, q.context_id LIMIT 1);
 `;

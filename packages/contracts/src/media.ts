@@ -199,8 +199,10 @@ export type WorkSummary = {
   shelf: ShelfState;
   coverId: string | null;
   lastResource: { id: string; title: string; ordinalLabel: string | null; revisionId: string | null } | null;
-  /** Fraction in [0, 1] of the last opened resource. */
+  /** Fraction in [0, 1] of the last opened resource, the latest position in any context (A-96). */
   progress: number;
+  /** The context that latest position is from: a project id and its name, or null id for "最近"; null when there is no position yet. A card notes it when it is not the current context. */
+  progressContext: { contextId: string | null; name: string } | null;
   /** Resources of this work whose progress says finished, and how many resources it has. */
   finishedCount: number;
   resourceCount: number;
@@ -223,7 +225,7 @@ export type WorkResourceRow = {
   ordinalNumber: number | null;
   ordinalType: string | null;
   revisionId: string | null;
-  progress: { percent: number; completion: string; locator: unknown | null; lastInteractionAt: string | null };
+  progress: { percent: number; completion: string; locator: unknown | null; lastInteractionAt: string | null; contextId: string | null; contextName: string | null };
   unit: "chars" | "pages" | "ms" | null;
   total: number;
   available: boolean;
