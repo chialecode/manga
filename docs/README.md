@@ -6,7 +6,7 @@
 | 编写日期 | 2026-09-19 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | M0 原型已复核修复，已测子集可交审；M0 未退出；下一轮先完成 M1a 基础门槛与 Agent |
+| 实现状态 | M0 已复核原型与 M1a 分别由 PR #1/#2 交付；用户已授权 DCO 补签、依次合并及分支清理，后续基线为 main。M1a 本轮技术复验、人工反馈与真实 Embedding 证据已记录；完整 AT、M0 整体退出及后续范围仍按状态台账 |
 
 ## 1. 阅读顺序
 
@@ -25,7 +25,9 @@
 | [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
 | [M0 执行与交接计划](delivery/m0-execution-plan.md) / [Cursor prompt](delivery/m0-cursor-prompt.md) | 工作包与交接；当前结果见 [复核修复报告](evidence/2026-09-19-m0-followup-review.md) |
 | [M0 收尾计划](delivery/m0-closure-plan.md) / [收尾 Cursor prompt](delivery/m0-closure-cursor-prompt.md) | 历史交接工作包；实际复核结论见下列最终报告 |
-| [M1a 执行计划](delivery/m1a-execution-plan.md) / [Cursor prompt](delivery/m1a-cursor-prompt.md) | 下一轮实施入口：新栈、授权/生命周期、数据恢复与目录、Agent/连接/配置、最终验证 |
+| [M1a 执行计划](delivery/m1a-execution-plan.md) / [Cursor prompt](delivery/m1a-cursor-prompt.md) | 本轮实施入口：新栈、授权/生命周期、数据恢复与目录、Agent/连接/配置、最终验证 |
+| [M1a 交付报告](evidence/m1a-delivery.md) / [最新 A 复验](evidence/m1a-f24-f32-review.md) / [原验收审查](evidence/m1a-acceptance-review.md) | 历史交付、当前缺口、用户决定落实及 B 集中返工入口 |
+| [模块规格](modules/library.md) | library / notes / settings / inventory / agent 的数据所有权与启停 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 
 | 文档 | 负责回答的问题 |

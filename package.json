@@ -7,16 +7,36 @@
     "node": ">=24.19.0"
   },
   "devDependencies": {
+    "@manga/app-core": "workspace:*",
+    "@manga/contracts": "workspace:*",
+    "@manga/i18n": "workspace:*",
+    "@manga/kernel": "workspace:*",
+    "@manga/model-protocol": "workspace:*",
+    "@manga/plugin-sdk": "workspace:*",
+    "@manga/storage-drizzle": "workspace:*",
+    "@testing-library/react": "16.3.0",
+    "@testing-library/user-event": "14.6.1",
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "24.5.2",
+    "@types/react": "19.1.13",
+    "better-sqlite3": "12.2.0",
     "esbuild": "0.25.10",
-    "typescript": "5.9.2"
+    "jsdom": "26.1.0",
+    "playwright-core": "1.55.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
   },
   "scripts": {
     "verify": "node scripts/verify.mjs",
     "verify:m0": "node scripts/verify-m0.mjs",
+    "verify:m1a": "node scripts/verify-m1a.mjs",
     "m0": "node scripts/m0.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node scripts/m0.mjs test"
+    "m1a": "node scripts/m1a.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/desktop/tsconfig.json",
+    "test": "node scripts/m0.mjs test",
+    "test:m1a": "vitest run --config vitest.config.ts"
   },
   "license": "Apache-2.0"
 }

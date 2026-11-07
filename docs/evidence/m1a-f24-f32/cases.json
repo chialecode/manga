@@ -1,0 +1,53 @@
+{
+  "status": "passed",
+  "at": "2026-09-20T15:33:04.039Z",
+  "sourceFingerprint": "566435d6e00daf8dec45a27ef44050bea8bef9511c20a1188445d7e6963e15a3",
+  "m1aSourceFingerprint": "2f24544d0e2caa946ba1d5d8b8cf9756c6b89ea5023975c1882e0c74025747b5",
+  "cases": [
+    {
+      "caseId": "F-24-owned-rollback",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-25-write-barrier",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-26-actor-idempotency",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-27-immediate-run-id",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-28-dual-runtime",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-29-purpose-isolation",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-30-setup-inventory",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-31-scale-report",
+      "kind": "automated",
+      "status": "passed"
+    },
+    {
+      "caseId": "F-32-snapshot-retry",
+      "kind": "automated",
+      "status": "passed"
+    }
+  ]
+}

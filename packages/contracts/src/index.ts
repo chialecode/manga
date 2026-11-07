@@ -13,3 +13,8 @@ export * from "./report.ts";
 export * from "./inputs.ts";
 
 export * from "./library-package.ts";
+export * from "./grant.ts";
+export * from "./paths.ts";
+export * from "./model.ts";
+export * from "./agent.ts";
+export * from "./inventory.ts";

@@ -1,0 +1,17 @@
+{
+  "name": "@manga/app-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@manga/contracts": "workspace:*",
+    "@manga/plugin-sdk": "workspace:*",
+    "@manga/kernel": "workspace:*",
+    "@manga/storage-drizzle": "workspace:*",
+    "@manga/model-protocol": "workspace:*",
+    "@manga/i18n": "workspace:*"
+  }
+}

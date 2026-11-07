@@ -1,0 +1,49 @@
+{
+  "status": "passed",
+  "at": "2026-09-21T15:38:04.348Z",
+  "sourceFingerprint": "78276083685baf9dcab69febe355ca18f4e46b773dbe2e4a1ebb5b5304842782",
+  "m1aSourceFingerprint": "53c944e31e47bf305abc0a3e19380c360ae8e1ba54cc6b446b26f08aeae5f67e",
+  "reviewBase": "b76fed5",
+  "prerequisite": "a33b115",
+  "scope": "Embedding live probe correction, user-reported human review and preparation of two independent delivery PRs; no product implementation changes",
+  "humanReview": {
+    "status": "user-reported-passed",
+    "date": "2026-09-21",
+    "scope": "Current delivered application; no inference for future VOICE-06—08 / AT-57—59 or untested media and device capabilities"
+  },
+  "authorization": {
+    "push": [
+      "feat/m0-tech-contract-validation",
+      "feat/m1a-agent-foundation"
+    ],
+    "pullRequests": true,
+    "merge": false,
+    "release": false
+  },
+  "checks": {
+    "m0ExactCommitVerify": {
+      "commit": "a33b115",
+      "status": "passed",
+      "documents": 79,
+      "links": 569,
+      "regressions": 15
+    },
+    "committedPublicationScan": "passed",
+    "screenshots": "44 images, 14 unique images visually inspected; synthetic samples only",
+    "live": "passed: LLM, ASR and real application embedding",
+    "package": "passed: initial/restart/agent/agent-restart",
+    "bench": "passed: 10000 metadata / 50000 search blocks",
+    "audit": "passed: four observations, disconnect retry preserves one note",
+    "m1aReport": "passed",
+    "repositoryQuality": "passed: 87 documents, 665 local links, 94 M1a tests / 4 live skipped, 15 M0 regressions, type and dependency checks"
+  },
+  "limitations": [
+    "M0 overall exit not reclassified",
+    "No full vector index or semantic search evaluation",
+    "No user library migration",
+    "Unsigned local Windows package; no release"
+  ],
+  "observations": [
+    "Documentation scan initially included the temporary nested M0 verification worktree; removed the clean temporary worktree and reran successfully. No documentation gate weakened."
+  ]
+}

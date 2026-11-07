@@ -34,6 +34,7 @@ for (const name of [
 run(process.execPath, ['scripts/check-docs.mjs']);
 run(process.execPath, ['--test', 'scripts/check-publication.test.mjs']);
 run(process.execPath, ['--test', 'scripts/m0-report.test.mjs']);
+run(process.execPath, ['--test', 'scripts/m1a-report.test.mjs']);
 run(process.execPath, ['scripts/check-publication.mjs']);
 if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
   run(process.execPath, ['scripts/check-deps.mjs']);
@@ -43,6 +44,17 @@ if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
     failed = true;
   } else if (fs.existsSync(tscJs)) {
     run(process.execPath, [tscJs, '--noEmit', '-p', 'tsconfig.json']);
+    const desktopTsconfig = path.join(root, 'apps/desktop/tsconfig.json');
+    if (fs.existsSync(desktopTsconfig)) {
+      run(process.execPath, [tscJs, '--noEmit', '-p', 'apps/desktop/tsconfig.json']);
+    }
+    const vitest = path.join(root, 'node_modules/vitest/vitest.mjs');
+    if (!fs.existsSync(vitest)) {
+      console.error('FAILED m1a tests: vitest is not installed');
+      failed = true;
+    } else {
+      run(process.execPath, [vitest, 'run', '--config', 'vitest.config.ts']);
+    }
     run(process.execPath, ['--test', '--test-concurrency=1', 'experiments/m0/src/tests/poc-contract-schema.test.ts', 'experiments/m0/src/tests/review-regressions.test.ts', 'experiments/m0/src/tests/closure-review.test.ts']);
   } else {
     console.error('FAILED application typecheck: tsc is not installed');

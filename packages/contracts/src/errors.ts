@@ -28,6 +28,9 @@ export const ERROR_CODES = [
   "PUBLISH_CONFLICT",
   "NEEDS_REVIEW",
   "INTERRUPTED",
+  "LOCATION_UNAVAILABLE",
+  "CREDENTIAL_UNAVAILABLE",
+  "GRANT_REVOKED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

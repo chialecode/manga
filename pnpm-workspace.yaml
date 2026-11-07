@@ -1,5 +1,14 @@
 packages:
   - packages/*
   - experiments/m0
+  - apps/*
+nodeLinker: hoisted
 allowBuilds:
   esbuild: true
+  better-sqlite3: true
+  electron: true
+  "@tailwindcss/oxide": true
+  protobufjs: true
+  "@google/genai": true
+overrides:
+  "@electron/rebuild": "4.2.0"

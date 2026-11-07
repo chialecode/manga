@@ -11,6 +11,7 @@ export interface ModuleContext {
   epoch: number;
   bindingEpoch: number;
   facet: Facet;
+  hostFacets?: Facet[];
   register(handle: ResourceHandle): Disposer;
   isCurrent(): boolean;
 }

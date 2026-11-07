@@ -17,11 +17,19 @@
       "@manga/contracts": ["packages/contracts/src/index.ts"],
       "@manga/plugin-sdk": ["packages/plugin-sdk/src/index.ts"],
       "@manga/kernel": ["packages/kernel/src/index.ts"],
-      "@manga/storage-sqlite": ["packages/storage-sqlite/src/index.ts"]
+      "@manga/storage-sqlite": ["packages/storage-sqlite/src/index.ts"],
+      "@manga/storage-drizzle": ["packages/storage-drizzle/src/index.ts"],
+      "@manga/i18n": ["packages/i18n/src/index.ts"],
+      "@manga/model-protocol": ["packages/model-protocol/src/index.ts"],
+      "@manga/app-core": ["packages/app-core/src/index.ts"]
     }
   },
   "include": [
     "packages/*/src/**/*.ts",
     "experiments/m0/src/**/*.ts"
+  ],
+  "exclude": [
+    "packages/app-core/src/parse-worker.ts",
+    "packages/app-core/src/crash-child.ts"
   ]
 }
