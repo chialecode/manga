@@ -11,6 +11,7 @@ allowBuilds:
   protobufjs: true
   "@google/genai": true
   core-js: false
+  lfa-ponyfill: false
   es5-ext: false
 overrides:
   "@electron/rebuild": "4.2.0"

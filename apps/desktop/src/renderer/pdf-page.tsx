@@ -23,6 +23,9 @@ type PdfPage = {
   cleanup: () => void;
 };
 type PdfTask = { promise: Promise<{ numPages: number; getPage: (index: number) => Promise<PdfPage> }>; destroy: () => Promise<void> };
+/** How long the page width has to hold still before the page is painted again at the new width. */
+const WIDTH_SETTLE_MS = 150;
+
 type TextLayerBuilder = { div: HTMLDivElement; render: (options: { viewport: Viewport; textContentParams: Record<string, unknown> }) => Promise<void>; cancel: () => void };
 
 export type PdfSelection = { quote: string; start: number; end: number };
@@ -244,11 +247,21 @@ export function PdfPageView(props: {
   useEffect(() => {
     const node = frame.current;
     if (!node) return;
-    const measure = () => setWidth(node.clientWidth);
+    let timer: number | undefined;
+    let first = true;
+    // The page is painted once at the width it opens with. A later change (a scrollbar appearing beside the painted page, the side panes
+    // settling) is taken only once the width has held still, so one open is one paint and the text layer a person is selecting in is not
+    // thrown away by a repaint a moment after it was made (LOOP-06). A real resize still repaints, after the pause.
+    const measure = () => {
+      const next = node.clientWidth;
+      window.clearTimeout(timer);
+      if (first) { first = false; setWidth(next); return; }
+      timer = window.setTimeout(() => setWidth((current) => (current === next ? current : next)), WIDTH_SETTLE_MS);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => { window.clearTimeout(timer); observer.disconnect(); };
   }, []);
 
   useEffect(() => {
@@ -364,7 +377,7 @@ export function PdfPageView(props: {
   }, [props.storedText, props.sliceStart]);
 
   return (
-    <div className="mx-auto mb-2" data-testid="reading-page-render" data-pdf-epoch={epoch} ref={frame}>
+    <div className="mx-auto mb-2" data-testid="reading-page-render" data-pdf-epoch={epoch} data-pdf-width={width} ref={frame}>
       <div className="flex gap-2 items-center mb-1 text-sm">
         <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-out" onClick={() => setZoom((value) => Math.max(0.5, Math.round((value - 0.25) * 100) / 100))}>缩小</button>
         <button type="button" className="border px-2 py-0.5 rounded" data-testid="reading-zoom-in" onClick={() => setZoom((value) => Math.min(4, Math.round((value + 0.25) * 100) / 100))}>放大</button>

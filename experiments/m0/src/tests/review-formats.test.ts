@@ -24,7 +24,11 @@ test("review: EPUB attribute order, real nav/NCX, expansion limits and original 
   assert.equal(normalized.normalized,"é\n🙂X");assert.deepEqual(normalized.mapToOriginal,[0,2,4,5]);
 });
 
-test("review: real MKV HEVC ASS, fractional FPS, VFR and observed keyframes", () => {
+// Needs a system FFmpeg with libx264 and libx265 encoders on PATH; the LGPL build bundled with the product has none.
+// Without them the case is skipped (reported as not run), not passed. Product coverage: tests/media and tests/video.
+const encoders = spawnSync("ffmpeg", ["-hide_banner", "-encoders"], { encoding: "utf8", timeout: 15000 });
+const canEncode = encoders.status === 0 && /libx264/.test(encoders.stdout) && /libx265/.test(encoders.stdout);
+test("review: real MKV HEVC ASS, fractional FPS, VFR and observed keyframes", { skip: canEncode ? false : "system ffmpeg with libx264 and libx265 not found" }, () => {
   const dir=isolateDir("media-review");
   const run=(args:string[])=>{const result=spawnSync("ffmpeg",["-v","error","-y",...args],{encoding:"utf8",timeout:30000});assert.equal(result.status,0,result.stderr);};
   const ass=path.join(dir,"marker.ass");
@@ -41,6 +45,6 @@ test("review: real MKV HEVC ASS, fractional FPS, VFR and observed keyframes", ()
   const frames=spawnSync("ffprobe",["-v","error","-select_streams","v:0","-show_frames","-show_entries","frame=best_effort_timestamp_time","-of","json",vfr],{encoding:"utf8"});assert.equal(frames.status,0,frames.stderr);
   const times=(JSON.parse(frames.stdout).frames as Array<{best_effort_timestamp_time:string}>).map(frame=>Number(frame.best_effort_timestamp_time));
   const gaps=new Set(times.slice(1).map((time,i)=>Math.round((time-times[i]!)*1000)));assert.ok(gaps.size>1);
-  const output=path.resolve(repoRoot(),process.env.M0_EVIDENCE_DIR ?? "docs/evidence/m0-closure","format-matrix.json");
+  const output=path.resolve(repoRoot(),process.env.M0_EVIDENCE_DIR ?? "dist/evidence-runs/m0","format-matrix.json");
   fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,JSON.stringify({status:"passed",sourceFingerprint:sourceFingerprint(repoRoot()),at:new Date().toISOString(),mkv:mkvProbe,fractional: fractionalProbe,vfrFrameIntervalsMs:[...gaps],scope:"FFmpeg generation/probe only; Electron playback is recorded separately in media-electron.json; ASS rendering and multi-track switching remain unverified"},null,2)+"\n");
 });

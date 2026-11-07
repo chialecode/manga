@@ -47,7 +47,9 @@ function responseInput(messages: ChatMessage[]): Array<Record<string, unknown>> 
       return [{ type: "function_call_output", call_id: message.toolCallId, output: message.content }];
     }
     const items: Array<Record<string, unknown>> = [];
-    if (message.content || !message.toolCalls?.length) items.push({ role: message.role, content: message.content });
+    if (message.role === "user" && message.images?.length) {
+      items.push({ role: "user", content: [{ type: "input_text", text: message.content }, ...message.images.map((image) => ({ type: "input_image", image_url: `data:${image.mediaType};base64,${image.base64}` }))] });
+    } else if (message.content || !message.toolCalls?.length) items.push({ role: message.role, content: message.content });
     for (const call of message.toolCalls ?? []) {
       items.push({ type: "function_call", call_id: call.id, name: call.name, arguments: call.arguments });
     }
@@ -70,6 +72,9 @@ function chatMessages(messages: ChatMessage[]) {
     }
     if (message.role === "tool") {
       return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
+    }
+    if (message.role === "user" && message.images?.length) {
+      return { role: "user", content: [{ type: "text", text: message.content }, ...message.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.base64}` } }))] };
     }
     return { role: message.role, content: message.content };
   });
@@ -215,7 +220,7 @@ export async function* streamResponses(baseUrl: string, apiKey: string, request:
       item_id?: string;
       arguments?: string;
       item?: { type?: string; id?: string; call_id?: string; name?: string };
-      response?: { status?: string };
+      response?: { status?: string; usage?: { input_tokens?: number; output_tokens?: number } };
     };
     if (json.type === "response.output_item.added" && json.item?.type === "function_call" && json.item.id) {
       items.set(json.item.id, { callId: json.item.call_id ?? json.item.id, name: json.item.name ?? "" });
@@ -227,7 +232,13 @@ export async function* streamResponses(baseUrl: string, apiKey: string, request:
       if (callId) yield { type: "tool-call-delta", callId, name: item?.name ?? json.name ?? "", argumentsDelta: json.delta ?? json.arguments ?? "" };
     }
     if (json.type === "response.completed") {
-      yield { type: "completed", finishReason: "stop" };
+      // The service states how many tokens the call used; a service that does not leaves them out and the usage page says so.
+      const used = json.response?.usage;
+      yield {
+        type: "completed",
+        finishReason: "stop",
+        ...(typeof used?.input_tokens === "number" || typeof used?.output_tokens === "number" ? { usage: { inputTokens: used.input_tokens, outputTokens: used.output_tokens } } : {}),
+      };
       return;
     }
   }

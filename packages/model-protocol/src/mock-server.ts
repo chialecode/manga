@@ -1,10 +1,12 @@
 import http from "node:http";
 
 export type MockProviderOptions = {
-  mode?: "ok" | "unauthorized" | "rate-limited" | "missing-capability" | "timeout" | "disconnect" | "malicious-json" | "truncated-stream" | "always-tools";
+  mode?: "ok" | "unauthorized" | "rate-limited" | "missing-capability" | "timeout" | "disconnect" | "malicious-json" | "truncated-stream" | "always-tools" | "no-vision";
   protocolPrefix?: string;
   streamToolName?: string;
   streamToolArguments?: string;
+  /** Sees every parsed request body, so a test can check what a model was actually given. */
+  onRequest?: (request: { url: string; body: Record<string, unknown> }) => void;
 };
 
 export function startMockProvider(options: MockProviderOptions = {}): Promise<{ url: string; close: () => Promise<void> }> {
@@ -50,6 +52,13 @@ export function startMockProvider(options: MockProviderOptions = {}): Promise<{ 
       }
       const body = Buffer.concat(chunks).toString("utf8");
       const json = body ? JSON.parse(body) as { stream?: boolean; tools?: unknown[]; messages?: Array<{ role?: string }>; input?: Array<{ type?: string }> } : {};
+      if (body) options.onRequest?.({ url, body: json as Record<string, unknown> });
+      // A text-only model rejects image parts the way hosted ones do: with a client error naming the input.
+      if (mode === "no-vision" && /"(image_url|input_image)"/.test(body)) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "image input is not supported by this model" } }));
+        return;
+      }
       const hasToolResult = (json.messages ?? []).some((message) => message.role === "tool")
         || (json.input ?? []).some((item) => item.type === "function_call_output");
       if (mode === "truncated-stream" && json.stream) {

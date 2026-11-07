@@ -1,10 +1,9 @@
 import { defineConfig } from "vite";
 
+// Forge's Vite plugin supplies the entry and emits [name].cjs, so src/preload/preload.ts becomes .vite/build/preload.cjs.
 export default defineConfig({
   build: {
     emptyOutDir: false,
-    lib: { entry: "src/preload/index.ts", formats: ["cjs"], fileName: () => "preload.cjs" },
-    rollupOptions: { external: ["electron"] },
     sourcemap: true,
     outDir: ".vite/build",
   },

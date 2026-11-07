@@ -9,10 +9,11 @@ export const ModelCapabilitySchema = z.enum([
   "streaming",
   "transcription",
   "embedding",
+  "vision",
 ]);
 export type ModelCapability = z.infer<typeof ModelCapabilitySchema>;
 
-export const ModelPurposeSchema = z.enum(["text", "transcription", "embedding"]);
+export const ModelPurposeSchema = z.enum(["text", "transcription", "embedding", "vision"]);
 export type ModelPurpose = z.infer<typeof ModelPurposeSchema>;
 
 export const AiRuntimeSchema = z.enum(["native", "pi"]);

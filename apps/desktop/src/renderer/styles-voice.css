@@ -1,0 +1,64 @@
+/* ---- recording: the control, the indicator, and the review ------------------ */
+.record-control { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.record-hold { padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12px; background: var(--color-surface); color: var(--color-text); touch-action: none; user-select: none; }
+.record-hold:hover { background: var(--color-accent-soft); }
+.record-hold:active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+.record-indicator { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 999px; background: #FDECEC; color: var(--color-danger); font-size: 12px; white-space: nowrap; }
+.record-light { width: 9px; height: 9px; border-radius: 50%; background: var(--color-danger); animation: record-pulse 1.2s ease-in-out infinite; }
+.record-indicator[data-phase="starting"] .record-light, .record-indicator[data-phase="stopping"] .record-light { animation: none; opacity: .6; }
+.record-time { font-variant-numeric: tabular-nums; }
+.record-level { width: 56px; height: 6px; border-radius: 3px; background: #F5C6C2; overflow: hidden; display: inline-block; }
+.record-level > span { display: block; height: 100%; background: var(--color-danger); transition: width 90ms linear; }
+.record-retention { color: var(--color-subtle); }
+@media (max-width: 520px) { .record-level { width: 32px; } .record-indicator { gap: 6px; padding: 3px 8px; } }
+.record-stop { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--color-danger); color: var(--color-danger); font-size: 12px; background: transparent; }
+.record-stop:hover { background: var(--color-danger); color: #fff; }
+@keyframes record-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .record-light { animation: none; } .record-level > span { transition: none; } }
+
+.review { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.review-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.review-sessions { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.review-session { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); text-align: left; }
+.review-session:hover { border-color: var(--color-brand); }
+.review-session-main, .review-session-state { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.review-session-state { align-items: flex-end; }
+.review-error { color: var(--color-danger); font-size: 13px; }
+
+.review-bar { position: relative; height: 22px; border-radius: 6px; background: var(--color-muted); overflow: hidden; border: 1px solid var(--color-border); }
+.review-bar-gap { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #E2E5EC, #E2E5EC 3px, #F2F3F6 3px, #F2F3F6 6px); }
+.review-bar-segment { position: absolute; top: 2px; bottom: 2px; min-width: 6px; border-radius: 4px; background: var(--color-brand); border: 0; padding: 0; }
+.review-bar-segment[data-state="failed"] { background: var(--color-danger); }
+.review-bar-segment[data-state="pending"], .review-bar-segment[data-state="uploaded"] { background: #B8BFCE; }
+.review-bar-segment[data-active] { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+
+.review-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.review-items { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.review-gap { font-size: 12px; color: var(--color-subtle); padding: 2px 12px; border-left: 3px dashed var(--color-border); }
+.review-bubble { padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 6px; }
+.review-bubble[data-state="failed"] { border-color: var(--color-danger); }
+.review-bubble[data-active] { border-color: var(--color-focus); }
+.review-bubble-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.review-bubble-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.review-bubble-actions .secondary-button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; font-size: 12px; }
+.review-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-edit, .review-term { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.review-edit textarea, .review-draft textarea { width: 100%; min-height: 84px; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; font: inherit; font-size: 14px; background: var(--color-surface); color: var(--color-text); resize: vertical; }
+.review-term input { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); }
+.review-drafts { display: flex; flex-direction: column; gap: 8px; }
+.review-draft { padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; background: var(--color-muted); }
+
+/* ---- settings: modules, recording, media preferences, metadata sources ---------- */
+.msettings { display: flex; flex-direction: column; gap: 20px; max-width: 42rem; margin-top: 28px; }
+.msettings-title { font-size: 16px; font-weight: 600; }
+.msettings-section { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.msettings-section h3 { font-size: 14px; font-weight: 600; }
+.msettings-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.msettings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.msettings-row label, .msettings-check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.msettings-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.msettings-field select, .msettings-field input { min-width: 11rem; max-width: 100%; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); }
+.msettings-key { min-width: 6rem; font-variant-numeric: tabular-nums; }
+.msettings-provider { display: flex; flex-direction: column; gap: 8px; }
+.msettings-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

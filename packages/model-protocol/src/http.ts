@@ -36,9 +36,14 @@ export type StreamEvent =
   | { type: "completed"; finishReason: string; usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number } }
   | { type: "error"; code: string; message: string; retryable: boolean };
 
+/** A still the model may look at. Only images travel to a chat model: audio is transcribed first and never sent as sound. */
+export type ImagePart = { mediaType: "image/jpeg" | "image/png" | "image/webp"; base64: string };
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Attached to user messages only. */
+  images?: ImagePart[];
   toolCallId?: string;
   toolCalls?: Array<{ id: string; name: string; arguments: string }>;
 };
@@ -63,9 +68,18 @@ export type TranscriptionRequest = {
   fileName: string;
   bytes: Uint8Array;
   mimeType: string;
+  /** Names and terms the speaker is likely to say; helps the recogniser spell them. */
+  prompt?: string;
+  /** ISO-639-1 hint, when the speaker's language is known. */
+  language?: string;
+  /** Ask for per-segment times (`verbose_json`). Providers that do not support it answer plain text. */
+  timestamps?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
 };
+
+export type TranscriptionSegment = { start: number; end: number; text: string };
+export type TranscriptionResult = { text: string; segments?: TranscriptionSegment[]; duration?: number; language?: string };
 
 export function mapHttpError(status: number, _body: string): MangaError {
   if (status === 401) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status } });

@@ -43,7 +43,10 @@ function showUnicode(text: string, table: Map<string, string>): string {
 
 /**
  * Advance widths for the synthetic CID font, which has no font program. PDF.js draws each glyph at the advance the
- * PDF gives it, so a combining mark takes none and sits on its base letter; Latin letters get proportional widths.
+ * PDF gives it; a combining mark takes none so a line's measured width does not grow with it, and Latin letters get
+ * proportional widths. This fixture is for the text pipeline only: it does not say where a combining mark is drawn
+ * (LOOP-04 found that a bare mark is drawn at the pen position even with zero advance). A sample whose display is looked
+ * at uses `scripts/samples/pdf-embedded-font.ts`, which embeds a real font and positions the mark as a producer would.
  */
 function cidWidths(table: Map<string, string>): string {
   const advance = (char: string): number => {

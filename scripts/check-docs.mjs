@@ -13,6 +13,25 @@ const kinds = new Set([
   'status', 'decision', 'research', 'evidence', 'template',
 ]);
 
+// Stage order for the retirement rule: a document marked retireAfter must be gone once the current stage is later.
+export const stageOrder = ['m0', 'm1a', 'm1b', 'm2', 'm3', 'm4'];
+
+export function retiredDocumentErrors(registry, exists) {
+  const errors = [];
+  const current = stageOrder.indexOf(registry.currentStage);
+  const marked = registry.documents.filter((doc) => doc && typeof doc === 'object' && doc.retireAfter !== undefined);
+  if (marked.length && current < 0) errors.push('Registry: currentStage must name a known stage when documents declare retireAfter');
+  if (registry.currentStage !== undefined && current < 0) errors.push(`Registry: unknown currentStage ${registry.currentStage}`);
+  for (const doc of marked) {
+    const retire = stageOrder.indexOf(doc.retireAfter);
+    if (retire < 0) errors.push(`${doc.path}: unknown retireAfter ${doc.retireAfter}`);
+    else if (current > retire && exists(doc.path)) {
+      errors.push(`${doc.path}: stage ${registry.currentStage} is past retireAfter ${doc.retireAfter}; extract it into the stage summary and delete it`);
+    }
+  }
+  return errors;
+}
+
 function outside(root, target) {
   const relative = path.relative(root, target);
   return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
@@ -128,6 +147,7 @@ export function validateRepository(directory) {
   for (const relative of markdown.keys()) {
     if (!registered.has(relative)) errors.push(`Unregistered Markdown: ${relative}`);
   }
+  errors.push(...retiredDocumentErrors(registry, (file) => markdown.has(file) || fs.existsSync(path.join(root, file))));
   if ((markdown.get('CLAUDE.md') ?? '').trim() !== '@AGENTS.md') {
     errors.push('CLAUDE.md must contain only @AGENTS.md');
   }

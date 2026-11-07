@@ -17,6 +17,10 @@ export type CapturePositionEvent = {
     | "resume"
     | "rate_change"
     | "resource_change"
+    | "position"
+    | "page"
+    | "selection"
+    | "episode_change"
     | "stop";
 };
 

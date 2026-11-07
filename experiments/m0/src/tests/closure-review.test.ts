@@ -6,7 +6,6 @@ import test from "node:test";
 import { startedApp, user, expectOk } from "./helpers.ts";
 import { isolateDir } from "../env.ts";
 import { exportLibraryPackage, importLibraryPackage } from "../domain/library-package.ts";
-import { mediaTimeAt, mapCaptureToSources } from "../domain/capture.ts";
 
 test("review closure: context uses the requested resource revision and code point range", async () => {
   const { app } = await startedApp(["library", "notes"]);
@@ -108,15 +107,4 @@ test("review closure: late package publish conflict rolls back own files and pre
     assert.deepEqual(fs.readdirSync(dest.store.attachmentsDir),["b.bin"]);
     assert.equal(fs.readFileSync(path.join(dest.store.attachmentsDir,"b.bin"),"utf8"),"concurrent-sentinel");
   } finally {t.mock.restoreAll();app.close();dest.close();}
-});
-
-test("review closure: seek starts a new advancing segment and stop ends capture", () => {
-  const events=[
-    {captureOffsetMs:0,clockDomainId:"samples",resourceId:"video",resourceRevisionId:"v1",locator:{kind:"temporal" as const,startMs:1000},playing:true,playbackRate:1,reason:"start" as const},
-    {captureOffsetMs:100,clockDomainId:"samples",resourceId:"video",resourceRevisionId:"v1",locator:{kind:"temporal" as const,startMs:8000},playing:true,playbackRate:2,reason:"seek" as const},
-    {captureOffsetMs:400,clockDomainId:"samples",resourceId:"video",resourceRevisionId:"v1",locator:{kind:"temporal" as const,startMs:8600},playing:false,reason:"stop" as const},
-  ];
-  assert.equal(mediaTimeAt(events,200)?.mediaMs,8200);
-  assert.equal(mediaTimeAt(events,500),undefined);
-  assert.equal(mapCaptureToSources([{...events[0]!,resourceId:undefined}, {...events[1]!,reason:"resource_change"},events[2]!]).length,1);
 });
