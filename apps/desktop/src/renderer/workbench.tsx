@@ -174,7 +174,7 @@ export function Workbench(props: {
   // ---- keys: the actions of the one key table ---------------------------------------------------------------------------------------------
   const latest = useRef({ s, controller, keyTable, toggleDebug });
   latest.current = { s, controller, keyTable, toggleDebug };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       const { s: services, controller: workspace, keyTable: table } = latest.current;
