@@ -1,0 +1,85 @@
+{
+  "poc": "poc-02",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "cases": [
+    {
+      "caseId": "POC-02/segment-on-resource-change",
+      "poc": "POC-02",
+      "title": "page/resource change splits capture intervals",
+      "status": "passed",
+      "expected": 2,
+      "actual": 2,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/media-seek-split",
+      "poc": "POC-02",
+      "title": "seek splits temporal capture mapping",
+      "status": "passed",
+      "expected": 2,
+      "actual": 2,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/asr-fixture",
+      "poc": "POC-02",
+      "title": "fixed ASR fixture covers delay/fail/timeout/cancel",
+      "status": "passed",
+      "expected": [
+        "cancelled",
+        "failed",
+        "timeout",
+        "ok"
+      ],
+      "actual": [
+        "cancelled",
+        "failed",
+        "timeout",
+        "ok"
+      ],
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-02/pause-and-seek-clock",
+      "poc": "POC-02",
+      "title": "pause freezes media time; playback advances from the seek target",
+      "status": "passed",
+      "expected": {
+        "pausedSegments": 2,
+        "seekMediaMs": 4500
+      },
+      "actual": {
+        "pausedSegments": 2,
+        "seekMediaMs": 4500,
+        "sampleMs": 1000
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/asr-keeps-request-focus",
+      "poc": "POC-02",
+      "title": "delayed ASR fixture attaches to request focus, not arrival focus",
+      "status": "passed",
+      "expected": {
+        "resourceId": "res-a",
+        "usedArrivalFocus": false
+      },
+      "actual": {
+        "resourceId": "res-a",
+        "usedArrivalFocus": false
+      },
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-02/device-headset-speaker",
+      "poc": "POC-02",
+      "title": "real headset/speaker capture",
+      "status": "not-run",
+      "expected": "human device log for headset vs speaker, crosstalk, unplug",
+      "actual": "external microphone + display speakers basic capture passed separately; headset/crosstalk/unplug still not-run",
+      "kind": "human",
+      "evidence": "docs/evidence/2026-09-19-m0-device-followup.md"
+    }
+  ],
+  "at": "2026-09-19T13:32:27.649Z"
+}

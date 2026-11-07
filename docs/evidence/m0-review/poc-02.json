@@ -1,0 +1,53 @@
+{
+  "poc": "poc-02",
+  "sourceFingerprint": "60522d6ea29db35e2c6b5634dd0c176edd493a6d2fe5d81d9920dca1dab3d66d",
+  "cases": [
+    {
+      "caseId": "POC-02/segment-on-resource-change",
+      "poc": "POC-02",
+      "title": "page/resource change splits capture intervals",
+      "status": "passed",
+      "expected": 2,
+      "actual": 2,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/media-seek-split",
+      "poc": "POC-02",
+      "title": "seek splits temporal capture mapping",
+      "status": "passed",
+      "expected": 2,
+      "actual": 2,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/asr-fixture",
+      "poc": "POC-02",
+      "title": "fixed ASR fixture covers delay/fail/timeout/cancel",
+      "status": "passed",
+      "expected": [
+        "cancelled",
+        "failed",
+        "timeout",
+        "ok"
+      ],
+      "actual": [
+        "cancelled",
+        "failed",
+        "timeout",
+        "ok"
+      ],
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-02/device-headset-speaker",
+      "poc": "POC-02",
+      "title": "real headset/speaker capture",
+      "status": "not-run",
+      "expected": "human device log",
+      "actual": "waiting for human checklist",
+      "kind": "human"
+    }
+  ],
+  "at": "2026-09-19T10:49:54.220Z"
+}

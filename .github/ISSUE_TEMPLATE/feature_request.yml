@@ -1,0 +1,17 @@
+name: 需求或设计建议
+description: 说明使用场景、目标和涉及的现有需求
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景与目标
+      description: 谁在什么情况下遇到了什么问题？预期如何验收？
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: 现有依据与范围
+      description: 链接已有需求、设计、待决问题或讨论，说明此次建议影响什么。
+    validations:
+      required: true

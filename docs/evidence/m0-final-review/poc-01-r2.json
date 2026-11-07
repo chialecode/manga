@@ -1,0 +1,31 @@
+{
+  "poc": "poc-01-r2",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "cases": [
+    {
+      "caseId": "POC-01/full-text-not-preview",
+      "poc": "POC-01",
+      "title": "long chapter is returned in full for locators",
+      "status": "passed",
+      "expected": {
+        "previewOnly": false,
+        "minLength": 32000
+      },
+      "actual": {
+        "previewOnly": false,
+        "length": 40004
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-01/locator-repeat-sentence",
+      "poc": "POC-01",
+      "title": "repeated sentence resolves with range plus prefix",
+      "status": "passed",
+      "expected": "resolved",
+      "actual": "resolved",
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T13:32:25.030Z"
+}

@@ -1,0 +1,77 @@
+{
+  "poc": "poc-09",
+  "cases": [
+    {
+      "caseId": "POC-09/idempotent-import",
+      "poc": "POC-09",
+      "title": "repeat recovery imports once",
+      "status": "passed",
+      "expected": "res_ea87eeff-3574-43f5-b6f7-2aed923d1b6a",
+      "actual": "res_ea87eeff-3574-43f5-b6f7-2aed923d1b6a",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/no-overwrite",
+      "poc": "POC-09",
+      "title": "same file name does not overwrite",
+      "status": "passed",
+      "expected": "error",
+      "actual": "PUBLISH_CONFLICT",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/redirect-private",
+      "poc": "POC-09",
+      "title": "private redirect rejected",
+      "status": "passed",
+      "expected": "error",
+      "actual": "FORBIDDEN",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/quota-disk",
+      "poc": "POC-09",
+      "title": "quota and injected disk-full",
+      "status": "passed",
+      "expected": [
+        "error",
+        "error"
+      ],
+      "actual": [
+        "QUOTA_EXCEEDED",
+        "DISK_FULL"
+      ],
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-09/remove-acquisition",
+      "poc": "POC-09",
+      "title": "imported file remains after download module stop",
+      "status": "passed",
+      "expected": true,
+      "actual": true,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-09/cross-volume",
+      "poc": "POC-09",
+      "title": "real distinct Windows volumes",
+      "status": "not-run",
+      "expected": "two maintainer-provided volumes",
+      "actual": {
+        "volA": null,
+        "volB": null,
+        "observedLetters": [
+          "volume-1",
+          "volume-2"
+        ]
+      },
+      "kind": "filesystem"
+    }
+  ],
+  "at": "2026-09-19T09:35:30.443Z",
+  "publicationRedaction": {
+    "date": "2026-09-19",
+    "scope": "Local drive labels replaced with anonymous volume labels; test outcomes and measurements unchanged. Not a rerun."
+  }
+}

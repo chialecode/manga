@@ -1,0 +1,74 @@
+{
+  "poc": "poc-02-r3",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "cases": [
+    {
+      "caseId": "POC-02/sample-clock-excludes-permission",
+      "poc": "POC-02",
+      "title": "capture offset uses processed samples, not getUserMedia wait",
+      "status": "passed",
+      "expected": {
+        "capturedMs": 1000,
+        "permissionWaitMs": 320
+      },
+      "actual": {
+        "capturedMs": 1000,
+        "permissionWaitMs": 320
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/player-events-during-capture",
+      "poc": "POC-02",
+      "title": "pause freezes media; seek does not interpolate; rate applies after the event",
+      "status": "passed",
+      "expected": {
+        "pauseMs": 1300,
+        "seekMs": 8200,
+        "afterRateMs": 8100
+      },
+      "actual": {
+        "pauseMs": 1300,
+        "seekMs": 8200,
+        "afterRateMs": 8100,
+        "segments": 6
+      },
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/asr-marker-keeps-request-focus",
+      "poc": "POC-02",
+      "title": "fixed marker/ASR fixture stays on request focus",
+      "status": "passed",
+      "expected": {
+        "resourceId": "vid",
+        "usedArrivalFocus": false
+      },
+      "actual": {
+        "resourceId": "vid",
+        "usedArrivalFocus": false
+      },
+      "kind": "simulated"
+    },
+    {
+      "caseId": "POC-02/playback-progress-persisted",
+      "poc": "POC-02",
+      "title": "playback position is stored on the capture session",
+      "status": "passed",
+      "expected": 350,
+      "actual": 350,
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-02/hardware-offset",
+      "poc": "POC-02",
+      "title": "hardware analog/acoustic offset",
+      "status": "not-run",
+      "expected": "user-started loopback/headset measurement",
+      "actual": "joint-test entry is in the desktop window; Agent does not open the real microphone",
+      "kind": "human",
+      "evidence": "docs/evidence/2026-09-19-m0-human-checklist.md"
+    }
+  ],
+  "at": "2026-09-19T13:32:26.612Z"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@manga/m0",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@manga/contracts": "workspace:*",
+    "@manga/plugin-sdk": "workspace:*",
+    "@manga/kernel": "workspace:*",
+    "@manga/storage-sqlite": "workspace:*",
+    "fflate": "0.8.2",
+    "parse5": "7.3.0"
+  }
+}

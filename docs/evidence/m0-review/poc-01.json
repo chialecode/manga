@@ -1,0 +1,52 @@
+{
+  "poc": "poc-01",
+  "sourceFingerprint": "60522d6ea29db35e2c6b5634dd0c176edd493a6d2fe5d81d9920dca1dab3d66d",
+  "cases": [
+    {
+      "caseId": "POC-01/utf8-bom",
+      "poc": "POC-01",
+      "title": "UTF-8 BOM stripped, code point range round-trips to UTF-16",
+      "status": "passed",
+      "expected": "春が来た。",
+      "actual": "春が来た。",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-01/emoji-cluster",
+      "poc": "POC-01",
+      "title": "emoji/ZWJ cluster uses code points not JS UTF-16 indexes",
+      "status": "passed",
+      "expected": "🙂‍↔️",
+      "actual": "🙂‍↔️",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-01/duplicate-needs-review",
+      "poc": "POC-01",
+      "title": "duplicate sentence does not silently pick the first match",
+      "status": "passed",
+      "expected": "needs_review",
+      "actual": "needs_review",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-01/epub-chapter",
+      "poc": "POC-01",
+      "title": "EPUB multi-chapter text locator",
+      "status": "passed",
+      "expected": "重复重复\n同",
+      "actual": "重复重复\n同",
+      "kind": "automated"
+    },
+    {
+      "caseId": "POC-01/epub-reject",
+      "poc": "POC-01",
+      "title": "illegal path and oversized EPUB entries rejected",
+      "status": "passed",
+      "expected": "rejected",
+      "actual": "rejected",
+      "kind": "automated"
+    }
+  ],
+  "at": "2026-09-19T10:49:53.988Z"
+}

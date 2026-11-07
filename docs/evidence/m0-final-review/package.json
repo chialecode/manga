@@ -1,0 +1,107 @@
+{
+  "status": "passed",
+  "sourceFingerprint": "ae15a38783cb7263c7aac8c88e15171462749e178df90f7d07f11b393cc89613",
+  "at": "2026-09-19T13:31:58.053Z",
+  "format": "unsigned unpacked local prototype",
+  "bundledNode": "v24.19.0",
+  "electron": "37.4.0",
+  "standalonePath": true,
+  "smokeResults": [
+    {
+      "status": "passed",
+      "phase": "initial",
+      "packaged": true,
+      "devicePixelRatio": 1.5,
+      "cases": [
+        "import-visible",
+        "composition-event-undo-redo",
+        "save-ack",
+        "dom-selection-anchor",
+        "fake-audio-capture-save-load",
+        "playback-duration-seek",
+        "player-survives-refresh",
+        "export-control",
+        "electron-h264-playback",
+        "electron-hevc-playback",
+        "electron-image-display",
+        "schema-rejection",
+        "renderer-no-node",
+        "narrow-layout"
+      ],
+      "at": "2026-09-19T13:31:52.704Z",
+      "limitations": [
+        "Synthetic composition events do not validate the Windows IME candidate window",
+        "Fake microphone does not validate actual acoustics"
+      ]
+    },
+    {
+      "status": "passed",
+      "phase": "restart",
+      "packaged": true,
+      "devicePixelRatio": 1.25,
+      "cases": [
+        "process-restart-note-import-audio",
+        "restart-playback-duration",
+        "schema-rejection",
+        "renderer-no-node",
+        "narrow-layout"
+      ],
+      "at": "2026-09-19T13:31:55.360Z",
+      "limitations": [
+        "Synthetic composition events do not validate the Windows IME candidate window",
+        "Fake microphone does not validate actual acoustics"
+      ]
+    },
+    {
+      "status": "passed",
+      "phase": "permission",
+      "packaged": true,
+      "devicePixelRatio": 1.5,
+      "cases": [
+        "permission-denied",
+        "schema-rejection",
+        "renderer-no-node",
+        "narrow-layout"
+      ],
+      "at": "2026-09-19T13:31:57.985Z",
+      "limitations": [
+        "Synthetic composition events do not validate the Windows IME candidate window",
+        "Fake microphone does not validate actual acoustics"
+      ]
+    }
+  ],
+  "mediaElectron": {
+    "status": "recorded",
+    "h264": {
+      "kind": "video",
+      "name": "h264-aac.mp4",
+      "mime": "video/mp4",
+      "canPlay": "maybe",
+      "duration": 4,
+      "currentTime": 0.231148,
+      "paused": false,
+      "status": "played"
+    },
+    "hevc": {
+      "kind": "hevc",
+      "name": "manga-m0-hevc-6248.mp4",
+      "mime": "video/mp4",
+      "canPlay": "maybe",
+      "duration": 1,
+      "currentTime": 0,
+      "paused": true,
+      "mediaError": "DECODER_ERROR_NOT_SUPPORTED: GetVideoDecoderConfigCount failed: 操作成功完成。 (0x0)",
+      "status": "rejected"
+    },
+    "image": {
+      "kind": "image",
+      "name": "p1.png",
+      "width": 1,
+      "height": 1,
+      "status": "played"
+    },
+    "at": "2026-09-19T13:31:51.258Z"
+  },
+  "hevcGenerated": true,
+  "exportBytes": 19279
+}
