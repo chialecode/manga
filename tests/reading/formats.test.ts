@@ -17,7 +17,7 @@ import {
   sniffFormat,
 } from "@manga/app-core";
 
-describe("G-01 format candidates", () => {
+describe("format candidates", () => {
   it("rejects invalid txt without replacing bytes and keeps the candidate unaccepted", () => {
     expect(() => parseTextBytes(Uint8Array.from([0xff, 0x20, 0x20]))).toThrow(MangaError);
     const parsed = parseTextBytes(new TextEncoder().encode("\uFEFF甲\r\n乙"));

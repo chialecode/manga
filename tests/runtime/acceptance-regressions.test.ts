@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { completeText, streamText, mapHttpError } from "@manga/model-protocol";
 import { startApp, tempProfile } from "../helpers/app.ts";
 
-describe("A acceptance review regressions", () => {
+describe("protocol, inventory and location regressions", () => {
   it.each([false, true])("sends Responses function definitions and round-trip call items (stream=%s)", async (stream) => {
     let payload: any;
     const server = createServer(async (req, res) => {

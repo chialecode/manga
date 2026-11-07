@@ -297,6 +297,17 @@ export class AgentMaterials {
     return this.collectSubtitles(input.resourceId, input.resourceRevisionId, Math.max(0, input.centerMs - before), to, limit, signal);
   }
 
+  /**
+   * How far into a video a reader may be given what other people wrote about it (the danmaku): the same limit as the subtitles, so a comment never
+   * shows a moment the person has not reached. A task frozen with the video keeps the limit it was frozen with; any other reading task gets the limit
+   * from the progress and the spoiler guard. Nobody can widen it from here.
+   */
+  watchedLimit(grant: ScopeGrant, input: { resourceId: string; resourceRevisionId: string; centerMs: number }): { limitMs: number; guard: SubtitleGuard } {
+    const frozen = grant.access === "owner" ? undefined : this.frozenVideo(grant, input.resourceId, input.resourceRevisionId);
+    if (frozen) return { limitMs: frozen.subtitles.limitMs, guard: frozen.subtitles.guard };
+    return subtitleLimit({ positionMs: input.centerMs, consumed: this.consumed(input.resourceId, input.resourceRevisionId), guard: this.deps.spoilerGuard() });
+  }
+
   private async collectSubtitles(resourceId: string, revisionId: string, fromMs: number, toMs: number, limit: { limitMs: number; guard: SubtitleGuard }, signal?: AbortSignal): Promise<FrozenSubtitles> {
     const base = { fromMs, toMs, limitMs: limit.limitMs, guard: limit.guard };
     let loaded: { trackId: string | null; cues: Cue[] };

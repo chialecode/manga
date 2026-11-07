@@ -9,13 +9,19 @@ import { serveMedia } from "../../packages/app-core/src/media/serve.ts";
 import { startApp } from "../helpers/app.ts";
 import { suggestKind } from "../../packages/app-core/src/comic/suggest.ts";
 import { evidenceRunDir } from "../../scripts/desktop-paths.ts";
+import { readLocalEnv } from "../helpers/local-env.ts";
 
 /**
- * Read-only open trial on the developer's own library (plan section 7.4). The roots come from MANGA_REAL_SAMPLE_ROOTS
- * (";" separated). Nothing is copied, nothing is written next to the sources, and the summary carries counts and
- * categories only: no file names, no paths, no titles.
+ * Read-only open trial on the developer's own library, run with MANGA_REAL_SAMPLES=1. The roots are the three per-medium
+ * variables below, read from the process environment or the ignored `.env.local`; a missing one is skipped. Nothing is copied, nothing is written next
+ * to the sources, and the summary carries counts and categories only: no file names, no paths, no titles.
  */
-const ROOTS = (process.env.MANGA_REAL_SAMPLE_ROOTS ?? "").split(";").map((root) => root.trim()).filter(Boolean);
+const ROOT_KEYS = { novel: "MANGA_TEST_LIBRARY_NOVEL", manga: "MANGA_TEST_LIBRARY_MANGA", anime: "MANGA_TEST_LIBRARY_ANIME" } as const;
+// Opt in with MANGA_REAL_SAMPLES=1 (never in CI): the trial walks whole libraries and takes minutes.
+const enabled = process.env.MANGA_REAL_SAMPLES === "1" && !process.env.CI;
+const env = enabled ? readLocalEnv(Object.values(ROOT_KEYS)) : {};
+const ENTRIES = Object.entries(ROOT_KEYS).flatMap(([medium, key]) => (env[key] && fs.existsSync(env[key]) ? [{ medium, root: env[key]! }] : []));
+const ROOTS = ENTRIES.map((entry) => entry.root);
 
 function percentile(values: number[], p: number): number | null {
   if (!values.length) return null;
@@ -137,7 +143,7 @@ describe.skipIf(!ROOTS.length)("real library, read-only trial", () => {
         }
 
         (summary.roots as unknown[]).push({
-          root: `root${index + 1}`,
+          root: ENTRIES[index]!.medium,
           files: walkCount.files, dirs: walkCount.dirs, maxDepth: walkCount.maxDepth,
           extensions,
           planned, itemTypes,
@@ -208,7 +214,7 @@ describe.skipIf(!ROOTS.length)("real library, read-only trial", () => {
       } finally { ctx.app.close(); }
       const after = ROOTS.map((root) => fs.statSync(root).mtimeMs);
       expect(after, "the trial must not touch the sources").toEqual(before);
-      const out = path.join(evidenceRunDir("m2", "real-samples"), "summary.json");
+      const out = path.join(evidenceRunDir("real-samples"), "summary.json");
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, JSON.stringify(summary, null, 2));
       console.log(JSON.stringify(summary, null, 1));

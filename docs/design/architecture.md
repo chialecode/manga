@@ -4,12 +4,12 @@
 | --- | --- |
 | 文档编号 | DESIGN-MANGA-ARCH |
 | 版本与日期 | 0.5 / 2026-09-25 |
-| 状态 | 评审稿；具体库版本与媒体后端待 M0 验证 |
+| 状态 | 评审稿；基础技术栈见 ADR-0007，EPUB 生产引擎待定 |
 | 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
 | 输入 | [产品需求](../product/requirements.md) |
 | 详细设计 | [领域模型](domain-model.md)、[Agent 与插件](agent-and-plugins.md)、[界面与工作流](interaction-and-workflows.md) |
 
-M1 先建设 Agent 主页面、OpenAI 格式连接/转录和基础配置；所有业务模块通过同一服务向 UI 与 Agent 暴露能力。目录分区与通道隔离遵循 [领域模型](domain-model.md#112-文件分区)，首次配置与资源总览遵循 [交互设计](interaction-and-workflows.md)。
+先建设 Agent 主页面、OpenAI 格式连接/转录和基础配置；所有业务模块通过同一服务向 UI 与 Agent 暴露能力。目录分区与通道隔离遵循 [领域模型](domain-model.md#112-文件分区)，首次配置与资源总览遵循 [交互设计](interaction-and-workflows.md)。
 
 ## 1. 架构目标
 
@@ -17,7 +17,7 @@ M1 先建设 Agent 主页面、OpenAI 格式连接/转录和基础配置；所�
 
 A-40 的当前技术方向是优先整合活跃开源能力。Agent A 在提出选型方案前查证维护与适用证据；MANGA 负责组合、领域与用户流程，具体口径见[开源选型规则](../dev-rules/architecture-and-contracts.md#open-source-first)。既有实现以可逆适配逐步演进，不因本次方案调整宣称已经完成替换。
 
-组合、运行时选型、功能中心与生命周期细化见[可组合与 AI-Native 架构方案](composable-ai-native-architecture.md)。M0 对运行时候选执行统一契约验证，完成后选择一个生产实现。所有业务功能可不安装、停用或替换；维持宿主运行的基础接口必须保留可用实现。外部数据库与下载接入见[外部扩展设计](external-providers-and-acquisition.md)。
+组合、运行时选型、功能中心与生命周期细化见[可组合与 AI-Native 架构方案](composable-ai-native-architecture.md)。运行时候选已按统一契约验证，生产只装配一个实现（自研 kernel，ADR-0005）。所有业务功能可不安装、停用或替换；维持宿主运行的基础接口必须保留可用实现。外部数据库与下载接入见[外部扩展设计](external-providers-and-acquisition.md)。
 
 必须保持以下不变量：
 
@@ -65,18 +65,18 @@ flowchart TB
 
 ## 3. Monorepo 组织
 
-以下是拟采用的结构，并非已经创建的应用源码。
+以下是拟采用的结构；已经创建的目录以[仓库地图](../dev-rules/repo-map.md)为准。
 
 ```text
 apps/
   desktop/                    Electron 启动、窗口、装配、打包
-  reader-host/                M1 的最小独立宿主验证工程
+  reader-host/                最小独立宿主验证工程（拟议，尚未创建）
 packages/
   contracts/                  ID、消息、定位与服务接口
   kernel/                     模块、依赖、注册、生命周期、任务基础设施
   ui/                         视觉组件、布局与可访问交互
   platform-electron/          IPC、文件授权、凭据、原生能力桥接
-  storage-sqlite/             持久化接口的 SQLite 实现
+  storage-drizzle/            持久化接口的 SQLite 实现（better-sqlite3 + Drizzle，已创建）
 modules/
   library/                    作品、版本、本地资源与进度
   content/                    内容对象登记、锚点与引用公共能力
@@ -238,7 +238,7 @@ Electron 的上下文隔离、渲染沙箱和 IPC 校验是宿主基础约束。
 
 业务仍以 TS 为主，成熟 JS/TS 或原生引擎由适配器接入。新自研通用能力先证明现成活跃方案不可用或代价不合适；既有自研按风险收益逐步收缩到必需业务部分。所有外部进程采用参数数组调用，用户文件名和模型文本不能拼入 shell 命令。
 
-UI、编辑、存储驱动与对应工程基础按 [ADR-0007](../decisions/0007-technology-stack.md)采用已确认的基础技术栈。该决定覆盖 React、Tiptap/ProseMirror、CodeMirror、better-sqlite3/Drizzle、Vite/Forge 等；完整范围以 ADR 为准。当前 M0 实现尚未迁移，中文输入、选区、保存恢复、数据库与打包必须在新实现上验证。媒体后端、EPUB 专用解析及画布编辑仍待对应阶段验证。
+UI、编辑、存储驱动与对应工程基础按 [ADR-0007](../decisions/0007-technology-stack.md)采用已确认的基础技术栈。该决定覆盖 React、Tiptap/ProseMirror、CodeMirror、better-sqlite3/Drizzle、Vite/Forge 等；完整范围以 ADR 为准。原型实现已由产品代码替代，中文输入、选区、保存恢复、数据库与打包在新实现上验证。EPUB 专用解析仍待选型；画布编辑用 React Flow（见 ADR-0007）。
 
 现有 TypeScript kernel 仍按 ADR-0005 运行已验证的依赖绑定、作用域、生命周期与代次机制；A-40 允许在有活跃候选与契约证据时替换内部基础，不以旧自研决定排斥复用，也不无证据重建内核。配置、权限、业务服务、工具与迁移各有所有者，不能全部塞入内核。详细契约见[组合方案第 2 节](composable-ai-native-architecture.md#2-组合运行时的职责与验证)。
 
@@ -260,14 +260,14 @@ UI、编辑、存储驱动与对应工程基础按 [ADR-0007](../decisions/0007-
 
 ## 11. 独立应用拆分验证
 
-M1 创建最小阅读宿主验证以下装配：
+最小阅读宿主（尚未创建）用来验证以下装配：
 
 1. 加载资源、小说、引用与必要存储提供者。
 2. 不加载创作模块和 Agent，完成导入、阅读、书签、恢复与引用跳转。
 3. 注入一个不同于 Electron 桥接的测试宿主实现，执行同一组领域与应用服务用例。
 4. 导入主应用导出的资料包，恢复资源身份、进度与引用；原始媒体未附带时允许重新定位。
 
-该验证工程用于证明边界，不等同于承诺 M1 发布第二个面向用户的产品。
+该验证工程用于证明边界，不等同于承诺发布第二个面向用户的产品。
 
 ## 12. 设计决定与待验证事项
 
@@ -278,10 +278,10 @@ M1 创建最小阅读宿主验证以下装配：
 | 当前状态 + 操作记录 + 事务事件 | 采用 | 支撑恢复与订阅，避免首版全面事件溯源 |
 | SQLite 单写入所有者 | 采用 | 清晰事务边界，避免各模块直接竞争数据库 |
 | 依赖接口的插件系统 | 采用 | 允许内置能力替换与独立宿主装配 |
-| 组合运行时实现 | M0 按统一契约验证运行时候选 | POC-07 验证生命周期、三个组合场景和维护成本，最终只选一个生产实现 |
+| 组合运行时实现 | 已按统一契约验证运行时候选 | POC-07 验证生命周期、三个组合场景和维护成本，生产只选一个实现 |
 | 进程隔离与插件权限隔离 | 分别实现 | 工作进程用于性能与故障边界；不可信代码另需受限运行环境 |
 | 独立的媒体后端适配 | 采用 | 以格式矩阵决定浏览器或原生后端，不污染业务模型 |
-| 具体界面/编辑/媒体库 | M0 决定 | 通过真实样本与输入行为验证后锁定 |
+| 具体界面/编辑/媒体库 | ADR-0007 已决定 | 通过真实样本与输入行为验证后锁定 |
 
 ## 13. 验证重点
 

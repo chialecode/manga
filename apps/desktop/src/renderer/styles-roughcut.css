@@ -1,0 +1,74 @@
+/* Rough cuts: the sequence of clips, the check before an export, and the export */
+.rc-view { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: auto; padding-right: 4px; }
+.rc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.rc-head h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.rc-tools { display: inline-flex; align-items: center; gap: 6px; }
+.rc-view p { margin: 0; }
+.rc-busy { padding: 6px 10px; border: 1px solid var(--color-accent); border-radius: 10px; background: var(--color-accent-soft); }
+.rc-clips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; counter-reset: none; }
+.rc-clip { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.rc-clip.is-selected { border-color: var(--color-accent); }
+.rc-clip.is-missing { border-style: dashed; }
+.rc-n { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--color-muted); color: var(--color-subtle); font-size: 12px; }
+.rc-clip-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rc-clip-title { overflow-wrap: anywhere; }
+.rc-clip-warn { color: var(--color-danger); }
+.rc-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; }
+.rc-times label { display: inline-flex; align-items: center; gap: 6px; }
+.rc-times input, .rc-note, .rc-field input { padding: 5px 8px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; background: var(--color-surface); color: inherit; min-width: 0; }
+.rc-times input { width: 104px; font-variant-numeric: tabular-nums; }
+.rc-times input[aria-invalid="true"] { border-color: var(--color-danger); }
+.rc-note { width: 100%; }
+.rc-clip-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+.rc-empty { padding: 16px 4px; }
+.rc-preview, .rc-plan, .rc-exports { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); font-size: 13px; }
+.rc-preview h4, .rc-plan h4, .rc-exports h4 { margin: 0; font-size: 14px; }
+.rc-preview video { width: 100%; max-height: 320px; background: var(--color-player-stage); border-radius: 8px; }
+.rc-preview-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rc-plan header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rc-plan[data-planning="true"] .rc-plan-body { opacity: 0.6; }
+.rc-ok { color: var(--color-text); font-weight: 600; }
+.rc-bad { color: var(--color-danger); font-weight: 600; }
+.rc-problems { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--color-danger); overflow-wrap: anywhere; }
+.rc-plan-clips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.rc-plan-clips li { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; background: var(--color-muted); }
+.rc-plan-clips small { overflow-wrap: anywhere; }
+.rc-exports ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rc-exports li { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; background: var(--color-muted); overflow-wrap: anywhere; }
+.rc-exports li[data-state="failed"] .rc-export-first { color: var(--color-danger); }
+.rc-running { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rc-running progress { flex: 1; min-width: 140px; }
+.rc-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.rc-add { display: flex; flex-direction: column; gap: 10px; }
+.rc-add-row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
+.rc-add select { padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: inherit; font-size: 13px; min-width: 0; max-width: 100%; }
+.rc-add .rc-field input { width: 120px; }
+.rc-add .rc-field-wide input { width: 220px; max-width: 100%; }
+
+/* What an export is: one file or one for each clip, the tracks to keep, chapters */
+.rc-options { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); font-size: 13px; }
+.rc-options h4 { margin: 0; font-size: 14px; }
+.rc-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.rc-mode label, .rc-tracks label, .rc-chapters, .rc-snap { display: inline-flex; align-items: center; gap: 6px; }
+.rc-tracks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; min-width: 0; }
+.rc-tracks legend { padding: 0 4px; color: var(--color-subtle); font-size: 12px; }
+.rc-tracks label { overflow-wrap: anywhere; }
+
+/* The keyframes of the video under the preview */
+.rc-timeline { display: flex; flex-direction: column; gap: 6px; }
+.rc-bar { position: relative; height: 28px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-muted); cursor: pointer; overflow: hidden; }
+.rc-bar svg { display: block; width: 100%; height: 100%; }
+.rc-bar .rc-range { fill: var(--color-accent-soft); }
+.rc-bar .rc-ticks { stroke: var(--color-subtle); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.rc-bar .rc-head { fill: var(--color-accent); }
+.rc-timeline-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+
+/* The destination in the export window, and what an export did */
+.rc-dest { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; }
+.rc-dest legend { padding: 0 4px; color: var(--color-subtle); font-size: 12px; }
+.rc-dest label { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; align-items: start; }
+.rc-dest label small { grid-column: 2; }
+.rc-details { font-size: 12px; }
+.rc-details summary { cursor: pointer; color: var(--color-subtle); }
+.rc-detail-files { margin: 4px 0; padding-left: 18px; overflow-wrap: anywhere; }
+.rc-commands { margin: 4px 0 0; padding: 8px; max-height: 220px; overflow: auto; border-radius: 8px; background: var(--color-surface); font-size: 11px; white-space: pre; user-select: text; }

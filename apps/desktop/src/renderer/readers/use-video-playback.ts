@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { attempt } from "../lib/api.ts";
 import {
-  clampRate, closePlayed, drainPlayed, emptyPlayed, frameLanded, samplePlayed, seekTargetForFrame,
+  clampRate, closePlayed, drainPlayed, emptyPlayed, frameLanded, REWIND_STEP_MS, REWIND_TICK_MS, samplePlayed, seekTargetForFrame,
   type FrameAnswer, type PlayedState, type TimeRange,
 } from "./video-model.ts";
 
@@ -10,6 +10,8 @@ export type ProgressReport = { resourceId: string; revisionId: string; timeMs: n
 
 export type FrameState =
   | { status: "idle" }
+  /** The frame table was not asked for yet: it is built when the first frame-by-frame step needs it. */
+  | { status: "absent" }
   | { status: "loading" }
   | { status: "ready"; frame: number; totalFrames: number; ptsMs: number; variableFrameRate: boolean }
   | { status: "unavailable"; message: string };
@@ -41,6 +43,8 @@ const TICK_MS = 100;
 const REPORT_EVERY_MS = 5000;
 const NEAR_END_MS = 1500;
 
+type FrameLookup = (FrameAnswer & { variableFrameRate?: boolean; ready?: true }) | { ready: false; state: "absent" | "building" | "ready" };
+
 const asFrame = (answer: FrameAnswer & { variableFrameRate?: boolean }): FrameState => ({
   status: "ready", frame: answer.frame, totalFrames: answer.totalFrames, ptsMs: answer.ptsMs, variableFrameRate: answer.variableFrameRate === true,
 });
@@ -59,6 +63,7 @@ export function useVideoPlayback(options: Options) {
   const [ready, setReady] = useState(false);
   const [ended, setEnded] = useState(false);
   const [holding, setHolding] = useState(false);
+  const [rewinding, setRewinding] = useState(false);
   const [frame, setFrame] = useState<FrameState>({ status: "idle" });
   const [presentedMs, setPresentedMs] = useState<number | null>(null);
   const [frameVerified, setFrameVerified] = useState<boolean | null>(null);
@@ -71,30 +76,45 @@ export function useVideoPlayback(options: Options) {
   const lastReport = useRef(0);
   const stopAt = useRef<number | null>(null);
   const baseRate = useRef(options.settings.rate);
+  /** Whether the video was paused when a hold began: a hold on a paused video ends paused again. */
+  const heldFrom = useRef<{ paused: boolean } | null>(null);
+  const rewindTimer = useRef<number | null>(null);
+  const rewindFrom = useRef<{ playing: boolean } | null>(null);
   const frameChain = useRef<Promise<void>>(Promise.resolve());
   const presented = useRef<number | null>(null);
   const expected = useRef<number | null>(null);
   const frameEpoch = useRef(0);
+  /** A frame table this player asked to have built and has not received: it is cancelled when the player goes away. */
+  const buildAsked = useRef(false);
   const metaSeen = useRef(false);
 
   const origin = () => latest.current.originMs ?? 0;
   const timeNow = useCallback((): number => (element ? Math.max(0, element.currentTime * 1000 - (latest.current.originMs ?? 0)) : 0), [element]);
 
+  const loaded = useRef(false);
   const flush = useCallback((ended = false) => {
-    if (!element) return;
+    // Before the file has loaded (and been moved to the place it resumes at) the element says 0, which is not where the viewer is.
+    if (!element || !loaded.current) return;
     const drained = drainPlayed(played.current);
     played.current = drained.state;
     lastReport.current = Date.now();
     latest.current.onProgress({ resourceId: latest.current.target.resourceId, revisionId: latest.current.target.revisionId, timeMs: Math.round(timeNow()), ranges: drained.ranges, ended });
   }, [element, timeNow]);
 
-  const lookupFrame = useCallback(async (timeMs: number, delta = 0): Promise<(FrameAnswer & { variableFrameRate?: boolean }) | null> => {
-    const result = await attempt<FrameAnswer & { variableFrameRate?: boolean }>("video.frameIndex", { resourceId: target.resourceId, revisionId: target.revisionId, timeMs, delta });
+  /**
+   * Ask which frame a time is. With `build` false a missing frame table is not built (the answer is "absent"): showing the frame
+   * number and jumping to a typed time must not cost a read of the whole file. Only a frame-by-frame step builds it.
+   */
+  const lookupFrame = useCallback(async (timeMs: number, delta = 0, build = true): Promise<(FrameAnswer & { variableFrameRate?: boolean }) | "absent" | null> => {
+    if (build) buildAsked.current = true;
+    const result = await attempt<FrameLookup>("video.frameIndex", { resourceId: target.resourceId, revisionId: target.revisionId, timeMs, delta, ...(build ? {} : { build: false }) });
     if (!result.ok) {
       setFrame({ status: "unavailable", message: result.error.message });
       return null;
     }
-    return result.value;
+    if (result.value.ready === false) return "absent";
+    buildAsked.current = false;
+    return result.value as FrameAnswer & { variableFrameRate?: boolean };
   }, [target.resourceId, target.revisionId]);
 
   /** Which frame the paused picture is. Called after a seek or a pause; a playing video has no single frame. */
@@ -103,16 +123,22 @@ export function useVideoPlayback(options: Options) {
     // A jump to a frame has already named its frame; asking again from the old picture would name the wrong one.
     if (expected.current !== null) return;
     const mine = ++frameEpoch.current;
-    setFrame((current) => (current.status === "ready" ? current : { status: "loading" }));
-    const answer = await lookupFrame(presented.current ?? timeNow());
-    if (answer && frameEpoch.current === mine) setFrame(asFrame(answer));
+    const answer = await lookupFrame(presented.current ?? timeNow(), 0, false);
+    if (frameEpoch.current !== mine || answer === null) return;
+    // No table yet: show nothing until a step asks for it. A table that is already being built for a step keeps its "loading" text.
+    setFrame((current) => answer === "absent" ? (current.status === "loading" ? current : { status: "absent" }) : asFrame(answer));
   }, [element, lookupFrame, timeNow]);
 
   // ---- a new source: load, resume, report ----
   // Runs in the same commit that gives the element its address, so it is done before the element can report anything about
   // that address. Run later, it could wipe a quick file's metadata that had already arrived, and the player would never be ready.
+  // Shown again after the page was in the background it is the same element with the same source: nothing is loaded again.
+  const setUp = useRef<{ element: HTMLVideoElement; url: string | null } | null>(null);
   useLayoutEffect(() => {
     if (!element) return;
+    if (setUp.current?.element === element && setUp.current.url === url) return;
+    setUp.current = { element, url };
+    loaded.current = false;
     setReady(false);
     setEnded(false);
     setPlaying(false);
@@ -135,6 +161,7 @@ export function useVideoPlayback(options: Options) {
     };
     const onMeta = () => {
       metaSeen.current = true;
+      loaded.current = true;
       const duration = Number.isFinite(element.duration) ? Math.max(0, element.duration * 1000 - origin()) : latest.current.durationHintMs;
       setDurationMs(duration);
       const at = resumeAt.current;
@@ -181,6 +208,8 @@ export function useVideoPlayback(options: Options) {
       const error = element.error;
       latest.current.onMediaError(error ? error.code : null, error?.message ?? "");
     };
+    // Listeners that were taken off while the page was in the background missed the pause that put it there.
+    if (metaSeen.current) { setPlaying(!element.paused); sync(); }
     const events: Array<[string, () => void]> = [["loadedmetadata", onMeta], ["durationchange", onDuration], ["timeupdate", onTime], ["play", onPlay], ["pause", onPause], ["seeking", onSeeking], ["seeked", onSeeked], ["ended", onEnd], ["error", onError], ["progress", sync]];
     for (const [name, handler] of events) element.addEventListener(name, handler);
     // A file that is already known (cached, or quick to open) can report its metadata before these listeners exist; the event is not repeated.
@@ -245,6 +274,16 @@ export function useVideoPlayback(options: Options) {
     flushRef.current();
   }, []);
 
+  // A frame table this player asked for and did not get is a whole-file read nobody waits for any more: stop it when the video is left.
+  useEffect(() => {
+    const { resourceId, revisionId } = target;
+    return () => {
+      if (!buildAsked.current) return;
+      buildAsked.current = false;
+      void attempt("video.cancelFrameIndex", { resourceId, revisionId });
+    };
+  }, [target.resourceId, target.revisionId]);
+
   // ---- commands ----
   const play = useCallback(async () => {
     if (!element) return;
@@ -280,13 +319,14 @@ export function useVideoPlayback(options: Options) {
     void play();
   }, [seekTo, play]);
 
-  /** Move to the frame `delta` away from the one on screen, or to a frame number from the index. */
+  /** Move to the frame `delta` away from the one on screen. The first step builds the frame table in the background; later steps are instant. */
   const stepFrame = useCallback((delta: number) => {
     frameChain.current = frameChain.current.then(async () => {
       if (!element) return;
       if (!element.paused) element.pause();
+      setFrame((current) => (current.status === "ready" ? current : { status: "loading" }));
       const answer = await lookupFrame(presented.current ?? timeNow(), delta);
-      if (!answer) return;
+      if (!answer || answer === "absent") return;
       const at = seekTargetForFrame(answer);
       expected.current = answer.ptsMs;
       element.currentTime = (at + origin()) / 1000;
@@ -297,37 +337,75 @@ export function useVideoPlayback(options: Options) {
     return frameChain.current;
   }, [element, lookupFrame, timeNow]);
 
-  const gotoFrame = useCallback((index: number) => {
+  /**
+   * Jump to a time, landing on the frame that contains it: when the frame table exists it names the frame and the seek goes to the
+   * middle of its interval. A video playing keeps playing from there. Without a table the jump goes to the time itself at once:
+   * a typed time never waits for a table to be built.
+   */
+  const gotoTime = useCallback((ms: number) => {
     frameChain.current = frameChain.current.then(async () => {
       if (!element) return;
-      if (!element.paused) element.pause();
-      const result = await attempt<FrameAnswer & { variableFrameRate?: boolean }>("video.frameIndex", { resourceId: target.resourceId, revisionId: target.revisionId, frame: index });
-      if (!result.ok) { setFrame({ status: "unavailable", message: result.error.message }); return; }
-      const answer = result.value;
-      const at = seekTargetForFrame(answer);
-      expected.current = answer.ptsMs;
+      const limit = Number.isFinite(element.duration) ? Math.max(0, element.duration * 1000 - origin()) : Number.POSITIVE_INFINITY;
+      const wanted = Math.min(Math.max(0, ms), limit);
+      const paused = element.paused;
+      const answer = await lookupFrame(wanted, 0, false);
+      if (!answer || answer === "absent") { seekTo(wanted); return; }
+      const at = Math.min(seekTargetForFrame(answer), limit);
+      stopAt.current = null;
+      expected.current = paused ? answer.ptsMs : null;
       element.currentTime = (at + origin()) / 1000;
       currentRef.current = at;
       setCurrentMs(at);
-      setFrame(asFrame(answer));
+      setEnded(false);
+      if (paused) setFrame(asFrame(answer));
     });
     return frameChain.current;
-  }, [element, target.resourceId, target.revisionId]);
+  }, [element, lookupFrame, seekTo]);
 
-  /** The right button held: play at the temporary rate until it is released. */
+  /** → held: play at the temporary rate until it is let go. A paused video plays while it is held and is paused again after. */
   const holdStart = useCallback(() => {
-    if (!element) return;
+    if (!element || heldFrom.current) return;
+    heldFrom.current = { paused: element.paused };
     setHolding(true);
     element.playbackRate = clampRate(latest.current.settings.holdRate);
     if (element.paused) void play();
   }, [element, play]);
   const holdEnd = useCallback(() => {
+    const from = heldFrom.current;
+    heldFrom.current = null;
     setHolding(false);
-    if (element) element.playbackRate = clampRate(baseRate.current);
+    if (!element) return;
+    element.playbackRate = clampRate(baseRate.current);
+    if (from?.paused) element.pause();
   }, [element]);
 
+  /**
+   * ← held: the video goes back by `REWIND_STEP_MS` every `REWIND_TICK_MS` (a video cannot play backward), so the picture follows along as it
+   * would paused. A playing video plays on from where it was let go.
+   */
+  const rewindStop = useCallback((resume: boolean) => {
+    if (rewindTimer.current !== null) window.clearInterval(rewindTimer.current);
+    rewindTimer.current = null;
+    const from = rewindFrom.current;
+    rewindFrom.current = null;
+    setRewinding(false);
+    if (resume && from?.playing) void play();
+  }, [play]);
+  const rewindStart = useCallback(() => {
+    if (!element || rewindTimer.current !== null) return;
+    rewindFrom.current = { playing: !element.paused };
+    if (!element.paused) element.pause();
+    setRewinding(true);
+    const back = () => seekTo(Math.max(0, timeNow() - REWIND_STEP_MS));
+    back();
+    rewindTimer.current = window.setInterval(back, REWIND_TICK_MS);
+  }, [element, seekTo, timeNow]);
+  const rewindEnd = useCallback(() => rewindStop(true), [rewindStop]);
+  // Leaving the player, or a new source, ends a rewind that is still running.
+  useEffect(() => () => { if (rewindTimer.current !== null) { window.clearInterval(rewindTimer.current); rewindTimer.current = null; } }, [url]);
+
   return {
-    playing, currentMs, durationMs, bufferedMs, ready, ended, holding, frame, presentedMs, frameVerified,
-    play, pause, toggle, seekTo, seekBy, playRange, stepFrame, gotoFrame, holdStart, holdEnd, flush, refreshFrame,
+    playing, currentMs, durationMs, bufferedMs, ready, ended, holding, rewinding, frame, presentedMs, frameVerified,
+    play, pause, toggle, seekTo, seekBy, playRange, stepFrame, gotoTime, holdStart, holdEnd, rewindStart, rewindEnd, flush, refreshFrame,
   };
 }

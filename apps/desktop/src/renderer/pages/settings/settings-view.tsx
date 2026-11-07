@@ -7,23 +7,34 @@ import type { PackageFlow } from "../../hooks/use-package.ts";
 import type { ScanState } from "../../hooks/use-scan.ts";
 import type { ComicSettings } from "../../readers/comic-reader.tsx";
 import type { VideoSettings } from "../../readers/video-player.tsx";
-import type { RecordingSettings } from "../../voice/use-recorder.ts";
-import { MediaPrefs, Modules, Providers, Recording, keyLabel } from "../settings-media.tsx";
+import type { useKeyBindings } from "../../hooks/use-key-bindings.ts";
+import type { RecordingPatch, RecordingSettings } from "../../voice/use-recorder.ts";
+import { MediaPrefs, Modules, Providers } from "../settings-media.tsx";
 import { GeneralPage, type MigrationPlan } from "./general-page.tsx";
 import { LibraryPage } from "./library-page.tsx";
 import { LogsPage } from "./logs-page.tsx";
+import { AgentPage } from "./agent-page.tsx";
+import type { PlainTestResult, SaveConnectionResult } from "./connection-dialog.tsx";
 import { ModelsPage } from "./models-page.tsx";
+import { PluginsPage } from "./plugins-page.tsx";
 import { QuickTasksPage } from "./quick-tasks-page.tsx";
 import { RecordsPage } from "./records-page.tsx";
+import { SemanticPage } from "./semantic-page.tsx";
+import { ShortcutsPage } from "./shortcuts-page.tsx";
+import { DanmakuPage } from "./danmaku-page.tsx";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
 import { StoragePage } from "./storage-page.tsx";
 import { UsagePage } from "./usage-page.tsx";
+import { VoicePage } from "./voice-page.tsx";
 
 /** Pages whose module is turned off are left out of the navigation; the rest are always reachable. */
 export function hiddenSettingsPages(facets: ReadonlySet<string>): Set<SettingsPageId> {
   const hidden = new Set<SettingsPageId>();
   if (!facets.has("voice")) hidden.add("recording");
   if (!facets.has("metadata")) hidden.add("sources");
+  if (!facets.has("danmaku")) hidden.add("danmaku");
+  if (!facets.has("semantic")) hidden.add("semantic");
+  if (!facets.has("plugins")) hidden.add("plugins");
   if (!facets.has("agent")) { hidden.add("models"); hidden.add("quick"); hidden.add("usage"); }
   return hidden;
 }
@@ -42,11 +53,12 @@ export type SettingsViewProps = {
   mode: WorkMode;
   onMode: (mode: WorkMode) => void;
   onReading: (patch: ReadingStylePatch) => void;
-  recording: { settings: RecordingSettings; save: (patch: Partial<RecordingSettings>) => Promise<void> };
+  recording: { settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void> };
   comic: { settings: ComicSettings; change: (patch: Partial<ComicSettings>) => void };
   video: { settings: VideoSettings; change: (patch: Partial<VideoSettings>) => void };
+  /** The reader keys: the table in use, the person's changes, and a way to save them. */
+  keys: ReturnType<typeof useKeyBindings>;
   onGoto: (page: SettingsPageId) => void;
-  onImport: () => void;
   onModulesChanged: () => Promise<void> | void;
   /** Something other pages show has changed: quick tasks, library paths, notes. */
   onChanged: () => void;
@@ -63,15 +75,15 @@ export type SettingsViewProps = {
   };
   models: {
     onRuntime: (runtime: string) => Promise<void>;
-    onSaveConnection: (fields: ConnectionForm) => Promise<void>;
+    onSaveConnection: (fields: ConnectionForm) => Promise<SaveConnectionResult>;
     onDeleteConnection: (id: string) => Promise<void>;
-    onTestConnection: (id: string, capability: string) => Promise<void>;
+    onTestConnection: (id: string, capability: string) => Promise<PlainTestResult>;
+    onProbeConnection: (id: string) => Promise<void>;
     onSkip: () => void;
   };
   storage: {
     onScan: () => void;
     onCancelScan: () => void;
-    onTranscribe: () => void;
     onReveal: (id: string) => void;
     onRepair: (id: string) => void;
     onOpenCategory: (category: "comic" | "video") => void;
@@ -83,23 +95,6 @@ export type SettingsViewProps = {
     onOpenRecording: (sessionId: string, workId: string | null) => void;
   };
 };
-
-/** The shortcuts the readers answer to (Q-13 defaults), listed so they can be found without trying keys. */
-const SHORTCUTS: ReadonlyArray<{ group: "comic" | "video" | "global"; keys: string; action: string }> = [
-  { group: "comic", keys: "← → / PageUp PageDown", action: "shortcuts.comicTurn" },
-  { group: "comic", keys: "Home / End", action: "shortcuts.comicEnds" },
-  { group: "comic", keys: "Ctrl + 滚轮 / + − 0", action: "shortcuts.comicZoom" },
-  { group: "comic", keys: "F", action: "shortcuts.fullscreen" },
-  { group: "video", keys: "Space / K", action: "shortcuts.videoToggle" },
-  { group: "video", keys: "← →", action: "shortcuts.videoSeek" },
-  { group: "video", keys: "↑ ↓", action: "shortcuts.videoVolume" },
-  { group: "video", keys: ", .", action: "shortcuts.videoFrame" },
-  { group: "video", keys: "[ ]", action: "shortcuts.videoRate" },
-  { group: "video", keys: "I / O", action: "shortcuts.videoMark" },
-  { group: "video", keys: "M / F", action: "shortcuts.videoMuteFull" },
-  { group: "global", keys: "Ctrl + Shift + D", action: "shortcuts.debug" },
-  { group: "global", keys: "Esc", action: "shortcuts.escape" },
-];
 
 /**
  * The settings page the navigation names. Every page is its own component; this only picks one. Pages that hold unsaved input
@@ -135,19 +130,21 @@ export function SettingsView(props: SettingsViewProps) {
           </SettingsPage>
         );
       case "recording":
-        return (
-          <SettingsPage id="recording" title={t("settings.page.recording")}>
-            <Recording t={t} settings={props.recording.settings} save={props.recording.save} onNotice={props.onNotice} />
-          </SettingsPage>
-        );
+        return <VoicePage t={t} settings={props.settings} recording={props.recording} onGoto={props.onGoto} onError={props.onError} onNotice={props.onNotice} />;
       case "library":
-        return <LibraryPage t={t} scan={props.scan} formatDate={i18n.formatDate} onImport={props.onImport} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
+        return <LibraryPage t={t} scan={props.scan} formatDate={i18n.formatDate} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
+      case "semantic":
+        return <SemanticPage t={t} formatDate={i18n.formatDate} formatNumber={i18n.formatNumber} onGoto={props.onGoto} onError={props.onError} onNotice={props.onNotice} />;
+      case "plugins":
+        return <PluginsPage t={t} formatDate={i18n.formatDate} onModulesChanged={props.onModulesChanged} onError={props.onError} onNotice={props.onNotice} />;
       case "sources":
         return (
           <SettingsPage id="sources" title={t("settings.page.sources")}>
             <Providers t={t} onError={props.onError} onNotice={props.onNotice} />
           </SettingsPage>
         );
+      case "danmaku":
+        return <DanmakuPage t={t} moduleOn={props.facets.has("danmaku")} onError={props.onError} onNotice={props.onNotice} />;
       case "storage":
         return <StoragePage i18n={i18n} inventory={props.inventory} pkg={props.pkg} {...props.storage} />;
       case "modules":
@@ -157,30 +154,15 @@ export function SettingsView(props: SettingsViewProps) {
           </SettingsPage>
         );
       case "shortcuts":
-        return (
-          <SettingsPage id="shortcuts" title={t("settings.page.shortcuts")} hint={t("shortcuts.hint")}>
-            <SettingsSection title={t("shortcuts.recording")} testId="shortcuts-recording">
-              <SettingsRow label={t("msettings.holdKey")}><kbd data-testid="shortcut-hold">{keyLabel(props.recording.settings.holdKey)}</kbd></SettingsRow>
-              <SettingsRow label={t("msettings.toggleKey")}><kbd data-testid="shortcut-toggle">{keyLabel(props.recording.settings.toggleKey)}</kbd></SettingsRow>
-              <SettingsRow label={t("shortcuts.recordingChange")}>
-                <button type="button" className="link-button" data-testid="shortcuts-goto-recording" onClick={() => props.onGoto("recording")}>{t("settings.page.recording")}</button>
-              </SettingsRow>
-            </SettingsSection>
-            {(["global", "comic", "video"] as const).map((group) => (
-              <SettingsSection key={group} title={t(`shortcuts.group.${group}`)} testId={`shortcuts-${group}`}>
-                {SHORTCUTS.filter((item) => item.group === group).map((item) => (
-                  <SettingsRow key={item.action} label={t(item.action as "shortcuts.debug")}><kbd>{item.keys}</kbd></SettingsRow>
-                ))}
-              </SettingsSection>
-            ))}
-          </SettingsPage>
-        );
+        return <ShortcutsPage t={t} keys={props.keys} recording={props.recording.settings} onGoto={() => props.onGoto("recording")} />;
       case "models":
         return <ModelsPage i18n={i18n} settings={props.settings} {...props.models} />;
+      case "agent":
+        return <AgentPage t={t} onError={props.onError} onNotice={props.onNotice} />;
       case "quick":
         return <QuickTasksPage t={t} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
       case "usage":
-        return <UsagePage t={t} formatDate={i18n.formatDate} formatNumber={i18n.formatNumber} onError={props.onError} />;
+        return <UsagePage t={t} formatDate={i18n.formatDate} formatNumber={i18n.formatNumber} onError={props.onError} onNotice={props.onNotice} />;
       case "records":
         return <RecordsPage t={t} formatDate={i18n.formatDate} initialWorkId={props.records.workId ?? null} onOpenNote={props.records.onOpenNote} onOpenNoteSource={props.records.onOpenNoteSource} onOpenRecording={props.records.onOpenRecording} onError={props.onError} onNotice={props.onNotice} />;
       case "logs":

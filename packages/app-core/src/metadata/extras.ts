@@ -9,6 +9,7 @@ import { readPdfInfo, renderPdfPage } from "../domain/pdfjs-document.ts";
 import { makeThumbnail } from "../media/thumbnails.ts";
 import type { MediaServices } from "../media/services.ts";
 import type { VideoService } from "../video/service.ts";
+import { resolveLocation } from "../library-locations.ts";
 import type { CoverService } from "./covers.ts";
 import { cleanPdfInfo, comicInfoFields, isEmptyFields, readEpub, readMobiExth, videoTagFields, type LocalFields } from "./local-file.ts";
 
@@ -41,8 +42,8 @@ export class ResourceExtras {
       FROM resources r JOIN resource_revisions v ON v.resource_id = r.id WHERE r.id = ? ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1`).get(resourceId) as { workId: string | null; title: string; revisionId: string; payload: string } | undefined;
     if (!row) throw new MangaError("NOT_FOUND", "resource missing");
     const payload = JSON.parse(row.payload) as { comic?: ComicManifest; format?: string; video?: unknown };
-    const location = this.store.sqlite.prepare("SELECT relative_path, available FROM file_locations WHERE resource_revision_id = ? ORDER BY rowid DESC LIMIT 1").get(row.revisionId) as { relative_path: string; available: number } | undefined;
-    const file = location?.relative_path ?? null;
+    const location = resolveLocation(this.store, row.revisionId);
+    const file = location?.path ?? null;
     const kind: Kind = payload.video ? "video" : payload.comic ? "comic" : (["epub", "mobi", "pdf"].includes(payload.format ?? "") ? payload.format as Kind : "txt");
     return { workId: row.workId, revisionId: row.revisionId, kind, file, available: file !== null && fs.existsSync(file), payload, title: row.title };
   }
@@ -84,13 +85,13 @@ export class ResourceExtras {
   }
 
   /** Extract the resource's own picture as a cover of its work. A work that already has a better or chosen cover keeps it. */
-  async extractCover(resourceId: string, options: { signal?: AbortSignal; ifMissing?: boolean } = {}): Promise<{ workId: string | null; added: boolean; coverId?: string; reason?: string }> {
+  async extractCover(resourceId: string, options: { signal?: AbortSignal; ifMissing?: boolean } = {}): Promise<{ workId: string | null; added: boolean; coverId?: string; reason?: string; hasCover?: boolean }> {
     const { signal } = options;
     const info = this.describe(resourceId);
     if (!info.workId) return { workId: null, added: false, reason: "the resource belongs to no work" };
     this.covers.forgetMissingCacheCovers(info.workId);
     // Later volumes of a work do not pile up covers: the first one that has a picture decides.
-    if (options.ifMissing && this.store.sqlite.prepare("SELECT 1 FROM works WHERE id = ? AND cover_id IS NOT NULL").get(info.workId)) return { workId: info.workId, added: false, reason: "the work already has a cover" };
+    if (options.ifMissing && this.store.sqlite.prepare("SELECT 1 FROM works WHERE id = ? AND cover_id IS NOT NULL").get(info.workId)) return { workId: info.workId, added: false, hasCover: true, reason: "the work already has a cover" };
     if (!info.available) return { workId: info.workId, added: false, reason: "the original file is not available" };
     let bytes: Buffer | null;
     try {

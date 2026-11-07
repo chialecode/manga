@@ -44,7 +44,7 @@ function installHost(overrides: Record<string, Handler> = {}, secrets: string[] 
 }
 
 const comicDefaults = { direction: "rtl", layout: "single", coverAlone: true, fit: "page", zoom: 1, autoFlipSeconds: 0, animation: "fade" } as const;
-const videoDefaults = { rate: 1, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false };
+const videoDefaults = { rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false, subtitlePlacement: "auto" as const, subtitleSizePct: 5, subtitleFont: "sans" as const, subtitleOutline: true, assStyle: "keep" as const, shotSubtitles: true };
 
 /**
  * Settings are separate pages now (modules, reading, recording, sources); each is rendered by its own component and shown by the
@@ -212,6 +212,40 @@ describe("settings for media, recording and metadata", () => {
     fireEvent.click(screen.getByTestId("msettings-video-autonext"));
     expect(comic.mock.calls.map((call) => call[0])).toEqual([{ direction: "ltr" }, { coverAlone: false }]);
     expect(video.mock.calls.map((call) => call[0])).toEqual([{ seekStepSeconds: 10 }, { holdRate: 3 }, { autoNext: true }]);
+  });
+
+  it("keeps the subtitles in a screenshot unless the person turns that off, and a reset of the style leaves it alone (AT-109)", async () => {
+    installHost();
+    const video = vi.fn();
+    renderSettings({ video });
+    const box = screen.getByTestId("msettings-shot-subtitles") as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(box.closest("label")!.textContent).toBe("截图带字幕");
+    fireEvent.click(box);
+    fireEvent.click(screen.getByTestId("msettings-subtitle-reset"));
+    expect(video.mock.calls.map((call) => call[0])).toEqual([
+      { shotSubtitles: false },
+      { subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep" },
+    ]);
+  });
+
+  it("changes the subtitle style, and puts it back to the standard's default in one step", async () => {
+    installHost();
+    const video = vi.fn();
+    renderSettings({ video });
+    expect(screen.getByTestId("msettings-subtitle-size")).toHaveProperty("value", "5");
+    fireEvent.change(screen.getByTestId("msettings-subtitle-size"), { target: { value: "6.5" } });
+    // A size outside the standard's room to move is not taken.
+    fireEvent.change(screen.getByTestId("msettings-subtitle-size"), { target: { value: "20" } });
+    fireEvent.change(screen.getByTestId("msettings-subtitle-font"), { target: { value: "kai" } });
+    fireEvent.change(screen.getByTestId("msettings-subtitle-placement"), { target: { value: "inside" } });
+    fireEvent.click(screen.getByTestId("msettings-subtitle-outline"));
+    fireEvent.change(screen.getByTestId("msettings-ass-style"), { target: { value: "standard" } });
+    fireEvent.click(screen.getByTestId("msettings-subtitle-reset"));
+    expect(video.mock.calls.map((call) => call[0])).toEqual([
+      { subtitleSizePct: 6.5 }, { subtitleFont: "kai" }, { subtitlePlacement: "inside" }, { subtitleOutline: false }, { assStyle: "standard" },
+      { subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep" },
+    ]);
   });
 
   it("turns the online source off and on", async () => {

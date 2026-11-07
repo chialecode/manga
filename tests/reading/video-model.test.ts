@@ -1,17 +1,32 @@
 import { describe, expect, it } from "vitest";
+import { resolveKeys } from "@manga/contracts/keys";
 import {
-  clampRate, closePlayed, displayFrame, drainPlayed, emptyPlayed, formatClock, formatClockPrecise, frameLanded, intervalOf, parseClock, parseFrameInput, parseRate,
-  parseVtt, percentOf, pickSubtitleTrack, samplePlayed, seekTargetForFrame, stepRate, subtitleRenderer, videoKeyAction, type SubtitleTrack,
+  clampRate, closePlayed, displayFrame, drainPlayed, emptyPlayed, formatClock, formatClockMs, frameLanded, intervalOf, parseClock, parseRate,
+  parseListRate, percentOf, pickSubtitleTrack, samplePlayed, seekTargetForFrame, stepRate, subtitleRenderer, videoKeyAction, type SubtitleTrack,
 } from "../../apps/desktop/src/renderer/readers/video-model.ts";
 
-describe("M2 video time", () => {
+describe("video time", () => {
   it("writes clocks the way a player does and survives bad numbers", () => {
     expect(formatClock(0)).toBe("0:00");
     expect(formatClock(65_900)).toBe("1:05");
     expect(formatClock(3_725_000)).toBe("1:02:05");
     expect(formatClock(-5)).toBe("0:00");
     expect(formatClock(Number.NaN)).toBe("0:00");
-    expect(formatClockPrecise(3_725_042)).toBe("1:02:05.042");
+  });
+
+  it("writes the shown time as minutes, seconds and milliseconds, with hours only from an hour on", () => {
+    expect(formatClockMs(0)).toBe("0:00.000");
+    expect(formatClockMs(65_250)).toBe("1:05.250");
+    expect(formatClockMs(754_005)).toBe("12:34.005");
+    expect(formatClockMs(3_599_999)).toBe("59:59.999");
+    expect(formatClockMs(3_725_042)).toBe("1:02:05.042");
+    expect(formatClockMs(-5)).toBe("0:00.000");
+    expect(formatClockMs(Number.NaN)).toBe("0:00.000");
+    expect(formatClockMs(1234.9)).toBe("0:01.234");
+  });
+
+  it("reads back whatever the clock writes", () => {
+    for (const ms of [0, 1, 999, 65_250, 754_005, 3_599_999, 3_725_042, 7_322_001]) expect(parseClock(formatClockMs(ms))).toBe(ms);
   });
 
   it("reads typed times and rejects what is not a time", () => {
@@ -24,7 +39,7 @@ describe("M2 video time", () => {
   });
 });
 
-describe("M2 video rate", () => {
+describe("video rate", () => {
   it("keeps typed rates in 0.25 to 4 and steps through the presets", () => {
     expect(parseRate("1.75")).toBe(1.75);
     expect(parseRate("2x")).toBe(2);
@@ -39,10 +54,16 @@ describe("M2 video rate", () => {
     expect(stepRate(3, 1)).toBe(4);
     expect(stepRate(0.5, -1)).toBe(0.25);
     expect(stepRate(1.1, 1)).toBe(1.25);
+    // The steps follow the list the person edited (AT-90): 1.25 became 1.3 and 3 was taken out.
+    const list = [0.5, 1, 1.3, 2];
+    expect(stepRate(1, 1, list)).toBe(1.3);
+    expect(stepRate(1.3, -1, list)).toBe(1);
+    expect(stepRate(2, 1, list)).toBe(4);
+    expect(stepRate(1.1, -1, list)).toBe(1);
   });
 });
 
-describe("M2 video frames", () => {
+describe("video frames", () => {
   it("seeks to the middle of a frame's own interval, and handles the last frame", () => {
     expect(seekTargetForFrame({ ptsMs: 1000, nextMs: 1041.7, previousMs: 958.3, durationMs: 10_000 })).toBeCloseTo(1020.85, 2);
     const last = seekTargetForFrame({ ptsMs: 9958, nextMs: null, previousMs: 9916, durationMs: 10_000 });
@@ -58,19 +79,13 @@ describe("M2 video frames", () => {
     expect(frameLanded(1.0427, 1041.7, 2)).toBe(true);
   });
 
-  it("numbers frames from 1 and rejects a frame outside the video", () => {
+  it("numbers frames from 1 for display only", () => {
     expect(displayFrame(0)).toBe(1);
-    expect(parseFrameInput("1", 100)).toBe(0);
-    expect(parseFrameInput(" 100 ", 100)).toBe(99);
-    expect(parseFrameInput("101", 100)).toBeNull();
-    expect(parseFrameInput("0", 100)).toBeNull();
-    expect(parseFrameInput("1.5", 100)).toBeNull();
-    expect(parseFrameInput("abc", 100)).toBeNull();
-    expect(parseFrameInput("500", 0)).toBe(499);
+    expect(displayFrame(99)).toBe(100);
   });
 });
 
-describe("M2 video watched ranges", () => {
+describe("video watched ranges", () => {
   const play = (times: number[], options = { playing: true, rate: 1 }) => times.reduce((state, time) => samplePlayed(state, time, options), emptyPlayed());
 
   it("extends the stretch while time moves on by normal steps", () => {
@@ -111,7 +126,7 @@ describe("M2 video watched ranges", () => {
   });
 });
 
-describe("M2 video marks and keys", () => {
+describe("video marks and keys", () => {
   it("orders the A and B marks and refuses a missing or empty interval", () => {
     expect(intervalOf(5000, 2000)).toEqual({ startMs: 2000, endMs: 5000 });
     expect(intervalOf(null, 2000)).toBeNull();
@@ -122,21 +137,24 @@ describe("M2 video marks and keys", () => {
   });
 
   it("maps the default keys and leaves system shortcuts alone", () => {
-    expect(videoKeyAction({ key: " " }, 5)).toEqual({ type: "toggle" });
-    expect(videoKeyAction({ key: "ArrowLeft" }, 5)).toEqual({ type: "seek", deltaMs: -5000 });
-    expect(videoKeyAction({ key: "ArrowRight" }, 10)).toEqual({ type: "seek", deltaMs: 10_000 });
-    expect(videoKeyAction({ key: "ArrowUp" }, 5)).toEqual({ type: "volume", delta: 0.05 });
-    expect(videoKeyAction({ key: "," }, 5)).toEqual({ type: "frame", delta: -1 });
-    expect(videoKeyAction({ key: "." }, 5)).toEqual({ type: "frame", delta: 1 });
-    expect(videoKeyAction({ key: "i" }, 5)).toEqual({ type: "markA" });
-    expect(videoKeyAction({ key: "o" }, 5)).toEqual({ type: "markB" });
-    expect(videoKeyAction({ key: "f", ctrlKey: true }, 5)).toBeNull();
-    expect(videoKeyAction({ key: "ArrowLeft", altKey: true }, 5)).toBeNull();
-    expect(videoKeyAction({ key: "q" }, 5)).toBeNull();
+    expect(videoKeyAction({ key: " " })).toEqual({ type: "toggle" });
+    // The arrows are one action each: a step or a hold is decided by how long the key is down, not by the map.
+    expect(videoKeyAction({ key: "ArrowLeft" })).toEqual({ type: "arrow", side: -1 });
+    expect(videoKeyAction({ key: "ArrowRight" })).toEqual({ type: "arrow", side: 1 });
+    expect(videoKeyAction({ key: "ArrowUp" })).toEqual({ type: "volume", delta: 0.05 });
+    expect(videoKeyAction({ key: "," })).toEqual({ type: "frame", delta: -1 });
+    expect(videoKeyAction({ key: "." })).toEqual({ type: "frame", delta: 1 });
+    expect(videoKeyAction({ key: "i" })).toEqual({ type: "markA" });
+    expect(videoKeyAction({ key: "o" })).toEqual({ type: "markB" });
+    expect(videoKeyAction({ key: "t" })).toEqual({ type: "time" });
+    expect(videoKeyAction({ key: "t", ctrlKey: true })).toBeNull();
+    expect(videoKeyAction({ key: "f", ctrlKey: true })).toBeNull();
+    expect(videoKeyAction({ key: "ArrowLeft", altKey: true })).toBeNull();
+    expect(videoKeyAction({ key: "q" })).toBeNull();
   });
 });
 
-describe("M2 video subtitle tracks", () => {
+describe("video subtitle tracks", () => {
   const track = (id: string, extra: Partial<SubtitleTrack> = {}): SubtitleTrack => ({ id, source: "embedded", streamIndex: 2, codec: "ass", format: "ass", language: null, title: null, default: false, ...extra });
 
   it("starts with the track the user chose, else Chinese, else the default, else the first that can be drawn", () => {
@@ -149,27 +167,29 @@ describe("M2 video subtitle tracks", () => {
     expect(pickSubtitleTrack([])).toBeNull();
   });
 
-  it("draws ASS with the ASS renderer, text formats natively, and picture subtitles not at all", () => {
+  it("draws ASS with the ASS renderer, text formats with the text layer, and picture subtitles not at all", () => {
     expect(subtitleRenderer({ format: "ass" })).toBe("ass");
-    expect(subtitleRenderer({ format: "srt" })).toBe("native");
-    expect(subtitleRenderer({ format: "vtt" })).toBe("native");
+    expect(subtitleRenderer({ format: "srt" })).toBe("text");
+    expect(subtitleRenderer({ format: "vtt" })).toBe("text");
     expect(subtitleRenderer({ format: null })).toBeNull();
   });
 });
 
-describe("M2 video WebVTT cues", () => {
-  it("reads cues with or without hours, identifiers, settings and a byte-order mark", () => {
-    const text = ["﻿WEBVTT", "", "1", "00:00:01.000 --> 00:00:02.500 align:start", "Hello", "there", "", "02:03.250 --> 02:04.000", "Short", "", "1:00:00.000 --> 1:00:01.000", "Late", ""].join("\n");
-    expect(parseVtt(text)).toEqual([
-      { startMs: 1000, endMs: 2500, text: "Hello\nthere" },
-      { startMs: 123_250, endMs: 124_000, text: "Short" },
-      { startMs: 3_600_000, endMs: 3_601_000, text: "Late" },
-    ]);
+describe("the rate list and the custom-rate key (AT-90)", () => {
+  it("reads a rate typed into the list as written, with at most two decimals, between 0.25 and 4", () => {
+    expect(parseListRate("1.3")).toBe(1.3);
+    expect(parseListRate(" 1.75x ")).toBe(1.75);
+    expect(parseListRate("4")).toBe(4);
+    expect(parseListRate("0.25")).toBe(0.25);
+    for (const bad of ["", "abc", "0.2", "4.01", "1.255", "-1", "1,3", "1.", ".5"]) expect(parseListRate(bad), JSON.stringify(bad)).toBeNull();
   });
 
-  it("skips what has no times, no text or an end before the start", () => {
-    const text = ["WEBVTT", "", "NOTE nothing here", "", "00:00:03.000 --> 00:00:02.000", "Backwards", "", "00:00:05.000 --> 00:00:06.000", "", "bad --> worse", "Text"].join("\n");
-    expect(parseVtt(text)).toEqual([]);
-    expect(parseVtt("")).toEqual([]);
+  it("maps R to the custom-rate switch, and the person's own key replaces it", () => {
+    expect(videoKeyAction({ key: "r" })).toEqual({ type: "customRate" });
+    expect(videoKeyAction({ key: "s" })).toEqual({ type: "screenshot" });
+    const own = resolveKeys({ "video.customRate": ["Y"] });
+    expect(videoKeyAction({ key: "y" }, own)).toEqual({ type: "customRate" });
+    expect(videoKeyAction({ key: "r" }, own)).toBeNull();
+    expect(videoKeyAction({ key: "Escape" }, own)).toEqual({ type: "escape" });
   });
 });

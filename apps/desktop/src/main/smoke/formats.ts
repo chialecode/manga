@@ -3,7 +3,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { buildEpubFixture, buildMobiFixture, buildPdfFixture, type MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
-import { clickTestId, openFromShelf, setField, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, openFromShelf, pressKey, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
 import { caller, ensureRightPane, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -28,6 +28,12 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   await call("settings.skipAi", {});
   const dir = path.join(logsDir, "formats");
   fs.mkdirSync(dir, { recursive: true });
+  // A file is read from a library path and nowhere else, so the folder the books are written to is added as one (no scan: each book is imported by hand below).
+  // It is a folder of its own: the damaged file further down goes in a sibling, because a library path cannot lie inside another.
+  const booksDir = path.join(dir, "books");
+  fs.mkdirSync(booksDir, { recursive: true });
+  const location = await call("library.paths.add", { pathHandle: appService.registerPath("directory", booksDir), mediaKind: "novel", autoScan: false });
+  if (location.status !== "ok") return { ok: false, reason: "the library path for the books could not be added", detail: location.error };
   const scanPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   const books = [
     { name: "sample.txt", format: "txt", marker: "FORMAT-TXT-MARK", bytes: Buffer.from("FORMAT-TXT-MARK. four format window.") },
@@ -44,7 +50,7 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   let loop06: Record<string, unknown> = {};
   const ids: Record<string, string> = {};
   for (const book of books) {
-    const file = path.join(dir, book.name);
+    const file = path.join(booksDir, book.name);
     fs.writeFileSync(file, book.bytes);
     const handle = appService.registerPath("file", file);
     const imported = await call("library.importDocument", { title: book.name, pathHandle: handle, format: book.format });
@@ -59,7 +65,7 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
     const visible = await waitUntil(view, `(() => {
       const text = document.querySelector('[data-testid="reading-body"]')?.textContent ?? "";
       const image = [...document.querySelectorAll('[data-testid="reading-page"] img')].some((item) => item.complete && item.naturalWidth > 0);
-      const title = document.querySelector('[data-testid="reading-title"]');
+      const title = document.querySelector('[data-testid="shell-title"]');
       return title && (text.includes(${JSON.stringify(book.marker)}) || (${JSON.stringify(book.format)} === "pdf" && image));
     })()`, 8000);
     if (book.format === "pdf" && visible) {
@@ -122,7 +128,10 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
       }
       // The second page is an image page: reading it again from the shelf, then forward.
       await openFromShelf(view, "nav-reading", resourceId);
-      await clickTestId(view, "reading-next");
+      // The part is chosen by its number: the position is a button that turns into a field (AT-83); Enter goes there.
+      await clickTestId(view, "reading-part-position");
+      await setField(view, "reading-part-input", "2");
+      await pressKey(view, "Enter");
       const image = await waitUntil(view, `(() => {
         const canvas = document.querySelector('[data-testid="reading-pdf-canvas"]');
         const position = document.querySelector('[data-testid="reading-part-position"]')?.textContent ?? "";
@@ -141,39 +150,29 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   const drafted = await setField(view, "agent-composer", "formats enthusiast draft");
   const enthusiast = await call("workspace.sessions", { mode: "enthusiast" }) as { status?: string; value?: Array<{ sessionId: string }> };
   const enthusiastId = enthusiast.value?.[0]?.sessionId ?? "";
-  await clickTestId(view, "mode-menu");
-  await waitForTestId(view, "mode-creator");
   await clickTestId(view, "mode-creator");
   const switched = await waitUntil(view, `(() => {
-    const menu = document.querySelector('[data-testid="mode-menu"]')?.textContent ?? "";
+    const work = document.querySelector('[data-testid="mode-creator"]')?.getAttribute("aria-pressed") === "true";
     const draft = document.querySelector('[data-testid="agent-composer"]')?.value ?? "";
     const listed = document.querySelector('[data-testid="session-open-${enthusiastId}"]');
-    return menu.includes("造物主") && draft !== "formats enthusiast draft" && !listed;
+    return work && draft !== "formats enthusiast draft" && !listed;
   })()`, 8000);
-  await clickTestId(view, "mode-menu");
-  await waitForTestId(view, "mode-enthusiast");
   await clickTestId(view, "mode-enthusiast");
   const returned = await waitUntil(view, `(() => {
-    const menu = document.querySelector('[data-testid="mode-menu"]')?.textContent ?? "";
+    const entertainment = document.querySelector('[data-testid="mode-enthusiast"]')?.getAttribute("aria-pressed") === "true";
     const draft = document.querySelector('[data-testid="agent-composer"]')?.value ?? "";
-    return menu.includes("观测者") && draft === "formats enthusiast draft";
+    return entertainment && draft === "formats enthusiast draft";
   })()`, 8000);
-  // A damaged file is reported by the import dialog, which is opened from the settings page of the library.
-  const bad = path.join(dir, "broken.pdf");
-  fs.writeFileSync(bad, Buffer.from("%PDF-1.4\nnot-a-page"));
-  testHooks.pick = () => bad;
+  // A damaged file inside a library path is reported by the scan, on the library page (the interface has no import dialog).
+  const badFolder = path.join(dir, "bad-library");
+  fs.mkdirSync(badFolder, { recursive: true });
+  fs.writeFileSync(path.join(badFolder, "broken.pdf"), Buffer.from("%PDF-1.4\nnot-a-page"));
+  testHooks.pick = () => badFolder;
   await toRail(view);
   await openSettingsPage(view, "library");
-  await clickTestId(view, "settings-import");
-  await clickTestId(view, "import-pick-file");
-  // The import dialog inspects the file first; a damaged one is reported there or when the import runs.
-  await waitForTestId(view, "import-confirm");
-  await sleep(500);
-  await clickTestId(view, "import-confirm");
-  const failureVisible = await waitUntil(view, `(() => {
-    const alert = document.querySelector('[data-testid="import-error"], [role="alert"]');
-    return alert && (alert.textContent || "").trim();
-  })()`, 8000);
+  await setSelect(view, "library-path-new-kind", "novel");
+  await clickTestId(view, "library-path-add");
+  const failureVisible = await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-last-"]')].some((el) => /失败 [1-9]/.test(el.textContent || ""))`, 20000);
   testHooks.pick = undefined;
   const pages = books.every((book) => opened[book.format]);
   return { ok: drafted && pages && switched && returned && failureVisible, pages, modes: switched && returned, failureVisible, opened, pdfDebug, pdfLayer, pdfSpans, pdfError, pdfReview, loop06 };

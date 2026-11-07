@@ -20,12 +20,17 @@ export async function runAgentSmoke(appService: MangaProductApp, grant: string, 
     const detail = restored ? await call("agent.getRun", { runId: restored.id }) : { status: "error" as const, value: undefined };
     const detailValue = detail.status === "ok" ? detail.value as { inputText?: string; status?: string } | undefined : undefined;
     const agentPage = await toRail(view) && await clickTestId(view, "nav-agent");
-    // The chat page lists the conversations; the one that was left is opened from the list.
-    const listed = agentPage && await clickFirst(view, "session-open-", 8000);
-    const shown = listed && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
+    // The chat page opens on the current conversation, the one that was left (A-65).
+    const shown = agentPage && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
+    // "开启新对话" empties the page and moves that conversation into the history, from where it is continued.
+    const started = shown && await clickTestId(view, "conversation-new");
+    const emptied = started && await waitUntil(view, `!document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 8000);
+    const history = emptied && await clickTestId(view, "conversation-history");
+    const listed = history && await clickFirst(view, "conversation-item-", 8000);
+    const continued = listed && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
     const inputText = String(detailValue?.inputText ?? restored?.inputText ?? "");
-    const ok = Boolean(restored) && inputText.includes(PROMPT) && agentPage && Boolean(shown);
-    return { ok, restoredStatus: restored?.status ?? detailValue?.status, agentVisible: agentPage, conversationShown: Boolean(shown), inputText };
+    const ok = Boolean(restored) && inputText.includes(PROMPT) && agentPage && Boolean(shown) && Boolean(emptied) && Boolean(continued);
+    return { ok, restoredStatus: restored?.status ?? detailValue?.status, agentVisible: agentPage, conversationShown: Boolean(shown), newConversationEmptied: Boolean(emptied), historyContinued: Boolean(continued), inputText };
   }
 
   const slow = createServer((request) => { request.resume(); });

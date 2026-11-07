@@ -19,7 +19,13 @@ const labels = {
   hideLeft: "收起导航",
   hideRight: "收起辅助",
   stop: "停止任务",
-  modeMenu: "工作模式",
+  modeGroup: "模式",
+  menu: "菜单",
+  back: "后退",
+  forward: "前进",
+  rightTitle: "MANGA Agent",
+  resizeLeft: "调整导航栏宽度",
+  resizeRight: "调整辅助栏宽度",
 };
 
 const editorLabels = {
@@ -106,10 +112,12 @@ function frame(width: number, height: number, extra: Partial<Parameters<typeof S
       hasRight
       running
       title="很长的书名用来检查标题省略"
-      channel="测试通道"
-      modeLabel="爱好者"
-      modeHints={{ enthusiast: "爱好者：阅读", creator: "创作者：已交付入口" }}
+      modeLabel="娱乐模式"
+      modeNames={{ enthusiast: "娱乐模式", creator: "工作模式" }}
+      modeHints={{ enthusiast: "阅读、观看与随手记录", creator: "整理笔记与管理项目" }}
       labels={labels}
+      menuItems={[{ id: "settings", label: "设置", onSelect: () => undefined }]}
+      history={{ canBack: false, canForward: false, onBack: () => undefined, onForward: () => undefined }}
       onMode={() => undefined}
       onHide={() => undefined}
       onShow={() => undefined}
@@ -133,7 +141,7 @@ describe("AT-60 AT-61 AT-62 shell", () => {
     expect(screen.getByTestId("nav-reading")).toBeTruthy();
     expect(screen.queryByText("白板")).toBeNull();
     expect(productWindow.minWidth).toBeLessThanOrEqual(360);
-    expect(productWindow.captionReservePx).toBeGreaterThan(100);
+    expect(productWindow.topHeightPx).toBe(36);
   });
 
   it("opens one overlay from hover and restores focus with Escape", () => {
@@ -148,18 +156,58 @@ describe("AT-60 AT-61 AT-62 shell", () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  it("moves the mode menu with the keyboard and keeps a stop control", () => {
+  it("keeps a stop control and the full-size layout", () => {
     frame(1280, 840);
-    const menu = screen.getByTestId("mode-menu");
-    expect(screen.getByTestId("shell-left").contains(menu)).toBe(true);
-    menu.focus();
-    fireEvent.keyDown(menu, { key: "ArrowDown" });
-    expect(screen.getByTestId("mode-menu-list")).toBeTruthy();
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("mode-menu-list")).toBeNull();
-    expect(document.activeElement).toBe(menu);
     expect(screen.getByTestId("shell-task-stop")).toBeTruthy();
     expect(screen.getByTestId("shell-root").getAttribute("data-compact")).toBe("false");
+  });
+
+  it("switches mode from two icon buttons in the title bar, not from the left sidebar", () => {
+    const onMode = vi.fn();
+    frame(1280, 840, { onMode });
+    const group = screen.getByTestId("mode-switch");
+    // The mode switch is in the top of the left column (no title bar row exists); the sidebar's list below it does not hold it.
+    const top = group.closest("[data-testid='column-top-left']");
+    expect(top).toBeTruthy();
+    expect(screen.getByTestId("shell-left").firstElementChild).toBe(top);
+    expect(group.closest(".shell-left-body")).toBeNull();
+    // The left top: menu, sidebar, back, forward, then the mode switch; the title follows in the main top.
+    const order = Array.from(screen.getByTestId("shell-root").querySelectorAll("[data-testid='shell-menu'], [data-testid='shell-left-toggle'], [data-testid='nav-back'], [data-testid='nav-forward'], [data-testid='mode-switch'], [data-testid='shell-title']")).map((node) => node.getAttribute("data-testid"));
+    expect(order).toEqual(["shell-menu", "shell-left-toggle", "nav-back", "nav-forward", "mode-switch", "shell-title"]);
+    expect(group.getAttribute("role")).toBe("group");
+    expect(group.getAttribute("aria-label")).toBe("模式");
+    const entertainment = screen.getByTestId("mode-enthusiast");
+    const work = screen.getByTestId("mode-creator");
+    expect(entertainment.getAttribute("aria-pressed")).toBe("true");
+    expect(work.getAttribute("aria-pressed")).toBe("false");
+    // The name and what the mode is for are in the tooltip; the accessible name is the name alone.
+    expect(entertainment.getAttribute("aria-label")).toBe("娱乐模式");
+    expect(entertainment.getAttribute("title")).toBe("娱乐模式：阅读、观看与随手记录");
+    expect(work.getAttribute("title")).toBe("工作模式：整理笔记与管理项目");
+    // Icons only: no text in the buttons.
+    expect((entertainment.textContent ?? "").trim()).toBe("");
+    fireEvent.click(work);
+    expect(onMode).toHaveBeenCalledWith("creator");
+    // The old controls are gone.
+    expect(screen.queryByTestId("mode-menu")).toBeNull();
+    expect(screen.queryByTestId("mode-menu-list")).toBeNull();
+    expect(screen.queryByTestId("mode-quick-enthusiast")).toBeNull();
+  });
+
+  it("reflects the saved mode and moves between the modes with the arrow keys", () => {
+    const onMode = vi.fn();
+    const preference = structuredClone(DEFAULT_SHELL_PREFERENCE);
+    preference.mode = "creator";
+    frame(1280, 840, { preference, onMode });
+    expect(screen.getByTestId("mode-creator").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("mode-enthusiast").getAttribute("aria-pressed")).toBe("false");
+    const work = screen.getByTestId("mode-creator");
+    work.focus();
+    fireEvent.keyDown(work, { key: "ArrowLeft" });
+    expect(onMode).toHaveBeenLastCalledWith("enthusiast");
+    // Both buttons are plain buttons: Tab reaches them and Enter or Space activates them like any button.
+    expect(screen.getByTestId("mode-enthusiast").tagName).toBe("BUTTON");
+    expect(screen.getByTestId("mode-enthusiast").getAttribute("tabindex")).toBeNull();
   });
 
   it("restores docking after a user hides the sidebar and closes pinned narrow panels", () => {
@@ -221,7 +269,7 @@ describe("AT-60 AT-61 AT-62 shell", () => {
         { sessionId: "ses_reading", title: "合成书", kind: "resource", targetId: "res_1", mode: "enthusiast", runCount: 2, activeRunId: "run_1", activeRunStatus: "running" },
         { sessionId: "ses_other", title: "另一本", kind: "resource", targetId: "res_2", mediaKind: "comic", mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null },
       ],
-      sessionLabels: { heading: "已打开的资源会话", empty: "还没有打开的资源会话", active: "进行中", groups: { novel: "小说", comic: "漫画", video: "动漫" }, position: (session) => (session.sessionId === "ses_other" ? "第 12 / 30 页" : "第 3 章") },
+      sessionLabels: { empty: "还没有打开的资源会话", active: "进行中", close: "关闭", groups: { novel: "小说", comic: "漫画", video: "动漫" }, position: (session) => (session.sessionId === "ses_other" ? "第 12 / 30 页" : "第 3 章") },
       onSession: opened,
     });
     const rail = screen.getByTestId("shell-sessions");
@@ -237,34 +285,42 @@ describe("AT-60 AT-61 AT-62 shell", () => {
     expect(opened).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "ses_other" }));
   });
 
-  it("lists conversations instead of opened resources on the chat page, marks the running one, and starts a new chat", () => {
-    const opened = vi.fn();
-    const newChat = vi.fn();
+  it("keeps the rail on the opened resources on the chat page: the entertainment mode's conversation is the page itself, not a list", () => {
     frame(1280, 840, {
       page: "agent",
-      sessions: [{ sessionId: "ses_reading", title: "合成书", kind: "resource", targetId: "res_1", mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null }],
-      conversations: [
+      sessions: [
+        { sessionId: "ses_reading", title: "合成书", kind: "resource", targetId: "res_1", mode: "enthusiast", runCount: 0, activeRunId: null, activeRunStatus: null },
         { sessionId: "ses_chat1", title: "关于合成作品的讨论", kind: "shared", targetId: null, mode: "enthusiast", runCount: 3, activeRunId: "run_9", activeRunStatus: "running" },
-        { sessionId: "ses_chat2", title: "另一个话题", kind: "shared", targetId: null, mode: "enthusiast", runCount: 1, activeRunId: null, activeRunStatus: null },
       ],
-      sessionLabels: { heading: "已打开的资源会话", empty: "x", active: "进行中", conversations: "对话", conversationsEmpty: "还没有对话", position: () => "" },
-      labels: { ...labels, newChat: "新对话" },
-      currentSession: "ses_chat2",
-      onSession: opened,
-      onNewChat: newChat,
+      sessionLabels: { empty: "x", active: "进行中", close: "关闭", groups: { novel: "小说" }, position: () => "" },
     });
-    const list = screen.getByTestId("chat-list");
-    expect(list.textContent).toContain("关于合成作品的讨论");
-    expect(list.textContent).toContain("进行中");
-    expect(screen.queryByTestId("session-open-ses_reading")).toBeNull();
-    expect(screen.getByTestId("session-open-ses_chat2").getAttribute("data-current")).toBe("true");
-    fireEvent.click(screen.getByTestId("session-open-ses_chat1"));
-    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "ses_chat1" }));
-    fireEvent.click(screen.getByTestId("chat-new"));
-    expect(newChat).toHaveBeenCalled();
-    cleanup();
-    frame(1280, 840, { page: "agent", conversations: [], sessionLabels: { heading: "h", empty: "e", active: "a", conversations: "对话", conversationsEmpty: "还没有对话", position: () => "" } });
-    expect(screen.getByTestId("chat-list-empty").textContent).toBe("还没有对话");
+    expect(screen.getByTestId("session-open-ses_reading")).toBeTruthy();
+    expect(screen.queryByTestId("session-open-ses_chat1")).toBeNull();
+    expect(screen.queryByTestId("chat-list")).toBeNull();
+    expect(screen.queryByTestId("chat-new")).toBeNull();
+  });
+
+  it("lists the work mode's project sessions first, and its conversations that belong to no project last", () => {
+    const opened = vi.fn();
+    const creator = structuredClone(DEFAULT_SHELL_PREFERENCE);
+    creator.mode = "creator";
+    frame(1280, 840, {
+      preference: creator,
+      sessions: [
+        { sessionId: "ses_old", title: "旧的一般对话", kind: "shared", targetId: null, mode: "creator", runCount: 2, activeRunId: null, activeRunStatus: null },
+        { sessionId: "ses_book", title: "合成书", kind: "resource", targetId: "res_1", mode: "creator", runCount: 0, activeRunId: null, activeRunStatus: null },
+        { sessionId: "ses_project", title: "合集解说", kind: "project", targetId: "prj_1", mode: "creator", runCount: 1, activeRunId: null, activeRunStatus: null },
+      ],
+      sessionLabels: { empty: "x", active: "进行中", close: "关闭", groups: { project: "项目会话", novel: "小说", unattached: "未归属项目" }, position: () => "" },
+      onSession: opened,
+    });
+    const groups = [...screen.getByTestId("shell-sessions").querySelectorAll("[data-testid^='session-group-']")].map((node) => node.getAttribute("data-testid"));
+    expect(groups).toEqual(["session-group-project", "session-group-novel", "session-group-unattached"]);
+    expect(screen.getByTestId("session-group-project").textContent).toContain("项目会话");
+    expect(screen.getByTestId("session-group-project").textContent).toContain("合集解说");
+    expect(screen.getByTestId("session-group-unattached").textContent).toContain("旧的一般对话");
+    fireEvent.click(screen.getByTestId("session-open-ses_project"));
+    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "ses_project", kind: "project", targetId: "prj_1" }));
   });
 
   it("replaces the navigation with the settings navigation, and keeps the title bar's own actions and a panel under the page", () => {
@@ -335,14 +391,13 @@ function note(onSave: Parameters<typeof NoteEditor>[0]["onSave"], drafts?: Param
 
 const readingLabels = {
   importBook: "导入", empty: "没有资源", search: "查找", progress: "标记已读", note: "记录笔记", missing: "原件不可用",
-  scan: "扫描页", more: "继续读", image: "图像页", imageFailed: "图像无法显示", restored: "已恢复上次位置", restoredStart: "从开头开始",
-  restoredOffset: "从第 {offset} 字继续", rangeRead: "已读范围：{count} 段", rangeNone: "尚未标记已读范围",
+  scan: "扫描页", more: "继续读", image: "图像页", imageFailed: "图像无法显示",
   style: "阅读样式", fontSize: "字号", lineHeight: "行距", margin: "边距", measure: "行宽",
   fontFamily: "字体", fontSans: "系统黑体", fontSerif: "系统宋体", fontMono: "系统等宽",
   themeWhite: "白", themeGreen: "绿", themePaper: "纸", themeNight: "夜", bookmark: "书签",
   bookmarkAdd: "加书签", bookmarkNone: "还没有书签", bookmarkRemove: "删除", prev: "上一节", next: "下一节",
   part: "第 {index}/{total} 节", hits: "查找结果", hitNone: "没有匹配结果", jump: "跳转", toc: "目录",
-  source: "来源", sourceOpen: "打开来源", quote: "摘录", images: "插图 {count}", selectForAgent: "交给 Agent", partSource: "源文件：{href}",
+  source: "来源", sourceOpen: "打开来源", quote: "摘录", images: "插图 {count}", selectForAgent: "交给 Agent",
 };
 
 function renderReader(document_: Parameters<typeof ReadingPane>[0]["document"], overrides: Partial<Parameters<typeof ReadingPane>[0]> = {}) {
@@ -351,7 +406,7 @@ function renderReader(document_: Parameters<typeof ReadingPane>[0]["document"], 
       document={document_}
       style={{ measurePx: 680, fontSizePx: 18, lineHeight: 1.7, marginPx: 16, theme: "white" }}
       labels={readingLabels}
-      labelsExtra={{ backToNote: "回到笔记", sourceResolved: "来源有效", sourceNeedsReview: "来源待复核", sourceMissing: "来源已失效", sourceRepair: "重新指定文件", sourceCard: "来源" }}
+      labelsExtra={{ sourceNeedsReview: "来源待复核", sourceMissing: "来源已失效", sourceRepair: "重新指定文件" }}
       onSearch={() => {}}
       hits={[]}
       onJump={() => {}}
@@ -393,16 +448,14 @@ function readingDocument(overrides: Partial<NonNullable<Parameters<typeof Readin
 }
 
 describe("reading surface", () => {
-  it("marks the stored bookmark range in the body and reports the restored position", () => {
+  it("marks the stored bookmark range in the body, and keeps the restored position out of the reading area (it is in the debug panel)", () => {
     renderReader(readingDocument(), { highlight: { start: 4, end: 6 } });
     expect(screen.getByTestId("reading-quote-hit").textContent).toBe("戊己");
     expect(screen.getByTestId("reading-body").textContent).toBe("甲乙丙丁戊己庚辛");
-    const status = screen.getByTestId("reading-restore-status").textContent ?? "";
-    expect(status).toContain("已恢复上次位置");
-    expect(status).toContain("从第 4 字继续");
-    expect(screen.getByTestId("reading-restore-status").getAttribute("data-restored")).toBe("progress");
-    expect(screen.getByTestId("reading-restore-status").getAttribute("data-offset")).toBe("4");
-    expect(status).toContain("已读范围：1 段");
+    expect(screen.queryByTestId("reading-restore-status")).toBeNull();
+    const text = screen.getByTestId("reading-page").textContent ?? "";
+    expect(text).not.toContain("已恢复上次位置");
+    expect(text).not.toContain("已读范围");
     // A highlight outside the loaded window is not drawn as if it were on screen.
     cleanup();
     renderReader(readingDocument({ slice: { partId: "body", text: "甲乙", start: 0, end: 2, kind: "text", textLayer: true, images: [] } }), { highlight: { start: 4, end: 6 } });
@@ -463,6 +516,8 @@ describe("reading surface", () => {
     // The search result is in the search panel.
     fireEvent.click(screen.getByTestId("reading-panel-search"));
     expect(screen.getByTestId("reading-hit-none")).toBeTruthy();
+    // The style controls are in the settings panel.
+    fireEvent.click(screen.getByTestId("reading-settings"));
     fireEvent.click(screen.getByTestId("reading-theme-night"));
     expect(styled).toHaveBeenCalledWith({ theme: "night" });
     fireEvent.click(screen.getByTestId("reading-theme-teal"));
@@ -473,7 +528,7 @@ describe("reading surface", () => {
     expect(styled).toHaveBeenCalledWith({ pageMode: "double" });
   });
 
-  it("offers the previous and next part controls and the bookmark list", () => {
+  it("chooses a part by its number, with no previous or next part button, and offers the bookmark list", () => {
     const opened = vi.fn();
     const part = vi.fn();
     renderReader(readingDocument({
@@ -486,8 +541,11 @@ describe("reading surface", () => {
       onPart: part,
     });
     expect(screen.getByTestId("reading-part-position").textContent).toBe("第 2/2 节");
-    expect(screen.getByTestId("reading-next")).toHaveProperty("disabled", true);
-    fireEvent.click(screen.getByTestId("reading-prev"));
+    expect(screen.queryByTestId("reading-next")).toBeNull();
+    expect(screen.queryByTestId("reading-prev")).toBeNull();
+    fireEvent.click(screen.getByTestId("reading-part-position"));
+    fireEvent.change(screen.getByTestId("reading-part-input"), { target: { value: "1" } });
+    fireEvent.keyDown(screen.getByTestId("reading-part-input"), { key: "Enter" });
     expect(part).toHaveBeenCalledWith("c1", 0);
     fireEvent.click(screen.getByTestId("reading-panel-bookmarks"));
     fireEvent.click(screen.getByTestId("reading-bookmark-bm_1"));
@@ -508,7 +566,7 @@ describe("reading surface", () => {
 });
 
 
-describe("A review editor regressions", () => {
+describe("editor regressions", () => {
   it("maps a repeated quote after emoji to the selected code-point range only", () => {
     const body = document.createElement("div");
     body.textContent = "😀重复句\n重复句";

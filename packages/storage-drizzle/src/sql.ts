@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 8;
+export const PRODUCT_SCHEMA_VERSION = 11;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -394,7 +394,7 @@ ALTER TABLE text_fragments ADD COLUMN start_offset INTEGER;
 ALTER TABLE text_fragments ADD COLUMN end_offset INTEGER;
 `;
 
-/** M1b rework: note tags, reading bookmarks, extracted page/illustration assets and resource-bound agent sessions. */
+/** Schema v6: note tags, reading bookmarks, extracted page/illustration assets and resource-bound agent sessions. */
 export const V6_SCHEMA_SQL = `
 ALTER TABLE content_objects ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
 
@@ -429,7 +429,7 @@ CREATE INDEX IF NOT EXISTS bookmarks_resource ON bookmarks(resource_id);
 `;
 
 /**
- * M2: media kinds, series ordering, shelf state, covers, multi-source metadata, video probes and play
+ * Schema v7: media kinds, series ordering, shelf state, covers, multi-source metadata, video probes and play
  * copies, and the recording pipeline. One migration for the whole stage; it only adds columns and tables,
  * so a v6 library keeps every row and every anchor.
  */
@@ -585,7 +585,7 @@ CREATE TABLE IF NOT EXISTS work_terms (
 `;
 
 /**
- * M2 rework (A-47—A-52): library paths with a file register and scan jobs, an image table for authoritative pictures
+ * Schema v8: library paths with a file register and scan jobs, an image table for authoritative pictures
  * (covers and avatars), characters and persons of a linked subject, quick tasks, the operation log, run usage fields and a
  * work association for notes. Only adds columns, tables and indexes; the cover files of a v7 library are imported into
  * the image table by the store after this DDL (see `DrizzleStore.importCoverFiles`), inside the same transaction.
@@ -731,4 +731,603 @@ ALTER TABLE content_objects ADD COLUMN work_id TEXT;
 CREATE INDEX IF NOT EXISTS content_objects_work ON content_objects(work_id);
 UPDATE content_objects SET work_id = (SELECT r.work_id FROM resources r WHERE r.id = json_extract(content_objects.scope_json, '$.resourceId'))
   WHERE type = 'notes.document' AND json_extract(scope_json, '$.resourceId') IS NOT NULL;
+`;
+
+/**
+ * Schema v9: projects with their materials and terms, the voice dictionary (global and per work), and a project on a session. The
+ * creative workspace's own tables follow in `V9_CREATIVE_SQL`; a v8 profile gets all of them in one migration. `work_terms` is kept for the old
+ * commands' compatibility and its rows become manual dictionary terms.
+ */
+export const V9_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  goal TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  model_connection_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS project_materials (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  added_at TEXT NOT NULL,
+  UNIQUE (project_id, kind, target_id)
+);
+CREATE INDEX IF NOT EXISTS project_materials_project ON project_materials(project_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS project_terms (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  term TEXT NOT NULL,
+  heard TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (project_id, term)
+);
+
+ALTER TABLE agent_sessions ADD COLUMN project_id TEXT;
+CREATE INDEX IF NOT EXISTS agent_sessions_project ON agent_sessions(project_id);
+
+CREATE TABLE IF NOT EXISTS dictionary_terms (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  work_id TEXT NOT NULL DEFAULT '',
+  term TEXT NOT NULL,
+  heard TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (scope, work_id, term)
+);
+CREATE INDEX IF NOT EXISTS dictionary_terms_work ON dictionary_terms(work_id);
+INSERT OR IGNORE INTO dictionary_terms(id, scope, work_id, term, heard, source, created_at, updated_at)
+  SELECT id, 'work', work_id, term, heard, 'manual', created_at, created_at FROM work_terms;
+`;
+
+/**
+ * The creative workspace's own tables (boards, maps, embeds, drafts, excerpts, search index, cuts, plugins, acquisition). Every statement is idempotent and
+ * the whole block runs at each start, so a profile that was migrated by an earlier build of the same schema version gets the tables added later.
+ */
+export const V9_CREATIVE_SQL = `
+-- What a project package said about personal material the project points at and this profile did not have (project package): kept so the
+-- reference stays readable while it shows as missing.
+CREATE TABLE IF NOT EXISTS project_snapshots (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  snapshot_json TEXT NOT NULL,
+  taken_at TEXT NOT NULL,
+  UNIQUE (project_id, kind, target_id)
+);
+
+-- Plugin packages (PLUG-04): the keys the person chose to trust, what is installed, the versions kept for going back, and what an uninstalled plugin left.
+CREATE TABLE IF NOT EXISTS plugin_keys (
+  key_id TEXT PRIMARY KEY,
+  public_key TEXT NOT NULL,
+  label TEXT NOT NULL,
+  added_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS plugins (
+  id TEXT PRIMARY KEY,
+  version TEXT NOT NULL,
+  previous_version TEXT,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  granted_json TEXT NOT NULL DEFAULT '[]',
+  last_error TEXT,
+  installed_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS plugin_versions (
+  plugin_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  key_id TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  files_json TEXT NOT NULL,
+  signed_at TEXT NOT NULL,
+  installed_at TEXT NOT NULL,
+  PRIMARY KEY (plugin_id, version)
+);
+CREATE TABLE IF NOT EXISTS plugin_leftovers (
+  plugin_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  uninstalled_at TEXT NOT NULL
+);
+
+-- Acquisition (ACQ-01—03): a job that fetches something through an engine plugin, and one row per file the torrent holds. The source (a magnet link can
+-- carry tracker keys) stays in this table and is never shown, logged or sent anywhere but to the engine.
+CREATE TABLE IF NOT EXISTS acquisition_jobs (
+  id TEXT PRIMARY KEY,
+  engine TEXT NOT NULL,
+  resume_format TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_ref TEXT NOT NULL DEFAULT '',
+  info_hash TEXT,
+  name TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL,
+  paused_from TEXT,
+  paused_reason TEXT,
+  stage TEXT,
+  error_json TEXT,
+  path_id TEXT NOT NULL,
+  subdir TEXT NOT NULL DEFAULT '',
+  budget_json TEXT NOT NULL DEFAULT '{}',
+  total_bytes INTEGER NOT NULL DEFAULT 0,
+  selected_bytes INTEGER NOT NULL DEFAULT 0,
+  downloaded_bytes INTEGER NOT NULL DEFAULT 0,
+  uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+  seeding INTEGER NOT NULL DEFAULT 0,
+  seed_ratio REAL NOT NULL DEFAULT 0,
+  seed_up_kbps INTEGER NOT NULL DEFAULT 0,
+  epoch INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS acquisition_jobs_state ON acquisition_jobs(state);
+CREATE INDEX IF NOT EXISTS acquisition_jobs_hash ON acquisition_jobs(info_hash);
+CREATE TABLE IF NOT EXISTS acquisition_entries (
+  job_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  length INTEGER NOT NULL,
+  selected INTEGER NOT NULL DEFAULT 0,
+  verified INTEGER NOT NULL DEFAULT 0,
+  fingerprint TEXT,
+  publish_state TEXT NOT NULL DEFAULT 'none',
+  target_rel TEXT,
+  import_state TEXT NOT NULL DEFAULT 'pending',
+  resource_id TEXT,
+  revision_id TEXT,
+  note TEXT,
+  PRIMARY KEY (job_id, idx)
+);
+
+-- Whiteboards (CRE-02): the layout is rows, so a move writes one node, and the undo stack is a list of operations, never a snapshot of the board.
+CREATE TABLE IF NOT EXISTS whiteboards (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  title TEXT NOT NULL,
+  viewport_json TEXT NOT NULL DEFAULT '{"x":0,"y":0,"zoom":1}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS whiteboards_project ON whiteboards(project_id);
+CREATE TABLE IF NOT EXISTS whiteboard_nodes (
+  id TEXT PRIMARY KEY,
+  board_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  x REAL NOT NULL,
+  y REAL NOT NULL,
+  w REAL NOT NULL,
+  h REAL NOT NULL,
+  z INTEGER NOT NULL DEFAULT 0,
+  parent_id TEXT,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS whiteboard_nodes_board ON whiteboard_nodes(board_id);
+CREATE TABLE IF NOT EXISTS whiteboard_edges (
+  id TEXT PRIMARY KEY,
+  board_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS whiteboard_edges_board ON whiteboard_edges(board_id);
+
+-- Mind maps (CRE-03): one root, a stable id per node, a sort key between siblings; a reference is an attachment, never a child.
+CREATE TABLE IF NOT EXISTS mindmaps (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  title TEXT NOT NULL,
+  theme TEXT NOT NULL DEFAULT 'pink',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mindmaps_project ON mindmaps(project_id);
+CREATE TABLE IF NOT EXISTS mindmap_nodes (
+  id TEXT PRIMARY KEY,
+  map_id TEXT NOT NULL,
+  parent_id TEXT,
+  sort_key TEXT NOT NULL,
+  text TEXT NOT NULL DEFAULT '',
+  collapsed INTEGER NOT NULL DEFAULT 0,
+  refs_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mindmap_nodes_map ON mindmap_nodes(map_id, parent_id, sort_key);
+
+-- The operations behind undo and redo of a board, a map or a rough cut: what was done and what undoes it.
+CREATE TABLE IF NOT EXISTS creative_ops (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_kind TEXT NOT NULL,
+  doc_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  label TEXT NOT NULL,
+  forward_json TEXT NOT NULL,
+  inverse_json TEXT NOT NULL,
+  undone INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS creative_ops_doc ON creative_ops(doc_kind, doc_id, id);
+
+-- Embeds (CRE-04): one relation for every object that can sit inside another, live or as a fixed snapshot.
+CREATE TABLE IF NOT EXISTS embeds (
+  id TEXT PRIMARY KEY,
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  slot TEXT NOT NULL DEFAULT '',
+  target_kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  locator_json TEXT NOT NULL DEFAULT '{}',
+  mode TEXT NOT NULL DEFAULT 'live',
+  snapshot_json TEXT,
+  snapshot_version TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (source_kind, source_id, slot)
+);
+CREATE INDEX IF NOT EXISTS embeds_target ON embeds(target_kind, target_id);
+
+-- Drafts and their suggestions (CRE-05): text with a version history; a suggestion is kept apart from the draft until the user takes it.
+CREATE TABLE IF NOT EXISTS drafts (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  title TEXT NOT NULL,
+  text TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS drafts_project ON drafts(project_id);
+CREATE TABLE IF NOT EXISTS draft_versions (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE (draft_id, version)
+);
+CREATE TABLE IF NOT EXISTS draft_suggestions (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  instruction TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  base_version INTEGER NOT NULL,
+  base_text TEXT NOT NULL,
+  result_text TEXT NOT NULL DEFAULT '',
+  sources_json TEXT NOT NULL DEFAULT '[]',
+  model_json TEXT,
+  adopted_version INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS draft_suggestions_draft ON draft_suggestions(draft_id, created_at);
+
+-- Research (CRE-06): a page fetched from a given address is kept by version; an excerpt points into one version of it.
+CREATE TABLE IF NOT EXISTS excerpt_pages (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  fetched_at TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  body_text TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  previous_id TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS excerpt_pages_url ON excerpt_pages(url, version);
+CREATE TABLE IF NOT EXISTS excerpts (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  page_id TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS excerpts_project ON excerpts(project_id);
+-- What is searched in pages and excerpts: a page as windows of its text (so a hit says where), an excerpt as one entry. Kept apart from the
+-- library's own index, so a hit here can never be mistaken for a resource of the library.
+CREATE VIRTUAL TABLE IF NOT EXISTS research_idx USING fts5(
+  ref_kind UNINDEXED,
+  ref_id UNINDEXED,
+  start_offset UNINDEXED,
+  text,
+  ngrams,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+-- Rough cuts (CLIP-01/02): a sequence of clips, each pointing at a revision of a video; an export keeps what was planned and what was cut.
+CREATE TABLE IF NOT EXISTS rough_cuts (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rough_cuts_project ON rough_cuts(project_id);
+CREATE TABLE IF NOT EXISTS rough_cut_clips (
+  id TEXT PRIMARY KEY,
+  cut_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  resource_revision_id TEXT NOT NULL,
+  in_ms INTEGER NOT NULL,
+  out_ms INTEGER NOT NULL,
+  sort_key TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rough_cut_clips_cut ON rough_cut_clips(cut_id, sort_key);
+CREATE TABLE IF NOT EXISTS rough_cut_exports (
+  id TEXT PRIMARY KEY,
+  cut_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  result_json TEXT,
+  tmp_name TEXT,
+  final_name TEXT,
+  error_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Semantic search (SEARCH-02): one version per model, vector length and way of cutting the text. A version's vectors live in a table of their
+-- own (a vec0 table, or the blob column of the chunk rows when the extension cannot be loaded), so vectors of different models never meet.
+CREATE TABLE IF NOT EXISTS index_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  connection_id TEXT NOT NULL,
+  model TEXT NOT NULL,
+  dim INTEGER,
+  segmentation TEXT NOT NULL,
+  engine TEXT NOT NULL,
+  status TEXT NOT NULL,
+  total INTEGER NOT NULL DEFAULT 0,
+  done INTEGER NOT NULL DEFAULT 0,
+  error_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  activated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS semantic_chunks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  version_id INTEGER NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  start_cp INTEGER NOT NULL,
+  end_cp INTEGER NOT NULL,
+  vector BLOB,
+  UNIQUE (version_id, source_kind, source_id, seq)
+);
+CREATE INDEX IF NOT EXISTS semantic_chunks_source ON semantic_chunks(source_kind, source_id);
+-- A conversation closed from the left rail (A-74): only removed from the list. The session, its runs and the place in the file are untouched,
+-- and opening the same target again takes it back.
+CREATE TABLE IF NOT EXISTS closed_sessions (
+  session_id TEXT PRIMARY KEY,
+  closed_at TEXT NOT NULL
+);
+-- The works that share one online entry are the versions of a title (A-68); the lookup is by entry, not by work.
+CREATE INDEX IF NOT EXISTS work_links_external ON work_links(provider_id, external_id);
+`;
+
+/**
+ * Schema v10: a resource's file is a library path plus a path inside it (A-80), the files a user makes for a work live in a folder of the work
+ * (A-79), screenshots, danmaku, the model profile of a connection and the call trace of the agent. One migration for the whole change; the
+ * statements that cannot run twice are here, the tables that can are in `V10_TABLES_SQL` (run at every start like the creative tables).
+ */
+export const V10_SCHEMA_SQL = `
+ALTER TABLE library_paths ADD COLUMN managed INTEGER NOT NULL DEFAULT 0;
+-- relative_path is relative to the library path, with / separators. A row with no library_path_id is outside the library: it keeps the
+-- path it had in legacy_path only to tell the user where to look, and its resource cannot be opened.
+ALTER TABLE file_locations ADD COLUMN library_path_id TEXT;
+ALTER TABLE file_locations ADD COLUMN legacy_path TEXT;
+CREATE INDEX IF NOT EXISTS file_locations_library ON file_locations(library_path_id, relative_path);
+ALTER TABLE capture_sessions ADD COLUMN audio_file_id TEXT;
+ALTER TABLE provider_connections ADD COLUMN profile_json TEXT;
+ALTER TABLE provider_connections ADD COLUMN last_test_json TEXT;
+`;
+
+export const V10_TABLES_SQL = `
+-- Files copied or moved between places by a migration or a folder change, so a stop in the middle can be finished at the next start.
+CREATE TABLE IF NOT EXISTS file_moves (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  from_path TEXT NOT NULL,
+  to_path TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  error TEXT,
+  created_at TEXT NOT NULL,
+  done_at TEXT
+);
+
+-- One folder per title and medium: the works linked to one online entry share it, every other work has its own (A-68, A-79).
+CREATE TABLE IF NOT EXISTS work_folders (
+  id TEXT PRIMARY KEY,
+  owner_kind TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  media_kind TEXT NOT NULL,
+  rel_dir TEXT NOT NULL,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (owner_kind, owner_id, media_kind)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS work_folders_dir ON work_folders(rel_dir);
+CREATE TABLE IF NOT EXISTS work_files (
+  id TEXT PRIMARY KEY,
+  folder_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  resource_id TEXT,
+  kind TEXT NOT NULL,
+  sub_dir TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  ref_kind TEXT,
+  ref_id TEXT,
+  bytes INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  UNIQUE (folder_id, sub_dir, file_name)
+);
+CREATE INDEX IF NOT EXISTS work_files_work ON work_files(work_id, kind);
+CREATE INDEX IF NOT EXISTS work_files_ref ON work_files(ref_kind, ref_id);
+
+CREATE TABLE IF NOT EXISTS screenshots (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  file_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  resource_revision_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  media_kind TEXT NOT NULL,
+  position_ms INTEGER,
+  frame INTEGER,
+  page_id TEXT,
+  page_label TEXT,
+  spread INTEGER,
+  region_json TEXT,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  format TEXT NOT NULL,
+  subtitle_text TEXT,
+  meta_json TEXT NOT NULL DEFAULT '{}',
+  captured_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS screenshots_resource ON screenshots(resource_id, captured_at);
+
+-- Which danmaku belong to a file's episode, kept per resource revision so the choice can be changed (A-81).
+CREATE TABLE IF NOT EXISTS danmaku_matches (
+  resource_revision_id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  anime_id INTEGER,
+  episode_id INTEGER NOT NULL,
+  anime_title TEXT NOT NULL DEFAULT '',
+  episode_title TEXT NOT NULL DEFAULT '',
+  offset_ms INTEGER NOT NULL DEFAULT 0,
+  method TEXT NOT NULL,
+  confirmed INTEGER NOT NULL DEFAULT 0,
+  matched_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS danmaku_cache (
+  source TEXT NOT NULL,
+  episode_id INTEGER NOT NULL,
+  fetched_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  payload BLOB NOT NULL,
+  PRIMARY KEY (source, episode_id)
+);
+-- Whether the file's name, fingerprint, size and length may be sent to match a work that is not linked to an online entry (Q-28), per work.
+CREATE TABLE IF NOT EXISTS danmaku_consent (
+  work_id TEXT PRIMARY KEY,
+  allowed INTEGER NOT NULL,
+  decided_at TEXT NOT NULL
+);
+
+-- The trace of the agent (A-83): one row per model request, tool call and context compaction, with what was sent and what came back.
+CREATE TABLE IF NOT EXISTS agent_requests (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  step INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  name TEXT,
+  status TEXT NOT NULL DEFAULT 'running',
+  started_at TEXT NOT NULL,
+  first_token_at TEXT,
+  ended_at TEXT,
+  connection_id TEXT,
+  model_id TEXT,
+  protocol TEXT,
+  request_z BLOB,
+  response_z BLOB,
+  request_bytes INTEGER NOT NULL DEFAULT 0,
+  response_bytes INTEGER NOT NULL DEFAULT 0,
+  truncated INTEGER NOT NULL DEFAULT 0,
+  usage_json TEXT,
+  error_json TEXT
+);
+CREATE INDEX IF NOT EXISTS agent_requests_run ON agent_requests(run_id, step, started_at);
+CREATE INDEX IF NOT EXISTS agent_requests_started ON agent_requests(started_at);
+`;
+
+/**
+ * Schema v11 (A-87, A-88). A resource may belong to no work (its entry was deleted), so the files and screenshots made from it may name no work
+ * either; the title a deleted work had is kept for what was written on the work itself. A v10 profile was already in use, so v10's definitions
+ * stay as they were and this is a second migration: tables are rebuilt (SQLite cannot drop NOT NULL), and nothing that holds a file is touched.
+ * The files themselves are moved by the work-folder settle that runs after the start, not in this transaction.
+ */
+export const V11_SCHEMA_SQL = `
+ALTER TABLE resources ADD COLUMN left_work_at TEXT;
+
+CREATE TABLE work_files_v11 (
+  id TEXT PRIMARY KEY,
+  folder_id TEXT NOT NULL,
+  work_id TEXT,
+  resource_id TEXT,
+  kind TEXT NOT NULL,
+  sub_dir TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  ref_kind TEXT,
+  ref_id TEXT,
+  bytes INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  UNIQUE (folder_id, sub_dir, file_name)
+);
+INSERT INTO work_files_v11(id, folder_id, work_id, resource_id, kind, sub_dir, file_name, ref_kind, ref_id, bytes, created_at)
+  SELECT id, folder_id, work_id, resource_id, kind, sub_dir, file_name, ref_kind, ref_id, bytes, created_at FROM work_files;
+DROP TABLE work_files;
+ALTER TABLE work_files_v11 RENAME TO work_files;
+CREATE INDEX IF NOT EXISTS work_files_work ON work_files(work_id, kind);
+CREATE INDEX IF NOT EXISTS work_files_ref ON work_files(ref_kind, ref_id);
+CREATE INDEX IF NOT EXISTS work_files_resource ON work_files(resource_id);
+
+CREATE TABLE screenshots_v11 (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  file_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  resource_revision_id TEXT NOT NULL,
+  work_id TEXT,
+  media_kind TEXT NOT NULL,
+  position_ms INTEGER,
+  frame INTEGER,
+  page_id TEXT,
+  page_label TEXT,
+  spread INTEGER,
+  region_json TEXT,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  format TEXT NOT NULL,
+  subtitle_text TEXT,
+  meta_json TEXT NOT NULL DEFAULT '{}',
+  captured_at TEXT NOT NULL
+);
+INSERT INTO screenshots_v11(id, title, file_id, resource_id, resource_revision_id, work_id, media_kind, position_ms, frame, page_id, page_label, spread, region_json, width, height, format, subtitle_text, meta_json, captured_at)
+  SELECT id, title, file_id, resource_id, resource_revision_id, work_id, media_kind, position_ms, frame, page_id, page_label, spread, region_json, width, height, format, subtitle_text, meta_json, captured_at FROM screenshots;
+DROP TABLE screenshots;
+ALTER TABLE screenshots_v11 RENAME TO screenshots;
+CREATE INDEX IF NOT EXISTS screenshots_resource ON screenshots(resource_id, captured_at);
+`;
+
+/** The same on every start: what a v11 library adds that cannot be rebuilt by the statements above. */
+export const V11_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS removed_works (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  media_kind TEXT NOT NULL,
+  removed_at TEXT NOT NULL
+);
 `;

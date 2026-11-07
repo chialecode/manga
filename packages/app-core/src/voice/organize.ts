@@ -71,7 +71,7 @@ export class Organizer {
   }
 
   /** Ask the text model for a draft. A second request while one is running joins it instead of starting another. */
-  organize(sessionId: string, connectionId?: string): Promise<DraftView> {
+  organize(sessionId: string, connectionId?: string, extraTerms?: string[]): Promise<DraftView> {
     this.host.assertCurrent();
     const existing = this.running.get(sessionId);
     if (existing) return existing;
@@ -80,7 +80,8 @@ export class Organizer {
     if (!segments) throw new MangaError("VALIDATION_ERROR", "there is no transcript to organize yet", { details: { stage: session.stage } });
     const connection = this.host.llm.resolve(connectionId);
     if (!connection) throw new MangaError("MODEL_CAPABILITY_MISSING", "no text model connection is configured");
-    const terms = session.work_id ? (this.host.terms(session.work_id).terms) : [];
+    // The work's dictionary and, when the recording is organized inside a project, the project's glossary: both go to the model as terms to keep.
+    const terms = [...new Set([...this.host.dictionary.glossaryFor(session.work_id), ...(extraTerms ?? [])])].map((term) => ({ term }));
     const id = createId("drf");
     const now = new Date().toISOString();
     this.host.db.prepare("INSERT INTO capture_drafts(id, session_id, state, text, created_at, updated_at) VALUES (?,?,?,?,?,?)").run(id, sessionId, "organizing", "", now, now);

@@ -7,7 +7,7 @@ import { startApp, waitForRun } from "../helpers/app.ts";
 import { seedComic } from "../helpers/media-seed.ts";
 import { EnergyVad, FakeAsr, FakeLlm, join, quiet, samplesFor, tone, toBase64 } from "../helpers/voice.ts";
 import { picture } from "../helpers/fake-bangumi.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { inLibrary, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -158,7 +158,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("video context and the spoiler limit",
   requireSamples(["video-mkv-ass-fonts"]);
 
   async function importVideo(ctx: App) {
-    return ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "字幕样例", kind: "video", pathHandle: ctx.app.registerPath("file", samplePath("video-mkv-ass-fonts")) }));
+    return ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "字幕样例", kind: "video", pathHandle: ctx.app.registerPath("file", inLibrary(ctx.app, samplePath("video-mkv-ass-fonts"))) }));
   }
   const watched = (ctx: App, video: { resourceId: string; revisionId: string }, endMs: number, at = endMs) =>
     run(ctx, "progress.setTime", { resourceId: video.resourceId, resourceRevisionId: video.revisionId, timeMs: at, played: [{ startMs: 0, endMs }] });
@@ -242,7 +242,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("video context and the spoiler limit",
 
   it("says plainly when a video has no readable subtitles and does not turn off the rest of the context", async () => {
     const ctx = await boot();
-    const mp4 = ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "无字幕", kind: "video", pathHandle: ctx.app.registerPath("file", samplePath("video-mkv-ass-fonts")) }));
+    const mp4 = ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "无字幕", kind: "video", pathHandle: ctx.app.registerPath("file", inLibrary(ctx.app, samplePath("video-mkv-ass-fonts"))) }));
     // The same file, asked for a track the probe does not list as text: the context still carries the position.
     const sent = ok<Record<string, any>>(await send(ctx, { sessionId: await session(ctx), text: "x", mediaContext: { video: { resourceId: mp4.resourceId, resourceRevisionId: mp4.revisionId, positionMs: 0 } } }));
     expect(frozenContext(sent)).toContain("当前位置：0:00");
@@ -318,7 +318,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("pictures as material and the model th
   requireSamples(["cbz-basic"]);
 
   async function prepared(ctx: App) {
-    const comic = ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "有图的漫画", kind: "comic", pathHandle: ctx.app.registerPath("file", samplePath("cbz-basic")) }));
+    const comic = ok<{ resourceId: string; revisionId: string }>(await run(ctx, "library.importDocument", { title: "有图的漫画", kind: "comic", pathHandle: ctx.app.registerPath("file", inLibrary(ctx.app, samplePath("cbz-basic"))) }));
     const pages = ok<{ pages: Array<{ id: string }> }>(await run(ctx, "comic.pages", { resourceId: comic.resourceId }));
     return { ...comic, pageIds: pages.pages.map((page) => page.id) };
   }
@@ -395,6 +395,34 @@ describe.skipIf(mediaPrerequisitesAbsent)("pictures as material and the model th
     await finish(ctx, { value: sent } as Call);
     const retryRequests = model.seen.filter((request) => JSON.stringify(request.body).includes("image_url") && !JSON.stringify(request.body).includes("Reply with one word"));
     for (const request of retryRequests) expect(JSON.stringify(request.body)).toContain(still.base64.slice(0, 64));
+  });
+
+  it("lets the profile of the model decide whether a picture is sent: switched off it is not, whatever a test once found, and switched on it is", async () => {
+    const ctx = await boot();
+    const comic = await prepared(ctx);
+    const model = await provider("ok");
+    const saved = await connect(ctx, model.url, "text", ["text", "vision"]);
+    expect((ok<Array<Record<string, any>>>(await run(ctx, "connections.list", {})).find((item) => item.id === saved.id)!).profile.inputTypes).toEqual(["text", "image"]);
+    const picture = async () => ok<Record<string, any>>(await run(ctx, "material.region", { resourceId: comic.resourceId, resourceRevisionId: comic.revisionId, pageId: comic.pageIds[1] }));
+    // The person says this model does not take images: the request is refused with the reason, and no request carries a picture.
+    ok(await run(ctx, "connections.setProfile", { connectionId: saved.id, profile: { inputTypes: ["text"] } }));
+    const before = model.seen.length;
+    const refused = await send(ctx, { sessionId: await session(ctx), text: "这张图里有什么字？", imageMaterialIds: [(await picture()).materialId] });
+    expect(refused.status).toBe("error");
+    expect(refused.error?.code).toBe("MODEL_CAPABILITY_MISSING");
+    expect(refused.error?.message).toContain("设置里没有开启图像输入");
+    expect(model.seen.length).toBe(before);
+    // Switched on again, the same task goes through and the picture rides with the question.
+    ok(await run(ctx, "connections.setProfile", { connectionId: saved.id, profile: { inputTypes: ["text", "image"] } }));
+    const sent = ok<Record<string, any>>(await send(ctx, { sessionId: await session(ctx), text: "这张图里有什么字？", imageMaterialIds: [(await picture()).materialId] }));
+    expect((await finish(ctx, { value: sent } as Call)).value?.status).toBe("succeeded");
+    expect(model.seen.slice(before).some((request) => JSON.stringify(request.body).includes("image_url"))).toBe(true);
+    // A model nobody has tested but the person says takes images is believed: the profile is the authority.
+    const unproven = await connect(ctx, model.url, "text", []);
+    await run(ctx, "connections.delete", { connectionId: saved.id });
+    ok(await run(ctx, "connections.setProfile", { connectionId: unproven.id, profile: { inputTypes: ["image"] } }));
+    const direct = ok<Record<string, any>>(await send(ctx, { sessionId: await session(ctx), text: "再看一次", imageMaterialIds: [(await picture()).materialId] }));
+    expect((await finish(ctx, { value: direct } as Call)).value?.status).toBe("succeeded");
   });
 
   it("lets a separate vision model read the picture and hands the main model only its text reading", async () => {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentStage": "m2",
+  "currentStage": "m3",
   "documents": [
     {
       "path": ".github/PULL_REQUEST_TEMPLATE.md",
@@ -26,7 +26,7 @@
       "status": "active",
       "owner": "产品负责人 / 技术负责人",
       "scope": "用户待办：用户需要做的全部事项的唯一入口（待决定及当前默认、人工检查及步骤、授权与外部配置），不绑定阶段",
-      "reviewed": "2026-10-06",
+      "reviewed": "2026-10-15",
       "basis": "A-53：2026-10-06 用户要求把所有需要用户确认的内容集中到一个文档，Agent 与用户的流水线互不阻塞；由原 docs/decisions/open-questions.md 迁移，Agent 侧后续 loop 移至执行状态"
     },
     {
@@ -75,35 +75,35 @@
       "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号"
     },
     {
-      "path": "docs/decisions/0003-m0-ui-editing.md",
+      "path": "docs/decisions/0003-ui-editing.md",
       "kind": "decision",
       "status": "superseded",
       "owner": "技术负责人",
-      "scope": "ADR-0003：原 M0 UI/编辑建议；正式选型由 ADR-0007 替代",
+      "scope": "ADR-0003：原 UI/编辑建议；正式选型由 ADR-0007 替代",
       "reviewed": "2026-09-19",
       "basis": "原 POC-05 证据；2026-09-19 用户 A-15 选择 基础技术栈",
       "supersededBy": "docs/decisions/0007-technology-stack.md"
     },
     {
-      "path": "docs/decisions/0004-m0-storage-host.md",
+      "path": "docs/decisions/0004-storage-host.md",
       "kind": "decision",
       "status": "active",
       "owner": "技术负责人",
       "scope": "ADR-0004：better-sqlite3 单写入宿主已正式确认，恢复验收独立",
       "reviewed": "2026-10-04",
-      "basis": "POC-06；ADR-0007 的驱动选择与 DATA-04 可配置目录要求；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查"
+      "basis": "POC-06；ADR-0007 的驱动选择与 DATA-04 可配置目录要求；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查"
     },
     {
-      "path": "docs/decisions/0005-m0-composition-runtime.md",
+      "path": "docs/decisions/0005-composition-runtime.md",
       "kind": "decision",
       "status": "active",
       "owner": "技术负责人",
       "scope": "ADR-0005：自研 kernel 正式定稿",
       "reviewed": "2026-10-04",
-      "basis": "POC-07 证据；正式选型未委派；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "basis": "POC-07 证据；正式选型未委派；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
-      "path": "docs/decisions/0006-m0-media-and-performance.md",
+      "path": "docs/decisions/0006-media-and-performance.md",
       "kind": "decision",
       "status": "superseded",
       "owner": "技术负责人",
@@ -127,17 +127,17 @@
       "status": "draft",
       "owner": "产品负责人 / 质量负责人",
       "scope": "MANGA 交付阶段与验收计划",
-      "reviewed": "2026-10-06",
-      "basis": "既有分阶段验收定义；本次 Agent 优先顺序已确认；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-10-10",
+      "basis": "既有分阶段验收定义；本次 Agent 优先顺序已确认；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
     },
     {
       "path": "docs/delivery/status.md",
       "kind": "status",
       "status": "active",
       "owner": "质量负责人",
-      "scope": "Agent 侧的当前执行状态：阶段状态、当前事实、后续 loop、M0 POC 的当前去向与推荐下一步",
-      "reviewed": "2026-10-06",
-      "basis": "M2 阶段清理（A-45/C6）：已合并阶段只引用阶段总结；当前事实以本页为准；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "scope": "Agent 侧的当前执行状态：当前阶段、已实现能力、当前事实、验证基线、后续 loop、原型 POC 的当前去向与推荐下一步",
+      "reviewed": "2026-10-15",
+      "basis": "阶段清理（A-45、A-57）：已合并阶段的结论提炼进本页；当前事实以本页为准；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
     },
     {
       "path": "docs/design-rules/DESIGN.md",
@@ -163,8 +163,8 @@
       "status": "draft",
       "owner": "技术负责人",
       "scope": "MANGA Agent、上下文与插件协议",
-      "reviewed": "2026-10-04",
-      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "reviewed": "2026-10-09",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/design/architecture.md",
@@ -190,7 +190,7 @@
       "status": "draft",
       "owner": "技术负责人",
       "scope": "MANGA 领域模型与数据设计",
-      "reviewed": "2026-10-03",
+      "reviewed": "2026-10-15",
       "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账；2026-09-20 A-29 环境变量测试规则与 A-30 后续语音需求同步，VOICE-06—08/AT-57—59 未实现未验收；后续修订依据见确认记录 A 编号"
     },
     {
@@ -208,8 +208,8 @@
       "status": "draft",
       "owner": "技术负责人",
       "scope": "MANGA 界面与工作流设计",
-      "reviewed": "2026-10-04",
-      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "reviewed": "2026-10-15",
+      "basis": "MANGA 需求与设计评审稿；运行时及其他未决选择见 A/Q 台账；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/dev-rules/agent-and-plugins.md",
@@ -218,7 +218,7 @@
       "owner": "技术负责人",
       "scope": "Agent、上下文与插件开发规则",
       "reviewed": "2026-09-25",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/dev-rules/architecture-and-contracts.md",
@@ -262,8 +262,8 @@
       "status": "active",
       "owner": "技术负责人",
       "scope": "验证与质量门禁",
-      "reviewed": "2026-10-06",
-      "basis": "M2 的 C3/C6：通用阶段入口、报告门禁与真实服务开关取代按阶段的脚本；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-10-15",
+      "basis": "通用阶段入口、报告门禁与真实服务开关取代按阶段的脚本；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
     },
     {
       "path": "docs/dev-rules/README.md",
@@ -281,7 +281,7 @@
       "owner": "技术负责人",
       "scope": "仓库地图与环境事实",
       "reviewed": "2026-10-04",
-      "basis": "M2 的 C3/C4/C6：目录、命令与生成物按当前实现重写；后续修订依据见确认记录 A 编号"
+      "basis": "目录、命令与生成物按当前实现重写；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/governance/documentation-policy.md",
@@ -299,7 +299,7 @@
       "owner": "产品负责人",
       "scope": "MANGA 核心产品原则",
       "reviewed": "2026-09-25",
-      "basis": "原已确认方向；本次 A-01/A-02 用户明确确认；2026-09-22 A-31 与 M1b 阅读/人工记录规划：UI-06—08、AT-60—62、POC-01/05/06 进入验证；后续修订依据见确认记录 A 编号"
+      "basis": "原已确认方向；本次 A-01/A-02 用户明确确认；2026-09-22 A-31 阅读/人工记录规划：UI-06—08、AT-60—62、POC-01/05/06 进入验证；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/product-rules/README.md",
@@ -317,7 +317,7 @@
       "owner": "产品负责人",
       "scope": "MANGA 产品需求文档",
       "reviewed": "2026-10-03",
-      "basis": "2026-09-19 用户确认 Agent 优先、路径、格式、录音、提供者与语言目标；未决部分单列；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "basis": "2026-09-19 用户确认 Agent 优先、路径、格式、录音、提供者与语言目标；未决部分单列；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/README.md",
@@ -383,22 +383,13 @@
       "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
     },
     {
-      "path": "experiments/m0/README.md",
-      "kind": "design",
-      "status": "reference",
-      "owner": "技术负责人",
-      "scope": "M0 验证工程说明与退出条件（M4 获取替代 POC-09 后删除）",
-      "reviewed": "2026-10-04",
-      "basis": "M0 委派建立的实验工程；非正式产品；M2 的 C4 记录退出条件"
-    },
-    {
       "path": "README.md",
       "kind": "entry",
       "status": "active",
       "owner": "文档维护者",
       "scope": "MANGA",
       "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-22 M1b A 审查、人工负面反馈与 A-32—34；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-22 A 审查、人工负面反馈与 A-32—34；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
     },
     {
       "path": "REVIEW.md",
@@ -425,7 +416,7 @@
       "owner": "技术负责人",
       "scope": "ADR-0007：已确认基础技术栈、迁移和验证边界",
       "reviewed": "2026-10-04",
-      "basis": "2026-09-19 用户确认沿用已讨论的选型；A-15；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "basis": "2026-09-19 用户确认沿用已讨论的选型；A-15；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/decisions/confirmed-decisions.md",
@@ -433,7 +424,7 @@
       "status": "active",
       "owner": "产品负责人 / 技术负责人",
       "scope": "已确认产品与技术决定的 A 编号及职责正本索引",
-      "reviewed": "2026-10-06",
+      "reviewed": "2026-10-10",
       "basis": "2026-09-19 用户逐项答复和公开内容要求；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
     },
     {
@@ -442,7 +433,7 @@
       "status": "active",
       "owner": "技术负责人 / 质量负责人",
       "scope": "A 计划、B 交付、A 审查/差异返工与集中待用户处理清单的最小结构",
-      "reviewed": "2026-10-06",
+      "reviewed": "2026-10-07",
       "basis": "A-20；用户要求为 A 规划 → B 执行 → A 审查建立高效交流机制；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
     },
     {
@@ -452,7 +443,7 @@
       "owner": "开发者",
       "scope": "资料库模块规格：资源、检索、资料包与 worker 生命周期",
       "reviewed": "2026-10-04",
-      "basis": "M1a P0 新模块规格要求；LIB-01/04；2026-09-20 A 审查补齐资料包导入/回滚语义；2026-09-22 M1b A 审查、人工负面反馈与 A-32—34；2026-09-25 A 对 B 8.15 独立复核、F-08 分页局部修复及 8.16 集中返工"
+      "basis": "新模块规格要求；LIB-01/04；2026-09-20 A 审查补齐资料包导入/回滚语义；2026-09-22 A 审查、人工负面反馈与 A-32—34；2026-09-25 A 对分页的独立复核与局部修复"
     },
     {
       "path": "docs/modules/notes.md",
@@ -461,7 +452,7 @@
       "owner": "开发者",
       "scope": "笔记模块规格：可撤销创建/更新与修订",
       "reviewed": "2026-10-04",
-      "basis": "M1a P0 新模块规格要求；NOTE-03；2026-09-20 A-29 环境变量测试规则与 A-30 后续语音需求同步，VOICE-06—08/AT-57—59 未实现未验收；2026-09-22 M1b A 审查、人工负面反馈与 A-32—34"
+      "basis": "新模块规格要求；NOTE-03；2026-09-20 A-29 环境变量测试规则与 A-30 后续语音需求同步，VOICE-06—08/AT-57—59 未实现未验收；2026-09-22 A 审查、人工负面反馈与 A-32—34"
     },
     {
       "path": "docs/modules/settings.md",
@@ -470,7 +461,7 @@
       "owner": "开发者",
       "scope": "设置模块规格：目录、通道、连接与凭据引用",
       "reviewed": "2026-10-04",
-      "basis": "M1a P0 新模块规格要求；DATA-04、MODEL-01；2026-09-20 A 审查补齐迁移校验与 recoverJobs；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；后续修订依据见确认记录 A 编号"
+      "basis": "新模块规格要求；DATA-04、MODEL-01；2026-09-20 A 审查补齐迁移校验与 recoverJobs；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号"
     },
     {
       "path": "docs/modules/inventory.md",
@@ -479,7 +470,7 @@
       "owner": "开发者",
       "scope": "资源总览模块规格：数量、位置、托管与可取消扫描",
       "reviewed": "2026-10-04",
-      "basis": "M1a P0 新模块规格要求；LIB-04；2026-09-20 用户九项决定、Agent 下一步规则与最新 M1a A 验收审查；2026-09-21 A F-24—F-32 独立复验与失败审计，技术未收敛"
+      "basis": "新模块规格要求；LIB-04；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；2026-09-21 A 对位置迁移的独立复验"
     },
     {
       "path": "docs/modules/agent.md",
@@ -488,44 +479,27 @@
       "owner": "开发者",
       "scope": "Agent 模块规格：会话、预算、工具授权与协议适配",
       "reviewed": "2026-10-04",
-      "basis": "M1a P0 新模块规格要求；AGENT-06、MODEL-04；2026-09-20 A 审查补齐工具 schema、流完成与材料授权；后续修订依据见确认记录 A 编号"
+      "basis": "新模块规格要求；AGENT-06、MODEL-04；2026-09-20 A 审查补齐工具 schema、流完成与材料授权；后续修订依据见确认记录 A 编号"
     },
     {
-      "path": "docs/delivery/m2-media-mvp-plan.md",
+      "path": "docs/delivery/stage-plan.md",
       "kind": "plan",
       "status": "active",
       "owner": "技术负责人",
-      "scope": "M2 全阶段唯一计划：上一阶段清理、运行时与依赖升级、漫画/动画/封面与多源元数据、界面、录音与三媒介语音定位、B 执行 prompt",
-      "reviewed": "2026-10-04",
-      "basis": "A-44：2026-10-03 用户要求规划小说、漫画、动漫 MVP，封面本地存储并经 Bangumi 获取，提供界面参考；A-45：文档清理规范；A-46：计划覆盖整个阶段、不分批；A-40 开源查证",
-      "retireAfter": "m2"
+      "scope": "当前阶段（M3）唯一计划：阶段开始的整理（按内容整理已入库与不入库的无用文件、以前阶段的标签）、剩余全部 MVP（创作工作区、粗剪、插件包、BitTorrent 获取）、2026-10-06 用户提出的界面与功能问题、B 执行 prompt；A 审查结论与返工（2026-10-07 用户试用反馈 21 条、F-03 的 Agent 暴露范围）与 B 返工 prompt；2026-10-09 用户第二轮试用反馈 20 条的根因、开源查证、返工工作包、schema v10 迁移与 B 返工 prompt",
+      "reviewed": "2026-10-10",
+      "basis": "A-55—A-66：2026-10-06 用户要求；A-67—A-73：2026-10-07 A 审查与用户试用反馈；A-75—A-84：2026-10-09 用户第二轮试用反馈；A-46：计划覆盖整个阶段、不分批；A-40 开源查证",
+      "retireAfter": "m3"
     },
     {
-      "path": "docs/evidence/m0-summary.md",
+      "path": "docs/delivery/stage-report.md",
       "kind": "evidence",
-      "status": "reference",
-      "owner": "质量负责人",
-      "scope": "M0 阶段总结：POC 结论、支持矩阵、人工反馈、遗留去向与清理记录",
-      "reviewed": "2026-10-04",
-      "basis": "M2 的 C1（A-45）：由已删除的 M0 计划、报告和轮次证据提炼；归档提交 dc925e9"
-    },
-    {
-      "path": "docs/evidence/m1a-summary.md",
-      "kind": "evidence",
-      "status": "reference",
-      "owner": "质量负责人",
-      "scope": "M1a 阶段总结：交付内容、F-01—F-32 关闭情况、度量、人工反馈、限制与清理记录",
-      "reviewed": "2026-10-04",
-      "basis": "M2 的 C1（A-45）：由已删除的 M1a 计划、报告和轮次证据提炼；归档提交 a688713"
-    },
-    {
-      "path": "docs/evidence/m1b-summary.md",
-      "kind": "evidence",
-      "status": "reference",
-      "owner": "质量负责人",
-      "scope": "M1b 阶段总结：交付内容、审查问题、H 步骤与结果、依赖与 bot 路线、清理记录与测试迁移映射",
-      "reviewed": "2026-10-04",
-      "basis": "M2 的 C1/C3（A-45）：由已删除的 M1b 计划、交付报告和轮次证据提炼；归档提交 5504c97"
+      "status": "active",
+      "owner": "开发者",
+      "scope": "当前阶段（M3）交付报告：任务/需求 → 实现 → 证据 → 状态与限制，含验收用例映射、数量迁移、基准、真实服务与真实库试验、整理记录、依赖例外与人工步骤；A 集中审查、返工与 A 复核的结果与结论",
+      "reviewed": "2026-10-15",
+      "basis": "阶段计划第 10 节；产品验收 not-run",
+      "retireAfter": "m3"
     },
     {
       "path": "docs/modules/comic.md",
@@ -534,7 +508,7 @@
       "owner": "开发者",
       "scope": "漫画模块规格：目录/CBZ/PDF 页面、阅读模式、区域锚点与页面句柄",
       "reviewed": "2026-10-04",
-      "basis": "M2 P2/P3：LIB-01—03、READ-02、NOTE-04；A-44 界面参考"
+      "basis": "LIB-01—03、READ-02、NOTE-04；A-44 界面参考"
     },
     {
       "path": "docs/modules/video.md",
@@ -543,7 +517,7 @@
       "owner": "开发者",
       "scope": "视频模块规格：探测、播放路径、字幕/音轨、帧索引、播放副本与时间锚点",
       "reviewed": "2026-10-04",
-      "basis": "M2 P2/P4：LIB-03、READ-03；Q-17 分发许可"
+      "basis": "LIB-03、READ-03；Q-17 分发许可"
     },
     {
       "path": "docs/modules/metadata.md",
@@ -552,7 +526,7 @@
       "owner": "开发者",
       "scope": "元数据模块规格：Bangumi 与本地来源、候选确认、字段来源、封面与相关作品",
       "reviewed": "2026-10-04",
-      "basis": "M2 P5：META-01—03、LIB-02；外部扩展设计 3.3"
+      "basis": "META-01—03、LIB-02；外部扩展设计 3.3"
     },
     {
       "path": "docs/modules/voice.md",
@@ -561,17 +535,106 @@
       "owner": "开发者",
       "scope": "语音与定位模块规格：录音会话、人声筛选、转录、整理、音频保留与来源映射",
       "reviewed": "2026-10-04",
-      "basis": "M2 R1—R4：VOICE-01—08、AT-57—59；Q-05"
+      "basis": "VOICE-01—08、AT-57—59；Q-05"
     },
     {
-      "path": "docs/evidence/m2-media-mvp-delivery.md",
-      "kind": "evidence",
+      "path": "docs/modules/projects.md",
+      "kind": "design",
       "status": "active",
-      "owner": "开发 Agent B",
-      "scope": "M2 交付报告：任务/需求 → 实现 → 证据 → 状态与限制，含清理记录、迁移映射、依赖升级与例外、支持矩阵、启动命令与人工步骤",
-      "reviewed": "2026-10-04",
-      "basis": "M2 全阶段计划第 10 节；产品验收 not-run",
-      "retireAfter": "m2"
+      "owner": "开发者",
+      "scope": "项目模块规格：项目、材料引用、术语表、项目会话范围与项目包",
+      "reviewed": "2026-10-07",
+      "basis": "CRE-01、DATA-03、AT-25"
+    },
+    {
+      "path": "docs/modules/whiteboard.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "白板模块规格：画布、撤销、引用实例、导出与规模",
+      "reviewed": "2026-10-07",
+      "basis": "CRE-02、CRE-04、AT-26"
+    },
+    {
+      "path": "docs/modules/mindmap.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "思维导图模块规格：树模型、排序键、撤销、引用与导出",
+      "reviewed": "2026-10-07",
+      "basis": "CRE-03、CRE-04、AT-27"
+    },
+    {
+      "path": "docs/modules/embeds.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "互嵌模块规格：笔记、白板、导图之间的嵌入关系、状态与循环",
+      "reviewed": "2026-10-07",
+      "basis": "CRE-04、AT-28、DATA-03"
+    },
+    {
+      "path": "docs/modules/copywriting.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "文案模块规格：文稿、版本、建议、采纳与依据变化",
+      "reviewed": "2026-10-07",
+      "basis": "CRE-05、AT-29"
+    },
+    {
+      "path": "docs/modules/research.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "材料搜寻模块规格：个人材料搜索、网页取页与摘录、联网边界",
+      "reviewed": "2026-10-07",
+      "basis": "CRE-06、SEARCH-01、AT-30、ACQ-03"
+    },
+    {
+      "path": "docs/modules/semantic.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "语义检索模块规格：嵌入索引版本、sqlite-vec 与回退、范围先于相似度",
+      "reviewed": "2026-10-07",
+      "basis": "SEARCH-02、MODEL-03、AT-31"
+    },
+    {
+      "path": "docs/modules/danmaku.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "弹幕模块规格：弹弹play 开放 API 接入、剧集匹配与缓存、显示设置、凭据隔离",
+      "reviewed": "2026-10-09",
+      "basis": "READ-04、AT-94；A-81、Q-28"
+    },
+    {
+      "path": "docs/modules/roughcut.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "粗剪模块规格：序列编辑、切点计划、无转码导出与核对",
+      "reviewed": "2026-10-07",
+      "basis": "CLIP-01、CLIP-02、AT-32、AT-33"
+    },
+    {
+      "path": "docs/modules/plugins.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "插件模块规格：插件包、签名与信任、独立进程运行、安装升级回退卸载",
+      "reviewed": "2026-10-07",
+      "basis": "PLUG-04、AT-34、AT-45、AT-47、AT-48；Q-06"
+    },
+    {
+      "path": "docs/modules/acquisition.md",
+      "kind": "design",
+      "status": "active",
+      "owner": "开发者",
+      "scope": "下载模块规格：获取任务流水线、发布与入库、第一方 BitTorrent 引擎与联网边界",
+      "reviewed": "2026-10-07",
+      "basis": "ACQ-01—03、AT-42、AT-43、AT-46、AT-47、AT-56"
     }
   ]
 }

@@ -35,6 +35,7 @@ run(process.execPath, ['scripts/check-docs.mjs']);
 run(process.execPath, ['--test', 'scripts/check-publication.test.mjs']);
 run(process.execPath, ['--test', 'scripts/check-docs.test.mjs']);
 run(process.execPath, ['--test', 'scripts/stage-report.test.mjs']);
+run(process.execPath, ['--test', 'scripts/pre-push.test.mjs']);
 run(process.execPath, ['scripts/check-publication.mjs']);
 if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
   run(process.execPath, ['scripts/check-deps.mjs']);
@@ -55,7 +56,6 @@ if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
     } else {
       run(process.execPath, [vitest, 'run', '--config', 'vitest.config.ts']);
     }
-    run(process.execPath, ['--test', '--test-concurrency=1', 'experiments/m0/src/tests/poc-contract-schema.test.ts', 'experiments/m0/src/tests/review-regressions.test.ts', 'experiments/m0/src/tests/closure-review.test.ts']);
   } else {
     console.error('FAILED application typecheck: tsc is not installed');
     failed = true;

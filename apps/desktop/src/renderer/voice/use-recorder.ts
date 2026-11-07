@@ -13,11 +13,19 @@ export type RecordingSettings = {
   retention: "keep" | "discard";
   duckPlayback: "none" | "lower" | "pause";
   boundaryMarginMs: number;
+  /** The language the recordings are in, as the service wants it ("zh", "ja"); `null` leaves it to the service. */
+  language: string | null;
+  /** How long the dictionary hint sent with each block of audio may be, and the lengths set for single connections. */
+  promptChars: number;
+  promptCharsByConnection: Record<string, number>;
   overlay: { x?: number; y?: number; width: number; height: number };
 };
 
+/** What a save may carry: the same fields, and a connection's hint length that is `null` goes back to the general one. */
+export type RecordingPatch = Partial<Omit<RecordingSettings, "promptCharsByConnection">> & { promptCharsByConnection?: Record<string, number | null> };
+
 export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
-  deviceId: null, holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, overlay: { width: 280, height: 84 },
+  deviceId: null, holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, language: null, promptChars: 600, promptCharsByConnection: {}, overlay: { width: 280, height: 84 },
 };
 
 export type RecorderDeps = {
@@ -59,8 +67,17 @@ export function useRecorder(deps: RecorderDeps) {
   }, []);
   useEffect(() => { if (enabled) void reloadSettings(); }, [enabled, reloadSettings]);
 
-  const saveSettings = useCallback(async (patch: Partial<RecordingSettings>) => {
-    setSettings((current) => ({ ...current, ...patch }));
+  const saveSettings = useCallback(async (patch: RecordingPatch) => {
+    setSettings((current) => {
+      const { promptCharsByConnection, ...rest } = patch;
+      const next = { ...current, ...rest };
+      if (promptCharsByConnection) {
+        const merged: Record<string, number> = { ...current.promptCharsByConnection };
+        for (const [id, value] of Object.entries(promptCharsByConnection)) { if (value === null) delete merged[id]; else merged[id] = value; }
+        next.promptCharsByConnection = merged;
+      }
+      return next;
+    });
     const result = await attempt("settings.setRecording", patch);
     if (!result.ok) { setError(result.error.message); await reloadSettings(); }
   }, [setError, reloadSettings]);

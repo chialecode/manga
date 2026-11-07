@@ -7,7 +7,23 @@ import { useSyncExternalStore } from "react";
 export type ReaderContext =
   | { kind: "comic"; resourceId: string; revisionId: string; title: string; workId?: string | null; pageId: string; pageNumber: number; pageCount: number }
   | { kind: "video"; resourceId: string; revisionId: string; title: string; workId?: string | null; positionMs: number; durationMs: number; frame?: number | null; interval?: { startMs: number; endMs: number } | null }
-  | { kind: "novel"; resourceId: string; revisionId: string; title: string; workId?: string | null; partId: string; partTitle: string; start: number; end: number; excerpt: string };
+  | { kind: "novel"; resourceId: string; revisionId: string; title: string; workId?: string | null; partId: string; partTitle: string; start: number; end: number; excerpt: string; debug?: NovelDebug };
+
+/** What the novel reader knows about its own place that a reader does not need to see: it is shown in the context debug panel only. */
+export type NovelDebug = {
+  /** Where the position came from: the stored progress, or the start of the book. */
+  restoredFrom: "progress" | "start";
+  restoredOffset: number;
+  readRanges: number;
+  /** The source file of the part (an EPUB chapter's href), when the format has one. */
+  partSourceHref: string | null;
+};
+
+/** The novel reader's debug facts from the open book: where the position came from, how much is marked read, the part's source file. */
+export function novelDebugOf(progress: { restoredFrom?: string; restoredRange?: { start: number } | null } | null | undefined, readRanges: readonly unknown[] | undefined, part: { sourceHref?: string } | undefined): NovelDebug {
+  const fromProgress = progress?.restoredFrom === "progress";
+  return { restoredFrom: fromProgress ? "progress" : "start", restoredOffset: fromProgress ? progress?.restoredRange?.start ?? 0 : 0, readRanges: readRanges?.length ?? 0, partSourceHref: part?.sourceHref ?? null };
+}
 
 type Listener = () => void;
 
@@ -20,7 +36,10 @@ function sameForDisplay(a: ReaderContext | null, b: ReaderContext | null): boole
   if (a === b) return true;
   if (!a || !b || a.kind !== b.kind || a.resourceId !== b.resourceId || a.revisionId !== b.revisionId || a.title !== b.title || a.workId !== b.workId) return false;
   if (a.kind === "comic" && b.kind === "comic") return a.pageId === b.pageId && a.pageNumber === b.pageNumber && a.pageCount === b.pageCount;
-  if (a.kind === "novel" && b.kind === "novel") return a.partId === b.partId && a.start === b.start && a.end === b.end;
+  if (a.kind === "novel" && b.kind === "novel") {
+    return a.partId === b.partId && a.start === b.start && a.end === b.end
+      && a.debug?.restoredFrom === b.debug?.restoredFrom && a.debug?.restoredOffset === b.debug?.restoredOffset && a.debug?.readRanges === b.debug?.readRanges && a.debug?.partSourceHref === b.debug?.partSourceHref;
+  }
   if (a.kind === "video" && b.kind === "video") {
     return Math.floor(a.positionMs / 1000) === Math.floor(b.positionMs / 1000) && a.durationMs === b.durationMs
       && (a.frame ?? null) === (b.frame ?? null) && a.interval?.startMs === b.interval?.startMs && a.interval?.endMs === b.interval?.endMs;

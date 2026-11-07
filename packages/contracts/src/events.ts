@@ -5,19 +5,3 @@ export type DomainEvent = {
   payload: Record<string, unknown>;
   createdAt: string;
 };
-
-export type JobStatus =
-  | "queued"
-  | "running"
-  | "waiting_input"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "interrupted";
-
-export type AcquisitionPhase =
-  | "resolving"
-  | "transferring"
-  | "verifying"
-  | "publishing"
-  | "importing";

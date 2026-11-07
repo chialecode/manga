@@ -16,7 +16,11 @@ export type ProjectedField = {
   candidates: Array<{ source: string; providerId?: string; value: string | number | string[]; fetchedAt?: string; selected: boolean }>;
 };
 
+export type WorkVersion = { workId: string; label: string; resourceCount: number; lastOpenedAt: string | null; current: boolean };
+
 export type WorkDetail = WorkSummary & {
+  /** The versions of the title, this work among them (A-68); only the owner is given them. */
+  versions?: WorkVersion[];
   originalTitle: string;
   fields: Partial<Record<string, ProjectedField>>;
   override: { fields: Record<string, unknown>; locked: string[]; cleared: string[] };

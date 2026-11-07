@@ -6,6 +6,8 @@ import type { ComicManifest, ComicPage, MediaHandleInfo, Ordinal } from "@manga/
 import { suggestKind, type KindSuggestion } from "./suggest.ts";
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { layoutFromPayload } from "../domain/revision-layout.ts";
+import { relinkByFingerprint } from "../domain/relink.ts";
+import { assertOpenable, insertLocation, placeInLibrary, requireInLibrary, resolveLocation, type PlacedPath } from "../library-locations.ts";
 import { ordinalFromParsed, ordinalLabel, parseOrdinalName, sortKeyFor } from "../domain/ordinal.ts";
 import { readPdfPageSizes, renderPdfPage } from "../domain/pdfjs-document.ts";
 import { makeThumbnail, type ThumbnailResult } from "../media/thumbnails.ts";
@@ -35,12 +37,14 @@ export type ComicImportResult = {
   pages: number;
   source: ComicManifest["source"];
   duplicate: boolean;
+  /** The file had been lost and this is the same content at a new place: the existing resource follows it (A-67). */
+  relinked?: boolean;
   replaced: boolean;
   unreadablePages: number;
   warnings: string[];
 };
 
-type Location = { path: string; hosted: boolean; available: boolean };
+type Location = { path: string; hosted: boolean; available: boolean; outside: boolean };
 
 export function detectComicSource(file: string): "dir" | "cbz" | "pdf" | "epub" | "mobi" {
   const stat = fs.statSync(file);
@@ -100,9 +104,11 @@ export class ComicService {
   }): Promise<ComicImportResult> {
     const { scan, sourcePath } = input;
     const now = input.now ?? new Date().toISOString();
-    const findExisting = () => this.store.sqlite.prepare(`SELECT r.id AS resourceId, r.work_id AS workId, r.title AS title, r.ordinal_label AS ordinalLabel, v.id AS revisionId, v.fingerprint AS fingerprint
+    // A comic is only ever read through a library path (A-80): a file outside every library path is refused, unless the application keeps its own copy.
+    const sourcePlaced: PlacedPath | null = input.hosted ? placeInLibrary(this.store, sourcePath) : requireInLibrary(this.store, sourcePath);
+    const findExisting = () => (sourcePlaced ? this.store.sqlite.prepare(`SELECT r.id AS resourceId, r.work_id AS workId, r.title AS title, r.ordinal_label AS ordinalLabel, v.id AS revisionId, v.fingerprint AS fingerprint
       FROM file_locations fl JOIN resource_revisions v ON v.id = fl.resource_revision_id JOIN resources r ON r.id = v.resource_id
-      WHERE fl.relative_path = ? ORDER BY v.created_at DESC LIMIT 1`).get(sourcePath) as { resourceId: string; workId: string; title: string; ordinalLabel: string | null; revisionId: string; fingerprint: string } | undefined;
+      WHERE fl.library_path_id = ? AND fl.relative_path = ? ORDER BY v.created_at DESC LIMIT 1`).get(sourcePlaced.libraryPathId, sourcePlaced.relativePath) : undefined) as { resourceId: string; workId: string; title: string; ordinalLabel: string | null; revisionId: string; fingerprint: string } | undefined;
     let existing = findExisting();
     const summary = (extra: Partial<ComicImportResult>): ComicImportResult => ({
       resourceId: "", workId: "", revisionId: "", title: "", ordinalLabel: null, pages: scan.manifest.pages.length, source: scan.source,
@@ -112,6 +118,14 @@ export class ComicService {
       const result = summary({ resourceId: existing.resourceId, workId: existing.workId, revisionId: existing.revisionId, title: existing.title, ordinalLabel: existing.ordinalLabel, duplicate: true });
       if (input.receipt) this.store.commit({ mutations: [], events: [], idempotencyKey: input.receipt.idempotencyKey, commandId: input.receipt.commandId, result });
       return result;
+    }
+    if (!existing && !input.hosted) {
+      const moved = relinkByFingerprint(this.store, { fingerprint: scan.fingerprint, placed: sourcePlaced! });
+      if (moved) {
+        const result = summary({ ...moved, duplicate: true, relinked: true });
+        if (input.receipt) this.store.commit({ mutations: [], events: [], idempotencyKey: input.receipt.idempotencyKey, commandId: input.receipt.commandId, result });
+        return result;
+      }
     }
     if (input.hosted && scan.source === "dir") throw new MangaError("VALIDATION_ERROR", "a folder cannot be copied into the library; import it in place");
     const revisionId = createId("rev");
@@ -151,10 +165,13 @@ export class ComicService {
       comic: scan.manifest,
     };
     let locationPath = sourcePath;
+    let placed: Pick<PlacedPath, "libraryPathId" | "relativePath" | "managed"> = sourcePlaced ?? { libraryPathId: "", relativePath: "", managed: false };
     let staged: string | undefined;
     if (input.hosted) {
-      locationPath = path.join(this.store.attachmentsDir, `${revisionId}.bin`);
-      await fsp.mkdir(this.store.attachmentsDir, { recursive: true });
+      const managed = this.store.ensureManagedLibraryPath();
+      placed = { libraryPathId: managed.id, relativePath: `${revisionId}.bin`, managed: true };
+      locationPath = path.join(managed.path, placed.relativePath);
+      await fsp.mkdir(managed.path, { recursive: true });
       staged = `${locationPath}.part`;
       // A large archive is copied without holding the main thread; nothing below waits again until the rows are committed.
       await fsp.copyFile(sourcePath, staged);
@@ -169,10 +186,7 @@ export class ComicService {
       sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at, layout_json) VALUES (?,?,?,?,?,?,?)",
       params: [revisionId, resourceId, scan.fingerprint, COMIC_PARSER_ID, JSON.stringify(payload), now, JSON.stringify(layoutFromPayload(payload))],
     });
-    mutations.push({
-      sql: "INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,1,?)",
-      params: [createId("loc"), revisionId, locationPath, scan.fingerprint, input.hosted ? 1 : 0],
-    });
+    mutations.push(insertLocation({ revisionId, placed, fingerprint: scan.fingerprint }));
     const result = summary({ resourceId, workId: workId!, revisionId, title, ordinalLabel: ordinal?.label ?? null, replaced: Boolean(existing) });
     try {
       if (staged) fs.renameSync(staged, locationPath);
@@ -264,15 +278,17 @@ export class ComicService {
   // ------------------------------------------------------------------ reading
 
   private location(revisionId: string): Location | null {
-    const row = this.store.sqlite.prepare("SELECT relative_path, available, hosted FROM file_locations WHERE resource_revision_id = ? ORDER BY rowid DESC LIMIT 1").get(revisionId) as { relative_path: string; available: number; hosted: number } | undefined;
+    const row = resolveLocation(this.store, revisionId);
     if (!row) return null;
-    const exists = fs.existsSync(row.relative_path);
-    if (!exists && row.available === 1) this.store.sqlite.prepare("UPDATE file_locations SET available = 0 WHERE resource_revision_id = ?").run(revisionId);
-    if (exists && row.available === 0) this.store.sqlite.prepare("UPDATE file_locations SET available = 1 WHERE resource_revision_id = ?").run(revisionId);
-    return { path: row.relative_path, hosted: row.hosted === 1, available: exists };
+    const exists = row.path !== null && fs.existsSync(row.path);
+    if (!exists && row.available) this.store.sqlite.prepare("UPDATE file_locations SET available = 0 WHERE resource_revision_id = ?").run(revisionId);
+    if (exists && !row.available) this.store.sqlite.prepare("UPDATE file_locations SET available = 1 WHERE resource_revision_id = ?").run(revisionId);
+    return { path: row.path ?? "", hosted: row.managed, available: exists, outside: row.outside };
   }
 
+  /** The pages of a comic, for anything that opens or reads it; a resource outside the library or whose file is gone is refused (A-86). */
   loadManifest(resourceId: string, revisionId?: string): { revisionId: string; manifest: ComicManifest; title: string } {
+    assertOpenable(this.store, resourceId);
     const row = (revisionId
       ? this.store.sqlite.prepare("SELECT r.title AS title, v.id AS revisionId, v.payload_json AS payload FROM resources r JOIN resource_revisions v ON v.id = ? AND v.resource_id = r.id WHERE r.id = ?").get(revisionId, resourceId)
       : this.store.sqlite.prepare("SELECT r.title AS title, v.id AS revisionId, v.payload_json AS payload FROM resources r JOIN resource_revisions v ON v.resource_id = r.id WHERE r.id = ? ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1").get(resourceId)) as { title: string; revisionId: string; payload: string } | undefined;

@@ -26,7 +26,7 @@ async function overview(ctx: App) {
 }
 const category = (view: { items: Item[] }, id: string) => view.items.find((item) => item.id === `category:${id}`)!;
 
-/** A profile holding one of everything M2 stores: hosted and indexed media, kept and cleaned recordings, covers, a playback copy. */
+/** A profile holding one of everything the media modules store: hosted and indexed media, kept and cleaned recordings, covers, a playback copy. */
 function seed(ctx: App) {
   const db = ctx.app.store.sqlite;
   const attachments = ctx.app.store.attachmentsDir;
@@ -36,14 +36,17 @@ function seed(ctx: App) {
   const video = seedVideo(ctx.app, { title: "合成动画" });
   const indexedVideo = seedVideo(ctx.app, { title: "原位置动画", workId: video.workId });
 
-  // The comic is hosted (a file MANGA stores); the first video is hosted too, the second stays where the user keeps it.
-  const hostedComic = path.join(attachments, `${comic.revisionId}.bin`);
+  // The comic is hosted (a copy MANGA keeps in its own library path, A-80); the first video is hosted too, the second stays where the user keeps it.
+  const managed = ctx.app.store.ensureManagedLibraryPath();
+  const hostedComic = path.join(managed.path, `${comic.revisionId}.bin`);
   fs.writeFileSync(hostedComic, Buffer.alloc(3000, 1));
-  db.prepare("INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,?)").run("loc-c", comic.revisionId, hostedComic, "f1", 1, 1);
-  const hostedVideo = path.join(attachments, `${video.revisionId}.bin`);
+  const insertLocation = db.prepare("INSERT INTO file_locations(id, resource_revision_id, library_path_id, relative_path, legacy_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,?,?,?)");
+  insertLocation.run("loc-c", comic.revisionId, managed.id, `${comic.revisionId}.bin`, null, "f1", 1, 1);
+  const hostedVideo = path.join(managed.path, `${video.revisionId}.bin`);
   fs.writeFileSync(hostedVideo, Buffer.alloc(5000, 2));
-  db.prepare("INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,?)").run("loc-v", video.revisionId, hostedVideo, "f2", 1, 1);
-  db.prepare("INSERT INTO file_locations(id, resource_revision_id, relative_path, fingerprint, available, hosted) VALUES (?,?,?,?,?,?)").run("loc-i", indexedVideo.revisionId, path.join(attachments, "..", "not-managed", "episode.mkv"), "f3", 1, 0);
+  insertLocation.run("loc-v", video.revisionId, managed.id, `${video.revisionId}.bin`, null, "f2", 1, 1);
+  // A file in one of the user's folders, indexed where it is.
+  insertLocation.run("loc-i", indexedVideo.revisionId, null, "episode.mkv", path.join(attachments, "..", "not-managed", "episode.mkv"), "f3", 1, 0);
 
   // Two recordings: one kept as audio, one whose audio the user chose not to keep.
   fs.writeFileSync(path.join(attachments, "cap-kept.opus"), Buffer.alloc(700, 3));
@@ -62,7 +65,7 @@ function seed(ctx: App) {
   db.prepare("INSERT INTO play_copies(id, resource_revision_id, reason, state, audio_stream_index, file_name, bytes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)").run("pc-1", video.revisionId, "hevc", "ready", null, "pc-1.mp4", 9000, now, now);
 
   fs.writeFileSync(path.join(attachments, "stray-note.txt"), "x");
-  return { comic, video, indexedVideo, attachments };
+  return { comic, video, indexedVideo, attachments, managed: managed.path };
 }
 
 describe("resource overview categories for media (LIB-04)", () => {
@@ -100,7 +103,7 @@ describe("resource overview categories for media (LIB-04)", () => {
     const attachmentTitles = view.items.filter((item) => item.kind === "attachment").map((item) => item.title);
     expect(attachmentTitles).toEqual(["stray-note.txt"]);
     // The flat total still counts every file so the number matches the folder.
-    expect(view.totals.attachment.count).toBe(5);
+    expect(view.totals.attachment.count).toBe(3);
   });
 
   it("keeps the numbers and the entry for a switched-off module, marked as such", async () => {
@@ -124,7 +127,7 @@ describe("resource overview categories for media (LIB-04)", () => {
   it("reports hosted media or recordings whose file is gone as missing instead of counting them as present", async () => {
     const ctx = await boot();
     const seeded = seed(ctx);
-    fs.rmSync(path.join(seeded.attachments, `${seeded.comic.revisionId}.bin`));
+    fs.rmSync(path.join(seeded.managed, `${seeded.comic.revisionId}.bin`));
     fs.rmSync(path.join(seeded.attachments, "cap-kept.opus"));
     const view = await overview(ctx);
     expect(category(view, "comic")).toMatchObject({ status: "missing", available: false, missing: 1, bytes: 0 });

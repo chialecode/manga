@@ -4,15 +4,16 @@ import type { ReadingStyle } from "../reading.tsx";
 import type { ReadingAsset, ReadingDocument } from "../reading.tsx";
 import type { Translator } from "@manga/i18n";
 import { asArray, call, messageOf, uid as id, type CommandResult } from "../lib/api.ts";
+import { relinkNotice, relinkResource } from "../lib/relink.ts";
 import type { AgentSelection, Bookmark, SourceCard } from "../lib/types.ts";
 import { captureBus } from "../voice/capture-bus.ts";
 import { quoteTags } from "../lib/quote-tags.ts";
-import { readerContext } from "../lib/reader-context.ts";
+import { novelDebugOf, readerContext } from "../lib/reader-context.ts";
 
 export type NovelDeps = {
   i18n: Translator;
   setError: (message?: string) => void;
-  setNotice: (message?: string) => void;
+  setNotice: (message?: string, action?: { label: string; onClick: () => void }) => void;
   setPage: (page: string) => void;
   /** Shared with the Agent pane so a stale answer for a book that is no longer open is dropped by both. */
   viewRequest: MutableRefObject<number>;
@@ -20,6 +21,12 @@ export type NovelDeps = {
   openNote: (objectId: string, focusBlockId?: string) => Promise<void>;
   refresh: () => Promise<void>;
 };
+
+/** What the title bar says while a book is open: the work's name, and the file's own name after it when the work has several (a folder of chapters). */
+export function readerHeading(book: string, work: { title: string; many: boolean } | null): string {
+  if (!work) return book;
+  return work.many && book && book !== work.title ? `${work.title} ${book}` : work.title;
+}
 
 const run = (commandId: string, input: unknown): Promise<CommandResult> => window.manga.command({ commandId, idempotencyKey: id(), input });
 
@@ -42,6 +49,8 @@ export function useNovel(deps: NovelDeps) {
   const [visible, setVisible] = useState(false);
   /** The work the open book belongs to, when it has one: the reader's back goes to its page. */
   const [workId, setWorkId] = useState<string | null>(null);
+  /** The work's own name, and whether it has more than one resource: the title bar names the work, not a chapter file. */
+  const [work, setWork] = useState<{ title: string; many: boolean } | null>(null);
   const readingRef = useRef<ReadingDocument | null>(null);
   const assetUrlsRef = useRef<Record<string, string>>({});
 
@@ -70,8 +79,9 @@ export function useNovel(deps: NovelDeps) {
       kind: "novel", resourceId: reading.resourceId, revisionId: reading.revisionId, title: reading.title, workId,
       partId: slice.partId, partTitle: part?.title ?? reading.toc.find((item) => item.partId === slice.partId)?.label ?? "",
       start: slice.start, end: Math.max(slice.end, slice.start), excerpt: [...slice.text].slice(0, 200).join(""),
+      debug: novelDebugOf(reading.progress, reading.readRanges, part),
     });
-  }, [reading?.resourceId, reading?.revisionId, sliceKey, workId]);
+  }, [reading?.resourceId, reading?.revisionId, sliceKey, workId, reading?.progress?.restoredFrom, reading?.progress?.restoredRange?.start, reading?.readRanges?.length]);
   useEffect(() => {
     const resourceId = reading?.resourceId;
     return () => { if (resourceId) { readerContext.clear(resourceId); quoteTags.clearFor(resourceId); } };
@@ -112,7 +122,12 @@ export function useNovel(deps: NovelDeps) {
     setAgentSelection(null);
     const touched = await run("works.open", { resourceId });
     if (request !== viewRequest.current) return;
-    setWorkId(touched.status === "ok" ? ((touched.value as { workId?: string | null } | undefined)?.workId ?? null) : null);
+    const owner = touched.status === "ok" ? ((touched.value as { workId?: string | null } | undefined)?.workId ?? null) : null;
+    setWorkId(owner);
+    const named = owner ? await run("works.get", { workId: owner }) : null;
+    if (request !== viewRequest.current) return;
+    const info = named?.status === "ok" ? (named.value as { title?: string; resources?: unknown[] } | undefined) : undefined;
+    setWork(info?.title ? { title: info.title, many: asArray(info.resources).length > 1 } : null);
     await loadBookmarks(resourceId);
     if (request !== viewRequest.current) return;
     if (document) await loadAssets(document, request);
@@ -345,14 +360,15 @@ export function useNovel(deps: NovelDeps) {
   async function repairNoteSource() {
     const resourceId = sourceCard?.resourceId ?? reading?.resourceId;
     if (!resourceId) { setError(i18n.t("reading.sourceRepairFailed")); return; }
-    const handle = await window.manga.choosePath();
-    if (!handle) return;
-    const result = await run("library.repairSource", { resourceId, pathHandle: handle });
-    if (result.status === "error") { setError(result.error?.message); return; }
+    const outcome = await relinkResource(resourceId);
+    if (outcome.kind === "cancelled") return;
     // A quote that has no single home in the new file stays unrepaired, and the user is told how many.
-    const kept = Number((result.value as { pointersKept?: number } | undefined)?.pointersKept ?? 0);
-    setNotice(kept > 0 ? i18n.t("reading.sourceRepairKept", { count: kept }) : i18n.t("reading.sourceRepairDone"));
+    const shown = relinkNotice(i18n.t, outcome, () => void repairNoteSource());
+    if (shown.error) { setError(shown.error); return; }
+    setNotice(shown.notice, shown.action);
     setError(undefined);
+    // A folder that is no library path yet: nothing was changed, and the notice offers adding it.
+    if (outcome.kind !== "done") return;
     await openResource(resourceId);
     if (returnTo?.objectId) {
       await openNoteSource(returnTo.objectId, returnTo.blockId ?? undefined);
@@ -415,6 +431,7 @@ export function useNovel(deps: NovelDeps) {
     setAgentSelection(null);
     setBookmarks([]);
     setWorkId(null);
+    setWork(null);
     setVisible(false);
   }
 
@@ -435,7 +452,7 @@ export function useNovel(deps: NovelDeps) {
   }
 
   return {
-    reading, hits, searched, bookmarks, assetUrls, highlight, originalBytes, sourceCard, returnTo, agentSelection, visible, workId,
+    reading, hits, searched, bookmarks, assetUrls, highlight, originalBytes, sourceCard, returnTo, agentSelection, visible, workId, work,
     setAgentSelection, setVisible,
     openResource, openSlice, markProgress, selectText, openNoteSource, backToNote, repairNoteSource,
     addBookmark, removeBookmark, openBookmark, closeReader, search, saveStyle,

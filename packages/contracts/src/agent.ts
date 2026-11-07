@@ -11,11 +11,16 @@ export const AgentRunStatusSchema = z.enum([
 ]);
 export type AgentRunStatus = z.infer<typeof AgentRunStatusSchema>;
 
+/**
+ * What one run may use. The context is counted in tokens (the model's window less the answer and a margin); the steps and the time are the person's
+ * limits from the settings; the answer is limited by the model's own maximum.
+ */
 export const AgentBudgetSchema = z.object({
-  maxSteps: z.number().int().positive().max(64).default(8),
-  maxDurationMs: z.number().int().positive().max(15 * 60_000).default(60_000),
-  maxContextChars: z.number().int().positive().max(200_000).default(16_000),
-  maxOutputChars: z.number().int().positive().max(200_000).default(16_000),
+  maxSteps: z.number().int().positive().max(64).default(24),
+  maxDurationMs: z.number().int().positive().max(30 * 60_000).default(10 * 60_000),
+  contextWindow: z.number().int().positive(),
+  contextTokens: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive(),
   maxCostUsd: z.number().nonnegative().max(100).optional(),
 }).strict();
 export type AgentBudget = z.infer<typeof AgentBudgetSchema>;

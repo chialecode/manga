@@ -19,7 +19,9 @@ const inventory = () => ({
     category("recording", { count: 1, bytes: 700 }),
     category("cover"),
     category("playCopy", { count: 0, bytes: 0 }),
-    { id: "res_1", kind: "resource", title: "小说一", bytes: 10, hosted: true, indexed: true, available: true, revealable: true },
+    { id: "res_1", kind: "resource", mediaKind: "novel", title: "小说一", bytes: 10, hosted: true, indexed: true, available: true, revealable: true },
+    { id: "res_2", kind: "resource", mediaKind: "comic", title: "漫画一", bytes: 20, available: true, revealable: true },
+    { id: "res_3", kind: "resource", mediaKind: "video", title: "动漫一", bytes: 30, available: false, revealable: true },
     { id: "capture:c1", kind: "recording", title: "合成动画 · 2026-10-02 09:00", bytes: 700, durationMs: 65_000, hosted: true, available: true, status: "ready", moduleEnabled: true, revealable: true },
     { id: "capture:c2", kind: "recording", title: "合成动画 · 2026-10-01 09:00", bytes: 0, durationMs: 4_000, hosted: true, available: true, status: "cleaned", moduleEnabled: true, revealable: false },
     { id: "n1", kind: "note", title: "笔记一", bytes: 5, hosted: true, available: true, revealable: true },
@@ -33,7 +35,7 @@ function pane(overrides: Partial<Parameters<typeof InventoryPane>[0]> = {}) {
     <InventoryPane
       i18n={i18n}
       inventory={inventory() as unknown as Record<string, unknown>}
-      onImport={vi.fn()} onScan={vi.fn()} onCancel={vi.fn()} onTranscribe={vi.fn()}
+      onImport={vi.fn()} onScan={vi.fn()} onCancel={vi.fn()}
       onReveal={(id) => calls.reveal.push(id)}
       onRepair={vi.fn()}
       onOpenCategory={(name) => calls.open.push(name)}
@@ -46,6 +48,34 @@ function pane(overrides: Partial<Parameters<typeof InventoryPane>[0]> = {}) {
 }
 const listed = () => [...screen.getByTestId("inventory-list").querySelectorAll("li")].map((item) => item.textContent ?? "");
 
+describe("the resource overview says what a row is in words (AT-100)", () => {
+  it("names a row by its kind and a resource by its medium, never by the identifier the program keeps", () => {
+    pane();
+    const text = screen.getByTestId("inventory-list").textContent ?? "";
+    for (const raw of ["resource", "partition", "media-category", "backups", "work-folder", "indexed-root", "attachment"]) expect(text).not.toContain(raw);
+    const rows = listed();
+    expect(rows.find((row) => row.includes("小说一"))).toContain("小说 ·");
+    expect(rows.find((row) => row.includes("漫画一"))).toContain("漫画 ·");
+    expect(rows.find((row) => row.includes("动漫一"))).toContain("动漫 ·");
+    expect(rows.find((row) => row.includes("笔记一"))).toContain("笔记 ·");
+    expect(rows.find((row) => row.includes("备份"))).toContain("存储分区 ·");
+  });
+
+  it("filters the resources by their medium, so a card's button for comics shows the comics", () => {
+    pane();
+    fireEvent.click(screen.getByTestId("inv-filter-chip-novel"));
+    expect(listed()).toHaveLength(1);
+    expect(listed()[0]).toContain("小说一");
+    fireEvent.click(screen.getByTestId("inv-filter-comic"));
+    expect(screen.getByTestId("inv-filter-chip-comic").getAttribute("aria-pressed")).toBe("true");
+    expect(listed()).toHaveLength(1);
+    expect(listed()[0]).toContain("漫画一");
+    fireEvent.click(screen.getByTestId("inv-filter-chip-video"));
+    expect(listed()[0]).toContain("动漫一");
+    expect(listed()[0]).toContain("不可用");
+  });
+});
+
 describe("the resource overview's media categories", () => {
   it("shows a card per category with its count and size, and the list below holds the other rows", () => {
     pane();
@@ -55,12 +85,14 @@ describe("the resource overview's media categories", () => {
     for (const id of ["comic", "video", "recording", "cover", "playCopy"]) expect(screen.getByTestId(`inv-cat-${id}`)).toBeTruthy();
     // A category is a card, not also a list row.
     expect(listed().some((text) => text.includes("media-category"))).toBe(false);
-    expect(listed()).toHaveLength(5);
+    expect(listed()).toHaveLength(7);
   });
 
-  it("says which part of a comic category stays at its original place, and when a module is off but its data stays", () => {
+  it("says when a module is off but its data stays, and nothing about where a file is kept", () => {
     pane();
-    expect(screen.getByTestId("inv-cat-comic").textContent).toContain("托管 1 项");
+    // Every file sits in a library location (A-80): no row or card speaks of managed or indexed-only files.
+    expect(screen.getByTestId("inv-cat-comic").textContent).not.toContain("托管");
+    expect(screen.getByTestId("inventory-list").textContent).not.toMatch(/托管|仅索引/);
     expect(screen.getByTestId("inv-cat-video-disabled").textContent).toContain("数据保留");
     expect(screen.getByTestId("inv-cat-video").getAttribute("data-status")).toBe("disabled");
     // A category of a switched-off module cannot be opened as a page, but it can still be filtered to.
@@ -80,9 +112,9 @@ describe("the resource overview's media categories", () => {
     expect(listed()).toHaveLength(1);
     expect(listed()[0]).toContain("笔记一");
     fireEvent.click(screen.getByTestId("inv-filter-chip-storage"));
-    expect(listed()[0]).toContain("backups");
+    expect(listed()[0]).toContain("备份");
     fireEvent.click(screen.getByTestId("inv-filter-chip-all"));
-    expect(listed()).toHaveLength(5);
+    expect(listed()).toHaveLength(7);
   });
 
   it("a card's own button filters to that category, and the playback copies belong with video", () => {
@@ -91,7 +123,8 @@ describe("the resource overview's media categories", () => {
     expect(listed()).toHaveLength(2);
     fireEvent.click(screen.getByTestId("inv-filter-playCopy"));
     expect(screen.getByTestId("inv-filter-chip-video").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("inventory-empty")).toBeTruthy();
+    expect(listed()).toHaveLength(1);
+    expect(listed()[0]).toContain("动漫一");
   });
 
   it("opens the shelf of a category, and reveals a category's location or a recording's file", () => {

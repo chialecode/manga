@@ -42,7 +42,7 @@ function classicPdf(content: string, fontDict = "<< /Type /Font /Subtype /Type1 
   return new Uint8Array(Buffer.from(source, "ascii"));
 }
 
-describe("M1b b8 PDF text advancing", () => {
+describe("PDF text advancing", () => {
   it("moves the text matrix by the glyphs' real advance after each shown string", async () => {
     const parsed = await parsePdfBytes(classicPdf("BT /F1 20 Tf 1 0 0 1 50 320 Tm (HELLO) Tj (WORLD) Tj ET"));
     expect(parsed.parts[0]!.normalized).toBe("HELLOWORLD");
@@ -86,7 +86,7 @@ describe("M1b b8 PDF text advancing", () => {
   });
 });
 
-describe("M1b b8 EPUB fixed geometry", () => {
+describe("EPUB fixed geometry", () => {
   it("renders a circle as an ellipse item, not a filled bounding-box rectangle", () => {
     const parsed = parseEpubBytes(buildEpubFixture({
       title: "固定几何",
@@ -166,7 +166,7 @@ function renderPane(document: ReadingDocument) {
   />);
 }
 
-describe("M1b b8 page view geometry", () => {
+describe("page view geometry", () => {
   afterEach(() => cleanup());
 
   it("draws the stored ellipse and keeps the run's own fill colour", () => {
@@ -190,7 +190,7 @@ describe("M1b b8 page view geometry", () => {
   });
 });
 
-describe("M1b b8 explicit mixed package strategies", () => {
+describe("explicit mixed package strategies", () => {
   it("keeps an explicitly replaced revision under the owner its kept anchor names", async () => {
     const ctx = await startApp();
     try {

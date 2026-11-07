@@ -17,6 +17,30 @@ export type ShellChrome = {
 
 const MAIN_TARGET = 640;
 
+/**
+ * How wide each side column may be (A-70). The left column has to hold the title bar's buttons above it, so it cannot go narrower than they are;
+ * the right one holds the conversation. The defaults are what a double click on a divider restores.
+ */
+export const SIDE_WIDTH = {
+  left: { min: 220, max: 420, initial: 224 },
+  right: { min: 320, max: 640, initial: 360 },
+} as const;
+
+/**
+ * The narrowest the main panel may be made by dragging a divider. It is the width below which a docked column folds into an overlay, so a
+ * divider that is dragged never makes the column it moves fold away under the pointer.
+ */
+export const MAIN_FLOOR = MAIN_TARGET;
+
+export function clampSide(side: "left" | "right", width: number): number {
+  return clamp(Math.round(width), SIDE_WIDTH[side].min, SIDE_WIDTH[side].max);
+}
+
+/** The widest a column can be dragged to while the main panel keeps its floor beside the other column. */
+export function dragLimit(side: "left" | "right", viewportWidth: number, otherDockedWidth: number): number {
+  return Math.max(SIDE_WIDTH[side].min, Math.min(SIDE_WIDTH[side].max, viewportWidth - otherDockedWidth - MAIN_FLOOR));
+}
+
 export function deriveShell(input: {
   viewport: ShellViewport;
   preference: ShellPreference;
@@ -24,8 +48,8 @@ export function deriveShell(input: {
   overlay: OverlaySide;
 }): ShellChrome {
   const mode = input.preference.layouts[input.preference.mode];
-  const leftWidth = clamp(mode.left.width, 200, 280);
-  const rightWidth = input.hasRight ? clamp(mode.right.width, 320, 480) : 0;
+  const leftWidth = clampSide("left", mode.left.width);
+  const rightWidth = input.hasRight ? clampSide("right", mode.right.width) : 0;
   const focus = mode.focus;
   const wantLeft = mode.left.visible && !focus;
   const wantRight = input.hasRight && mode.right.visible && !focus;

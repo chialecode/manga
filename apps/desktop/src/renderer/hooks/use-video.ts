@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
+import { relinkNotice, relinkResource } from "../lib/relink.ts";
 import type { SourceCard } from "../lib/types.ts";
 import { nextResource, resourceLabel } from "../lib/works.ts";
 import type { ProgressReport } from "../readers/use-video-playback.ts";
@@ -10,7 +11,7 @@ import type { AudioTrackInfo, EpisodeItem, VideoDoc, VideoFocus, VideoSettings }
 export type VideoDeps = {
   i18n: Translator;
   setError: (message?: string) => void;
-  setNotice: (message?: string) => void;
+  setNotice: (message?: string, action?: { label: string; onClick: () => void }) => void;
   setPage: (page: string) => void;
   viewRequest: MutableRefObject<number>;
   ensureBoundSession: (kind: "resource" | "project" | "note", targetId: string, request?: number) => Promise<string | undefined>;
@@ -18,7 +19,10 @@ export type VideoDeps = {
   refresh: () => Promise<void>;
 };
 
-export const DEFAULT_VIDEO_SETTINGS: VideoSettings = { rate: 1, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false };
+export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {
+  rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false,
+  subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true,
+};
 
 type OpenOptions = {
   revisionId?: string;
@@ -73,6 +77,11 @@ export function useVideo(deps: VideoDeps) {
   const progressChain = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef<Partial<VideoSettings>>({});
   const saveTimer = useRef<number | null>(null);
+  /**
+   * Where the viewer is, as the player last reported it. `startMs` is only where the video was opened at; a player that is
+   * mounted again (the page was left and came back) must start from here, or it would start over and write that over the saved place.
+   */
+  const reached = useRef<{ resourceId: string; ms: number } | null>(null);
 
   function flushSettings() {
     if (saveTimer.current !== null) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
@@ -127,6 +136,7 @@ export function useVideo(deps: VideoDeps) {
     const at = locator?.kind === "temporal" && typeof locator.startMs === "number" ? locator.startMs : 0;
     const finished = progress.ok && progress.value.completion === "completed" && loaded.durationMs > 0 && at >= loaded.durationMs - FINISHED_WITHIN_MS;
     setStartMs(options.focus ? options.focus.startMs : finished ? 0 : at);
+    reached.current = null;
     docRef.current = loaded;
     setDoc(loaded);
     setSourceCard(options.card ?? null);
@@ -160,12 +170,18 @@ export function useVideo(deps: VideoDeps) {
     flushSettings();
     viewRequest.current += 1;
     docRef.current = null;
+    reached.current = null;
     setDoc(null);
     setStatus("idle");
     setSourceCard(null);
     setReturnTo(null);
     setFocus(null);
     setNext(null);
+  }
+
+  /** The player went to the stretch a note pointed at; a player mounted again must not go there a second time. */
+  function focusApplied(focusNonce: number) {
+    setFocus((current) => (current && current.nonce === focusNonce && !current.applied ? { ...current, applied: true } : current));
   }
 
   async function backToNote() {
@@ -180,11 +196,13 @@ export function useVideo(deps: VideoDeps) {
   async function repair() {
     const current = docRef.current;
     if (!current) return;
-    const handle = await window.manga.choosePath();
-    if (!handle) return;
-    const result = await attempt<{ pointersKept?: number }>("library.repairSource", { resourceId: current.resourceId, pathHandle: handle });
-    if (!result.ok) { setError(result.error.message); return; }
-    setNotice(i18n.t("reading.sourceRepairDone"));
+    const outcome = await relinkResource(current.resourceId);
+    if (outcome.kind === "cancelled") return;
+    const shown = relinkNotice(i18n.t, outcome, () => void repair());
+    if (shown.error) { setError(shown.error); return; }
+    setNotice(shown.notice, shown.action);
+    // A folder that is no library path yet: nothing was changed, and the notice offers adding it.
+    if (outcome.kind !== "done") return;
     await open(current.resourceId, { revisionId: current.revisionId, card: sourceCard, returnTo, focus: focus ? { startMs: focus.startMs, endMs: focus.endMs } : undefined });
     await refresh();
   }
@@ -200,6 +218,7 @@ export function useVideo(deps: VideoDeps) {
   /** The position and the stretches watched since the last report. Writes go one after another so the last position wins. */
   function recordProgress(report: ProgressReport) {
     const { resourceId, revisionId } = report;
+    reached.current = { resourceId, ms: report.ended ? 0 : Math.max(0, report.timeMs) };
     progressChain.current = progressChain.current.then(async () => {
       const result = await attempt("progress.setTime", { resourceId, resourceRevisionId: revisionId, timeMs: Math.max(0, report.timeMs), played: report.ranges });
       if (!result.ok) setError(result.error.message);
@@ -209,7 +228,9 @@ export function useVideo(deps: VideoDeps) {
   /** Resolves once every position written so far is saved. */
   const settled = () => progressChain.current;
 
-  return { doc, status, startMs, settings, next, focus, sourceCard, visible: doc !== null, open, openFromNote, playRange, close, backToNote, repair, changeSettings, recordProgress, settled };
+  const resumeMs = reached.current && doc && reached.current.resourceId === doc.resourceId ? reached.current.ms : startMs;
+
+  return { doc, status, startMs: resumeMs, focusApplied, settings, next, focus, sourceCard, visible: doc !== null, open, openFromNote, playRange, close, backToNote, repair, changeSettings, recordProgress, settled };
 }
 
 export type VideoState = ReturnType<typeof useVideo>;

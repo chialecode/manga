@@ -18,7 +18,8 @@ export type CopySummary = {
 
 export type SourceState =
   | { phase: "loading" }
-  | { phase: "ready"; url: string; via: "original" | "play_copy"; startMs: number; mediaType: string; copyId?: string }
+  /** `decision` and `reasons` are the plan's, for the debug panel: why the file plays as it does. */
+  | { phase: "ready"; url: string; via: "original" | "play_copy"; startMs: number; mediaType: string; copyId?: string; decision: string; reasons: string[] }
   /** The file cannot play as it is on this machine; a copy would. `reason` says why, in the plan's own words. */
   | { phase: "needs_copy"; decision: string; reason: string; reasons: string[]; detail: string }
   | { phase: "building"; copy: CopySummary }
@@ -49,7 +50,7 @@ export function useVideoSource(target: { resourceId: string; revisionId: string 
   const audioRef = useRef(audioStreamIndex);
   audioRef.current = audioStreamIndex;
 
-  const openHandle = useCallback(async (mine: number, source: "original" | "play_copy", copyId?: string): Promise<boolean> => {
+  const openHandle = useCallback(async (mine: number, source: "original" | "play_copy", copyId?: string, plan?: { decision: string; reasons: string[] }): Promise<boolean> => {
     const current = targetRef.current;
     if (!current) return false;
     const handle = await attempt<{ url: string; mediaType: string; startMs: number; copyId?: string }>("video.handle", { resourceId: current.resourceId, revisionId: current.revisionId, source, ...(copyId ? { copyId } : {}) });
@@ -58,7 +59,10 @@ export function useVideoSource(target: { resourceId: string; revisionId: string 
       setState(handle.error.code === "NOT_FOUND" ? { phase: "missing" } : { phase: "failed", message: handle.error.message, code: handle.error.code, canForceCopy: false });
       return true;
     }
-    setState({ phase: "ready", url: handle.value.url, via: source, startMs: handle.value.startMs ?? 0, mediaType: handle.value.mediaType, ...(handle.value.copyId ? { copyId: handle.value.copyId } : {}) });
+    setState({
+      phase: "ready", url: handle.value.url, via: source, startMs: handle.value.startMs ?? 0, mediaType: handle.value.mediaType, ...(handle.value.copyId ? { copyId: handle.value.copyId } : {}),
+      decision: plan?.decision ?? (source === "play_copy" ? "play_copy" : "direct"), reasons: plan?.reasons ?? [],
+    });
     return true;
   }, []);
 
@@ -78,15 +82,23 @@ export function useVideoSource(target: { resourceId: string; revisionId: string 
     const { plan, copy, available } = planned.value;
     if (!available) { setState({ phase: "missing" }); return; }
     if (plan.decision === "unsupported") { setState({ phase: "unsupported", detail: plan.detail }); return; }
-    if (plan.decision === "direct") { await openHandle(mine, "original"); return; }
-    if (copy?.state === "ready") { await openHandle(mine, "play_copy", copy.id); return; }
+    if (plan.decision === "direct") { await openHandle(mine, "original", undefined, plan); return; }
+    if (copy?.state === "ready") { await openHandle(mine, "play_copy", copy.id, plan); return; }
     if (copy && (copy.state === "queued" || copy.state === "running")) { setState({ phase: "building", copy }); return; }
     setState({ phase: "needs_copy", decision: plan.decision, reason: plan.copy?.reason ?? plan.reasons[0] ?? "unsupported_video", reasons: plan.reasons, detail: plan.detail });
   }, [openHandle]);
 
+  // A player shown again after the page was in the background keeps the source it had: the file is not asked for, or loaded, a second time.
+  // A resolve that was cut off by going to the background is the one exception, and runs again.
+  const resolvedKey = useRef("");
+  const stateRef = useRef(state);
+  stateRef.current = state;
   useEffect(() => {
-    decodeFailures.current = 0;
-    if (key) void resolve();
+    if (key && (resolvedKey.current !== key || stateRef.current.phase === "loading")) {
+      resolvedKey.current = key;
+      decodeFailures.current = 0;
+      void resolve();
+    }
     return () => { epoch.current += 1; };
   }, [key, resolve]);
 

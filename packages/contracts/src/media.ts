@@ -183,7 +183,7 @@ export type VideoProbe = {
   streams: VideoStreamInfo[];
   chapters: Array<{ startMs: number; endMs: number; title?: string }>;
   keyframesMs: number[];
-  /** The first keyframes of the file are enough for M4 rough cuts to plan from; the rest is rebuildable. */
+  /** The first keyframes of the file are enough for rough cuts to plan from; the rest is rebuildable. */
   keyframesTruncated: boolean;
   variableFrameRate: boolean;
   externalSubtitles: Array<{ id: string; fileName: string; format: "ass" | "srt" | "vtt"; language?: string }>;
@@ -204,6 +204,10 @@ export type WorkSummary = {
   /** Resources of this work whose progress says finished, and how many resources it has. */
   finishedCount: number;
   resourceCount: number;
+  /** How many versions the title has (A-68): works of one medium linked to the same Bangumi entry. 1 when it stands alone. */
+  versionCount: number;
+  /** Resources of this work imported on their own, outside every library path (A-69). */
+  outsideCount: number;
   linked: boolean;
   createdAt: string;
   lastOpenedAt: string | null;
@@ -223,4 +227,6 @@ export type WorkResourceRow = {
   unit: "chars" | "pages" | "ms" | null;
   total: number;
   available: boolean;
+  /** Imported on its own, outside every library path (A-69). */
+  outside: boolean;
 };

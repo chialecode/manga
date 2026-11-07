@@ -47,7 +47,7 @@ export function recordsList(store: DrizzleStore, filter: { type?: "all" | "note"
   const params: Array<string | number> = [];
   where.push(filter.deleted ? "x.deleted_at IS NOT NULL" : "x.deleted_at IS NULL");
   if (filter.workId) { where.push("x.work_id = ?"); params.push(filter.workId); }
-  if (filter.mediaKind) { where.push("w.media_kind = ?"); params.push(filter.mediaKind); }
+  if (filter.mediaKind) { where.push("COALESCE(w.media_kind, rw.media_kind, r.kind) = ?"); params.push(filter.mediaKind); }
   if (filter.state) {
     if ((CAPTURE_STAGES as readonly string[]).includes(filter.state)) { where.push("x.kind = 'recording' AND x.stage = ?"); params.push(filter.state); }
     else if (AUDIO_STATES.includes(filter.state)) { where.push("x.kind = 'recording' AND x.audio_state = ?"); params.push(filter.state); }
@@ -57,11 +57,11 @@ export function recordsList(store: DrizzleStore, filter: { type?: "all" | "note"
     const needle = like(filter.q);
     params.push(needle, needle, needle, needle);
   }
-  const from = `FROM (${parts.join(" UNION ALL ")}) x LEFT JOIN works w ON w.id = x.work_id LEFT JOIN resources r ON r.id = x.resource_id WHERE ${where.join(" AND ")}`;
+  const from = `FROM (${parts.join(" UNION ALL ")}) x LEFT JOIN works w ON w.id = x.work_id LEFT JOIN removed_works rw ON rw.id = x.work_id LEFT JOIN resources r ON r.id = x.resource_id WHERE ${where.join(" AND ")}`;
   const total = (store.sqlite.prepare(`SELECT COUNT(*) AS n ${from}`).get(...params) as { n: number }).n;
   const limit = Math.min(100, filter.limit ?? 30);
   const rows = store.sqlite.prepare(`SELECT x.kind, x.id, x.title, x.preview, x.at, x.deleted_at, x.work_id, x.tags, x.stage, x.audio_state, x.duration_ms, x.resource_id,
-      w.title AS work_title, w.media_kind AS media_kind, r.title AS resource_title,
+      COALESCE(w.title, rw.title) AS work_title, COALESCE(w.media_kind, rw.media_kind, r.kind) AS media_kind, r.title AS resource_title,
       CASE WHEN x.kind = 'note' THEN EXISTS (SELECT 1 FROM refs f WHERE f.from_object_id = x.id AND f.to_kind = 'anchor') ELSE x.resource_id IS NOT NULL END AS has_source
       ${from} ORDER BY x.at DESC, x.id DESC LIMIT ? OFFSET ?`).all(...params, limit, filter.offset ?? 0) as Array<{
     kind: "note" | "recording"; id: string; title: string; preview: string; at: string; deleted_at: string | null; work_id: string | null; tags: string; stage: string | null; audio_state: string | null;

@@ -4,6 +4,7 @@ import type { MessageKey, Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
 import type { ComicSettings } from "../readers/comic-reader.tsx";
 import type { VideoSettings } from "../readers/video-player.tsx";
+import { CustomRate, RateList } from "./settings-rates.tsx";
 import { listMicrophones } from "../voice/mic.ts";
 import type { RecordingSettings } from "../voice/use-recorder.ts";
 
@@ -13,8 +14,8 @@ type ModuleRow = { featureId: string; moduleId: string; displayName: string; wan
 type ProviderRow = { id: string; displayName: string; kind: "online" | "local"; namespace: string; enabled: boolean; credentialConfigured: boolean };
 
 /** The key as a person reads it: the physical key's name without the layout words. */
-export function keyLabel(code: string): string {
-  return code.replace(/^Key/, "").replace(/^Digit/, "").replace(/^Arrow/, "").replace(/^Numpad/, "小键盘 ");
+export function keyLabel(code: string, t?: T): string {
+  return code.replace(/^Key/, "").replace(/^Digit/, "").replace(/^Arrow/, "").replace(/^Numpad/, t ? `${t("msettings.keyNumpad")} ` : "Num ");
 }
 
 /** A key choice: click it, then press the key to use; Escape leaves it as it was. */
@@ -47,7 +48,7 @@ function KeyField(props: { t: T; label: string; value: string; testId: string; o
         title={props.t("msettings.keyHint")}
         onClick={() => setWaiting(true)}
         onBlur={() => setWaiting(false)}
-      >{waiting ? props.t("msettings.keyPress") : keyLabel(props.value)}</button>
+      >{waiting ? props.t("msettings.keyPress") : keyLabel(props.value, props.t)}</button>
     </label>
   );
 }
@@ -230,7 +231,51 @@ export function MediaPrefs(props: { t: T; facets: Set<string>; reading: ShellPre
               {[1.5, 2, 3, 4].map((rate) => <option key={rate} value={String(rate)}>{rate}×</option>)}
             </select>
           </label>
+          <div className="msettings-subgroup" role="group" aria-labelledby="msettings-rates-title">
+            <h4 id="msettings-rates-title">{t("msettings.videoRates")}</h4>
+            <p className="detail-muted">{t("msettings.videoRatesHint")}</p>
+            <RateList t={t} rates={props.video.rates} onChange={(rates) => props.onVideo({ rates })} />
+            <div className="msettings-field">
+              <span>{t("msettings.videoCustomRate")}</span>
+              <CustomRate t={t} value={props.video.customRate} onChange={(customRate) => props.onVideo({ customRate })} />
+            </div>
+            <p className="detail-muted">{t("msettings.videoCustomRateHint")}</p>
+          </div>
           <label className="msettings-check"><input type="checkbox" data-testid="msettings-video-autonext" checked={props.video.autoNext} onChange={(event) => props.onVideo({ autoNext: event.target.checked })} />{t("msettings.videoAutoNext")}</label>
+          <div className="msettings-subgroup" role="group" aria-labelledby="msettings-subtitle-title" data-testid="msettings-subtitle">
+            <h4 id="msettings-subtitle-title">{t("msettings.subtitle")}</h4>
+            <p className="detail-muted">{t("msettings.subtitleHint")}</p>
+            <label className="msettings-field">
+              <span>{t("msettings.subtitleSize")}</span>
+              <input type="number" min={3} max={8} step={0.5} data-testid="msettings-subtitle-size" value={props.video.subtitleSizePct} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 3 && value <= 8) props.onVideo({ subtitleSizePct: Math.round(value * 10) / 10 }); }} />
+            </label>
+            <label className="msettings-field">
+              <span>{t("msettings.subtitleFont")}</span>
+              <select data-testid="msettings-subtitle-font" value={props.video.subtitleFont} onChange={(event) => props.onVideo({ subtitleFont: event.target.value as VideoSettings["subtitleFont"] })}>
+                <option value="sans">{t("msettings.subtitleFontSans")}</option>
+                <option value="serif">{t("msettings.subtitleFontSerif")}</option>
+                <option value="kai">{t("msettings.subtitleFontKai")}</option>
+              </select>
+            </label>
+            <label className="msettings-field">
+              <span>{t("msettings.subtitlePlacement")}</span>
+              <select data-testid="msettings-subtitle-placement" value={props.video.subtitlePlacement} onChange={(event) => props.onVideo({ subtitlePlacement: event.target.value as VideoSettings["subtitlePlacement"] })}>
+                <option value="auto">{t("msettings.subtitlePlaceAuto")}</option>
+                <option value="inside">{t("msettings.subtitlePlaceInside")}</option>
+              </select>
+            </label>
+            <label className="msettings-check"><input type="checkbox" data-testid="msettings-subtitle-outline" checked={props.video.subtitleOutline} onChange={(event) => props.onVideo({ subtitleOutline: event.target.checked })} />{t("msettings.subtitleOutline")}</label>
+            <label className="msettings-field">
+              <span>{t("msettings.assStyle")}</span>
+              <select data-testid="msettings-ass-style" value={props.video.assStyle} onChange={(event) => props.onVideo({ assStyle: event.target.value as VideoSettings["assStyle"] })}>
+                <option value="keep">{t("msettings.assKeep")}</option>
+                <option value="standard">{t("msettings.assStandard")}</option>
+              </select>
+            </label>
+            <label className="msettings-check"><input type="checkbox" data-testid="msettings-shot-subtitles" checked={props.video.shotSubtitles} onChange={(event) => props.onVideo({ shotSubtitles: event.target.checked })} />{t("msettings.shotSubtitles")}</label>
+            <p className="detail-muted">{t("msettings.shotSubtitlesHint")}</p>
+            <button type="button" className="secondary-button" data-testid="msettings-subtitle-reset" onClick={() => props.onVideo({ subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep" })}>{t("msettings.subtitleReset")}</button>
+          </div>
         </section>
       ) : null}
     </>

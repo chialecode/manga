@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadStage, stageFingerprints } from "./stage/lib.mjs";
+import { loadGate, stageFingerprints } from "./stage/lib.mjs";
 import { evidenceRunDir } from "./desktop-paths.ts";
 
 // Runs the live model probes from the ignored per-purpose local configuration and records
@@ -14,7 +14,7 @@ if (!fs.existsSync(vitest)) {
   console.error("FAILED live probes: vitest is not installed");
   process.exit(1);
 }
-const evidence = process.env.LIVE_EVIDENCE_DIR ? path.resolve(root, process.env.LIVE_EVIDENCE_DIR) : evidenceRunDir("m2", "live-models");
+const evidence = process.env.LIVE_EVIDENCE_DIR ? path.resolve(root, process.env.LIVE_EVIDENCE_DIR) : evidenceRunDir("live-models");
 fs.mkdirSync(evidence, { recursive: true });
 
 function configured(prefix) {
@@ -58,7 +58,7 @@ const probes = {
 const record = {
   status: result.status === 0 ? "recorded" : "failed",
   at: new Date().toISOString(),
-  ...stageFingerprints(root, loadStage("m2")),
+  ...stageFingerprints(root, loadGate()),
   generator: "scripts/live-models.mjs",
   runner: "vitest tests/agent/live-models.test.ts with MANGA_LIVE_MODELS=1",
   probes,

@@ -44,15 +44,15 @@ export function sessionPositionLabel(session: SessionRowFacts, t: T): string {
 
 export type SettingsGroupId = "basic" | "agent" | "records" | "logs";
 export type SettingsPageId =
-  | "general" | "appearance" | "reading" | "recording" | "library" | "sources" | "storage" | "modules" | "shortcuts"
-  | "models" | "quick" | "usage"
+  | "general" | "appearance" | "reading" | "recording" | "library" | "semantic" | "sources" | "danmaku" | "storage" | "plugins" | "modules" | "shortcuts"
+  | "models" | "agent" | "quick" | "usage"
   | "records"
   | "logs";
 
 /** The settings navigation (交互设计 3.5): which pages exist and how they are grouped. */
 export const SETTINGS_GROUPS: ReadonlyArray<{ id: SettingsGroupId; pages: readonly SettingsPageId[] }> = [
-  { id: "basic", pages: ["general", "appearance", "reading", "recording", "library", "sources", "storage", "modules", "shortcuts"] },
-  { id: "agent", pages: ["models", "quick", "usage"] },
+  { id: "basic", pages: ["general", "appearance", "reading", "recording", "library", "semantic", "sources", "danmaku", "storage", "plugins", "modules", "shortcuts"] },
+  { id: "agent", pages: ["models", "agent", "quick", "usage"] },
   { id: "records", pages: ["records"] },
   { id: "logs", pages: ["logs"] },
 ];

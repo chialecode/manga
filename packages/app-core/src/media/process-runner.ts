@@ -25,6 +25,8 @@ export type ToolRunOptions = {
   cwd?: string;
   /** Tests and supervisors use the pid to confirm the process is really gone afterwards. */
   onSpawn?: (pid: number | undefined) => void;
+  /** Background work (a probe nobody is waiting for, a cover) runs below normal priority so it does not compete with what the user is doing. */
+  lowPriority?: boolean;
 };
 
 const DEFAULT_TIMEOUT = 120_000;
@@ -62,6 +64,10 @@ export function runTool(file: string, args: string[], options: ToolRunOptions = 
       return;
     }
     options.onSpawn?.(child.pid);
+    if (options.lowPriority && child.pid !== undefined) {
+      // Best effort: a process that already ended, or a system that refuses, simply keeps its normal priority.
+      try { os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* keep the normal priority */ }
+    }
     const out: Buffer[] = [];
     let outBytes = 0;
     let err = "";
