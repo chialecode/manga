@@ -10,6 +10,7 @@ function installHost(store: {
   sessionId: string;
   run: Record<string, unknown> | null;
   runs: Array<{ id: string; sessionId: string; status: string; inputText?: string }>;
+  mode?: string;
 }) {
   window.manga = {
     async state() {
@@ -35,7 +36,14 @@ function installHost(store: {
       }
       if (body.commandId === "inventory.overview") return { status: "ok" as const, value: { items: [], totals: {} } };
       if (body.commandId === "settings.get") return { status: "ok" as const, value: { needsSetup: false, recoveryJobs: [], aiRuntime: "native" } };
-      if (body.commandId === "agent.createSession") return { status: "ok" as const, value: { id: store.sessionId } };
+      if (body.commandId === "workspace.sessions") {
+        return {
+          status: "ok" as const,
+          value: [{ sessionId: store.sessionId, title: "会话 1", kind: "shared", targetId: null, mode: store.mode ?? "enthusiast", runCount: store.runs.length, activeRunId: store.run ? "run-1" : null, activeRunStatus: store.run ? String(store.run.status) : null }],
+        };
+      }
+      if (body.commandId === "notes.list") return { status: "ok" as const, value: [] };
+      if (body.commandId === "agent.createSession") return { status: "ok" as const, value: { id: store.sessionId, mode: body.input?.mode ?? "enthusiast" } };
       if (body.commandId === "agent.send") {
         store.run = {
           runId: "run-1",

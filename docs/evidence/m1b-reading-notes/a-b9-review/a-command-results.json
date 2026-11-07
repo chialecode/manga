@@ -1,0 +1,165 @@
+[
+  {
+    "command": "node scripts/package-m1b.mjs",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/package.log"
+  },
+  {
+    "command": "node scripts/review-m1b-a-b8.mjs",
+    "start": "2026-09-25T04:35:13.994Z",
+    "end": "2026-09-25T04:35:16.022Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-a-b8.log"
+  },
+  {
+    "command": "node scripts/audit-m1b-b5-review.mjs",
+    "start": "2026-09-25T04:35:16.023Z",
+    "end": "2026-09-25T04:35:16.674Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1b-b5-review.log"
+  },
+  {
+    "command": "node scripts/audit-m1b-b6-review.mjs",
+    "start": "2026-09-25T04:35:16.674Z",
+    "end": "2026-09-25T04:35:17.337Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1b-b6-review.log"
+  },
+  {
+    "command": "node scripts/audit-m1b-b7-rework.mjs",
+    "start": "2026-09-25T04:35:17.337Z",
+    "end": "2026-09-25T04:35:18.047Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1b-b7-rework.log"
+  },
+  {
+    "command": "node scripts/audit-m1b-a-b7-review.mjs",
+    "start": "2026-09-25T04:35:18.047Z",
+    "end": "2026-09-25T04:35:18.795Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1b-a-b7-review.log"
+  },
+  {
+    "command": "node scripts/audit-m1b-recheck.mjs",
+    "start": "2026-09-25T04:35:18.796Z",
+    "end": "2026-09-25T04:35:19.421Z",
+    "exitCode": 1,
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1b-recheck.log"
+  },
+  {
+    "command": "node scripts/review-m1b-a-b7-ui.mjs",
+    "start": "2026-09-25T04:35:19.422Z",
+    "end": "2026-09-25T04:35:21.588Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-a-b7-ui.log"
+  },
+  {
+    "command": "node scripts/review-m1b-ui.mjs",
+    "start": "2026-09-25T04:35:21.589Z",
+    "end": "2026-09-25T04:35:24.259Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-ui.log"
+  },
+  {
+    "command": "node scripts/review-m1b-reading.mjs",
+    "start": "2026-09-25T04:35:24.259Z",
+    "end": "2026-09-25T04:35:29.553Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-reading.log"
+  },
+  {
+    "command": "node scripts/review-m1b-recheck.mjs",
+    "start": "2026-09-25T04:35:29.553Z",
+    "end": "2026-09-25T04:35:30.748Z",
+    "exitCode": 1,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-recheck.log"
+  },
+  {
+    "command": "node scripts/review-m1b-b6-ui.mjs",
+    "start": "2026-09-25T04:35:30.748Z",
+    "end": "2026-09-25T04:35:34.849Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-b6-ui.log"
+  },
+  {
+    "command": "node scripts/review-m1b-b5-h-checks.mjs",
+    "start": "2026-09-25T04:35:34.850Z",
+    "end": "2026-09-25T04:35:42.983Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-b5-h-checks.log"
+  },
+  {
+    "command": "node scripts/review-m1b-b9-reader-engines.mjs",
+    "start": "2026-09-25T04:35:42.983Z",
+    "end": "2026-09-25T04:35:43.577Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-b9-reader-engines.log"
+  },
+  {
+    "command": "node scripts/bench-m1b.mjs",
+    "start": "2026-09-25T04:35:43.577Z",
+    "end": "2026-09-25T04:37:55.452Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/bench-m1b.log"
+  },
+  {
+    "command": "node scripts/audit-m1a-reverify.mjs",
+    "start": "2026-09-25T04:37:55.453Z",
+    "end": "2026-09-25T04:38:56.196Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1a-reverify.log"
+  },
+  {
+    "command": "node scripts/verify-m1b.mjs",
+    "start": "2026-09-25T04:38:56.196Z",
+    "end": "2026-09-25T04:39:28.659Z",
+    "exitCode": 0,
+    "log": "dist/desktop/review-runs/a-b9-review/verify-m1b.log"
+  },
+  {
+    "command": "node scripts/audit-m1b-recheck.mjs",
+    "exitCode": 0,
+    "note": "After copying the two historical fixtures; hashes verified in offline-inspection.json",
+    "log": "dist/desktop/review-runs/a-b9-review/audit-m1b-recheck-corrected.log"
+  },
+  {
+    "command": "node scripts/review-m1b-recheck.mjs",
+    "exitCode": 0,
+    "note": "After fixture preparation",
+    "log": "dist/desktop/review-runs/a-b9-review/review-m1b-recheck-corrected.log"
+  },
+  {
+    "command": "node docs/evidence/m1b-reading-notes/a-b9-review/supplementary-review.mjs",
+    "exitCode": 1,
+    "note": "Final 2 passed / 5 failed; exploratory Tw hypothesis withdrawn",
+    "log": "dist/desktop/review-runs/a-b9-review/supplementary-final.log"
+  },
+  {
+    "command": "M1B_REQUIRE_REPORT=1 node scripts/verify-m1b.mjs",
+    "exitCode": 1,
+    "note": "136 Vitest passed; independent aggregate rejected",
+    "log": "dist/desktop/review-runs/a-b9-review/verify-m1b-final.log"
+  },
+  {
+    "status": "passed",
+    "command": "node scripts/verify.mjs",
+    "exitCode": 0,
+    "start": "2026-09-25T04:47:14.335Z",
+    "end": "2026-09-25T04:48:43.534Z",
+    "sourceFingerprint": "81785f68caa8968bcbace537ceac93c464b26c045133f43e841c6744c29fd6b9",
+    "m1bSourceFingerprint": "1bbe90fdad88434c161a0fb527738f7d3f7fc17c99accad4f4912fd01284c6d9",
+    "lockFingerprint": "1e2b3818348bf103defc5cea61fe188eb57f513d1bf277db483a30cdbf46c48b",
+    "testScriptFingerprint": "529cfff5f278226024b5283ea0a3f378f973d26218b8ec457f249a3cebcd15eb",
+    "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+    "log": "dist/desktop/review-runs/a-b9-review/verify.log",
+    "logSha256": "e199826b53db9262888e2c7ab461f78df8180eccfcee89fef442f191de599575",
+    "summary": [
+      " Test Files  16 passed | 1 skipped (17)",
+      "      Tests  94 passed | 4 skipped (98)",
+      " Test Files  14 passed | 1 skipped (15)",
+      "      Tests  134 passed | 2 skipped (136)",
+      "{\"status\":\"passed\",\"check\":\"repository-quality\",\"node\":\"24.19.0\"}"
+    ],
+    "productAcceptance": "not-run"
+  }
+]

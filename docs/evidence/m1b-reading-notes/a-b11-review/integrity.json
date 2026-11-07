@@ -1,0 +1,308 @@
+{
+  "at": "2026-09-25T16:20:41.167Z",
+  "reviewedCommit": "05be466e0d93319129f4ae96983b653fd8a3e18a",
+  "parent": "c692f584b945d2fcdf97b807fa4a69fe0cc96fc5",
+  "sourceFingerprint": "44369144423f2360b9f3daba834890829caf9ce5e0df99f684a5416d2c0e2ee8",
+  "m1bSourceFingerprint": "8e36dccb67b6b9201fc09c89027d508f46d34d184985df58b7620def7bc48fcb",
+  "lockFingerprint": "36f91e5e71830a88004a9d1f0da85b8e23b02019503e010f95d9dace6b75ae55",
+  "testScriptFingerprint": "3381dfaf8e3e2676f6c1bcfed37849ddd258068f94922786a897e222ffec4c2a",
+  "buildScriptFingerprint": "bb160a0ac42a3a4708ce8a479931a3f93b76b8b05e00037112204dcdff6bdcc7",
+  "sameSourceAsB": false,
+  "reason": "Agent A fixed late TextLayer publication and pending in-flight cancellation; required tests use existing G-01 and AT-04 identifiers.",
+  "localReviewFixes": [
+    "apps/desktop/src/renderer/pdf-page.tsx",
+    "packages/app-core/src/domain/pdfjs-document.ts",
+    "scripts/m1b-required-cases.json",
+    "tests/m1b/b11-pdfjs-text.test.ts",
+    "tests/m1b/pdf-page-lifecycle.test.tsx"
+  ],
+  "protectedCommits": [
+    {
+      "commit": "1919dc409c85d1175e8b675aa01600b8b958ed3c",
+      "ancestorOfReviewedCommit": true
+    },
+    {
+      "commit": "bd1fcbe3f335424bae54afa9e1b16507989c4ea1",
+      "ancestorOfReviewedCommit": true
+    },
+    {
+      "commit": "c692f584b945d2fcdf97b807fa4a69fe0cc96fc5",
+      "ancestorOfReviewedCommit": true
+    }
+  ],
+  "protectedResults": [
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b10-review",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b5-review",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b6-review",
+      "files": 3,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b7-review",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b8-review",
+      "files": 3,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b9-review",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-b9-rework-review",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-final",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/a-recheck",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b-final",
+      "files": 4,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b10-pdfjs-mvp",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b11-pdfjs-text",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b3-rework",
+      "files": 3,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b4-recheck",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b5-rework",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b6-rework",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b7-rework",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b8-rework",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b9-integration",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-m1a-regression/b9-rework",
+      "files": 1,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b10-review",
+      "files": 96,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b5-review",
+      "files": 51,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b6-review",
+      "files": 102,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b7-review",
+      "files": 89,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b8-review",
+      "files": 228,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b9-review",
+      "files": 93,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-b9-rework-review",
+      "files": 109,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-final",
+      "files": 14,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/a-recheck",
+      "files": 41,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b-final",
+      "files": 13,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b10-pdfjs-mvp",
+      "files": 27,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b11-pdfjs-text",
+      "files": 84,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b3-rework",
+      "files": 30,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b4-recheck",
+      "files": 30,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b5-rework",
+      "files": 34,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b6-rework",
+      "files": 29,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b7-rework",
+      "files": 55,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b8-rework",
+      "files": 65,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b9-integration",
+      "files": 68,
+      "unchanged": true
+    },
+    {
+      "directory": "docs/evidence/m1b-reading-notes/b9-rework",
+      "files": 86,
+      "unchanged": true
+    }
+  ],
+  "protectedFiles": 1373,
+  "package": {
+    "path": "dist/desktop/packages/MANGA-win32-x64",
+    "asarSha256": "07e70dc29be21b698c341b0b93769b372d94c9e2dd65af3f60e8a1547a63b6ee",
+    "executableSha256": "709b034bf29463b0c47b36843b651a41f6502be1009de2f0246b3db4d8a38eea",
+    "offlineAssets": [
+      {
+        "kind": "cmaps",
+        "files": 169,
+        "installedBytesMatch": true
+      },
+      {
+        "kind": "standard_fonts",
+        "files": 16,
+        "installedBytesMatch": true
+      },
+      {
+        "kind": "wasm",
+        "files": 13,
+        "installedBytesMatch": true
+      },
+      {
+        "kind": "iccs",
+        "files": 2,
+        "installedBytesMatch": true
+      },
+      {
+        "kind": "legacy/build",
+        "files": 2,
+        "installedBytesMatch": true
+      }
+    ],
+    "licenseMatch": true,
+    "rendererAssets": 204,
+    "pdfWorker": [
+      "/.vite/renderer/main_window/assets/pdf.worker-DTrjDNvb.mjs"
+    ],
+    "oldPdfSourceRemoved": true
+  },
+  "reviewScripts": [
+    {
+      "name": "finalize-review.mjs",
+      "sha256": "970d2eb741054a3500c850f708f6aae536bb295686da72917cd4f89b29d44be6"
+    },
+    {
+      "name": "independent-review.mjs",
+      "sha256": "60eab9ef0dd719d11961ff5c5b4f30caf2f5dd0e5ce35277cd73e157b0bbea54"
+    },
+    {
+      "name": "run-review.mjs",
+      "sha256": "87b590c1aef47425af7f89514358f554eb0656436dc21e1219d6fa3dc99d62a3"
+    },
+    {
+      "name": "supplemental-review.mjs",
+      "sha256": "2d91b92788b2ea2a9af208b05b49fddafb30a5e59e5cfff5a93265bdc8932836"
+    }
+  ],
+  "ci": {
+    "reviewedCommit": "05be466e0d93319129f4ae96983b653fd8a3e18a",
+    "query": "gh run list --commit <reviewedCommit> --limit 5 --json databaseId,headSha,status,conclusion,workflowName,url",
+    "runs": [],
+    "remoteBranchQuery": "git ls-remote --heads origin codex/m1b-reading-notes",
+    "remoteBranchRefs": [],
+    "status": "not-run",
+    "finalReviewVersion": "not-run; no remote execution authorized in this review",
+    "remoteWrites": false,
+    "recordedAt": "2026-09-25T16:19:42.6917933Z"
+  },
+  "productAcceptance": "not-run",
+  "formalH": "not-run",
+  "q08": "not-run",
+  "realModels": "not-run",
+  "realProfileMigration": "not-run"
+}

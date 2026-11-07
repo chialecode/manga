@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "command": "node scripts/verify.mjs",
+  "exitCode": 0,
+  "start": "2026-09-25T04:47:14.335Z",
+  "end": "2026-09-25T04:48:43.534Z",
+  "sourceFingerprint": "81785f68caa8968bcbace537ceac93c464b26c045133f43e841c6744c29fd6b9",
+  "m1bSourceFingerprint": "1bbe90fdad88434c161a0fb527738f7d3f7fc17c99accad4f4912fd01284c6d9",
+  "lockFingerprint": "1e2b3818348bf103defc5cea61fe188eb57f513d1bf277db483a30cdbf46c48b",
+  "testScriptFingerprint": "529cfff5f278226024b5283ea0a3f378f973d26218b8ec457f249a3cebcd15eb",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "log": "dist/desktop/review-runs/a-b9-review/verify.log",
+  "logSha256": "e199826b53db9262888e2c7ab461f78df8180eccfcee89fef442f191de599575",
+  "summary": [
+    " Test Files  16 passed | 1 skipped (17)",
+    "      Tests  94 passed | 4 skipped (98)",
+    " Test Files  14 passed | 1 skipped (15)",
+    "      Tests  134 passed | 2 skipped (136)",
+    "{\"status\":\"passed\",\"check\":\"repository-quality\",\"node\":\"24.19.0\"}"
+  ],
+  "productAcceptance": "not-run"
+}

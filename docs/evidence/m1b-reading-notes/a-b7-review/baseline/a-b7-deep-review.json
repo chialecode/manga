@@ -1,0 +1,263 @@
+{
+  "at": "2026-09-24T18:05:05.121Z",
+  "sourceFingerprint": "76a54236d371bc8d85bf22dcb7e4dde8ad5dcef2fc67b06bc8a1e6947a9ed34a",
+  "m1bSourceFingerprint": "68b005015f75523dd9b04f99676dd073abe50479b6cb20f2927ee7a430d6b46a",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "beeda01fc7e0cd4193ae087d13a65dbfa0016029c181d93ce1a2028597bf7e1d",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "c1897703faf3f843b1f73e1c7efb9e648d611442cadd10455e4d9b01cd921200",
+  "status": "rework-required",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-07",
+      "name": "consecutive Tj advances the text matrix",
+      "status": "failed",
+      "actual": "the second run overlaps the first instead of advancing\n\n50 !== 110\n",
+      "detail": {
+        "normalized": "HELLOWORLD",
+        "runs": [
+          {
+            "k": "t",
+            "x": 50,
+            "y": 320,
+            "s": 20,
+            "f": "mono",
+            "t": "HELLO",
+            "o": 0
+          },
+          {
+            "k": "t",
+            "x": 50,
+            "y": 320,
+            "s": 20,
+            "f": "mono",
+            "t": "WORLD",
+            "o": 5
+          }
+        ],
+        "expectedSecondOrigin": {
+          "x": 110,
+          "y": 320
+        }
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "TJ applies glyph advance and numeric spacing",
+      "status": "failed",
+      "actual": "the second run overlaps the first instead of advancing\n\n50 !== 116\n",
+      "detail": {
+        "normalized": "HELLO WORLD",
+        "runs": [
+          {
+            "k": "t",
+            "x": 50,
+            "y": 320,
+            "s": 20,
+            "f": "mono",
+            "t": "HELLO",
+            "o": 0
+          },
+          {
+            "k": "t",
+            "x": 50,
+            "y": 320,
+            "s": 20,
+            "f": "mono",
+            "t": "WORLD",
+            "o": 6
+          }
+        ],
+        "expectedSecondOrigin": {
+          "x": 116,
+          "y": 320
+        }
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "quote operator moves to the next text line",
+      "status": "failed",
+      "actual": "the quote operator did not move to the next line\n\n320 !== 296\n",
+      "detail": {
+        "normalized": "HELLO\nWORLD",
+        "runs": [
+          {
+            "k": "t",
+            "x": 50,
+            "y": 320,
+            "s": 20,
+            "f": "mono",
+            "t": "HELLO",
+            "o": 0
+          },
+          {
+            "k": "t",
+            "x": 50,
+            "y": 320,
+            "s": 20,
+            "f": "mono",
+            "t": "WORLD",
+            "o": 6
+          }
+        ],
+        "expectedSecondOrigin": {
+          "x": 50,
+          "y": 296
+        }
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "fixed EPUB keeps SVG circle geometry",
+      "status": "failed",
+      "actual": "a circle is rendered as a filled square",
+      "detail": {
+        "render": {
+          "w": 400,
+          "h": 400,
+          "items": [
+            {
+              "k": "r",
+              "x": 120,
+              "y": 120,
+              "w": 160,
+              "h": 160,
+              "c": "red"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "mixed strategy: implicit-revision-copy",
+      "status": "passed",
+      "detail": {
+        "strategy": "replace",
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "object",
+            "action": "skip"
+          }
+        ],
+        "sameRevisionOwner": true,
+        "sourceResourcePreserved": true,
+        "openStatus": "resolved",
+        "cardStatus": "resolved",
+        "originalRefsBefore": 1,
+        "originalRefsAfter": 1
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "mixed strategy: explicit-revision-replace",
+      "status": "failed",
+      "actual": "the kept anchor and its revision now have different resource owners\n\nfalse !== true\n",
+      "detail": {
+        "strategy": "replace",
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "object",
+            "action": "skip"
+          },
+          {
+            "kind": "resource_revision",
+            "action": "replace"
+          }
+        ],
+        "sameRevisionOwner": false,
+        "sourceResourcePreserved": false,
+        "openStatus": "resolved",
+        "cardStatus": "missing_revision",
+        "originalRefsBefore": 1,
+        "originalRefsAfter": 1
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "mixed strategy: copied-object-replaced-ref",
+      "status": "failed",
+      "actual": "opening the original note silently targets a copied resource\n\nfalse !== true\n",
+      "detail": {
+        "strategy": "replace",
+        "decisions": [
+          {
+            "kind": "resource",
+            "action": "duplicate"
+          },
+          {
+            "kind": "object",
+            "action": "duplicate"
+          }
+        ],
+        "sameRevisionOwner": true,
+        "sourceResourcePreserved": false,
+        "openStatus": "unresolved",
+        "cardStatus": "unresolved",
+        "originalRefsBefore": 1,
+        "originalRefsAfter": 0
+      }
+    },
+    {
+      "finding": "F-09",
+      "name": "mixed strategy: duplicate-with-skipped-revision",
+      "status": "passed",
+      "detail": {
+        "strategy": "duplicate",
+        "decisions": [
+          {
+            "kind": "resource_revision",
+            "action": "skip"
+          }
+        ],
+        "sameRevisionOwner": true,
+        "sourceResourcePreserved": true,
+        "openStatus": "resolved",
+        "cardStatus": "resolved",
+        "originalRefsBefore": 1,
+        "originalRefsAfter": 1
+      }
+    },
+    {
+      "finding": "F-08",
+      "name": "pagination keeps the full matching total on every page",
+      "status": "failed",
+      "actual": "total must describe the full match set, not only the remaining suffix\n+ actual - expected\n\n  [\n    205,\n+   105,\n+   5\n-   205,\n-   205\n  ]\n",
+      "detail": {
+        "totals": [
+          205,
+          105,
+          5
+        ],
+        "listed": 205,
+        "oldestListed": true
+      }
+    },
+    {
+      "finding": "F-08",
+      "name": "workspace paginates resources once even with multiple revisions",
+      "status": "failed",
+      "actual": "the initial library page repeats one book for each revision\n\n100 !== 1\n",
+      "detail": {
+        "rows": 100,
+        "uniqueResources": 1,
+        "resourcePage": {
+          "total": 102,
+          "listed": 100,
+          "nextCursor": "eyJhIjoiMjAyNi0wOS0yNFQxODowNTowNS4xMTNaIiwiaSI6InJlc184MWIwNDQ3MC04ZmE2LTQzMzYtOWRkOS1jOGE4MGZkMjRiNzMifQ"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "at": "2026-09-25T06:22:39.013Z",
+  "sourceFingerprint": "dfa7f0d97e2b548b5f3874700a1fab64159bf04743a32d0476960687a32eaf56",
+  "m1bSourceFingerprint": "1cb0463fe9c4d4144c37377a30fa25155a8eead34f48eb133a8be13d2fad457b",
+  "lockFingerprint": "1e2b3818348bf103defc5cea61fe188eb57f513d1bf277db483a30cdbf46c48b",
+  "testScriptFingerprint": "ec87749776eb57e7770acbaf8641bbfad5a928e227e800ab0585a28cb40723f1",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "package": {
+    "target": "dist/desktop/packages/MANGA-win32-x64",
+    "evidence": "docs/evidence/m1b-reading-notes/a-b9-rework-review",
+    "stage": "m1b",
+    "sourceFingerprint": "dfa7f0d97e2b548b5f3874700a1fab64159bf04743a32d0476960687a32eaf56",
+    "m1bSourceFingerprint": "1cb0463fe9c4d4144c37377a30fa25155a8eead34f48eb133a8be13d2fad457b",
+    "lockFingerprint": "1e2b3818348bf103defc5cea61fe188eb57f513d1bf277db483a30cdbf46c48b",
+    "testScriptFingerprint": "ec87749776eb57e7770acbaf8641bbfad5a928e227e800ab0585a28cb40723f1",
+    "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1"
+  },
+  "scriptFingerprint": "9ac8f330c94a83e069757ac349856d2368733a0e9eb2e0251033a200b4289339",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "finding": "F-08",
+      "name": "search continuation stays filtered and opens the oldest match",
+      "status": "passed",
+      "detail": {
+        "listed": 115,
+        "unrelated": [],
+        "totalLabel": "全库共 115 本",
+        "oldestOpened": true,
+        "rowsAfterOpen": 115
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "visible PDF runs do not overlap after consecutive Tj",
+      "status": "passed",
+      "detail": {
+        "runs": [
+          {
+            "text": "HELLO",
+            "x": "50 62 74 86 98",
+            "left": 373.3333435058594,
+            "right": 513.7333374023438
+          },
+          {
+            "text": "WORLD",
+            "x": "110 122 134 146 158",
+            "left": 513.7333374023438,
+            "right": 654.1333618164062
+          }
+        ]
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "white PDF text retains its fill over a black box",
+      "status": "passed",
+      "detail": {
+        "fill": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "finding": "F-07",
+      "name": "EPUB author line height and alignment reach the visible text",
+      "status": "passed",
+      "detail": {
+        "computed": {
+          "color": "rgb(34, 51, 68)",
+          "lineHeight": "41.4px",
+          "fontSize": "18px",
+          "textAlign": "right"
+        }
+      }
+    }
+  ]
+}

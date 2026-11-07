@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./pdf-text-map": "./src/domain/pdf-text-map.ts"
   },
   "dependencies": {
     "@manga/contracts": "workspace:*",
@@ -12,6 +13,7 @@
     "@manga/kernel": "workspace:*",
     "@manga/storage-drizzle": "workspace:*",
     "@manga/model-protocol": "workspace:*",
-    "@manga/i18n": "workspace:*"
+    "@manga/i18n": "workspace:*",
+    "pdfjs-dist": "6.3.289"
   }
 }

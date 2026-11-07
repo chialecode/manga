@@ -1,0 +1,43 @@
+{
+  "at": "2026-09-23T13:37:47.820Z",
+  "sourceFingerprint": "ce5ada40dbc2415e3c110160bca22b7989d980133688edaedc289495052df019",
+  "m1bSourceFingerprint": "e247fc7e6bc8e9caa83fa57756d5b1fc5a73f695fb3d9d9620aa301ba703209a",
+  "lockFingerprint": "a6699b8bf09cba2192f10323919f96261298f3d188418c4b2c0e345af44ab192",
+  "testScriptFingerprint": "f4ff73b8a766283e65e8e7001fd4c7b6169423aefc87a3a85eeab65f271c6e54",
+  "buildScriptFingerprint": "cfc1d329bf09d049f8689c6e528563f15e58efb7cc23b20369c5388749fa6497",
+  "status": "rework-required",
+  "productAcceptance": "not-run",
+  "humanChecks": "not-run",
+  "observations": [
+    {
+      "finding": "F-09",
+      "name": "duplicate import preserves non-conflicting identities",
+      "status": "failed",
+      "actual": "non-conflicting resource id became null instead of retaining the package id\n+ actual - expected\n\n+ null\n- 'res_d5ea383b-ae55-49cc-8d23-3eaff6698571'\n"
+    },
+    {
+      "finding": "F-09",
+      "name": "duplicated note payload and reference use the same remapped anchor",
+      "status": "failed",
+      "actual": "duplicated block retains the old anchor while its reference points to the new anchor\n+ actual - expected\n\n+ 'anc_39618432-595c-4153-9330-63ffa0ae7d9d'\n- 'anc_474b033a-dbcc-4054-8e6e-236ce048ea77'\n"
+    },
+    {
+      "finding": "F-09",
+      "name": "per-row skip of a conflicting anchor succeeds",
+      "status": "failed",
+      "actual": "skip inserted an additional anchor with a null id\n\n3 !== 2\n"
+    },
+    {
+      "finding": "F-07",
+      "name": "standard Flate RGB scan produces a browser-decodable image",
+      "status": "failed",
+      "actual": "standard scan has no image asset"
+    },
+    {
+      "finding": "F-07",
+      "name": "EPUB resolves a sibling image using a parent-relative path",
+      "status": "failed",
+      "actual": "declared ../Images/scan.png was silently dropped\n\n0 !== 1\n"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 4;
+export const PRODUCT_SCHEMA_VERSION = 6;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -384,4 +384,46 @@ CREATE TABLE IF NOT EXISTS partition_stats (
   missing INTEGER NOT NULL DEFAULT 0,
   scanned_at TEXT
 );
+`;
+
+/** Locator columns for full-text chunks. Added only here so v4 databases keep their original table and get an in-place upgrade. */
+export const V5_SCHEMA_SQL = `
+ALTER TABLE text_fragments ADD COLUMN resource_revision_id TEXT;
+ALTER TABLE text_fragments ADD COLUMN part_id TEXT;
+ALTER TABLE text_fragments ADD COLUMN start_offset INTEGER;
+ALTER TABLE text_fragments ADD COLUMN end_offset INTEGER;
+`;
+
+/** M1b rework: note tags, reading bookmarks, extracted page/illustration assets and resource-bound agent sessions. */
+export const V6_SCHEMA_SQL = `
+ALTER TABLE content_objects ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+
+ALTER TABLE agent_sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shared';
+ALTER TABLE agent_sessions ADD COLUMN target_id TEXT;
+ALTER TABLE agent_sessions ADD COLUMN mode TEXT;
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id TEXT PRIMARY KEY,
+  resource_id TEXT NOT NULL,
+  resource_revision_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  locator_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS resource_assets (
+  id TEXT PRIMARY KEY,
+  resource_id TEXT NOT NULL,
+  resource_revision_id TEXT NOT NULL,
+  part_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  media_type TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  payload BLOB NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS resource_assets_part ON resource_assets(resource_revision_id, part_id);
+CREATE INDEX IF NOT EXISTS bookmarks_resource ON bookmarks(resource_id);
 `;

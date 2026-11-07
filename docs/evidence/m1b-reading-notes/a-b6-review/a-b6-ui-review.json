@@ -1,0 +1,83 @@
+{
+  "at": "2026-09-24T15:33:05.996Z",
+  "sourceFingerprint": "bd307ec44f5279c9f15ee5d75ca393139026e7823409800a0a797623e0660e56",
+  "m1bSourceFingerprint": "e61ad20964063c4d7c36459f65dc77befb19561ef9dc128ff5950faa10e29960",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "fb273e75128a475788bb96c98149e1331bb68f4fb6b928201f2c94ee424c3cdf",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "e178ea884671cb2cb76366307eb2a08916ebd77bd59edf9a78bd992432cdaec5",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "screenshots": [
+    "animation-wide.png",
+    "animation-note.png",
+    "animation-1280.png",
+    "animation-960.png",
+    "animation-phone-assistant.png",
+    "animation-360.png",
+    "reading-wide.png",
+    "agent-wide.png",
+    "notes-wide.png"
+  ],
+  "observations": [
+    {
+      "name": "static scene is bundled and the page explicitly describes its simulation",
+      "status": "passed",
+      "detail": {
+        "labels": "观测者\n造物主\n观测者"
+      }
+    },
+    {
+      "name": "simulated time, captions and episode controls change the visible state",
+      "status": "passed",
+      "detail": {
+        "current": "18:42 / 23:40"
+      }
+    },
+    {
+      "name": "demo note saves locally, jumps to its timestamp and survives page and mode switches",
+      "status": "passed",
+      "detail": {
+        "counts": {
+          "resources": 0,
+          "notes": 0,
+          "runs": 0
+        }
+      }
+    },
+    {
+      "name": "wide, medium and phone windows keep navigation, actions and assistant reachable",
+      "status": "passed",
+      "detail": {
+        "viewports": [
+          {
+            "width": 1280,
+            "height": 840,
+            "scroll": 1280,
+            "main": 678
+          },
+          {
+            "width": 960,
+            "height": 640,
+            "scroll": 960,
+            "main": 723
+          },
+          {
+            "width": 360,
+            "height": 780,
+            "scroll": 360,
+            "main": 360
+          }
+        ]
+      }
+    },
+    {
+      "name": "reading, notes and Agent remain reachable with the new shell and names",
+      "status": "passed",
+      "detail": {
+        "crossPageDraft": "preserved"
+      }
+    }
+  ]
+}

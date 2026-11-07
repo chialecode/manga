@@ -1,0 +1,333 @@
+{
+  "at": "2026-09-24T04:28:51.822Z",
+  "sourceFingerprint": "e00b1e29ebdb89557692d7894feb640dc9587f4dc8c6b9abc1b9eb53eb67c3be",
+  "m1bSourceFingerprint": "20af05295eabaff09aa1918485ed695d51a92cdd4ae4e8b12975c532d3fdb182",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "b6198d8a15607993c94c22063cc80cbe3e7c5001e1390607405152a23f56e47c",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "f8af8ff3532787dbebc4293cb3ec381a6d5e3382b49278f112bf122056d25885",
+  "status": "rework-required",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "scope": "Automated subsets of H-01/H-03/H-04 in the packaged Windows app. No real IME, OS DPI changes, physical dragging/snapping or visual acceptance.",
+  "observations": [
+    {
+      "finding": "H-01",
+      "name": "EPUB final chapter, Unicode excerpt, comment, source return and process restart",
+      "status": "failed",
+      "actual": "Expected values to be strictly equal:\n+ actual - expected\n\n+ '中文日本語😀é。'\n- '中文日本語😀é'\n           ^\n",
+      "detail": {
+        "excerpt": "中文日本語😀é",
+        "locator": {
+          "kind": "text",
+          "partId": "last",
+          "representationId": "rev_3f781794-f119-4926-9ddd-96b83d0c9317",
+          "normalizationVersion": "text-nfc-lf-v1",
+          "range": {
+            "start": 8,
+            "end": 15
+          },
+          "quote": {
+            "exact": "中文日本語😀é"
+          }
+        }
+      }
+    },
+    {
+      "finding": "F-05",
+      "name": "one resource session keeps its composer draft across reading and Agent pages",
+      "status": "failed",
+      "actual": "the same resource session has two independent composer keys\n+ actual - expected\n\n+ ''\n- 'same-resource-draft'\n",
+      "detail": {
+        "agentDraft": "",
+        "readingDraft": "same-resource-draft"
+      }
+    },
+    {
+      "finding": "H-04",
+      "name": "keyboard mode menu preserves each mode's draft on returning",
+      "status": "passed",
+      "detail": {
+        "nativeDraggingAndSnapping": "not-run"
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1920x1080, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1920,
+        "cssHeight": 1080,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 1336,
+        "mainScrollWidth": 1336,
+        "bodyWidth": 680,
+        "bodyRight": 1232
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1920x1080, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1536,
+        "cssHeight": 864,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 952,
+        "mainScrollWidth": 952,
+        "bodyWidth": 680.0000610351562,
+        "bodyRight": 1040.0000915527344
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1920x1080, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1280,
+        "cssHeight": 720,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 686,
+        "mainScrollWidth": 686,
+        "bodyWidth": 621.7777709960938,
+        "bodyRight": 877.7777709960938
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1280x840, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1280,
+        "cssHeight": 840,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 696,
+        "mainScrollWidth": 696,
+        "bodyWidth": 632,
+        "bodyRight": 888
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1280x840, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 1024,
+        "cssHeight": 672,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 788,
+        "mainScrollWidth": 788,
+        "bodyWidth": 680.0000610351562,
+        "bodyRight": 957.8667297363281
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 1280x840, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 853,
+        "cssHeight": 560,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 843,
+        "mainScrollWidth": 843,
+        "bodyWidth": 680,
+        "bodyRight": 761.5555572509766
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 960x640, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 960,
+        "cssHeight": 640,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 721,
+        "mainScrollWidth": 721,
+        "bodyWidth": 656.6666870117188,
+        "bodyRight": 912.6666870117188
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 960x640, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 768,
+        "cssHeight": 512,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 756,
+        "mainScrollWidth": 756,
+        "bodyWidth": 680.0000610351562,
+        "bodyRight": 717.8667297363281
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 960x640, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 640,
+        "cssHeight": 426,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 630,
+        "mainScrollWidth": 630,
+        "bodyWidth": 565.7777709960938,
+        "bodyRight": 597.7777709960938
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 720x540, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 720,
+        "cssHeight": 540,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 705,
+        "mainScrollWidth": 705,
+        "bodyWidth": 640.6666870117188,
+        "bodyRight": 672.6666870117188
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 720x540, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 576,
+        "cssHeight": 432,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 564,
+        "mainScrollWidth": 564,
+        "bodyWidth": 499.7333679199219,
+        "bodyRight": 531.7333679199219
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 720x540, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 480,
+        "cssHeight": 360,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 470,
+        "mainScrollWidth": 470,
+        "bodyWidth": 405.77777099609375,
+        "bodyRight": 437.77777099609375
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 800x1200, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 800,
+        "cssHeight": 1200,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 800,
+        "mainScrollWidth": 800,
+        "bodyWidth": 680,
+        "bodyRight": 740
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 800x1200, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 640,
+        "cssHeight": 960,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 640,
+        "mainScrollWidth": 640,
+        "bodyWidth": 576,
+        "bodyRight": 608
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 800x1200, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 533,
+        "cssHeight": 800,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 533,
+        "mainScrollWidth": 533,
+        "bodyWidth": 469.3333435058594,
+        "bodyRight": 501.3333435058594
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 360x780, Electron zoom 1",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 360,
+        "cssHeight": 780,
+        "dpr": 1.5,
+        "shellOverflow": false,
+        "mainWidth": 345,
+        "mainScrollWidth": 345,
+        "bodyWidth": 280.66668701171875,
+        "bodyRight": 312.66668701171875
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 360x780, Electron zoom 1.25",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 288,
+        "cssHeight": 624,
+        "dpr": 1.875,
+        "shellOverflow": false,
+        "mainWidth": 276,
+        "mainScrollWidth": 276,
+        "bodyWidth": 211.73333740234375,
+        "bodyRight": 243.73333740234375
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "window 360x780, Electron zoom 1.5",
+      "status": "passed",
+      "detail": {
+        "cssWidth": 240,
+        "cssHeight": 520,
+        "dpr": 2.25,
+        "shellOverflow": false,
+        "mainWidth": 230,
+        "mainScrollWidth": 230,
+        "bodyWidth": 165.7777862548828,
+        "bodyRight": 197.7777862548828
+      }
+    },
+    {
+      "finding": "H-03",
+      "name": "narrow sidebars hover transfer, Escape and focus return",
+      "status": "passed",
+      "detail": {
+        "zoomKind": "Electron content zoom; Windows display scaling is not changed"
+      }
+    }
+  ]
+}

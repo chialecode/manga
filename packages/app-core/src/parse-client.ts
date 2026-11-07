@@ -6,7 +6,15 @@ import { fileURLToPath } from "node:url";
 
 export type ParseClient = {
   pid(): number | undefined;
-  parse(request: { bytes: number[]; encoding?: "utf-8" | "utf-16le"; delayMs?: number; signal?: AbortSignal }): Promise<unknown>;
+  parse(request: {
+    bytes?: number[];
+    filePath?: string;
+    encoding?: "utf-8" | "utf-16le";
+    format?: string;
+    kind?: "text" | "document";
+    delayMs?: number;
+    signal?: AbortSignal;
+  }): Promise<unknown>;
   kill(): void;
 };
 
@@ -66,13 +74,16 @@ export function startParseWorker(explicitPath?: string): ParseClient {
   const rl = createInterface({ input: child.stdout });
   rl.on("line", (line) => {
     try {
-      const message = JSON.parse(line) as { id?: string; status?: string; value?: unknown; error?: { message: string } };
+      const message = JSON.parse(line) as { id?: string; status?: string; value?: unknown; error?: { message: string; code?: string } };
       if (!message.id || !pending.has(message.id)) return;
       const item = pending.get(message.id)!;
       clearTimeout(item.timer);
       pending.delete(message.id);
-      if (message.status === "error") item.reject(new Error(message.error?.message ?? "parse failed"));
-      else item.resolve(message.value);
+      if (message.status === "error") {
+        const failure = new Error(message.error?.message ?? "parse failed") as Error & { code?: string };
+        failure.code = message.error?.code;
+        item.reject(failure);
+      } else item.resolve(message.value);
     } catch {
       // ignore
     }
@@ -87,13 +98,13 @@ export function startParseWorker(explicitPath?: string): ParseClient {
         const timer = setTimeout(() => {
           pending.delete(id);
           reject(new Error("parse worker timeout"));
-        }, 20_000);
+        }, request.filePath || request.kind === "document" ? 120_000 : 20_000);
         pending.set(id, { resolve, reject, timer });
         const onAbort = () => {
           if (child.stdin.writable) child.stdin.write(`${JSON.stringify({ type: "cancel", id })}\n`);
         };
         request.signal?.addEventListener("abort", onAbort, { once: true });
-        child.stdin.write(`${JSON.stringify({ type: "parse", id, kind: "text", bytes: request.bytes, encoding: request.encoding, delayMs: request.delayMs })}\n`);
+        child.stdin.write(`${JSON.stringify({ type: "parse", id, kind: request.kind ?? "text", bytes: request.bytes, filePath: request.filePath, format: request.format, encoding: request.encoding, delayMs: request.delayMs })}\n`);
       });
     },
     kill: () => child.kill(),

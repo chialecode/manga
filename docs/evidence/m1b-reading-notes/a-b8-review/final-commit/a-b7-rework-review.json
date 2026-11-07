@@ -1,0 +1,68 @@
+{
+  "at": "2026-09-24T20:03:40.941Z",
+  "sourceFingerprint": "ce408c5c1875c6bddfd27cf13396a76735b5090c71a21449e4820ee0a08dd1f5",
+  "m1bSourceFingerprint": "61d27d2e08bd8fb851a8cc73403e8b72358181a2f40310e120d1a50c7c6d8dc1",
+  "lockFingerprint": "c9288502bcce68caa76474fcf7e28eb7d35d104e7532eadb140c30af7ecdffba",
+  "testScriptFingerprint": "c9f7c6f4164d1dcbc994d5d3ffd9d6a89957a7268413ba20e59d6496fa43cd8f",
+  "buildScriptFingerprint": "145bf3b5f31be864f0dc4721863cffaa18c4e2f265f2db978948e0680b01dfd1",
+  "scriptFingerprint": "40112e49f7c5fb9d1cd57948958c9761b230502ae2f93d3118eac5217d7cfec7",
+  "status": "passed",
+  "humanChecks": "not-run",
+  "productAcceptance": "not-run",
+  "observations": [
+    {
+      "name": "skipping a note preserves the source resource of its existing anchor",
+      "status": "passed",
+      "detail": {
+        "sourcePreserved": true,
+        "sourceNowTargetsDuplicate": false
+      }
+    },
+    {
+      "name": "skipping a revision while duplicating a resource retains recoverable excerpt provenance",
+      "status": "passed",
+      "detail": {
+        "excerptTextKept": true,
+        "sourceAnchorKept": true,
+        "sourceReferenceCount": 1,
+        "originalAnchorStillExists": true,
+        "copySourceResolves": true
+      }
+    },
+    {
+      "name": "an anchor a surviving local note references is never re-pointed, even under replace",
+      "status": "passed",
+      "detail": {
+        "localAnchorKept": true,
+        "localNoteResolves": false
+      }
+    },
+    {
+      "name": "the 101st and oldest resource is listable, searchable and openable",
+      "status": "passed",
+      "detail": {
+        "total": 101,
+        "listed": 100,
+        "inventoryContinuation": true,
+        "workspaceContinuation": true,
+        "pages": 3,
+        "listedThroughCursors": 101,
+        "oldestListed": true,
+        "searchFindsOldest": true,
+        "oldestOpens": true
+      }
+    },
+    {
+      "name": "a text PDF page renders from a positional model that quotes the text layer",
+      "status": "passed",
+      "detail": {
+        "vectorPageRendering": true,
+        "pageRenders": 2,
+        "sliceHasRender": true,
+        "partsHaveRender": 2,
+        "runOffsetQuotesText": true,
+        "epubFixedPageRender": true
+      }
+    }
+  ]
+}

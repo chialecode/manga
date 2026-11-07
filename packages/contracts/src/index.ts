@@ -18,3 +18,4 @@ export * from "./paths.ts";
 export * from "./model.ts";
 export * from "./agent.ts";
 export * from "./inventory.ts";
+export * from "./reading.ts";
