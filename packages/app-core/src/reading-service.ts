@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import {
   DEFAULT_SHELL_PREFERENCE,
   MangaError,
@@ -12,12 +11,10 @@ import {
   type NoteDocument,
   type Ordinal,
   type WorkMediaKind,
-  type ScopeGrant,
   type SearchHit,
   type RailPatch,
   type ShellPreference,
   type SourceLocator,
-  type TextLocator,
 } from "@manga/contracts";
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { findQuoteMatches, resolveTextLocator } from "./domain/anchors.ts";
@@ -30,8 +27,7 @@ import type { ParsedAsset, ParsedDocument, PdfTextRun } from "./domain/formats.t
 import { documentLength, slicePart } from "./domain/formats.ts";
 import { elsewhereProgress, frontierConsumed } from "./progress-service.ts";
 import { applyNoteOp, coerceNoteDocument, notePlainText, type NoteOp } from "./domain/note-document.ts";
-import { codePointLength, createTextLocator, sliceCodePoints } from "./domain/text.ts";
-import type { GrantRegistry } from "./grants.ts";
+import { createTextLocator, sliceCodePoints } from "./domain/text.ts";
 
 const MAX_DOCUMENT_BYTES = 40 * 1024 * 1024;
 
@@ -598,17 +594,6 @@ function placementsInWindow(part: StoredPart, start: number, end: number): Store
   return (part.placements ?? []).filter((item) => item.offset >= start && item.offset <= end);
 }
 
-/** Follow a bookmark or search hit back into its page; opening a bookmark never marks it read. */
-export function readRangeRaw(store: DrizzleStore, input: { resourceId: string; resourceRevisionId: string; partId: string; start: number; end: number }): Record<string, unknown> {
-  const row = store.sqlite.prepare("SELECT payload_json FROM resource_revisions WHERE id = ? AND resource_id = ?").get(input.resourceRevisionId, input.resourceId) as { payload_json: string } | undefined;
-  if (!row) throw new MangaError("NOT_FOUND", "resource revision missing");
-  const part = payloadParts(JSON.parse(row.payload_json) as StoredPayload).find((item) => item.id === input.partId);
-  if (!part) throw new MangaError("NOT_FOUND", "resource part missing");
-  return { resourceId: input.resourceId, resourceRevisionId: input.resourceRevisionId, ...slicePart(part, input.start, Math.max(1, input.end - input.start)), textLayer: part.kind === "text" };
-}
-
-export { setProgress, mergeConsumedRanges } from "./progress-service.ts";
-
 export function resolveAnchor(store: DrizzleStore, revisionId: string, locator: SourceLocator): Record<string, unknown> {
   const row = store.sqlite.prepare("SELECT id, resource_id, payload_json FROM resource_revisions WHERE id = ?").get(revisionId) as { id: string; resource_id: string; payload_json: string } | undefined;
   if (!row) return { status: "missing_revision" };
@@ -1002,9 +987,4 @@ export function filterUnread(store: DrizzleStore, hits: SearchHit[]): SearchHit[
     if (hit.kind !== "body" || !hit.resourceId || !hit.revisionId || !hit.locator) return hit.kind !== "body";
     return rangeConsumed(store, hit.resourceId, hit.revisionId, hit.locator.partId, hit.locator.range.start, hit.locator.range.end);
   });
-}
-
-export function quoteLocator(normalized: string, partId: string, representationId: string, start: number, end: number): TextLocator {
-  if (end > codePointLength(normalized)) throw new MangaError("VALIDATION_ERROR", "context range is past the end");
-  return createTextLocator({ partId, representationId, normalized, start, end });
 }

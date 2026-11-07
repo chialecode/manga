@@ -15,6 +15,8 @@ import { createId, LOCATION_PARTITIONS } from "@manga/contracts";
 import { safeStorage } from "electron";
 import { utilitySpawner } from "./plugin-process.ts";
 
+/** How long a closing window waits for the page to save what waits for its save. */
+const SAVE_BEFORE_CLOSE_MS = 1500;
 const smoke = process.argv.includes("--manga-smoke");
 // A smoke window sits on the developer's own desktop. When other windows cover it, Chromium treats it as occluded: frames stop and the renderer is
 // throttled, so transitions never finish and timings stretch. Smoke runs keep the window rendering whatever else is on screen.
@@ -196,6 +198,26 @@ app.whenReady().then(async () => {
     onStopRequest: () => { if (window && !window.isDestroyed()) window.webContents.send("manga:overlay-stop"); },
   });
   window.on("closed", () => overlay.close());
+  // Before the window goes the page saves what waits for its save (LOOP-23, 计划 4.8): the close is held, the page is asked, and the window goes when it
+  // answers or after SAVE_BEFORE_CLOSE_MS, whichever comes first, so a page that hangs cannot keep the window open. In Electron 44 the page is still
+  // fully alive during `close` (it is unloaded only after the event is let through), so it can take and answer IPC. A quit closes the window the same way.
+  let saved = false;
+  window.on("close", (event) => {
+    if (saved || !window || window.isDestroyed() || window.webContents.isDestroyed() || window.webContents.isCrashed()) return;
+    event.preventDefault();
+    const closing = window;
+    const token = createId("save");
+    const done = () => {
+      clearTimeout(timer);
+      ipcMain.removeListener("manga:saved", onSaved);
+      saved = true;
+      if (!closing.isDestroyed()) closing.close();
+    };
+    const onSaved = (reply: Electron.IpcMainEvent, answered: unknown) => { if (reply.sender === closing.webContents && answered === token) done(); };
+    const timer = setTimeout(done, SAVE_BEFORE_CLOSE_MS);
+    ipcMain.on("manga:saved", onSaved);
+    closing.webContents.send("manga:save-now", token);
+  });
   const fromMainWindow = (event: Electron.IpcMainEvent) => Boolean(window && !window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame);
   ipcMain.on("manga:overlay-publish", (event, state) => { if (fromMainWindow(event)) void overlay.publish(state); });
   ipcMain.on("manga:overlay-stop-request", (event) => { if (overlay.owns(event.sender)) overlay.requestStop(); });

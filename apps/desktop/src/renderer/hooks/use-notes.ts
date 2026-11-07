@@ -102,5 +102,3 @@ export function useNotes(deps: NotesDeps) {
     doc, history, showHistory, epoch, renaming, setRenaming, focusBlock, open, close: () => { request.current += 1; setDoc(null); setShowHistory(false); setRenaming(false); }, save, rename, loadHistory, restore,
   };
 }
-
-export type Notes = ReturnType<typeof useNotes>;

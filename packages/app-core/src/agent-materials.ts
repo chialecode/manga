@@ -204,8 +204,6 @@ const clockOf = (ms: number): string => {
   const s = total % 60;
   return `${h ? `${h}:` : ""}${String(m).padStart(h ? 2 : 1, "0")}:${String(s).padStart(2, "0")}`;
 };
-export { clockOf as formatClock };
-
 const clip = (text: string, limit: number): { text: string; truncated: boolean } => {
   const chars = [...text];
   return chars.length > limit ? { text: chars.slice(0, limit).join(""), truncated: true } : { text, truncated: false };

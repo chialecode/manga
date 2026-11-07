@@ -22,13 +22,15 @@ export async function runAgentSmoke(appService: MangaProductApp, grant: string, 
     // The conversation that was left comes back as the tab it was in; if the tab was not kept, its row in the conversation view of the sidebar opens it again (A-65).
     const reopened = async () => await railTo(view, "conversation") && await ensureSidebar(view) && await clickFirst(view, "session-open-", 6000) && await waitDrawn(view, "page-agent", 6000);
     const agentPage = await toRail(view) && (await waitDrawn(view, "page-agent", 6000) || await reopened());
-    const shown = agentPage && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
+    // In the messages of the conversation on screen: a conversation is named after its first sentence, so the prompt also stands in the tab and the sidebar.
+    const inLog = `[...document.querySelectorAll('[data-testid="chat-log"]')].some((log) => log.checkVisibility({ visibilityProperty: true }) && log.textContent.includes(${JSON.stringify(PROMPT)}))`;
+    const shown = agentPage && await waitUntil(view, inLog, 10_000);
     // "开启新对话" empties the page and moves that conversation into the history, from where it is continued.
     const started = shown && await clickTestId(view, "conversation-new");
-    const emptied = started && await waitUntil(view, `!document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 8000);
+    const emptied = started && await waitUntil(view, `!(${inLog})`, 8000);
     const history = emptied && await clickTestId(view, "conversation-history");
     const listed = history && await clickFirst(view, "conversation-item-", 8000);
-    const continued = listed && await waitUntil(view, `document.body.innerText.includes(${JSON.stringify(PROMPT)})`, 10_000);
+    const continued = listed && await waitUntil(view, inLog, 10_000);
     const inputText = String(detailValue?.inputText ?? restored?.inputText ?? "");
     const ok = Boolean(restored) && inputText.includes(PROMPT) && agentPage && Boolean(shown) && Boolean(emptied) && Boolean(continued);
     // What the context kept, so that a conversation which did not come back says where it was lost.
@@ -47,7 +49,7 @@ export async function runAgentSmoke(appService: MangaProductApp, grant: string, 
     // The window learns of the connection when it reads its settings again.
     await view.webContents.reload();
     // The home view of the rail has "新对话"; the sidebar is shown first if the window folded it.
-    const agentPage = await toRail(view) && await viaSidebar(view, "home", "sidebar-new-conversation", 10_000);
+    const agentPage = await toRail(view) && await viaSidebar(view, "conversation", "sidebar-new-conversation", 10_000);
     const pageShown = agentPage && await waitDrawn(view, "page-agent", 8000);
     await clickTestId(view, "chat-mode-ask");
     await setField(view, "agent-composer", PROMPT);

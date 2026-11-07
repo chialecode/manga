@@ -233,7 +233,8 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   }
   if (flat.sidebar && (flat.sidebar.background === flat.frame || flat.sidebar.background === flat.surface)) flatProblems.push("the sidebar is drawn in the frame's color or the page's, not in between");
   if (flat.main && flat.main.background !== flat.surface) flatProblems.push(`the main area is ${flat.main.background}, not the page color ${flat.surface}`);
-  if (flat.main && flat.main.radius[0] !== 10) flatProblems.push(`the main area's top left corner is ${flat.main.radius[0]}px, not 10`);
+  // The main area meets the sidebar, the rail and the top row at right angles (UI-01, 计划 4.13).
+  if (flat.main && flat.main.radius[0] !== 0) flatProblems.push(`the main area's top left corner is ${flat.main.radius[0]}px, not square`);
   if (!flat.root || flat.root.padding.some((p: string) => p !== "0px")) flatProblems.push("the window keeps a margin around the regions");
   for (const key of ["dividerSidebar", "dividerDock"] as const) {
     const d = flat[key] as Rect | null;

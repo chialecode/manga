@@ -3,10 +3,15 @@ import {
   BookOpen, BookText, Clapperboard, Download, Ellipsis, FileText, House, LayoutDashboard, MessageCircle, Network, NotebookPen, Pin, Scissors, Settings,
   type LucideIcon,
 } from "lucide-react";
-import { HIDEABLE_RAIL_VIEWS, type RailView } from "@manga/contracts";
+import { HIDEABLE_RAIL_VIEWS, type HideableRailView, type RailView } from "@manga/contracts";
 import { railLayout } from "../../../../packages/app-core/src/domain/shell-layout.ts";
 import { Popup } from "./components/popup.tsx";
-import { ContextMenu } from "./workspace/context-menu.tsx";
+import { ContextMenu, type ContextItem } from "./workspace/context-menu.tsx";
+
+/** A press that moves this far starts a drag; one that goes this far off the rail sideways gives it up; the icons are this far apart. */
+const DRAG_START_PX = 4;
+const DRAG_LEAVE_PX = 24;
+const RAIL_GAP = 4;
 
 /** The picture of each view of the rail, and of the two things below it. */
 export const RAIL_ICON: Record<RailView, LucideIcon> = {
@@ -32,6 +37,10 @@ export type RailLabels = {
   pin: string;
   /** "固定“{name}”到图标栏". */
   pinOf: (name: string) => string;
+  moveUp: string;
+  moveDown: string;
+  /** What a screen reader hears after a move: "{name}已移到第 {n} 位". */
+  moved: (name: string, position: number) => string;
   settings: string;
 };
 
@@ -54,6 +63,8 @@ export function Rail(props: {
   onSelect: (view: RailView, how: RailHow) => void;
   onHide: (view: RailView) => void;
   onPin: (view: RailView) => void;
+  /** The person moved an icon to place `to` among the movable icons they see (`visible`); none: the icons do not move. */
+  onMove?: (view: HideableRailView, visible: readonly HideableRailView[], to: number) => void;
   /** The pointer came onto an icon or left it (the card of the view comes out or goes). */
   onHover?: { enter: (view: RailView, element: HTMLElement) => void; leave: (view: RailView, event: ReactMouseEvent) => void };
   /** Gives the shell the icon of a view, to return the focus to it. */
@@ -64,6 +75,75 @@ export function Rail(props: {
   const layout = railLayout({ height: props.height, views: props.entries.map((entry) => entry.view), hidden: props.hidden, settings: Boolean(props.settings) });
   const [menu, setMenu] = useState<{ x: number; y: number; view: RailView } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+  const [said, setSaid] = useState("");
+  /** The icons that can move, in the order they are shown: every shown one but the home. */
+  const movable = layout.shown.filter((view): view is HideableRailView => view !== "home" && isHideable(view));
+
+  // ---- dragging an icon to another place (A-108): a press that moves 4 px starts it, the others make room, Esc or leaving the rail puts it back ----
+  const group = useRef<HTMLDivElement>(null);
+  const press = useRef<{ view: HideableRailView; pointerId: number; y: number; slots: Array<{ view: HideableRailView; mid: number }>; size: number } | null>(null);
+  const [drag, setDrag] = useState<{ view: HideableRailView; dy: number; to: number } | null>(null);
+  const dragged = useRef(false);
+  const cancel = useCallback(() => { press.current = null; setDrag(null); }, []);
+  useEffect(() => {
+    if (!drag) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel(); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [drag, cancel]);
+
+  const moveTo = (view: HideableRailView, to: number) => {
+    const from = movable.indexOf(view);
+    if (from < 0 || to === from || !props.onMove) return;
+    props.onMove(view, movable, to);
+    setSaid(labels.moved(byView.get(view)?.label ?? "", to + 2));
+  };
+
+  const pointer = {
+    down(view: RailView, event: React.PointerEvent<HTMLButtonElement>) {
+      dragged.current = false;
+      if (event.button !== 0 || !isHideable(view) || !movable.includes(view) || !props.onMove) return;
+      const slots = movable.map((item) => {
+        const rect = group.current?.querySelector<HTMLElement>(`[data-rail-view="${item}"]`)?.getBoundingClientRect();
+        return { view: item, mid: rect ? rect.top + rect.height / 2 : 0 };
+      });
+      const size = event.currentTarget.getBoundingClientRect().height + RAIL_GAP;
+      press.current = { view, pointerId: event.pointerId, y: event.clientY, slots, size };
+    },
+    move(event: React.PointerEvent<HTMLButtonElement>) {
+      const now = press.current;
+      if (!now || now.pointerId !== event.pointerId) return;
+      const dy = event.clientY - now.y;
+      if (!drag && Math.abs(dy) < DRAG_START_PX) return;
+      if (!drag) { try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* the pointer is gone */ } }
+      // Leaving the rail sideways gives up the move.
+      const box = group.current?.getBoundingClientRect();
+      if (box && (event.clientX < box.left - DRAG_LEAVE_PX || event.clientX > box.right + DRAG_LEAVE_PX)) { cancel(); dragged.current = true; return; }
+      const others = now.slots.filter((slot) => slot.view !== now.view);
+      const to = others.filter((slot) => slot.mid < event.clientY).length;
+      setDrag({ view: now.view, dy, to });
+    },
+    up(event: React.PointerEvent<HTMLButtonElement>) {
+      const now = press.current;
+      press.current = null;
+      if (!now || now.pointerId !== event.pointerId || !drag) { setDrag(null); return; }
+      dragged.current = true;
+      setDrag(null);
+      moveTo(now.view, drag.to);
+    },
+  };
+  /** Where an icon is drawn while another is dragged: the dragged one follows the pointer, the ones between its place and the new one move by one slot. */
+  const shiftOf = (view: RailView): number => {
+    if (!drag || !press.current) return 0;
+    if (view === drag.view) return drag.dy;
+    const from = movable.indexOf(drag.view);
+    const at = movable.indexOf(view as HideableRailView);
+    if (at < 0) return 0;
+    const size = press.current.size;
+    if (from < drag.to && at > from && at <= drag.to) return -size;
+    if (from > drag.to && at >= drag.to && at < from) return size;
+    return 0;
+  };
 
   const iconOf = (view: RailView) => {
     const Icon = RAIL_ICON[view];
@@ -72,6 +152,7 @@ export function Rail(props: {
 
   const button = (view: RailView) => {
     const entry = byView.get(view)!;
+    const shift = shiftOf(view);
     return (
       <button
         key={view}
@@ -80,23 +161,53 @@ export function Rail(props: {
         className="rail-button"
         data-testid={`nav-${view}`}
         data-rail-view={view}
+        data-dragging={drag?.view === view ? "true" : undefined}
+        style={shift ? { transform: `translateY(${shift}px)` } : undefined}
         aria-label={entry.label}
         title={entry.label}
         aria-current={props.current === view ? "page" : undefined}
-        onClick={(event) => props.onSelect(view, event.detail === 0 ? "key" : "pointer")}
-        onMouseEnter={(event) => props.onHover?.enter(view, event.currentTarget)}
+        onPointerDown={(event) => pointer.down(view, event)}
+        onDragStart={(event) => event.preventDefault()}
+        onPointerMove={pointer.move}
+        onPointerUp={pointer.up}
+        onPointerCancel={cancel}
+        onLostPointerCapture={() => { if (press.current) cancel(); }}
+        onClick={(event) => {
+          // A drag is not a click: the view stays.
+          if (dragged.current) { dragged.current = false; return; }
+          props.onSelect(view, event.detail === 0 ? "key" : "pointer");
+        }}
+        onMouseEnter={(event) => { if (!drag) props.onHover?.enter(view, event.currentTarget); }}
         onMouseLeave={(event) => props.onHover?.leave(view, event)}
         onContextMenu={(event) => {
           event.preventDefault();
           if (view !== "home") setMenu({ x: event.clientX, y: event.clientY, view });
         }}
+        onKeyDown={(event) => {
+          // The menu key and Shift+F10 open the same menu (Q-35 7).
+          if (view === "home" || !(event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey))) return;
+          event.preventDefault();
+          const rect = event.currentTarget.getBoundingClientRect();
+          setMenu({ x: rect.right, y: rect.top, view });
+        }}
       >{iconOf(view)}</button>
     );
   };
 
+  const menuItems = (view: RailView): ContextItem[] => {
+    const items: ContextItem[] = [];
+    const at = isHideable(view) ? movable.indexOf(view) : -1;
+    if (at >= 0 && props.onMove) {
+      items.push({ id: "up", label: labels.moveUp, disabled: at === 0, onSelect: () => { moveTo(view as HideableRailView, at - 1); window.requestAnimationFrame(() => group.current?.querySelector<HTMLButtonElement>(`[data-rail-view="${view}"]`)?.focus()); } });
+      items.push({ id: "down", label: labels.moveDown, disabled: at === movable.length - 1, onSelect: () => { moveTo(view as HideableRailView, at + 1); window.requestAnimationFrame(() => group.current?.querySelector<HTMLButtonElement>(`[data-rail-view="${view}"]`)?.focus()); } });
+    }
+    items.push({ id: "hide", label: labels.hide, separatorBefore: items.length > 0, onSelect: () => props.onHide(view) });
+    return items;
+  };
+
   return (
     <>
-      <div className="rail-group" data-testid="rail-views">
+      <div ref={group} className="rail-group" data-testid="rail-views" data-dragging={drag ? "true" : undefined}>
         {layout.shown.map((view) => button(view as RailView))}
         {layout.more.length ? (
           <RailMore
@@ -123,12 +234,13 @@ export function Rail(props: {
           ><Settings size={20} aria-hidden="true" /></button>
         ) : null}
       </div>
+      <span className="sr-only" role="status" aria-live="polite" data-testid="rail-said">{said}</span>
       {menu ? (
         <ContextMenu
           x={menu.x}
           y={menu.y}
           label={byView.get(menu.view)?.label ?? ""}
-          items={[{ id: "hide", label: labels.hide, onSelect: () => props.onHide(menu.view) }]}
+          items={menuItems(menu.view)}
           onClose={closeMenu}
           testId="rail-menu"
         />

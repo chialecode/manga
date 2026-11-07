@@ -4,6 +4,7 @@ import type { Translator } from "@manga/i18n";
 import { attempt } from "../../lib/api.ts";
 import type { LibraryPath, ScanJob, ScanSchedule, ScanState } from "../../hooks/use-scan.ts";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
+import { OutsideSection } from "./outside-section.tsx";
 
 type T = Translator["t"];
 type Kind = "novel" | "comic" | "video";
@@ -68,6 +69,9 @@ export function LibraryPage(props: {
   t: T;
   scan: ScanState;
   formatDate: (value: string) => string;
+  refreshKey?: number;
+  /** Opens what was made on a resource outside the library (the view of a resource that cannot be opened). */
+  onViewRecords?: (resourceId: string, kind: "novel" | "comic" | "video") => void;
   onChanged: () => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
@@ -170,6 +174,14 @@ export function LibraryPage(props: {
           {scan.paths.map((path) => <PathRow key={path.id} t={t} path={path} scan={scan} busy={busy} formatDate={props.formatDate} onRemove={(item) => void remove(item)} onMove={(item) => void move(item)} onChange={(item, patch) => void change(item, patch)} />)}
         </ul>
       </SettingsSection>
+      <OutsideSection
+        t={t}
+        refreshKey={(props.refreshKey ?? 0) + scan.paths.length * 1000 + (running ? 1 : 0)}
+        onViewRecords={(resourceId, kind) => props.onViewRecords?.(resourceId, kind)}
+        onChanged={() => { void scan.reload(); props.onChanged(); }}
+        onError={props.onError}
+        onNotice={props.onNotice}
+      />
     </SettingsPage>
   );
 }

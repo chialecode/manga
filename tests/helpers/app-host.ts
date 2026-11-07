@@ -1,4 +1,4 @@
-import { DEFAULT_RAIL_PREFERENCE, applyRailPatch, type RailPatch, type RailPreference } from "@manga/contracts";
+import { DEFAULT_RAIL_PREFERENCE, applyRailPatch, sidebarShown, type RailPatch, type RailPreference, type RailView, type SidebarProgress } from "@manga/contracts";
 import { DEFAULT_SHELL_PREFERENCE, type ShellPreference } from "@manga/contracts/reading";
 
 /** A synthetic host for the whole renderer: the commands the app asks, answered from small in-memory tables, with every call kept. */
@@ -22,7 +22,7 @@ export const workDetail = (id: string, kind: "video" | "comic", title: string, r
 export type ContextRow = { contextId: string | null; kind: "recent" | "project"; name: string; status?: "active" | "archived"; conversationCount?: number; tabCount?: number; lastActivityAt?: string | null };
 
 /** A thing the synthetic sidebar lists besides the conversations (which come from the session table): a work, a note, a whiteboard … */
-export type HostItem = { type: "novel" | "comic" | "video" | "note" | "whiteboard" | "mindmap" | "draft" | "roughcut"; id: string; title: string; contextId?: string | null; updatedAt?: string; detail?: string | null };
+export type HostItem = { type: "novel" | "comic" | "video" | "note" | "whiteboard" | "mindmap" | "draft" | "roughcut"; id: string; title: string; contextId?: string | null; updatedAt?: string; detail?: string | null; coverId?: string | null; progress?: SidebarProgress | null };
 
 const OPEN_KIND: Record<HostItem["type"], string> = { novel: "work", comic: "work", video: "work", note: "note", whiteboard: "whiteboard", mindmap: "mindmap", draft: "draft", roughcut: "roughcut" };
 const ITEM_TYPES: ReadonlyArray<"conversation" | HostItem["type"]> = ["conversation", "novel", "comic", "video", "note", "whiteboard", "mindmap", "draft", "roughcut"];
@@ -71,7 +71,7 @@ export function contextHandlers(options: Pick<HostOptions, "facets" | "projects"
       return {
         key: `conversation:${id}`, type, title: String(row.title), detail: null,
         open: { kind: "conversation", id, general: row.kind === "shared" || row.kind === "project" }, contextId, contextName: projectName(contextId),
-        updatedAt: String(row.updatedAt ?? "2026-01-01T00:00:00.000Z"), running: row.activeRunStatus === "running", materialId: null,
+        updatedAt: String(row.updatedAt ?? "2026-01-01T00:00:00.000Z"), running: row.activeRunStatus === "running", materialId: null, coverId: null, progress: null,
       };
     }
     const found = (options.items ?? []).find((item) => item.type === type && item.id === id)!;
@@ -79,7 +79,7 @@ export function contextHandlers(options: Pick<HostOptions, "facets" | "projects"
     return {
       key: `${type}:${id}`, type, title: found.title, detail: found.detail ?? null,
       open: { kind: OPEN_KIND[type], id, ...(OPEN_KIND[type] === "work" ? { mediaKind: type } : {}) }, contextId, contextName: projectName(contextId),
-      updatedAt: found.updatedAt ?? "2026-01-01T00:00:00.000Z", running: false, materialId: contextId ? `mat_${id}` : null,
+      updatedAt: found.updatedAt ?? "2026-01-01T00:00:00.000Z", running: false, materialId: contextId ? `mat_${id}` : null, coverId: found.coverId ?? null, progress: found.progress ?? null,
     };
   };
   /** The ids of one kind in one context, newest first. A conversation is listed when it is a general one or something was asked in it, and not when it is about a file that is outside every library path (`openState: "outside"`). */
@@ -92,21 +92,23 @@ export function contextHandlers(options: Pick<HostOptions, "facets" | "projects"
     }
     return (options.items ?? []).filter((item) => item.type === type && (item.contextId ?? null) === contextId).sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))).map((item) => item.id);
   };
-  const SHOWN = 5;
-  const sectionOf = (type: (typeof ITEM_TYPES)[number], contextId: string | null, wanted: boolean, perGroup: number) => {
-    const ids = idsOf(type, contextId);
-    const first = ids.slice(0, perGroup);
-    return { type, total: ids.length, items: wanted ? first.map((id) => itemOf(type, id)) : [], loaded: wanted, nextCursor: wanted && ids.length > first.length ? String(first.length) : null };
+  /** The things of a list: one kind, or (`all`, the home) every kind by latest activity, as the main process lists them (A-103). */
+  const listOf = (type: (typeof ITEM_TYPES)[number] | "all", contextId: string | null) => (type === "all"
+    ? ITEM_TYPES.flatMap((kind) => idsOf(kind, contextId).map((id) => itemOf(kind, id))).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || a.key.localeCompare(b.key))
+    : idsOf(type, contextId).map((id) => itemOf(type, id)));
+  const sectionOf = (type: (typeof ITEM_TYPES)[number] | "all", contextId: string | null, wanted: boolean, perGroup: number) => {
+    const all = listOf(type, contextId);
+    const first = all.slice(0, perGroup);
+    return { type, total: all.length, items: wanted ? first : [], loaded: wanted || all.length === 0, nextCursor: wanted && all.length > first.length ? String(first.length) : null };
   };
   const sidebar = (input: Record<string, any>) => {
     const view = String(input.view);
-    const perGroup = Number(input.perGroup ?? SHOWN);
+    const perGroup = Number(input.perGroup ?? sidebarShown(view as RailView));
     const open = input.open as Array<string | null> | undefined;
-    const types = ITEM_TYPES.filter((type) => (view === "home" ? true : type === view));
+    const type = view === "home" ? "all" as const : (view as (typeof ITEM_TYPES)[number]);
     const place = (contextId: string | null, kind: "recent" | "project", name: string) => {
       const wanted = !open || open.some((key) => (key ?? null) === contextId);
-      const sections = types.map((type) => sectionOf(type, contextId, wanted, perGroup)).filter((section) => view !== "home" || section.total > 0);
-      return { contextId, kind, name, sections };
+      return { contextId, kind, name, sections: [sectionOf(type, contextId, wanted, perGroup)] };
     };
     if (view === "downloads") return { view, groups: [], downloads: { type: "download", total: 0, items: [], loaded: true, nextCursor: null } };
     return { view, groups: [...(options.projects ?? []).map((project) => place(project.id, "project", project.name)), place(null, "recent", "最近")], downloads: null };
@@ -114,12 +116,12 @@ export function contextHandlers(options: Pick<HostOptions, "facets" | "projects"
   const handlers: Record<string, Handler> = {
     "workspace.sidebar": sidebar,
     "workspace.items": (input) => {
-      const type = (input.type ?? input.view) as (typeof ITEM_TYPES)[number];
-      const ids = idsOf(type, (input.contextId as string | null) ?? null);
+      const type = (input.type ?? (input.view === "home" ? "all" : input.view)) as (typeof ITEM_TYPES)[number] | "all";
+      const all = listOf(type, (input.contextId as string | null) ?? null);
       const start = Number(input.cursor ?? 0);
       const limit = Number(input.limit ?? 20);
-      const page = ids.slice(start, start + limit);
-      return { items: page.map((id) => itemOf(type, id)), nextCursor: start + page.length < ids.length ? String(start + page.length) : null };
+      const page = all.slice(start, start + limit);
+      return { type, total: all.length, items: page, nextCursor: start + page.length < all.length ? String(start + page.length) : null };
     },
     "workspace.objects": () => ({ items: [], total: 0, nextOffset: null }),
     "workspace.find": (input) => {

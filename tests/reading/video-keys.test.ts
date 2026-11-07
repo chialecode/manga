@@ -76,10 +76,6 @@ describe("AT-83 arrow keys: a tap is a step, a hold lasts until the key is let g
     keys.down(1);
     for (let count = 0; count < 12; count += 1) { clock.advance(30); keys.down(1, true); }
     expect(events).toEqual(["hold 1"]);
-    // A key that reports down twice without a repeat flag (a lost key-up) is also the same key.
-    keys.down(1);
-    clock.advance(1000);
-    expect(events).toEqual(["hold 1"]);
     keys.up(1);
     expect(events).toEqual(["hold 1", "release 1"]);
   });
@@ -130,5 +126,57 @@ describe("AT-83 arrow keys: a tap is a step, a hold lasts until the key is let g
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("AT-135 holding → speeds up every time, even after the player missed a key", () => {
+  it("takes a fresh press of a key still down as a lost key-up: the old hold ends, the new press holds on its own, and no step is added", () => {
+    const { keys, clock, events } = setup();
+    keys.down(1);
+    clock.advance(500);
+    // The key-up never came; the person presses → again and holds it.
+    keys.down(1);
+    expect(events).toEqual(["hold 1", "release 1"]);
+    clock.advance(300);
+    expect(events).toEqual(["hold 1", "release 1", "hold 1"]);
+    keys.up(1);
+    expect(events).toEqual(["hold 1", "release 1", "hold 1", "release 1"]);
+    // A lost key-up after a tap: the pending step is dropped, not made twice.
+    keys.down(1);
+    clock.advance(100);
+    keys.down(1);
+    keys.up(1);
+    expect(events.slice(4)).toEqual(["tap 1"]);
+  });
+
+  it("starts the hold at once when only the system's repeats arrive (the press went elsewhere), with no step", () => {
+    const { keys, clock, events } = setup();
+    keys.down(1, true);
+    expect(events).toEqual(["hold 1"]);
+    for (let count = 0; count < 10; count += 1) { clock.advance(33); keys.down(1, true); }
+    expect(events).toEqual(["hold 1"]);
+    keys.up(1);
+    expect(events).toEqual(["hold 1", "release 1"]);
+    expect(clock.pending()).toBe(0);
+    // ← the same way: the rewind starts and ends.
+    keys.down(-1, true);
+    keys.up(-1);
+    expect(events).toEqual(["hold 1", "release 1", "hold -1", "release -1"]);
+  });
+
+  it("keeps a short tap one step: a press and its key-up, repeated, never step twice", () => {
+    const { keys, clock, events } = setup();
+    for (let count = 0; count < 25; count += 1) { keys.down(1); clock.advance(80); keys.up(1); clock.advance(80); }
+    expect(events).toEqual(Array.from({ length: 25 }, () => "tap 1"));
+  });
+
+  it("ends the hold when the window loses focus in the middle of it, and the next hold starts again", () => {
+    const { keys, clock, events } = setup();
+    keys.down(1);
+    clock.advance(400);
+    keys.release();
+    keys.down(1, true);
+    keys.up(1);
+    expect(events).toEqual(["hold 1", "release 1", "hold 1", "release 1"]);
   });
 });

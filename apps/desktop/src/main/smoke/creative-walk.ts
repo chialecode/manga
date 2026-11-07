@@ -385,6 +385,9 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
           tabbar: Boolean(barBox) && barBox.left >= -1 && barBox.right <= window.innerWidth + 1,
           canvas: box ? Math.round(box.height) : null,
           body: Boolean(body) && body.getBoundingClientRect().height > 40,
+          // What reaches past the main area, when something does: the widest few, seen or not.
+          wide: main.scrollWidth > main.clientWidth + 1 ? [...main.querySelectorAll("*")].map((el) => ({ el, right: el.getBoundingClientRect().right })).filter((row) => row.right > main.getBoundingClientRect().right + 1).sort((x, y) => y.right - x.right).slice(0, 4).map(({ el, right }) => ({ tag: el.tagName, test: el.getAttribute("data-testid"), cls: String(el.className).slice(0, 60), right: Math.round(right), shown: el.checkVisibility({ visibilityProperty: true }) })) : [],
+          sizes: { doc: document.documentElement.scrollWidth, inner: window.innerWidth, mainScroll: main.scrollWidth, mainClient: main.clientWidth, overflow: getComputedStyle(main).overflowX },
         };
       })()`) : { overflowX: true, tabbar: false, canvas: null, body: false };
       const needsCanvas = tab === "whiteboard" || tab === "mindmap";

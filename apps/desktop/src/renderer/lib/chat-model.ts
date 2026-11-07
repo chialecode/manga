@@ -9,7 +9,6 @@ import type { StreamNote, StreamVoice } from "../hooks/use-session-stream.ts";
 type T = Translator["t"];
 
 /** Source tags in the words the right pane shows: "第 12 页 · 区域", "12:30—12:45", "选区 128 字". */
-export const selectionLabel = (t: T, length: number): string => t("chat.tag.selection", { count: length });
 export const regionLabel = (t: T, page: number): string => t("chat.tag.region", { page });
 export const intervalLabel = (t: T, startMs: number, endMs: number): string => t("chat.tag.interval", { start: formatClock(startMs), end: formatClock(endMs) });
 

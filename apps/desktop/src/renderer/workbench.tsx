@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordLabel, chordOf } from "@manga/contracts/keys";
-import type { RailView, WorkspacePreset } from "@manga/contracts";
+import { moveRailView, railOrder, type RailView, type WorkspacePreset } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
 import type { ShellPreference } from "@manga/contracts/reading";
 import { MAIN_FLOOR, deriveShell } from "../../../../packages/app-core/src/domain/shell-layout.ts";
@@ -174,7 +174,7 @@ export function Workbench(props: {
   // ---- keys: the actions of the one key table ---------------------------------------------------------------------------------------------
   const latest = useRef({ s, controller, keyTable, toggleDebug });
   latest.current = { s, controller, keyTable, toggleDebug };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       const { s: services, controller: workspace, keyTable: table } = latest.current;
@@ -307,16 +307,26 @@ export function Workbench(props: {
   ];
 
   // ---- the rail and the sidebar (A-99, A-101) ------------------------------------------------------------------------------------------
-  const railViews = useMemo(() => railViewsFor(s.facets), [s.facets]);
+  // The person's order of the icons (A-108): the home first, then theirs; the ones of a module that is off are left out.
+  const railViews = useMemo(() => {
+    const available = new Set(railViewsFor(s.facets));
+    return ["home" as RailView, ...railOrder(rail.order).filter((view) => available.has(view))].filter((view) => available.has(view));
+  }, [s.facets, rail.order]);
   const currentView: RailView = railViews.includes(rail.view) ? rail.view : "home";
+  // The main area shows the view of the rail (A-107): its own layout, the tab it had in front, and the dock follows that tab.
+  useLayoutEffect(() => { controller.showView(currentView); }, [controller, currentView]);
   const railProps: ShellRail = {
     entries: railViews.map((view) => ({ view, label: t(VIEW_LABEL[view]) })),
     hidden: rail.hidden,
     current: currentView,
     settings: s.facets.has("settings") ? { active: settingsOn, onSelect: () => s.open.settings() } : null,
-    labels: { more: t("rail.more"), moreEmpty: t("rail.moreEmpty"), hide: t("rail.hide"), pin: t("rail.pin"), pinOf: (name) => t("rail.pinOf", { name }), settings: t("nav.settings") },
+    labels: {
+      more: t("rail.more"), moreEmpty: t("rail.moreEmpty"), hide: t("rail.hide"), pin: t("rail.pin"), pinOf: (name) => t("rail.pinOf", { name }), settings: t("nav.settings"),
+      moveUp: t("rail.moveUp"), moveDown: t("rail.moveDown"), moved: (name, n) => t("rail.moved", { name, n }),
+    },
+    onMove: (view, visible, to) => changeRail({ order: moveRailView(rail.order, visible, view, to) }),
     // A view of the rail leaves the settings, and the workspace is as it was.
-    onSelect: (view) => { if (view !== rail.view) changeRail({ view }); if (settingsOn) shellStore.leaveSettings(); },
+    onSelect: (view) => { controller.showView(view); if (view !== rail.view) changeRail({ view }); if (settingsOn) shellStore.leaveSettings(); },
     onHide: (view) => { if (isHideable(view)) changeRail({ hidden: [...new Set([...rail.hidden, view])] }); },
     onPin: (view) => changeRail({ hidden: rail.hidden.filter((item) => item !== view) }),
   };
@@ -418,7 +428,7 @@ export function Workbench(props: {
         />
         {props.shotsDialog}
         {/* The settings stand over the main area; what is under them stays mounted and is told it is out of sight (A-101). */}
-        <div className="workspace-area" data-testid="workspace-area" data-suspended={settingsOn ? "true" : "false"} {...(settingsOn ? { inert: true } : {})}>
+        <div className="workspace-area" data-testid="workspace-area" data-suspended={settingsOn ? "true" : "false"} {...(settingsOn ? { inert: true, "data-hidden-layer": "" } : {})}>
           <WorkspaceHosts />
         </div>
         {settingsOn ? (

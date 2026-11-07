@@ -39,7 +39,6 @@ export function shownLines(cues: readonly SubtitleCue[], timeMs: number): string
 }
 
 const WIDE_CLASS = String.raw`\u2e80-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef`;
-const WIDE = new RegExp(`[${WIDE_CLASS}]`);
 const TOKENS = new RegExp(String.raw`[${WIDE_CLASS}]|[^\s${WIDE_CLASS}]+\s*|\s+`, "g");
 
 /** Breaks a line to fit a width the way the page does: at spaces, between wide (CJK) characters, or anywhere inside a word too long for a line. */
@@ -138,4 +137,3 @@ export function drawTextSubtitles(context: CanvasRenderingContext2D, width: numb
 }
 
 /** Whether a character is one the wrapper may break after on its own; exported for the tests of the wrapper. */
-export const isWide = (letter: string) => WIDE.test(letter);

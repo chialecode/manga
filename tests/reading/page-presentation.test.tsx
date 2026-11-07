@@ -171,7 +171,7 @@ describe("page view", () => {
       hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
       onBackToNote={() => {}} onRepair={() => {}} labelsExtra={paneLabelsExtra} labels={paneLabels}
       onImportBook={() => {}} onOpen={() => {}} onSearch={() => {}} onJump={() => {}} onProgress={() => {}}
-      onNote={() => {}} onMore={() => {}} onPart={() => {}} onStyle={() => {}} onBookmark={() => {}}
+      onNote={() => {}} onPart={() => {}} onStyle={() => {}} onBookmark={() => {}}
       onRemoveBookmark={() => {}} onOpenBookmark={() => {}}
     />);
     const pageRender = screen.getByTestId("reading-page-render");

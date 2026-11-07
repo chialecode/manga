@@ -1,0 +1,3074 @@
+{
+  "commands": [
+    {
+      "commandId": "acquisition.add",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.cancel",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.get",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.list",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.pause",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.remove",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.restart",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.resume",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.retryImport",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.retryPublish",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.select",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "acquisition.setSeeding",
+      "moduleId": "manga.acquisition",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.cancel",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.createSession",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.getRun",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.retry",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.send",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.trace.clear",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.trace.export",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.trace.get",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.trace.list",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.trace.stats",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.acceptDraft",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.addTerm",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.append",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.audioHandle",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.calibrate",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.cancel",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.editDraft",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.event",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.list",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.organize",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.removeTerm",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.retain",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.retry",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.review",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.reviseSegment",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.start",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.status",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.stop",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.terms",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "capture.transcribe",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "comic.pageHandle",
+      "moduleId": "manga.comic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "comic.pageHandles",
+      "moduleId": "manga.comic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "comic.pages",
+      "moduleId": "manga.comic",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "connections.delete",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "connections.list",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "connections.probe",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "connections.setProfile",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "connections.test",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "connections.upsert",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.current",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.delete",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.deleteAll",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.history",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.list",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.move",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.new",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.rename",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "conversation.resume",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "covers.fromImage",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "covers.handles",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "covers.list",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "covers.lock",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "covers.select",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.around",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.choose",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.clearCache",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.getSettings",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.load",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.match",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.search",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.setCredentials",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.setOffset",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.setSettings",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "danmaku.status",
+      "moduleId": "manga.danmaku",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "debug.context",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.add",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.importMetadata",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.list",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.prompt",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.remove",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.removedWorks",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.update",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.adopt",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.cancelSuggestion",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.checkpoint",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.create",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.delete",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.discardSuggestion",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.get",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.keepSuggestion",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.list",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.rename",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.restore",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.save",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.suggest",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.suggestion",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.suggestions",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.undoAdopt",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "draft.version",
+      "moduleId": "manga.copywriting",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "embed.backlinks",
+      "moduleId": "manga.embeds",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "embed.list",
+      "moduleId": "manga.embeds",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "embed.refresh",
+      "moduleId": "manga.embeds",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "embed.remove",
+      "moduleId": "manga.embeds",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "embed.upsert",
+      "moduleId": "manga.embeds",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "excerpt.create",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "excerpt.delete",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "excerpt.follow",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "excerpt.get",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "excerpt.list",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "excerpt.update",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "inventory.cancelScan",
+      "moduleId": "manga.inventory",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "inventory.overview",
+      "moduleId": "manga.inventory",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "inventory.repair",
+      "moduleId": "manga.inventory",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "inventory.reveal",
+      "moduleId": "manga.inventory",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "inventory.scan",
+      "moduleId": "manga.inventory",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.cancelExport",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.contextSnapshot",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.exportPackage",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.find",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.getResource",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.importDocument",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.importEpub",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.importPackage",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.importText",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.indexExternal",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.inspectFile",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.list",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.openable",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.outside",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.outsidePreview",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.paths.add",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.paths.ensureDownloads",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.paths.list",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.paths.remove",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.paths.update",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.read",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.readOriginal",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.readSlice",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.rebuildIndex",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.removeOutside",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.repairSource",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.resourceContent",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.scan.cancel",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.scan.setSchedule",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.scan.start",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.scan.status",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.search",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "library.transcribeAudio",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "log.query",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "material.frame",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "material.region",
+      "moduleId": "manga.comic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "material.subtitleWindow",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.candidates",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.characters",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.findMissing",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.link",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.preview",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.providers",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.refresh",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.related",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.resolveRef",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.search",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": true,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.setProvider",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "metadata.unlink",
+      "moduleId": "manga.metadata",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.create",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.delete",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.edit",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.export",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.get",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.list",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.redo",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.rename",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.setTheme",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "mindmap.undo",
+      "moduleId": "manga.mindmap",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.asset",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.copy",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.create",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.delete",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.get",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.history",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.insert",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.list",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.merge",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.move",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.openSource",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.remove",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.rename",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.replace",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.restore",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.setType",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.split",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.tags",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.undelete",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "notes.undo",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "notes.update",
+      "moduleId": "manga.notes",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": true
+    },
+    {
+      "commandId": "package.importResolved",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "package.preview",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.bundled",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.deleteData",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.disable",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.enable",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.exportData",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.inspect",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.install",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.list",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.rollback",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.trust.add",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.trust.list",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.trust.remove",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "plugin.uninstall",
+      "moduleId": "manga.plugins",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "progress.get",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "progress.set",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "progress.setPage",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "progress.setTime",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.addMaterial",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.addTerm",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.create",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.delete",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.exportPackage",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.get",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.importPackage",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.importTerms",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.list",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.objects",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.overview",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.packagePreview",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.removeMaterial",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.removeTerm",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.terms",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.update",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "project.updateTerm",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "quickTasks.delete",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "quickTasks.list",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "quickTasks.reorder",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "quickTasks.restore",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "quickTasks.save",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "reader.resolveAnchor",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "reader.ui.present",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "reading.bookmarks",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "reading.removeBookmark",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "reading.setBookmark",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "records.list",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "research.search",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.cancel",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.create",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.delete",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.edit",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.export",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.exports",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.get",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.list",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.plan",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.redo",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.rename",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "roughcut.undo",
+      "moduleId": "manga.roughcut",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "screenshot.delete",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "screenshot.get",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "screenshot.image",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "screenshot.list",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "screenshot.save",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.cancel",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.clear",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.configure",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.rebuild",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.search",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.status",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "semantic.update",
+      "moduleId": "manga.semantic",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "session.open",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "session.stream",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.applyLocations",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.get",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.getAgent",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.getMedia",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.getModules",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.getRecording",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.getShell",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.proposeLocations",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.recoverJobs",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setAgent",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setLayout",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setMedia",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setModule",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setRecording",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setRuntime",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.setShell",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "settings.skipAi",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "source.card",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "usage.query",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.audioTracks",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.cancelFrameIndex",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.fonts",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.frameIndex",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.handle",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.keyframes",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.playbackPlan",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.playCopy",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.probe",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.subtitleHandle",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "video.subtitles",
+      "moduleId": "manga.video",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "webpage.delete",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "webpage.fetch",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "webpage.get",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "webpage.list",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.create",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.delete",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.edit",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.get",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.list",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.redo",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.rename",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.setViewport",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "whiteboard.undo",
+      "moduleId": "manga.whiteboard",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workFolders.forWork",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workFolders.list",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workFolders.rename",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.counterpart",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.delete",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.deletePreview",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.get",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.importDirectory",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.list",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": true,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.moveResource",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.open",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.reidentify",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.setKind",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.setOrdinal",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.setOverride",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.setShelf",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "works.unassigned",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.contexts",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.find",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.get",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.items",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.loadContext",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.objects",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.saveContext",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.sessions",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.setLastContext",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.sidebar",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    }
+  ],
+  "onListsOnly": []
+}

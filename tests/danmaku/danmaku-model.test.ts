@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_DANMAKU_SETTINGS, validPattern, type DanmakuItem, type DanmakuSettings } from "@manga/contracts/danmaku";
-import { compilePatterns, crossingSeconds, danmakuMetrics, offsetSeconds, pictureRect, prepareDanmaku, shownCount, sourcesOf, visibleFilter } from "../../apps/desktop/src/renderer/readers/danmaku-model.ts";
+import { compilePatterns, crossingSeconds, danmakuArea, danmakuCrop, danmakuMetrics, offsetSeconds, pictureRect, prepareDanmaku, shownCount, sourcesOf, visibleFilter } from "../../apps/desktop/src/renderer/readers/danmaku-model.ts";
 
 const settings = (patch: Partial<DanmakuSettings> = {}): DanmakuSettings => ({ ...DEFAULT_DANMAKU_SETTINGS, bottom: true, ...patch });
 const item = (at: number, text: string, patch: Partial<DanmakuItem> = {}): DanmakuItem => ({ at, mode: "scroll", color: 0xffffff, source: "", text, ...patch });
@@ -98,9 +98,22 @@ describe("danmaku model: size and place", () => {
     expect(pictureRect(1200, 900, 1920, 1080)).toEqual({ left: 0, top: 113, width: 1200, height: 675 });
     // A 4:3 picture in a 16:9 stage has bars at the sides.
     expect(pictureRect(1920, 1080, 1440, 1080)).toEqual({ left: 240, top: 0, width: 1440, height: 1080 });
-    // Before the size of the video is known the whole stage is used.
-    expect(pictureRect(800, 450, 0, 0)).toEqual({ left: 0, top: 0, width: 800, height: 450 });
+    // Before the size of the video is known there is no picture (nothing is drawn).
+    expect(pictureRect(800, 450, 0, 0)).toEqual({ left: 0, top: 0, width: 0, height: 0 });
     expect(pictureRect(0, 0, 1920, 1080)).toEqual({ left: 0, top: 0, width: 0, height: 0 });
+  });
+
+  it("AT-133 lays the comments from the play area's top across its width, and a screenshot keeps only the part over the picture", () => {
+    expect(danmakuArea(1280, 1440, 0.25)).toEqual({ left: 0, top: 0, width: 1280, height: 360 });
+    // Tall window: the picture starts 360 px down, so a quarter-high layer is all in the bar and nothing reaches the screenshot.
+    expect(danmakuCrop({ width: 1280, height: 360 }, { width: 1280, height: 360 }, { left: 0, top: 360, width: 1280, height: 720 }, { width: 1920, height: 1080 })).toBeNull();
+    // Half the play area: the lower 360 px of the layer are over the picture's top half; a canvas at 2x pixels is cut at 2x and scaled to the frame.
+    expect(danmakuCrop({ width: 2560, height: 1440 }, { width: 1280, height: 720 }, { left: 0, top: 360, width: 1280, height: 720 }, { width: 1920, height: 1080 }))
+      .toEqual({ sx: 0, sy: 720, sw: 2560, sh: 720, dx: 0, dy: 0, dw: 1920, dh: 540 });
+    // Wide window: the bars at the sides are cut off; the middle goes over the whole frame width.
+    expect(danmakuCrop({ width: 1280, height: 360 }, { width: 1280, height: 360 }, { left: 160, top: 0, width: 960, height: 720 }, { width: 1440, height: 1080 }))
+      .toEqual({ sx: 160, sy: 0, sw: 960, sh: 360, dx: 0, dy: 0, dw: 1440, dh: 540 });
+    expect(danmakuCrop({ width: 0, height: 0 }, { width: 1280, height: 360 }, { left: 0, top: 0, width: 1280, height: 720 }, { width: 1920, height: 1080 })).toBeNull();
   });
 
   it("writes the offset in whole tenths of a second with its sign", () => {

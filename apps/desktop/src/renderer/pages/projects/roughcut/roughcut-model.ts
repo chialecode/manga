@@ -4,7 +4,7 @@ import { formatClockMs } from "../../../readers/video-model.ts";
 
 type T = Translator["t"];
 
-export type { RoughcutExportView as ExportView, RoughcutPlan as PlanView, RoughcutProblem as PlanProblem };
+export type { RoughcutExportView as ExportView, RoughcutPlan as PlanView };
 
 export type ClipView = { id: string; resourceId: string; revisionId: string; title: string; label: string; inMs: number; outMs: number; sortKey: string; available: boolean; durationMs: number | null };
 export type OpsState = { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null };

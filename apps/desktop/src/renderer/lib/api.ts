@@ -52,6 +52,8 @@ export interface MangaHost {
   windowAction?(action: "minimize" | "toggle-maximize" | "close"): Promise<WindowControlsState>;
   /** Told when the window is maximized or restored, by whatever means. Returns an unsubscribe function. */
   onWindowState?(listener: (state: WindowControlsState) => void): () => void;
+  /** The main process asks for the saves that wait (the tabs and layouts of each context) before the window closes; the page answers when they are done. */
+  onSaveNow?(listener: () => Promise<unknown>): () => void;
   /** Leaves the application; the title bar's menu offers it. */
   quit?(): Promise<void>;
   /** Only pages on the allow list open, in the system browser. */

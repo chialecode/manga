@@ -89,7 +89,7 @@ export function readJson(dir, name) {
 }
 
 export function packagedExecutable() {
-  const outDir = path.join(repoRoot, "dist/desktop/packages");
+  const outDir = process.env.MANGA_DESKTOP_PACKAGE_DIR ? path.resolve(repoRoot, process.env.MANGA_DESKTOP_PACKAGE_DIR) : path.join(repoRoot, "dist/desktop/packages");
   if (!fs.existsSync(outDir)) return undefined;
   const built = fs.readdirSync(outDir).find((name) => name.startsWith("MANGA"));
   if (!built) return undefined;

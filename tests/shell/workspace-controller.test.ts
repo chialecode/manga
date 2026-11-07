@@ -219,7 +219,9 @@ describe("what is saved, and when (AT-111, AT-113)", () => {
     expect(saved[0]!.contextId).toBe("prj_1");
     expect(saved[0]!.state.tabs.map((tab) => tab.target.resourceId)).toEqual(["a", "b"]);
     expect(saved[0]!.state.focusedTab).toBe(saved[0]!.state.tabs[1]!.id);
-    expect(saved[0]!.state.version).toBe(1);
+    expect(saved[0]!.state.version).toBe(2);
+    // The novels' view keeps the same tabs in a layout of its own (A-107), the newest in front.
+    expect(saved[0]!.state.views.novel).toMatchObject({ focusedTab: saved[0]!.state.tabs[1]!.id });
   });
 
   it("saves a tab's position in what it shows with the layout, and not when nothing changed", async () => {
@@ -482,5 +484,109 @@ describe("how a thing was asked for (A-95)", () => {
     const left = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 });
     card.dispatchEvent(left);
     expect(left.defaultPrevented).toBe(false);
+  });
+});
+
+describe("AT-130 each view has its own main area (A-107)", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); tabMarks.reset(); });
+
+  it("shows in a feature view only its kind of tab, with the tab it had in front, and in the home every tab", async () => {
+    const { controller } = setup();
+    await controller.activate("prj_1");
+    const board = controller.open({ kind: "whiteboard", target: { projectId: "prj_1", objectId: "b1" } })!;
+    const episode = controller.open({ kind: "reader", target: { resourceId: "ep1", mediaKind: "video" } })!;
+    expect(controller.view).toBe("home");
+    expect(controller.focusedTabId()).toBe(episode);
+    controller.showView("whiteboard");
+    expect(controller.tabsIn().map((tab) => tab.id)).toEqual([board]);
+    expect(controller.focusedTabId()).toBe(board);
+    controller.showView("comic");
+    expect(controller.tabsIn()).toEqual([]);
+    expect(controller.focusedTabId()).toBeNull();
+    controller.showView("video");
+    expect(controller.focusedTabId()).toBe(episode);
+    controller.showView("home");
+    expect(controller.tabsIn().map((tab) => tab.id)).toEqual([board, episode]);
+    // Switching views opens and closes nothing.
+    expect(controller.tabsOf()).toHaveLength(2);
+  });
+
+  it("opens a thing of the same kind in the feature view on screen and in the home, and a thing of another kind in its own view", async () => {
+    const views: string[] = [];
+    const { controller, env } = setup();
+    env.onView = (view) => views.push(view);
+    await controller.activate("prj_1");
+    controller.showView("whiteboard");
+    const board = controller.open({ kind: "whiteboard", target: { projectId: "prj_1", objectId: "b1" } })!;
+    expect(controller.view).toBe("whiteboard");
+    expect(controller.focusedTabId()).toBe(board);
+    // A card on the board that opens an episode moves to the episodes' view (Q-35 6).
+    const episode = controller.open({ kind: "reader", target: { resourceId: "ep1", mediaKind: "video" } })!;
+    expect(controller.view).toBe("video");
+    expect(views).toEqual(["video"]);
+    expect(controller.focusedTabId()).toBe(episode);
+    // A page shown only in the home moves to the home.
+    controller.open({ kind: "project", target: { projectId: "prj_1" } });
+    expect(controller.view).toBe("home");
+    // Something already open is not opened twice: it is brought in front in its view.
+    controller.showView("comic");
+    expect(controller.open({ kind: "whiteboard", target: { projectId: "prj_1", objectId: "b1" } })).toBe(board);
+    expect(controller.view).toBe("whiteboard");
+    expect(controller.tabsOf()).toHaveLength(3);
+  });
+
+  it("closes a tab in every view at once, and reopens it in the view, the column and the place it was closed from", async () => {
+    const { controller } = setup();
+    await controller.activate(null);
+    const one = controller.open({ kind: "reader", target: { resourceId: "n1", mediaKind: "novel" } })!;
+    controller.open({ kind: "reader", target: { resourceId: "n2", mediaKind: "novel" } });
+    controller.showView("novel");
+    controller.closeTab(one);
+    expect(controller.tabsIn("novel").map((tab) => tab.id)).not.toContain(one);
+    expect(controller.tabsIn("home").map((tab) => tab.id)).not.toContain(one);
+    controller.showView("home");
+    expect(controller.reopen()).toBe(one);
+    expect(controller.view).toBe("novel");
+    expect(controller.focusedTabId()).toBe(one);
+  });
+
+  it("saves the layout of each view, and puts each back after a restart", async () => {
+    const { controller, saved } = setup();
+    await controller.activate(null);
+    const novel = controller.open({ kind: "reader", target: { resourceId: "n1", mediaKind: "novel" } })!;
+    const comic = controller.open({ kind: "reader", target: { resourceId: "c1", mediaKind: "comic" } })!;
+    controller.showView("comic");
+    controller.setPreset("two");
+    await vi.advanceTimersByTimeAsync(600);
+    const state = saved.at(-1)!.state;
+    expect(state.views.comic).toMatchObject({ preset: "two", focusedTab: comic });
+    expect(state.views.novel).toMatchObject({ focusedTab: novel });
+    expect(state.focusedTab).toBe(comic);
+
+    const again = setup({ "": state });
+    await again.controller.activate(null);
+    again.controller.showView("comic");
+    expect(again.controller.preset()).toBe("single"); // the dock's own count: no dock in this test, the saved preset is kept
+    expect(again.controller.stateOf()!.views.comic).toMatchObject({ preset: "two", focusedTab: comic });
+    again.controller.showView("novel");
+    expect(again.controller.focusedTabId()).toBe(novel);
+  });
+
+  it("reads a context saved before the views (version 1): its tabs all there, each feature view with its kind", async () => {
+    const v1 = { version: 1, preset: "single", layout: null, focusedTab: "b", closed: [], tabs: [
+      { id: "a", kind: "reader", target: { resourceId: "x", mediaKind: "video" }, title: "x", view: {} },
+      { id: "b", kind: "note", target: { objectId: "n" }, title: "n", view: {} },
+      { id: "c", kind: "hologram", target: {}, title: "?", view: {} },
+    ] } as unknown as WorkspaceState;
+    const { controller } = setup({ "": v1 });
+    await controller.activate(null);
+    expect(controller.tabsOf().map((tab) => tab.id)).toEqual(["a", "b", "c"]);
+    controller.showView("video");
+    expect(controller.focusedTabId()).toBe("a");
+    controller.showView("note");
+    expect(controller.focusedTabId()).toBe("b");
+    controller.showView("home");
+    expect(controller.focusedTabId()).toBe("b");
   });
 });

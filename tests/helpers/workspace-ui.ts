@@ -38,10 +38,6 @@ export function closeFocusedTab() {
   if (!tab) throw new Error("no tab is in front");
   fireEvent.click(tab.querySelector("[data-testid='tab-close']")!);
 }
-
-/** The page of the tab in front. */
-export const focusedPanel = () => (activeHost() ?? document).querySelector<HTMLElement>("[data-testid='tab-panel'][data-focused='true'][data-visible='true']");
-
 /**
  * From a window that has just come up to the shelf of one medium, in the library tab that is open at the start: the overview lists each medium with a
  * "view all", and that is the way to its shelf. Waits for the pause that the tab's history takes before it counts a place as visited.

@@ -16,6 +16,7 @@ export function runStageTest({ withReport = false } = {}) {
     return 1;
   }
   const evidence = runDir();
+  const leftoversBefore = testTempEntries();
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "manga-vitest-"));
   const reporterFile = path.join(scratch, "vitest.json");
   // Stage evidence runs every test: the large files on, and never the CI switch that skips tests needing the media tools.
@@ -29,6 +30,12 @@ export function runStageTest({ withReport = false } = {}) {
   const vitestReport = fs.existsSync(reporterFile) ? JSON.parse(fs.readFileSync(reporterFile, "utf8")) : undefined;
   fs.rmSync(scratch, { recursive: true, force: true });
   if (result.status !== 0 || !vitestReport) return result.status || 1;
+  // A test run leaves nothing in the system's temporary folder (LOOP-25); only the names the tests use are counted.
+  const leftovers = [...testTempEntries()].filter((name) => !leftoversBefore.has(name));
+  if (leftovers.length) {
+    console.error(JSON.stringify({ status: "failed", check: "stage-test", reason: "temporary directories left behind", count: leftovers.length, prefixes: [...new Set(leftovers.map((name) => name.replace(/[^-]*$/, "")))] }));
+    return 1;
+  }
 
   const selfTests = ["scripts/stage-report.test.mjs", "scripts/check-docs.test.mjs"];
   const executed = [];
@@ -82,6 +89,15 @@ export function runStageTest({ withReport = false } = {}) {
   if (withReport) return runStageReport();
   console.log(JSON.stringify({ status: "passed", check: "stage-test", evidence: path.relative(root, evidence).replaceAll("\\", "/"), productAcceptance: "not-run" }));
   return 0;
+}
+
+/** The entries of the system's temporary folder named the way this repository's tests and stage scripts name theirs. */
+function testTempEntries() {
+  try {
+    return new Set(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith("manga-")));
+  } catch {
+    return new Set();
+  }
 }
 
 /** node scripts/stage.mjs report: evaluate the run directory; non-zero for any missing, stale or failed item. */

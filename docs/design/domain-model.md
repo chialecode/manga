@@ -453,8 +453,8 @@ interface CapturePositionEvent {
 | 进度 | `progress` 重建，主键（`context_id`、`resource_id`、`resource_revision_id`），`context_id` 非空；索引（`resource_id`、`last_interaction_at`）；视图 `progress_latest` | 已有记录全部归入“最近”（空字符串） |
 | 对话 | `agent_sessions` 以 `project_id` 为上下文，`mode` 只在迁移时读取；元数据键 `conversation.current.recent` 与 `conversation.current.project.<编号>` | `project` 类补齐 `project_id`；项目在 v11 已删除的项目会话成为“最近”里的普通对话（与现在删除项目的处理相同）；其余归入“最近”；两种模式下同一（kind、target）各有一段对话时，较新的一段是它在“最近”里的对话，另一段成为“最近”里的普通对话，标题后注明原模式；运行、消息与工具事件不动 |
 | 录音 | `capture_sessions.mode` 不再使用 | 录音的上下文按所属会话推出，没有会话的归入“最近” |
-| 外壳偏好 | `shell.layout` 升到 version 2：一份 `{ sidebar, dock }` 的宽度与显隐，加 `lastContext` | 读到 version 1 时取原娱乐模式的左右栏值转换并写回 |
-| 标签与布局 | `workspace_contexts(context_id PRIMARY KEY, state_json, updated_at)` | `state_json` 经 Zod 校验，分屏布局、各栏的标签（类型、目标、标题、视图状态）、焦点、关闭过的标签（最多 10 个），单条不超过 256 KiB；未知的标签类型原样保留；原两种模式已打开的资源成为“最近”的标签，工作模式里打开过的项目各有一个只含项目主页的布局 |
+| 外壳偏好 | `shell.layout` 升到 version 2：一份 `{ sidebar, dock }` 的宽度与显隐，加 `lastContext`；可选字段：图标栏的顺序、三个媒介视图的“封面 / 列表”，已存的记录照常读 | 读到 version 1 时取原娱乐模式的左右栏值转换并写回 |
+| 标签与布局 | `workspace_contexts(context_id PRIMARY KEY, state_json, updated_at)` | `state_json` 经 Zod 校验（version 2，`packages/contracts/src/workspace-state.ts`）：标签（类型、目标、标题、视图状态）与关闭过的标签（最多 10 个，带关闭时所在的视图、栏与位置）属于上下文；顶层的 `preset`、`layout`、`focusedTab` 是主页的布局，`views` 是各功能视图各自的一份（A-107）。读到 version 1 时原布局成为主页的布局，每个功能视图的布局是它那一类标签按原顺序放在单栏里，写回时存 version 2。单条不超过 256 KiB，超出时先丢最早关闭的标签与看不见的视图里轻量页面的视图状态，再丢功能视图的布局，主页的布局最后丢；未知的标签类型原样保留；原两种模式已打开的资源成为“最近”的标签，工作模式里打开过的项目各有一个只含项目主页的布局 |
 | 项目材料 | `project_materials.origin`（`manual` / `auto`）与 `project_material_exclusions(project_id, kind, target_id)` | 在项目里打开资源、写笔记、录音、截图时自动加入材料；用户移除后在这个项目里不再自动加入 |
 | 资料包与项目包 | 资料包带按上下文的进度，项目包带该项目的进度与布局 | 旧版本导出的包照常导入，进度归入“最近” |
 

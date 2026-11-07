@@ -42,7 +42,8 @@ const OBJECT_VIEWS = ["whiteboard", "mindmap", "draft", "roughcut"] as const;
 
 /** The entries each view puts above its list (交互设计 2.10), by test id and in order. */
 const ENTRIES: Record<RailName, string[]> = {
-  home: ["sidebar-new-conversation", "sidebar-new-project", "sidebar-entry-library", "sidebar-entry-projects"],
+  // A new conversation is the conversations' view's, and a new project is the "+" on the projects' title (A-110).
+  home: ["sidebar-entry-library", "sidebar-entry-projects"],
   conversation: ["sidebar-new-conversation", "sidebar-manage"],
   novel: ["sidebar-manage"],
   comic: ["sidebar-manage"],
@@ -73,7 +74,7 @@ const near = (a: number, b: number, tolerance = 2) => Math.abs(a - b) <= toleran
 
 // ------------------------------------------------------------------------------------------------------------------------------ what the page shows
 
-type RowFacts = { id: string; title: string; type: string | null };
+type RowFacts = { id: string; title: string; type: string | null; pill: boolean };
 type GroupFacts = { key: string; current: boolean; opened: boolean; rows: RowFacts[]; more: string[] };
 type SidebarFacts = { view: string | null; title: string; entries: string[]; groups: GroupFacts[]; flat: RowFacts[]; hasProjects: boolean; hasRecent: boolean };
 type ApiItem = { title: string; type: string };
@@ -109,7 +110,8 @@ function makeKit(view: BrowserWindow, call: Call) {
     sidebar: () => js<SidebarFacts | null>(view, `(() => {
       const root = ${at("sidebar")};
       if (!root || !${DRAWN}(root)) return null;
-      const row = (r) => ({ id: r.getAttribute("data-testid") ?? "", title: r.querySelector(".truncate")?.textContent ?? "", type: r.getAttribute("data-type") });
+      // A thing is a row, or a cover in a medium's view (A-105).
+      const row = (r) => ({ id: r.getAttribute("data-testid") ?? "", title: r.querySelector(".truncate, .sidebar-cover-title")?.textContent ?? "", type: r.getAttribute("data-type"), pill: Boolean(r.querySelector(".sidebar-pill")) });
       return {
         view: root.getAttribute("data-view"),
         title: root.querySelector('[data-testid="sidebar-title"]')?.textContent ?? "",
@@ -117,9 +119,9 @@ function makeKit(view: BrowserWindow, call: Call) {
         groups: [...root.querySelectorAll(".sidebar-context")].map((g) => ({
           key: (g.getAttribute("data-testid") ?? "").slice("context-".length),
           current: g.getAttribute("data-current") === "true",
-          opened: g.querySelector(".sidebar-chevron")?.getAttribute("aria-expanded") === "true",
-          rows: [...g.querySelectorAll(".sidebar-row")].map(row),
-          more: [...g.querySelectorAll(".sidebar-more")].map((b) => b.getAttribute("data-testid") ?? ""),
+          opened: g.querySelector(".sidebar-folder")?.getAttribute("aria-expanded") === "true",
+          rows: [...g.querySelectorAll(".sidebar-row, .sidebar-cover")].map(row),
+          more: [...g.querySelectorAll('[data-testid^="sidebar-more-"]')].map((b) => b.getAttribute("data-testid") ?? ""),
         })),
         flat: [...root.querySelectorAll('[data-testid="sidebar-downloads"] .sidebar-row')].map(row),
         hasProjects: Boolean(root.querySelector('[data-testid="sidebar-projects"]')),
@@ -133,7 +135,11 @@ function makeKit(view: BrowserWindow, call: Call) {
       return waitUntil(view, `(() => { const root = ${at("sidebar")}; return Boolean(root) && ${DRAWN}(root) && root.getAttribute("data-view") === ${JSON.stringify(name)} && !document.querySelector('[data-testid="sidebar-loading"]'); })()`, timeoutMs);
     },
     /** What the sidebar of a view should list: asked of the command that fills it, for the groups the window has open. */
-    api: async (name: RailName, open: Array<string | null>): Promise<ApiView> => (await call("workspace.sidebar", { view: name, perGroup: 5, open })).value as ApiView,
+    api: async (name: RailName, open: Array<string | null>): Promise<ApiView> => (await call("workspace.sidebar", { view: name, open })).value as ApiView,
+    /** Every tab the context in front holds, whichever view shows it (a tab out of the view on screen is not a `tab` by test id). */
+    allTabs: () => js<string>(view, `[...new Set([...(document.querySelector('[data-testid="context-host"][data-active="true"]')?.querySelectorAll(".tab-chip[data-tab]") ?? [])].map((el) => el.getAttribute("data-tab")))].sort().join(",")`),
+    /** The view whose layout the main area shows (a view with no tab shows its empty page instead). */
+    mainView: () => js<string | null>(view, `(() => { const host = document.querySelector('[data-testid="context-host"][data-active="true"]'); return (host?.querySelector('[data-testid="view-dock"]') ?? host?.querySelector('[data-testid="view-empty"]'))?.getAttribute("data-view") ?? null; })()`),
   };
   return kit;
 }
@@ -232,8 +238,12 @@ async function walkViews(env: RailEnv, kit: Kit, seeded: Seeded): Promise<void> 
   await openGroup(projectId);
   home = await settle(kit, "home");
   const opened = home.facts?.groups.find((group) => group.key === projectId);
-  if (!opened?.rows.some((row) => row.id === `sidebar-item-whiteboard-${boardId}` && row.type === "whiteboard")) problems.push("the project's group does not list its whiteboard once it is open");
-  if (!(await kit.drawn(`sidebar-type-${projectId}-whiteboard`))) problems.push("the home does not name the kind above the project's whiteboards");
+  const boardRow = opened?.rows.find((row) => row.id === `sidebar-item-whiteboard-${boardId}` && row.type === "whiteboard");
+  if (!boardRow) problems.push("the project's group does not list its whiteboard once it is open");
+  // The home's list is one list of every kind: the kind is a pill after the name (A-103), on every row.
+  else if (!boardRow.pill) problems.push("the home does not name the kind after the project's whiteboard");
+  if (opened?.rows.some((row) => !row.pill)) problems.push("a row of the home's list has no pill naming its kind");
+  if (!(await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="sidebar-projects"] .sidebar-group-head [data-testid="sidebar-new-project"]'))`))) problems.push("the projects' title has no \"+\" to make a project");
   problems.push(...home.problems.map((text) => `home: ${text}`));
   const labelOf = (name: RailName) => kit.attr(`nav-${name}`, "aria-label");
   if (home.facts && home.facts.title !== (await labelOf("home"))) problems.push("the home's sidebar is not headed by the icon's name");
@@ -266,10 +276,12 @@ async function walkViews(env: RailEnv, kit: Kit, seeded: Seeded): Promise<void> 
       else views.downloads = "no icon without the plugin";
       continue;
     }
-    const tabsBefore = (await tabsOf(view)).map((tab) => tab.id).join(",");
+    const tabsBefore = await kit.allTabs();
     if (!(await kit.showView(name))) { problems.push(`${name}: the sidebar did not come`); continue; }
-    // The icon itself opens no tab.
-    if ((await tabsOf(view)).map((tab) => tab.id).join(",") !== tabsBefore) problems.push(`${name}: a click on the icon changed the tabs`);
+    // The icon itself opens no tab; the main area goes to the view's own layout with the sidebar (A-107).
+    if ((await kit.allTabs()) !== tabsBefore) problems.push(`${name}: a click on the icon changed the tabs`);
+    const main = await kit.mainView();
+    if (main !== name) problems.push(`${name}: the main area shows the view ${main}, not the one of the icon`);
     if (name === "conversation") {
       // A conversation of a project that is not where the window is: its group opens, the row is clicked, and the window goes to the project first.
       const settledNow = await settle(kit, name);
@@ -375,8 +387,9 @@ export async function hideRailIcon(view: BrowserWindow, name: RailName): Promise
     return true;
   })()`);
   if (!sent || !(await waitDrawn(view, "rail-menu", 2000))) return false;
-  const onlyOne = await js<string[]>(view, `[...document.querySelectorAll('[data-testid="rail-menu"] [role="menuitem"]')].map((b) => b.getAttribute("data-testid") ?? "")`);
-  if (JSON.stringify(onlyOne) !== JSON.stringify(["rail-menu-hide"])) return false;
+  // The menu of an icon that can be taken out moves it up or down as well (A-108), and taking out is the last entry.
+  const entries = await js<string[]>(view, `[...document.querySelectorAll('[data-testid="rail-menu"] [role="menuitem"]')].map((b) => b.getAttribute("data-testid") ?? "")`);
+  if (JSON.stringify(entries) !== JSON.stringify(["rail-menu-up", "rail-menu-down", "rail-menu-hide"])) return false;
   await clickTestId(view, "rail-menu-hide", 2000);
   return waitUntil(view, `!${at}`, 3000);
 }
@@ -522,6 +535,7 @@ async function walkHoverCard(env: RailEnv, kit: Kit): Promise<void> {
   await away();
   await sleep(300);
   const mainBefore = await kit.rect("shell-main");
+  const dockBefore = await kit.drawn("shell-dock");
 
   // The pointer rests on an icon: its card comes out against the rail, over the page, with the sidebar's color, an edge and a shadow, and the focus is not taken.
   await js(view, `${kit.at("nav-home")}.focus()`);
@@ -594,7 +608,13 @@ async function walkHoverCard(env: RailEnv, kit: Kit): Promise<void> {
   const markedNote = await kit.attr("nav-note", "aria-current");
   const sameMain = await kit.rect("shell-main");
   if (!noteCard || markedNote !== "page") problems.push(`a click on the note icon ${noteCard ? "did not mark it" : "brought no card of the note view"}`);
-  if (mainBefore && sameMain && !near(mainBefore.w, sameMain.w, 1)) problems.push("a click on an icon changed the width of the page");
+  // The card does not push the page: it starts where it started. Its width follows the dock only, which comes and goes with what the view shows (A-107).
+  const dockNow = (await kit.drawn("shell-dock")) ? await kit.rect("shell-dock") : null;
+  const dockChanged = dockBefore !== Boolean(dockNow);
+  if (mainBefore && sameMain && !near(mainBefore.x, sameMain.x, 1)) problems.push("a click on an icon moved the page's left edge");
+  if (mainBefore && sameMain && !dockChanged && !near(mainBefore.w, sameMain.w, 1)) problems.push("a click on an icon changed the width of the page");
+  if (sameMain && dockNow && !near(sameMain.r, dockNow.x, 2)) problems.push("the page does not reach the dock after a click on an icon");
+  detail.afterIcon = { main: sameMain, dock: dockNow, dockBefore };
   if ((await sidebarWidth())?.visible !== false) problems.push("a click on an icon unfolded the sidebar");
   await away();
   const gone = await noCard(3000);

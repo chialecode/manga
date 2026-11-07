@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { createRef, type MutableRefObject } from "react";
 import { DEFAULT_DANMAKU_SETTINGS, type DanmakuItem, type DanmakuSettings } from "@manga/contracts/danmaku";
-import { DanmakuLayer } from "../../apps/desktop/src/renderer/readers/danmaku-layer.tsx";
+import { DanmakuLayer, type DanmakuCapture } from "../../apps/desktop/src/renderer/readers/danmaku-layer.tsx";
 import type { EngineFactory, EngineInput } from "../../apps/desktop/src/renderer/readers/danmaku-engine.ts";
 
 /** jsdom lays nothing out; the stage gets a size of its own, as a real window would give it. */
@@ -59,15 +59,37 @@ function mount(props: Partial<Parameters<typeof DanmakuLayer>[0]> & { factory: E
 const layer = () => screen.getByTestId("danmaku-layer");
 
 describe("danmaku layer", () => {
-  it("covers the top part of the picture and not the bars around it", () => {
-    // A 4:3 picture in a 16:9 stage has bars at the sides; the comments stay on the picture.
+  it("AT-133 starts at the top of the play area and spans its width, bars included, with the letters of the picture and its crossing time", () => {
+    // A 4:3 picture in a 16:9 stage has bars at the sides: the comments cross them too.
     const run = engines();
     mount({ factory: run.factory, settings: settings({ area: 0.5 }) }, video({ w: 1440, h: 1080 }));
-    expect(layer().style.left).toBe("160px");
-    expect(layer().style.width).toBe("960px");
+    expect(layer().style.left).toBe("0px");
+    expect(layer().style.width).toBe("1280px");
     expect(layer().style.height).toBe("360px");
     expect(layer().style.top).toBe("0px");
     expect(layer().getAttribute("aria-hidden")).toBe("true");
+    // The picture is 960 x 720: letters by its height; the speed by the layer's width, so a comment crosses in the setting's time.
+    expect(run.made[0]!.fontPx).toBe(17);
+    expect(run.made[0]!.speedPxPerS).toBeCloseTo(128, 5);
+  });
+
+  it("AT-133 in a window taller than the picture: the area counts from the play area's top, so a quarter can be all in the bar above", () => {
+    stage.w = 1280;
+    stage.h = 1440;
+    const run = engines();
+    mount({ factory: run.factory, settings: settings({ area: 0.25 }) });
+    // The 16:9 picture is 1280 x 720 in the middle: 360 px of bar above it, and the layer is the top 360 px.
+    expect(layer().style.top).toBe("0px");
+    expect(layer().style.height).toBe("360px");
+    expect(layer().style.width).toBe("1280px");
+    // The window grew, the picture did not: the letters stay the size they were.
+    expect(run.made[0]!.fontPx).toBe(17);
+  });
+
+  it("AT-133 draws nothing before the video's size is known", () => {
+    const run = engines();
+    mount({ factory: run.factory }, video({ w: 0, h: 0 }));
+    expect(run.made).toHaveLength(0);
   });
 
   it("gives the engine the shown comments, the text size and the speed for this picture", () => {
@@ -154,7 +176,7 @@ describe("danmaku layer", () => {
 
   it("builds nothing on a picture too small to draw on and gives the screenshot code the canvas while it exists", () => {
     const run = engines();
-    const capture: MutableRefObject<(() => HTMLCanvasElement | null) | null> = createRef() as MutableRefObject<(() => HTMLCanvasElement | null) | null>;
+    const capture: MutableRefObject<(() => DanmakuCapture | null) | null> = createRef() as MutableRefObject<(() => DanmakuCapture | null) | null>;
     capture.current = null;
     stage.w = 8;
     stage.h = 8;
@@ -164,7 +186,11 @@ describe("danmaku layer", () => {
     stage.w = 1280;
     stage.h = 720;
     const view = mount({ factory: run.factory, captureRef: capture });
-    expect(capture.current?.()).toBeInstanceOf(HTMLCanvasElement);
+    const given = capture.current?.();
+    expect(given?.canvas).toBeInstanceOf(HTMLCanvasElement);
+    // The screenshot code is told the layer's size and where the picture is in it.
+    expect(given?.layer).toEqual({ width: 1280, height: 360 });
+    expect(given?.picture).toEqual({ left: 0, top: 0, width: 1280, height: 720 });
     view.unmount();
     expect(capture.current).toBeNull();
   });

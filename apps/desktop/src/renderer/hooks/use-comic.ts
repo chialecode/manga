@@ -203,5 +203,3 @@ export function useComic(deps: ComicDeps) {
 
   return { doc, status, elsewhere, dismissElsewhere: () => setElsewhere(null), startPageId: resumePageId, focusApplied, settings, focus, sourceCard, visible: doc !== null, open, openFromNote, close, backToNote, repair, changeSettings, recordPages, settled };
 }
-
-export type Comic = ReturnType<typeof useComic>;

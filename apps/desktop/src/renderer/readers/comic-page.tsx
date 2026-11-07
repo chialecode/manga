@@ -109,6 +109,7 @@ export function ComicPageView(props: {
           ref={layer}
           className="comic-select-layer"
           data-testid={`comic-select-layer-${page.index}`}
+          onDragStart={(event) => event.preventDefault()}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             const from = point(event);

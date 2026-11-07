@@ -63,6 +63,11 @@ function host(overrides: Partial<Record<string, (call: Call) => Reply>> = {}) {
       case "works.moveResource":
         remaining = remaining.filter((item) => item.resourceId !== call.input.resourceId);
         return { status: "ok", value: { resourceId: call.input.resourceId, workId: "work-new", moved: true } };
+      case "works.reidentify": {
+        const ids = call.input.resourceIds as string[];
+        remaining = remaining.filter((item) => !ids.includes(item.resourceId));
+        return { status: "ok", value: { results: ids.map((resourceId) => ({ resourceId, workId: "work-folder", created: true })) } };
+      }
       default: return { status: "ok", value: { covers: [] } };
     }
   });
@@ -186,5 +191,34 @@ describe("the resources that are in no work (AT-101)", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "匹配条目…" }));
     await waitFor(() => expect(matched).toHaveBeenCalledWith("work-new", "video"));
     expect(calls.filter((call) => call.commandId === "works.moveResource" && call.input.resourceId === "r-new")).toEqual([{ commandId: "works.moveResource", input: { resourceId: "r-new", newWorkTitle: "没有归过作品" } }]);
+  });
+
+  it("AT-137 re-identifies one from its menu, or the ticked ones together, and says there is no delete", async () => {
+    const calls = host();
+    const changed = vi.fn();
+    const notices: string[] = [];
+    render(<Shelf {...props({ onChanged: changed, onNotice: (message) => notices.push(message) })} />);
+    await screen.findByTestId("unassigned-group");
+    expect(screen.getByTestId("unassigned-group").textContent).toContain("这里不提供删除");
+    fireEvent.click(screen.getByTestId("unassigned-menu-r-left"));
+    expect(screen.queryByRole("menuitem", { name: /删除/ })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "重新识别作品" }));
+    await waitFor(() => expect(calls.some((call) => call.commandId === "works.reidentify")).toBe(true));
+    expect(calls.filter((call) => call.commandId === "works.reidentify").map((call) => call.input)).toEqual([{ resourceIds: ["r-left"] }]);
+    await waitFor(() => expect(screen.queryByTestId("unassigned-r-left")).toBeNull());
+    expect(changed).toHaveBeenCalled();
+    expect(notices.at(-1)).toContain("1");
+  });
+
+  it("AT-137 re-identifies the ticked resources in one call", async () => {
+    const calls = host();
+    render(<Shelf {...props({ onChanged: () => {}, onNotice: () => {} })} />);
+    await screen.findByTestId("unassigned-group");
+    expect(screen.queryByTestId("unassigned-reidentify-picked")).toBeNull();
+    fireEvent.click(screen.getByTestId("unassigned-pick-r-left"));
+    fireEvent.click(screen.getByTestId("unassigned-pick-r-new"));
+    fireEvent.click(screen.getByTestId("unassigned-reidentify-picked"));
+    await waitFor(() => expect(calls.filter((call) => call.commandId === "works.reidentify").map((call) => call.input)).toEqual([{ resourceIds: ["r-left", "r-new"] }]));
+    await waitFor(() => expect(screen.queryByTestId("unassigned-group")).toBeNull());
   });
 });

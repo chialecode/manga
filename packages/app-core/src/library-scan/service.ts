@@ -9,7 +9,7 @@ import { absoluteIn, moveLocation, relativeWithin } from "../library-locations.t
 /** What the scan needs from the application: reading one unit into the library, and the few things around it. */
 export type ScanHost = {
   importUnit(request: { kind: ScanKind; rootAbs: string; groupAbs: string; unit: ScanUnit; group: ScanGroup; workId?: string; index: number }, signal: AbortSignal): Promise<{ resourceId: string; revisionId: string; workId: string; duplicate: boolean; replaced: boolean; relinked?: boolean }>;
-  /** Called once per scan with the resources it added, for the cover and file-metadata work that follows. */
+  /** Called with the resources a scan added, a stretch at a time as their works are done (A-114), for the cover and file-metadata work that follows. */
   afterImport(resourceIds: string[]): void;
   moduleEnabled(kind: ScanKind): boolean;
   assertWritable(): void;
@@ -77,7 +77,7 @@ const within = (parent: string, child: string) => {
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 };
 
-export type ScanServiceOptions = { store: DrizzleStore; host: ScanHost; now?: () => number; tickMs?: number; startupDelayMs?: number };
+export type ScanServiceOptions = { store: DrizzleStore; host: ScanHost; now?: () => number; tickMs?: number; startupDelayMs?: number; progressMs?: number };
 
 /**
  * Library paths and the background scan (A-50). A scan lists a path in a worker thread, compares the listing with the file
@@ -101,12 +101,16 @@ export class ScanService {
   private readonly startupDelayMs: number;
   private disposed = false;
 
+  /** How often, at most, a scan tells the windows which works it has finished (A-114). */
+  private readonly progressMs: number;
+
   constructor(options: ScanServiceOptions) {
     this.store = options.store;
     this.host = options.host;
     this.now = options.now ?? Date.now;
     this.tickMs = options.tickMs ?? 60_000;
     this.startupDelayMs = options.startupDelayMs ?? 4000;
+    this.progressMs = options.progressMs ?? 1000;
     this.lastTickStart = this.now();
     // No scan survives a process boundary: whatever the database still calls running was cut off.
     this.store.sqlite.prepare("UPDATE scan_jobs SET status = 'interrupted', finished_at = ? WHERE status IN ('queued','running')").run(new Date().toISOString());
@@ -477,12 +481,33 @@ export class ScanService {
 
       // 4. Read the new and changed units, one at a time, writing each as its own small transaction.
       this.stage(job, "import");
-      const added: string[] = [];
       const rootAbs = row.path;
       const workOfGroup = new Map<string, string | undefined>();
+      // A work is shown as soon as its files are in (A-114): when the scan moves on to the next folder, the one before is done. At most once per
+      // `progressMs` (and once at the end) the windows hear which works were finished, and the covers and file facts of their resources start.
+      let finished: string[] = [];
+      let fresh: string[] = [];
+      let told = this.now();
+      let current: string | null = null;
+      const tell = (force: boolean) => {
+        if (!finished.length && !fresh.length) return;
+        if (!force && this.now() - told < this.progressMs) return;
+        if (fresh.length) this.host.afterImport(fresh);
+        if (finished.length) this.host.notify("work.updated", { reason: "scan-progress", pathId: row.id, workIds: [...new Set(finished)] });
+        finished = [];
+        fresh = [];
+        told = this.now();
+      };
+      const groupDone = (key: string | null) => {
+        if (key === null) return;
+        const workId = workOfGroup.get(key);
+        if (workId) finished.push(workId);
+        tell(false);
+      };
       for (const item of todo) {
         if (signal.aborted) break;
         const { unit, group, index, known } = item;
+        if (current !== group.key) { groupDone(current); current = group.key; }
         job.current = unit.rel;
         const key = keys.get(unit.rel) ?? unit.sig ?? null;
         try {
@@ -500,7 +525,7 @@ export class ScanService {
           if (outcome.relinked) job.moved += 1;
           else if (outcome.duplicate) job.skipped += 1;
           else if (known || outcome.replaced) job.changed += 1;
-          else { job.added += 1; added.push(outcome.resourceId); }
+          else { job.added += 1; fresh.push(outcome.resourceId); }
         } catch (error) {
           if (signal.aborted || (error instanceof MangaError && error.code === "CANCELLED")) break;
           job.failed += 1;
@@ -509,15 +534,20 @@ export class ScanService {
         }
         job.processed += 1;
         this.publish(job);
+        // A finished work held back by the once-a-second limit is told as soon as the second is over, not when the next folder (which may be a long
+        // one) is done.
+        if (finished.length) tell(false);
         await yieldToLoop();
       }
+      // What was imported stays, a cancelled scan included: the last works are told.
+      groupDone(current);
+      tell(true);
       if (signal.aborted) return this.finish(job, "cancelled");
 
       // 5. What is no longer there is marked, not deleted. Folders that could not be opened do not count as gone.
       const failedDirs = walk.failed.map((item) => item.p);
       job.unavailable = this.markUnavailable(row, job.id, failedDirs, walk.truncated || plan.truncated);
       this.stage(job, "covers");
-      if (added.length) this.host.afterImport(added);
       this.finish(job, "done");
     } catch (error) {
       if (signal.aborted) return this.finish(job, "cancelled");

@@ -69,7 +69,8 @@ export function LibraryTab() {
         facets={s.facets}
         onOpen={(summary) => s.open.work(summary.id, { kind: summary.mediaKind as WorkMediaKind, title: summary.title })}
         onContinue={(summary) => s.open.continueWork(summary)}
-        onDetail={(id, tab) => s.open.work(id, { tab })}
+        // A shelf of one medium names it, so the work's page opens in that view (A-107) instead of moving the screen to the home.
+        onDetail={(id, tab) => s.open.work(id, { tab, ...(kind ? { kind } : {}) })}
         onAddPath={() => s.open.settings("library")}
         onViewAll={(next) => s.open.library(next)}
         onSetShelf={(id, state) => void setShelf(id, state)}

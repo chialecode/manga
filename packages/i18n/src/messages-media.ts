@@ -86,6 +86,7 @@ export const zhCNMedia = {
   "card.episodes": "共 {count} 集",
   "card.versions": "{count} 个版本",
   "card.outside": "库外",
+  "card.missing": "文件不可用",
   "card.noResource": "没有资源",
 
   // shared
@@ -197,9 +198,15 @@ export const zhCNMedia = {
   "window.restore": "还原",
   "window.close": "关闭窗口",
   "reader.paragraph": "段距",
-  "reader.spreadPrev": "上一对页",
-  "reader.spreadNext": "下一对页",
-  "reader.spreadPosition": "第 {from}–{to} 页 · 共 {spreads} 对页（本段）",
+  "reader.pagePrev": "上一页",
+  "reader.pageNext": "下一页",
+  "reader.pagePosition": "本章 第 {page} / {total} 页",
+  "reader.pagePositionApprox": "本章 第 {page} / 约 {total} 页",
+  "reader.bookPercent": "全书 {percent}%",
+  "reader.flow": "阅读方式",
+  "reader.flowPaged": "翻页",
+  "reader.flowScroll": "滚动",
+  "reader.panelResize": "拖动调整面板宽度",
   "reading.themeTeal": "青绿",
 
   // comic reader

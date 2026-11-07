@@ -210,6 +210,8 @@ export type WorkSummary = {
   versionCount: number;
   /** Resources of this work imported on their own, outside every library path (A-69). */
   outsideCount: number;
+  /** Resources of this work in a library path whose file is gone: still listed, marked as not available (A-113). */
+  missingCount: number;
   linked: boolean;
   createdAt: string;
   lastOpenedAt: string | null;

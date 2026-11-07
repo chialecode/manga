@@ -16,8 +16,6 @@ export type FlowNode = Node<FlowData>;
 export type FlowEdge = Edge;
 
 export const CARD_COLORS = ["none", "pink", "blue", "green", "yellow"] as const;
-export type CardColor = (typeof CARD_COLORS)[number];
-
 export const NO_OPS: WbOps = { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null };
 
 /** A flow node keeps what React Flow needs (position, fixed size, layer) and carries the stored node as data, so a change from the main process replaces only what changed. */

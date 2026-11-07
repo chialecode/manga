@@ -203,7 +203,7 @@ describe("AT-89 the other two readers have the button too", () => {
           document={readingDoc} style={{ measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, theme: "white" }} labels={readingLabels(i18n)} t={i18n.t}
           labelsExtra={{ sourceNeedsReview: "", sourceMissing: "", sourceRepair: "" }}
           hits={[]} bookmarks={[]} assets={{}} highlight={null} sourceCard={null}
-          onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onNote={() => {}} onMore={() => {}} onPart={() => {}}
+          onSearch={() => {}} onJump={() => {}} onProgress={() => {}} onNote={() => {}} onPart={() => {}}
           onStyle={() => {}} onBookmark={() => {}} onRemoveBookmark={() => {}} onOpenBookmark={() => {}} onBackToNote={() => {}} onRepair={() => {}}
         />
       </WindowFullscreenProvider>

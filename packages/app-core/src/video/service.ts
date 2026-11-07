@@ -332,6 +332,15 @@ export class VideoService {
   }
 
   /** Whether the frame table exists, is being built, or has not been asked for. Reading it never starts a build. */
+  /** A revision whose record was removed: its play copies, frame table and subtitle cache go from the disk, and a frame table still being built stops. */
+  forgetRevision(revisionId: string): void {
+    this.cancelFrameIndex(revisionId);
+    this.copies.cancel(revisionId);
+    this.copies.remove(revisionId);
+    fs.rmSync(this.indexFile(revisionId), { force: true });
+    fs.rmSync(this.subtitleDir(revisionId), { recursive: true, force: true });
+  }
+
   frameIndexState(revisionId: string): FrameIndexState {
     if (this.readIndex(revisionId)) return "ready";
     return this.media.jobs.list({ kind: "frame-index", active: true }).some((job) => job.key === `frame-index:${revisionId}`) ? "building" : "absent";

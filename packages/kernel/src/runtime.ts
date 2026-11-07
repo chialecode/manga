@@ -111,6 +111,11 @@ export class MangaRuntime {
     return totals;
   }
 
+  /** Every registered command with the module that registered it (the command snapshot test reads this). */
+  commandOwners(): Array<{ commandId: string; moduleId: string }> {
+    return [...this.commandOwner].map(([commandId, moduleId]) => ({ commandId, moduleId }));
+  }
+
   registerCommand(moduleId: string, commandId: string, handler: CommandHandler): void {
     const slot = this.must(moduleId);
     if (slot.state !== "activating" && slot.state !== "active") throw new MangaError("CAPABILITY_UNAVAILABLE", "module cannot register while stopped");
@@ -342,7 +347,4 @@ export class MangaRuntime {
   }
 }
 
-export { planComposition } from "./planner.ts";
 export { CommandGateway } from "./gateway.ts";
-export { SequencedBus } from "./bus.ts";
-export { ResourceScope } from "./scope.ts";

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-  SIDEBAR_GROUP_SHOWN, SIDEBAR_PAGE_MAX, contextFromKey, contextKey,
+  SIDEBAR_PAGE_MAX, contextFromKey, contextKey,
   type ContextId, type RailPatch, type RailPreference, type RailView, type SidebarItem, type SidebarSection, type SidebarView,
 } from "@manga/contracts";
 import { attempt } from "./lib/api.ts";
@@ -35,10 +35,14 @@ export type SidebarData = {
   /** The pages "更多" has added to a section, by `<view>|<context>|<type>`. */
   more: Record<string, More>;
   loadMore: (contextId: ContextId, type: string, cursor: string | null) => Promise<void>;
+  /** "收起": the section goes back to its first page. */
+  collapse: (contextId: ContextId, type: string) => void;
   reload: () => void;
 };
 
 const sectionKey = (view: string, contextId: ContextId, type: string) => `${view}|${contextKey(contextId)}|${type}`;
+/** The kind a page of the home is asked for: none for its one list of every kind (A-103). */
+const kindOf = (view: RailView, type: string) => (view === "home" && type !== "all" ? { type } : {});
 export { sectionKey };
 
 /**
@@ -69,7 +73,7 @@ export function useSidebarData(view: RailView): SidebarData {
   useEffect(() => {
     const mine = ++latest.current;
     void (async () => {
-      const result = await attempt<SidebarView>("workspace.sidebar", { view, perGroup: SIDEBAR_GROUP_SHOWN, open: open.map((key) => contextFromKey(key)) });
+      const result = await attempt<SidebarView>("workspace.sidebar", { view, open: open.map((key) => contextFromKey(key)) });
       if (mine !== latest.current) return;
       if (!result.ok || !Array.isArray(result.value?.groups)) { setStatus("error"); return; }
       cache.set(view, result.value);
@@ -85,7 +89,7 @@ export function useSidebarData(view: RailView): SidebarData {
         if (!section || section.nextCursor === null) return;
         const size = Math.min(SIDEBAR_PAGE_MAX, Math.max(20, before.items.length));
         const page = await attempt<{ items: SidebarItem[]; nextCursor: string | null }>("workspace.items", {
-          view, contextId: contextFromKey(ctx), ...(view === "home" ? { type } : {}), limit: size, cursor: section.nextCursor,
+          view, contextId: contextFromKey(ctx), ...kindOf(view, type), limit: size, cursor: section.nextCursor,
         });
         if (page.ok) refreshed[key] = { items: page.value.items, next: page.value.nextCursor };
       }));
@@ -98,13 +102,18 @@ export function useSidebarData(view: RailView): SidebarData {
     if (cursor === null) return;
     const key = sectionKey(view, contextId, type);
     const page = await attempt<{ items: SidebarItem[]; nextCursor: string | null }>("workspace.items", {
-      view, contextId, ...(view === "home" ? { type } : {}), limit: 20, cursor,
+      view, contextId, ...kindOf(view, type), limit: 20, cursor,
     });
     if (!page.ok) { s.setError(page.error.message); return; }
     setMore((current) => ({ ...current, [key]: { items: [...(current[key]?.items ?? []), ...page.value.items], next: page.value.nextCursor } }));
   }, [view, s]);
 
-  return { data, status, more, loadMore, reload: () => setAgain((value) => value + 1) };
+  const collapse = useCallback((contextId: ContextId, type: string) => {
+    const key = sectionKey(view, contextId, type);
+    setMore((current) => Object.fromEntries(Object.entries(current).filter(([item]) => item !== key)));
+  }, [view]);
+
+  return { data, status, more, loadMore, collapse, reload: () => setAgain((value) => value + 1) };
 }
 
 /** The items a section shows: its first page and the pages "更多" added, and where the next page starts. */

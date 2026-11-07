@@ -96,7 +96,7 @@ describe("loading and saving the tabs of a context", () => {
   it("refuses a state that is not one, and a project that does not exist, and writes nothing", async () => {
     const ctx = await boot();
     const a = await project(ctx, "项目甲");
-    expect((await run(ctx, "workspace.saveContext", { contextId: a, state: { ...EMPTY_WORKSPACE_STATE, version: 2 } })).error?.code).toBe("VALIDATION_ERROR");
+    expect((await run(ctx, "workspace.saveContext", { contextId: a, state: { ...EMPTY_WORKSPACE_STATE, version: 3 } })).error?.code).toBe("VALIDATION_ERROR");
     expect((await run(ctx, "workspace.saveContext", { contextId: "prj_none", state: EMPTY_WORKSPACE_STATE })).error?.code).toBe("NOT_FOUND");
     expect((await run(ctx, "workspace.loadContext", { contextId: "prj_none" })).error?.code).toBe("NOT_FOUND");
     expect(ctx.app.store.sqlite.prepare("SELECT COUNT(*) AS n FROM workspace_contexts").get()).toEqual({ n: 0 });
