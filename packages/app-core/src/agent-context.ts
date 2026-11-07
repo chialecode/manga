@@ -24,10 +24,18 @@ export function estimateTokens(text: string): number {
   return Math.ceil(narrow / 3.5 + wide);
 }
 
+/** What one page of a PDF given whole is taken to cost: services that take PDF send the text and a picture of each page. */
+export const PDF_PAGE_TOKENS = 2_000;
+/** What one second of a video clip is taken to cost (services that take video count a few hundred tokens a second). */
+export const VIDEO_SECOND_TOKENS = 300;
+
 export function messageTokens(message: ChatMessage): number {
   let sum = MESSAGE_OVERHEAD + estimateTokens(message.content);
   for (const call of message.toolCalls ?? []) sum += estimateTokens(call.name) + estimateTokens(call.arguments) + MESSAGE_OVERHEAD;
   sum += (message.images?.length ?? 0) * IMAGE_TOKENS;
+  // A file or a clip cannot be counted before it is sent; a page and a second are taken at a cautious size (计划 4.5).
+  for (const file of message.files ?? []) sum += file.pages * PDF_PAGE_TOKENS;
+  for (const video of message.videos ?? []) sum += Math.ceil(video.seconds) * VIDEO_SECOND_TOKENS;
   return sum;
 }
 

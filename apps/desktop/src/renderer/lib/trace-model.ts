@@ -22,7 +22,22 @@ export type TraceEntry = {
   hasContent: boolean;
   usage: { inputTokens?: number; outputTokens?: number; costUsd?: number } | null;
   error: { code?: string; message?: string } | null;
+  /** How this request carried its pictures, PDFs and video (计划 4.5): sent whole, or as text and frames, and why. Absent for older entries. */
+  delivery?: DeliveryNote[] | null;
 };
+
+export type DeliveryNote = { kind: "image" | "file" | "video" | "text" | "frames"; bytes?: number; pages?: number; seconds?: number; reason?: string };
+
+const REASONS = ["model-no-pdf", "model-no-video", "runtime-unsupported", "protocol-no-video", "partial-material", "spoiler-range", "over-size-limit", "over-length-limit", "over-budget", "clip-failed", "clip-empty", "file-unreadable", "expired-reextracted"] as const;
+
+/** One line of what a request carried, in the person's words; the reason is a code the record keeps, never words from the material. */
+export function deliveryLine(t: T, note: DeliveryNote): string {
+  const size = note.bytes !== undefined ? sizeLabel(note.bytes) : "";
+  const what = t(`trace.delivery.${note.kind}` as MessageKey, { size, pages: note.pages ?? 0, seconds: note.seconds ?? 0 });
+  if (!note.reason) return what;
+  const reason = (REASONS as readonly string[]).includes(note.reason) ? t(`trace.reason.${note.reason}` as MessageKey) : note.reason;
+  return t("trace.deliveryBecause", { what, reason });
+}
 
 export type TracePart = { entryId: string; part: "request" | "response"; available: boolean; text: string; offset: number; total: number; truncated: boolean; bytes: number };
 

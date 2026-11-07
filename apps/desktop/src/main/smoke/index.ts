@@ -1,3 +1,4 @@
+import { benchPowerThrottlingOff } from "./power-throttling.ts";
 import { app, BrowserWindow } from "electron";
 import fs from "node:fs";
 import path from "node:path";
@@ -48,6 +49,7 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
     // screenshot may still be taken
   }
   const phaseName = process.env.MANGA_SMOKE_PHASE ?? "initial";
+  const powerThrottling = benchPowerThrottlingOff(phaseName, layout.partitions.logs);
   const evidenceDir = process.env.MANGA_SMOKE_EVIDENCE_DIR;
   let markerRestored: boolean | undefined;
   const reportExtras: Record<string, unknown> = {};
@@ -97,6 +99,18 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       merge(await runCreativeSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
     } else if (phaseName === "trace") {
       merge(await runTraceSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "loop") {
+      const { runLoopSmoke } = await import("./loop-walk.ts");
+      merge(await runLoopSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs, samples: process.env.MANGA_SMOKE_SAMPLES }));
+    } else if (phaseName === "credentials-async" || phaseName === "credentials-async-restart") {
+      const { runCredentialsSmoke } = await import("./stage-walks.ts");
+      merge(await runCredentialsSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, phase: phaseName }));
+    } else if (phaseName === "migrate-v13" || phaseName === "migrate-v13-restart") {
+      const { runMigrateSmoke } = await import("./stage-walks.ts");
+      merge(await runMigrateSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, phase: phaseName }));
+    } else if (phaseName === "locations-seed" || phaseName === "locations") {
+      const { runLocationsSmoke } = await import("./stage-walks.ts");
+      merge(await runLocationsSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, phase: phaseName, samples: process.env.MANGA_SMOKE_SAMPLES }));
     } else if (phaseName === "plugins") {
       merge(await runPluginsSmoke({ appService, grant: ownerGrant, view: window, logsDir: layout.partitions.logs }));
     } else if (phaseName === "bench-scale") {
@@ -129,6 +143,12 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       fs.mkdirSync(layout.partitions.logs, { recursive: true });
       fs.writeFileSync(path.join(layout.partitions.logs, `${phaseName}-window.json`), `${JSON.stringify(measured, null, 2)}
 `);
+    } else if (phaseName === "bench-chat") {
+      const { measureChatBench } = await import("./bench-chat.ts");
+      const measured = await measureChatBench(appService, ownerGrant, window);
+      markerRestored = measured.ok === true;
+      fs.mkdirSync(layout.partitions.logs, { recursive: true });
+      fs.writeFileSync(path.join(layout.partitions.logs, "bench-chat-window.json"), `${JSON.stringify(measured, null, 2)}\n`);
     } else if (phaseName === "bench-pane") {
       const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_PANE_SPEC), "utf8")) as { resourceId: string; notes: number };
       await toRail(window);
@@ -166,6 +186,7 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
     status: layout.writable && facets.length > 0 && markerRestored !== false && reportExtras.ok !== false ? "passed" : "failed",
   };
   fs.mkdirSync(layout.partitions.logs, { recursive: true });
+  powerThrottling();
   fs.writeFileSync(path.join(layout.partitions.logs, `smoke-${phaseName}.json`), `${JSON.stringify(report, null, 2)}\n`);
   if (evidenceDir) {
     await capturePage(window, evidenceDir, `ui-smoke-${phaseName}.png`);

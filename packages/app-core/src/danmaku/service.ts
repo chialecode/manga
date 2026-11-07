@@ -41,7 +41,7 @@ export type DanmakuDeps = {
   store: DrizzleStore;
   videos: Pick<VideoService, "load">;
   client: DandanClient;
-  credentialSource: () => CredentialSource;
+  credentialSource: () => CredentialSource | Promise<CredentialSource>;
   /** What a work is searched for, from its title or file name. */
   suggestedQuery: (workId: string) => string;
   now?: () => number;
@@ -193,14 +193,14 @@ export class DanmakuService {
 
   // ------------------------------------------------------------------ status
 
-  status(resourceId: string, revisionId?: string) {
+  async status(resourceId: string, revisionId?: string) {
     const target = this.target(resourceId, revisionId);
     const saved = this.savedMatch(target.revisionId);
     const cache = saved ? this.cacheRow(saved.episode_id) : undefined;
     const subject = this.bangumiSubject(target.workId);
     return {
       resourceId, resourceRevisionId: target.revisionId,
-      credentials: this.deps.credentialSource(),
+      credentials: await this.deps.credentialSource(),
       settings: this.settings(),
       attribution: DANMAKU_ATTRIBUTION,
       match: saved ? matchInfo(saved) : null,
@@ -256,7 +256,7 @@ export class DanmakuService {
     const target = this.target(input.resourceId, input.resourceRevisionId);
     const saved = this.savedMatch(target.revisionId);
     if (saved && !input.refresh) return { state: "matched", match: matchInfo(saved) };
-    if (this.deps.credentialSource() === "none") return { state: "no_credentials" };
+    if ((await this.deps.credentialSource()) === "none") return { state: "no_credentials" };
     const query = target.workId ? this.deps.suggestedQuery(target.workId) : target.title;
     const choice = (reason: "denied" | "uncertain" | "none" | "no_episode", candidates: DanmakuCandidate[] = []): MatchOutcome => ({ state: "needs_choice", candidates, reason, suggestedQuery: query, episodeNumber: target.ordinal });
 
@@ -299,7 +299,7 @@ export class DanmakuService {
 
   /** A search the person typed: only the words typed leave the machine. */
   async search(input: { query: string; episode?: number }, signal?: AbortSignal): Promise<{ candidates: DanmakuCandidate[]; hasMore: boolean }> {
-    if (this.deps.credentialSource() === "none") throw new MangaError("CREDENTIAL_UNAVAILABLE", "danmaku needs the application credentials of the DanDanPlay open platform", { details: { reason: "no_credentials" } });
+    if ((await this.deps.credentialSource()) === "none") throw new MangaError("CREDENTIAL_UNAVAILABLE", "danmaku needs the application credentials of the DanDanPlay open platform", { details: { reason: "no_credentials" } });
     const found = await this.deps.client.searchEpisodes(input.query, input.episode, signal);
     const candidates: DanmakuCandidate[] = [];
     for (const anime of found.animes) {
@@ -343,7 +343,7 @@ export class DanmakuService {
       const wait = REFRESH_MIN_MS - (this.now() - Date.parse(cached.fetched_at));
       if (wait > 0) throw new MangaError("RATE_LIMITED", "this episode was refreshed a moment ago", { details: { reason: "refresh_too_soon", retryAfterMs: wait } });
     }
-    if (this.deps.credentialSource() === "none") {
+    if ((await this.deps.credentialSource()) === "none") {
       // What is already kept can still be shown without credentials; with nothing kept, the reason is the credentials.
       return cached ? view(cached, { fromCache: true, stale: !fresh, warning: { code: "CREDENTIAL_UNAVAILABLE", message: "no application credentials" } }) : { state: "no_credentials" };
     }

@@ -113,7 +113,8 @@ export const WorkspaceCommandInputs = {
   }).strict(),
   "notes.delete": z.object({ objectId: id }).strict(),
   "notes.undelete": z.object({ objectId: id }).strict(),
-  "session.stream": z.object({ sessionId: id, limit: z.number().int().positive().max(1000).optional(), before: iso.optional() }).strict(),
+  // `from`: every message from this time to the newest (at most 5000), for a refresh that keeps the pages already loaded (LOOP-07).
+  "session.stream": z.object({ sessionId: id, limit: z.number().int().positive().max(1000).optional(), before: iso.optional(), from: iso.optional() }).strict(),
   "debug.context": z.object({
     sessionId: id.optional(),
     resourceId: id.optional(),

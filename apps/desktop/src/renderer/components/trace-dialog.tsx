@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { attempt } from "../lib/api.ts";
-import { entryTitle, readable, sizeLabel, spanLabel, type TraceEntry, type TracePart } from "../lib/trace-model.ts";
+import { deliveryLine, entryTitle, readable, sizeLabel, spanLabel, type TraceEntry, type TracePart } from "../lib/trace-model.ts";
 import { Modal } from "./modal.tsx";
 
 type T = Translator["t"];
@@ -70,6 +70,7 @@ function EntryDetail(props: { t: T; entry: TraceEntry; formatNumber: (value: num
         {entry.durationMs !== null ? <li data-testid="trace-duration">{t("trace.duration", { time: spanLabel(entry.durationMs) })}</li> : null}
         {entry.usage && (entry.usage.inputTokens || entry.usage.outputTokens) ? <li data-testid="trace-tokens">{t("trace.tokens", { input: props.formatNumber(entry.usage.inputTokens ?? 0), output: props.formatNumber(entry.usage.outputTokens ?? 0) })}</li> : null}
         <li>{t("trace.bytes", { request: sizeLabel(entry.requestBytes), response: sizeLabel(entry.responseBytes) })}</li>
+        {(entry.delivery ?? []).map((note, index) => <li key={index} data-testid="trace-delivery" data-kind={note.kind} data-reason={note.reason ?? ""}>{deliveryLine(t, note)}</li>)}
       </ul>
       {entry.error?.message ? <p className="review-error" role="alert" data-testid="trace-error">{t("trace.error", { message: entry.error.message })}</p> : null}
       <PartView t={t} entry={entry} part="request" />
@@ -83,10 +84,41 @@ function EntryDetail(props: { t: T; entry: TraceEntry; formatNumber: (value: num
  * sent and what came back. It is opened from the usage page and from a reply in the conversation. The copy is the same text the host exports, cleaned
  * the same way.
  */
+type FrozenStill = { width?: number; height?: number; expired?: boolean; origin?: { kind?: string; pageId?: string; timeMs?: number } };
+
+function Stills(props: { t: T; stills: FrozenStill[] }) {
+  const { t } = props;
+  return (
+    <section className="trace-stills" aria-label={t("trace.stills")} data-testid="trace-stills">
+      {props.stills.map((still, index) => {
+        const size = `${still.width ?? 0} × ${still.height ?? 0}`;
+        const source = still.origin?.kind === "video_frame" ? t("trace.still.frame") : still.origin?.kind === "comic_region" ? t("trace.still.page") : t("trace.still.other");
+        const hint = t("trace.still.hint", { source, size });
+        return (
+          <figure key={index} className="trace-still" data-testid={still.expired ? "trace-image-expired" : "trace-image"} data-expired={still.expired ? "true" : undefined}
+            style={{ aspectRatio: `${Math.max(1, still.width ?? 1)} / ${Math.max(1, still.height ?? 1)}` }} title={hint} aria-label={still.expired ? `${t("trace.still.expired")}，${hint}` : hint} role="img">
+            <span>{still.expired ? t("trace.still.expired") : size}</span>
+          </figure>
+        );
+      })}
+    </section>
+  );
+}
+
 export function TraceDialog(props: { t: T; runId: string; formatNumber: (value: number) => string; onNotice: (message: string) => void; onClose: () => void }) {
   const { t, runId } = props;
   const [entries, setEntries] = useState<TraceEntry[] | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [stills, setStills] = useState<FrozenStill[]>([]);
+
+  // The pictures the task froze: kept ones by their size, ones past the retention period as a placeholder of the same shape (计划第 6 节).
+  useEffect(() => {
+    let live = true;
+    void attempt<{ media?: { images?: FrozenStill[] } }>("agent.getRun", { runId }).then((result) => {
+      if (live) setStills(result.ok && Array.isArray(result.value.media?.images) ? result.value.media.images : []);
+    });
+    return () => { live = false; };
+  }, [runId]);
 
   useEffect(() => {
     let live = true;
@@ -121,6 +153,7 @@ export function TraceDialog(props: { t: T; runId: string; formatNumber: (value: 
       className="trace-drawer"
       footer={entries?.length ? <button type="button" className="secondary-button" data-testid="trace-copy" onClick={() => void copy()}><Copy size={13} />{t("trace.copy")}</button> : undefined}
     >
+      {stills.length ? <Stills t={t} stills={stills} /> : null}
       {entries === null ? <p className="detail-muted" role="status">{t("trace.loading")}</p> : null}
       {entries && entries.length === 0 ? <p className="detail-muted" data-testid="trace-empty">{t("trace.empty")}</p> : null}
       {entries?.length ? (

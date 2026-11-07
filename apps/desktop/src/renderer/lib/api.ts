@@ -8,7 +8,18 @@ export type CommandResult<T = Record<string, unknown>> = {
 };
 
 export type HostState = {
-  layout: { channel: string; pointerPath: string; partitions: Record<string, string>; writable: boolean; recovery: string };
+  layout: {
+    channel: string;
+    pointerPath: string;
+    partitions: Record<string, string>;
+    overrides?: Record<string, string>;
+    appRoot?: string;
+    filesRoot?: string;
+    writable: boolean;
+    recovery: string;
+    /** The move from where earlier versions kept the profile, when this start made or tried it. */
+    upgrade?: { state: "migrated" | "failed"; from: string; to: string; reason?: string };
+  };
   writable: boolean;
   vaultAvailable: boolean;
   packaged?: boolean;

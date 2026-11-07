@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const id = z.string().min(1).max(256);
 
-/** What a model can be given besides text. Audio is transcribed first and video goes as frame pictures; both are listed so the person can say what the model takes. */
+/**
+ * What a model can be given besides text. Audio is transcribed first. A model that takes PDF is given a whole PDF the person put into the task as the file,
+ * and one that takes video a clip of the stretch asked about, when the conditions of 计划 4.5 hold; otherwise the text and frame pictures go as before.
+ */
 export const MODEL_INPUT_TYPES = ["text", "image", "video", "pdf", "audio"] as const;
 export type ModelInputType = (typeof MODEL_INPUT_TYPES)[number];
 
@@ -17,6 +20,18 @@ export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 /** Where a number of the profile came from: left at the default, typed by the person, or read from the service by a test. */
 export type ProfileSource = "default" | "user" | "detected";
 
+/** How large a file and a video clip a model is given at most (计划 4.5). Saved with the profile; a profile saved before this has the defaults. */
+export const ModelLimitsSchema = z.object({
+  /** A whole file (a PDF), in bytes: 1 MiB to 50 MiB, the most one request may carry. */
+  fileBytes: z.number().int().min(1024 * 1024).max(50 * 1024 * 1024),
+  /** A video clip, in bytes: 1 MiB to 20 MiB (base64 makes it a third larger in the request). */
+  videoBytes: z.number().int().min(1024 * 1024).max(20 * 1024 * 1024),
+  /** A video clip, in seconds: 5 to 600. */
+  videoSeconds: z.number().int().min(5).max(600),
+}).strict();
+export type ModelLimits = z.infer<typeof ModelLimitsSchema>;
+export const DEFAULT_MODEL_LIMITS: ModelLimits = { fileBytes: 20 * 1024 * 1024, videoBytes: 5 * 1024 * 1024, videoSeconds: 60 };
+
 export const ModelProfileSchema = z.object({
   /** Tokens the model can take in one request, the input and the answer together. */
   contextWindow: z.number().int().min(4_096).max(10_000_000),
@@ -29,6 +44,7 @@ export const ModelProfileSchema = z.object({
     contextWindow: z.enum(["default", "user", "detected"]),
     maxOutput: z.enum(["default", "user", "detected"]),
   }).strict(),
+  limits: ModelLimitsSchema.default(DEFAULT_MODEL_LIMITS),
 }).strict().refine((profile) => profile.maxOutput < profile.contextWindow, { message: "the answer cannot be as long as the whole window", path: ["maxOutput"] });
 export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 
@@ -40,6 +56,7 @@ export const DEFAULT_MODEL_PROFILE: ModelProfile = {
   capabilities: ["tools"],
   reasoningEffort: null,
   source: { contextWindow: "default", maxOutput: "default" },
+  limits: { ...DEFAULT_MODEL_LIMITS },
 };
 
 /** What a person may set. Anything left out keeps its value; text is always an input. */
@@ -49,6 +66,7 @@ export const ModelProfilePatchSchema = z.object({
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).max(MODEL_INPUT_TYPES.length).optional(),
   capabilities: ModelProfileSchema.shape.capabilities.optional(),
   reasoningEffort: ModelProfileSchema.shape.reasoningEffort.optional(),
+  limits: ModelLimitsSchema.partial().optional(),
 }).strict();
 export type ModelProfilePatch = z.infer<typeof ModelProfilePatchSchema>;
 
@@ -63,6 +81,7 @@ export function applyProfile(base: ModelProfile, patch: ModelProfilePatch, sourc
     ...(patch.inputTypes !== undefined ? { inputTypes: unique(["text" as const, ...patch.inputTypes]) } : {}),
     ...(patch.capabilities !== undefined ? { capabilities: unique(patch.capabilities) } : {}),
     ...(patch.reasoningEffort !== undefined ? { reasoningEffort: patch.reasoningEffort } : {}),
+    limits: { ...DEFAULT_MODEL_LIMITS, ...base.limits, ...(patch.limits ?? {}) },
     source: {
       contextWindow: patch.contextWindow !== undefined ? source : base.source.contextWindow,
       maxOutput: patch.maxOutput !== undefined ? source : base.source.maxOutput,
@@ -97,6 +116,7 @@ export function effectiveProfile(stored: string | null | undefined, verified: re
     ...DEFAULT_MODEL_PROFILE,
     inputTypes: verified.includes("vision") ? ["text", "image"] : [...DEFAULT_MODEL_PROFILE.inputTypes],
     capabilities: unique([...DEFAULT_MODEL_PROFILE.capabilities]),
+    limits: { ...DEFAULT_MODEL_LIMITS },
   };
 }
 
@@ -126,6 +146,16 @@ export const AgentLimitsSchema = z.object({
 export type AgentLimits = z.infer<typeof AgentLimitsSchema>;
 export const DEFAULT_AGENT_LIMITS: AgentLimits = { maxSteps: 24, maxDurationMs: 10 * 60_000 };
 
+/**
+ * How long the pictures and clips frozen for a task are kept after the task has ended (计划 4.4, Q-36): 1 to 365 days, or for ever (`null`). After that a
+ * retry takes them again from their source.
+ */
+export const AgentMediaSettingsSchema = z.object({
+  retentionDays: z.number().int().min(1).max(365).nullable(),
+}).strict();
+export type AgentMediaSettings = z.infer<typeof AgentMediaSettingsSchema>;
+export const DEFAULT_AGENT_MEDIA_SETTINGS: AgentMediaSettings = { retentionDays: 30 };
+
 /** What is kept of every request the agent makes (A-83, Q-29): the whole of it, or only its sizes and timing. */
 export const AgentTraceSettingsSchema = z.object({
   mode: z.enum(["full", "metadata"]),
@@ -150,6 +180,7 @@ export const ModelInputs = {
   "settings.setAgent": z.object({
     limits: AgentLimitsSchema.partial().optional(),
     trace: AgentTraceSettingsSchema.partial().optional(),
+    media: AgentMediaSettingsSchema.partial().optional(),
   }).strict(),
   /** The requests, tool calls and compactions of one run, in order, without their contents. */
   "agent.trace.list": z.object({ runId: id }).strict(),

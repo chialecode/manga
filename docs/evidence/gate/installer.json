@@ -1,0 +1,117 @@
+{
+  "status": "passed",
+  "stage": "m6",
+  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
+  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
+  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
+  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
+  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
+  "packageScriptFingerprint": "9f8b9cbda518e731ed9fac2a0c38689b2eae319580fddf9115206af14c3fe27d",
+  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
+  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
+  "at": "2026-11-05T18:04:26.833Z",
+  "format": "unsigned per-user NSIS installer (electron-builder, --prepackaged)",
+  "electronBuilder": "26.18.0",
+  "steps": [
+    {
+      "name": "no real installation of either channel",
+      "ok": true
+    },
+    {
+      "name": "release: installer built and configured",
+      "ok": true,
+      "megabytes": 202,
+      "seconds": 47
+    },
+    {
+      "name": "development: installer built and configured",
+      "ok": true,
+      "megabytes": 202,
+      "seconds": 48
+    },
+    {
+      "name": "release: installed per user without elevation into the chosen folder",
+      "ok": true,
+      "seconds": 8
+    },
+    {
+      "name": "release: Start menu and desktop shortcuts",
+      "ok": true
+    },
+    {
+      "name": "development: installed per user without elevation into the chosen folder",
+      "ok": true,
+      "seconds": 8
+    },
+    {
+      "name": "development: Start menu and desktop shortcuts",
+      "ok": true
+    },
+    {
+      "name": "both channels installed at once",
+      "ok": true
+    },
+    {
+      "name": "release: first start",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "name": "release: data under LOCALAPPDATA, files under Documents, downloads under Downloads",
+      "ok": true
+    },
+    {
+      "name": "development: first start",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "name": "development: data under LOCALAPPDATA, files under Documents, downloads under Downloads",
+      "ok": true
+    },
+    {
+      "name": "nothing written to the roaming profile",
+      "ok": true,
+      "before": 0,
+      "after": 0
+    },
+    {
+      "name": "release: installed again over a running copy, which was closed, into the same folder",
+      "ok": true
+    },
+    {
+      "name": "development: uninstalled",
+      "ok": true,
+      "status": "removed",
+      "ms": 2000
+    },
+    {
+      "name": "development: Start menu, desktop shortcut, uninstall entry and the per-user key gone",
+      "ok": true
+    },
+    {
+      "name": "development: data and files kept",
+      "ok": true
+    },
+    {
+      "name": "release: uninstalled",
+      "ok": true,
+      "status": "removed",
+      "ms": 2000
+    },
+    {
+      "name": "release: Start menu, desktop shortcut, uninstall entry and the per-user key gone",
+      "ok": true
+    },
+    {
+      "name": "release: data and files kept",
+      "ok": true
+    },
+    {
+      "name": "clean afterwards",
+      "ok": true,
+      "entries": 0,
+      "shortcuts": 0
+    }
+  ]
+}

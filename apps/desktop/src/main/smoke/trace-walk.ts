@@ -92,8 +92,13 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     await waitUntil(view, `!document.querySelector('[data-testid="toast-notice"]')`, 8000);
     view.webContents.focus();
     const copied = await trustedClick(view, "trace-copy", 4000);
-    await sleep(800);
-    const copy = copied ? await clipboard.readText() : "";
+    // The system clipboard is shared with every other application: the copy is read until it is there (up to 4 s), not once after a fixed wait.
+    let copy = "";
+    for (let waited = 0; copied && waited < 4000; waited += 200) {
+      await sleep(200);
+      copy = await clipboard.readText();
+      if (copy.trim().startsWith("[") || copy.trim().startsWith("{")) break;
+    }
     const notice = await js<string>(view, `[...document.querySelectorAll('[data-testid^="toast-"]')].map((el) => el.textContent ?? "").join(" | ")`);
     clipboard.writeText(keptClipboard);
     let copyJson = false;

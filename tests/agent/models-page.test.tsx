@@ -42,7 +42,7 @@ function mount(connections: Array<Record<string, unknown>>, handlers: { onSaveCo
 describe("the profile of a model in the form", () => {
   it("starts from the profile as stored, and a patch holds only what was changed", () => {
     const before = profileForm(found);
-    expect(before).toEqual({ contextWindow: "32768", maxOutput: "8192", inputTypes: ["text"], capabilities: ["tools"], reasoningEffort: "" });
+    expect(before).toEqual({ contextWindow: "32768", maxOutput: "8192", inputTypes: ["text"], capabilities: ["tools"], reasoningEffort: "", fileMiB: "20", videoMiB: "5", videoSeconds: "60" });
     expect(profilePatch(before, before)).toEqual({});
     expect(profilePatch(before, { ...before, contextWindow: "65536" })).toEqual({ contextWindow: 65_536 });
     expect(profilePatch(before, { ...before, inputTypes: ["text", "image"], capabilities: ["tools", "reasoning"], reasoningEffort: "high" })).toEqual({ inputTypes: ["text", "image"], capabilities: ["tools", "reasoning"], reasoningEffort: "high" });
@@ -54,6 +54,15 @@ describe("the profile of a model in the form", () => {
     expect(profileProblem({ ...before, maxOutput: "10" })).toBe("output");
     expect(profileProblem({ ...before, maxOutput: "40000" })).toBe("order");
     expect(profileProblem({ ...before, contextWindow: "abc" })).toBe("window");
+    // The limits of a whole PDF and a clip (计划 4.5): saved in bytes and seconds, checked only for an input the model takes.
+    expect(profilePatch(before, { ...before, fileMiB: "10", videoMiB: "2.5", videoSeconds: "30" })).toEqual({ limits: { fileBytes: 10 * 1024 * 1024, videoBytes: 2.5 * 1024 * 1024, videoSeconds: 30 } });
+    expect(profileProblem({ ...before, fileMiB: "0" })).toBeNull();
+    expect(profileProblem({ ...before, inputTypes: ["text", "pdf"], fileMiB: "0" })).toBe("fileLimit");
+    expect(profileProblem({ ...before, inputTypes: ["text", "pdf"], fileMiB: "51" })).toBe("fileLimit");
+    expect(profileProblem({ ...before, inputTypes: ["text", "video"], videoMiB: "25" })).toBe("videoLimit");
+    expect(profileProblem({ ...before, inputTypes: ["text", "video"], videoSeconds: "4" })).toBe("videoSeconds");
+    expect(profileProblem({ ...before, inputTypes: ["text", "video"], videoSeconds: "7.5" })).toBe("videoSeconds");
+    expect(profileProblem({ ...before, inputTypes: ["text", "pdf", "video"] })).toBeNull();
   });
 
   it("shows the numbers of a connection with where each came from, and has one button to test it", () => {
@@ -185,7 +194,7 @@ describe("the result of the test", () => {
 });
 
 describe("the page of the agent", () => {
-  function host(initial = { limits: { maxSteps: 24, maxDurationMs: 600_000 }, trace: { mode: "full", retentionDays: 30, maxMegabytes: 500 } }) {
+  function host(initial: Record<string, any> = { limits: { maxSteps: 24, maxDurationMs: 600_000 }, trace: { mode: "full", retentionDays: 30, maxMegabytes: 500 }, media: { retentionDays: 30 } }) {
     const calls: Array<{ commandId: string; input: Record<string, any> }> = [];
     let current = initial;
     (window as unknown as { manga: unknown }).manga = {
@@ -193,8 +202,8 @@ describe("the page of the agent", () => {
         calls.push({ commandId: payload.commandId, input: payload.input ?? {} });
         if (payload.commandId === "settings.getAgent") return { status: "ok", value: current };
         if (payload.commandId === "settings.setAgent") {
-          const input = payload.input as { limits?: object; trace?: object };
-          current = { limits: { ...current.limits, ...input.limits }, trace: { ...current.trace, ...input.trace } } as typeof current;
+          const input = payload.input as { limits?: object; trace?: object; media?: object };
+          current = { limits: { ...current.limits, ...input.limits }, trace: { ...current.trace, ...input.trace }, media: { ...current.media, ...input.media } } as typeof current;
           return { status: "ok", value: current };
         }
         return { status: "ok", value: {} };
@@ -207,7 +216,7 @@ describe("the page of the agent", () => {
   it("sits among the agent pages and shows the limits as they are set", async () => {
     expect(SETTINGS_GROUPS.find((group) => group.id === "agent")!.pages).toEqual(["models", "agent", "quick", "usage"]);
     expect(i18n.t("settings.page.agent")).toBe("智能体");
-    host({ limits: { maxSteps: 12, maxDurationMs: 300_000 }, trace: { mode: "full", retentionDays: 30, maxMegabytes: 500 } });
+    host({ limits: { maxSteps: 12, maxDurationMs: 300_000 }, trace: { mode: "full", retentionDays: 30, maxMegabytes: 500 }, media: { retentionDays: 30 } });
     render(<AgentPage t={i18n.t} onError={vi.fn()} onNotice={vi.fn()} />);
     await waitFor(() => expect((screen.getByTestId("agent-steps") as HTMLInputElement).value).toBe("12"));
     expect((screen.getByTestId("agent-minutes") as HTMLInputElement).value).toBe("5");
@@ -234,5 +243,26 @@ describe("the page of the agent", () => {
     expect((await screen.findByTestId("agent-steps-error")).textContent).toContain("1 – 64");
     expect((screen.getByTestId("agent-steps") as HTMLInputElement).value).toBe("40");
     expect(calls.filter((call) => call.commandId === "settings.setAgent")).toHaveLength(2);
+  });
+
+  it("keeps the pictures and clips of tasks for the days set, or for ever", async () => {
+    const { calls } = host();
+    const onNotice = vi.fn();
+    render(<AgentPage t={i18n.t} onError={vi.fn()} onNotice={onNotice} />);
+    await waitFor(() => expect((screen.getByTestId("agent-media-days") as HTMLInputElement).value).toBe("30"));
+    expect((screen.getByTestId("agent-media-forever") as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(screen.getByTestId("agent-media-days"), { target: { value: "7" } });
+    fireEvent.blur(screen.getByTestId("agent-media-days"));
+    await waitFor(() => expect(calls.filter((call) => call.commandId === "settings.setAgent").at(-1)?.input).toEqual({ media: { retentionDays: 7 } }));
+    // The saved value is back before the next is typed.
+    await waitFor(() => expect(onNotice).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByTestId("agent-media-days"), { target: { value: "400" } });
+    fireEvent.blur(screen.getByTestId("agent-media-days"));
+    expect((await screen.findByTestId("agent-media-days-error")).textContent).toContain("1 – 365");
+    fireEvent.click(screen.getByTestId("agent-media-forever"));
+    await waitFor(() => expect(calls.filter((call) => call.commandId === "settings.setAgent").at(-1)?.input).toEqual({ media: { retentionDays: null } }));
+    await waitFor(() => expect(screen.queryByTestId("agent-media-days")).toBeNull());
+    fireEvent.click(screen.getByTestId("agent-media-forever"));
+    await waitFor(() => expect((screen.getByTestId("agent-media-days") as HTMLInputElement).value).toBe("30"));
   });
 });

@@ -16,6 +16,19 @@ import { REDACTED_SECRET, redactText } from "./ops/redact.ts";
 
 export type TraceStatus = "running" | "ok" | "error" | "cancelled";
 
+/**
+ * What a request delivered of a task's material, without the content (AGENT-07, 计划 4.5): a picture, a whole file (PDF), a video clip, or the text or
+ * frames sent instead, with the size, pages or length and, for a fallback or a picture extracted again, the reason. Kept in every trace mode.
+ */
+export type DeliveryNote = {
+  kind: "image" | "file" | "video" | "text" | "frames";
+  bytes?: number;
+  pages?: number;
+  seconds?: number;
+  /** Why this and not the richer form, or why a picture was extracted again; a code from DELIVERY_REASONS. */
+  reason?: string;
+};
+
 export type TraceEntry = {
   id: string;
   runId: string;
@@ -37,12 +50,13 @@ export type TraceEntry = {
   hasContent: boolean;
   usage: { inputTokens?: number; outputTokens?: number; costUsd?: number } | null;
   error: { code?: string; message?: string } | null;
+  delivery: DeliveryNote[] | null;
 };
 
 type Row = {
   id: string; run_id: string; step: number; kind: TraceKind; name: string | null; status: TraceStatus; started_at: string; first_token_at: string | null; ended_at: string | null;
   connection_id: string | null; model_id: string | null; protocol: string | null; request_z: Buffer | null; response_z: Buffer | null; request_bytes: number; response_bytes: number;
-  truncated: number; usage_json: string | null; error_json: string | null;
+  truncated: number; usage_json: string | null; error_json: string | null; delivery_json: string | null;
 };
 
 export type TraceBegin = {
@@ -54,6 +68,7 @@ export type TraceBegin = {
   request: unknown;
   /** Exact strings that must not appear in the record, such as the key of the connection. */
   secrets?: readonly string[];
+  delivery?: readonly DeliveryNote[];
 };
 
 export type TraceHandle = {
@@ -113,13 +128,17 @@ export function recordedRequest(request: TextRequest): Record<string, unknown> {
   return {
     ...rest,
     messages: request.messages.map((message) => {
-      if (!message.images?.length) return message;
+      if (!message.images?.length && !message.files?.length && !message.videos?.length) return message;
+      const facts = (base64: string) => { const bytes = Buffer.from(base64, "base64"); return { bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex").slice(0, 16) }; };
       return {
         ...message,
-        images: message.images.map((image) => {
+        ...(message.images?.length ? { images: message.images.map((image) => {
           const bytes = Buffer.from(image.base64, "base64");
           return { mediaType: image.mediaType, bytes: bytes.length, ...(imageDimensions(bytes) ?? {}), sha256: createHash("sha256").update(bytes).digest("hex").slice(0, 16) };
-        }),
+        }) } : {}),
+        // A file or a clip is recorded as its kind, size and a short fingerprint: never its content, never its name (it may be a path the person chose).
+        ...(message.files?.length ? { files: message.files.map((file) => ({ mediaType: file.mediaType, ...facts(file.base64) })) } : {}),
+        ...(message.videos?.length ? { videos: message.videos.map((video) => ({ mediaType: video.mediaType, ...facts(video.base64) })) } : {}),
       };
     }),
   };
@@ -183,7 +202,18 @@ const entryOf = (row: Row): TraceEntry => ({
   hasContent: row.request_z !== null || row.response_z !== null,
   usage: parseUsage(row.usage_json),
   error: parseError(row.error_json),
+  delivery: parseDelivery(row.delivery_json),
 });
+
+function parseDelivery(text: string | null): DeliveryNote[] | null {
+  if (!text) return null;
+  try {
+    const value = JSON.parse(text) as unknown;
+    return Array.isArray(value) ? value as DeliveryNote[] : null;
+  } catch {
+    return null;
+  }
+}
 
 /** The error of a failed request as it is kept: its code and its words. */
 function errorOf(error: unknown): { code?: string; message: string } {
@@ -233,8 +263,10 @@ export class AgentTrace {
     const full = this.settings().mode === "full";
     try {
       const request = full ? pack(input.request, secrets) : { z: null, bytes: measure(input.request), truncated: false };
-      this.store.sqlite.prepare(`INSERT INTO agent_requests(id, run_id, step, kind, name, status, started_at, connection_id, model_id, protocol, request_z, request_bytes, truncated)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id, input.runId, input.step, input.kind, input.name ?? null, "running", startedAt, input.connection?.id ?? null, input.connection?.modelId ?? null, input.connection?.protocol ?? null, request.z, request.bytes, request.truncated ? 1 : 0);
+      // The delivery notes carry kinds, sizes and reason codes only, so they are kept in every mode.
+      const delivery = input.delivery?.length ? JSON.stringify(input.delivery.map(({ kind, bytes, pages, seconds, reason }) => ({ kind, ...(bytes !== undefined ? { bytes } : {}), ...(pages !== undefined ? { pages } : {}), ...(seconds !== undefined ? { seconds } : {}), ...(reason ? { reason } : {}) }))) : null;
+      this.store.sqlite.prepare(`INSERT INTO agent_requests(id, run_id, step, kind, name, status, started_at, connection_id, model_id, protocol, request_z, request_bytes, truncated, delivery_json)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id, input.runId, input.step, input.kind, input.name ?? null, "running", startedAt, input.connection?.id ?? null, input.connection?.modelId ?? null, input.connection?.protocol ?? null, request.z, request.bytes, request.truncated ? 1 : 0, delivery);
     } catch {
       return NOOP;
     }

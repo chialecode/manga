@@ -24,7 +24,7 @@
 | `docs/governance/`、`docs/decisions/` | 文档登记、治理和决定 |
 | `docs/delivery/`、`docs/evidence/gate/`、`docs/templates/` | 当前阶段计划、报告与状态；最近一次阶段门禁的最终证据；模板 |
 | `scripts/verify.mjs` | 统一入口：语法、文档、公开内容、依赖方向、类型、全部 Vitest、`git diff --check` |
-| `scripts/stage.mjs`、`scripts/stage/` | 阶段门禁入口：`test`/`bench`/`package`/`report`；当前阶段取自登记表的 `currentStage`，门禁定义在 `scripts/stage/gate.json`（指纹范围、必需用例、基准目标、包烟测阶段与窗口场景） |
+| `scripts/stage.mjs`、`scripts/stage/` | 阶段门禁入口：`gate`/`test`/`bench`/`package`/`installer`/`report`；当前阶段取自登记表的 `currentStage`，门禁定义在 `scripts/stage/gate.json`（按输入分组的指纹与每份结果依赖哪些组、必需用例、基准目标、包烟测阶段与窗口场景） |
 | `scripts/check-docs.mjs`、`check-deps.mjs`、`check-publication.mjs` 及其 `.test.mjs` | 文档与登记、包依赖方向、公开内容检查及反例；`stage-report.test.mjs` 为阶段报告门禁反例 |
 | `scripts/samples/` | 合成样本生成：媒体（`generate-media-samples.mjs`，输出 `dist/samples/media`）、阅读样本（`build-reading-samples.py`）与扫描页 PDF（`build-scan-pdf-sample.py`，需要本机 Python 与 PDF 库） |
 | `scripts/tools/` | 随包工具的下载与锁定（FFmpeg LGPL 构建、Silero VAD 模型及其哈希） |
@@ -45,6 +45,7 @@
 | --- | --- |
 | `dist/desktop/native` | 与 Electron 版本/架构匹配的 native binding 和下载 staging；不覆盖 Node 测试 binding |
 | `dist/desktop/packages` | 当前未签名桌面包；最新指针 `dist/desktop/latest-package.json` 带源码指纹 |
+| `dist/desktop/installer` | `stage package` 用 electron-builder 做出的本通道按用户安装包（未签名，不发布） |
 | `dist/desktop/development` | `pnpm dev` 的开发 Profile、运行日志和指针；不会访问正式 Profile |
 | `dist/keys` | 第一方插件签名密钥（私钥不进仓库，公钥在 `packages/app-core/src/plugins/trust.ts`）；丢失后无法再签随包插件，须自行备份（见[用户待办](../../USER-ACTIONS.md)） |
 | `dist/plugins` | 构建并签名的随包插件 `.manga-plugin`；打包时复制到 `resources/plugins` |
@@ -66,10 +67,12 @@
 | `pnpm install` | 可用 | 按锁文件安装 workspace |
 | `pnpm dev` | Windows 可用 | 检查 Electron SQLite ABI 后以独立开发 Profile 启动；无须手工 rebuild；媒体功能需要 `dist/tools` 中的随包工具 |
 | `node scripts/verify.mjs` | 可用 | 统一入口，范围见[质量门禁](quality-gates.md) |
+| `node scripts/stage.mjs gate` | Windows 可用 | 整套门禁：verify（不跑测试）→ test → package → installer → bench → package 补到连续 3 次 → report，第一个失败就停，结果仍有效的步骤不重跑，每步用时写进 `gate-run.json`（`scripts/stage/gate.mjs`） |
 | `node scripts/stage.mjs test` | 可用 | 全部 Vitest + 脚本自测，按必需用例匹配写入跑次目录 |
-| `node scripts/stage.mjs bench` | 可用 | 10k 元数据 / 50k 块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、200 封面读取与 1000 条消息停靠栏的打包窗口测量（`scripts/stage/bench-scan-pane.mjs`，需先有打包产物），再加语义检索（1 万片）、粗剪导出开销、本机回环 BT 下载 200 MB（`bench-creative.mjs`、`bench-bt.mjs`）与白板/导图交互（`bench-canvas.mjs`，隐藏窗口），保留原始样本 |
-| `node scripts/stage.mjs package` | Windows 可用 | Forge 未签名包及打包烟测（含媒体、录音、`window-walk`、创作工作区 `creative` 与插件下载 `plugins` 阶段并写 `scenarios.json`，需先生成合成样本，并有第一方私钥来签随包插件） |
-| `node scripts/stage.mjs report` | 可用 | 核对必需文件/用例/指纹/基准/包；缺项或失败非零退出，不计算产品验收 |
+| `node scripts/stage.mjs bench` | 可用 | 10k 元数据 / 50k 块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、200 封面读取与 1000 条消息停靠栏的打包窗口测量（`scripts/stage/bench-scan-pane.mjs`，需先有打包产物），再加语义检索（1 万片）、粗剪导出开销、本机回环 BT 下载 200 MB（`bench-creative.mjs`、`bench-bt.mjs`）与白板/导图交互（`bench-canvas.mjs`，隐藏窗口），5000 条消息的对话（打包窗口的 `bench-chat` 阶段）与任务媒体（60 s 片段、4 MB 图像、v13 迁移与 500 MB 升级复制，`bench-agent-media.mjs`），保留原始样本 |
+| `node scripts/stage.mjs package` | Windows 可用 | Forge 未签名包及打包烟测（含媒体、录音、`window-walk`、创作工作区 `creative` 与插件下载 `plugins` 阶段，以及长对话与任务媒体 `loop`、旧版凭据 `credentials-async`、schema v13 迁移 `migrate-v13`、数据位置 `data-locations-*` 并写 `scenarios.json`；再用 electron-builder 做出本通道的按用户安装包（不签名）。需先生成合成样本与旧版凭据 Profile（`scripts/samples/build-legacy-credentials.mjs`），并有第一方私钥来签随包插件） |
+| `node scripts/stage.mjs installer` | Windows 可用 | 把打好的包做成两个通道的安装包，真实安装到临时目录、启动、卸载，确认开始菜单项、快捷方式与卸载项都已清掉、数据还在（`scripts/stage/installer.mjs`）；本机已装有 MANGA 时不动手 |
+| `node scripts/stage.mjs report` | 可用 | 核对必需文件/用例/指纹（每份结果只比它依赖的组）/基准/包（连续通过次数）/安装；缺项或失败非零退出，不计算产品验收 |
 | `node scripts/samples/generate-media-samples.mjs` | 可用 | 生成合成漫画/视频/字幕/录音样本到 `dist/samples/media` |
 | `node scripts/tools/fetch-ffmpeg.mjs`、`fetch-silero-vad.mjs`、`fetch-subtitle-font.mjs` | 需网络 | 按锁文件下载并校验随包工具 |
 | `node scripts/inventory-deps.mjs` | 需网络 | 依赖版本盘点（npm 与锁文件） |
@@ -94,4 +97,4 @@
 
 ## 建立工程时登记
 
-Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md) 选定，当前实际目录/依赖按上表，产品验收另行记录。数据默认 Documents、全部生成位置可配置与通道隔离已确认；需要验证的是实现和启动定位机制。组合运行时、写入宿主与媒体后端的技术定稿见[用户待办](../../USER-ACTIONS.md)与 [ADR-0007](../decisions/0007-technology-stack.md)。密钥示例用占位值，实际依赖由锁文件维护。
+Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md) 选定，当前实际目录/依赖按上表，产品验收另行记录。数据位置按 A-118 分两个根（应用数据在 `%LOCALAPPDATA%\manga`，用户文件在系统登记的“文档”下的 `MANGA`，下载在“下载”下的 `MANGA`；开发版各用 `-dev` 后缀），全部生成位置可配置、通道隔离，启动定位在 `packages/app-core/src/locations.ts`。组合运行时、写入宿主与媒体后端的技术定稿见[用户待办](../../USER-ACTIONS.md)与 [ADR-0007](../decisions/0007-technology-stack.md)。密钥示例用占位值，实际依赖由锁文件维护。

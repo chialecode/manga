@@ -15,6 +15,9 @@ export default defineConfig({
     // == 1", nodejs/node#66366, open; the V8 fix is not in a 24.x release yet). It took down the voice filter's test process once (LOOP-08).
     // The test processes keep WebAssembly code instead of collecting it; the app runs on Electron's own V8, not this Node.
     execArgv: ["--no-wasm-code-gc"],
-    fileParallelism: false,
+    // Files run in parallel on half the logical processors (10 on the development machine, 2 on a CI runner): about 80 s instead of about 480 s
+    // one file after another, with headroom so a test that waits for a render is not starved (LOOP-27; measured 2026-11-06, 计划 4.7).
+    fileParallelism: true,
+    maxWorkers: "50%",
   },
 });

@@ -6,6 +6,9 @@ import { spawnSync } from 'node:child_process';
 // One offline entry point shared by developers, the optional hook and CI.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let failed = false;
+// --skip-tests: everything but the Vitest run, for `node scripts/stage.mjs gate`, whose next step runs every test (with the large files on) on the
+// same tree. Developers, the pre-push hook and CI run verify whole.
+const skipTests = process.argv.includes('--skip-tests');
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
   if (result.error || result.status !== 0) {
@@ -58,7 +61,9 @@ if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
       run(process.execPath, [knip, '--no-progress']);
     }
     const vitest = path.join(root, 'node_modules/vitest/vitest.mjs');
-    if (!fs.existsSync(vitest)) {
+    if (skipTests) {
+      console.log('tests skipped (--skip-tests): node scripts/stage.mjs test runs them');
+    } else if (!fs.existsSync(vitest)) {
       console.error('FAILED tests: vitest is not installed');
       failed = true;
     } else {
