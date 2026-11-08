@@ -168,6 +168,52 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
   const installer = readJson(dir, "installer.json");
   current("installer.json", installer);
   if (installer && installer.status !== "passed") errors.push("installer.json: result is not passed");
+  if (config.requirePackagedUpdateRehearsal) {
+    const rehearsal = installer?.updateRehearsal;
+    const positive = (value) => Number.isFinite(value) && value > 0;
+    const required = ["ok", "verifiedInstallerExecuted", "dataIntact", "backupCreated", "tamperedRejected", "justUpdatedOnce", "realInstallationsUntouched"];
+    if (rehearsal?.kind !== "electron-nsis" || rehearsal?.artifactKind !== "test-identity-repackage"
+      || required.some((key) => rehearsal?.[key] !== true) || !/^[0-9a-f]{64}$/.test(rehearsal?.appAsarSha256 ?? "")
+      || !/^[0-9a-f]{64}$/.test(rehearsal?.previousAsarSha256 ?? "") || !Array.isArray(installer?.steps) || !installer.steps.length || installer.steps.some((step) => step.ok !== true)) {
+      errors.push("installer.json: real packaged update rehearsal missing or incomplete");
+    }
+    const cases = rehearsal?.cases;
+    if (!Array.isArray(cases) || cases.length !== 2 || new Set(cases.map((item) => item.mode)).size !== 2) {
+      errors.push("installer.json: full restart and differential quit cases missing");
+    } else for (const mode of ["restart", "quit"]) {
+      const item = cases.find((entry) => entry.mode === mode);
+      if (!item || item.downloader !== "electron-updater" || !positive(item.downloadBytes) || !positive(item.fullBytes) || !positive(item.readyMs)
+        || item.usedDifferential !== (mode === "quit") || (mode === "restart" ? item.downloadBytes !== item.fullBytes : item.downloadBytes >= item.fullBytes)
+        || ["oldProcessExited", "newProcessStarted", "verifiedInstallerExecuted", "draftWasUnsaved", "draftPreserved", "backupContainsSavedDraft", "workspaceRestored"].some((key) => item[key] !== true)) {
+        errors.push(`installer.json: ${mode} did not execute the verified installer and preserve unsaved work`);
+      }
+    }
+    const development = rehearsal?.development;
+    if (development?.kind !== "electron-nsis" || development.timeoutMs !== 30_000 || !positive(development.installDevMs)
+      || ["installed", "relaunched", "draftWasUnsaved", "draftPreserved", "releaseProcessKeptRunning", "releaseExecutableUntouched", "timedOutWithoutForceKill", "stayedAliveAfterWriteCompleted"].some((key) => development?.[key] !== true)) {
+      errors.push("installer.json: real install-dev save, relaunch or abandoned quit evidence incomplete");
+    }
+    const records = bench?.records?.update;
+    const measured = rehearsal?.records;
+    const full = Array.isArray(cases) ? cases.find((item) => item.mode === "restart") : null;
+    const diff = Array.isArray(cases) ? cases.find((item) => item.mode === "quit") : null;
+    if (records?.kind !== "electron-nsis" || records.sourceEvidence !== "installer.json" || !measured
+      || !positive(records.restartToReadyMs) || records.restartToReadyMs !== full?.readyMs || measured.restartToReadyMs !== full?.readyMs
+      || records.installDevMs !== development?.installDevMs || measured.installDevMs !== development?.installDevMs
+      || records.downloadBytes?.fullBytes !== full?.downloadBytes || records.downloadBytes?.differentialBytes !== diff?.downloadBytes
+      || records.downloadBytes?.savedRatio !== 1 - diff?.downloadBytes / full?.downloadBytes
+      || JSON.stringify(records.downloadBytes) !== JSON.stringify(measured.downloadBytes)) {
+      errors.push("bench.json: update records do not match the real installer rehearsal");
+    }
+    if (records?.stageRelease?.status === "measured") {
+      const release = readJson(dir, "release.json");
+      current("release.json", release);
+      if (release?.status !== "passed" || release.rehearsal?.kind !== "electron-nsis" || records.stageRelease.sourceEvidence !== "release.json"
+        || !positive(release.totalMs) || records.stageReleaseMs !== release.totalMs) errors.push("bench.json: release timing does not match the real release rehearsal");
+    } else if (records?.stageRelease?.status !== "not-run" || records.stageReleaseMs !== null) {
+      errors.push("bench.json: absent release timing must be explicitly not-run");
+    }
+  }
   if (pack) {
     for (const phase of config.package.smoke) {
       if (!(pack.smoke ?? []).includes(phase)) errors.push(`package.json: ${phase} smoke missing`);

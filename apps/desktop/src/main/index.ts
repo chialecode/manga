@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, net, session, shell } from "electron";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { MangaProductApp, ElectronSafeStorageVault, resolveLaunchLayout, persistPointer } from "@manga/app-core";
+import { MangaProductApp, ElectronSafeStorageVault, FIRST_PARTY_KEYS, resolveLaunchLayout, persistPointer, readBuildInfo, readBuildInfoIfPresent } from "@manga/app-core";
 import { parseWindowAction, productWindow, windowControlsDrawn, type WindowState } from "./window-options.ts";
 import { testHooks } from "./test-hooks.ts";
 import { handleMediaProtocol, registerMediaScheme } from "./media-protocol.ts";
@@ -11,6 +12,7 @@ import { RecordingOverlay } from "./overlay.ts";
 import { PACKAGED_PLUGIN_ASSETS, REQUIRED_ASSETS, verifyBundledAssets } from "./bundled-assets.ts";
 import { createNetFetch } from "./net-fetch.ts";
 import { builtInDanmakuCredentials, SMOKE_DANMAKU_CREDENTIALS } from "./danmaku-credentials.ts";
+import { attachNsisUpdater } from "./updater.ts";
 import { CHANNELS, createId, LOCATION_PARTITIONS, type Channel } from "@manga/contracts";
 import { safeStorage } from "electron";
 import { utilitySpawner } from "./plugin-process.ts";
@@ -18,6 +20,7 @@ import { utilitySpawner } from "./plugin-process.ts";
 /** How long a closing window waits for the page to save what waits for its save. */
 const SAVE_BEFORE_CLOSE_MS = 1500;
 const smoke = process.argv.includes("--manga-smoke");
+const updateFixtureSmoke = smoke && process.env.MANGA_SMOKE_PHASE === "update";
 // A smoke window sits on the developer's own desktop. When other windows cover it, Chromium treats it as occluded: frames stop and the renderer is
 // throttled, so transitions never finish and timings stretch. Smoke runs keep the window rendering whatever else is on screen.
 if (smoke) {
@@ -46,36 +49,390 @@ function systemFolder(name: "documents" | "downloads", variable: string): string
   try { return app.getPath(name); } catch { return undefined; }
 }
 
-/** The channel a package was built for is written into it (计划 4.9), not guessed: a development build installed beside a release keeps its own places. */
-function builtChannel(): Channel | undefined {
+/** The channel (and optional test identity, 计划 4.8) a package was built for is written into it (计划 4.9), not guessed: a development build installed beside a release keeps its own places. */
+function builtChannelInfo(): { channel: Channel | undefined; testIdentity: boolean } {
+  const envTest = process.env.MANGA_TEST_IDENTITY === "1";
   const named = process.env.MANGA_CHANNEL as Channel | undefined;
-  if (named && (CHANNELS as readonly string[]).includes(named)) return named;
-  if (!app.isPackaged) return "development";
-  try {
-    const body = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, "channel.json"), "utf8")) as { channel?: string };
-    if (body.channel === "release" || body.channel === "development") return body.channel;
-  } catch { /* a package made before the channel was written in is a release */ }
-  return "release";
+  let fileChannel: Channel | undefined;
+  let fileTest = false;
+  if (app.isPackaged || fs.existsSync(path.join(process.resourcesPath, "channel.json"))) {
+    try {
+      const body = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, "channel.json"), "utf8")) as { channel?: string; testIdentity?: boolean };
+      if (body.channel === "release" || body.channel === "development") fileChannel = body.channel;
+      if (body.testIdentity === true) fileTest = true;
+    } catch { /* a package made before the channel was written in is a release */ }
+  }
+  const channel = named && (CHANNELS as readonly string[]).includes(named)
+    ? named
+    : !app.isPackaged
+      ? (fileChannel ?? "development")
+      : (fileChannel ?? "release");
+  return { channel, testIdentity: envTest || fileTest };
 }
 
+const channelInfo = builtChannelInfo();
 const layout = resolveLaunchLayout({
   packaged: app.isPackaged,
   profileRoot: process.env.MANGA_PROFILE_ROOT,
-  channel: builtChannel(),
+  channel: channelInfo.channel,
+  testIdentity: channelInfo.testIdentity,
   documentsDir: systemFolder("documents", "MANGA_DOCUMENTS_DIR"),
   downloadsDir: systemFolder("downloads", "MANGA_DOWNLOADS_DIR"),
   crashAt: process.env.MANGA_UPGRADE_CRASH_AT,
 });
+const packagedBuildInfo = readBuildInfoIfPresent(process.resourcesPath);
+const buildInfo = readBuildInfo(process.resourcesPath, {
+  version: packagedBuildInfo?.version ?? process.env.MANGA_BUILD_VERSION?.trim() ?? app.getVersion(),
+  channel: layout.channel,
+});
+if (buildInfo.version) {
+  app.getVersion = () => buildInfo.version;
+}
+
+function windowIconPath(): string | undefined {
+  const candidates = [
+    path.join(process.resourcesPath, "icon.ico"),
+    path.join(process.resourcesPath, "icon.png"),
+    path.resolve(__dirname, "../../assets/icon.ico"),
+    path.resolve(__dirname, "../../assets/icon.png"),
+  ];
+  return candidates.find((file) => fs.existsSync(file));
+}
 app.setPath("userData", layout.partitions.runtime);
 app.setPath("sessionData", layout.partitions.runtime);
 // Crash dumps belong with the logs, not in a folder of their own under the roaming profile.
 app.setPath("crashDumps", path.join(layout.partitions.logs, "crashes"));
-if (layout.writable) persistPointer(layout);
+
+const runtimeDir = layout.partitions.runtime;
+const runningInstanceFile = path.join(runtimeDir, "running-instance.json");
+const quitSignalFile = path.join(runtimeDir, "quit-for-update.json");
+const quitAckFile = path.join(runtimeDir, "quit-for-update-ack.json");
+const releaseBlockingFile = path.join(runtimeDir, "release-blocking-write.json");
+const quitForUpdateFlag = process.argv.includes("--quit-for-update");
+const cliHoldWriteMs = (() => {
+  const match = process.argv.find((arg) => arg.startsWith("--manga-hold-write-ms="));
+  return match ? Number.parseInt(match.slice("--manga-hold-write-ms=".length), 10) || 0 : 0;
+})();
+
+if (quitForUpdateFlag) {
+  try {
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    if (!fs.existsSync(quitSignalFile) && !process.env.MANGA_DEV_QUIT_REQUEST_ID) {
+      fs.writeFileSync(
+        quitSignalFile,
+        `${JSON.stringify({ requestedAt: new Date().toISOString(), pid: process.pid, channel: layout.channel, testIdentity: channelInfo.testIdentity })}\n`,
+      );
+    }
+  } catch {
+    // ignore if runtime directory is not writable
+  }
+  try {
+    app.requestSingleInstanceLock({ quitForUpdate: true, channel: layout.channel, testIdentity: channelInfo.testIdentity });
+  } catch {
+    // ignore
+  }
+  app.exit(0);
+}
+
+if (!quitForUpdateFlag && layout.writable) {
+  persistPointer(layout);
+}
 
 let appService: MangaProductApp | undefined;
 let ownerGrant: string | undefined;
 const actor = { kind: "user" as const, id: "desktop-user" };
 let window: BrowserWindow | undefined;
+let saved = false;
+let preparingUpdate = false;
+let quittingForUpdate: Promise<void> | null = null;
+let quitPollTimer: ReturnType<typeof setInterval> | null = null;
+const instanceStartedAt = new Date().toISOString();
+let instanceReady = false;
+
+function writeRunningInstance(state: "starting" | "ready", extras: Record<string, unknown> = {}): void {
+  if (quitForUpdateFlag || !layout.writable) return;
+  instanceReady = state === "ready";
+  try {
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    fs.writeFileSync(
+      runningInstanceFile,
+      `${JSON.stringify({
+        pid: process.pid,
+        state,
+        version: buildInfo.version,
+        channel: layout.channel,
+        testIdentity: channelInfo.testIdentity,
+        execPath: process.execPath,
+        startedAt: instanceStartedAt,
+        updatedAt: new Date().toISOString(),
+        ...extras,
+      }, null, 2)}\n`,
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function cleanupInstanceFiles(): void {
+  if (quitPollTimer) {
+    clearInterval(quitPollTimer);
+    quitPollTimer = null;
+  }
+  try {
+    if (fs.existsSync(runningInstanceFile)) {
+      const current = JSON.parse(fs.readFileSync(runningInstanceFile, "utf8")) as { pid?: number };
+      if (current.pid === process.pid) fs.rmSync(runningInstanceFile, { force: true });
+    }
+  } catch {
+    // ignore
+  }
+  try { fs.rmSync(quitSignalFile, { force: true }); } catch { /* ignore */ }
+}
+
+function handleQuitForUpdate(): Promise<void> {
+  if (quittingForUpdate) return quittingForUpdate;
+  quittingForUpdate = (async () => {
+    let requestText: string;
+    let expiresAt: number;
+    try {
+      requestText = fs.readFileSync(quitSignalFile, "utf8");
+      const request = JSON.parse(requestText) as { channel?: string; testIdentity?: boolean; expiresAt?: number };
+      if (request.channel !== layout.channel || Boolean(request.testIdentity) !== channelInfo.testIdentity) return;
+      expiresAt = Math.min(request.expiresAt ?? Date.now() + 28_000, Date.now() + 28_000);
+      if (!(expiresAt > Date.now())) { fs.rmSync(quitSignalFile, { force: true }); return; }
+    } catch { return; }
+    const cancelled = new AbortController();
+    const timeout = setTimeout(() => cancelled.abort(new Error("update quit timed out")), expiresAt - Date.now());
+    const requestStillCurrent = () => {
+      try { return fs.readFileSync(quitSignalFile, "utf8") === requestText; } catch { return false; }
+    };
+    const poll = setInterval(() => { if (!requestStillCurrent()) cancelled.abort(new Error("update quit cancelled")); }, 100);
+    try {
+      fs.mkdirSync(runtimeDir, { recursive: true });
+      fs.writeFileSync(
+        quitAckFile,
+        `${JSON.stringify({
+          pid: process.pid,
+          receivedAt: new Date().toISOString(),
+          blockingWrites: appService?.hasBlockingWrites() ?? false,
+        }, null, 2)}\n`,
+      );
+    } catch {
+      // ignore
+    }
+    try {
+      preparingUpdate = true;
+      window?.setEnabled(false);
+      await flushWindowSaves({ strict: true, signal: cancelled.signal });
+      await appService?.prepareQuitForUpdate({ signal: cancelled.signal });
+      cancelled.signal.throwIfAborted();
+      if (!requestStillCurrent()) throw new Error("update quit request withdrawn");
+      cleanupInstanceFiles();
+      appService?.close();
+      appService = undefined;
+      app.exit(0);
+    } catch {
+      // An abandoned install request must never close the instance later when a blocked write completes.
+      saved = false;
+      preparingUpdate = false;
+      if (window && !window.isDestroyed()) window.setEnabled(true);
+      try { fs.writeFileSync(quitAckFile, JSON.stringify({ pid: process.pid, status: "busy" })); } catch { /* ignore */ }
+      if (requestStillCurrent()) { try { fs.rmSync(quitSignalFile, { force: true }); } catch { /* ignore */ } }
+    } finally {
+      clearTimeout(timeout);
+      clearInterval(poll);
+    }
+  })().finally(() => { quittingForUpdate = null; });
+  return quittingForUpdate;
+}
+
+if (!quitForUpdateFlag && layout.writable) {
+  try {
+    if (!app.requestSingleInstanceLock({ channel: layout.channel, testIdentity: channelInfo.testIdentity })) app.exit(0);
+  } catch {
+    // ignore
+  }
+  for (const stale of [quitSignalFile, quitAckFile, releaseBlockingFile]) {
+    try { fs.rmSync(stale, { force: true }); } catch { /* ignore */ }
+  }
+  writeRunningInstance("starting");
+  app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
+    const extra = additionalData as { quitForUpdate?: boolean } | undefined;
+    if (argv.includes("--quit-for-update") || extra?.quitForUpdate === true || fs.existsSync(quitSignalFile)) {
+      void handleQuitForUpdate();
+    }
+  });
+  let lastBlockingState: boolean | undefined;
+  quitPollTimer = setInterval(() => {
+    if (instanceReady && smoke && process.env.MANGA_SMOKE_PHASE === "update-driver" && appService) {
+      const blockingWrites = appService.hasBlockingWrites();
+      if (blockingWrites !== lastBlockingState) {
+        lastBlockingState = blockingWrites;
+        writeRunningInstance("ready", { blockingWrites, justUpdated: appService.update.status().justUpdated });
+      }
+    }
+    if (fs.existsSync(quitSignalFile)) {
+      void handleQuitForUpdate();
+    }
+  }, 120);
+  quitPollTimer.unref?.();
+}
+
+async function runDetachedWindowsInstaller(input: { installerPath: string; mode: "restart" | "quit"; expectedSha512: string }): Promise<boolean> {
+  try {
+    const installDir = path.dirname(process.execPath);
+    const exePath = process.execPath;
+    const updaterDir = path.join(layout.partitions.cache, "updater");
+    fs.mkdirSync(updaterDir, { recursive: true });
+    const attemptId = createId("update-install");
+    const planFile = path.join(updaterDir, `${attemptId}.json`);
+    const readyFile = path.join(updaterDir, `${attemptId}.ready`);
+    const cancelFile = path.join(updaterDir, `${attemptId}.cancel`);
+    const doneFile = path.join(updaterDir, "last-installed.json");
+    try { fs.rmSync(doneFile, { force: true }); } catch { /* ignore */ }
+    const targetVersion = appService?.update.status().availableVersion ?? null;
+    let relaunchArgs: string[] = [];
+    if (process.env.MANGA_UPDATE_RELAUNCH_ARGS) {
+      try {
+        const parsed = JSON.parse(process.env.MANGA_UPDATE_RELAUNCH_ARGS);
+        if (Array.isArray(parsed)) relaunchArgs = parsed.map(String);
+      } catch {
+        // ignore
+      }
+    }
+    fs.writeFileSync(
+      planFile,
+      `${JSON.stringify({
+        pid: process.pid,
+        installerPath: input.installerPath,
+        installDir,
+        exePath,
+        mode: input.mode,
+        attemptId,
+        version: targetVersion,
+        sha512Hex: Buffer.from(input.expectedSha512, "base64").toString("hex"),
+        doneFile,
+        readyFile,
+        cancelFile,
+        relaunchArgs,
+      }, null, 2)}\n`,
+    );
+    const psScript = [
+      "$ErrorActionPreference = 'Stop'",
+      "$plan = Get-Content -LiteralPath $env:MANGA_INSTALL_PLAN -Raw -Encoding UTF8 | ConvertFrom-Json",
+      "$code = 1; $actualVersion = $null; $installed = $false; $failureStage = 'prepare'; $errorType = $null",
+      "try {",
+      // The caller may be PowerShell 7, whose inherited module path omits Windows
+      // PowerShell's Get-FileHash function. Load the helper's own system module.
+      "  Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop",
+      "  if ((Get-FileHash -LiteralPath $plan.installerPath -Algorithm SHA512).Hash.ToLowerInvariant() -ne $plan.sha512Hex) { throw 'installer changed' }",
+      "  $ready = @{ attemptId = $plan.attemptId; helperPid = $PID } | ConvertTo-Json -Compress",
+      "  [System.IO.File]::WriteAllText([string]$plan.readyFile, [string]$ready, (New-Object System.Text.UTF8Encoding($false)))",
+      "  $failureStage = 'wait-for-exit'",
+      "  for ($i = 0; $i -lt 400; $i++) {",
+      "    if (Test-Path -LiteralPath $plan.cancelFile) { throw 'installation cancelled' }",
+      "    if (-not (Get-Process -Id $plan.pid -ErrorAction SilentlyContinue)) { break }",
+      "    Start-Sleep -Milliseconds 100",
+      "  }",
+      "  if (Get-Process -Id $plan.pid -ErrorAction SilentlyContinue) { throw 'old application still running' }",
+      "  if (Test-Path -LiteralPath $plan.cancelFile) { throw 'installation cancelled' }",
+      "  $failureStage = 'verify-installer'",
+      "  if ((Get-FileHash -LiteralPath $plan.installerPath -Algorithm SHA512).Hash.ToLowerInvariant() -ne $plan.sha512Hex) { throw 'installer changed' }",
+      "  if (Test-Path -LiteralPath $plan.cancelFile) { throw 'installation cancelled' }",
+      "  $failureStage = 'install'",
+      "  $p = Start-Process -FilePath $plan.installerPath -ArgumentList @('--updated', '/S', ('/D=' + $plan.installDir)) -Wait -PassThru -WindowStyle Hidden",
+      "  $code = $p.ExitCode",
+      "  $failureStage = 'inspect-installed-version'",
+      "  $actualVersion = (Get-Content -LiteralPath (Join-Path $plan.installDir 'resources/build.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version",
+      "  $installed = $code -eq 0 -and $actualVersion -eq $plan.version -and (Test-Path -LiteralPath $plan.exePath)",
+      "} catch { $code = 1; $errorType = $_.Exception.GetType().FullName }",
+      "$done = @{ attemptId = $plan.attemptId; status = if ($installed) { 'installed' } else { 'failed' }; exitCode = $code; version = $plan.version; actualVersion = $actualVersion; mode = $plan.mode; installerSha512Hex = $plan.sha512Hex; failureStage = if ($installed) { $null } else { $failureStage }; errorType = $errorType; completedAt = (Get-Date).ToString('o') } | ConvertTo-Json -Compress",
+      "[System.IO.File]::WriteAllText([string]$plan.doneFile, [string]$done, (New-Object System.Text.UTF8Encoding($false)))",
+      "if ($plan.mode -eq 'restart' -and -not (Test-Path -LiteralPath $plan.cancelFile) -and -not (Get-Process -Id $plan.pid -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath $plan.exePath)) {",
+      "  if ($plan.relaunchArgs -and $plan.relaunchArgs.Count -gt 0) {",
+      "    Start-Process -FilePath $plan.exePath -ArgumentList $plan.relaunchArgs -WindowStyle Hidden",
+      "  } else {",
+      "    Start-Process -FilePath $plan.exePath -WindowStyle Hidden",
+      "  }",
+      "}",
+    ].join("; ");
+    // PowerShell cannot run with DETACHED_PROCESS here; a directly attached child is
+    // killed by Node's Windows job when the app exits. Start-Process launches the
+    // hidden installer helper independently, while this short bootstrap can finish.
+    const bootstrap = "Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$env:MANGA_INSTALL_SCRIPT) -WindowStyle Hidden";
+    const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", bootstrap], {
+      detached: false,
+      stdio: "ignore",
+      windowsHide: true,
+      env: { ...process.env, MANGA_INSTALL_PLAN: planFile, MANGA_INSTALL_SCRIPT: Buffer.from(psScript, "utf16le").toString("base64") },
+    });
+    let bootstrapFailed = false;
+    child.once("exit", (code) => { bootstrapFailed = code !== 0; });
+    const started = await new Promise<boolean>((resolve) => {
+      child.once("error", () => resolve(false));
+      child.once("spawn", () => resolve(true));
+    });
+    if (!started) return false;
+    const deadline = Date.now() + 8_000;
+    let prepared = false;
+    while (!bootstrapFailed && Date.now() < deadline) {
+      try {
+        const ready = JSON.parse(fs.readFileSync(readyFile, "utf8"));
+        if (ready.attemptId === attemptId && Number.isSafeInteger(ready.helperPid) && ready.helperPid > 0) {
+          process.kill(ready.helperPid, 0);
+          prepared = true;
+          break;
+        }
+      } catch { /* preparation is still in progress */ }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (bootstrapFailed || !prepared) {
+      fs.writeFileSync(cancelFile, "cancelled");
+      child.unref();
+      return false;
+    }
+    child.unref();
+    if (input.mode === "restart") {
+      setTimeout(() => {
+        cleanupInstanceFiles();
+        appService?.close();
+        appService = undefined;
+        app.exit(0);
+      }, 60).unref?.();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function flushWindowSaves(options: { strict?: boolean; signal?: AbortSignal } = {}): Promise<void> {
+  options.signal?.throwIfAborted();
+  if (saved) return Promise.resolve();
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed() || window.webContents.isCrashed()) {
+    return options.strict ? Promise.reject(new Error("界面未能确认保存，已保留当前版本")) : Promise.resolve();
+  }
+  const closing = window;
+  const token = createId("save");
+  return new Promise<void>((resolve, reject) => {
+    const done = (ok: boolean) => {
+      clearTimeout(timer);
+      ipcMain.removeListener("manga:saved", onSaved);
+      options.signal?.removeEventListener("abort", aborted);
+      saved = ok || !options.strict;
+      if (options.strict && !ok) reject(new Error("update save did not complete"));
+      else resolve();
+    };
+    const aborted = () => done(false);
+    const onSaved = (reply: Electron.IpcMainEvent, answered: unknown, result?: { ok?: boolean }) => {
+      if (reply.sender === closing.webContents && answered === token) done(options.strict ? result?.ok === true : result?.ok !== false);
+    };
+    const timer = setTimeout(() => done(false), options.strict ? 20_000 : SAVE_BEFORE_CLOSE_MS);
+    options.signal?.addEventListener("abort", aborted, { once: true });
+    ipcMain.on("manga:saved", onSaved);
+    closing.webContents.send("manga:save-now", token);
+  });
+}
 const rendererUrl = () => MAIN_WINDOW_VITE_DEV_SERVER_URL ?? pathToFileURL(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).href;
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -97,13 +454,20 @@ async function bootService(): Promise<void> {
     packaged: app.isPackaged,
     hostId: "desktop",
     vault: new ElectronSafeStorageVault(safeStorage),
-    appVersion: app.getVersion(),
+    appVersion: buildInfo.version,
+    buildInfo,
     // Packaged builds carry FFmpeg and the voice-filter model next to the app; development builds look at the local tool cache.
     resourcesPath: process.resourcesPath,
     // Metadata requests go through Chromium's network stack, so the system proxy and certificates apply.
     netFetch: createNetFetch(net),
     // Plugins run in utility processes; the packages that come with the application sit next to it and are offered for installation, never installed by themselves.
-    plugins: { spawn: utilitySpawner, bundledDir: app.isPackaged ? path.join(process.resourcesPath, "plugins") : process.env.MANGA_PLUGINS_DIR || path.join(process.resourcesPath, "plugins") },
+    plugins: {
+      spawn: utilitySpawner,
+      bundledDir: app.isPackaged ? path.join(process.resourcesPath, "plugins") : process.env.MANGA_PLUGINS_DIR || path.join(process.resourcesPath, "plugins"),
+      ...(smoke && process.env.MANGA_SMOKE_PLUGIN_PUBLIC_KEY?.trim()
+        ? { firstPartyKeys: [...FIRST_PARTY_KEYS, { publicKey: process.env.MANGA_SMOKE_PLUGIN_PUBLIC_KEY.trim(), label: "MANGA Smoke Ephemeral" }] }
+        : {}),
+    },
     // A packaged-window smoke that downloads keeps to the loopback address: no public DHT, no LAN discovery, no port mapping.
     // Danmaku: a release signs with the credentials built in; a smoke run never does, and talks only to the local fake server named by the harness (or to nothing).
     // The legacy-credentials phases open a Profile an earlier build saved its own DanDanPlay credentials into, and ask a Bangumi stand-in on the loopback address.
@@ -111,6 +475,35 @@ async function bootService(): Promise<void> {
     ...(smoke && process.env.MANGA_SMOKE_BANGUMI_ORIGIN ? { bangumi: { apiOrigin: process.env.MANGA_SMOKE_BANGUMI_ORIGIN, allowedHosts: [new URL(process.env.MANGA_SMOKE_BANGUMI_ORIGIN).host], allowHttp: true, allowPrivate: true, maxRetries: 0, timeoutMs: 4000 } } : {}),
     danmaku: smoke ? { credentials: SMOKE_DANMAKU_CREDENTIALS, origin: process.env.MANGA_SMOKE_DANDAN_ORIGIN || "http://127.0.0.1:9", client: { allowHttp: true } } : { credentials: builtInDanmakuCredentials() },
     ...(smoke && process.env.MANGA_SMOKE_BT_LOOPBACK === "1" ? { acquisition: { network: { dht: false, lsd: false, natUpnp: false, natPmp: false } } } : {}),
+    ...(cliHoldWriteMs > 0 ? { holdWriteMs: cliHoldWriteMs } : {}),
+    update: {
+      installDirectory: app.isPackaged ? path.dirname(process.execPath) : undefined,
+      onInstallFailed: () => {
+        saved = false;
+        preparingUpdate = false;
+        if (window && !window.isDestroyed()) window.setEnabled(true);
+      },
+      onBeforeInstall: async () => {
+        try {
+          if (!updateFixtureSmoke) {
+            preparingUpdate = true;
+            window?.setEnabled(false);
+          }
+          await flushWindowSaves({ strict: true });
+          await appService?.prepareQuitForUpdate({ signal: AbortSignal.timeout(28_000) });
+        } catch (error) {
+          saved = false;
+          preparingUpdate = false;
+          if (window && !window.isDestroyed()) window.setEnabled(true);
+          throw error;
+        }
+      },
+      ...((app.isPackaged && process.platform === "win32") || process.env.MANGA_FORCE_DETACHED_UPDATER === "1"
+        ? { runInstaller: (installerPath, _args, mode, receipt) => runDetachedWindowsInstaller({ installerPath, mode, expectedSha512: receipt.sha512 }) }
+        : {}),
+      ...(smoke ? { allowLoopbackHttp: true } : {}),
+      ...(smoke && process.env.MANGA_SMOKE_UPDATE_PUBLIC_KEY ? { publicKeys: [{ publicKey: process.env.MANGA_SMOKE_UPDATE_PUBLIC_KEY, label: "MANGA Smoke Update" }] } : {}),
+    },
     useParseWorker: true,
     parseWorkerPath: [
       path.join(process.resourcesPath, "parse-worker.cjs"),
@@ -119,6 +512,19 @@ async function bootService(): Promise<void> {
     ].find((file) => fs.existsSync(file)),
   });
   await appService.start();
+  if (layout.channel === "release" && app.isPackaged && !updateFixtureSmoke) {
+    attachNsisUpdater({
+      updateService: appService.update,
+      version: buildInfo.version,
+      appUpdateConfigPath: path.join(process.resourcesPath, "app-update.yml"),
+      userDataPath: layout.partitions.runtime,
+      baseCachePath: layout.partitions.cache,
+      installDirectory: app.isPackaged ? path.dirname(process.execPath) : undefined,
+      isPackaged: app.isPackaged,
+      runtime: true,
+      allowLoopbackHttp: smoke,
+    });
+  }
   ownerGrant = appService.issueOwnerGrant(actor).handle;
   appService.onNotice((notice) => {
     if (window && !window.isDestroyed()) window.webContents.send("manga:notice", notice);
@@ -133,7 +539,7 @@ function assetProblems(): string[] {
   return verifyBundledAssets(process.resourcesPath, { required: [...REQUIRED_ASSETS, ...PACKAGED_PLUGIN_ASSETS] }).problems;
 }
 
-app.whenReady().then(async () => {
+if (!quitForUpdateFlag) app.whenReady().then(async () => {
   const missing = assetProblems();
   if (missing.length) {
     const message = `安装包不完整：${missing.join("；")}。请重新安装。`;
@@ -164,11 +570,13 @@ app.whenReady().then(async () => {
   }
   handleMediaProtocol(() => appService);
   const hideWindow = smoke || process.env.MANGA_WINDOW_HIDDEN === "1";
+  const windowIcon = windowIconPath();
   window = new BrowserWindow({
     width: productWindow.width,
     height: productWindow.height,
     minWidth: productWindow.minWidth,
     minHeight: productWindow.minHeight,
+    ...(windowIcon ? { icon: windowIcon } : {}),
     show: !hideWindow,
     skipTaskbar: hideWindow,
     backgroundColor: productWindow.backgroundColor,
@@ -228,22 +636,35 @@ app.whenReady().then(async () => {
   // Before the window goes the page saves what waits for its save (LOOP-23, 计划 4.8): the close is held, the page is asked, and the window goes when it
   // answers or after SAVE_BEFORE_CLOSE_MS, whichever comes first, so a page that hangs cannot keep the window open. In Electron 44 the page is still
   // fully alive during `close` (it is unloaded only after the event is let through), so it can take and answer IPC. A quit closes the window the same way.
-  let saved = false;
+  let closeInFlight = false;
+  let closingAfterUpdate = false;
   window.on("close", (event) => {
+    if (closeInFlight || (preparingUpdate && !closingAfterUpdate)) { event.preventDefault(); return; }
     if (saved || !window || window.isDestroyed() || window.webContents.isDestroyed() || window.webContents.isCrashed()) return;
     event.preventDefault();
     const closing = window;
-    const token = createId("save");
-    const done = () => {
-      clearTimeout(timer);
-      ipcMain.removeListener("manga:saved", onSaved);
-      saved = true;
-      if (!closing.isDestroyed()) closing.close();
-    };
-    const onSaved = (reply: Electron.IpcMainEvent, answered: unknown) => { if (reply.sender === closing.webContents && answered === token) done(); };
-    const timer = setTimeout(done, SAVE_BEFORE_CLOSE_MS);
-    ipcMain.on("manga:saved", onSaved);
-    closing.webContents.send("manga:save-now", token);
+    closeInFlight = true;
+    void (async () => {
+      try {
+        // A ready update is prepared while the page can still acknowledge its saves.
+        if (appService?.update.status().state === "ready" && !updateFixtureSmoke) {
+          if (!await appService.update.installOnQuit()) await flushWindowSaves();
+        } else {
+          await flushWindowSaves();
+        }
+        closeInFlight = false;
+        closingAfterUpdate = true;
+        if (!closing.isDestroyed()) closing.close();
+      } catch (error) {
+        closeInFlight = false;
+        preparingUpdate = false;
+        saved = false;
+        if (!closing.isDestroyed()) {
+          closing.setEnabled(true);
+          await dialog.showMessageBox(closing, { type: "error", title: "无法准备更新", message: error instanceof Error ? error.message : "更新前保存或备份失败，已保留当前版本" });
+        }
+      }
+    })();
   });
   const fromMainWindow = (event: Electron.IpcMainEvent) => Boolean(window && !window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame);
   ipcMain.on("manga:overlay-publish", (event, state) => { if (fromMainWindow(event)) void overlay.publish(state); });
@@ -258,16 +679,23 @@ app.whenReady().then(async () => {
     assertCaller(event);
     if (!appService || !ownerGrant) return { status: "error", error: { code: "LOCATION_UNAVAILABLE", message: "目录不可写或尚未完成配置", retryable: false, details: { recovery: layout.recovery } } };
     if (!payload || typeof payload.commandId !== "string") throw new Error("invalid command");
-    return appService.call(actor, payload, ownerGrant, createId("ui"));
+    const result = await appService.call(actor, payload, ownerGrant, createId("ui"));
+    if (payload.commandId === "update.restartToUpdate" && result.status !== "ok") {
+      saved = false;
+      preparingUpdate = false;
+      if (window && !window.isDestroyed()) window.setEnabled(true);
+    }
+    return result;
   });
   ipcMain.handle("manga:state", async (event) => {
     assertCaller(event);
     return {
-      layout,
+      layout: appService ? appService.layout : layout,
       writable: layout.writable,
       vaultAvailable: await safeStorage.isAsyncEncryptionAvailable(),
       packaged: app.isPackaged,
-      appVersion: app.getVersion(),
+      appVersion: appService ? appService.appVersion : app.getVersion(),
+      buildInfo: appService ? appService.buildInfo : buildInfo,
     };
   });
   // The window's own buttons are drawn by the page (A-91): it asks for one of three actions, and is told when the window is maximized or restored,
@@ -406,6 +834,8 @@ app.whenReady().then(async () => {
     if (typeof value !== "string" || value.length < 1 || value.length > 4096) throw new Error("invalid secret");
     return appService.stashSecret(value);
   });
+  writeRunningInstance("ready", smoke ? { justUpdated: appService?.update.status().justUpdated ?? null } : {});
+  if (smoke && process.env.MANGA_SMOKE_PHASE === "update-driver") return;
   if (smoke) {
     const { runSmoke } = await import("./smoke/index.ts");
     await runSmoke({ appService, ownerGrant, window, layout });
@@ -413,7 +843,13 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  appService?.close();
-  app.quit();
+  void (async () => {
+    try {
+      appService?.close();
+    } finally {
+      cleanupInstanceFiles();
+      app.quit();
+    }
+  })();
 });
 

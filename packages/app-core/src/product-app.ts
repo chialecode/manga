@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant } from "@manga/contracts";
+import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant, type UpdateBusyReason } from "@manga/contracts";
 import { MangaRuntime } from "@manga/kernel";
 import { DrizzleStore, acquireHostLock, releaseHostLock } from "@manga/storage-drizzle";
 import type { ChatMessage } from "@manga/model-protocol";
@@ -63,6 +63,8 @@ import { DandanClient, type DandanClientOptions } from "./danmaku/client.ts";
 import type { DandanCredentials } from "./danmaku/sign.ts";
 import { DanmakuService } from "./danmaku/service.ts";
 import { AgentTrace } from "./agent-trace.ts";
+import { readBuildInfo, type BuildInfo } from "./version.ts";
+import { UpdateService, type UpdateServiceOptions } from "./update/service.ts";
 import { AGENT_COMMANDS, AGENT_OPT_IN_COMMANDS, NOTE_CONTENT_COMMANDS, OWNER_COMMANDS } from "./commands/access.ts";
 import { AgentMaterials, subtitleLimit, publicMedia, type FrozenMedia } from "./agent-materials.ts";
 import { BASE_FEATURES, MEDIA_FEATURES, CREATIVE_FEATURES, CORE_FEATURES, TOOL_DESCRIPTIONS, encodeResourceCursor, safeJsonValue } from "./product-helpers.ts";
@@ -88,8 +90,10 @@ export type ProductAppOptions = LaunchRequest & {
   resourcesPath?: string;
   /** Replace FFmpeg discovery (tests); `null` runs without it. */
   ffmpegTools?: FfmpegTools | null;
-  /** Shown to Bangumi in the User-Agent. */
+  /** Shown to Bangumi in the User-Agent and exposed in diagnostics/settings. */
   appVersion?: string;
+  /** Build metadata (`version`, `channel`, `commit`, `builtAt`, `schemaVersion`, 计划 4.1). */
+  buildInfo?: Partial<BuildInfo>;
   /** Network entry for metadata sources. The desktop host passes Electron's `net.fetch` so system proxies apply. */
   netFetch?: FetchLike;
   /** Overrides for the network broker that fetches the pages people ask to keep (tests allow their loopback server and fake name lookups here). */
@@ -121,6 +125,10 @@ export type ProductAppOptions = LaunchRequest & {
   danmaku?: { credentials?: DandanCredentials | null; origin?: string; client?: Partial<Pick<DandanClientOptions, "allowHttp" | "extraRedirectHosts" | "timeoutMs" | "now">>; now?: () => number };
   /** Acquisition (ACQ-01—03): the network an engine may use (tests keep it to the loopback), the free-space probe, and a hook that stops a publish where a crash would. */
   acquisition?: Pick<AcquisitionOptions, "network" | "freeBytes" | "forceCopy" | "fault" | "progressPersistMs" | "progressNoticeMs">;
+  /** Release update service configuration (计划 4.3, 4.4). */
+  update?: Partial<Omit<UpdateServiceOptions, "store" | "layout" | "buildInfo" | "log" | "notify">>;
+  /** Hold a non-cancellable write barrier for the given duration in ms (for testing AT-158 `--quit-for-update` timeout). */
+  holdWriteMs?: number;
 };
 
 export type CreativeReg = (commandId: string, handler: (envelope: CommandEnvelope, signal: AbortSignal) => unknown, options?: { write?: boolean }) => void;
@@ -132,6 +140,8 @@ export class MangaProductApp {
   readonly store: DrizzleStore;
   readonly grants: GrantRegistry;
   readonly layout: LocationLayout;
+  appVersion: string;
+  buildInfo: BuildInfo;
   readonly media: MediaServices;
   readonly comics: ComicService;
   readonly videos: VideoService;
@@ -184,19 +194,30 @@ export class MangaProductApp {
   readonly secrets = new Map<string, string>();
   readonly builtinDanmakuCredentials: DandanCredentials | null;
   readonly trace: AgentTrace;
+  readonly update: UpdateService;
   sealed = false;
   closed = false;
   private layoutTask: Promise<void> | null = null;
   private readonly mediaSweepTimers: ReturnType<typeof setTimeout>[] = [];
+  private readonly blockingWrites = new Set<Promise<unknown>>();
+  private readonly blockingWriteResolvers = new Set<() => void>();
+  private readonly initialHoldWriteMs: number;
 
   constructor(options: ProductAppOptions) {
     this.layout = options.layout ?? resolveLaunchLayout(options);
+    this.buildInfo = readBuildInfo(options.resourcesPath, {
+      ...options.buildInfo,
+      ...(options.appVersion ? { version: options.appVersion } : {}),
+      channel: this.layout.channel,
+    });
+    this.appVersion = this.buildInfo.version;
     if (!this.layout.writable) {
       throw new MangaError("LOCATION_UNAVAILABLE", "profile data directory is not writable", {
         details: { recovery: this.layout.recovery },
       });
     }
-    for (const dir of Object.values(this.layout.partitions)) fs.mkdirSync(dir, { recursive: true });
+    // The Downloads folder is the person's: it is made when something is first saved there (a library path for downloads), not at every start.
+    for (const [name, dir] of Object.entries(this.layout.partitions)) if (name !== "downloads") fs.mkdirSync(dir, { recursive: true });
     persistPointer(this.layout);
     this.vault = options.vault ?? new UnavailableVault();
     const hostId = options.hostId ?? "product";
@@ -224,7 +245,19 @@ export class MangaProductApp {
     this.covers = new CoverService(this.store, this.media);
     this.extras = new ResourceExtras(this.store, this.media, this.comics, this.videos, this.covers);
     this.log = new OperationLog(this.store);
-    this.trace = new AgentTrace(this.store, () => readAgentSettings(this.store).trace);
+    this.trace = new AgentTrace(this.store, () => readAgentSettings(this.store).trace, { appVersion: this.appVersion, commit: this.buildInfo.commit });
+    this.update = new UpdateService({
+      store: this.store,
+      layout: this.layout,
+      buildInfo: this.buildInfo,
+      log: this.log,
+      notify: (topic, payload) => this.notify(topic, payload),
+      resourcesPath: options.resourcesPath,
+      packaged: options.packaged,
+      netFetch: options.netFetch,
+      isBusy: () => this.busyReasons(),
+      ...options.update,
+    });
     this.quickTasks = new QuickTaskService(this.store);
     this.projects = new ProjectService(this.store, (featureId) => this.featureEnabled(featureId));
     this.agentAccess = new AgentProjectAccess(this.store, this.projects, this.grants);
@@ -252,7 +285,7 @@ export class MangaProductApp {
       projectConnection: (projectId) => (this.store.sqlite.prepare("SELECT model_connection_id AS id FROM projects WHERE id = ?").get(projectId) as { id: string | null } | undefined)?.id ?? null,
     });
     this.research = new ResearchService(this.store, {
-      broker: new NetworkBroker({ fetch: options.netFetch, userAgent: `MANGA/${options.appVersion ?? "0.0.0"} (local reader)`, ...options.network }),
+      broker: new NetworkBroker({ fetch: options.netFetch, userAgent: `MANGA/${this.appVersion} (local reader)`, ...options.network }),
       featureOn: (featureId) => this.featureEnabled(featureId),
     });
     this.semantic = new SemanticService(this.store, {
@@ -265,12 +298,12 @@ export class MangaProductApp {
     this.pluginRuntime = new PluginRuntime({ spawn: options.plugins?.spawn ?? nodeSpawner, limits: options.plugins?.limits });
     this.plugins = new PluginService({
       store: this.store, pluginsDir: path.join(this.layout.partitions.data, "plugins"), dataDir: path.join(this.layout.partitions.data, "plugin-data"),
-      bundledDir: options.plugins?.bundledDir, appVersion: options.appVersion ?? "0.0.0", trust: new TrustStore(this.store, options.plugins?.firstPartyKeys), runtime: this.pluginRuntime,
+      bundledDir: options.plugins?.bundledDir, appVersion: this.appVersion, trust: new TrustStore(this.store, options.plugins?.firstPartyKeys), runtime: this.pluginRuntime,
       notify: (topic, payload) => this.notify(topic, payload),
     });
     this.scan = new ScanService({ store: this.store, host: scanHost(this) });
     this.acquisition = new AcquisitionService({
-      store: this.store, plugins: this.plugins, runtime: this.pluginRuntime, scan: this.scan, stagingRoot: path.join(this.layout.partitions.downloads, "acquisition"),
+      store: this.store, plugins: this.plugins, runtime: this.pluginRuntime, scan: this.scan, stagingRoot: path.join(this.layout.partitions.cache, "acquisition"), legacyStagingRoot: path.join(this.layout.partitions.downloads, "acquisition"),
       notify: (topic, payload) => this.notify(topic, payload), ...options.acquisition,
     });
     if (this.store.migration) {
@@ -278,7 +311,7 @@ export class MangaProductApp {
     }
     const bangumiClient = new BangumiClient({
       fetch: options.netFetch ?? ((url, init) => fetch(url, init as RequestInit)),
-      userAgent: bangumiUserAgent(options.appVersion ?? "0.0.0"),
+      userAgent: bangumiUserAgent(this.appVersion),
       token: () => metadataToken(this, "bangumi"),
       ...options.bangumi,
     });
@@ -293,7 +326,7 @@ export class MangaProductApp {
     this.dandan = new DandanClient({
       fetch: options.netFetch ?? ((url, init) => fetch(url, init as RequestInit)),
       credentials: () => danmakuCredentials(this),
-      userAgent: `MANGA/${options.appVersion ?? "0.0.0"} (local reader)`,
+      userAgent: `MANGA/${this.appVersion} (local reader)`,
       origin: options.danmaku?.origin,
       ...options.danmaku?.client,
     });
@@ -351,6 +384,8 @@ export class MangaProductApp {
     });
     this.parseWorkerPath = options.parseWorkerPath;
     this.wantParseWorker = options.useParseWorker === true;
+    const envHoldMs = Number(process.env.MANGA_HOLD_WRITE_MS);
+    this.initialHoldWriteMs = options.holdWriteMs ?? (Number.isFinite(envHoldMs) && envHoldMs > 0 ? envHoldMs : 0);
   }
 
   async start(): Promise<void> {
@@ -375,6 +410,9 @@ export class MangaProductApp {
     this.store.replayUnpublished();
     this.noteFiles.attach();
     this.settleWorkFiles();
+    if (this.initialHoldWriteMs > 0) {
+      void this.holdBlockingWrite(this.initialHoldWriteMs);
+    }
   }
 
   private reportWorkFiles(reason: string): void {
@@ -439,10 +477,33 @@ export class MangaProductApp {
   /** Start the timed library scans; the desktop host calls this once the window is up. Tests and tools that only read do not. */
   startScheduler(): void {
     this.scan.startScheduler();
+    this.update.startScheduler();
     // The pictures of ended tasks are let go after the retention period: once shortly after the start, when the window has settled, then every day (计划 4.4).
     const sweep = () => { if (!this.closed) this.sweepAgentMedia(); };
     this.mediaSweepTimers.push(setTimeout(sweep, 30_000), setInterval(sweep, 86_400_000));
     for (const timer of this.mediaSweepTimers) timer.unref?.();
+  }
+
+  /** Reasons why an immediate restart-to-update would interrupt active work (计划 4.3, AT-159). */
+  busyReasons(): UpdateBusyReason[] {
+    const reasons: UpdateBusyReason[] = [];
+    try {
+      const rec = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM capture_sessions WHERE status = 'recording'").get() as { n: number } | undefined;
+      if ((rec?.n ?? 0) > 0) reasons.push("recording");
+    } catch { /* ignore */ }
+    try {
+      const rc = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM rough_cut_exports WHERE state = 'running'").get() as { n: number } | undefined;
+      if ((rc?.n ?? 0) > 0) reasons.push("roughcut");
+    } catch { /* ignore */ }
+    try {
+      const acq = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM acquisition_jobs WHERE state IN ('metadata','downloading','verifying','publishing','importing')").get() as { n: number } | undefined;
+      if ((acq?.n ?? 0) > 0) reasons.push("download");
+    } catch { /* ignore */ }
+    try {
+      const run = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_runs WHERE status IN ('queued','running','waiting_input')").get() as { n: number } | undefined;
+      if (this.runAbort.size > 0 || (run?.n ?? 0) > 0) reasons.push("agent");
+    } catch { /* ignore */ }
+    return reasons;
   }
 
   /** One pass of the clean-up of frozen task pictures; `now` is for the tests and the window observation that move the clock. */
@@ -454,9 +515,95 @@ export class MangaProductApp {
     }
   }
 
+  /** Track a non-cancellable write operation that `--quit-for-update` must wait for before closing SQLite (计划 4.2, AT-158). */
+  beginBlockingWrite<T>(work: Promise<T> | (() => Promise<T>)): Promise<T> {
+    const task = (typeof work === "function" ? Promise.resolve().then(work) : Promise.resolve(work)).finally(() => {
+      this.blockingWrites.delete(task);
+    });
+    this.blockingWrites.add(task);
+    return task;
+  }
+
+  /** Hold a non-cancellable write barrier for `ms` milliseconds (or until released via `releaseBlockingWrites()` or `release-blocking-write.json`). */
+  holdBlockingWrite(ms: number): Promise<void> {
+    if (!(ms > 0)) return Promise.resolve();
+    const releaseFile = path.join(this.layout.partitions.runtime, "release-blocking-write.json");
+    return this.beginBlockingWrite(
+      new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          clearInterval(poll);
+          this.blockingWriteResolvers.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        timer.unref?.();
+        const poll = setInterval(() => {
+          if (this.closed || fs.existsSync(releaseFile)) done();
+        }, 100);
+        poll.unref?.();
+        this.blockingWriteResolvers.add(done);
+      }),
+    );
+  }
+
+  /** Release any held synthetic blocking writes immediately (used in test cleanup after verifying timeout behavior). */
+  releaseBlockingWrites(): void {
+    for (const done of [...this.blockingWriteResolvers]) done();
+  }
+
+  hasBlockingWrites(): boolean {
+    return this.blockingWrites.size > 0;
+  }
+
+  async waitForBlockingWrites(): Promise<void> {
+    while (this.blockingWrites.size > 0) {
+      await Promise.allSettled([...this.blockingWrites]);
+    }
+  }
+
+  /**
+   * Prepare for `--quit-for-update` (计划 4.2, AT-158):
+   * 1. Stop any active voice recording (saving recorded audio).
+   * 2. Cancel cancellable background tasks (library scan, exports, agent runs, voice transcription pipeline).
+   * 3. Wait for non-cancellable writes (`layoutTask`, `blockingWrites`) to finish before closing the database.
+   */
+  async prepareQuitForUpdate(options: { signal?: AbortSignal } = {}): Promise<void> {
+    const wait = async (work: Promise<unknown>): Promise<void> => {
+      const signal = options.signal;
+      signal?.throwIfAborted();
+      if (!signal) { await work; return; }
+      await new Promise<void>((resolve, reject) => {
+        const aborted = () => reject(signal.reason ?? new Error("update quit cancelled"));
+        signal.addEventListener("abort", aborted, { once: true });
+        work.then(() => resolve(), reject).finally(() => signal.removeEventListener("abort", aborted));
+      });
+      signal.throwIfAborted();
+    };
+    if (this.voice.activeId) {
+      await wait(this.voice.stop({ sessionId: this.voice.activeId, reason: "deactivated" }));
+    }
+    try { this.scanAbort?.abort(); } catch { /* ignore */ }
+    this.scan.cancel();
+    try { this.exportAbort?.abort(); } catch { /* ignore */ }
+    try { this.interruptRuns("application quitting for update"); } catch { /* ignore */ }
+    try { this.voice.pipeline.abortAll(); } catch { /* ignore */ }
+    await wait(this.acquisition.suspend());
+    await wait(Promise.all([
+      this.whenLayoutSettled(),
+      this.waitForBlockingWrites(),
+      this.scan.whenIdle(),
+      this.roughcuts.dispose(),
+      this.acquisition.whenSettled(),
+    ]));
+    this.noteFiles.flush();
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.releaseBlockingWrites();
+    this.update.dispose();
     this.noteFiles.dispose();
     for (const timer of this.mediaSweepTimers.splice(0)) clearTimeout(timer);
     this.scan.dispose();
@@ -976,6 +1123,9 @@ export class MangaProductApp {
     const host = (() => { try { return new URL(connection?.base_url ?? "").host; } catch { return null; } })();
     const report = {
       generatedAt: new Date().toISOString(),
+      appVersion: this.appVersion,
+      commit: this.buildInfo.commit,
+      buildInfo: this.buildInfo,
       scope: { sessionId: session?.id ?? null, sessionKind: session?.kind ?? null, targetId: session?.targetId ?? input.resourceId ?? input.workId ?? null, contextId: session?.contextId ?? null, page: input.page ?? null },
       model: connection ? { connectionId: connection.id, protocol: connection.protocol, modelId: connection.model_id, runtime: connection.runtime, host } : null,
       tools: [...AGENT_COMMANDS, ...(session?.contextId ? AGENT_PROJECT_COMMANDS : [])].filter((commandId) => this.runtime.gateway.has(commandId)).map((commandId) => ({ id: commandId, description: TOOL_DESCRIPTIONS[commandId] ?? commandId })),

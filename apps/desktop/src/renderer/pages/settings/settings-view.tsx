@@ -5,6 +5,7 @@ import type { ConnectionForm } from "../../lib/types.ts";
 import type { SettingsPageId } from "../../lib/shell-model.ts";
 import type { PackageFlow } from "../../hooks/use-package.ts";
 import type { ScanState } from "../../hooks/use-scan.ts";
+import type { UpdateHandle } from "../../hooks/use-update.ts";
 import type { ComicSettings } from "../../readers/comic-reader.tsx";
 import type { VideoSettings } from "../../readers/video-player.tsx";
 import type { useKeyBindings } from "../../hooks/use-key-bindings.ts";
@@ -24,6 +25,7 @@ import { ShortcutsPage } from "./shortcuts-page.tsx";
 import { DanmakuPage } from "./danmaku-page.tsx";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
 import { StoragePage } from "./storage-page.tsx";
+import { UpdatePage } from "./update-page.tsx";
 import { UsagePage } from "./usage-page.tsx";
 import { VoicePage } from "./voice-page.tsx";
 
@@ -47,6 +49,7 @@ export type SettingsViewProps = {
   facets: Set<string>;
   scan: ScanState;
   pkg: PackageFlow;
+  update?: UpdateHandle;
   inventory: Record<string, unknown> | null;
   migration: MigrationPlan | null;
   shell: ShellPreference;
@@ -104,6 +107,25 @@ export function SettingsView(props: SettingsViewProps) {
     switch (props.page) {
       case "general":
         return <GeneralPage i18n={i18n} host={props.host} settings={props.settings} migration={props.migration} onGoto={props.onGoto} {...props.general} />;
+      case "update": {
+        const fallbackUpdate: UpdateHandle = props.update ?? {
+          status: null,
+          checking: false,
+          notesOpen: false,
+          setNotesOpen: () => undefined,
+          snoozed: false,
+          snooze: () => undefined,
+          busyDialog: null,
+          cancelBusyRestart: () => undefined,
+          reload: async () => null,
+          check: async () => null,
+          setSettings: async () => undefined,
+          requestRestart: async () => undefined,
+          confirmBusyRestart: async () => undefined,
+          dismissJustUpdated: async () => undefined,
+        };
+        return <UpdatePage i18n={i18n} host={props.host} update={fallbackUpdate} />;
+      }
       case "appearance":
         return (
           <SettingsPage id="appearance" title={t("settings.page.appearance")}>

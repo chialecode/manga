@@ -5,8 +5,8 @@ import { defineConfig } from "vite";
 import esbuild from "esbuild";
 import { danmakuDefine } from "./danmaku-define.ts";
 
-/** Native modules stay outside the bundles; the package copies them next to the app (see forge.config.ts). */
-const NATIVE = ["better-sqlite3", "sharp", "@napi-rs/canvas"];
+/** Native and runtime-resolved modules stay outside the bundles; the package copies them next to the app (see forge.config.ts). */
+const NATIVE = ["better-sqlite3", "sharp", "@napi-rs/canvas", "electron-updater"];
 const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
 
 /** A worker that runs on its own thread or process is one self-contained file, built here next to the main bundle. */

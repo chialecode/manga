@@ -38,6 +38,9 @@ export type HostOptions = {
   workspaces?: Record<string, unknown>;
   /** The context the person was last in. */
   lastContext?: string | null;
+  channel?: "release" | "development" | "test";
+  appVersion?: string;
+  buildInfo?: { version: string; channel: "release" | "development" | "test"; commit: string; builtAt: string; schemaVersion: number };
 };
 
 /**
@@ -156,6 +159,17 @@ export function contextHandlers(options: Pick<HostOptions, "facets" | "projects"
 
 export function installHost(options: HostOptions = {}) {
   const calls: Call[] = [];
+  const noticeListeners = new Set<(notice: { topic: string; payload: Record<string, unknown> }) => void>();
+  const channel = options.channel ?? "test";
+  const appVersion = options.appVersion ?? options.buildInfo?.version ?? "0.1.0";
+  const buildInfo = options.buildInfo ?? {
+    version: appVersion,
+    channel,
+    commit: "c79f49a",
+    builtAt: "2026-11-08T08:00:00.000Z",
+    schemaVersion: 14,
+  };
+  let updateSettings = { autoCheck: true, autoDownload: true };
   const context = contextHandlers(options);
   const { sessions } = context;
   const state = Object.assign(context.state, {
@@ -167,7 +181,53 @@ export function installHost(options: HostOptions = {}) {
   const handlers: Record<string, Handler> = {
     ...context.handlers,
     "inventory.overview": () => ({ items: [], totals: {} }),
-    "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }] }),
+    "settings.get": () => ({ needsSetup: false, recoveryJobs: [], aiRuntime: "native", connections: [{ purpose: "text" }], appVersion, buildInfo }),
+    "update.status": () => ({
+      version: buildInfo.version,
+      channel: buildInfo.channel,
+      commit: buildInfo.commit,
+      builtAt: buildInfo.builtAt,
+      schemaVersion: buildInfo.schemaVersion,
+      state: buildInfo.channel === "release" ? "idle" : "unavailable",
+      lastCheckedAt: null,
+      availableVersion: null,
+      releaseNotes: null,
+      targetSchemaVersion: null,
+      willUpgradeSchema: false,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      usedDifferential: false,
+      error: null,
+      errorCode: null,
+      settings: updateSettings,
+      justUpdated: null,
+    }),
+    "update.settings.get": () => updateSettings,
+    "update.settings.set": (input) => {
+      updateSettings = { ...updateSettings, ...(input as Partial<typeof updateSettings>) };
+      return updateSettings;
+    },
+    "update.check": () => ({
+      version: buildInfo.version,
+      channel: buildInfo.channel,
+      commit: buildInfo.commit,
+      builtAt: buildInfo.builtAt,
+      schemaVersion: buildInfo.schemaVersion,
+      state: buildInfo.channel === "release" ? "idle" : "unavailable",
+      lastCheckedAt: "2026-11-08T10:00:00.000Z",
+      availableVersion: null,
+      releaseNotes: null,
+      targetSchemaVersion: null,
+      willUpgradeSchema: false,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      usedDifferential: false,
+      error: null,
+      errorCode: null,
+      settings: updateSettings,
+      justUpdated: null,
+    }),
+    "update.restartToUpdate": () => ({ status: "restarting", restarted: true, busyReasons: [], version: null }),
     "notes.list": () => [],
     "quickTasks.list": () => ({ tasks: [] }),
     "session.open": (input) => {
@@ -214,7 +274,7 @@ export function installHost(options: HostOptions = {}) {
     ...options.overrides,
   };
   (window as unknown as { manga: unknown }).manga = {
-    async state() { return { layout: { channel: "test", pointerPath: "pointer.json", partitions: { data: "d" }, writable: true, recovery: "none" }, writable: true, vaultAvailable: true }; },
+    async state() { return { layout: { channel, pointerPath: "pointer.json", partitions: { data: "d" }, writable: true, recovery: "none" }, writable: true, vaultAvailable: true, appVersion, buildInfo }; },
     async command(payload: { commandId: string; input?: Record<string, unknown> }) {
       const input = payload.input ?? {};
       calls.push({ commandId: payload.commandId, input });
@@ -225,11 +285,22 @@ export function installHost(options: HostOptions = {}) {
         return { status: "error", error: { code: failure.code ?? "INTERNAL", message: failure.message ?? "failed" } };
       }
     },
-    onNotice: () => () => undefined,
+    onNotice: (listener: (notice: { topic: string; payload: Record<string, unknown> }) => void) => {
+      noticeListeners.add(listener);
+      return () => { noticeListeners.delete(listener); };
+    },
     async chooseDirectory() { return null; }, async chooseFile() { return null; }, async chooseAudio() { return null; }, async stashSecret() { return null; },
     async reveal() { return { status: "ok", value: {} }; },
   };
-  return { calls, state, sessions, of: (id: string) => calls.filter((call) => call.commandId === id) };
+  return {
+    calls,
+    state,
+    sessions,
+    of: (id: string) => calls.filter((call) => call.commandId === id),
+    emitNotice: (topic: string, payload: Record<string, unknown>) => {
+      for (const listener of [...noticeListeners]) listener({ topic, payload });
+    },
+  };
 }
 
 /** The page history keeps a place the person stayed on for a moment; a test that goes back stays on each place for that moment. */

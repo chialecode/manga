@@ -1,0 +1,134 @@
+{
+  "status": "passed",
+  "stage": "m10",
+  "version": "0.1.1",
+  "tag": "v0.1.1",
+  "commit": "c7196ca",
+  "targetSha": "c7196ca23d8d2a30adfbc9f6db82cca1b5896180",
+  "schemaVersion": 14,
+  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
+  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
+  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
+  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
+  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
+  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
+  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
+  "testScriptFingerprint": "7ddec5774ad97e7d328fd606bc81a72e340e2d802989be7d3c85ee9442dfba85",
+  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
+  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
+  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
+  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
+  "benchFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
+  "benchMatchesSource": true,
+  "at": "2026-11-08T22:31:39.987Z",
+  "ci": false,
+  "files": [
+    {
+      "fileName": "manga-setup-0.1.1.exe",
+      "bytes": 212172879,
+      "sha256": "60cab91589722c9c1c88290d872ffb537bf26d7ab2320f04d0d54a4c7859a8d7"
+    },
+    {
+      "fileName": "manga-setup-0.1.1.exe.blockmap",
+      "bytes": 223201,
+      "sha256": "858f28e1d032820b68b1034d0e3ed666851fc6bdd8afbd043cd53018b40ba049"
+    },
+    {
+      "fileName": "manga-setup-0.1.1.exe.sig",
+      "bytes": 436,
+      "sha256": "1643e09a8d4e0b45d19e806a8d6ed90cfb26ad4a992b15614c0fd9963f5285c9"
+    },
+    {
+      "fileName": "latest.yml",
+      "bytes": 2755,
+      "sha256": "308c01d16586ee87fd0987d55eaa7a3495bfbe0736601e0b8c1503d046661272"
+    },
+    {
+      "fileName": "RELEASE-NOTES.md",
+      "bytes": 2332,
+      "sha256": "bc9f1b70f383355339f2c73601e4449d683435fff27c81387b6990de7633b43e"
+    },
+    {
+      "fileName": "SHA256SUMS",
+      "bytes": 437,
+      "sha256": "507ca5e1d852cdd2f48d2cebb66a5bde16bfe97f2b4f40f8641255b429201609"
+    }
+  ],
+  "rehearsal": {
+    "ok": true,
+    "kind": "electron-nsis",
+    "artifactKind": "test-identity-repackage",
+    "previousRelease": {
+      "kind": "first-release-current-source-seed"
+    },
+    "previousVersion": "0.1.0",
+    "upgradedVersion": "0.1.1",
+    "appAsarSha256": "6caeb41fb2b04b26a234f0ae1ff10a48e6f2720f6da270c01f1d785e5086ceda",
+    "previousAsarSha256": "6caeb41fb2b04b26a234f0ae1ff10a48e6f2720f6da270c01f1d785e5086ceda",
+    "verifiedInstallerExecuted": true,
+    "dataIntact": true,
+    "backupCreated": true,
+    "tamperedRejected": true,
+    "justUpdatedOnce": true,
+    "realInstallationsUntouched": true,
+    "cases": [
+      {
+        "mode": "restart",
+        "previousVersion": "0.1.0",
+        "version": "0.1.1",
+        "downloader": "electron-updater",
+        "downloadBytes": 212172940,
+        "fullBytes": 212172940,
+        "usedDifferential": false,
+        "oldProcessExited": true,
+        "newProcessStarted": true,
+        "verifiedInstallerExecuted": true,
+        "draftWasUnsaved": true,
+        "draftPreserved": true,
+        "backupContainsSavedDraft": true,
+        "workspaceRestored": true,
+        "savedTabSelectedBeforeNavigation": true,
+        "emptyLibraryOnboarding": true,
+        "readyMs": 21676
+      },
+      {
+        "mode": "quit",
+        "previousVersion": "0.1.0",
+        "version": "0.1.1",
+        "downloader": "electron-updater",
+        "downloadBytes": 466589,
+        "fullBytes": 212172940,
+        "usedDifferential": true,
+        "oldProcessExited": true,
+        "newProcessStarted": true,
+        "verifiedInstallerExecuted": true,
+        "draftWasUnsaved": true,
+        "draftPreserved": true,
+        "backupContainsSavedDraft": true,
+        "workspaceRestored": true,
+        "savedTabSelectedBeforeNavigation": true,
+        "emptyLibraryOnboarding": true,
+        "readyMs": 20809
+      }
+    ],
+    "development": null,
+    "records": {
+      "downloadBytes": {
+        "fullBytes": 212172940,
+        "differentialBytes": 466589,
+        "savedRatio": 0.9978009024147942
+      },
+      "restartToReadyMs": 21676,
+      "installDevMs": null
+    },
+    "seconds": 207.03
+  },
+  "previousRelease": {
+    "kind": "first-release-current-source-seed"
+  },
+  "totalMs": 267558,
+  "published": false,
+  "releaseUrl": null,
+  "requiresAuthorization": "node scripts/stage/release-publish-verify.mjs --version 0.1.1 --dir dist/release/v0.1.1 --target c7196ca23d8d2a30adfbc9f6db82cca1b5896180 --publish"
+}

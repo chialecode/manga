@@ -128,8 +128,11 @@ describe("installing a plugin package: only what the host trusts, and only with 
   it("refuses a plugin that is not made for this version of the application", async () => {
     const ctx = await boot();
     expect(fails(await install(ctx, { key: first, host: { min: "9.0.0" } })).details?.reason).toBe("incompatible");
-    // The newest version the plugin works with may be the one the application is.
-    ok(await install(ctx, { key: first, host: { min: "0.0.0", max: "0.0.0" }, version: "1.0.0" }));
+    // The newest version the plugin works with may be the one the application is, including a development prerelease version.
+    ok(await install(ctx, { key: first, host: { min: "0.0.0", max: ctx.app.appVersion }, version: "1.0.0" }));
+    const devCtx = await startApp({ profileRoot: tempProfile(), options: { appVersion: "0.1.1-dev.202611081140", plugins: { firstPartyKeys: [{ publicKey: first.publicKey, label: first.label }], limits: LIMITS } } });
+    apps.push(devCtx);
+    ok(await install(devCtx, { key: first, host: { min: "0.1.0" }, version: "1.0.0" }));
   });
 
   it("is run only by the owner", async () => {

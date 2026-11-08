@@ -353,13 +353,18 @@ export function NoteEditor(props: {
 
   // Closing the window or leaving the page flushes synchronously enough to keep the draft and try a save.
   useEffect(() => {
-    const onHide = () => {
+    const saveNow = async () => {
       if (dirty.current) drafts.write(draftOwner.current, { blocks: pending.current, title: props.title, tags: props.tags });
-      void flush();
+      await flush();
+    };
+    const onHide = () => {
+      void saveNow();
     };
     window.addEventListener("beforeunload", onHide);
     document.addEventListener("visibilitychange", onHide);
+    const stopSaveNow = typeof window !== "undefined" ? window.manga?.onSaveNow?.(saveNow) : undefined;
     return () => {
+      stopSaveNow?.();
       window.removeEventListener("beforeunload", onHide);
       document.removeEventListener("visibilitychange", onHide);
     };

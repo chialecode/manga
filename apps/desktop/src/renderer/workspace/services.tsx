@@ -13,6 +13,7 @@ import type { RecorderHandle } from "../voice/use-recorder.ts";
 import type { useScan } from "../hooks/use-scan.ts";
 import type { usePackage } from "../hooks/use-package.ts";
 import type { useKeyBindings } from "../hooks/use-key-bindings.ts";
+import type { UpdateHandle } from "../hooks/use-update.ts";
 import type { ReadingStylePatch } from "@manga/contracts/reading";
 
 /** How an open is done: behind the tab in front (Ctrl + click, middle click), or as a tab of its own. */
@@ -87,6 +88,7 @@ export type Services = {
   changedProjects: () => void;
   scan: ReturnType<typeof useScan>;
   pkg: ReturnType<typeof usePackage>;
+  update: UpdateHandle;
   recorder: RecorderHandle;
   voiceOn: boolean;
   keyBindings: ReturnType<typeof useKeyBindings>;

@@ -45,11 +45,19 @@ pnpm dev
 
 `pnpm dev` 会自动准备并校验 Electron 所需的 SQLite 原生模块，以开发版运行：数据放在开发版自己的位置（`%LOCALAPPDATA%\manga-dev`，以及“文档”和“下载”里的 `manga-dev`），与正式版 `manga` 分开；`pnpm dev --isolated` 则把数据全部放在 `dist/desktop/development` 下。首次准备要下载依赖，失败时停止并显示原因；不要手动替换 `node_modules` 里的原生文件来回切环境。
 
+### 安装、双通道并存与自动更新
+
+- **按用户安装、双通道并存**：Windows 安装程序不需要管理员权限，默认装到 `%LOCALAPPDATA%\Programs\manga`（开发版为 `manga-dev`），安装时可以改目录；正式版（`MANGA`）与开发版（`MANGA Dev`）拥有各自的应用 ID、快捷方式、安装目录与数据目录，可以在同一台机器上同时安装、互不干扰；卸载只删程序与快捷方式，保留应用数据与个人文件。
+- **开发版本地自动更新**：本机安装了开发版（`MANGA Dev`）后，每次运行 `node scripts/stage.mjs package` 或 `node scripts/stage.mjs gate` 通过时，会自动执行 `stage install-dev`：如果开发版正在运行，先请它保存工作区与草稿并退出，静默安装新打出的开发版（版本号形如 `0.1.x-dev.<UTC 时间>`），再自动重新打开；正式版完全不受影响（设 `MANGA_DEV_AUTO_INSTALL=0` 可关闭）。
+- **正式版每周发布与联网更新**：GitHub Actions 每周一自动检查上次发布以来是否有新的 PR 合并，有则运行检查、打包、安装与升级演练，通过后用独立的 Ed25519 私钥签名并发布 `v0.1.x` 到 GitHub Releases。已安装的正式版在后台按块图只下载变化的部分，经内置公钥校验通过后在顶部一行右侧提示“新版本已就绪 · 重启以更新”（也可以在下次退出应用时自动安装），可在“设置 › 更新”查看版本、手动检查或关闭自动检查。
+
 | 命令 | 用途 |
 | --- | --- |
 | `pnpm dev` | 启动开发版桌面应用 |
-| `node scripts/verify.mjs` | 离线统一检查：文档与公开内容、依赖边界、类型检查、未使用代码、Vitest；开发者、pre-push hook 与 CI 共用 |
-| `node scripts/stage.mjs gate` | 阶段门禁：依次运行测试、打包烟测、安装包、性能基准与报告，跳过结果仍有效的步骤 |
+| `node scripts/verify.mjs` | 离线统一检查：文档与公开内容、工作流配置、依赖边界、类型检查、未使用代码、Vitest；开发者、pre-push hook 与 CI 共用 |
+| `node scripts/stage.mjs gate` | 阶段门禁：依次运行测试、打包烟测、安装包、性能基准与报告，跳过结果仍有效的步骤，通过后自动更新本机开发版 |
+| `node scripts/stage.mjs install-dev` | 单独把刚打出的开发版安装包更新到本机已装的开发版 |
+| `node scripts/stage.mjs release` | 在门禁通过的 `main` 上生成正式版发布产物并完成升级演练 |
 
 打包输出在 `dist/desktop/packages`，构建资产与缓存都是生成物。环境要求与检查边界见[质量门禁](docs/dev-rules/quality-gates.md)。
 

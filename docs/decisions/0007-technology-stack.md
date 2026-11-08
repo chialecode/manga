@@ -25,7 +25,7 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 | 存储与全文索引 | SQLite + better-sqlite3 + Drizzle ORM / Kit，FTS5 | 服务或 worker 侧；ORM 类型不进入公共 DTO |
 | 运行时校验 | Zod 4 | IPC、工具与资料包；升级时验证现有 Zod 3 契约 |
 | ZIP 资料包 | JSZip | 校验路径、实际解压量、条目数与内存预算；ZIP 支持不等于 EPUB 支持 |
-| 构建与桌面打包 | Vite + @vitejs/plugin-react + Electron Forge / plugin-vite | 验证原生模块 ABI、重建、asar 与离线资产 |
+| 构建与桌面打包 | Vite + @vitejs/plugin-react + Electron Forge / plugin-vite + electron-builder（NSIS 安装包） + electron-updater（正式版更新） | 验证原生模块 ABI、重建、asar 与离线资产；正式版更新只经内置 Ed25519 公钥校验通过后才允许执行 |
 | 单元与组件测试 | Vitest + Testing Library / user-event + jsdom | 既有 node:test 在覆盖迁移前保留 |
 | 浏览器烟测 | playwright-core | Electron 宿主、原生 IME 与真实设备另测 |
 | AI runtime 与模型协议适配 | 自研适配器 + PI（@earendil-works/pi-ai） | BYOK；首版两种实现均须实际接入，可在设置切换；运行时身份独立于 API 协议/模型/连接，工具授权与 Agent 业务规则由 MANGA 宿主管理 |
@@ -121,7 +121,7 @@ Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，�
 
 ## 2026-11-07 依赖刷新与待审操作自研说明
 
-Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点一次（`pnpm outdated -r`），按“实施当天满 14 天的最新精确版本”升级，最小发行龄不绕过。逐项验证见[阶段报告](../delivery/stage-report.md#dependencies)。
+Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点一次（`pnpm outdated -r`），按“实施当天满 14 天的最新精确版本”升级，最小发行龄不绕过。逐项验证见[阶段报告](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-report.md#dependencies)。
 
 | 项 | 前 | 后 | 结果 |
 | --- | --- | --- | --- |
@@ -132,9 +132,21 @@ Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点�
 
 **待审操作状态机、提议卡片与烟测条件等待为仓内自写（A-40、A-121）：**
 
-- **待审操作状态机与原子消费：** 复用 SQLite、命令网关与成功回执。创建提议与工具回执一起保存；确认原子抢占后，同步效果与回执在最后一次修订核对的事务里一起提交，项目包用发布摘要恢复，粗剪按持久任务完成状态恢复。A 已核对的人工审批候选、官方来源与适配理由见[阶段计划第 3 节](../delivery/stage-plan.md#31-候选)：需要不暂停任务、在下一轮带回结果，现有 SDK 的运行状态与本项目的双运行时不同；只补五种已有命令的确认入口，保留一份状态源。
+- **待审操作状态机与原子消费：** 复用 SQLite、命令网关与成功回执。创建提议与工具回执一起保存；确认原子抢占后，同步效果与回执在最后一次修订核对的事务里一起提交，项目包用发布摘要恢复，粗剪按持久任务完成状态恢复。A 已核对的人工审批候选、官方来源与适配理由见[阶段计划第 3 节](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-plan.md#31-候选)：需要不暂停任务、在下一轮带回结果，现有 SDK 的运行状态与本项目的双运行时不同；只补五种已有命令的确认入口，保留一份状态源。
 - **提议卡片界面：** 在 `apps/desktop/src/renderer/components/chat/messages.tsx` 中用现有的卡片、按钮、危险按钮样式与语义 token 渲染，随 `session.stream` 装入对应的助手消息并参与 `@tanstack/react-virtual` 的 `measureElement` 动态行高测量，不引入独立聊天 UI 框架（如 `@assistant-ui/react`）。
 - **打包烟测的条件等待（LOOP-29）：** 复用 `apps/desktop/src/main/smoke/driver.ts` 的 `waitUntil`、`waitForTestId`，补充 `waitText`、`waitFrames`、`waitDrawn`，通过 `webContents.executeJavaScript` 等待实际状态；无需另换测试运行器。
+
+## 2026-11-08 依赖盘点与自动更新选型
+
+安装与自动更新阶段开始时与门禁前各执行一次 `pnpm outdated -r`，按“实施当天满 14 天的最新精确版本”处理，最小发行龄策略（`minimumReleaseAge: 20160` 分钟）不绕过、不写入豁免。
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| electron-updater（新增，`apps/desktop` 依赖） | — | 6.8.11 | 2026-10-20 20:51 UTC 发行，已满 14 天（6.8.12 于 2026-10-25 23:54 UTC 发行，实施时尚未满 14 天；7.x 仍为 alpha 且改为无 Windows 代码签名即拒绝更新，正式发行并与 Q-09 一起评估后再议）。配合 `app-update.yml` 的 `publisherName: ["chialecode"]` 接入自定义 `verifyUpdateCodeSignature`（见开源选型记录） |
+| knip | 6.42.1 | 6.43.0 | 升级（2026-10-24 07:45 UTC 发行，已满 14 天；最新 6.46.0 未满龄）。`node scripts/verify.mjs` 通过 |
+| electron-builder | 26.18.0 | 保持 26.18.0 | 26.18.1 于 2026-10-25 23:54 UTC 发行，实施时距满 14 天尚差数小时，按最小发行龄策略保持 26.18.0；下次盘点满龄后升级 |
+| linkedom | 0.18.13 | 保持 0.18.13 | 已登记例外不变（0.18.14 的 `@acemir/cssom` CommonJS 导出限制未变，上游尚无新发行） |
+| dockview-react、Electron、Vitest 与其余依赖 | 8.6.1、45.0.0、5.0.5 等 | 不变 | 2026-11-08 核对 npm registry `time`：高于当前锁定版本的候选（如 Electron 45.2.3、dockview-react 8.8.3、@earendil-works/pi-ai 1.5.0、@tanstack/react-virtual 3.14.26 等）发行均未满 14 天，保持当前精确版本 |
 
 ## 2026-09-20 接入与构建边界
 
@@ -168,7 +180,10 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 标签页与分屏（2026-10-22 查证） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
 | 消息流贴底 | use-stick-to-bottom 1.1.6（MIT），与 @tanstack/react-virtual 的虚拟列表共用滚动容器（2026-11-04 试验） | 自写滚动判定；react-virtuoso（要把列表与贴底整体换掉，两条现有路线可用时不评估） |
-| 安装包（2026-11-04 查证） | electron-builder 26.18.0 的 NSIS 目标（MIT，开发依赖），`--prepackaged` 用 Forge 的产物，按用户安装到 `%LOCALAPPDATA%\Programs\manga` | @electron-forge/maker-squirrel（固定装到 `%LocalAppData%\<应用名>`，不能选目录）；maker-wix（要另装 WiX）；maker-msix（`AppData` 被虚拟化） |
+| 安装包（2026-11-04 查证） | electron-builder 26.18.0 的 NSIS 目标（MIT，开发依赖），`--prepackaged` 用 Forge 的产物，按用户安装到 `%LOCALAPPDATA%\Programs\manga`；图标由 SVG 源文件经 `sharp` 与 `resedit` 生成多尺寸 `.ico` 并写入可执行文件资源，安装界面设为简体中文（`2052` / `zh_CN`） | @electron-forge/maker-squirrel（固定装到 `%LocalAppData%\<应用名>`，不能选目录）；maker-wix（要另装 WiX）；maker-msix（`AppData` 被虚拟化） |
+| 正式版应用内更新（2026-11-08 查证） | electron-updater 6.8.11（MIT，与 electron-builder 同源）配合仓内 `UpdateService`：支持 NSIS 安装包、GitHub Releases 与通用 HTTP 源、按 `.blockmap` 块图做 HTTP Range 差分下载、`autoInstallOnAppQuit`、拒绝降级（`allowDowngrade = false`） | Electron 自带 `autoUpdater`（Windows 上绑定 Squirrel.Windows，与已定的 NSIS 按用户安装冲突）；Velopack 1.3.39（自带安装器与更新器，会替换现有 NSIS 安装目录约定） |
+| 更新包防篡改校验（2026-11-08 查证） | Node 内置 `crypto` 的 Ed25519 分离签名（`.sig`）：独立于插件密钥的 `dist/keys/update-release.pem` 对安装包的 `SHA-512 + 版本号 + 文件名` 签名，公钥内置在 `packages/app-core/src/update/signature.ts`；正式版 `resources/app-update.yml` 写入 `publisherName: ["chialecode"]` 使 `NsisUpdater.verifySignature` 调用自定义 `verifyUpdateCodeSignature`，同时 `UpdateService` 在标记就绪与执行安装前做纵深防御二次校验（缺失 `publisherName`、缺失 `.sig`、篡改 1 字节、旧版签名冒充、降级、非 HTTPS 一律拒绝并删除下载文件） | Windows Authenticode 代码签名（Q-09 当前默认暂不签名：Azure Artifact Signing 个人开发者仅开放美加，Certum 收费，SignPath 要求知名度，Store 仅支持 MSIX）；只靠 `latest.yml` 的 SHA-512（无法防御更新源清单与安装包被同时替换） |
+| 发布到 GitHub Releases 与每周 CI 构建（2026-11-08 查证） | GitHub CLI `gh release`（MIT，本机与 GitHub 托管运行器自带）创建标签与 Release；CI 构建采用固定标签的 GitHub 托管运行器 `windows-2025`（不用随时迁移的 `windows-latest`），`build` 与 `publish` 两个 job 之间用官方 `actions/upload-artifact` v7.0.2 与 `actions/download-artifact` v8.0.2（均满 14 天，固定完整 SHA）传产物，使写权限只留在不装依赖、不碰私钥的 `publish` job | electron-builder 自带上传（需把写权限令牌交给构建进程）；第三方 release Action（扩大 Actions 允许列表与供应链面） |
 | 目录遍历与定时扫描 | Node 内置 `fs.promises.opendir`，在 `worker_threads` 中执行，写库仍由单写入宿主按小批次完成；定时用应用内计时器（关闭、30 分钟、1 小时、6 小时、每天）与启动后延迟扫描 | fdir 6.5.0：瓶颈不在遍历本身；croner 10.0.1：用不到 cron 表达式 |
 | 文件变更监听 | 不采用（用户要求的是按间隔扫描） | chokidar 5.0.0 与 @parcel/watcher 2.6.0：大目录树长期监听有句柄与网络盘问题，需要“即时发现新文件”时的候选 |
 | 播放器控件 | 保留原生 `video` 播放器，只改样式与控件布局 | media-chrome 4.19.3：换控件层要重接帧号跳转、JASSUB、A-B 与录音标记；Vidstack 的 React 包 0.6.15 停在 2024-04 |

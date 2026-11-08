@@ -18,9 +18,10 @@ import type { MangaProductApp } from "../product-app.ts";
 import { INDEXABLE_PARTITIONS } from "../product-helpers.ts";
 import { listConnections, upsertConnection, testConnection, deleteConnection, setProfile, probeConnection } from "./connections.ts";
 import { indexRootRecord } from "./inventory.ts";
+import type { UpdateBusyReason, UpdateSettingsPatch } from "@manga/contracts";
 
 /** What these commands use of the application. */
-export type SettingsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "notify" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders">;
+export type SettingsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "notify" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders"> & Partial<Pick<MangaProductApp, "appVersion" | "buildInfo" | "update">>;
 
 export function settingsModule(app: SettingsHost): MangaModule {
   return defineModule({
@@ -125,6 +126,23 @@ export function settingsModule(app: SettingsHost): MangaModule {
         app.assertWritable();
         return app.trace.clear();
       });
+      app.runtime.registerCommand("manga.settings", "update.status", (envelope) => {
+        const input = (envelope.input ?? {}) as { dismissJustUpdated?: boolean };
+        return app.update!.status(input);
+      });
+      app.runtime.registerCommand("manga.settings", "update.check", (envelope) => {
+        const input = (envelope.input ?? {}) as { download?: boolean };
+        return app.update!.check({ manual: true, download: input.download });
+      });
+      app.runtime.registerCommand("manga.settings", "update.restartToUpdate", (envelope) => {
+        const input = (envelope.input ?? {}) as { force?: boolean; busyReasons?: UpdateBusyReason[] };
+        return app.update!.restartToUpdate(input);
+      });
+      app.runtime.registerCommand("manga.settings", "update.settings.get", () => app.update!.getSettings());
+      app.runtime.registerCommand("manga.settings", "update.settings.set", (envelope) => {
+        app.assertWritable();
+        return app.update!.setSettings(envelope.input as UpdateSettingsPatch);
+      });
     },
     deactivate: () => undefined,
   });
@@ -133,6 +151,8 @@ export function settingsModule(app: SettingsHost): MangaModule {
 export async function settingsSnapshot(app: SettingsHost) {
   return {
     layout: app.publicLayout(),
+    appVersion: app.appVersion,
+    buildInfo: app.buildInfo,
     pointerPath: app.layout.pointerPath,
     layoutConfig: app.store.getMeta("layoutConfig") ? JSON.parse(app.store.getMeta("layoutConfig")!) : { pointerPath: app.layout.pointerPath, partitions: app.layout.overrides },
     aiSkipped: app.store.getMeta("aiSkipped") === "1",

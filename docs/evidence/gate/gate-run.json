@@ -1,37 +1,74 @@
 {
   "status": "passed",
-  "at": "2026-11-08T08:02:10.934Z",
-  "seconds": 25,
+  "at": "2026-11-08T21:52:50.632Z",
+  "seconds": 2149,
   "steps": [
     {
       "name": "verify",
       "outcome": "passed",
-      "seconds": 24
+      "seconds": 25
     },
     {
       "name": "test",
-      "outcome": "current, kept",
-      "seconds": 0
+      "outcome": "passed",
+      "seconds": 73
     },
     {
       "name": "package",
-      "outcome": "current, kept",
-      "seconds": 0
+      "outcome": "passed",
+      "seconds": 353
     },
     {
       "name": "installer",
-      "outcome": "current, kept",
-      "seconds": 0
+      "outcome": "passed",
+      "seconds": 408
     },
     {
       "name": "bench",
-      "outcome": "current, kept",
-      "seconds": 0
+      "outcome": "passed",
+      "seconds": 588,
+      "slowest": [
+        {
+          "name": "workspace",
+          "seconds": 144.8
+        },
+        {
+          "name": "scaleWindow",
+          "seconds": 136.6
+        },
+        {
+          "name": "scanPane",
+          "seconds": 103
+        },
+        {
+          "name": "reader",
+          "seconds": 78.9
+        },
+        {
+          "name": "chat",
+          "seconds": 40.2
+        }
+      ]
+    },
+    {
+      "name": "package (pass 2 of 3)",
+      "outcome": "passed",
+      "seconds": 334
+    },
+    {
+      "name": "package (pass 3 of 3)",
+      "outcome": "passed",
+      "seconds": 352
     },
     {
       "name": "report",
       "outcome": "passed",
       "seconds": 0
+    },
+    {
+      "name": "install-dev",
+      "outcome": "passed",
+      "seconds": 14
     }
   ]
 }

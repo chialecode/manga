@@ -17,7 +17,7 @@ Feature `acquisition`；没有自己的界面部分（页面由引擎插件的 `
 
 ## 2. 数据与公开能力
 
-- 数据：`acquisition_jobs`（来源种类、来源引用、信息哈希、名称、状态、所在阶段、库路径、子目录、预算、已选/已下/已传字节、做种设置、错误、纪元）、`acquisition_entries`（每个文件的序号、路径、长度、是否选中、是否校验、指纹、发布状态、目标相对路径、入库状态、资源 ID、备注）、导入回执。暂存区 `<staging>/<jobId>/{data,engine}` 与保存下来的 `source.torrent`；来源引用不出现在任何视图、通知与日志里（磁力里可能带有 passkey）。
+- 数据：`acquisition_jobs`（来源种类、来源引用、信息哈希、名称、状态、所在阶段、库路径、子目录、预算、已选/已下/已传字节、做种设置、错误、纪元）、`acquisition_entries`（每个文件的序号、路径、长度、是否选中、是否校验、指纹、发布状态、目标相对路径、入库状态、资源 ID、备注）、导入回执。暂存区 `<staging>/<jobId>/{data,engine}` 与保存下来的 `source.torrent`，`<staging>` 是应用数据的 `cache/acquisition`（`%LOCALAPPDATA%mangacacheacquisition`，开发版 `manga-dev`），不在“下载”目录；早先版本放在 `<下载>mangaacquisition` 的任务在启动时移过来，留下的空目录删除；来源引用不出现在任何视图、通知与日志里（磁力里可能带有 passkey）。
 - 流水线与状态：`metadata → choosing → downloading → verifying → publishing → importing → done`，另有 `paused`（用户暂停，或引擎消失；记录原因与暂停前的位置）、`failed`（记录停在 `transfer`、`publish` 还是 `import`，以便给出对应的重试）、`cancelled`。每一步在做之前先写下来，所以每一步都可以在崩溃后重复，并走到同一个结果。
 - 添加（`acquisition.add`）：来源是磁力链接，或用户在宿主对话框里选的种子文件（最大 8 MiB，复制进任务自己的目录）；必须指定一个已有的库路径和可选的子目录（只允许相对、安全、写得进每个系统的文件夹名）；预算可设最大字节、下行与上行速度，0 或不填表示不限。同一个信息哈希已有任务时拒绝。元数据到手后任务停在 `choosing`，由用户在种子的文件清单里选要哪些文件（`acquisition.select`）；选中的总字节超过预算以 `QUOTA_EXCEEDED` 拒绝，选中的文件加 64 MiB 余量超过目标卷可用空间以 `DISK_FULL` 拒绝。种子里每个文件的路径宿主自己再检查一遍（绝对、`..`、保留名一律拒绝），不信任引擎已经检查过。
 - 校验：引擎对每个分片按种子里的哈希校验，不合格的分片丢弃重下；文件完成后宿主再算一遍整个文件的 SHA-256 作为指纹，之后的发布与入库都对着这个指纹。

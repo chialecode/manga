@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const ERROR_CODES = [
   "VALIDATION_ERROR",
   "FORBIDDEN",
@@ -34,9 +36,19 @@ export const ERROR_CODES = [
   "PROPOSAL_DECIDED",
   "PROPOSAL_STALE",
   "PROPOSAL_LIMIT",
+  "UPDATE_VERIFY_FAILED",
+  "UPDATE_UNAVAILABLE",
 ] as const;
 
+export const ErrorCodeSchema = z.enum(ERROR_CODES);
+
 export type ErrorCode = (typeof ERROR_CODES)[number];
+
+export const UPDATE_ERROR_MESSAGES = {
+  UPDATE_VERIFY_FAILED: "更新包校验失败，已保留当前版本",
+  UPDATE_UNAVAILABLE: "开发版由本机构建自动更新，不检查联网更新",
+  UPDATE_OFFLINE: "无法连接更新源，请检查网络后重试",
+} as const;
 
 export class MangaError extends Error {
   readonly code: ErrorCode;

@@ -33,6 +33,7 @@ export const REQUIRED_ASSETS = [
   "vad-model", "vad-worker", "ort-runtime", "ort-common", "ort-wasm", "ort-wasm-loader",
   "parse-worker", "pdfjs-main", "pdfjs-worker",
   "jassub-wasm", "jassub-wasm-modern", "jassub-worker", "subtitle-font", "subtitle-font-license",
+  "app-icon-ico", "app-icon-png",
 ] as const;
 
 /** The plugin packages a packaged application carries; a development build offers the ones built into `dist/plugins`. */

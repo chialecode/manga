@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import { clickTestId, openFromShelf, railTo, revealNovelControls, sleep, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { js, type caller } from "./common.ts";
-import { longChaptersEpub } from "./novel-walk.ts";
+import { longChaptersEpub } from "./fixtures.ts";
 
 /**
  * What a view switch, a drag and a book by the page cost in the real window (plan 7), after the workspace's own figures, in the same window:

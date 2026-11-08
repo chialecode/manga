@@ -37,3 +37,5 @@ export * from "./inventory.ts";
 export * from "./reading.ts";
 export * from "./workspace-state.ts";
 export * from "./sidebar.ts";
+export * from "./version.ts";
+export * from "./update.ts";

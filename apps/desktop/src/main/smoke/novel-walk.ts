@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import zlib from "node:zlib";
 import type { BrowserWindow } from "electron";
 import { clickTestId, openFromShelf, revealNovelControls, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { js, type caller } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
+import { longChaptersEpub } from "./fixtures.ts";
 
 /**
  * Reading a book by the page (AT-139) and the panels on the reader's left (AT-140), in the real window: a long TXT, a long EPUB of three chapters made here,
@@ -15,42 +15,6 @@ export const NOVEL_OBSERVATIONS = ["novel-paginate", "novel-side-panel"] as cons
 type Call = ReturnType<typeof caller>;
 export type NovelEnv = { view: BrowserWindow; call: Call; observe: Observe; shot: (name: string) => Promise<void> };
 type Page = { start: number; end: number; page: number; total: number; chapter: string };
-
-/** A zip that stores its entries, which is all an EPUB's reader needs of one. */
-function storedZip(entries: Array<[string, string]>): Buffer {
-  const heads: Buffer[] = [];
-  const central: Buffer[] = [];
-  let offset = 0;
-  for (const [name, text] of entries) {
-    const body = Buffer.from(text);
-    const file = Buffer.from(name);
-    const crc = zlib.crc32(body);
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt32LE(crc, 14); local.writeUInt32LE(body.length, 18); local.writeUInt32LE(body.length, 22); local.writeUInt16LE(file.length, 26);
-    heads.push(local, file, body);
-    const row = Buffer.alloc(46);
-    row.writeUInt32LE(0x02014b50, 0); row.writeUInt16LE(20, 4); row.writeUInt16LE(20, 6); row.writeUInt32LE(crc, 16); row.writeUInt32LE(body.length, 20); row.writeUInt32LE(body.length, 24); row.writeUInt16LE(file.length, 28); row.writeUInt32LE(offset, 42);
-    central.push(row, file);
-    offset += local.length + file.length + body.length;
-  }
-  const directory = Buffer.concat(central);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...heads, directory, end]);
-}
-
-/** An EPUB of some chapters, each about so many characters long. */
-export function longChaptersEpub(count: number, characters: number): Buffer {
-  const chapters = Array.from({ length: count }, (_, index) => index + 1);
-  const paragraph = (n: number) => `<p>第${n}章的合成正文，用来把一章排成好几页，每一段都差不多长，读起来没有别的意思。</p>`.repeat(Math.ceil(characters / 36));
-  return storedZip([
-    ["mimetype", "application/epub+zip"],
-    ["META-INF/container.xml", `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`],
-    ["OEBPS/content.opf", `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">long-chapters-${count}-${characters}</dc:identifier><dc:title>分页 EPUB</dc:title><dc:language>zh-CN</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>${chapters.map((n) => `<item id="c${n}" href="c${n}.xhtml" media-type="application/xhtml+xml"/>`).join("")}</manifest><spine>${chapters.map((n) => `<itemref idref="c${n}"/>`).join("")}</spine></package>`],
-    ["OEBPS/nav.xhtml", `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>目录</title></head><body><nav epub:type="toc"><ol>${chapters.map((n) => `<li><a href="c${n}.xhtml">第${n}章</a></li>`).join("")}</ol></nav></body></html>`],
-    ...chapters.map((n): [string, string] => [`OEBPS/c${n}.xhtml`, `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>第${n}章</title></head><body><h1>第${n}章</h1>${paragraph(n)}</body></html>`]),
-  ]);
-}
 
 const pageOf = (view: BrowserWindow) => js<Page | null>(view, `(() => {
   const body = document.querySelector('[data-testid="reading-body"]');

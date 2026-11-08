@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+const saveListeners = new Set<() => unknown>();
+ipcRenderer.on("manga:save-now", (_event: unknown, token: string) => {
+  const tasks = [...saveListeners].map((fn) => Promise.resolve().then(() => fn()));
+  void Promise.allSettled(tasks).then((results) => {
+    ipcRenderer.send("manga:saved", token, { ok: results.every((result) => result.status === "fulfilled") });
+  });
+});
+
 contextBridge.exposeInMainWorld("manga", {
   command: (payload: unknown) => ipcRenderer.invoke("manga:command", payload),
   state: () => ipcRenderer.invoke("manga:state"),
@@ -28,11 +36,8 @@ contextBridge.exposeInMainWorld("manga", {
   },
   // Before the window closes the main process asks the page to save what waits for its save now (LOOP-23); the page answers when it is done.
   onSaveNow: (listener: () => Promise<unknown>) => {
-    const handler = (_event: unknown, token: string) => {
-      void Promise.resolve().then(listener).catch(() => undefined).finally(() => ipcRenderer.send("manga:saved", token));
-    };
-    ipcRenderer.on("manga:save-now", handler);
-    return () => { ipcRenderer.removeListener("manga:save-now", handler); };
+    saveListeners.add(listener);
+    return () => { saveListeners.delete(listener); };
   },
   // The title bar's menu: leaves the application (the main process decides how it closes down).
   quit: () => ipcRenderer.invoke("manga:quit"),

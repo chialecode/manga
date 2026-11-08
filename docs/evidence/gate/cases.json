@@ -1,14 +1,19 @@
 {
   "status": "passed",
-  "at": "2026-11-08T07:13:10.695Z",
-  "sourceFingerprint": "fbd0b6994c782f5af1a2a32d915fc9b1b8f9a852d6a823e4d74cfefa4170da66",
-  "lockFingerprint": "9e3b406214305808bd8cefcc1a4ee403c62f0c5698c6dc0eb1145cb8774aeb06",
-  "buildScriptFingerprint": "0371340943049a28cf472347c426428b182b3dd697476168f5676e1a163d1282",
-  "gateScriptFingerprint": "5c3459906755130571c5bca29ca612c782f3d4f3fd0e093170c3ba035b5b3881",
-  "testScriptFingerprint": "cf6a51e8e9cc004d94aae456a325342e67e3a4150cd6c46134ad7c59f2156a5a",
-  "packageScriptFingerprint": "7802f4511e43de3a92ef28ebb69aa842217abf8f7515e6887d90265396503219",
-  "benchScriptFingerprint": "c73470c4c99069e45da9141f053d6e82507d8b21cf16cd414ef37a9b67f2eac0",
-  "installerScriptFingerprint": "92914f2e9a8b93f5e172a4f2308cdeba51e61b3041fc1f02bc0e905c4bc85d39",
+  "at": "2026-11-08T22:46:49.889Z",
+  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
+  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
+  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
+  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
+  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
+  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
+  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
+  "testScriptFingerprint": "ee50e236dd1c52512c0aa6c074f90fcf11b7067434c633bc964c0ef562930e4e",
+  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
+  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
+  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
+  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -16971,7 +16976,17 @@
         },
         {
           "file": "tests/runtime/data-locations.test.ts",
+          "name": "where a new installation keeps things (AT-148) leaves the Downloads folder alone on a start and stages downloads in the application's cache, moving what an earlier version staged there",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
           "name": "where a new installation keeps things (AT-148) falls back to the home folder when LOCALAPPDATA is missing, keeps the variables and the person's overrides, and a test still needs its own root",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "where a new installation keeps things (AT-148) isolates test installation identities under manga-test and manga-dev-test while keeping their release/development channel (计划 4.8)",
           "status": "passed"
         },
         {
@@ -17050,17 +17065,32 @@
       "tests": [
         {
           "file": "tests/runtime/installer-config.test.ts",
-          "name": "the per-user installer's configuration (AT-150) is right for both channels",
+          "name": "the per-user installer's configuration (AT-150, AT-162) is right for both channels and includes Chinese NSIS settings, publisher metadata and icons",
           "status": "passed"
         },
         {
           "file": "tests/runtime/installer-config.test.ts",
-          "name": "the per-user installer's configuration (AT-150) keeps the two channels apart in what Windows tells apart",
+          "name": "the per-user installer's configuration (AT-150, AT-162) keeps the two channels apart in what Windows tells apart",
           "status": "passed"
         },
         {
           "file": "tests/runtime/installer-config.test.ts",
-          "name": "the per-user installer's configuration (AT-150) names what is wrong in a configuration that would not do",
+          "name": "the per-user installer's configuration (AT-150, AT-162) names what is wrong in a configuration that would not do",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) defines distinct test installation identities for both channels and detects any modification to real installations (计划 4.8)",
           "status": "passed"
         }
       ]
@@ -17413,6 +17443,465 @@
         {
           "file": "tests/library/schema-v14-migration.test.ts",
           "name": "schema v14 migration (agent_proposals table and index, AT-156, A-121) goes back by restoring premigrate-v13 and migrates again cleanly, and refuses a library newer than v14",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-157-version-about",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/version-build.test.ts",
+          "name": "versioning rules and build.json metadata (AT-157, 计划 4.1) computes 0.1.1 when no v0.1.* tag exists and highest + 1 when tags exist, even when non-contiguous",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/version-build.test.ts",
+          "name": "versioning rules and build.json metadata (AT-157, 计划 4.1) never auto-bumps to 0.2 or 1.0 and ignores non-0.1.* or pre-release tags",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/version-build.test.ts",
+          "name": "versioning rules and build.json metadata (AT-157, 计划 4.1) formats development versions as <nextRelease>-dev.<YYYYMMDDHHmm> in UTC without a leading zero and orders monotonically",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/version-build.test.ts",
+          "name": "versioning rules and build.json metadata (AT-157, 计划 4.1) keeps apps/desktop/package.json at the 0.1.0 version line and matches the storage schema version",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/version-build.test.ts",
+          "name": "versioning rules and build.json metadata (AT-157, 计划 4.1) round-trips build.json and exposes version and commit in MangaProductApp, settings, debug.context and agent.trace.export",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) offers a manual download after autoDownload is disabled without changing that policy (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) places 'update' right after 'general' in SETTINGS_GROUPS",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) renders '关于 MANGA' in release vs development channels and copies version summary without local paths (AT-157, AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) renders '设置 › 更新' in release vs development channels, toggles autoCheck/autoDownload, and shows verification errors (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) shows top-bar ready banner, release notes with schema upgrade notice, busy confirmation dialog when recording, and post-update notice (AT-159)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-158-install-dev",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/install-dev-recovery.test.ts",
+          "name": "Development installer recovery review (AT-158) reopens the saved development app after a failed installer or a checksum change after graceful quit (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/install-dev-recovery.test.ts",
+          "name": "Development installer recovery review (AT-158) leaves the running development app alone when the installed build is already this one, and installs a same-version build that differs (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/install-dev-recovery.test.ts",
+          "name": "Development installer recovery review (AT-158) withdraws a failed helper or timed-out request without installing or reopening an app that is still running (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/install-dev-recovery.test.ts",
+          "name": "Development installer recovery review (AT-158) refuses a live competing lock, the wrong process identity and missing installed build metadata (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/install-dev-recovery.test.ts",
+          "name": "Development installer recovery review (AT-158) selects the exact fingerprint-current packaged installer instead of the oldest directory entry and rejects stale or escaped metadata (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W2: Local development auto-update `stage install-dev` & `--quit-for-update` (AT-158) skips when MANGA_DEV_AUTO_INSTALL=0 or on CI, and when development channel is not installed, always writing install-dev.json (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W2: Local development auto-update `stage install-dev` & `--quit-for-update` (AT-158) saves unsaved draft on --quit-for-update, updates development channel, relaunches it with draft intact, and leaves running release channel completely untouched (AT-158)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W2: Local development auto-update `stage install-dev` & `--quit-for-update` (AT-158) does not force-kill and aborts the update when a 60-second non-cancellable write prevents exit within timeout (AT-158)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-159-update-flow",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) uses upstream full, differential and cached downloads and always invokes the publisher gate",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) resumes an upstream interrupted download at a complete block boundary and verifies the assembled bytes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) rejects unsafe redirects in both the manifest fetch and the upstream installer request without contacting the target",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) keeps a ready release bound to its receipt and rejects a signature removed during the save barrier",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) propagates save, SQLite backup and installer failures, restores pending metadata and allows retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) includes committed WAL data in the pre-update backup even when the main SQLite file lacks it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) does not publish a late network result or write to the closed store after disposal",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) clears an obsolete available release and never marks a download ready after an intermediate publisher callback (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) rejects duplicate or conflicting manifest fields while preserving examples in release notes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) embeds the dedicated release update Ed25519 public key in app-core",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) disables online update checks in the development channel and returns UPDATE_UNAVAILABLE (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) performs differential blockmap download, verifies Ed25519 signature, checks busy tasks, backs up DB before restart, and shows justUpdated once on first launch (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) resumes an interrupted download via HTTP Range and installs silently on app quit (autoInstallOnAppQuit, AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) rejects tampered 1-byte installer, wrong-version signature, missing .sig, downgrade, and non-HTTPS URL, deleting files and logging each (AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) stays silent on automatic check when offline, shows error on manual check, and respects autoCheck toggle (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) proves NsisUpdater skips verification without publisherName and UpdateService refuses unverified packages when publisherName is removed (计划 3.1, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) offers a manual download after autoDownload is disabled without changing that policy (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) places 'update' right after 'general' in SETTINGS_GROUPS",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) renders '关于 MANGA' in release vs development channels and copies version summary without local paths (AT-157, AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) renders '设置 › 更新' in release vs development channels, toggles autoCheck/autoDownload, and shows verification errors (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) shows top-bar ready banner, release notes with schema upgrade notice, busy confirmation dialog when recording, and post-update notice (AT-159)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-160-update-rejected",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) rejects incomplete or duplicate checksums, misleading manifest text and mismatched release target (AT-160, AT-161)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) uses upstream full, differential and cached downloads and always invokes the publisher gate",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) resumes an upstream interrupted download at a complete block boundary and verifies the assembled bytes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) rejects unsafe redirects in both the manifest fetch and the upstream installer request without contacting the target",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) keeps a ready release bound to its receipt and rejects a signature removed during the save barrier",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) propagates save, SQLite backup and installer failures, restores pending metadata and allows retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) includes committed WAL data in the pre-update backup even when the main SQLite file lacks it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) does not publish a late network result or write to the closed store after disposal",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) clears an obsolete available release and never marks a download ready after an intermediate publisher callback (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) rejects duplicate or conflicting manifest fields while preserving examples in release notes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) embeds the dedicated release update Ed25519 public key in app-core",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) disables online update checks in the development channel and returns UPDATE_UNAVAILABLE (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) performs differential blockmap download, verifies Ed25519 signature, checks busy tasks, backs up DB before restart, and shows justUpdated once on first launch (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) resumes an interrupted download via HTTP Range and installs silently on app quit (autoInstallOnAppQuit, AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) rejects tampered 1-byte installer, wrong-version signature, missing .sig, downgrade, and non-HTTPS URL, deleting files and logging each (AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) stays silent on automatic check when offline, shows error on manual check, and respects autoCheck toggle (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) proves NsisUpdater skips verification without publisherName and UpdateService refuses unverified packages when publisherName is removed (计划 3.1, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) offers a manual download after autoDownload is disabled without changing that policy (AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) places 'update' right after 'general' in SETTINGS_GROUPS",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) renders '关于 MANGA' in release vs development channels and copies version summary without local paths (AT-157, AT-159)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) renders '设置 › 更新' in release vs development channels, toggles autoCheck/autoDownload, and shows verification errors (AT-159, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/update-ui.test.tsx",
+          "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) shows top-bar ready banner, release notes with schema upgrade notice, busy confirmation dialog when recording, and post-update notice (AT-159)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-161-stage-release",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W5: One-command release `stage release` & upgrade rehearsal (AT-161) refuses when the working tree is dirty or when stage gate evidence is stale (AT-161)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W5: One-command release `stage release` & upgrade rehearsal (AT-161) generates all signed release artifacts, runs upgrade rehearsal, does not publish without authorization, and stops when rehearsal installer is tampered (AT-161)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) rejects incomplete or duplicate checksums, misleading manifest text and mismatched release target (AT-160, AT-161)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) writes and verifies the complete release record before any mocked publication command (AT-161, AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) stops publication on authentication, network, rate-limit and tag-check failures (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) verifies every previous release artifact before extraction and never falls back after a failed download (AT-161, AT-163)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-162-installer-info",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) is right for both channels and includes Chinese NSIS settings, publisher metadata and icons",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) keeps the two channels apart in what Windows tells apart",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) names what is wrong in a configuration that would not do",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) defines distinct test installation identities for both channels and detects any modification to real installations (计划 4.8)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-163-release-workflow",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) statically validates `.github/workflows/release.yml` and rejects security boundary violations (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) handles all 3 `decideWeeklyRelease` scenarios: no tag, no commits since tag, and 2 merged PRs since tag (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) fails immediately when `stage release --ci` runs without a signing key and leaves no unsigned package behind (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) refuses to publish in `publishVerifiedRelease` when the tag already exists or when SHA256SUMS is tampered (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) rejects incomplete or duplicate checksums, misleading manifest text and mismatched release target (AT-160, AT-161)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) writes and verifies the complete release record before any mocked publication command (AT-161, AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) stops publication on authentication, network, rate-limit and tag-check failures (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-integrity.test.ts",
+          "name": "Release integrity review (AT-161, AT-163) verifies every previous release artifact before extraction and never falls back after a failed download (AT-161, AT-163)",
           "status": "passed"
         }
       ]

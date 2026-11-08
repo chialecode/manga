@@ -14,6 +14,7 @@ import { ProposalCommandInputs } from "./inputs-proposals.ts";
 import { WorkFileCommandInputs } from "./inputs-works.ts";
 import { DanmakuCommandInputs } from "./inputs-danmaku.ts";
 import { ModelInputs, ModelProfilePatchSchema } from "./inputs-models.ts";
+import { UpdateCommandInputs } from "./update.ts";
 import { OrdinalSchema } from "./media.ts";
 import { PACKAGE_ROW_KINDS } from "./library-package.ts";
 import { LOCATION_PARTITIONS } from "./paths.ts";
@@ -266,6 +267,7 @@ export const CommandInputs = {
   ...WorkFileCommandInputs,
   ...DanmakuCommandInputs,
   ...ModelInputs,
+  ...UpdateCommandInputs,
 };
 
 export function validateCommandInput(commandId: string, input: unknown): unknown {

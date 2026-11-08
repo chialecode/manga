@@ -1,13 +1,69 @@
 {
   "description": "Stage gate: the regression cases carried forward plus the cases the current stage adds.",
+  "requirePackagedUpdateRehearsal": true,
+  "packaged": ["source", "smoke", "smokeChecks", "smokeBench", "smokeWalk", "lock", "build"],
   "fingerprint": {
     "source": [
       "packages",
       "apps/desktop",
+      "!apps/desktop/src/main/smoke",
       "plugins",
       "package.json",
       "pnpm-workspace.yaml",
       "tsconfig.json"
+    ],
+    "smoke": [
+      "apps/desktop/src/main/smoke/index.ts",
+      "apps/desktop/src/main/smoke/driver.ts",
+      "apps/desktop/src/main/smoke/common.ts",
+      "apps/desktop/src/main/smoke/power-throttling.ts",
+      "apps/desktop/src/main/smoke/fixtures.ts"
+    ],
+    "smokeChecks": [
+      "apps/desktop/src/main/smoke/subtitle-check.ts",
+      "apps/desktop/src/main/smoke/glyph-cells.ts"
+    ],
+    "smokeBench": [
+      "apps/desktop/src/main/smoke/bench-canvas.ts",
+      "apps/desktop/src/main/smoke/bench-chat.ts",
+      "apps/desktop/src/main/smoke/bench-polish.ts",
+      "apps/desktop/src/main/smoke/bench-reader.ts",
+      "apps/desktop/src/main/smoke/bench-window.ts",
+      "apps/desktop/src/main/smoke/bench-workspace.ts"
+    ],
+    "smokeWalk": [
+      "apps/desktop/src/main/smoke/agent.ts",
+      "apps/desktop/src/main/smoke/creative-walk.ts",
+      "apps/desktop/src/main/smoke/danmaku-walk.ts",
+      "apps/desktop/src/main/smoke/formats.ts",
+      "apps/desktop/src/main/smoke/frame-walk.ts",
+      "apps/desktop/src/main/smoke/hold-walk.ts",
+      "apps/desktop/src/main/smoke/input.ts",
+      "apps/desktop/src/main/smoke/library-walk.ts",
+      "apps/desktop/src/main/smoke/loop-media.ts",
+      "apps/desktop/src/main/smoke/loop-walk.ts",
+      "apps/desktop/src/main/smoke/management-walk.ts",
+      "apps/desktop/src/main/smoke/media.ts",
+      "apps/desktop/src/main/smoke/novel-walk.ts",
+      "apps/desktop/src/main/smoke/overlay-walk.ts",
+      "apps/desktop/src/main/smoke/player-menus-walk.ts",
+      "apps/desktop/src/main/smoke/plugins-walk.ts",
+      "apps/desktop/src/main/smoke/proposals-walk.ts",
+      "apps/desktop/src/main/smoke/rail-walk.ts",
+      "apps/desktop/src/main/smoke/reader-controls-walk.ts",
+      "apps/desktop/src/main/smoke/reading-loop.ts",
+      "apps/desktop/src/main/smoke/real-video.ts",
+      "apps/desktop/src/main/smoke/retention-walk.ts",
+      "apps/desktop/src/main/smoke/shell-walk.ts",
+      "apps/desktop/src/main/smoke/shot-subtitles.ts",
+      "apps/desktop/src/main/smoke/stage-walks.ts",
+      "apps/desktop/src/main/smoke/trace-walk.ts",
+      "apps/desktop/src/main/smoke/update-walk.ts",
+      "apps/desktop/src/main/smoke/view-walk.ts",
+      "apps/desktop/src/main/smoke/voice.ts",
+      "apps/desktop/src/main/smoke/window-walk.ts",
+      "apps/desktop/src/main/smoke/workspace-restart.ts",
+      "apps/desktop/src/main/smoke/workspace-walk.ts"
     ],
     "lock": [
       "pnpm-lock.yaml"
@@ -19,6 +75,8 @@
       "scripts/pack-plugin.mjs",
       "scripts/verify-electron-sqlite.mjs",
       "scripts/dev-desktop.mjs",
+      "scripts/stage/version-lib.mjs",
+      "scripts/stage/installer-lib.mjs",
       "apps/desktop/forge.config.ts",
       "apps/desktop/package.json",
       "apps/desktop/vite.main.config.ts",
@@ -28,6 +86,7 @@
     "gate": [
       "scripts/stage.mjs",
       "scripts/stage/lib.mjs",
+      "scripts/stage/version-lib.mjs",
       "scripts/stage/gate.json",
       "scripts/stage/gate.mjs"
     ],
@@ -38,19 +97,39 @@
       "scripts/stage/test.mjs",
       "scripts/stage/report.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/version-lib.mjs",
+      "scripts/stage/install-dev.mjs",
+      "scripts/stage/release.mjs",
+      "scripts/stage/release-decide.mjs",
+      "scripts/stage/release-publish-verify.mjs",
+      "scripts/stage/release-previous.mjs",
+      "scripts/stage/update-rehearsal.mjs",
+      ".github/workflows/release.yml",
+      ".github/actions-policy.json",
       "scripts/stage-report.test.mjs",
       "scripts/check-docs.mjs",
-      "scripts/check-docs.test.mjs"
+      "scripts/check-docs.test.mjs",
+      "scripts/check-workflows.mjs"
     ],
     "package": [
       "scripts/stage/package.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/version-lib.mjs",
+      "scripts/stage/install-dev.mjs",
+      "scripts/stage/release.mjs",
+      "scripts/stage/release-decide.mjs",
+      "scripts/stage/release-publish-verify.mjs",
+      "scripts/stage/release-previous.mjs",
+      "scripts/stage/update-rehearsal.mjs",
+      ".github/workflows/release.yml",
+      "scripts/check-workflows.mjs",
       "scripts/stage/temp-dirs.mjs",
       "scripts/samples",
       "tests/helpers"
     ],
     "bench": [
       "scripts/stage/bench.mjs",
+      "scripts/stage/installer.mjs",
       "scripts/stage/bench-agent-media.mjs",
       "scripts/stage/bench-bt.mjs",
       "scripts/stage/bench-canvas.mjs",
@@ -62,18 +141,47 @@
       "scripts/stage/bench-scan-pane.mjs",
       "scripts/stage/bench-workspace.mjs",
       "scripts/stage/power-throttling.mjs",
+      "scripts/stage/installer-lib.mjs",
+      "scripts/stage/version-lib.mjs",
+      "scripts/stage/install-dev.mjs",
+      "scripts/stage/release.mjs",
+      "scripts/stage/release-decide.mjs",
+      "scripts/stage/release-publish-verify.mjs",
+      "scripts/stage/release-previous.mjs",
+      "scripts/stage/update-rehearsal.mjs",
       "scripts/stage/temp-dirs.mjs",
       "scripts/samples",
       "tests/helpers"
     ],
     "installer": [
       "scripts/stage/installer.mjs",
-      "scripts/stage/installer-lib.mjs"
+      "scripts/stage/installer-lib.mjs",
+      "scripts/stage/version-lib.mjs",
+      "scripts/stage/install-dev.mjs",
+      "scripts/stage/release.mjs",
+      "scripts/stage/release-decide.mjs",
+      "scripts/stage/release-publish-verify.mjs",
+      "scripts/stage/release-previous.mjs",
+      "scripts/stage/update-rehearsal.mjs"
+    ],
+    "release": [
+      "scripts/stage/release.mjs",
+      "scripts/stage/release-decide.mjs",
+      "scripts/stage/release-publish-verify.mjs",
+      "scripts/stage/release-previous.mjs",
+      "scripts/stage/update-rehearsal.mjs",
+      "scripts/stage/installer-lib.mjs",
+      "scripts/stage/version-lib.mjs",
+      ".github/workflows/release.yml",
+      ".github/actions-policy.json"
     ]
   },
   "fingerprintOf": {
+    "release.json": ["source", "smoke", "smokeChecks", "smokeBench", "smokeWalk", "lock", "build", "gate", "release"],
     "cases.json": [
       "source",
+      "smoke",
+      "smokeChecks",
       "lock",
       "build",
       "gate",
@@ -81,6 +189,8 @@
     ],
     "test-run.json": [
       "source",
+      "smoke",
+      "smokeChecks",
       "lock",
       "build",
       "gate",
@@ -88,6 +198,9 @@
     ],
     "package.json": [
       "source",
+      "smoke",
+      "smokeChecks",
+      "smokeWalk",
       "lock",
       "build",
       "gate",
@@ -95,6 +208,9 @@
     ],
     "scenarios.json": [
       "source",
+      "smoke",
+      "smokeChecks",
+      "smokeWalk",
       "lock",
       "build",
       "gate",
@@ -102,6 +218,7 @@
     ],
     "installer.json": [
       "source",
+      "smoke",
       "lock",
       "build",
       "gate",
@@ -109,6 +226,8 @@
     ],
     "bench.json": [
       "source",
+      "smoke",
+      "smokeBench",
       "lock",
       "build",
       "gate",
@@ -650,7 +769,8 @@
       "migrate-v13-restart",
       "migrate-v13-newer",
       "data-locations-fresh",
-      "data-locations-upgrade"
+      "data-locations-upgrade",
+      "update"
     ],
     "pluginSteps": [
       "offered-not-installed",
@@ -2833,6 +2953,55 @@
       "tests": [
         "AT-156(?!\\d)"
       ]
+    },
+    {
+      "id": "AT-157-version-about",
+      "kind": "automated",
+      "tests": [
+        "AT-157(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-158-install-dev",
+      "kind": "automated",
+      "tests": [
+        "AT-158(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-159-update-flow",
+      "kind": "automated",
+      "tests": [
+        "AT-159(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-160-update-rejected",
+      "kind": "automated",
+      "tests": [
+        "AT-160(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-161-stage-release",
+      "kind": "automated",
+      "tests": [
+        "AT-161(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-162-installer-info",
+      "kind": "automated",
+      "tests": [
+        "AT-162(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-163-release-workflow",
+      "kind": "automated",
+      "tests": [
+        "AT-163(?!\\d)"
+      ]
     }
   ],
   "scenarios": [
@@ -2955,6 +3124,14 @@
     "proposal-export-project",
     "proposal-restart",
     "agent-opt-in",
-    "migrate-v14"
+    "migrate-v14",
+    "version-about",
+    "update-flow",
+    "update-on-quit",
+    "update-rejected",
+    "update-offline",
+    "install-dev",
+    "release-workflow",
+    "installer-info"
   ]
 }

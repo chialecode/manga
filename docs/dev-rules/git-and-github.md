@@ -91,11 +91,32 @@ node scripts/verify.mjs
 | 运行环境 | 单个 Ubuntu 24.04 runner；Node 版本读取 `.node-version`；当前验证脚本可跨平台执行；Windows 媒体前置缺席，相关用例跳过（见上） |
 | 资源控制 | 每次运行最多 15 分钟；同一个 PR/手动分支的新运行取消旧运行 |
 | 权限 | `contents: read`，checkout 不保留凭据；不使用 `pull_request_target`、仓库 secrets 或写入令牌 |
-| 供应链 | Actions 固定完整 SHA；远端只允许 checkout/setup-node，新增 Action 同步调整 allowlist 并评审 |
+| 供应链 | Actions 固定完整 SHA；远端允许列表只放 `actions/checkout`、`actions/setup-node`、`actions/upload-artifact`、`actions/download-artifact`，新增 Action 同步调整 allowlist 并评审 |
 
 一个本地批次通常只需一次分支推送，已有 PR 因该更新运行一次 CI。首次创建 PR、重开 PR、手动运行和取消中的旧任务仍可能分别产生运行记录；并发取消不会消除已发生的触发或消耗。
 
-应用工程建立后，先让开发者在本地运行真实命令，再把必要的快速检查纳入此工作流。当前 CI 已安装锁定依赖并做类型/依赖门禁；Windows 专属集成、Electron 安装包和完整阶段门禁仍走本地入口。
+应用工程建立后，先让开发者在本地运行真实命令，再把必要的快速检查纳入此工作流。当前 PR CI 已安装锁定依赖并做类型/依赖门禁；完整阶段门禁仍以开发机本地的 Windows 11 环境为准。
+
+### 2.1 每周发布工作流（`release.yml`，A-126）
+
+[release.yml](../../.github/workflows/release.yml) 是上述 `ci.yml` 规则的有意例外，专门负责正式版的自动构建、升级演练与 GitHub Releases 发布；`ci.yml` 与必需检查 `repository-quality` 保持不变。
+
+- **触发与并发：** 每周一 `00:00 UTC`（北京时间 `08:00`，cron `0 0 * * 1`）定时运行，以及 `workflow_dispatch` 手动触发（输入 `dry_run`，默认 `true`：只构建与演练、不创建标签与 Release）；不响应 `push`、`pull_request` 或任何 fork 事件。`concurrency` 组为 `release` 且 `cancel-in-progress: false`，不中途取消正在进行的发布。
+- **四个阶段（按最小权限隔离）：**
+  1. `decide`（Ubuntu，`contents: read`，不安装依赖）：运行 `node scripts/stage/release-decide.mjs`，读取最高的 `v0.1.*` 标签与 `main` 在它之后的新提交（包括 Dependabot 等任何合并进 `main` 的 PR）。没有新合并时以“本周没有新的合并”成功结束，不启动后续 Windows 构建；没有任何 `v0.1.*` 标签时发布 `0.1.1`；有新合并时算出下一个 `0.1.x` 版本号并生成中文发布说明素材。
+  2. `check`（`windows-2025`，`contents: read`，**无任何 secret**）：按锁文件下载随包工具（FFmpeg、Silero VAD、字幕字体）、生成合成样本，依次运行 `node scripts/verify.mjs`、`node scripts/stage.mjs test`、`node scripts/stage.mjs package` 与 `node scripts/stage.mjs installer`（使用测试身份 `MANGA Test` / `MANGA Dev Test`）。共享运行器不跑性能基准，基准结论以本机最近一次门禁证据为准，并在 `release.json` 记录基准源码指纹与本次发布源码是否一致。任一步骤失败则停止，本周不发布。
+  3. `build`（`windows-2025`，`contents: read`，绑定受保护环境 `environment: release`）：在同一提交上构建正式版安装包、生成块图 `.blockmap`、`latest.yml`、Ed25519 分离签名 `.sig`、`SHA256SUMS` 与中文 `RELEASE-NOTES.md`，并执行从上一版到当前版本的升级演练与 1 字节篡改拒绝演练（`node scripts/stage.mjs release --ci`）。环境的两个 secret（`MANGA_PLUGIN_SIGNING_KEY_PEM` 与 `MANGA_UPDATE_SIGNING_KEY_PEM`）分别只映射给打包插件和签名发布包的那一个步骤，写入运行器临时目录后交给脚本，步骤结束即在 `finally` 中删除，绝不打印或进入日志与 artifact。产物通过 `actions/upload-artifact` 上传（保留 7 天）。
+  4. `publish`（Ubuntu，`contents: write`，**无 secret、不执行 `pnpm install`**，`if: inputs.dry_run != true`）：下载 artifact，运行 `node scripts/stage/release-publish-verify.mjs --publish` 用仓库内置公钥再次核对 `SHA256SUMS`、`latest.yml` 与 `.sig`，确认标签尚不存在后调用 `gh release create v0.1.x --target <SHA>` 发布正式版。
+- **静态检查守护：** `scripts/check-workflows.mjs` 随 `node scripts/verify.mjs` 自动运行，静态校验 `ci.yml` 与 `release.yml` 的触发器、顶层与各 job 权限、secret 只出现在 `build` 的指定步骤、所有 Action 固定 40 位完整 SHA 且在 `.github/actions-policy.json` 允许列表中、`publish` 不含任何依赖安装命令。
+- **长期不活动与失败排查：** 公开仓库连续 60 天无仓库活动时 GitHub 会自动停用定时 workflow，在 Actions 页面重新启用或手动触发一次即可恢复。如果某周定时运行失败，workflow 直接停止、不发布，不自动重跑或自动改代码；Agent 在下一阶段开工时可执行一次 `gh run list --workflow release.yml --limit 3` 查看最近一次运行状态，若失败则纳入当前阶段修复。
+
+### 2.2 本机发布、发布授权与更新密钥轮换（A-125）
+
+- **本机一键发布命令：** `node scripts/stage.mjs release` 在 `main` 分支、工作区干净、与 `origin/main` 同步且当前源码指纹的 `stage gate` 通过时运行，复用门禁打包产物生成 `dist/release/v0.1.x/` 下的 `manga-setup-0.1.x.exe`、`.blockmap`、`latest.yml`、`.sig`、`SHA256SUMS`、`RELEASE-NOTES.md` 与脱敏的 `release.json`，并在临时目录用测试安装身份完成升级演练与篡改拒绝演练。
+- **发布授权边界：** 正式发布默认由 2.1 的每周 workflow 自动执行；本机运行 `node scripts/stage.mjs release` 默认只生成文件并完成演练，**不创建 Git 标签、不调用 `gh release create`**，并在输出与 `release.json` 的 `requiresAuthorization` 中写出需用户当次明确授权才执行的发布命令。只有在用户当次明确授权本机发布、显式传入 `MANGA_RELEASE_PUBLISH=1` 与 `--publish` 时才创建标签并上传 Release。
+- **Ed25519 更新签名密钥与轮换步骤：** 正式版更新使用独立于第一方插件密钥的 Ed25519 密钥对（私钥 `dist/keys/update-release.pem` 不入库并存入 GitHub `release` 环境 secret `MANGA_UPDATE_SIGNING_KEY_PEM`，公钥 `dist/keys/update-release.pub` 内置在 `packages/app-core/src/update/signature.ts` 的 `RELEASE_UPDATE_PUBLIC_KEYS`）。需要轮换更新密钥时，必须分两步过渡，避免已安装的旧版本无法校验过渡版本：
+  1. **发布过渡版本 `v0.1.N`：** 生成新密钥对，把新公钥追加到 `RELEASE_UPDATE_PUBLIC_KEYS`（同时保留旧公钥），用**旧私钥**为 `v0.1.N` 签名并发布，使已安装的旧版本能够验证并升级到同时信任新旧公钥的 `v0.1.N`；
+  2. **切换新私钥并移除旧公钥：** 更新本机 `dist/keys/update-release.pem` 与 GitHub `release` 环境 secret `MANGA_UPDATE_SIGNING_KEY_PEM` 为新私钥；待用户升级到 `v0.1.N` 后（或旧私钥因泄露需立即作废时），从 `RELEASE_UPDATE_PUBLIC_KEYS` 移除旧公钥并用新私钥签发后续版本。
 
 
 ## 3. main Ruleset 与合并
@@ -124,7 +145,7 @@ node scripts/verify.mjs
 
 - 外部只开放 Discussions（A-123）：为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，关闭 Issues；保留 PR 但仅协作者可创建（`pull_request_creation_policy=collaborators_only`）。文档集中在 Git 中，关闭 Wiki 和 Projects。来自 fork 的 PR 运行 workflow 前须维护者批准（所有外部贡献者）。
 - 只允许 squash 合并，使用 PR 标题和正文形成提交消息；关闭自动合并，启用合并后分支删除。
-- Actions 默认令牌只读，不允许 Actions 创建/批准 PR；workflow 不包含写权限。
+- Actions 默认令牌只读，不允许 Actions 创建/批准 PR；日常验证 workflow（`ci.yml`）不包含写权限或 secrets。发布工作流（`release.yml`）仅在 `publish` job 声明 `contents: write` 用于创建 GitHub Release，两把签名私钥仅存于只允许 `main` 分支部署的 `release` 环境 secrets（`MANGA_PLUGIN_SIGNING_KEY_PEM`、`MANGA_UPDATE_SIGNING_KEY_PEM`），不設仓库级全局 secret。
 - 保持 Secret scanning 和 Push protection 开启。忽略规则只是减少误提交，仍需人工核对暂存区；若秘密已经泄露，优先撤销或轮换凭据。
 - 使用 GitHub 私密漏洞报告作为安全入口，处理范围见 [SECURITY.md](../../SECURITY.md)。不编造邮箱、支持时限或不存在的发行版本。
 - 项目许可证已确认为 [Apache-2.0](../../LICENSE)；额外贡献权利安排、发布签名和安装包发布方式仍见 [Q-09](../../USER-ACTIONS.md#q-09)。不擅自变更已确认许可；提交的 DCO 签名按第 1.2 节执行。

@@ -113,6 +113,9 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
     } else if (phaseName === "locations-seed" || phaseName === "locations") {
       const { runLocationsSmoke } = await import("./stage-walks.ts");
       merge(await runLocationsSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, phase: phaseName, samples: process.env.MANGA_SMOKE_SAMPLES }));
+    } else if (phaseName === "update") {
+      const { runUpdateSmoke } = await import("./update-walk.ts");
+      merge(await runUpdateSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
     } else if (phaseName === "plugins") {
       merge(await runPluginsSmoke({ appService, grant: ownerGrant, view: window, logsDir: layout.partitions.logs }));
     } else if (phaseName === "bench-scale") {
@@ -190,7 +193,7 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
   fs.mkdirSync(layout.partitions.logs, { recursive: true });
   powerThrottling();
   fs.writeFileSync(path.join(layout.partitions.logs, `smoke-${phaseName}.json`), `${JSON.stringify(report, null, 2)}\n`);
-  if (evidenceDir) {
+  if (evidenceDir && phaseName !== "update") {
     await capturePage(window, evidenceDir, `ui-smoke-${phaseName}.png`);
     // The pages that belong to the phase, reached through the rail the way a person reaches them.
     if (phaseName === "initial" && await toRail(window) && await openLibrary(window)) {

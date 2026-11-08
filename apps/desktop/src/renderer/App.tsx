@@ -11,6 +11,7 @@ import { useRecorder } from "./voice/use-recorder.ts";
 import { usePackage } from "./hooks/use-package.ts";
 import { useScan } from "./hooks/use-scan.ts";
 import { useScreenshots, type RichNotice } from "./hooks/use-screenshots.tsx";
+import { useUpdate } from "./hooks/use-update.ts";
 import { asArray, attempt, type HostState } from "./lib/api.ts";
 import { WorksCacheContext, type WorksCache } from "./lib/use-works.ts";
 import { useKeyBindings } from "./hooks/use-key-bindings.ts";
@@ -290,6 +291,11 @@ export function App() {
   const pkg = usePackage({ i18n, setError, setNotice, refresh });
   const shots = useScreenshots({ i18n, setError, setRichNotice, setNotice, contextId: context });
   const recorder = useRecorder({ i18n, setError, setNotice, enabled: voiceOn, contextId: context });
+  const update = useUpdate({
+    enabled: Boolean(host?.writable),
+    recordingActive: voiceOn && recorder.state.phase !== "idle",
+    setError,
+  });
   const keyBindings = useKeyBindings();
   const keyTable = keyBindings.table;
 
@@ -337,6 +343,7 @@ export function App() {
     changedProjects,
     scan,
     pkg,
+    update,
     recorder,
     voiceOn,
     keyBindings,

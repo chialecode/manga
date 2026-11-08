@@ -140,10 +140,10 @@ export function fileHashes(files: ReadonlyMap<string, Uint8Array>): Array<{ path
   return [...files.keys()].sort().map((name) => ({ path: name, bytes: files.get(name)!.length, sha256: sha256Hex(files.get(name)!) }));
 }
 
-/** Compares two versions of three numbers; negative when `a` is older. */
+/** Compares two versions of three numbers; negative when `a` is older. Prerelease or build tags (e.g. `-dev.202611081140`) are stripped from the numeric triplet. */
 export function compareVersions(a: string, b: string): number {
-  const left = a.split(".").map(Number);
-  const right = b.split(".").map(Number);
+  const left = a.split(/[-+]/)[0]!.split(".").map(Number);
+  const right = b.split(/[-+]/)[0]!.split(".").map(Number);
   for (let i = 0; i < 3; i += 1) if (left[i] !== right[i]) return (left[i] ?? 0) - (right[i] ?? 0);
   return 0;
 }

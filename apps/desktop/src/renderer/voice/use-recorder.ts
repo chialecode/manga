@@ -219,8 +219,19 @@ export function useRecorder(deps: RecorderDeps) {
   }, [state.phase, state.elapsedMs, state.level, state.retention, state.mode, state.deviceLabel, i18n]);
   useEffect(() => window.manga.overlay?.onStop(() => { void recorder.stop("user"); }), [recorder]);
 
-  // The window going away saves the audio.
-  useEffect(() => () => { void recorder.dispose(); }, [recorder]);
+  // The window going away (or `--quit-for-update` / `flushWindowSaves()`) stops any active recording and saves the audio.
+  useEffect(() => {
+    const stopOnSave = window.manga?.onSaveNow?.(async () => {
+      const phase = recorder.getState().phase;
+      if (phase === "recording" || phase === "starting") {
+        await recorder.stop("user");
+      }
+    });
+    return () => {
+      stopOnSave?.();
+      void recorder.dispose();
+    };
+  }, [recorder]);
 
   const duck = { active: state.phase === "recording" || state.phase === "starting", mode: settings.duckPlayback };
   return { state: state as RecorderState, settings, reloadSettings, saveSettings, begin, stop, endHold, toggle, duck, recorder };

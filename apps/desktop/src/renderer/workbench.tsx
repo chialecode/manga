@@ -301,6 +301,9 @@ export function Workbench(props: {
       items: [
         item("shortcuts", t("menu.shortcuts"), () => s.open.keys()),
         item("logs", t("menu.logs"), () => s.open.settings("logs")),
+        ...((s.update.status?.channel ?? s.host.buildInfo?.channel ?? s.host.layout.channel) === "release"
+          ? [item("check-update", t("menu.checkUpdate"), () => { s.open.settings("update"); void s.update.check(); })]
+          : []),
         item("about", t("menu.about"), () => setAboutOpen(true)),
       ],
     },
@@ -354,7 +357,30 @@ export function Workbench(props: {
   };
 
   const live = reading as ReaderContext | null;
-  const channelLabel = s.host.layout.channel === "release" ? t("app.channel.release") : s.host.layout.channel === "test" ? t("app.channel.test") : t("app.channel.development");
+  const effectiveChannel = s.update.status?.channel ?? s.host.buildInfo?.channel ?? s.host.layout.channel;
+  const channelLabel = effectiveChannel === "release" ? t("app.channel.release") : effectiveChannel === "test" ? t("app.channel.test") : t("app.channel.development");
+  const aboutVersion = s.update.status?.version ?? s.host.buildInfo?.version ?? s.host.appVersion ?? "-";
+  const aboutCommit = s.update.status?.commit ?? s.host.buildInfo?.commit ?? "-";
+  const aboutBuiltAtRaw = s.update.status?.builtAt ?? s.host.buildInfo?.builtAt ?? "";
+  const aboutBuiltAt = aboutBuiltAtRaw ? i18n.formatDate(aboutBuiltAtRaw) : "-";
+  const copyAboutSummary = async () => {
+    const summary = [
+      `MANGA ${aboutVersion}`,
+      `${t("about.channel")}: ${channelLabel}`,
+      `${t("about.commit")}: ${aboutCommit}`,
+      `${t("about.builtAt")}: ${aboutBuiltAtRaw || "-"}`,
+      `${t("about.license")}: Apache-2.0`,
+    ].join("\n");
+    try {
+      await navigator.clipboard?.writeText?.(summary);
+    } catch {
+      // ignore clipboard unavailability in headless environments
+    }
+    s.setNotice(t("about.copied"));
+  };
+  const busyItemsLabel = (s.update.busyDialog ?? [])
+    .map((reason) => t(`update.busy.item.${reason}` as MessageKey))
+    .join("、");
   const debugPanel = debugView.open ? (
     <DebugPanel
       t={t}
@@ -412,6 +438,7 @@ export function Workbench(props: {
             onStopRecording={() => void s.recorder.stop("user")}
             scan={s.scan.running}
             onScan={() => s.open.settings("library")}
+            update={s.update}
           />
         )}
       >
@@ -441,9 +468,58 @@ export function Workbench(props: {
           <Modal testId="about-dialog" title={t("about.title")} closeLabel={t("common.close")} onClose={() => setAboutOpen(false)}>
             <p>{t("about.blurb")}</p>
             <dl className="about-facts">
-              <dt>{t("about.version")}</dt><dd data-testid="about-version">{s.host.appVersion ?? "-"}</dd>
+              <dt>{t("about.name")}</dt><dd data-testid="about-name">MANGA</dd>
+              <dt>{t("about.version")}</dt><dd data-testid="about-version">{aboutVersion}</dd>
               <dt>{t("about.channel")}</dt><dd data-testid="about-channel">{channelLabel}</dd>
+              <dt>{t("about.commit")}</dt><dd data-testid="about-commit">{aboutCommit}</dd>
+              <dt>{t("about.builtAt")}</dt><dd data-testid="about-built-at">{aboutBuiltAt}</dd>
+              <dt>{t("about.license")}</dt><dd data-testid="about-license">Apache-2.0</dd>
             </dl>
+            {effectiveChannel !== "release" ? (
+              <p className="detail-muted mt-2" data-testid="about-dev-hint">{t("about.devHint")}</p>
+            ) : null}
+            <div className="msettings-actions mt-3">
+              <button type="button" className="secondary-button" data-testid="about-copy" onClick={() => void copyAboutSummary()}>
+                {t("about.copy")}
+              </button>
+              {effectiveChannel === "release" ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  data-testid="about-check-update"
+                  onClick={() => {
+                    setAboutOpen(false);
+                    s.open.settings("update");
+                    void s.update.check();
+                  }}
+                >
+                  {t("about.checkUpdate")}
+                </button>
+              ) : null}
+            </div>
+          </Modal>
+        ) : null}
+        {s.update.busyDialog ? (
+          <Modal testId="update-busy-dialog" title={t("update.busy.title")} closeLabel={t("common.close")} onClose={() => s.update.cancelBusyRestart()}>
+            <p data-testid="update-busy-body">{t("update.busy.body", { items: busyItemsLabel })}</p>
+            <div className="msettings-actions mt-3">
+              <button
+                type="button"
+                className="primary-button"
+                data-testid="update-busy-confirm"
+                onClick={() => void s.update.confirmBusyRestart()}
+              >
+                {t("update.busy.confirm")}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="update-busy-cancel"
+                onClick={() => s.update.cancelBusyRestart()}
+              >
+                {t("update.busy.cancel")}
+              </button>
+            </div>
           </Modal>
         ) : null}
       </ShellFrame>

@@ -242,10 +242,12 @@ const EXPORT_LIMIT_CHARS = 8 * 1024 * 1024;
 export class AgentTrace {
   private readonly store: DrizzleStore;
   private readonly settings: () => AgentTraceSettings;
+  private readonly buildMeta: { appVersion?: string; commit?: string };
 
-  constructor(store: DrizzleStore, settings: () => AgentTraceSettings) {
+  constructor(store: DrizzleStore, settings: () => AgentTraceSettings, buildMeta: { appVersion?: string; commit?: string } = {}) {
     this.store = store;
     this.settings = settings;
+    this.buildMeta = buildMeta;
     // A request that was running when the process stopped will never finish.
     this.safely(() => this.store.sqlite.prepare("UPDATE agent_requests SET status = 'error', ended_at = ?, error_json = ? WHERE status = 'running'").run(new Date().toISOString(), JSON.stringify({ message: "the application stopped before this finished" })));
     this.safely(() => this.prune());
@@ -350,7 +352,18 @@ export class AgentTrace {
       used += size;
       return { ...meta, request: parse(row.request_z), response: parse(row.response_z) };
     });
-    return { json: JSON.stringify({ runId, exportedAt: new Date().toISOString(), mode: this.settings().mode, entries }, null, 2), entries: entries.length, omitted };
+    return {
+      json: JSON.stringify({
+        runId,
+        exportedAt: new Date().toISOString(),
+        ...(this.buildMeta.appVersion ? { appVersion: this.buildMeta.appVersion } : {}),
+        ...(this.buildMeta.commit ? { commit: this.buildMeta.commit } : {}),
+        mode: this.settings().mode,
+        entries,
+      }, null, 2),
+      entries: entries.length,
+      omitted,
+    };
   }
 
   stats(): { count: number; bytes: number; oldestAt: string | null } {

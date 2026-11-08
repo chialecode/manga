@@ -12,14 +12,14 @@
       "id": "recording-shown",
       "ok": true,
       "detail": {
-        "feedbackMs": 11
+        "feedbackMs": 10
       }
     },
     {
       "id": "microphone",
       "ok": true,
       "detail": {
-        "level": 0.48,
+        "level": 0.43,
         "clock1": "0:00",
         "clock2": "0:01"
       }
@@ -41,18 +41,18 @@
       "ok": true,
       "detail": {
         "session": {
-          "id": "cap_e3be1784-d7de-4a23-92cc-90ecde660548",
+          "id": "cap_9cd75c4b-cd1f-4228-90a2-e8b41b05030e",
           "mode": "toggle",
           "retention": "keep",
           "stage": "done",
           "audioState": "retained",
           "playable": true,
           "durationMs": 11200,
-          "createdAt": "2026-11-08T06:23:12.824Z",
-          "stoppedAt": "2026-11-08T06:23:24.079Z",
-          "workId": "work_7784383f-70db-4a46-8079-eafbe5174fba",
+          "createdAt": "2026-11-08T22:23:50.422Z",
+          "stoppedAt": "2026-11-08T22:24:01.675Z",
+          "workId": "work_b3752bf7-1993-4249-a092-9d7f12c15338",
           "deviceLabel": "Fake Default Audio Input",
-          "resourceId": "res_cf224aa9-6f6a-46b5-a6b2-4601e49b0715",
+          "resourceId": "res_2c326308-7371-4273-9dfc-a886da314d4b",
           "error": null,
           "segments": {
             "total": 1,
@@ -87,12 +87,12 @@
           {
             "startMs": 0,
             "endMs": 6700,
-            "resourceId": "res_cf224aa9-6f6a-46b5-a6b2-4601e49b0715",
-            "resourceRevisionId": "rev_dfe0763c-2157-41d5-8169-02ec9d77604e",
+            "resourceId": "res_2c326308-7371-4273-9dfc-a886da314d4b",
+            "resourceRevisionId": "rev_74c6b4d6-d8ed-465f-8c83-992fd63eda08",
             "locator": {
               "kind": "text",
               "partId": "body",
-              "representationId": "rev_dfe0763c-2157-41d5-8169-02ec9d77604e",
+              "representationId": "rev_74c6b4d6-d8ed-465f-8c83-992fd63eda08",
               "normalizationVersion": "text-nfc-lf-v1",
               "range": {
                 "start": 0,

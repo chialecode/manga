@@ -1,0 +1,213 @@
+name: Release
+
+# Weekly release workflow (计划 4.9, A-126, AT-163).
+# Runs every Monday at 00:00 UTC (08:00 CST) or on manual workflow_dispatch (dry_run defaults to true).
+# Never runs on push, pull_request, or any fork event.
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只构建、签名与演练，不创建标签或发布 GitHub Release"
+        required: false
+        default: true
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    name: decide
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      should_release: ${{ steps.decide.outputs.should_release }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+      previous_tag: ${{ steps.decide.outputs.previous_tag }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Decide whether to cut a weekly release
+        id: decide
+        run: node scripts/stage/release-decide.mjs
+
+  check:
+    name: check
+    needs: [decide]
+    if: needs.decide.outputs.should_release == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          corepack prepare pnpm@11.24.0 --activate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Fetch pinned media tools and generate synthetic samples
+        run: |
+          node scripts/tools/fetch-ffmpeg.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-silero-vad.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-subtitle-font.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --experimental-strip-types scripts/samples/build-legacy-credentials.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --experimental-strip-types scripts/samples/generate-media-samples.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run repository verification and stage checks
+        run: |
+          node scripts/verify.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/stage.mjs test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/stage.mjs package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/stage.mjs installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  build:
+    name: build
+    needs: [decide, check]
+    if: needs.decide.outputs.should_release == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          corepack prepare pnpm@11.24.0 --activate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Fetch pinned media tools
+        run: |
+          node scripts/tools/fetch-ffmpeg.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-silero-vad.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-subtitle-font.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package release application with first-party plugin signing key
+        id: package-release
+        shell: pwsh
+        env:
+          MANGA_BUILD_CHANNEL: release
+          MANGA_BUILD_VERSION: ${{ needs.decide.outputs.version }}
+          MANGA_PLUGIN_SIGNING_KEY_PEM: ${{ secrets.MANGA_PLUGIN_SIGNING_KEY_PEM }}
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "plugin-first-party-$([guid]::NewGuid().ToString('N')).pem"
+          try {
+            if ([string]::IsNullOrWhiteSpace($env:MANGA_PLUGIN_SIGNING_KEY_PEM)) {
+              throw "MANGA_PLUGIN_SIGNING_KEY_PEM secret is not configured in the release environment"
+            }
+            Set-Content -LiteralPath $keyPath -Value $env:MANGA_PLUGIN_SIGNING_KEY_PEM -NoNewline -Encoding UTF8
+            $env:MANGA_PLUGIN_SIGNING_KEY = $keyPath
+            Remove-Item Env:\MANGA_PLUGIN_SIGNING_KEY_PEM -ErrorAction SilentlyContinue
+            pnpm --filter @manga/desktop exec electron-forge package --platform win32 --arch x64
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            if (Test-Path -LiteralPath $keyPath) { Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue }
+          }
+      - name: Build, sign and rehearse release installer
+        id: stage-release
+        shell: pwsh
+        env:
+          MANGA_UPDATE_SIGNING_KEY_PEM: ${{ secrets.MANGA_UPDATE_SIGNING_KEY_PEM }}
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "update-release-$([guid]::NewGuid().ToString('N')).pem"
+          try {
+            if ([string]::IsNullOrWhiteSpace($env:MANGA_UPDATE_SIGNING_KEY_PEM)) {
+              throw "MANGA_UPDATE_SIGNING_KEY_PEM secret is not configured in the release environment"
+            }
+            Set-Content -LiteralPath $keyPath -Value $env:MANGA_UPDATE_SIGNING_KEY_PEM -NoNewline -Encoding UTF8
+            $env:MANGA_UPDATE_SIGNING_KEY = $keyPath
+            Remove-Item Env:\MANGA_UPDATE_SIGNING_KEY_PEM -ErrorAction SilentlyContinue
+            node scripts/stage.mjs release --ci --version "${{ needs.decide.outputs.version }}"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            if (Test-Path -LiteralPath $keyPath) { Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue }
+          }
+      - name: Upload signed release artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-v${{ needs.decide.outputs.version }}
+          path: dist/release/v${{ needs.decide.outputs.version }}/*
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [decide, build]
+    if: ${{ needs.decide.outputs.should_release == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Download signed release artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-v${{ needs.decide.outputs.version }}
+          path: dist/release/v${{ needs.decide.outputs.version }}
+      - name: Verify SHA256SUMS and Ed25519 signature and create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/stage/release-publish-verify.mjs \
+            --version "${{ needs.decide.outputs.version }}" \
+            --dir "dist/release/v${{ needs.decide.outputs.version }}" \
+            --target "${{ github.sha }}" \
+            --publish

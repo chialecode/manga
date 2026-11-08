@@ -1,7 +1,7 @@
 import { RAIL_VIEWS, type RailView } from "@manga/contracts";
 export type SettingsGroupId = "basic" | "agent" | "logs";
 export type SettingsPageId =
-  | "general" | "appearance" | "reading" | "recording" | "library" | "semantic" | "sources" | "danmaku" | "storage" | "plugins" | "modules" | "shortcuts"
+  | "general" | "update" | "appearance" | "reading" | "recording" | "library" | "semantic" | "sources" | "danmaku" | "storage" | "plugins" | "modules" | "shortcuts"
   | "models" | "agent" | "quick" | "usage"
   | "logs";
 
@@ -10,7 +10,7 @@ export type SettingsPageId =
  * are managed in tabs of their own.
  */
 export const SETTINGS_GROUPS: ReadonlyArray<{ id: SettingsGroupId; pages: readonly SettingsPageId[] }> = [
-  { id: "basic", pages: ["general", "appearance", "reading", "recording", "library", "semantic", "sources", "danmaku", "storage", "plugins", "modules", "shortcuts"] },
+  { id: "basic", pages: ["general", "update", "appearance", "reading", "recording", "library", "semantic", "sources", "danmaku", "storage", "plugins", "modules", "shortcuts"] },
   { id: "agent", pages: ["models", "agent", "quick", "usage"] },
   { id: "logs", pages: ["logs"] },
 ];

@@ -7,7 +7,12 @@
   "selectedActions": {
     "github_owned_allowed": false,
     "verified_allowed": false,
-    "patterns_allowed": ["actions/checkout@*", "actions/setup-node@*"]
+    "patterns_allowed": [
+      "actions/checkout@*",
+      "actions/setup-node@*",
+      "actions/upload-artifact@*",
+      "actions/download-artifact@*"
+    ]
   },
   "workflowPermissions": {
     "default_workflow_permissions": "read",
@@ -15,5 +20,21 @@
   },
   "forkPullRequestApproval": {
     "approval_policy": "all_external_contributors"
+  },
+  "environments": {
+    "release": {
+      "deployment_branch_policy": {
+        "protected_branches": false,
+        "custom_branch_policies": true
+      },
+      "deployment_branches": [
+        "main"
+      ],
+      "required_reviewers": [],
+      "secrets": [
+        "MANGA_PLUGIN_SIGNING_KEY_PEM",
+        "MANGA_UPDATE_SIGNING_KEY_PEM"
+      ]
+    }
   }
 }

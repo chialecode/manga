@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="manga-bg" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#DE6C9B" />
+      <stop offset="52%" stop-color="#AD3268" />
+      <stop offset="100%" stop-color="#84204D" />
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#manga-bg)" />
+  <rect x="36" y="36" width="440" height="440" rx="96" stroke="#F8E4ED" stroke-opacity="0.28" stroke-width="8" />
+  <path
+    d="M116 384V128H174L256 262L338 128H396V384H340V226L274 332H238L172 226V384H116Z"
+    fill="#FFFFFF"
+  />
+</svg>
