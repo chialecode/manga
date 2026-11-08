@@ -122,7 +122,7 @@ node scripts/verify.mjs
 
 [repository-settings.json](../../.github/repository-settings.json)记录仓库开关，[actions-policy.json](../../.github/actions-policy.json)记录 Actions 策略。它们是可审阅的期望配置；不在 CI 中运行自动对账或自动修改设置。
 
-- 开启 Issues 与结构化表单；文档集中在 Git 中，关闭 Wiki、Projects 和 Discussions。确有协作需求时再启用相应入口。
+- 外部只开放 Discussions（A-123）：为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，关闭 Issues；保留 PR 但仅协作者可创建（`pull_request_creation_policy=collaborators_only`）。文档集中在 Git 中，关闭 Wiki 和 Projects。来自 fork 的 PR 运行 workflow 前须维护者批准（所有外部贡献者）。
 - 只允许 squash 合并，使用 PR 标题和正文形成提交消息；关闭自动合并，启用合并后分支删除。
 - Actions 默认令牌只读，不允许 Actions 创建/批准 PR；workflow 不包含写权限。
 - 保持 Secret scanning 和 Push protection 开启。忽略规则只是减少误提交，仍需人工核对暂存区；若秘密已经泄露，优先撤销或轮换凭据。

@@ -14,6 +14,7 @@
 <p align="center">
   <a href="docs/delivery/status.md">执行状态</a> ·
   <a href="docs/README.md">文档导航</a> ·
+  <a href="https://github.com/chialecode/manga/discussions">反馈与讨论</a> ·
   <a href="CONTRIBUTING.md">参与开发</a> ·
   <a href="SECURITY.md">安全报告</a>
 </p>
@@ -96,6 +97,7 @@ Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockv
 - **AI Agent 与程序员：**先读 [AGENTS.md](AGENTS.md)，再按任务读取相关规则；入门见 [CONTRIBUTING.md](CONTRIBUTING.md)，评审口径见 [REVIEW.md](REVIEW.md)。
 - **协作方式：**一个阶段一个分支、一个提交、一个 PR；本地验证优先，PR 只用 squash 合并，所有提交带 DCO 签名。详见 [Git 与 GitHub](docs/dev-rules/git-and-github.md)。
 - **文档规则：**权威文档、生命周期与变更流程见[文档治理](docs/governance/documentation-policy.md)。
+- **反馈：**缺陷、建议和使用问题请在 [Discussions](https://github.com/chialecode/manga/discussions) 提出。为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，仓库关闭了 Issues，PR 只接受协作者创建。
 
 ## 安全与许可证
 
