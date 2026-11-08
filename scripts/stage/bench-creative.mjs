@@ -292,3 +292,182 @@ export async function runNoteFileBench({ runs, blocks }) {
     fs.rmSync(library, { recursive: true, force: true });
   }
 }
+
+/**
+ * Pending proposals in a project of `objects` objects (计划第 7 节, AT-151—AT-156):
+ * - `propose`: time to propose deleting an object (`proposal.delete`, including backlink query across embeds, whiteboard reference cards and mind map node refs, plus preview generation) in a project with 500 objects;
+ * - `apply`: time from confirming a proposal (`proposal.apply`) until both the target object and the proposal card (`proposal.list`) are updated;
+ * - `migrationV14`: recorded time to migrate a v13 profile database (with projects, sessions, runs and messages) to schema v14 with pre-migration backup.
+ */
+export async function runProposalBench({ objects = 500, proposeRuns = 30, applyRuns = 20 }) {
+  const { DrizzleStore } = await import("@manga/storage-drizzle");
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-proposals-"));
+  const v13Root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-v14mig-"));
+  const app = new MangaProductApp({
+    profileRoot: profile,
+    documentsDir: path.join(profile, "documents"),
+    pointerPath: path.join(profile, "launcher", "pointer.json"),
+    channel: "test",
+    hostId: "bench-proposals",
+    vault: new TestVault("bench-proposals"),
+  });
+  try {
+    await app.start();
+    const ownerActor = { kind: "user", id: "bench-proposals" };
+    const ownerGrant = app.issueOwnerGrant(ownerActor);
+    let seq = 0;
+    const callOwner = async (commandId, input) => {
+      seq += 1;
+      const result = await app.call(ownerActor, { commandId, idempotencyKey: `bench-prop-owner-${seq}`, input }, ownerGrant.handle);
+      if (result.status !== "ok") throw new Error(`${commandId}: ${result.error?.message ?? "failed"}`);
+      return result.value;
+    };
+
+    const projectId = (await callOwner("project.create", { name: "500对象基准项目" })).id;
+    const session = await callOwner("session.open", { kind: "project", targetId: projectId, contextId: projectId });
+    const sessionId = session.id;
+
+    // Seed 500 objects in the project (200 whiteboards, 150 mindmaps, 150 drafts) and cross-references in a transaction.
+    const wbCount = 200;
+    const mmCount = 150;
+    const drCount = Math.max(1, objects - wbCount - mmCount);
+    const totalObjects = wbCount + mmCount + drCount;
+    const now = new Date().toISOString();
+    const sql = app.store.sqlite;
+    sql.exec("BEGIN");
+    const insWb = sql.prepare("INSERT INTO whiteboards(id, project_id, title, viewport_json, created_at, updated_at) VALUES (?, ?, ?, '{\"x\":0,\"y\":0,\"zoom\":1}', ?, ?)");
+    const insWbNode = sql.prepare("INSERT INTO whiteboard_nodes(id, board_id, kind, x, y, w, h, z, parent_id, data_json, created_at, updated_at) VALUES (?, ?, ?, 0, 0, 160, 90, 1, NULL, ?, ?, ?)");
+    const insMm = sql.prepare("INSERT INTO mindmaps(id, project_id, title, theme, created_at, updated_at) VALUES (?, ?, ?, 'pink', ?, ?)");
+    const insMmNode = sql.prepare("INSERT INTO mindmap_nodes(id, map_id, parent_id, sort_key, text, collapsed, refs_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)");
+    const insDr = sql.prepare("INSERT INTO drafts(id, project_id, title, text, version, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)");
+    const insEmbed = sql.prepare("INSERT INTO embeds(id, source_kind, source_id, slot, target_kind, target_id, locator_json, mode, snapshot_json, snapshot_version, created_at, updated_at) VALUES (?, ?, ?, ?, 'whiteboard', ?, '{}', 'live', NULL, NULL, ?, ?)");
+
+    for (let i = 0; i < wbCount; i += 1) {
+      const wbId = `wb_bench_${i}`;
+      insWb.run(wbId, projectId, `基准白板${i}`, now, now);
+      insWbNode.run(`wbn_card_${i}`, wbId, "card", JSON.stringify({ title: `卡片${i}`, text: textOf(i + 1, 24) }), now, now);
+      if (i > 0) {
+        const refTarget = `wb_bench_${(i - 1) % 60}`;
+        insWbNode.run(`wbn_ref_${i}`, wbId, "ref", JSON.stringify({ refKind: "whiteboard", refId: refTarget, title: `引用${refTarget}` }), now, now);
+      }
+    }
+    for (let i = 0; i < mmCount; i += 1) {
+      const mmId = `mm_bench_${i}`;
+      const refTarget = `wb_bench_${i % 60}`;
+      insMm.run(mmId, projectId, `基准导图${i}`, now, now);
+      insMmNode.run(`mmn_root_${i}`, mmId, null, "0", `导图根${i}`, JSON.stringify([{ kind: "whiteboard", targetId: refTarget }]), now, now);
+      insEmbed.run(`emb_bench_${i}`, "mindmap", mmId, `slot_${i}`, refTarget, now, now);
+    }
+    for (let i = 0; i < drCount; i += 1) {
+      insDr.run(`dr_bench_${i}`, projectId, `基准文稿${i}`, textOf(500 + i, 80), now, now);
+    }
+    sql.exec("COMMIT");
+
+    const runId = "run_bench_proposals";
+    sql.prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, live_text, created_at, updated_at) VALUES (?, ?, 'running', 'g_bench', '{}', '基准测试', '', ?, ?)").run(runId, sessionId, now, now);
+    const agentActor = { kind: "agent", id: `agent:${runId}` };
+    const agentGrant = app.issueAgentGrant(ownerGrant, agentActor, { sessionId, runId, readResourceIds: [], projectId });
+
+    // 1. Measure proposal.delete (with backlink query & preview generation) across 500 objects.
+    const proposeSamples = [];
+    for (let i = 0; i < proposeRuns + 5; i += 1) {
+      const targetId = `wb_bench_${i % 50}`;
+      const t0 = performance.now();
+      const res = await app.call(
+        agentActor,
+        { commandId: "proposal.delete", idempotencyKey: `bench-propose-${i}`, input: { kind: "whiteboard", targetId, reason: "基准测试删除预览" } },
+        agentGrant.handle,
+      );
+      const elapsed = performance.now() - t0;
+      // Agent replies intentionally contain only the compact receipt. Inspect the owner-only card
+      // to keep this benchmark checking the full preview and backlink query without widening the
+      // model-visible result contract.
+      const card = res.status === "ok" && res.value?.proposalId ? app.proposals.getCard(res.value.proposalId) : null;
+      if (
+        res.status !== "ok" ||
+        !res.value?.proposalId ||
+        typeof res.value?.summary !== "string" ||
+        !card ||
+        !Array.isArray(card.preview.lines) ||
+        typeof card.preview.meta?.backlinks !== "number"
+      ) {
+        throw new Error(`proposal.delete failed in bench: ${JSON.stringify(res)}`);
+      }
+      if (i >= 5) proposeSamples.push(elapsed);
+      // Reject immediately so pending count stays below the per-session cap (20).
+      await callOwner("proposal.reject", { proposalId: res.value.proposalId });
+    }
+
+    // 2. Measure proposal.apply -> object & card both updated.
+    const applySamples = [];
+    for (let i = 0; i < applyRuns + 3; i += 1) {
+      const targetId = `dr_bench_${i % drCount}`;
+      const newTitle = `已确认改名文稿_${i}`;
+      const proposed = await app.call(
+        agentActor,
+        { commandId: "proposal.rename", idempotencyKey: `bench-apply-prep-${i}`, input: { kind: "draft", targetId, title: newTitle, reason: "基准确认耗时" } },
+        agentGrant.handle,
+      );
+      if (proposed.status !== "ok") throw new Error(`proposal.rename prep failed: ${JSON.stringify(proposed)}`);
+      const proposalId = proposed.value.proposalId;
+
+      const t0 = performance.now();
+      const applied = await callOwner("proposal.apply", { proposalId });
+      const listed = await callOwner("proposal.list", { sessionId });
+      const draftNow = await callOwner("draft.get", { draftId: targetId });
+      const elapsed = performance.now() - t0;
+
+      const card = listed.proposals.find((p) => p.id === proposalId);
+      if (applied.proposal.status !== "applied" || card?.status !== "applied" || draftNow.draft.title !== newTitle) {
+        throw new Error(`proposal.apply did not update both object and card in run ${i}`);
+      }
+      if (i >= 3) applySamples.push(elapsed);
+    }
+
+    // 3. Measure schema v13 -> v14 migration (recorded metric).
+    const v13DataDir = path.join(v13Root, "data");
+    fs.mkdirSync(v13DataDir, { recursive: true });
+    const seedStore = new DrizzleStore({ profileDir: v13DataDir, hostId: "bench-v13-seed" });
+    seedStore.sqlite.exec("BEGIN");
+    for (let p = 0; p < 10; p += 1) {
+      seedStore.sqlite.prepare("INSERT INTO projects(id, name, goal, status, created_at, updated_at) VALUES (?, ?, '', 'active', ?, ?)").run(`proj_${p}`, `项目${p}`, now, now);
+      seedStore.sqlite.prepare("INSERT INTO agent_sessions(id, title, kind, target_id, project_id, grant_handle, created_at, updated_at) VALUES (?, ?, 'project', ?, ?, 'g', ?, ?)").run(`ses_${p}`, `对话${p}`, `proj_${p}`, `proj_${p}`, now, now);
+      for (let r = 0; r < 10; r += 1) {
+        seedStore.sqlite.prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, live_text, created_at, updated_at) VALUES (?, ?, 'succeeded', 'g', '{}', '问题', '回答', ?, ?)").run(`run_${p}_${r}`, `ses_${p}`, now, now);
+      }
+    }
+    seedStore.sqlite.exec("COMMIT");
+    seedStore.sqlite.exec("DROP TABLE IF EXISTS agent_proposals");
+    seedStore.sqlite.prepare("UPDATE schema_meta SET value = '13' WHERE key = 'schemaVersion'").run();
+    seedStore.close();
+
+    const migStart = performance.now();
+    const migApp = new MangaProductApp({
+      profileRoot: v13Root,
+      documentsDir: path.join(v13Root, "documents"),
+      pointerPath: path.join(v13Root, "launcher", "pointer.json"),
+      channel: "test",
+      hostId: "bench-v14-mig",
+      vault: new TestVault("bench-v14-mig"),
+    });
+    await migApp.start();
+    const migrateV14Ms = Math.round((performance.now() - migStart) * 100) / 100;
+    const migInfo = migApp.store.migration;
+    const backupExists = fs.existsSync(path.join(v13DataDir, "manga.sqlite.premigrate-v13"));
+    migApp.close();
+    if (migInfo?.from !== 13 || migInfo?.to !== 14 || !backupExists) {
+      throw new Error(`v13 -> v14 migration benchmark check failed: ${JSON.stringify({ migInfo, backupExists })}`);
+    }
+
+    return {
+      objects: totalObjects,
+      propose: { samples: proposeSamples, p95: p95(proposeSamples), detail: { ok: true, objects: totalObjects, backlinksQueried: true } },
+      apply: { samples: applySamples, p95: p95(applySamples), detail: { ok: true, objects: totalObjects } },
+      migrationV14: { ok: true, ms: migrateV14Ms, from: 13, to: 14, backupCreated: backupExists, runs: 100 },
+    };
+  } finally {
+    app.close();
+    fs.rmSync(profile, { recursive: true, force: true });
+    fs.rmSync(v13Root, { recursive: true, force: true });
+  }
+}

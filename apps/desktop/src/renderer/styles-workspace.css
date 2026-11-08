@@ -69,6 +69,25 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .bubble-edit { display: flex; flex-direction: column; gap: 6px; }
 .bubble-edit textarea { width: 100%; resize: vertical; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; line-height: 1.6; }
 
+/* ---- agent proposal cards in chat ---- */
+.proposal-group { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.proposal-batch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-muted); }
+.proposal-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); font-size: 12.5px; line-height: 1.55; }
+.proposal-card[data-status="pending"] { border-left: 3px solid var(--color-accent); }
+.proposal-card[data-status="pending"][data-kind="delete"] { border-left-color: var(--color-danger); }
+.proposal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.proposal-title { font-size: 13px; font-weight: 600; color: var(--color-text); }
+.proposal-summary { margin: 0; color: var(--color-text); }
+.proposal-reason { margin: 0; font-size: 12px; }
+.proposal-lines, .proposal-warnings { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--color-subtle); }
+.proposal-warnings { color: var(--color-danger-text); }
+.proposal-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
+.proposal-irreversible { font-size: 12px; font-weight: 500; color: var(--color-danger-text); }
+.proposal-status { font-size: 12px; font-weight: 500; color: var(--color-subtle); }
+.proposal-status-applied { color: var(--color-accent); }
+.proposal-status-stale, .proposal-status-failed { color: var(--color-danger-text); }
+.proposal-batch-list { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+
 .chat-composer { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
 .chat-nomodel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; padding: 6px 10px; font-size: 12px; color: var(--color-subtle); background: var(--color-muted); border-radius: 8px; }
 .chat-quick { display: flex; flex-wrap: wrap; gap: 6px; }

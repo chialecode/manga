@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
-import { clickTestId, pressKey, setField, setSelect, sleep, waitForTestId, waitUntil } from "./driver.ts";
-import { js, leaveSettings, openSettingsPage } from "./common.ts";
+import { clickTestId, pressKey, setField, setSelect, viewport, waitForTestId, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
+import { exitScreenFullscreen, js, leaveSettings, openSettingsPage } from "./common.ts";
 import { SMOKE_DANMAKU_CREDENTIALS } from "../danmaku-credentials.ts";
 import { hitTestOpenPopup, realClick } from "./player-menus-walk.ts";
 import type { Observe } from "./reader-controls-walk.ts";
@@ -16,14 +16,46 @@ import type { Observe } from "./reader-controls-walk.ts";
 export const DANMAKU_OBSERVATIONS = ["danmaku-layer", "danmaku-window-top", "danmaku-privacy"] as const;
 
 type Box = { x: number; y: number; w: number; h: number };
-type Alignment = { layer: Box | null; picture: Box | null; area: Box | null; canvas: { w: number; h: number } | null; count: number; visible: boolean };
+type Alignment = { layer: Box | null; picture: Box | null; area: Box | null; canvas: { w: number; h: number } | null; count: number; visible: boolean; viewport: { w: number; h: number } };
+
+/** Record a resize's actual viewport and fail its observation when the requested size never arrives. */
+async function resizeForDanmaku(view: BrowserWindow, width: number, height: number, detail: Record<string, unknown>, problems: string[], name: string): Promise<void> {
+  view.setContentSize(width, height);
+  const reached = await waitUntil(view, `Math.abs(window.innerWidth - ${width}) <= 2 && Math.abs(window.innerHeight - ${height}) <= 2`, 2000);
+  // Dockview lays out the tab on its ResizeObserver's next frame. The layer and its parent can still agree on the old size until that happens.
+  const layoutReady = reached && await waitUntil(view, `(() => {
+    const reader = document.querySelector('[data-testid="video-reader"]');
+    const panel = reader?.closest('[data-testid="tab-panel"]');
+    const dock = panel?.closest('[data-testid="view-dock"]');
+    if (!panel || !dock) return false;
+    const p = panel.getBoundingClientRect(), d = dock.getBoundingClientRect();
+    return Math.abs(p.right - d.right) <= 4 && Math.abs(p.bottom - d.bottom) <= 4
+      && Math.abs(p.bottom - window.innerHeight) <= 4;
+  })()`, 3000);
+  detail[name] = { requested: { width, height }, reached, layoutReady, native: view.getContentSize(), viewport: await viewport(view), fullscreen: view.isFullScreen() };
+  if (!reached) problems.push(`${name}: the viewport did not reach ${width}x${height}`);
+  if (!layoutReady) problems.push(`${name}: the player's tab did not finish its layout at ${width}x${height}`);
+}
 
 /** Where the layer is, where the play area is (the layer's parent), and where the picture is: the part of the play area the video covers once it is fitted inside it. */
-const alignmentOf = (view: BrowserWindow) => js<Alignment>(view, `(() => {
+const alignmentOf = async (view: BrowserWindow, areaShare = 0.5): Promise<Alignment> => {
+  await waitUntil(view, `(() => {
+    const layer = document.querySelector('[data-testid="danmaku-layer"]');
+    const area = layer?.parentElement;
+    if (!layer || !area) return false;
+    const l = layer.getBoundingClientRect();
+    const a = area.getBoundingClientRect();
+    return Math.abs(l.x - (a.x + area.clientLeft)) <= 2
+      && Math.abs(l.y - (a.y + area.clientTop)) <= 2
+      && Math.abs(l.width - area.clientWidth) <= 2
+      && Math.abs(l.height - area.clientHeight * ${areaShare}) <= 3;
+  })()`, 2000);
+  return js<Alignment>(view, `(() => {
   const layer = document.querySelector('[data-testid="danmaku-layer"]');
   const video = document.querySelector('[data-testid="video-element"]');
   const area = layer?.parentElement;
-  if (!layer || !video || !area) return { layer: null, picture: null, area: null, canvas: null, count: 0, visible: false };
+  const viewport = { w: window.innerWidth, h: window.innerHeight };
+  if (!layer || !video || !area) return { layer: null, picture: null, area: null, canvas: null, count: 0, visible: false, viewport };
   const l = layer.getBoundingClientRect();
   const v = video.getBoundingClientRect();
   const a = area.getBoundingClientRect();
@@ -39,8 +71,10 @@ const alignmentOf = (view: BrowserWindow) => js<Alignment>(view, `(() => {
     canvas: canvas ? { w: canvas.width, h: canvas.height } : null,
     count: Number(layer.getAttribute("data-count") ?? 0),
     visible: layer.getAttribute("data-visible") === "true",
+    viewport,
   };
 })()`);
+};
 
 const within = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance;
 
@@ -81,11 +115,12 @@ async function checkShot(view: BrowserWindow, detail: Record<string, unknown>, n
   // Pressed the way the other screenshot walks press it; the real pointer may rest on the comments panel of a narrow window.
   if (!await clickTestId(view, "video-screenshot", 4000)) return [`${name}: the button could not be pressed`];
   let taken: Shot | undefined;
-  for (let waited = 0; !taken && waited < 15_000; waited += 250) {
+  const deadline = Date.now() + 15_000;
+  while (!taken && Date.now() < deadline) {
     taken = (await list()).find((item) => !known.has(item.id));
-    if (!taken) await sleep(250);
+    if (!taken) await waitFrames(view);
   }
-  if (await clickTestId(view, "toast-notice-close", 1500)) await sleep(200);
+  if (await clickTestId(view, "toast-notice-close", 1500)) await waitUntil(view, `!document.querySelector('[data-testid="toast-notice"]')`, 2000);
   detail[name] = taken ? { width: taken.width, height: taken.height, composited: taken.meta?.composited ?? null, native, commentsExpected } : null;
   if (!taken) return [`${name}: the screenshot was not saved`];
   const problems: string[] = [];
@@ -107,7 +142,7 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   detail.asked = asked;
   if (!asked) problems.push("the question before the file's details are sent did not come");
   else {
-    await sleep(200);
+    await waitFrames(view);
     const panel = await hitTestOpenPopup(view, '[data-testid="danmaku-panel"]');
     detail.panel = { items: panel.items.length, topLayer: panel.topLayer, box: panel.box };
     if (!panel.found || !panel.topLayer) problems.push("the danmaku panel did not open on the top layer");
@@ -164,7 +199,7 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
     }
   }
   await pressKey(view, "Escape");
-  await sleep(250);
+  await waitUntil(view, `!document.querySelector('[data-testid="danmaku-panel"]')`, 2000);
 
   // 3. The comments are on the top half of the play area.
   const loaded = await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"][data-visible="true"]')`, 6000);
@@ -177,8 +212,12 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
 
   // 4. They are really drawn while the video plays: the first comes at 1.5 s and crosses in about ten.
   await js(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); v.currentTime = 1; return v.play().then(() => true, () => false); })()`);
-  await sleep(2800);
-  const ink = await inkOf(view);
+  let ink = -1;
+  const inkDeadline = Date.now() + 4000;
+  while (ink <= 40 && Date.now() < inkDeadline) {
+    ink = await inkOf(view);
+    if (ink <= 40) await waitFrames(view);
+  }
   detail.ink = ink;
   if (ink <= 40) problems.push(`nothing was drawn on the canvas while the video played (${ink} pixels)`);
   if (shot) await shot("danmaku-playing");
@@ -187,14 +226,12 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   // 5. The layer follows the play area when the window changes size...
   const [width, height] = view.getContentSize();
   try {
-    view.setContentSize(980, 640);
-    await sleep(700);
+    await resizeForDanmaku(view, 980, 640, detail, problems, "smallResize");
     const small = await alignmentOf(view);
     problems.push(...misplaced("in a smaller window", small, 0.5));
     detail.small = small;
   } finally {
-    view.setContentSize(width!, height!);
-    await sleep(700);
+    await resizeForDanmaku(view, width!, height!, detail, problems, "restoreResize");
   }
   const restored = await alignmentOf(view);
   problems.push(...misplaced("back in the first size", restored, 0.5));
@@ -203,17 +240,14 @@ export async function walkDanmaku(view: BrowserWindow, observe: Observe, shot?: 
   const wasFull = view.isFullScreen();
   if (await realClick(view, "video-fullscreen") && await waitUntil(view, `document.fullscreenElement !== null`, 4000)) {
     try {
-      await sleep(900);
+      if (!(await waitWindowFullscreen(view, true))) problems.push("the native window did not enter screen full screen");
+      await waitFrames(view, 3);
       const full = await alignmentOf(view);
       detail.fullscreen = full;
       problems.push(...misplaced("in screen full screen", full, 0.5));
       if (!full.visible) problems.push("the layer is not showing in screen full screen");
     } finally {
-      view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
-      view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
-      await waitUntil(view, `document.fullscreenElement === null`, 3000);
-      if (view.isFullScreen() !== wasFull) { await realClick(view, "video-fullscreen"); await waitUntil(view, `document.fullscreenElement === null`, 3000); }
-      await sleep(500);
+      if (!(await exitScreenFullscreen(view, wasFull, "video-fullscreen")).restored) problems.push("screen full screen did not restore the native window");
     }
   } else problems.push("screen full screen did not start");
 
@@ -285,26 +319,31 @@ async function walkDanmakuWindowTop(view: BrowserWindow, observe: Observe, shot?
       && await js<boolean>(view, `(() => { const el = document.getElementById("danmaku-shot-with"); if (!el) return false; const on = el.checked ?? el.getAttribute("aria-checked") === "true"; if (on !== ${shotWith}) el.click(); return true; })()`);
     await leaveSettings(view);
     await waitUntil(view, `document.querySelector('[data-testid="danmaku-layer"][data-visible="true"]')`, 4000);
-    await sleep(400);
+    await waitFrames(view);
     return set;
   };
   try {
     if (!(await area("0.25", true))) problems.push("the area could not be set to a quarter in the settings");
 
     // A window taller than the picture: black bars above and below it.
-    view.setContentSize(720, 900);
-    await sleep(900);
-    const tall = await alignmentOf(view);
+    await resizeForDanmaku(view, 720, 900, detail, problems, "tallResize");
+    const tall = await alignmentOf(view, 0.25);
     detail.tall = tall;
     problems.push(...misplaced("in a tall window", tall, 0.25));
     const bar = tall.picture && tall.area ? tall.picture.y - tall.area.y : 0;
     if (bar < 40) problems.push(`the tall window leaves ${Math.round(bar)} px above the picture, too little to look at`);
     else {
       await play(1);
-      await sleep(2800);
+      const maxCss = Math.min(bar, tall.layer?.h ?? 0);
+      let above = 0;
+      const aboveDeadline = Date.now() + 4000;
+      while (above <= 40 && Date.now() < aboveDeadline) {
+        above = await inkBetween(view, 0, maxCss);
+        if (above <= 40) await waitFrames(view);
+      }
       await pause();
-      await sleep(200);
-      const above = await inkBetween(view, 0, Math.min(bar, tall.layer?.h ?? 0));
+      await waitFrames(view, 2);
+      above = await inkBetween(view, 0, maxCss);
       // A pointer at a point of the bar above the picture, inside the layer, reaches the play area: nothing of the page is drawn over the comments there.
       const point = { x: Math.round((tall.area!.x + tall.area!.w / 2)), y: Math.round(tall.area!.y + Math.min(bar, tall.layer!.h) / 2) };
       const reach = await js<boolean>(view, `(() => {
@@ -327,45 +366,41 @@ async function walkDanmakuWindowTop(view: BrowserWindow, observe: Observe, shot?
     }
 
     // A window wider than the picture: the layer spans the bars on both sides.
-    view.setContentSize(1500, 520);
-    await sleep(900);
-    const wide = await alignmentOf(view);
+    await resizeForDanmaku(view, 1500, 520, detail, problems, "wideResize");
+    const wide = await alignmentOf(view, 0.25);
     detail.wide = wide;
     problems.push(...misplaced("in a wide window", wide, 0.25));
     // A screenshot here: the layer lies over the top of the picture, so the comments on it are in the picture.
     problems.push(...await checkShot(view, detail, "screenshotOver", true));
     if (wide.layer && wide.picture && wide.layer.w < wide.picture.w + 40) problems.push(`in a wide window the layer is ${Math.round(wide.layer.w)} wide, not wider than the picture's ${Math.round(wide.picture.w)}`);
-    view.setContentSize(width!, height!);
-    await sleep(700);
+    await resizeForDanmaku(view, width!, height!, detail, problems, "beforeFullscreenResize");
 
     // Window full screen and screen full screen: the play area is the window, then the screen.
-    if (await realClick(view, "video-window-fullscreen") && await waitUntil(view, `document.querySelector('[data-testid="video-reader"]')?.hasAttribute("data-window-full")`, 4000)) {
-      await sleep(700);
-      const windowFull = await alignmentOf(view);
+    await js(view, `document.querySelector('[data-testid="video-reader"]')?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 40, clientY: 40 }))`);
+    await waitUntil(view, `Boolean(document.querySelector('[data-testid="video-window-fullscreen"]'))`, 2000);
+    if (await clickTestId(view, "video-window-fullscreen") && await waitUntil(view, `document.querySelector('[data-testid="video-reader"]')?.hasAttribute("data-window-full")`, 4000)) {
+      await waitFrames(view);
+      const windowFull = await alignmentOf(view, 0.25);
       detail.windowFull = windowFull;
       problems.push(...misplaced("in window full screen", windowFull, 0.25));
-      await realClick(view, "video-window-fullscreen");
+      await clickTestId(view, "video-window-fullscreen");
       await waitUntil(view, `!document.querySelector('[data-testid="video-reader"]')?.hasAttribute("data-window-full")`, 4000);
-      await sleep(400);
+      await waitFrames(view);
     } else problems.push("window full screen did not start");
     const wasFull = view.isFullScreen();
     if (await realClick(view, "video-fullscreen") && await waitUntil(view, `document.fullscreenElement !== null`, 4000)) {
       try {
-        await sleep(900);
-        const screenFull = await alignmentOf(view);
+        if (!(await waitWindowFullscreen(view, true))) problems.push("the native window did not enter screen full screen");
+        await waitFrames(view, 3);
+        const screenFull = await alignmentOf(view, 0.25);
         detail.screenFull = screenFull;
         problems.push(...misplaced("in screen full screen", screenFull, 0.25));
       } finally {
-        view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
-        view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
-        await waitUntil(view, `document.fullscreenElement === null`, 3000);
-        if (view.isFullScreen() !== wasFull) { await realClick(view, "video-fullscreen"); await waitUntil(view, `document.fullscreenElement === null`, 3000); }
-        await sleep(500);
+        if (!(await exitScreenFullscreen(view, wasFull, "video-fullscreen")).restored) problems.push("screen full screen did not restore the native window");
       }
     } else problems.push("screen full screen did not start");
   } finally {
-    view.setContentSize(width!, height!);
-    await sleep(500);
+    await resizeForDanmaku(view, width!, height!, detail, problems, "finalResize");
     await pause();
     await area("0.5", false);
   }

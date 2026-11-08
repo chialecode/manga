@@ -7,14 +7,21 @@ import type { ProjectService } from "./projects.ts";
  * What an agent may do with the creative workspace (A-73). Only a conversation of a project reaches these commands, and only the project's own
  * objects: a call that names another project, or an object that is not the project's, is refused here, in the command layer, not only left out of
  * the tool list. Writes are the ones the person can take back (the board's or map's own undo, removing a material or a term, discarding a suggestion);
- * deleting, renaming, packages, rough cuts, semantic search, fetching pages, plugins and downloads stay with the owner.
+ * deleting, renaming, packages and rough cuts are proposed for the owner to confirm; semantic search and fetching pages require the task's opt-in.
+ * Plugins, downloads, project deletion and package import stay with the owner.
  */
 export const AGENT_PROJECT_READS = [
   "project.list", "project.get", "project.objects", "project.terms",
   "whiteboard.list", "whiteboard.get", "mindmap.list", "mindmap.get", "draft.list", "draft.get", "draft.version",
   "roughcut.list", "roughcut.get", "research.search", "excerpt.list", "excerpt.get", "webpage.list", "webpage.get",
 ] as const;
-export const AGENT_PROJECT_WRITES = ["whiteboard.edit", "mindmap.edit", "project.addMaterial", "project.addTerm", "draft.suggest"] as const;
+export const AGENT_PROJECT_PROPOSALS = [
+  "proposal.delete", "proposal.rename", "proposal.exportProject", "proposal.editRoughcut", "proposal.exportRoughcut",
+] as const;
+export const AGENT_PROJECT_WRITES = [
+  "whiteboard.edit", "mindmap.edit", "project.addMaterial", "project.addTerm", "draft.suggest",
+  ...AGENT_PROJECT_PROPOSALS,
+] as const;
 export const AGENT_PROJECT_COMMANDS: readonly string[] = [...AGENT_PROJECT_READS, ...AGENT_PROJECT_WRITES];
 
 /** The writes that are worth a line in the operation log when an agent makes them (the person's own edits of a board are too frequent to log). */
@@ -37,7 +44,7 @@ const REQUIRED_PARAMETERS: Record<string, string[]> = { "draft.suggest": ["text"
  * command that has options an agent may not use does not list them.
  */
 export function agentToolSchema(commandId: string, schema: Record<string, unknown>): Record<string, unknown> {
-  const project = AGENT_PROJECT_COMMANDS.includes(commandId);
+  const project = AGENT_PROJECT_COMMANDS.includes(commandId) || commandId === "semantic.search";
   if (!project && !takesContext(schema)) return schema;
   const hidden = new Set([...TASK_PARAMETERS, ...(project ? ["projectId", ...(HIDDEN_PARAMETERS[commandId] ?? [])] : [])]);
   const properties = Object.fromEntries(Object.entries((schema.properties ?? {}) as Record<string, unknown>).filter(([key]) => !hidden.has(key)));
@@ -85,6 +92,14 @@ export class AgentProjectAccess {
     this.grants = grants;
     const same: AgentRule = { check: (envelope, projectId) => this.same(envelope, projectId) };
     const fill: AgentRule = { check: (envelope, projectId) => this.fill(envelope, projectId) };
+    const proposal: AgentRule = {
+      check: () => undefined,
+      // Full impact previews may name references outside this task. Only the owner receives the cards through session.stream.
+      shape: (value) => {
+        const result = value as { proposalId: string; status: string; summary: string };
+        return { proposalId: result.proposalId, status: result.status, summary: result.summary };
+      },
+    };
     const readOf = (kind: Kind, key: string): AgentRule => ({ check: (envelope, projectId) => this.reach(kind, text(this.input(envelope)[key]), projectId, "read") });
     this.rules = {
       "project.list": { check: () => undefined, shape: (value, projectId) => ({ ...(value as object), projects: ((value as { projects: Array<{ id: string }> }).projects ?? []).filter((item) => item.id === projectId) }) },
@@ -173,6 +188,19 @@ export class AgentProjectAccess {
           return { ...page, excerpts: (page.excerpts ?? []).filter((excerpt) => excerpt.projectId === projectId || this.referenced("excerpt", excerpt.id, projectId)) };
         },
       },
+      "webpage.fetch": {
+        check: () => undefined,
+        shape: (value, projectId) => {
+          const url = (value as { page?: { url?: string } })?.page?.url;
+          if (url) this.addProjectPageUrl(projectId, url);
+          return value;
+        },
+      },
+      "proposal.delete": proposal,
+      "proposal.rename": proposal,
+      "proposal.exportProject": proposal,
+      "proposal.editRoughcut": proposal,
+      "proposal.exportRoughcut": proposal,
     };
   }
 
@@ -268,11 +296,29 @@ export class AgentProjectAccess {
     input.label = `${AGENT_EDIT_LABEL}${text(input.label) || first}`.slice(0, 80);
   }
 
-  /** The addresses of the pages the project took excerpts from (its own, or ones it holds a reference to). */
+  /** Whether the task can read a video or other resource in this project. */
+  canSeeResource(resourceId: string, projectId: string, grant: ScopeGrant): boolean {
+    return this.grants.canRead(grant, resourceId) || this.referenced("resource", resourceId, projectId);
+  }
+
+  /** The addresses of the pages the project took excerpts from or fetched as project material. */
   private pageUrls(projectId: string): Set<string> {
     const rows = this.store.sqlite.prepare(`SELECT DISTINCT p.url AS url FROM excerpts e JOIN excerpt_pages p ON p.id = e.page_id
       WHERE e.project_id = ? OR e.id IN (SELECT target_id FROM project_materials WHERE project_id = ? AND kind = 'excerpt')`).all(projectId, projectId) as Array<{ url: string }>;
-    return new Set(rows.map((row) => row.url));
+    const urls = new Set(rows.map((row) => row.url));
+    const saved = this.store.getMeta(`project.pages.${projectId}`);
+    if (saved) {
+      try {
+        for (const item of JSON.parse(saved) as string[]) if (typeof item === "string") urls.add(item);
+      } catch { /* ignore */ }
+    }
+    return urls;
+  }
+
+  private addProjectPageUrl(projectId: string, url: string): void {
+    const urls = this.pageUrls(projectId);
+    urls.add(url);
+    this.store.setMeta(`project.pages.${projectId}`, JSON.stringify([...urls]));
   }
 }
 

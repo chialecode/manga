@@ -1,7 +1,7 @@
 import type { CommandResult, ScopeGrant } from "@manga/contracts";
 
 /** The tools that read the resources of a task's scope (LOOP-20, 计划 4.9). */
-const SCOPED_READ_COMMANDS = new Set(["library.find", "library.list", "library.read", "library.getResource", "library.contextSnapshot", "comic.pages", "material.subtitleWindow"]);
+const SCOPED_READ_COMMANDS = new Set(["library.find", "library.list", "library.read", "library.getResource", "library.contextSnapshot", "comic.pages", "material.subtitleWindow", "semantic.search"]);
 
 /**
  * A task whose scope has no resource to read gets, with the empty answer of a tool that reads them, why and what to do (AT-129): the model can then tell
@@ -9,6 +9,7 @@ const SCOPED_READ_COMMANDS = new Set(["library.find", "library.list", "library.r
  */
 export function withEmptyScopeNote(grant: ScopeGrant, commandId: string, result: CommandResult): CommandResult {
   if (result.status !== "ok" || grant.access === "owner" || grant.readResourceIds.length > 0 || !SCOPED_READ_COMMANDS.has(commandId)) return result;
+  if (commandId === "semantic.search" && Array.isArray((result.value as { results?: unknown[] } | undefined)?.results) && (result.value as { results: unknown[] }).results.length > 0) return result;
   return {
     ...result,
     value: {

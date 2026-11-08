@@ -13,17 +13,17 @@ const kinds = new Set([
   'status', 'decision', 'research', 'evidence', 'template',
 ]);
 
-// Stage names are "m" plus a number and an optional letter (m2, m1b). They are compared by number, not looked up in a list,
-// so a new stage needs no change here.
+// Stage names are "M" plus a sequence number (M1, M2, …; no M0, no letter suffixes, unrelated to PR numbers). People read "M9"; machine
+// identifiers such as currentStage, branches and paths write "m9". Either case is accepted here. They are compared by number,
+// not looked up in a list, so a new stage needs no change here.
 export function parseStage(name) {
-  const match = typeof name === 'string' ? /^m(\d+)([a-z]?)$/.exec(name) : null;
-  return match ? [Number(match[1]), match[2]] : null;
+  const match = typeof name === 'string' ? /^[Mm]([1-9]\d*)$/.exec(name) : null;
+  return match ? Number(match[1]) : null;
 }
 
 export function compareStages(a, b) {
   const [left, right] = [parseStage(a), parseStage(b)];
-  if (!left || !right) return NaN;
-  return left[0] - right[0] || (left[1] < right[1] ? -1 : left[1] > right[1] ? 1 : 0);
+  return left === null || right === null ? NaN : left - right;
 }
 
 // A document marked retireAfter must be gone once the current stage is later.
@@ -43,7 +43,8 @@ export function retiredDocumentErrors(registry, exists) {
 }
 
 // Stage labels (documentation policy 8.3): documents and code say what is implemented and what is next, not which stage it came from.
-// Only the current stage's name may appear. The lookarounds keep file formats (m4a, m4v), m3u8 and the like out of the match.
+// Only the current stage's name may appear. The optional letter still catches retired names such as m1b; the lookarounds keep
+// file formats (m4a, m4v), m3u8 and the like out of the match.
 const stageLabel = /(?<![A-Za-z0-9])[Mm](\d+)([a-z]?)(?![A-Za-z0-9])/g;
 const formatNames = new Set(['m4a', 'm4b', 'm4p', 'm4r', 'm4v']);
 // Fixed archive links (documentation policy 8.2) point at paths of files that only exist in history, so their paths may carry labels.
@@ -56,7 +57,7 @@ export function stageLabels(text, currentStage) {
     // SVG path data (d="M13 5H9...") starts with an M command that only looks like a stage label.
     for (const match of line.replace(archiveLink, '').replace(/(?<![A-Za-z0-9])d="[^"]*"/g, '').matchAll(stageLabel)) {
       const label = match[0].toLowerCase();
-      if (label === currentStage || formatNames.has(label)) continue;
+      if (label === String(currentStage).toLowerCase() || formatNames.has(label)) continue;
       found.push({ label: match[0], line: index + 1 });
     }
   });
@@ -65,7 +66,7 @@ export function stageLabels(text, currentStage) {
 
 export function stageLabelErrors(registry, markdown) {
   const errors = [];
-  const exempt = new Set(registry.documents.filter((doc) => doc && doc.retireAfter !== undefined && doc.retireAfter === registry.currentStage).map((doc) => doc.path));
+  const exempt = new Set(registry.documents.filter((doc) => doc && doc.retireAfter !== undefined && compareStages(doc.retireAfter, registry.currentStage) === 0).map((doc) => doc.path));
   for (const [relative, content] of markdown) {
     if (exempt.has(relative)) continue;
     for (const { label, line } of stageLabels(content, registry.currentStage)) errors.push(`${relative}:${line}: stage label ${label} (documentation policy 8.3)`);

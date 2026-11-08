@@ -5,10 +5,11 @@ import type { CreativeHooks } from "../creative/library-section.ts";
 import { DraftService } from "../creative/drafts.ts";
 import { importProjectPackage, previewProjectPackage, writeProjectPackage } from "../creative/project-package.ts";
 import { writeExportFile } from "../creative/export-file.ts";
+import { readShell } from "../reading-service.ts";
 import type { MangaProductApp, CreativeReg } from "../product-app.ts";
 
 /** What these commands use of the application. */
-export type CreativeHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "closed" | "drafts" | "embeds" | "grantOf" | "mindmaps" | "pluginRuntime" | "plugins" | "projects" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runtime" | "semantic" | "store" | "uiFacets" | "whiteboards">;
+export type CreativeHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "closed" | "drafts" | "embeds" | "grantOf" | "grants" | "mindmaps" | "pluginRuntime" | "plugins" | "projects" | "proposals" | "requireModule" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runtime" | "semantic" | "store" | "uiFacets" | "whiteboards">;
 
 export function projectsModule(app: CreativeHost): MangaModule {
   const moduleId = "manga.projects";
@@ -29,10 +30,11 @@ export function projectsModule(app: CreativeHost): MangaModule {
         app.uiFacets.add("projects");
         ctx.register({ kind: "subscription", id: `projects-ui-${ctx.epoch}`, dispose: () => { app.uiFacets.delete("projects"); } });
       }
-      const reg = (commandId: string, handler: (envelope: CommandEnvelope) => unknown, options: { write?: boolean } = {}) => app.runtime.registerCommand(moduleId, commandId, (envelope) => {
+      const reg = (commandId: string, handler: (envelope: CommandEnvelope, signal: AbortSignal) => unknown, options: { write?: boolean } = {}) => app.runtime.registerCommand(moduleId, commandId, (envelope, signal) => {
         const reply = creativeAccess(app, envelope, commandId, "projects");
         if (options.write !== false) app.assertWritable();
-        return reply ? reply(handler(envelope)) : handler(envelope);
+        const value = app.proposals.executeOwnerCommand(envelope, () => handler(envelope, signal));
+        return reply ? (value instanceof Promise ? value.then(reply) : reply(value)) : value;
       });
       const input = <T>(envelope: CommandEnvelope) => envelope.input as T;
       reg("project.list", (envelope) => app.projects.list(input<{ status?: "active" | "archived" | "all" }>(envelope).status), { write: false });
@@ -52,12 +54,41 @@ export function projectsModule(app: CreativeHost): MangaModule {
       // A package goes to a folder the person picked, and comes from a file they picked, both through the host dialog; only names come back.
       reg("project.exportPackage", (envelope) => {
         const value = input<{ projectId: string; pathHandle: string }>(envelope);
-        return writeProjectPackage(app.store, value.projectId, app.resolvePathFor(value.pathHandle, ["directory", "export"]));
+        return writeProjectPackage(app.store, value.projectId, app.resolvePathFor(value.pathHandle, ["directory", "export"]), undefined, app.proposals.projectExportHooks(envelope));
       }, { write: false });
       reg("project.packagePreview", (envelope) => previewProjectPackage(app.store, app.resolvePathFor(input<{ pathHandle: string }>(envelope).pathHandle, ["file", "import"])), { write: false });
       reg("project.importPackage", (envelope) => {
         return importProjectPackage(app.store, app.resolvePathFor(input<{ pathHandle: string }>(envelope).pathHandle, ["file", "import"]), creativePackageHooks(app));
       });
+      // Pending actions proposed by an Agent in a project conversation (A-121, 计划 4.1–4.3), and the owner commands that list, apply or reject them.
+      const proposalScope = (envelope: CommandEnvelope) => {
+        const grant = app.grantOf(envelope);
+        const projectId = app.agentAccess.projectOf(grant);
+        return { grant, projectId };
+      };
+      reg("proposal.delete", (envelope) => {
+        const { grant, projectId } = proposalScope(envelope);
+        return app.proposals.proposeDelete(grant, projectId, input(envelope), envelope.idempotencyKey);
+      });
+      reg("proposal.rename", (envelope) => {
+        const { grant, projectId } = proposalScope(envelope);
+        return app.proposals.proposeRename(grant, projectId, input(envelope), envelope.idempotencyKey);
+      });
+      reg("proposal.exportProject", (envelope) => {
+        const { grant, projectId } = proposalScope(envelope);
+        return app.proposals.proposeExportProject(grant, projectId, input(envelope), envelope.idempotencyKey);
+      });
+      reg("proposal.editRoughcut", (envelope) => {
+        const { grant, projectId } = proposalScope(envelope);
+        return app.proposals.proposeEditRoughcut(grant, projectId, input(envelope), envelope.idempotencyKey);
+      });
+      reg("proposal.exportRoughcut", (envelope, signal) => {
+        const { grant, projectId } = proposalScope(envelope);
+        return app.proposals.proposeExportRoughcut(grant, projectId, input(envelope), signal, envelope.idempotencyKey);
+      });
+      reg("proposal.list", (envelope) => app.proposals.list(input(envelope)), { write: false });
+      reg("proposal.apply", (envelope) => app.proposals.apply(envelope.actor, envelope.scopeHandle, input(envelope)));
+      reg("proposal.reject", (envelope) => app.proposals.reject(input(envelope)));
     },
     deactivate: () => undefined,
   });
@@ -79,7 +110,11 @@ export function creativePackageHooks(app: CreativeHost): Omit<CreativeHooks, "ma
  */
 export function creativeAccess(app: CreativeHost, envelope: CommandEnvelope, commandId: string, featureId: string): ((value: unknown) => unknown) | null {
   const grant = app.grantOf(envelope);
-  if (grant.access === "owner") return null;
+  if (grant.access === "owner" && envelope.actor.kind === "agent") throw new MangaError("FORBIDDEN", "an agent cannot execute an owner command");
+  if (grant.access === "owner" && envelope.actor.kind !== "agent") return null;
+  if (commandId === "semantic.search" && grant.actor.kind === "agent" && grant.allowedCommands.includes("semantic.search")) {
+    return (value) => app.agentAccess.fit(value);
+  }
   const rule = grant.actor.kind === "agent" ? app.agentAccess.rule(commandId) : undefined;
   if (!rule) throw new MangaError("FORBIDDEN", `${featureId} belongs to the owner`);
   const projectId = app.agentAccess.projectOf(grant);
@@ -116,7 +151,7 @@ export function creativeModule(app: CreativeHost, spec: { moduleId: string; feat
       const reg: CreativeReg = (commandId, handler, options = {}) => app.runtime.registerCommand(spec.moduleId, commandId, (envelope, signal) => {
         const reply = creativeAccess(app, envelope, commandId, spec.featureId);
         if (options.write !== false) app.assertWritable();
-        const value = handler(envelope, signal);
+        const value = app.proposals.executeOwnerCommand(envelope, () => handler(envelope, signal));
         return reply ? (value instanceof Promise ? value.then(reply) : reply(value)) : value;
       });
       spec.register(reg, <T>(envelope: CommandEnvelope) => envelope.input as T);
@@ -210,7 +245,29 @@ export function semanticModule(app: CreativeHost): MangaModule {
       reg("semantic.cancel", () => app.semantic.cancel());
       reg("semantic.update", () => app.semantic.update());
       reg("semantic.clear", () => app.semantic.clear());
-      reg("semantic.search", (envelope, signal) => app.semantic.search(input(envelope), signal), { write: false });
+      reg("semantic.search", async (envelope, signal) => {
+        const raw = input<Parameters<CreativeHost["semantic"]["search"]>[0]>(envelope);
+        const grant = app.grantOf(envelope);
+        if (grant.access === "owner") return app.semantic.search(raw, signal);
+        const projectId = app.agentAccess.contextOf(grant);
+        if (raw.projectId !== undefined && raw.projectId !== projectId) {
+          throw new MangaError("SCOPE_DENIED", "that project is not the one this task belongs to", { details: { reason: "cross-project" } });
+        }
+        if (raw.resourceId && !app.grants.canRead(grant, raw.resourceId)) {
+          throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set", { details: { reason: "outside-task" } });
+        }
+        const projectScope = projectId ? semanticScope(app, projectId) : { resourceIds: [], noteIds: [], recordingIds: [], excerptIds: [] };
+        const resourceIds = grant.readResourceIds;
+        const noteIds = [...new Set([...grant.writeObjectIds, ...projectScope.noteIds])];
+        const recordingIds = projectId
+          ? projectScope.recordingIds
+          : resourceIds.length
+            ? (app.store.sqlite.prepare(`SELECT DISTINCT session_id AS id FROM capture_events WHERE resource_id IN (${resourceIds.map(() => "?").join(",")})`).all(...resourceIds) as Array<{ id: string }>).map((row) => row.id)
+            : [];
+        const excerptIds = projectScope.excerptIds;
+        const withinProgress = raw.withinProgress || readShell(app.store).spoilerGuard;
+        return app.semantic.search({ ...raw, projectId: projectId ?? undefined, withinProgress, scope: { resourceIds, noteIds, recordingIds, excerptIds } }, signal);
+      }, { write: false });
     },
   });
 }
@@ -293,7 +350,7 @@ export function roughcutModule(app: CreativeHost): MangaModule {
       reg("roughcut.export", async (envelope, signal) => {
         const value = input<{ cutId: string; pathHandle?: string; fileName?: string; options?: RoughcutExportOptions }>(envelope);
         const dir = value.pathHandle ? app.resolvePathFor(value.pathHandle, ["directory", "export"]) : undefined;
-        return { export: await app.roughcuts.startExport({ cutId: value.cutId, dir, fileName: value.fileName, options: value.options }, signal) };
+        return { export: await app.roughcuts.startExport({ cutId: value.cutId, dir, fileName: value.fileName, options: value.options }, signal, app.proposals.roughcutExportHooks(envelope)) };
       });
       reg("roughcut.cancel", (envelope) => ({ export: app.roughcuts.cancelExport(input<{ exportId: string }>(envelope).exportId) }));
       reg("roughcut.exports", (envelope) => app.roughcuts.exportsOf(input<{ cutId: string }>(envelope).cutId), { write: false });

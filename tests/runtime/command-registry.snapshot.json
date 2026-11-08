@@ -2098,6 +2098,78 @@
       "noteContent": false
     },
     {
+      "commandId": "proposal.apply",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.delete",
+      "moduleId": "manga.projects",
+      "owner": false,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.editRoughcut",
+      "moduleId": "manga.projects",
+      "owner": false,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.exportProject",
+      "moduleId": "manga.projects",
+      "owner": false,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.exportRoughcut",
+      "moduleId": "manga.projects",
+      "owner": false,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.list",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.reject",
+      "moduleId": "manga.projects",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "proposal.rename",
+      "moduleId": "manga.projects",
+      "owner": false,
+      "agent": false,
+      "agentProject": true,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "quickTasks.delete",
       "moduleId": "manga.settings",
       "owner": true,
@@ -2400,7 +2472,7 @@
       "owner": true,
       "agent": false,
       "agentProject": false,
-      "agentOptIn": false,
+      "agentOptIn": true,
       "noteContent": false
     },
     {
@@ -2733,7 +2805,7 @@
       "owner": true,
       "agent": false,
       "agentProject": false,
-      "agentOptIn": false,
+      "agentOptIn": true,
       "noteContent": false
     },
     {

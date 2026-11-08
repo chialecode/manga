@@ -54,6 +54,7 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
   // The names that match come as the text is typed; an answer that arrives after a newer question is dropped.
   useEffect(() => {
     if (!query) { latestFind.current += 1; setGroups([]); setFound(""); setBody(null); setSemantic(null); return; }
+    setFound("");
     const mine = ++latestFind.current;
     const timer = window.setTimeout(() => {
       void (async () => {
@@ -216,7 +217,7 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
             />
             <Dialog.Close className="icon-button search-close" aria-label={t("common.close")} data-testid="search-box-close"><X size={16} aria-hidden="true" /></Dialog.Close>
           </div>
-          <div ref={list} id={listId} role="listbox" aria-label={t("search.box.results")} className="search-results" data-testid="search-results" aria-busy={busy}>
+          <div ref={list} id={listId} role="listbox" aria-label={t("search.box.results")} className="search-results" data-testid="search-results" data-found={found} aria-busy={busy}>
             {!query ? <p className="search-hint" data-testid="search-hint">{t("search.box.hint")}</p> : null}
             {query && found === query && groups.length === 0 ? <p className="search-hint" role="status" data-testid="search-names-none">{t("search.box.noNames")}</p> : null}
             {nameRows}

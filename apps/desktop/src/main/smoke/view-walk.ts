@@ -1,6 +1,6 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import { createId } from "@manga/contracts";
-import { DRAWN, clickTestId, closeTabs, ensureSidebar, openLibrary, pressChord, pressKey, railTo, sleep, waitDrawn, waitUntil, type RailName } from "./driver.ts";
+import { DRAWN, clickTestId, closeTabs, ensureSidebar, openLibrary, pressChord, pressKey, railTo, sleep, waitDrawn, waitFrames, waitUntil, type RailName } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller } from "./common.ts";
 import { mouse, pixelsOf, near3, hex, parseRgb, type Box } from "./input.ts";
 import type { Observe } from "./reader-controls-walk.ts";
@@ -65,7 +65,7 @@ async function openGroup(view: BrowserWindow, key: string): Promise<void> {
   const expanded = await js<string | null>(view, `document.querySelector('[data-testid="context-toggle-${key}"]')?.getAttribute("aria-expanded") ?? null`);
   const disabled = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="context-toggle-${key}"]')?.disabled)`);
   if (expanded !== "true" && !disabled) await clickTestId(view, `context-toggle-${key}`);
-  await sleep(400);
+  await waitUntil(view, `document.querySelector('[data-testid="context-toggle-${key}"]')?.getAttribute("aria-expanded") === "true" && !document.querySelector('[data-testid="sidebar-loading"]')`, 3000);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------ view-main-linkage
@@ -100,7 +100,7 @@ async function walkLinkage(env: ViewEnv): Promise<void> {
   await clickTestId(view, `sidebar-item-resource-${videoId}`, 4000);
   const videoReady = await waitUntil(view, `(() => { const v = ${HOST}?.querySelector('[data-testid="view-dock"][data-view="video"] video'); return v && v.readyState >= 2; })()`, 30_000);
   await js(view, `(() => { const v = ${HOST}.querySelector('[data-testid="view-dock"][data-view="video"] video'); v.__viewMark = "linkage"; v.__loads = 0; v.__emptied = 0; v.addEventListener("loadstart", () => { v.__loads += 1; }); v.addEventListener("emptied", () => { v.__emptied += 1; }); v.muted = true; return v.play().then(() => true, () => false); })()`);
-  await sleep(1500);
+  await waitUntil(view, `(() => { const v = ${HOST}?.querySelector('[data-testid="view-dock"][data-view="video"] video'); return Boolean(v) && !v.paused && v.currentTime > 0.25 && document.querySelector('[data-testid="sidebar"] [data-opens][aria-current="true"]'); })()`, 5000);
   const marked = await sidebarMarked(view);
   detail.open = { boardOpen, videoReady, marked };
   if (!boardOpen) problems.push("the whiteboard did not open in the whiteboard view");
@@ -113,7 +113,7 @@ async function walkLinkage(env: ViewEnv): Promise<void> {
   })()`);
   // Back to the whiteboard view.
   await showView(view, "whiteboard");
-  await sleep(500);
+  await waitUntil(view, `(() => { const v = [...document.querySelectorAll("video")].find((el) => el.__viewMark === "linkage"); return Boolean(v?.paused) && ${HOST}?.querySelector('[data-testid="view-dock"]')?.getAttribute("data-view") === "whiteboard" && (document.querySelector('[data-testid="shell-dock"] [data-testid="conversation-title"]')?.textContent ?? "") === ${JSON.stringify(projectDock)}; })()`, 3000);
   const atBoard = { main: await mainView(view), focused: await focusedKind(view), video: await video(), dock: await dockTitle(view) };
   detail.atBoard = { ...atBoard, projectDock };
   if (atBoard.main !== "whiteboard" || atBoard.focused !== "whiteboard") problems.push(`back in the whiteboard view the main area is ${atBoard.main} with ${atBoard.focused} in front`);
@@ -122,7 +122,7 @@ async function walkLinkage(env: ViewEnv): Promise<void> {
   await shot("view-main-whiteboard");
   // The comic view: nothing opened there.
   await showView(view, "comic");
-  await sleep(400);
+  await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="view-empty"][data-view="comic"]'))`, 3000);
   const comic = { main: await mainView(view), empty: await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="view-empty"][data-view="comic"]'))`), manage: await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="view-empty-manage"]'))`) };
   detail.comic = comic;
   if (comic.main !== "comic" || !comic.empty || !comic.manage) problems.push(`the comic view with nothing opened shows ${JSON.stringify(comic)}, not its empty page with the way to the comics`);
@@ -130,7 +130,7 @@ async function walkLinkage(env: ViewEnv): Promise<void> {
   // Back to the video view: the same element, where it was, and not loaded again.
   const left = atBoard.video?.time ?? 0;
   await showView(view, "video");
-  await sleep(500);
+  await waitUntil(view, `${HOST}?.querySelector('[data-testid="view-dock"]')?.getAttribute("data-view") === "video" && (document.querySelector('[data-testid="shell-dock"] [data-testid="conversation-title"]')?.textContent ?? "") === ${JSON.stringify(episodeDock)}`, 3000);
   const back = { main: await mainView(view), video: await video(), dock: await dockTitle(view) };
   detail.back = { ...back, left, episodeDock };
   if (back.main !== "video") problems.push(`back in the video view the main area is ${back.main}`);
@@ -142,19 +142,19 @@ async function walkLinkage(env: ViewEnv): Promise<void> {
   if (back.dock !== episodeDock || back.dock === projectDock) problems.push(`with the episode in front the dock says "${back.dock}", not the episode's "${episodeDock}"`);
   // The home: both, and side by side.
   await showView(view, "home");
-  await sleep(400);
+  await waitUntil(view, `${HOST}?.querySelector('[data-testid="view-dock"]')?.getAttribute("data-view") === "home"`, 3000);
   const homeKinds = await js<string[]>(view, `[...(${HOST}?.querySelectorAll('[data-testid="view-dock"][data-view="home"] [data-testid="tab"]') ?? [])].map((c) => c.getAttribute("data-kind") ?? "")`);
   await chooseMenu(view, "layout-menu", "layout-two");
-  await sleep(600);
+  await waitUntil(view, `[...(${HOST}?.querySelectorAll('[data-testid="view-dock"] .dv-groupview') ?? [])].filter((g) => g.getClientRects().length > 0).length === 2`, 3000);
   const columns = await columnsOf(view);
   detail.home = { kinds: homeKinds, columns: columns.map((column) => column.length) };
   if (!homeKinds.includes("whiteboard") || !homeKinds.includes("reader")) problems.push(`the home holds ${JSON.stringify(homeKinds)}, not the board and the episode`);
   if (columns.length !== 2 || columns.some((column) => column.length === 0)) problems.push(`the home's two columns are ${JSON.stringify(columns.map((column) => column.length))}`);
   await chooseMenu(view, "layout-menu", "layout-single");
-  await sleep(400);
+  await waitUntil(view, `[...(${HOST}?.querySelectorAll('[data-testid="view-dock"] .dv-groupview') ?? [])].filter((g) => g.getClientRects().length > 0).length === 1`, 3000);
   // A reference card on the board opens the episode in the video view.
   await showView(view, "whiteboard");
-  await sleep(600);
+  await waitUntil(view, `${HOST}?.querySelector('[data-testid="view-dock"][data-view="whiteboard"] [data-testid^="wb-open-"]')`, 3000);
   const card = await js<string | null>(view, `(() => {
     const opens = [...(${HOST}?.querySelectorAll('[data-testid="view-dock"][data-view="whiteboard"] [data-testid^="wb-open-"]') ?? [])];
     const pick = opens.find((el) => (el.closest('[data-testid^="wb-node-"]')?.textContent ?? "").includes(${JSON.stringify(env.titles.video)})) ?? null;
@@ -213,16 +213,16 @@ async function walkHiddenLayers(env: ViewEnv): Promise<void> {
     await openGroup(view, projectId);
     await clickTestId(view, item.open, 4000);
     await waitUntil(view, `document.querySelector(${JSON.stringify(item.selector)})`, 8000);
-    if (item.name === "whiteboard") { await clickTestId(view, "whiteboard-add-card", 3000); await sleep(500); }
-    if (item.name === "mindmap") { await clickTestId(view, "mindmap-add-child", 3000); await pressKey(view, "Escape"); await sleep(500); }
-    await sleep(600);
+    if (item.name === "whiteboard") { await clickTestId(view, "whiteboard-add-card", 3000); await waitFrames(view, 2); }
+    if (item.name === "mindmap") { await clickTestId(view, "mindmap-add-child", 3000); await pressKey(view, "Escape"); await waitFrames(view, 2); }
+    await waitFrames(view, 2);
     const shown = await nodesOf(view, item.selector);
     if (!shown.length || shown.some((node) => !node.visible)) { problems.push(`${item.name}: no card is on screen to hide`); continue; }
     const colours = await Promise.all(shown.map(async (node) => (await pixelsOf(view, { x: node.box.x + node.box.w / 2, y: node.box.y + node.box.h / 2, w: 1, h: 1 })).rgb[0]));
     const rows: Record<string, unknown> = {};
     const hiddenBy = async (label: string, hide: () => Promise<boolean>, show: () => Promise<void>) => {
       const ok = await hide();
-      await sleep(500);
+      await waitFrames(view, 2);
       const now = await js<Array<{ hitInside: boolean; visible: boolean }>>(view, `(() => {
         const points = ${JSON.stringify(shown.map((node) => ({ id: node.id, x: node.box.x + node.box.w / 2, y: node.box.y + node.box.h / 2 })))};
         return points.map((p) => {
@@ -245,7 +245,8 @@ async function walkHiddenLayers(env: ViewEnv): Promise<void> {
       if (leaks.length) problems.push(`${item.name}: under ${label} ${leaks.length} card(s) still show through`);
       if (label === "the settings") await shot(`hidden-layers-${item.name}-settings`);
       await show();
-      await sleep(600);
+      await waitUntil(view, `document.querySelector(${JSON.stringify(item.selector)})`, 3000);
+      await waitFrames(view, 2);
       const after = await nodesOf(view, item.selector);
       const moved = shown.filter((node) => { const back = after.find((other) => other.id === node.id); return !back || Math.abs(back.box.x - node.box.x) > 1 || Math.abs(back.box.y - node.box.y) > 1 || !back.visible; });
       if (moved.length) problems.push(`${item.name}: after ${label} ${moved.length} card(s) are not where they were (${JSON.stringify(moved.slice(0, 1).map((node) => ({ was: node.box, now: after.find((other) => other.id === node.id) ?? null })))})`);
@@ -294,13 +295,13 @@ async function walkReopen(env: ViewEnv): Promise<void> {
   await closeTabs(view, "all");
   await openLibrary(view);
   await chooseMenu(view, "layout-menu", "layout-two");
-  await sleep(600);
+  await waitUntil(view, `[...(${HOST}?.querySelectorAll('[data-testid="view-dock"] .dv-groupview') ?? [])].filter((g) => g.getClientRects().length > 0).length === 2`, 3000);
   // The right column in front, and three more tabs in it.
   await pressChord(view, "2", ["control"]);
-  await sleep(300);
+  await waitFrames(view, 2);
   const right = (await js<number>(view, `[...(${HOST}?.querySelectorAll('[data-testid="view-dock"] .dv-groupview') ?? [])].filter((g) => g.getClientRects().length > 0).length`)) === 2;
   const opened = await openRecentRows(view, 3);
-  await sleep(500);
+  await waitFrames(view, 2);
   const columns = await columnsOf(view);
   detail.setup = { right, opened, columns: columns.map((column) => column.length) };
   const column = columns.length - 1;
@@ -311,7 +312,7 @@ async function walkReopen(env: ViewEnv): Promise<void> {
   await js(view, `${HOST}?.querySelector('[data-testid="tab"][data-tab="${target}"] [data-testid="tab-close"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); true`);
   const gone = await waitUntil(view, `!${HOST}?.querySelector('[data-testid="view-dock"] [data-testid="tab"][data-tab="${target}"]')`, 3000);
   await pressChord(view, "T", ["control", "shift"]);
-  await sleep(800);
+  await waitUntil(view, `(${HOST}?.querySelectorAll('[data-testid="view-dock"] [data-testid="tab"]').length ?? 0) >= ${columns.flat().length}`, 3000);
   const after = await columnsOf(view);
   const back = after.findIndex((items) => items.length > 0 && items.some((id) => !strip.includes(id) || id === target));
   const place = after.map((items, index) => ({ index, at: items.indexOf(target) })).find((row) => row.at >= 0);
@@ -330,15 +331,15 @@ async function walkReopen(env: ViewEnv): Promise<void> {
   const before = await count();
   const focused = await js<boolean>(view, `(() => { const chip = ${HOST}?.querySelector('[data-testid="view-dock"] [data-testid="tab"][data-focused="true"]'); const tab = chip?.closest(".dv-tab") ?? chip; if (!tab) return false; tab.setAttribute("tabindex", tab.getAttribute("tabindex") ?? "0"); tab.focus(); return document.activeElement === tab || tab.contains(document.activeElement); })()`);
   await pressKey(view, "Delete");
-  await sleep(250);
+  await waitFrames(view, 2);
   await pressKey(view, "Backspace");
-  await sleep(250);
+  await waitFrames(view, 2);
   const kept = await count();
   detail.keys = { focused, before, kept };
   if (!focused) problems.push("the focus could not be put on a tab");
   if (kept !== before) problems.push(`Delete and Backspace on a tab closed ${before - kept} tab(s)`);
   await chooseMenu(view, "layout-menu", "layout-single");
-  await sleep(300);
+  await waitUntil(view, `[...(${HOST}?.querySelectorAll('[data-testid="view-dock"] .dv-groupview') ?? [])].filter((g) => g.getClientRects().length > 0).length === 1`, 3000);
   observe("tab-reopen-place", problems.length === 0, { ...detail, problems });
 }
 
@@ -360,9 +361,12 @@ async function walkQuitSave(env: ViewEnv): Promise<void> {
   await chooseMenu(view, "layout-menu", "layout-two");
   // The two columns are saved by the usual pause.
   let stored: string | null = null;
-  for (let waited = 0; waited < 4000 && stored !== "two"; waited += 200) { await sleep(200); stored = await preset(); }
+  for (let waited = 0; waited < 4000 && stored !== "two"; waited += 50) {
+    await sleep(50); // real time: poll until debounced two-column layout save reaches store
+    stored = await preset();
+  }
   await chooseMenu(view, "layout-menu", "layout-single");
-  await sleep(60);
+  await sleep(60); // real time: 60 ms window between layout change and quit-save request (within debounce window)
   const token = createId("save");
   const started = Date.now();
   const answered = await new Promise<boolean>((resolve) => {

@@ -1,10 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { startMockProvider } from "@manga/model-protocol";
-import { sleep, viaSidebar, waitUntil } from "./driver.ts";
+import { clickTestId, sleep, viaSidebar, waitUntil } from "./driver.ts";
 import { capturePage, js, toRail, type caller } from "./common.ts";
 
 /**
@@ -40,7 +39,7 @@ export async function waitRun(call: Call, runId: string): Promise<string> {
     const got = await call("agent.getRun", { runId });
     const status = String((got.value as { status?: string } | undefined)?.status ?? "");
     if (got.status === "ok" && !["queued", "running", "waiting_input"].includes(status)) return status;
-    await sleep(200);
+    await sleep(200); // real time: 后台轮询定时器节流，等待模型任务流式完成
   }
   return "timeout";
 }
@@ -56,7 +55,7 @@ export async function runMediaObservations(input: { appService: MangaProductApp;
     return;
   }
   // Copies of their own in a library folder, so changing a file later leaves the shared samples alone.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-loop-media-"));
+  const dir = fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-package-loop-media-"));
   for (const [from, name] of [[pdf, "整本.pdf"], [mp4, "片段.mp4"], [cbz, "有图.cbz"]] as const) fs.copyFileSync(from, path.join(dir, name));
   await ok(call, "library.paths.add", { pathHandle: appService.registerPath("directory", dir), mediaKind: "comic", autoScan: false });
   const importAs = (name: string, kind: "comic" | "video", title: string) => ok<{ resourceId: string; revisionId: string }>(call, "library.importDocument", { title, kind, pathHandle: appService.registerPath("file", path.join(dir, name)) });
@@ -211,7 +210,8 @@ async function openTraceStep(view: BrowserWindow, sessionId: string, runId: stri
     found = await waitUntil(view, `document.querySelector('[data-testid="${link}"]')`, 400);
   }
   if (!found) return `no ${link} in the page`;
-  await js(view, `document.querySelector('[data-testid="${link}"]').click(); true`);
+  // The virtualizer can remove the row between finding it and the next renderer task. Look up and click in the same task, waiting again if it moved.
+  if (!(await clickTestId(view, link, 6000))) return `the ${link} button moved out of the page before it could be clicked`;
   return (await waitUntil(view, `document.querySelector('[data-testid="trace-dialog"]')`, 6000)) ? "open" : "the record dialog did not open";
 }
 

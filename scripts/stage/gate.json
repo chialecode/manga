@@ -175,7 +175,9 @@
       "chatLateFramePct": 2,
       "chatOlderPageP95Ms": 150,
       "clip60P95Ms": 2000,
-      "freeze4mbP95Ms": 200
+      "freeze4mbP95Ms": 200,
+      "proposalProposeP95Ms": 150,
+      "proposalApplyP95Ms": 300
     },
     "scale": {
       "metadataCount": 10000,
@@ -566,6 +568,24 @@
           "bytes": 4194304
         },
         "requirement": "AT-144：冻结一张 4 MB 的图像（SHA-256 与存放它的一次事务），p95 ≤ 200 ms"
+      },
+      "proposalPropose": {
+        "metric": "proposalProposeP95Ms",
+        "stat": "p95",
+        "minSamples": 30,
+        "scale": {
+          "objects": 500
+        },
+        "requirement": "AT-151：在有 500 个对象的项目里提出一条删除提议（含引用查询与预览生成），p95 ≤ 150 ms"
+      },
+      "proposalApply": {
+        "metric": "proposalApplyP95Ms",
+        "stat": "p95",
+        "minSamples": 20,
+        "scale": {
+          "objects": 500
+        },
+        "requirement": "AT-151、AT-152：在有 500 个对象的项目里确认一条提议，到目标对象与提议卡片都更新，p95 ≤ 300 ms"
       }
     },
     "canvas": {
@@ -604,6 +624,7 @@
   },
   "package": {
     "passStreak": 3,
+    "windowWalkMaxSeconds": 240,
     "smoke": [
       "initial",
       "restart",
@@ -2770,6 +2791,48 @@
       "tests": [
         "AT-150(?!\\d)"
       ]
+    },
+    {
+      "id": "AT-151-proposal-delete-rename",
+      "kind": "automated",
+      "tests": [
+        "AT-151(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-152-proposal-stale-once",
+      "kind": "automated",
+      "tests": [
+        "AT-152(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-153-proposal-roughcut",
+      "kind": "automated",
+      "tests": [
+        "AT-153(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-154-proposal-export-project",
+      "kind": "automated",
+      "tests": [
+        "AT-154(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-155-agent-opt-in",
+      "kind": "automated",
+      "tests": [
+        "AT-155(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-156-migrate-v14",
+      "kind": "automated",
+      "tests": [
+        "AT-156(?!\\d)"
+      ]
     }
   ],
   "scenarios": [
@@ -2885,6 +2948,13 @@
     "migrate-v13-newer",
     "data-locations-fresh-release",
     "data-locations-fresh-development",
-    "data-locations-upgrade"
+    "data-locations-upgrade",
+    "proposal-delete-rename",
+    "proposal-stale-once",
+    "proposal-roughcut",
+    "proposal-export-project",
+    "proposal-restart",
+    "agent-opt-in",
+    "migrate-v14"
   ]
 }

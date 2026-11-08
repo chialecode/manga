@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 13;
+export const PRODUCT_SCHEMA_VERSION = 14;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -1403,4 +1403,28 @@ CREATE TABLE IF NOT EXISTS agent_run_media (
   PRIMARY KEY (run_id, hash, ordinal)
 );
 CREATE INDEX IF NOT EXISTS agent_run_media_hash ON agent_run_media(hash);
+`;
+
+/**
+ * v14: pending and decided proposals made by an Agent in a project conversation (A-121, 计划 4.1). Only user confirmation through
+ * `proposal.apply` executes the underlying owner command; the rows go with the conversation or project when either is deleted.
+ */
+export const V14_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS agent_proposals (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  command_id TEXT NOT NULL,
+  input_json TEXT NOT NULL,
+  preview_json TEXT NOT NULL,
+  target_json TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  result_json TEXT,
+  created_at TEXT NOT NULL,
+  decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS agent_proposals_session_status ON agent_proposals(session_id, status, created_at);
 `;

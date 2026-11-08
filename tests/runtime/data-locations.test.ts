@@ -31,10 +31,10 @@ afterEach(() => {
 const request = (channel: "release" | "development" = "release") => ({ channel, documentsDir: machine.documents, downloadsDir: machine.downloads, localAppDataDir: machine.local });
 const filesUnder = (dir: string): string[] => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).map(String) : []);
 
-/** An old profile as versions before the split made it: everything under <Documents>\MANGA\<channel>, a work's note file written, a pointer beside it. */
+/** An old profile as versions before the split made it: everything under <Documents>\manga\<channel>, a work's note file written, a pointer beside it. */
 async function oldProfile(channel: "release" | "development" = "release", options: { root?: string; overrides?: Record<string, string> } = {}) {
-  const root = options.root ?? path.join(machine.documents, "MANGA", channel);
-  const pointerPath = path.join(machine.documents, "MANGA", channel, "launcher", "pointer.json");
+  const root = options.root ?? path.join(machine.documents, "manga", channel);
+  const pointerPath = path.join(machine.documents, "manga", channel, "launcher", "pointer.json");
   const app = new MangaProductApp({ profileRoot: root, channel, pointerPath, documentsDir: machine.documents, hostId: "old", vault: new TestVault("old-secret") });
   await app.start();
   const owner = app.issueOwnerGrant({ kind: "user", id: "u" });
@@ -50,18 +50,36 @@ async function oldProfile(channel: "release" | "development" = "release", option
 }
 
 describe("where a new installation keeps things (AT-148)", () => {
-  it("puts the application's data under LOCALAPPDATA and the person's files under the registered Documents and Downloads folders, per channel", () => {
-    for (const [channel, app, files] of [["release", "manga", "MANGA"], ["development", "manga-dev", "MANGA-dev"]] as const) {
+  it("puts the application's data under LOCALAPPDATA and the person's files under the registered Documents and Downloads folders, per channel, all lowercase", () => {
+    for (const [channel, folder] of [["release", "manga"], ["development", "manga-dev"]] as const) {
       const layout = resolveLaunchLayout(request(channel));
-      expect(layout.appRoot).toBe(path.join(machine.local, app));
-      expect(layout.filesRoot).toBe(path.join(machine.documents, files));
-      expect(layout.pointerPath).toBe(path.join(machine.local, app, "launcher", "pointer.json"));
-      for (const name of ["data", "cache", "logs", "backups", "runtime"] as const) expect(layout.partitions[name]).toBe(path.join(machine.local, app, name));
-      for (const name of ["works", "projects", "attachments", "resources", "exports"] as const) expect(layout.partitions[name]).toBe(path.join(machine.documents, files, name));
-      expect(layout.partitions.downloads).toBe(path.join(machine.downloads, files));
+      expect(layout.appRoot).toBe(path.join(machine.local, folder));
+      expect(layout.filesRoot).toBe(path.join(machine.documents, folder));
+      expect(layout.pointerPath).toBe(path.join(machine.local, folder, "launcher", "pointer.json"));
+      for (const name of ["data", "cache", "logs", "backups", "runtime"] as const) expect(layout.partitions[name]).toBe(path.join(machine.local, folder, name));
+      for (const name of ["works", "projects", "attachments", "resources", "exports"] as const) expect(layout.partitions[name]).toBe(path.join(machine.documents, folder, name));
+      expect(layout.partitions.downloads).toBe(path.join(machine.downloads, folder));
       expect(layout.overrides).toEqual({});
       expect(layout.upgrade).toBeUndefined();
     }
+  });
+
+  it("renames an existing uppercase MANGA folder in Documents or Downloads to lowercase manga, and rewrites uppercase overrides", () => {
+    fs.mkdirSync(path.join(machine.documents, "MANGA", "release", "works"), { recursive: true });
+    fs.mkdirSync(path.join(machine.downloads, "MANGA"), { recursive: true });
+    const pointerPath = path.join(machine.local, "manga", "launcher", "pointer.json");
+    fs.mkdirSync(path.dirname(pointerPath), { recursive: true });
+    fs.writeFileSync(pointerPath, JSON.stringify({
+      profileRoot: path.join(machine.local, "manga"),
+      channel: "release",
+      revision: 1,
+      partitions: { works: path.join(machine.documents, "MANGA", "release", "works"), downloads: path.join(machine.downloads, "MANGA") },
+    }));
+    const layout = resolveLaunchLayout(request("release"));
+    expect(fs.readdirSync(machine.documents)).toEqual(["manga"]);
+    expect(fs.readdirSync(machine.downloads)).toEqual(["manga"]);
+    expect(layout.partitions.works).toBe(path.join(machine.documents, "manga", "release", "works"));
+    expect(layout.partitions.downloads).toBe(path.join(machine.downloads, "manga"));
   });
 
   it("writes nothing to the roaming profile or the home folder, and the Documents folder may be on another drive", async () => {

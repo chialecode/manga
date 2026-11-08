@@ -4,7 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { evaluateStageEvidence } from "./stage/report.mjs";
-import { fingerprintKey, hashTree, loadGate, p95, p99, stageFingerprints } from "./stage/lib.mjs";
+import { fingerprintKey, findUncommentedSmokeSleeps, hashTree, loadGate, p95, p99, stageFingerprints } from "./stage/lib.mjs";
+import { beginTestEvidence } from "./stage/test.mjs";
 
 // Counterexamples for the stage gate: each mutation of an otherwise complete run must be rejected.
 const config = loadGate();
@@ -54,7 +55,7 @@ function passing() {
     tests: def.tests.map((pattern) => ({ file: "tests/synthetic.test.ts", name: literal(pattern), status: "passed" })),
   }));
   write(dir, "cases.json", { ...fingerprints, generator: "scripts/stage/test.mjs", productAcceptance: "not-run", cases });
-  write(dir, "test-run.json", { ...fingerprints, status: "passed", productAcceptance: "not-run" });
+  write(dir, "test-run.json", { ...fingerprints, status: "passed", productAcceptance: "not-run", tempDirs: { before: 0, after: 0, removed: 1, left: 0, prefixes: [] } });
   write(dir, "bench.json", {
     ...fingerprints,
     status: "passed",
@@ -101,14 +102,16 @@ function passing() {
     status: "passed",
     passStreak: config.package.passStreak ?? 1,
     productAcceptance: "not-run",
-    output: "dist/desktop/packages/MANGA-win32-x64",
+    output: "dist/desktop/packages/manga-win32-x64",
     electron: "44.5.1",
     smoke: config.package.smoke,
     formats: { pages: true, contexts: true, failureVisible: true },
     viewports: { wide: { innerWidth: 1280 }, narrow: { innerWidth: 720 } },
     loop06: { settled: { stable: true }, tagged: true, repainted: false, atEnd: { nodeConnected: true } },
     agent: { runningShown: true, stoppedShown: true, conversationShown: true },
-    windowWalk: { ok: true, observations: config.scenarios.length },
+    windowWalk: { ok: true, observations: config.scenarios.length, seconds: 1 },
+    phaseTimings: { "window-walk": 1 },
+    tempDirs: { removed: 1, left: 0, prefixes: [] },
     creative: { ok: true, observations: 13 },
     trace: { ok: true, observations: 1 },
     plugins: { ok: true, steps: (config.package.pluginSteps ?? []).map((id) => ({ id, ok: true })) },
@@ -321,6 +324,10 @@ test("report rejects a package run that lost the PDF selection, the agent contro
     (pack) => { pack.agent.conversationShown = false; },
     (pack) => { pack.windowWalk.ok = false; },
     (pack) => { pack.windowWalk.observations = 3; },
+    (pack) => { delete pack.windowWalk.seconds; },
+    (pack) => { pack.windowWalk.seconds = config.package.windowWalkMaxSeconds + 1; pack.phaseTimings["window-walk"] = pack.windowWalk.seconds; },
+    (pack) => { pack.phaseTimings["window-walk"] = 2; },
+    (pack) => { pack.tempDirs.left = 1; },
     (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "window-walk"); },
     (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "creative"); },
     (pack) => { pack.smoke = pack.smoke.filter((phase) => phase !== "plugins"); },
@@ -391,6 +398,46 @@ test("report accepts declared blocked and not-run limits only with an owner and 
   assert.equal(evaluate(dir).engineeringReviewable, false);
   write(dir, "limits.json", { entries: [{ id: "x", status: "passed", owner: "a", retest: "b" }] });
   assert.equal(evaluate(dir).engineeringReviewable, false);
+});
+
+test("report rejects a test-run that left temporary directories behind (LOOP-28)", () => {
+  const dir = passing();
+  const run = read(dir, "test-run.json");
+  run.tempDirs = { before: 0, after: 2, removed: 1, left: 2, prefixes: ["manga-test-"] };
+  write(dir, "test-run.json", run);
+  const report = evaluate(dir);
+  assert.equal(report.engineeringReviewable, false);
+  assert.ok(report.errors.some((error) => error.includes("temporary directories left behind")));
+});
+
+test("starting another test attempt invalidates an earlier pass even if the new runner never produces a report", () => {
+  const dir = passing();
+  assert.equal(evaluate(dir).engineeringReviewable, true);
+  beginTestEvidence(dir, fingerprints);
+  assert.equal(fs.existsSync(path.join(dir, "cases.json")), false);
+  assert.equal(read(dir, "test-run.json").status, "running");
+  assert.equal(evaluate(dir).engineeringReviewable, false);
+  write(dir, "test-run.json", { ...fingerprints, status: "failed", productAcceptance: "not-run" });
+  assert.equal(evaluate(dir).engineeringReviewable, false);
+});
+
+test("report requires actual temporary directory counts instead of treating absent counts as zero", () => {
+  const dir = passing();
+  const run = read(dir, "test-run.json");
+  delete run.tempDirs;
+  write(dir, "test-run.json", run);
+  assert.equal(evaluate(dir).engineeringReviewable, false);
+});
+
+test("smoke directory has zero uncommented sleep( calls, and counterexample is caught (LOOP-29)", () => {
+  assert.deepEqual(findUncommentedSmokeSleeps(), []);
+  const fakeSmoke = scratch("manga-smoke-sleep-");
+  fs.writeFileSync(path.join(fakeSmoke, "walk.ts"), [
+    "export function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }",
+    "await sleep(200); // real time: hold key duration",
+    "await sleep(300);",
+  ].join("\n"));
+  assert.deepEqual(findUncommentedSmokeSleeps(fakeSmoke), ["walk.ts:3: await sleep(300);"]);
 });
 
 test("a fingerprint follows the stored text, not the line ends a tool left in the working tree", () => {

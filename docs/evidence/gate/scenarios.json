@@ -1,16 +1,16 @@
 {
   "status": "passed",
-  "stage": "m6",
-  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
-  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
-  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
-  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
-  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
-  "packageScriptFingerprint": "9f8b9cbda518e731ed9fac2a0c38689b2eae319580fddf9115206af14c3fe27d",
-  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
-  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
+  "stage": "m9",
+  "sourceFingerprint": "fbd0b6994c782f5af1a2a32d915fc9b1b8f9a852d6a823e4d74cfefa4170da66",
+  "lockFingerprint": "9e3b406214305808bd8cefcc1a4ee403c62f0c5698c6dc0eb1145cb8774aeb06",
+  "buildScriptFingerprint": "0371340943049a28cf472347c426428b182b3dd697476168f5676e1a163d1282",
+  "gateScriptFingerprint": "5c3459906755130571c5bca29ca612c782f3d4f3fd0e093170c3ba035b5b3881",
+  "testScriptFingerprint": "a681485d94b9b9c02cca3d20d54bf889198fb070120d0ee42c2ba9bab480b7a1",
+  "packageScriptFingerprint": "7802f4511e43de3a92ef28ebb69aa842217abf8f7515e6887d90265396503219",
+  "benchScriptFingerprint": "c73470c4c99069e45da9141f053d6e82507d8b21cf16cd414ef37a9b67f2eac0",
+  "installerScriptFingerprint": "92914f2e9a8b93f5e172a4f2308cdeba51e61b3041fc1f02bc0e905c4bc85d39",
   "productAcceptance": "not-run",
-  "at": "2026-11-05T18:43:09.334Z",
+  "at": "2026-11-08T06:27:02.353Z",
   "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
@@ -45,7 +45,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 1117,
+        "scanMs": 193,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -1182,7 +1182,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.659149,
+            "time": 0.645151,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1190,7 +1190,7 @@
         },
         "rewind": {
           "at": 23.7,
-          "after": 20.1,
+          "after": 20.5,
           "rewinding": true
         },
         "rightButton": {
@@ -1288,6 +1288,74 @@
           },
           "faded": true
         },
+        "idle": {
+          "shown": {
+            "video": {
+              "x": 0,
+              "y": 0,
+              "w": 2560,
+              "h": 1440
+            },
+            "stage": {
+              "x": 0,
+              "y": 0,
+              "w": 2560,
+              "h": 1440
+            },
+            "shell": "true",
+            "idle": false,
+            "barShown": true,
+            "barHovered": false,
+            "popovers": 0,
+            "paused": false,
+            "ended": false,
+            "time": 0.27733
+          },
+          "hidden": {
+            "video": {
+              "x": 0,
+              "y": 0,
+              "w": 2560,
+              "h": 1440
+            },
+            "stage": {
+              "x": 0,
+              "y": 0,
+              "w": 2560,
+              "h": 1440
+            },
+            "shell": "true",
+            "idle": true,
+            "barShown": false,
+            "barHovered": false,
+            "popovers": 0,
+            "paused": false,
+            "ended": false,
+            "time": 3.15499
+          },
+          "back": {
+            "video": {
+              "x": 0,
+              "y": 0,
+              "w": 2560,
+              "h": 1440
+            },
+            "stage": {
+              "x": 0,
+              "y": 0,
+              "w": 2560,
+              "h": 1440
+            },
+            "shell": "true",
+            "idle": false,
+            "barShown": true,
+            "barHovered": false,
+            "popovers": 0,
+            "paused": false,
+            "ended": false,
+            "time": 3.3376
+          }
+        },
         "video-subtitles": {
           "items": 1,
           "topLayer": true,
@@ -1334,7 +1402,7 @@
           "judged": "page clock",
           "during": {
             "ok": true,
-            "enteredMs": 301,
+            "enteredMs": 302,
             "rate": 2,
             "holding": true
           },
@@ -1354,8 +1422,8 @@
           "keptOnBar": true
         },
         "tap": {
-          "from": 10.89,
-          "step": 5.22,
+          "from": 10.06,
+          "step": 5.08,
           "downIdle": true,
           "upIdle": false
         },
@@ -1375,7 +1443,7 @@
           "firstHold": true,
           "secondHold": true,
           "firstBack": true,
-          "moved": 2.09,
+          "moved": 0.62,
           "paused": true
         },
         "rateButton": true,
@@ -1397,7 +1465,7 @@
         "timings": [
           {
             "step": "first hold",
-            "ms": 309
+            "ms": 312
           },
           {
             "step": "second hold",
@@ -1417,11 +1485,11 @@
           },
           {
             "step": "before the change of source",
-            "ms": 314
+            "ms": 307
           },
           {
             "step": "after the change of source",
-            "ms": 2
+            "ms": 1
           }
         ],
         "problems": []
@@ -1518,6 +1586,24 @@
       "name": "danmaku-window-top",
       "status": "passed",
       "detail": {
+        "tallResize": {
+          "requested": {
+            "width": 720,
+            "height": 900
+          },
+          "reached": true,
+          "layoutReady": true,
+          "native": [
+            720,
+            900
+          ],
+          "viewport": {
+            "innerWidth": 720,
+            "innerHeight": 900,
+            "devicePixelRatio": 1.5
+          },
+          "fullscreen": false
+        },
         "tall": {
           "layer": {
             "x": 48.66666793823242,
@@ -1542,12 +1628,16 @@
             "h": 285
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 720,
+            "h": 900
+          }
         },
         "aboveThePicture": {
           "bar": 192,
-          "canvasInk": 2535,
-          "screenBright": 5933,
+          "canvasInk": 51,
+          "screenBright": 5791,
           "reach": true
         },
         "screenshot": {
@@ -1559,6 +1649,24 @@
             "h": 360
           },
           "commentsExpected": false
+        },
+        "wideResize": {
+          "requested": {
+            "width": 1500,
+            "height": 520
+          },
+          "reached": true,
+          "layoutReady": true,
+          "native": [
+            1500,
+            520
+          ],
+          "viewport": {
+            "innerWidth": 1500,
+            "innerHeight": 520,
+            "devicePixelRatio": 1.5
+          },
+          "fullscreen": false
         },
         "wide": {
           "layer": {
@@ -1584,7 +1692,11 @@
             "h": 142
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 1500,
+            "h": 520
+          }
         },
         "screenshotOver": {
           "width": 640,
@@ -1595,6 +1707,24 @@
             "h": 360
           },
           "commentsExpected": true
+        },
+        "beforeFullscreenResize": {
+          "requested": {
+            "width": 1280,
+            "height": 840
+          },
+          "reached": true,
+          "layoutReady": true,
+          "native": [
+            1280,
+            840
+          ],
+          "viewport": {
+            "innerWidth": 1280,
+            "innerHeight": 840,
+            "devicePixelRatio": 1.5
+          },
+          "fullscreen": false
         },
         "windowFull": {
           "layer": {
@@ -1620,7 +1750,11 @@
             "h": 315
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 1280,
+            "h": 840
+          }
         },
         "screenFull": {
           "layer": {
@@ -1646,7 +1780,29 @@
             "h": 540
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 2560,
+            "h": 1440
+          }
+        },
+        "finalResize": {
+          "requested": {
+            "width": 1280,
+            "height": 840
+          },
+          "reached": true,
+          "layoutReady": true,
+          "native": [
+            1280,
+            840
+          ],
+          "viewport": {
+            "innerWidth": 1280,
+            "innerHeight": 840,
+            "devicePixelRatio": 1.5
+          },
+          "fullscreen": false
         },
         "problems": []
       }
@@ -1666,7 +1822,7 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 327,
+        "searchMs": 27,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
@@ -1691,9 +1847,31 @@
             "h": 525
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 1280,
+            "h": 840
+          }
         },
-        "ink": 2459,
+        "ink": 51,
+        "smallResize": {
+          "requested": {
+            "width": 980,
+            "height": 640
+          },
+          "reached": true,
+          "layoutReady": true,
+          "native": [
+            980,
+            640
+          ],
+          "viewport": {
+            "innerWidth": 980,
+            "innerHeight": 640,
+            "devicePixelRatio": 1.5
+          },
+          "fullscreen": false
+        },
         "small": {
           "layer": {
             "x": 308.66668701171875,
@@ -1718,7 +1896,29 @@
             "h": 375
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 980,
+            "h": 640
+          }
+        },
+        "restoreResize": {
+          "requested": {
+            "width": 1280,
+            "height": 840
+          },
+          "reached": true,
+          "layoutReady": true,
+          "native": [
+            1280,
+            840
+          ],
+          "viewport": {
+            "innerWidth": 1280,
+            "innerHeight": 840,
+            "devicePixelRatio": 1.5
+          },
+          "fullscreen": false
         },
         "fullscreen": {
           "layer": {
@@ -1744,7 +1944,11 @@
             "h": 1080
           },
           "count": 5,
-          "visible": true
+          "visible": true,
+          "viewport": {
+            "w": 2560,
+            "h": 1440
+          }
         },
         "problems": []
       }
@@ -1870,7 +2074,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 2,
+        "hideLateMs": 7,
         "problems": []
       }
     },
@@ -1907,7 +2111,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 2,
+        "hideLateMs": 12,
         "problems": []
       }
     },
@@ -1944,7 +2148,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 13,
+        "hideLateMs": 7,
         "problems": []
       }
     },
@@ -2218,7 +2422,7 @@
           {
             "label": "player-wide",
             "shown": true,
-            "checked": 12,
+            "checked": 10,
             "covered": []
           },
           {
@@ -2820,11 +3024,11 @@
         "controlsShown": {
           "rect": {
             "x": 1142,
-            "y": 0,
+            "y": -0.2116466462612152,
             "w": 138,
             "h": 36,
             "r": 1280,
-            "b": 36
+            "b": 35.788353353738785
           },
           "closeReachable": true
         },
@@ -3092,8 +3296,8 @@
             "reader:合成长篇 第一章",
             "library:合成漫画"
           ],
-          "focusedBefore": "tmw3w0zmmbhg",
-          "focusedAfter": "tmw3w0zmmbhg",
+          "focusedBefore": "tmw7g66xrb1b",
+          "focusedAfter": "tmw7g66xrb1b",
           "context": ""
         },
         "stored": 4
@@ -3149,15 +3353,15 @@
         "problems": [],
         "other-column": {
           "before": 12,
-          "after": 13.759386,
+          "after": 12.166631,
           "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 13.826954,
-          "after": 15.642103,
+          "before": 12.219512,
+          "after": 12.381252,
           "column": 3,
           "paused": false,
           "loadstart": 0,
@@ -3176,8 +3380,6 @@
           "playing": true,
           "afterSpace": false,
           "pausedAfter": [
-            true,
-            true,
             true
           ],
           "comic": [
@@ -3226,7 +3428,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw3w0zmmbhg",
+            "within": "tmw7g66xrb1b",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3237,7 +3439,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw3w0zmmbhg",
+            "within": "tmw7g66xrb1b",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3259,7 +3461,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw3w0zhq9o3",
+            "within": "tmw7g66vs9be",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3270,7 +3472,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmw3w0zhq9o3",
+            "within": "tmw7g66vs9be",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3281,7 +3483,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw3w0zhq9o3",
+            "within": "tmw7g66vs9be",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3292,7 +3494,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw3w0zhq9o3",
+            "within": "tmw7g66vs9be",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3302,20 +3504,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmw3w0zmmbhg",
-            "at": 8196,
+            "tab": "tmw7g66xrb1b",
+            "at": 1385,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmw3w0zmmbhg",
-            "at": 8847,
+            "tab": "tmw7g66xrb1b",
+            "at": 1432,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmw3w0zmmbhg",
-            "at": 10109,
+            "tab": "tmw7g66xrb1b",
+            "at": 1657,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3521,8 +3723,8 @@
         "loose": 1,
         "files": {
           "under": "未分类",
-          "files": 2,
-          "onDisk": 2
+          "files": 1,
+          "onDisk": 1
         },
         "noteKept": true,
         "problems": []
@@ -3636,8 +3838,8 @@
         "views": {
           "home": {
             "groups": [
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:3",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:3",
               "recent:8"
             ],
             "entries": [
@@ -3651,8 +3853,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:1",
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:1",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:1",
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3663,8 +3865,8 @@
           },
           "novel": {
             "rows": [
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
               "recent:2"
             ],
             "flat": 0,
@@ -3674,8 +3876,8 @@
           },
           "comic": {
             "rows": [
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:1",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3685,8 +3887,8 @@
           },
           "video": {
             "rows": [
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3700,8 +3902,8 @@
           },
           "note": {
             "rows": [
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded",
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:folded",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3716,8 +3918,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:2",
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:2",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3727,8 +3929,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3738,8 +3940,8 @@
           },
           "draft": {
             "rows": [
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3749,8 +3951,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:0",
-              "prj_a8985e82-35b4-4753-958d-9535afde992c:folded"
+              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
+              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3886,7 +4088,7 @@
           "tabs": 2,
           "columns": 1,
           "dock": true,
-          "time": 1.28
+          "time": 0.38
         },
         "directory": {
           "pages": 17,
@@ -3910,7 +4112,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 1.291991,
+            "time": 0.383564,
             "paused": true,
             "ready": 4
           }
@@ -3932,10 +4134,10 @@
           "same": true,
           "emptied": 0,
           "loads": 0,
-          "time": 1.29,
+          "time": 0.38,
           "paused": true,
           "ready": 4,
-          "before": 1.28
+          "before": 0.38
         }
       }
     },
@@ -3962,8 +4164,8 @@
           "boardOpen": true,
           "videoReady": true,
           "marked": [
-            "sidebar-item-resource-res_c9886b0c-51a6-42a4-96f4-887ba59718ae",
-            "sidebar-item-resource-res_c9886b0c-51a6-42a4-96f4-887ba59718ae"
+            "sidebar-item-resource-res_8402a2d6-6b1b-47c8-9c17-37864b367808",
+            "sidebar-item-resource-res_8402a2d6-6b1b-47c8-9c17-37864b367808"
           ]
         },
         "atBoard": {
@@ -3971,7 +4173,7 @@
           "focused": "whiteboard",
           "video": {
             "same": true,
-            "time": 1.480396,
+            "time": 0.271932,
             "paused": true,
             "loads": 0,
             "emptied": 0
@@ -3988,13 +4190,13 @@
           "main": "video",
           "video": {
             "same": true,
-            "time": 1.480396,
+            "time": 0.271932,
             "paused": true,
             "loads": 0,
             "emptied": 0
           },
           "dock": "合成动画",
-          "left": 1.480396,
+          "left": 0.271932,
           "episodeDock": "合成动画"
         },
         "home": {
@@ -4008,7 +4210,7 @@
           ]
         },
         "fromCard": {
-          "card": "wb-open-wbn_4cf4dfea-75c8-4683-b494-28919c2a5f0b",
+          "card": "wb-open-wbn_1b357138-e668-4b4c-af9c-e30ee2128729",
           "switched": true,
           "there": "video"
         },
@@ -4147,7 +4349,7 @@
         "save": {
           "before": "two",
           "answered": true,
-          "ms": 9,
+          "ms": 6,
           "after": "single"
         },
         "problems": []
@@ -4402,7 +4604,7 @@
         ],
         "guides": {
           "current": "recent:rgb(173, 50, 104)",
-          "other": "prj_c50607c5-75ba-4095-8082-f6aaa4bcd031:rgb(221, 225, 232)"
+          "other": "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:rgb(221, 225, 232)"
         },
         "narrow": {
           "width": 200,
@@ -4425,8 +4627,8 @@
           "novel/project/novel": "0=0"
         },
         "samples": {
-          "comic": "res_9c559edc-087d-43dd-9f6c-e10a7ffd9638",
-          "novel": "res_0e447da7-b487-45da-b924-997c8a7bf57a"
+          "comic": "res_fe1faf00-c2f3-44df-a431-e0a5a3156ee2",
+          "novel": "res_43e5da74-5a6b-4e8e-ae31-ba68ad877801"
         },
         "before": {
           "comicOpened": true,
@@ -4454,14 +4656,14 @@
           "placeholders": 2,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_7fbbcf7b-3cff-4ccf-b08c-d266cc38b74d",
-            "sidebar-item-resource-res_7362ee2d-f679-4cdc-9760-7b4b9608207d"
+            "sidebar-item-resource-res_aa1bca73-5a65-481c-8ee9-25e258f0648a",
+            "sidebar-item-resource-res_e19ab319-7898-4a67-a138-c36e5626eef5"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_d74a428d-5428-4e16-b6b4-1fe43d79965c",
-            "work:work_0a0656fb-d6c5-4c36-8eaf-25ed9c70eaf7"
+            "work:work_643d74a2-585d-4ff7-abf7-94fce97fd5a3",
+            "work:work_acced4e2-222d-4a52-b56d-4a40795dfc33"
           ]
         },
         "comic": {
@@ -4471,12 +4673,12 @@
           "placeholders": 1,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_6ba6a4f6-31b1-45da-98b0-63d3cfcd8863"
+            "sidebar-item-resource-res_8896e961-a7d4-42cb-a420-4fdfd6710815"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "resource:res_6ba6a4f6-31b1-45da-98b0-63d3cfcd8863"
+            "resource:res_8896e961-a7d4-42cb-a420-4fdfd6710815"
           ]
         },
         "video": {
@@ -4486,12 +4688,12 @@
           "placeholders": 0,
           "images": 1,
           "keys": [
-            "sidebar-item-resource-res_c9886b0c-51a6-42a4-96f4-887ba59718ae"
+            "sidebar-item-resource-res_8402a2d6-6b1b-47c8-9c17-37864b367808"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_bd05e4ed-3aae-400d-9672-649429b24e91"
+            "work:work_38a19aa4-41a0-4212-b130-b1f639110bda"
           ]
         },
         "switch": {
@@ -4546,64 +4748,64 @@
             "chapter": ""
           },
           "after": {
-            "start": 1428,
-            "end": 1785,
+            "start": 1512,
+            "end": 1890,
             "page": 5,
-            "total": 36,
+            "total": 34,
             "chapter": ""
           }
         },
         "epub": {
           "start": 0,
-          "end": 404,
+          "end": 435,
           "page": 1,
-          "total": 9,
+          "total": 8,
           "chapter": "第1章"
         },
         "bookmark": {
           "marked": {
-            "start": 404,
-            "end": 833,
+            "start": 435,
+            "end": 875,
             "page": 2,
-            "total": 9,
+            "total": 8,
             "chapter": "第1章"
           },
           "back": {
-            "start": 404,
-            "end": 833,
+            "start": 435,
+            "end": 875,
             "page": 2,
-            "total": 9,
+            "total": 8,
             "chapter": "第1章"
           },
           "hit": true
         },
         "nextChapter": {
           "start": 0,
-          "end": 404,
+          "end": 435,
           "page": 1,
-          "total": 9,
+          "total": 8,
           "chapter": "第2章"
         },
         "previousChapter": {
-          "start": 3324,
+          "start": 3075,
           "end": 3363,
-          "page": 9,
-          "total": 9,
+          "page": 8,
+          "total": 8,
           "chapter": "第1章"
         },
         "double": {
           "twoFrom": {
-            "start": 3190,
-            "end": 3363,
-            "page": 21,
-            "total": 22,
+            "start": 2764,
+            "end": 3111,
+            "page": 17,
+            "total": 20,
             "chapter": "第1章"
           },
           "twoTo": {
-            "start": 2870,
-            "end": 3190,
-            "page": 19,
-            "total": 22,
+            "start": 2418,
+            "end": 2764,
+            "page": 15,
+            "total": 20,
             "chapter": "第1章"
           }
         },
@@ -4625,14 +4827,14 @@
           },
           "before": {
             "start": 0,
-            "end": 444,
+            "end": 481,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
           },
           "after": {
             "start": 0,
-            "end": 444,
+            "end": 481,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
@@ -4649,14 +4851,14 @@
           },
           "before": {
             "start": 0,
-            "end": 444,
+            "end": 481,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
           },
           "after": {
             "start": 0,
-            "end": 444,
+            "end": 481,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
@@ -4672,14 +4874,14 @@
           },
           "before": {
             "start": 0,
-            "end": 444,
+            "end": 481,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
           },
           "after": {
             "start": 0,
-            "end": 444,
+            "end": 481,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
@@ -4699,9 +4901,9 @@
       "name": "scan-incremental",
       "status": "passed",
       "detail": {
-        "progressAt": 1349,
-        "cardAt": 1408,
-        "cardAfterProgressMs": 59,
+        "progressAt": 1139,
+        "cardAt": 1185,
+        "cardAfterProgressMs": 46,
         "runningAtCard": true,
         "opened": {
           "read": true,
@@ -4709,9 +4911,9 @@
         },
         "works": 20,
         "afterImport": {
-          "calls": 7,
-          "first": 1349,
-          "finishedAt": 7512
+          "calls": 2,
+          "first": 1138,
+          "finishedAt": 1509
         },
         "cardsShown": 15,
         "problems": []
@@ -5014,7 +5216,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 5
+        "overheadMs": 3
       }
     },
     {
@@ -5478,7 +5680,7 @@
           "firstToken": true,
           "duration": true
         },
-        "copied": 56155,
+        "copied": 56157,
         "holdersChecked": 8,
         "leaks": [],
         "problems": []
@@ -5489,7 +5691,7 @@
       "status": "passed",
       "detail": {
         "first": {
-          "before": "对话",
+          "before": "对话 2026-11-08 14:25",
           "tab": "帮我总结一下第一章的主要人物",
           "named": true,
           "stored": true
@@ -5540,7 +5742,7 @@
       "name": "chat-long-session",
       "status": "passed",
       "detail": {
-        "firstScreenMs": 461,
+        "firstScreenMs": 184,
         "firstScreen": {
           "drawn": true,
           "nodes": 9,
@@ -5599,7 +5801,7 @@
             true
           ],
           "gaps": [
-            0,
+            1,
             1,
             1,
             1,
@@ -5768,8 +5970,8 @@
             "bytes": 5552,
             "origin": {
               "kind": "comic_region",
-              "resourceId": "res_fea1a941-d023-46ce-9c92-3026378ecf64",
-              "resourceRevisionId": "rev_d161077b-cc37-40b7-bb46-e953d3bfa547",
+              "resourceId": "res_b20baf67-7f13-4b64-a3a0-81067c2ab053",
+              "resourceRevisionId": "rev_4703542f-e8b7-4154-83e4-d7f0242aeded",
               "pageId": "002.png",
               "region": {
                 "x": 0,
@@ -5779,7 +5981,7 @@
               }
             },
             "extraction": "第 2 页的选定区域，从原页面裁剪",
-            "id": "img_dccca35a324d4a16a4f1",
+            "id": "img_ad0a31b745134cb7b07c",
             "hash": "e16c6a6b785ec666b58f330ee777f08c99a31ead5f1c01c074b6e7d719726ccf",
             "expired": true
           }
@@ -5799,6 +6001,140 @@
           "code": "REVISION_CONFLICT",
           "reason": "media-source-changed",
           "images": 0
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "proposal-delete-rename",
+      "status": "passed",
+      "detail": {
+        "before": {
+          "cardsDrawn": true,
+          "hasIrreversible": true,
+          "hasNoteRef": true,
+          "hasMapRef": true,
+          "hasNewTitle": true,
+          "boardsCount": 3,
+          "mapTitle": "导图甲",
+          "sidebarHasBoard1": true
+        },
+        "after": {
+          "delApplied": true,
+          "renRejected": true,
+          "boardsCount": 2,
+          "noteBacklinkDeleted": true,
+          "mapRefState": "missing",
+          "mapTitle": "导图甲"
+        },
+        "nextTurnCarriedBoth": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "proposal-stale-once",
+      "status": "passed",
+      "detail": {
+        "stale": {
+          "staleShown": true,
+          "draftExists": true
+        },
+        "once": {
+          "twoButtons": true,
+          "clickedCount": 2,
+          "bothApplied": true,
+          "title": "同时确认的文稿乙",
+          "version": 1
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "proposal-roughcut",
+      "status": "passed",
+      "detail": {
+        "edit": {
+          "lineCount": 6,
+          "summary": "片段数 12 段 → 10 段 · 总时长 00:18（18 秒） → 00:14.1（14.1 秒）",
+          "editApplied": true,
+          "clipsAfterEdit": 10,
+          "undoLabel": "Agent：精简结尾并调整开场",
+          "clipsAfterUndo": 12
+        },
+        "export": {
+          "expApplied": true,
+          "state": "done",
+          "checkOk": true,
+          "fileName": "agent-roughcut.mp4"
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "proposal-export-project",
+      "status": "passed",
+      "detail": {
+        "pkg": {
+          "p1Applied": true,
+          "filesMatch": true,
+          "zipEntries": 18,
+          "p2StatusAfterCancel": "pending"
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "proposal-restart",
+      "status": "passed",
+      "detail": {
+        "restart": {
+          "recovery": {
+            "applied": 1,
+            "reverted": 1
+          },
+          "committedStatus": "applied",
+          "uncommittedStatus": "pending",
+          "pendingStatus": "pending",
+          "pendingApplied": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "agent-opt-in",
+      "status": "passed",
+      "detail": {
+        "optIn": {
+          "webTagShown": true,
+          "webHasFetch": true,
+          "webHasSemantic": false,
+          "savedWebpages": 1,
+          "tagClearedAfterSend": true,
+          "nextHasFetch": false,
+          "semHasSemantic": true,
+          "semFoundKey": true,
+          "webpageInRecent": false
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "migrate-v14",
+      "status": "passed",
+      "detail": {
+        "v14": {
+          "migrateMs": 25.4,
+          "backupExists": true,
+          "versionAfter1": "14",
+          "migration1": {
+            "from": 13,
+            "to": 14,
+            "coversImported": 0
+          },
+          "proposalsTable": true,
+          "runKept": true,
+          "migration2": null,
+          "newerRefused": true
         },
         "problems": []
       }
@@ -5846,16 +6182,16 @@
       "status": "passed",
       "detail": {
         "phase": "migrate-v13",
-        "schemaVersion": "13",
+        "schemaVersion": "14",
         "migration": {
           "from": 12,
-          "to": 13,
+          "to": 14,
           "coversImported": 0,
           "agentMedia": {
             "runs": 300,
             "images": 340,
             "unique": 201,
-            "ms": 17
+            "ms": 16
           }
         },
         "agentMedia": 201,
@@ -5876,7 +6212,7 @@
       "status": "passed",
       "detail": {
         "phase": "migrate-v13-restart",
-        "schemaVersion": "13",
+        "schemaVersion": "14",
         "migration": null,
         "agentMedia": 201,
         "agentRunMedia": 340,
@@ -5893,7 +6229,7 @@
       "detail": {
         "exitStatus": 1,
         "refused": true,
-        "versionAfter": "14"
+        "versionAfter": "15"
       }
     },
     {
@@ -5944,7 +6280,7 @@
         },
         "older": {
           "exitStatus": 0,
-          "ms": 1512,
+          "ms": 645,
           "data": true,
           "emulated": true
         },

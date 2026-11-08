@@ -245,6 +245,7 @@ export class ConversationService {
           counts.grants += sqlite.prepare("DELETE FROM grants WHERE run_id = ? AND access <> 'owner'").run(run.id).changes;
           sqlite.prepare("DELETE FROM command_requests WHERE run_id = ?").run(run.id);
         }
+        sqlite.prepare("DELETE FROM agent_proposals WHERE session_id = ?").run(item.id);
         counts.runs += sqlite.prepare("DELETE FROM agent_runs WHERE session_id = ?").run(item.id).changes;
         counts.sessions += sqlite.prepare("DELETE FROM agent_sessions WHERE id = ?").run(item.id).changes;
       }

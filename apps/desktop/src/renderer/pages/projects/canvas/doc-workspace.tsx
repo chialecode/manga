@@ -52,6 +52,15 @@ export function DocWorkspace<S extends DocSummary>(props: { ctx: ProjectTabConte
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, kind.prefix]);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    const off = window.manga.onNotice?.((notice) => {
+      if (notice.topic === "proposal.changed" && notice.payload.status === "applied" && (!notice.payload.projectId || notice.payload.projectId === projectId)) {
+        void reload();
+        ctx.reload();
+      }
+    });
+    return () => { off?.(); };
+  }, [reload, projectId, ctx]);
   const focusId = ctx.focus?.kind === kind.focusKind ? ctx.focus.id : null;
   useEffect(() => { if (focusId) { void reload(focusId).then(() => ctx.onFocus(null)); } }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openId) { try { localStorage.setItem(lastKey, openId); } catch { /* ignore */ } } }, [openId, lastKey]);

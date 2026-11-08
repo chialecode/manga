@@ -3,7 +3,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createTranslator } from "@manga/i18n";
-import { DRAWN, clickTestId, closeTabs, openLibrary, openShelf, setField, sleep, waitUntil } from "./driver.ts";
+import { DRAWN, clickTestId, closeTabs, openLibrary, openShelf, setField, sleep, waitFrames, waitUntil } from "./driver.ts";
 import { js, openSettingsPage, toRail, type caller } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
@@ -82,7 +82,11 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
         fs.mkdirSync(folder, { recursive: true });
         for (let part = 1; part <= PER_SERIES; part += 1) fs.writeFileSync(path.join(folder, `第${part}章.txt`), chapter(`${seriesName(index)} 第${part}章`));
       }
-      host.importUnit = async (request, signal) => { await sleep(IMPORT_DELAY_MS); return original.importUnit.call(host, request, signal); };
+      let slowScan = true;
+      host.importUnit = async (request, signal) => {
+        if (slowScan) await sleep(IMPORT_DELAY_MS); // real time: throttle importUnit so scan is still running when first works appear
+        return original.importUnit.call(host, request, signal);
+      };
       host.afterImport = (resourceIds) => { seen.afterImport.push(Date.now() - started); original.afterImport.call(host, resourceIds); };
       host.notify = (topic, payload) => {
         if (topic === "work.updated" && payload.reason === "scan-progress" && seen.progressAt === null) {
@@ -112,7 +116,7 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
             runningAtCard = Boolean((await value<{ running: unknown }>("library.scan.status", {})).running);
           }
         }
-        if (cardAt === null) await sleep(50);
+        if (cardAt === null) await sleep(50); // real time: poll shelf DOM while incremental scan is in progress
       }
       detail.progressAt = seen.progressAt;
       detail.cardAt = cardAt;
@@ -137,8 +141,9 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
         await closeTabs(view, ["reader"]);
       }
 
+      slowScan = false;
       await appService.scan.whenIdle();
-      await sleep(600);
+      await waitFrames(view, 2);
       const listed = (await works("批量系列")).filter((item) => item.title.startsWith("批量系列"));
       detail.works = listed.length;
       detail.afterImport = { calls: seen.afterImport.length, first: seen.afterImport[0] ?? null, finishedAt: seen.finishedAt };
@@ -148,7 +153,7 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
       // The shelf is still narrowed to the new series: its cards are the works the scan made.
       await openShelf(view, "novel", 8000);
       await setField(view, "shelf-search", "批量系列");
-      await sleep(600);
+      await waitFor(`document.querySelectorAll('[data-work-open]').length > 0`, 4000);
       const cards = await js<number>(view, `document.querySelectorAll('[data-work-open]').length`);
       detail.cardsShown = cards;
       if (cards === 0) problems.push("the shelf shows no card of the new works once the scan is over");
@@ -208,11 +213,10 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
       // The overview and the shelves, as drawn.
       await toRail(view);
       await openLibrary(view);
-      await waitFor(`document.querySelector('[data-testid="page-library"]')`, 8000);
-      await sleep(600);
+      await waitFor(`document.querySelector('[data-testid="page-library"] [data-testid^="work-"]')`, 8000);
       const onOverview = await exists(`work-${outsideWork.id}`) || await exists(`work-menu-${outsideWork.id}`);
       const novel = await openShelf(view, "novel", 8000) && await setField(view, "shelf-search", "系列");
-      await sleep(800);
+      await waitFor(`document.querySelector('[data-testid="work-${missingWork.id}"]')`, 4000);
       const shelfFacts = await js<{ outside: boolean; missing: boolean; flags: string }>(view, `({
         outside: Boolean(document.querySelector('[data-testid="work-${outsideWork.id}"]')),
         missing: Boolean(document.querySelector('[data-testid="work-${missingWork.id}"]')),
@@ -241,7 +245,7 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
       const countsBefore = { works: (await works()).length, library: (await value<{ items: unknown[] }>("library.list", {})).items.length };
       const removed = await clickTestId(view, "library-outside-remove") && await waitFor(`document.querySelector('[data-testid="library-outside-confirm"]')`, 4000)
         && await clickTestId(view, "library-outside-confirm-remove") && await gone("library-outside", 8000);
-      await sleep(400);
+      await waitFrames(view, 2);
       const countsAfter = { works: (await works()).length, library: (await value<{ items: unknown[] }>("library.list", {})).items.length };
       const notes = JSON.stringify(await value("notes.list", {}));
       detail.removal = { removed, countsBefore, countsAfter, noteKept: notes.includes("库外资源的笔记"), outsideAfter: (await value<{ total: number }>("library.outside", {})).total };
@@ -271,12 +275,12 @@ export async function runLibraryWalk(env: LibraryEnv): Promise<{ manyPathId: str
         && await waitFor(`document.querySelector('[data-testid="work-move"]')`, 4000)
         && await setField(view, "work-move-query", seriesName(SERIES - 2))
         && await clickTestId(view, `work-move-to-${target.id}`, 8000) && await gone("work-move", 8000);
-      await sleep(400);
+      await waitFrames(view, 2);
       const inTarget = ((await value<{ resources: Array<{ id: string }> }>("works.get", { workId: target.id })).resources ?? []).some((item) => item.id === toAssign);
       await waitFor(`document.querySelector('[data-testid="unassigned-menu-${toIdentify}"]')`, 8000);
       const identified = await clickTestId(view, `unassigned-menu-${toIdentify}`) && await clickTestId(view, `unassigned-menu-${toIdentify}-reidentify`)
         && await gone(`unassigned-${toIdentify}`, 8000);
-      await sleep(400);
+      await waitFor(`document.querySelector('[data-testid="toast-notice"]')`, 3000);
       const stillLoose = (await value<{ items: Array<{ resourceId: string }> }>("works.unassigned", { kind: "novel" })).items.some((item) => item.resourceId === toIdentify);
       const notice = await noticeText();
       detail.unassigned = { opened, assigned, inTarget, identified, stillLoose, said: notice.includes(t("unassigned.reidentified", { count: 1 })) };

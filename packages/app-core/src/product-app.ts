@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type ScopeGrant } from "@manga/contracts";
+import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant } from "@manga/contracts";
 import { MangaRuntime } from "@manga/kernel";
 import { DrizzleStore, acquireHostLock, releaseHostLock } from "@manga/storage-drizzle";
 import type { ChatMessage } from "@manga/model-protocol";
@@ -44,6 +44,7 @@ import { ConversationService } from "./conversations.ts";
 import { WorkspaceService } from "./workspace-service.ts";
 import { SidebarService } from "./sidebar-service.ts";
 import { ProjectService } from "./creative/projects.ts";
+import { ProposalService } from "./creative/proposals.ts";
 import { AGENT_LOGGED_COMMANDS, AGENT_PROJECT_COMMANDS, AgentProjectAccess } from "./creative/agent-access.ts";
 import { OpLog } from "./creative/ops.ts";
 import { EmbedService, noteEmbedsOf } from "./creative/embeds.ts";
@@ -144,6 +145,7 @@ export class MangaProductApp {
   readonly log: OperationLog;
   readonly quickTasks: QuickTaskService;
   readonly projects: ProjectService;
+  readonly proposals: ProposalService;
   readonly agentAccess: AgentProjectAccess;
   readonly creativeOps: OpLog;
   readonly embeds: EmbedService;
@@ -232,6 +234,17 @@ export class MangaProductApp {
     this.mindmaps = new MindmapService(this.store, this.creativeOps, this.embeds, (featureId) => this.featureEnabled(featureId));
     this.roughcuts = new RoughcutService({
       store: this.store, ops: this.creativeOps, videos: this.videos, ffmpeg: this.media.ffmpeg, folders: this.workFolders, stagingRoot: path.join(this.layout.partitions.cache, "roughcut"),
+      notify: (topic, payload) => this.notify(topic, payload),
+    });
+    this.proposals = new ProposalService({
+      store: this.store,
+      projects: this.projects,
+      embeds: this.embeds,
+      roughcuts: this.roughcuts,
+      log: this.log,
+      requireModule: (commandId, label) => this.requireModule(commandId, label),
+      holdsResource: (resourceId, projectId, grant) => this.agentAccess.canSeeResource(resourceId, projectId, grant),
+      callOwner: (actor, command, grantHandle) => this.call(actor, command, grantHandle),
       notify: (topic, payload) => this.notify(topic, payload),
     });
     this.drafts = new DraftService(this.store, {
@@ -358,6 +371,7 @@ export class MangaProductApp {
     this.store.setMeta("lastValidProfile", JSON.stringify(this.runtime.snapshot().lastValidProfile ?? profile));
     // No run loop survives a process boundary: anything still "running" in the database is stale.
     this.interruptRuns("host restarted before the run finished");
+    this.proposals.recover();
     this.store.replayUnpublished();
     this.noteFiles.attach();
     this.settleWorkFiles();
@@ -492,7 +506,11 @@ export class MangaProductApp {
       sessionId: input.sessionId,
       runId: input.runId,
       // The network commands are not part of the standing set: the user adds them for one task, and only commands the task may ever use are accepted.
-      allowedCommands: [...AGENT_COMMANDS, ...(input.projectId ? AGENT_PROJECT_COMMANDS : []), ...(input.allowCommands ?? []).filter((commandId) => AGENT_OPT_IN_COMMANDS.includes(commandId))],
+      allowedCommands: [
+        ...AGENT_COMMANDS,
+        ...(input.projectId ? AGENT_PROJECT_COMMANDS : []),
+        ...(input.allowCommands ?? []).filter((commandId) => AGENT_OPT_IN_COMMANDS.includes(commandId) && (commandId !== "webpage.fetch" || Boolean(input.projectId))),
+      ],
       access: "enumerated",
       readResourceIds: input.readResourceIds,
       writeResourceIds: [],
@@ -566,6 +584,7 @@ export class MangaProductApp {
     const next = { ...current, revision: current.revision + 1, enabledFeatures: [...on], disabledFeatures: [...off] };
     await this.runtime.applyProfile(next);
     this.store.setMeta("lastValidProfile", JSON.stringify(this.runtime.snapshot().lastValidProfile ?? next));
+    this.notify("settings.changed", { featureId, enabled });
     return this.listModules();
   }
 
@@ -995,6 +1014,7 @@ export class MangaProductApp {
   }
 
   notify(topic: string, payload: Record<string, unknown>): void {
+    if (topic === "roughcut.export") this.proposals?.onRoughcutExport(payload as unknown as RoughcutExportView);
     for (const listener of this.noticeListeners) {
       try { listener({ topic, payload }); } catch { /* a broken subscriber must not stop an import */ }
     }

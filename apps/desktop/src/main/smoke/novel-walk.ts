@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import type { BrowserWindow } from "electron";
-import { clickTestId, openFromShelf, revealNovelControls, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, openFromShelf, revealNovelControls, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { js, type caller } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
@@ -84,7 +84,7 @@ export async function walkNovelPages(env: NovelEnv): Promise<void> {
     if (!id) return false;
     const opened = await openFromShelf(view, "novel", id, 8000) && await waitForTestId(view, "reading-body", "data-present", null, 10_000);
     if (!opened) { problems.push(`${name}: the book did not open`); return false; }
-    await sleep(500);
+    await waitUntil(view, `document.querySelector('[data-testid="reading-page-position"]') && document.querySelector('[data-testid="reading-body"]')?.hasAttribute("data-page-start")`, 4000);
     const shape = await js<{ flow: string | null; more: boolean; diagnosis: boolean; position: boolean }>(view, `(() => {
       const text = document.querySelector('[data-testid="reading-scroll"]')?.textContent ?? "";
       return { flow: document.querySelector('[data-testid="reading-scroll"]')?.getAttribute("data-flow") ?? null, more: Boolean(document.querySelector('[data-testid="reading-more"]')), diagnosis: /author page styles|reading defaults|text layer/.test(text), position: Boolean(document.querySelector('[data-testid="reading-page-position"]')) };
@@ -99,33 +99,34 @@ export async function walkNovelPages(env: NovelEnv): Promise<void> {
     await act();
     const moved = await waitUntil(view, `(() => { const label = document.querySelector('[data-testid="reading-page-position"]')?.textContent ?? ""; const hit = /第\\s*(\\d+)/.exec(label); return hit && Number(hit[1]) === ${(before?.page ?? -9) + 1}; })()`, 2500);
     if (!moved) problems.push(`${name} did not turn one page (${JSON.stringify(before)} → ${JSON.stringify(await pageOf(view))})`);
-    await sleep(320);
+    await waitFrames(view, 2);
   };
   const stage = () => js<{ x: number; y: number; w: number; h: number }>(view, `(() => { const b = document.querySelector('[data-testid="reading-scroll"]').getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; })()`);
   const settings = async (...ids: string[]) => {
     await revealNovelControls(view);
     await clickTestId(view, "reading-settings", 3000);
     await waitUntil(view, `document.querySelector('[data-testid="reading-settings-panel"]')`, 3000);
-    for (const id of ids) { await clickTestId(view, id, 3000); await sleep(120); }
+    for (const id of ids) { await clickTestId(view, id, 3000); await waitFrames(view, 1); }
     await revealNovelControls(view);
     await clickTestId(view, "reading-settings", 3000);
-    await sleep(500);
+    await waitUntil(view, `!document.querySelector('[data-testid="reading-settings-panel"]')`, 2000);
+    await waitFrames(view, 2);
   };
 
   // ---- the three ways of turning a page, and the bar's ----
   if (await open("txt", txt)) {
-    view.show();
+    if (!view.isVisible()) view.showInactive();
     view.webContents.focus();
     const first = await pageOf(view);
     detail.txt = first;
     if (!first || first.total < 3) problems.push(`txt: the book is not several pages (${JSON.stringify(first)})`);
     await shot("novel-paginate-single");
     await turned("the bar's button", async () => { await revealNovelControls(view); await clickTestId(view, "reading-page-next", 2000); });
-    await turned("the → key", async () => { view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Right" }); await sleep(40); view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Right" }); });
+    await turned("the → key", async () => { view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Right" }); view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Right" }); });
     const box = await stage();
-    await sleep(600);
+    await waitFrames(view, 2);
     await turned("the wheel", async () => { view.webContents.sendInputEvent({ type: "mouseWheel", x: Math.round(box.x + box.w / 2), y: Math.round(box.y + box.h / 2), deltaX: 0, deltaY: -120 }); });
-    await sleep(600);
+    await waitFrames(view, 2);
     await turned("a click on the right third", async () => {
       const at = { x: Math.round(box.x + box.w * 0.86), y: Math.round(box.y + box.h / 2) };
       view.webContents.sendInputEvent({ type: "mouseDown", x: at.x, y: at.y, button: "left", clickCount: 1 });
@@ -151,27 +152,29 @@ export async function walkNovelPages(env: NovelEnv): Promise<void> {
     if (at && at.total >= 3) {
       await revealNovelControls(view);
       await clickTestId(view, "reading-page-next", 2000);
-      await sleep(400);
+      await waitUntil(view, `(() => { const hit = /第\\s*(\\d+)/.exec(document.querySelector('[data-testid="reading-page-position"]')?.textContent ?? ""); return hit && Number(hit[1]) === 2; })()`, 2500);
       const marked = await pageOf(view);
       await clickTestId(view, "reading-bookmark-add", 2000);
-      await sleep(400);
+      await waitFrames(view, 2);
       await clickTestId(view, "reading-page-prev", 2000);
-      await sleep(400);
+      await waitUntil(view, `(() => { const hit = /第\\s*(\\d+)/.exec(document.querySelector('[data-testid="reading-page-position"]')?.textContent ?? ""); return hit && Number(hit[1]) === 1; })()`, 2500);
       await clickTestId(view, "reading-panel-bookmarks", 2000);
       const row = await waitUntil(view, `document.querySelector('${BOOKMARK_ROW}')`, 3000);
       await js(view, `(() => { document.querySelector('${BOOKMARK_ROW}')?.click(); return true; })()`);
       const hit = row && await waitForTestId(view, "reading-quote-hit", "data-present", null, 5000);
-      await sleep(500);
+      await waitUntil(view, `(() => { const m = /第\\s*(\\d+)/.exec(document.querySelector('[data-testid="reading-page-position"]')?.textContent ?? ""); return m && Number(m[1]) === ${marked?.page ?? 2}; })()`, 2500);
       const back = await pageOf(view);
       detail.bookmark = { marked, back, hit };
       if (!hit || !marked || !back || back.page !== marked.page) problems.push(`a bookmark did not open at its page (${marked?.page} → ${back?.page})`);
       await clickTestId(view, "reading-panel-bookmarks", 2000);
-      await sleep(400);
+      await waitUntil(view, `!document.querySelector('[data-testid="reading-panel"]')`, 2000);
     }
     for (let i = 0; i < 80 && at && at.chapter === chapterOne; i += 1) {
+      const prevStart = at.start;
+      const prevCh = at.chapter;
       await revealNovelControls(view);
       await clickTestId(view, "reading-page-next", 2000);
-      await sleep(220);
+      await waitUntil(view, `(() => { const b = document.querySelector('[data-testid="reading-body"]'); const ch = document.querySelector('[data-testid="reading-chapter"]')?.textContent ?? ""; return Number(b?.getAttribute("data-page-start")) !== ${prevStart} || ch !== ${JSON.stringify(prevCh)}; })()`, 2000);
       at = await pageOf(view);
     }
     detail.nextChapter = at;
@@ -179,7 +182,7 @@ export async function walkNovelPages(env: NovelEnv): Promise<void> {
     await revealNovelControls(view);
     await clickTestId(view, "reading-page-prev", 2000);
     await waitUntil(view, `document.querySelector('[data-testid="reading-chapter"]')?.textContent === ${JSON.stringify(chapterOne)}`, 4000);
-    await sleep(500);
+    await waitUntil(view, `(() => { const hit = /第\\s*(\\d+)\\s*\\/\\s*约?\\s*(\\d+)/.exec(document.querySelector('[data-testid="reading-page-position"]')?.textContent ?? ""); return hit && Number(hit[1]) === Number(hit[2]); })()`, 2500);
     const previous = await pageOf(view);
     detail.previousChapter = previous;
     if (!previous || previous.chapter !== chapterOne || previous.page !== previous.total) problems.push(`the first page of a chapter did not go back to the last of the one before (${JSON.stringify(previous)})`);
@@ -188,7 +191,7 @@ export async function walkNovelPages(env: NovelEnv): Promise<void> {
     const twoFrom = await pageOf(view);
     await revealNovelControls(view);
     await clickTestId(view, "reading-page-prev", 2000);
-    await sleep(400);
+    await waitUntil(view, `Number(document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-start")) < ${twoFrom?.start ?? 0}`, 2500);
     const twoTo = await pageOf(view);
     await shot("novel-paginate-double");
     detail.double = { twoFrom, twoTo };
@@ -204,8 +207,7 @@ export async function walkNovelPages(env: NovelEnv): Promise<void> {
     for (let i = 0; i < 60 && !onward; i += 1) {
       await js(view, `(() => { const s = document.querySelector('[data-testid="reading-scroll"]'); s.scrollTop = s.scrollHeight; return true; })()`);
       view.webContents.sendInputEvent({ type: "mouseWheel", x: Math.round(box.x + box.w / 2), y: Math.round(box.y + box.h / 2), deltaX: 0, deltaY: -240 });
-      await sleep(450);
-      onward = await js<boolean>(view, `(document.querySelector('[data-testid="reading-chapter"]')?.textContent ?? "") !== ${JSON.stringify(chapterThen)}`);
+      onward = await waitUntil(view, `(document.querySelector('[data-testid="reading-chapter"]')?.textContent ?? "") !== ${JSON.stringify(chapterThen)}`, 260);
     }
     detail.scrollOnward = onward;
     if (!onward) problems.push("scrolling to the end of a chapter did not go on to the next");
@@ -223,9 +225,9 @@ async function walkSidePanel(env: NovelEnv, book: string | null): Promise<void> 
   const detail: Record<string, unknown> = {};
   const [startWidth, startHeight] = view.getContentSize();
   view.setContentSize(1700, Math.max(startHeight!, 900));
-  await sleep(700);
+  await waitUntil(view, `Math.abs(window.innerWidth - 1700) <= 4`, 2000);
   if (!book || !(await openFromShelf(view, "novel", book, 8000)) || !(await waitForTestId(view, "reading-body", "data-present", null, 10_000))) { observe("novel-side-panel", false, { problems: ["the book did not open"] }); return; }
-  await sleep(500);
+  await waitUntil(view, `document.querySelector('[data-testid="reading-page-position"]') && document.querySelector('[data-testid="reading-body"]')?.hasAttribute("data-page-start")`, 4000);
   const place = () => js<{ placement: string | null; panelRight: number; bodyLeft: number; opened: boolean; pageWidth: number }>(view, `(() => {
     const panel = document.querySelector('[data-testid="reading-panel"]');
     const body = document.querySelector('[data-testid="reading-scroll"]');
@@ -236,7 +238,7 @@ async function walkSidePanel(env: NovelEnv, book: string | null): Promise<void> 
     await revealNovelControls(view);
     await clickTestId(view, button, 3000);
     await waitUntil(view, `document.querySelector('[data-testid="reading-panel"]')?.getAttribute("data-panel") === ${JSON.stringify(name)}`, 3000);
-    await sleep(500);
+    await waitFrames(view, 2);
     const box = await place();
     const after = await pageOf(view);
     detail[name] = { box, before, after };
@@ -251,17 +253,17 @@ async function walkSidePanel(env: NovelEnv, book: string | null): Promise<void> 
     const focus = await js<string | null>(view, `document.activeElement?.getAttribute("data-testid") ?? null`);
     if (!closed) problems.push(`${name}: Esc did not close the panel`);
     if (focus !== button) problems.push(`${name}: Esc left the focus on ${focus}`);
-    await sleep(400);
+    await waitFrames(view, 1);
   }
 
   // A reader narrower than 640: the panel floats over the text, and a click on the text closes it.
   const [, height] = view.getContentSize();
   view.setContentSize(620, height!);
-  await sleep(700);
+  await waitUntil(view, `(document.querySelector('[data-testid="reading-page"]')?.getBoundingClientRect().width ?? 999) < 640`, 3000);
   await revealNovelControls(view);
   await clickTestId(view, "reading-panel-toc", 3000);
   await waitUntil(view, `document.querySelector('[data-testid="reading-panel"]')`, 3000);
-  await sleep(300);
+  await waitFrames(view, 2);
   const narrow = await place();
   detail.narrow = narrow;
   if (narrow.pageWidth >= 640) problems.push(`the reader is ${Math.round(narrow.pageWidth)} wide in the narrow window`);
@@ -269,6 +271,6 @@ async function walkSidePanel(env: NovelEnv, book: string | null): Promise<void> 
   await js(view, `(() => { document.querySelector('[data-testid="reading-body"]')?.click(); return true; })()`);
   if (!(await waitUntil(view, `!document.querySelector('[data-testid="reading-panel"]')`, 2000))) problems.push("a click on the text did not close the floating panel");
   view.setContentSize(startWidth!, startHeight!);
-  await sleep(600);
+  await waitUntil(view, `Math.abs(window.innerWidth - ${startWidth!}) <= 4`, 2000);
   observe("novel-side-panel", problems.length === 0, { ...detail, problems });
 }

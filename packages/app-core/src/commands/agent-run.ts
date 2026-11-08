@@ -19,7 +19,7 @@ import { DELIVERY_REASONS, readFrozenFile } from "../agent-native-input.ts";
 import { loadRunMessages, materialContextMessage, startRunLoop } from "./agent.ts";
 
 /** What these commands use of the application. */
-export type AgentRunHost = Pick<MangaProductApp, "agentAccess" | "assertWritable" | "builtinDanmakuCredentials" | "call" | "closed" | "comics" | "conversations" | "covers" | "danmaku" | "debugContext" | "extras" | "followFiles" | "grantOf" | "grants" | "interruptRuns" | "issueAgentGrant" | "layout" | "listModules" | "log" | "materials" | "media" | "metadata" | "notify" | "parseGeneration" | "parseWorker" | "pendingRecoveryJobs" | "projects" | "publicLayout" | "queryLog" | "quickTasks" | "requireModule" | "resolvePath" | "resolvePathFor" | "runAbort" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "suggestedQuery" | "trace" | "uiFacets" | "vault" | "videos" | "voice" | "workFolders">;
+export type AgentRunHost = Pick<MangaProductApp, "agentAccess" | "assertWritable" | "builtinDanmakuCredentials" | "call" | "closed" | "comics" | "conversations" | "covers" | "danmaku" | "debugContext" | "extras" | "followFiles" | "grantOf" | "grants" | "interruptRuns" | "issueAgentGrant" | "layout" | "listModules" | "log" | "materials" | "media" | "metadata" | "notify" | "parseGeneration" | "parseWorker" | "pendingRecoveryJobs" | "projects" | "proposals" | "publicLayout" | "queryLog" | "quickTasks" | "requireModule" | "resolvePath" | "resolvePathFor" | "runAbort" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "suggestedQuery" | "trace" | "uiFacets" | "vault" | "videos" | "voice" | "workFolders">;
 
 /**
  * Every request an agent run makes to a model goes through here, and every tool it calls through `toolCall`, so the trace of the run sees all of them (A-83).
@@ -596,6 +596,7 @@ export function getRun(app: AgentRunHost, envelope: CommandEnvelope) {
       updatedAt: row.updated_at,
     },
     tools,
+    proposals: app.proposals.list({ runId: row.id }).proposals,
     messages,
     text,
     // The visible material receipt: exactly what was frozen for app run, with revisions.

@@ -20,7 +20,7 @@ test('rejects private values without echoing them in diagnostics', () => {
 });
 
 test('allows portable configuration and official API examples', () => {
-  const text = 'https://example.invalid/v1/audio/transcriptions\n%DOCUMENTS%/MANGA\n${MANGA_PROFILE_DIR}\nAPI_KEY=\n';
+  const text = 'https://example.invalid/v1/audio/transcriptions\n%DOCUMENTS%/manga\n${MANGA_PROFILE_DIR}\nAPI_KEY=\n';
   assert.deepEqual(inspectPublication('.env.example', Buffer.from(text)).findings, []);
   assert.deepEqual(inspectPublication('docs/example.md', Buffer.from(text)).findings, []);
 });

@@ -32,14 +32,20 @@ test("documents without retireAfter are never retired", () => {
 test("stages compare by number, so a stage the checker has never heard of still orders correctly", () => {
   assert.ok(compareStages("m10", "m9") > 0);
   assert.ok(compareStages("m2", "m10") < 0);
-  assert.ok(compareStages("m1b", "m1a") > 0);
-  assert.ok(compareStages("m2", "m1b") > 0);
   assert.equal(compareStages("m5", "m5"), 0);
-  assert.deepEqual(parseStage("m12"), [12, ""]);
+  assert.equal(parseStage("m12"), 12);
+  assert.equal(parseStage("M12"), 12);
+  assert.equal(compareStages("M9", "m9"), 0);
   assert.equal(parseStage("m"), null);
   assert.equal(parseStage("stage3"), null);
   const registry = { currentStage: "m12", documents: [doc("a.md", { retireAfter: "m11" })] };
   assert.equal(retiredDocumentErrors(registry, () => true).length, 1);
+});
+
+test("stage names are plain sequence numbers: no m0 and no letter suffixes", () => {
+  for (const name of ["m0", "m1a", "m1b", "m01"]) assert.equal(parseStage(name), null, name);
+  assert.ok(Number.isNaN(compareStages("m2", "m1b")));
+  assert.ok(retiredDocumentErrors({ currentStage: "m1b", documents: [doc("a.md", { retireAfter: "m1" })] }, () => true).length > 0);
 });
 
 test("a label of an earlier stage is an error anywhere in a document", () => {

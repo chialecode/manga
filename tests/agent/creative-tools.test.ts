@@ -99,6 +99,9 @@ describe("AT-85 agent creative tools: a project's task reads its own project", (
       ["whiteboard.edit", { boardId: world.boardB, actions: [{ type: "addNode", kind: "text", x: 0, y: 0, data: { text: "越界" } }] }],
       ["mindmap.edit", { mapId: world.mapB, actions: [{ type: "addChild", parentId: "x", text: "越界" }] }],
       ["draft.suggest", { draftId: world.draftB, kind: "continue", text: "越界" }],
+      ["proposal.delete", { kind: "whiteboard", targetId: world.boardB }],
+      ["proposal.rename", { kind: "mindmap", targetId: world.mapB, title: "越界" }],
+      ["proposal.rename", { kind: "project", targetId: b, title: "越界" }],
     ] as const) {
       expect(failure(await asAgent(world, commandId, input)).code, commandId).toBe("SCOPE_DENIED");
     }
@@ -139,9 +142,10 @@ describe("AT-85 agent creative tools: a project's task reads its own project", (
       ["whiteboard.create", { projectId: world.a.projectId, title: "x" }], ["whiteboard.rename", { boardId: world.a.boardId, title: "x" }], ["whiteboard.delete", { boardId: world.a.boardId }],
       ["whiteboard.undo", { boardId: world.a.boardId }], ["mindmap.create", { projectId: world.a.projectId, title: "x" }], ["mindmap.rename", { mapId: world.a.mapId, title: "x" }],
       ["mindmap.delete", { mapId: world.a.mapId }], ["mindmap.export", { mapId: world.a.mapId, format: "markdown", pathHandle: "p" }],
-      ["draft.create", { projectId: world.a.projectId, title: "x" }], ["draft.save", { draftId: world.a.draftId, expectedVersion: 2, text: "x" }], ["draft.delete", { draftId: world.a.draftId }],
+      ["draft.create", { projectId: world.a.projectId, title: "x" }], ["draft.rename", { draftId: world.a.draftId, title: "x" }], ["draft.save", { draftId: world.a.draftId, expectedVersion: 2, text: "x" }], ["draft.delete", { draftId: world.a.draftId }],
       ["draft.adopt", { suggestionId: "sug-done" }], ["draft.restore", { draftId: world.a.draftId, version: 1 }],
-      ["roughcut.create", { projectId: world.a.projectId, title: "x" }], ["roughcut.edit", { cutId: "cut-1", actions: [{ type: "remove", clipId: "clip-1" }] }], ["roughcut.export", { cutId: "cut-1", pathHandle: "p" }], ["roughcut.delete", { cutId: "cut-1" }],
+      ["roughcut.create", { projectId: world.a.projectId, title: "x" }], ["roughcut.rename", { cutId: "cut-1", title: "x" }], ["roughcut.edit", { cutId: "cut-1", actions: [{ type: "remove", clipId: "clip-1" }] }], ["roughcut.export", { cutId: "cut-1", pathHandle: "p" }], ["roughcut.delete", { cutId: "cut-1" }],
+      ["proposal.apply", { proposalId: "prop-1" }], ["proposal.reject", { proposalId: "prop-1" }], ["proposal.list", { sessionId: world.sessionId }],
       ["excerpt.create", { pageId: "pgv-1", start: 0, end: 2 }], ["excerpt.delete", { excerptId: world.a.excerptId }], ["webpage.fetch", { url: "https://pages.example.org/x" }], ["webpage.delete", { pageId: "pgv-1" }],
       ["semantic.configure", { enabled: true }], ["semantic.search", { text: "雨夜" }], ["plugin.install", { bundledId: "xx", grant: [] }], ["plugin.enable", { pluginId: "xx" }], ["acquisition.add", { magnet: "magnet:?xt=urn:btih:0000", pathId: "p1" }],
       ["embed.upsert", { sourceKind: "note", sourceId: "n", slot: "s", targetKind: "note", targetId: "m" }],
@@ -153,10 +157,12 @@ describe("AT-85 agent creative tools: a project's task reads its own project", (
       codes[commandId] = failure(await asAgent(world, commandId, input)).code;
     }
     expect(Object.entries(codes).filter(([, code]) => code !== "FORBIDDEN")).toEqual([]);
-    // The tool list is exactly the reads and the five writes of A-73.
+    // The tool list is the reads, the five reversible writes of A-73, and the five proposal tools of A-74/A-121.
     expect([...AGENT_PROJECT_COMMANDS].sort()).toEqual([
       "draft.get", "draft.list", "draft.suggest", "draft.version", "excerpt.get", "excerpt.list", "mindmap.edit", "mindmap.get", "mindmap.list", "project.addMaterial", "project.addTerm",
-      "project.get", "project.list", "project.objects", "project.terms", "research.search", "roughcut.get", "roughcut.list", "webpage.get", "webpage.list", "whiteboard.edit", "whiteboard.get", "whiteboard.list",
+      "project.get", "project.list", "project.objects", "project.terms",
+      "proposal.delete", "proposal.editRoughcut", "proposal.exportProject", "proposal.exportRoughcut", "proposal.rename",
+      "research.search", "roughcut.get", "roughcut.list", "webpage.get", "webpage.list", "whiteboard.edit", "whiteboard.get", "whiteboard.list",
     ]);
   });
 });

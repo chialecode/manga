@@ -38,7 +38,7 @@
 - [外部数据库与下载扩展](design/external-providers-and-acquisition.md)
 - [交付与验收](delivery/roadmap-and-acceptance.md)
 - [当前阶段计划](delivery/stage-plan.md)
-- [当前阶段报告](delivery/stage-report.md)
+- [当前阶段交付报告](delivery/stage-report.md)
 - [资料库模块规格](modules/library.md)
 - [笔记模块规格](modules/notes.md)
 - [设置模块规格](modules/settings.md)

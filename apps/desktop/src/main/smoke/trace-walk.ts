@@ -3,7 +3,7 @@ import path from "node:path";
 import { clipboard, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { startMockProvider } from "@manga/model-protocol";
-import { clickTestId, ensureSidebar, pressKey, railTo, setField, sleep, trustedClick, viaSidebar, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, ensureSidebar, pressKey, railTo, setField, sleep, trustedClick, viaSidebar, waitDrawn, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { caller, capturePage, js, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -31,7 +31,6 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     console.error(`trace ${name}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, 700)}`);
     return ok;
   };
-  view.showInactive();
   const problems: string[] = [];
   const server = await startMockProvider({
     streamToolScript: [{ name: "library.find", arguments: '{"text":"x"}' }],
@@ -80,7 +79,7 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     if (!first.firstToken || !first.duration) problems.push("the first request shows no time to the first token or no duration");
     if (!first.request.includes("library.find")) problems.push("the tools offered are not in the request that was kept");
     if (!first.request.includes("在资料里找一下")) problems.push("the person's words are not in the request that was kept");
-    await sleep(300);
+    await waitFrames(view, 2);
     if (evidenceDir) await capturePage(view, evidenceDir, "ui-trace-timeline.png");
 
     // What the dialog shows, what the person copies and what the logs hold: none of them has the key, a token in the words, a header or a path.
@@ -95,9 +94,14 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     // The system clipboard is shared with every other application: the copy is read until it is there (up to 4 s), not once after a fixed wait.
     let copy = "";
     for (let waited = 0; copied && waited < 4000; waited += 200) {
-      await sleep(200);
+      await sleep(200); // real time: 后台轮询定时器节流，等待系统剪贴板写入
       copy = await clipboard.readText();
       if (copy.trim().startsWith("[") || copy.trim().startsWith("{")) break;
+      if (waited === 800 && !view.isVisible()) {
+        view.showInactive();
+        view.webContents.focus();
+        await trustedClick(view, "trace-copy", 2000);
+      }
     }
     const notice = await js<string>(view, `[...document.querySelectorAll('[data-testid^="toast-"]')].map((el) => el.textContent ?? "").join(" | ")`);
     clipboard.writeText(keptClipboard);

@@ -92,6 +92,10 @@ export function useSessionStream(sessionId: string | undefined, options: { versi
     if (!sessionId) return;
     let timer: number | undefined;
     const off = window.manga.onNotice?.((notice) => {
+      if (notice.topic === "proposal.changed") {
+        if (!notice.payload.sessionId || notice.payload.sessionId === sessionId) void load();
+        return;
+      }
       if (!LIVE_TOPICS.has(notice.topic)) return;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => { void load(); }, NOTICE_MS);

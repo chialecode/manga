@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import type { BrowserWindow } from "electron";
 import { loadVecExtension, type MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
-import { clickTestId, closeTabs, openProjectsPage, openRecords, setField, showTab, sleep, waitDrawn, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, closeTabs, openProjectsPage, openRecords, setField, showTab, sleep, waitDrawn, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { capturePage, caller, js, toRail, type FlowResult } from "./common.ts";
 import { WINDOW_SIZES, type Observation } from "./window-walk.ts";
 
@@ -118,10 +118,10 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     const boardShown = await waitForTestId(view, "whiteboard-board", "data-nodes", "0", 8000);
     await clickTestId(view, "whiteboard-add-card");
     await waitUntil(view, `document.querySelector('[data-testid="whiteboard-board"]')?.getAttribute("data-nodes") === "1"`, 6000);
-    await sleep(150);
+    await waitFrames(view, 1);
     await clickTestId(view, "whiteboard-add-card");
-    const two = await waitUntil(view, `document.querySelector('[data-testid="whiteboard-board"]')?.getAttribute("data-nodes") === "2"`, 6000);
-    await sleep(500);
+    const two = await waitUntil(view, `document.querySelector('[data-testid="whiteboard-board"]')?.getAttribute("data-nodes") === "2" && document.querySelectorAll('[data-testid="whiteboard-canvas"] .react-flow__node').length === 2`, 6000);
+    await waitFrames(view, 2);
     const boardId = await js<string>(view, `document.querySelector('[data-testid="whiteboard-board"]')?.getAttribute("data-board") ?? ""`);
     const before = await value<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId });
     // A card is taken with the mouse and put down some way off.
@@ -138,10 +138,14 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
       mouse("mouseup", window, { x, y });
       return { id: target.getAttribute("data-id") };
     })()`);
-    await sleep(900);
-    const after = await value<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId });
     const was = before.nodes.find((node) => node.id === moved.id);
-    const now = after.nodes.find((node) => node.id === moved.id);
+    let now: { id: string; x: number; y: number } | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const after = await value<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId });
+      now = after.nodes.find((node) => node.id === moved.id);
+      if (was && now && (Math.abs(now.x - was.x) > 4 || Math.abs(now.y - was.y) > 4)) break;
+      await sleep(50); // real time: poll whiteboard.get until debounced drag position persists
+    }
     const kept = Boolean(was && now) && (Math.abs(now!.x - was!.x) > 4 || Math.abs(now!.y - was!.y) > 4);
     // The window is reloaded and the board opened again: the same two cards, the dropped one where it was put.
     await view.webContents.reload();
@@ -149,9 +153,13 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     const back = await openTab("whiteboard");
     const again = back && await waitUntil(view, `document.querySelector('[data-testid="whiteboard-board"]')?.getAttribute("data-nodes") === "2"`, 10_000);
     const undone = again && await clickTestId(view, "whiteboard-undo") && await waitUntil(view, `(() => { const b = document.querySelector('[data-testid="whiteboard-board"]'); return b && b.getAttribute("data-nodes") === "2"; })()`, 4000);
-    await sleep(600);
-    const afterUndo = await value<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId });
-    const undoneNode = afterUndo.nodes.find((node) => node.id === moved.id);
+    let undoneNode: { id: string; x: number; y: number } | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const afterUndo = await value<{ nodes: Array<{ id: string; x: number; y: number }> }>("whiteboard.get", { boardId });
+      undoneNode = afterUndo.nodes.find((node) => node.id === moved.id);
+      if (undoneNode && was && Math.abs(undoneNode.x - was.x) <= 4 && Math.abs(undoneNode.y - was.y) <= 4) break;
+      await sleep(50); // real time: poll whiteboard.get until undo position persists
+    }
     const backWhereItWas = Boolean(undoneNode && was) && Math.abs(undoneNode!.x - was!.x) <= 4 && Math.abs(undoneNode!.y - was!.y) <= 4;
     wbDetail = { boardShown, two, moved: Boolean(moved.id), kept, again, undone, backWhereItWas };
     whiteboard = boardShown && two && Boolean(moved.id) && kept && Boolean(again) && Boolean(undone) && backWhereItWas;
@@ -174,9 +182,12 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
       await js(view, `document.querySelector('[data-testid="${editor}"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))`);
     }
     const texted = await waitUntil(view, `[...document.querySelectorAll('.mm-text')].some((el) => el.textContent === "窗口里的子主题")`, 6000);
-    await sleep(600);
     const mapId = await js<string>(view, `document.querySelector('[data-testid="mindmap-board"]')?.getAttribute("data-map") ?? ""`);
-    const saved = (await value<{ nodes: Array<{ text: string }> }>("mindmap.get", { mapId })).nodes.some((node) => node.text === "窗口里的子主题");
+    let saved = false;
+    for (let i = 0; i < 40 && !saved; i += 1) {
+      saved = (await value<{ nodes: Array<{ text: string }> }>("mindmap.get", { mapId })).nodes.some((node) => node.text === "窗口里的子主题");
+      if (!saved) await sleep(50); // real time: poll mindmap.get until debounced node text persists
+    }
     // Folding the root takes the child out of the page; unfolding brings it back.
     const folded = await clickTestId(view, `mm-fold-${rootNode}`) && await waitUntil(view, `![...document.querySelectorAll('.mm-text')].some((el) => el.textContent === "窗口里的子主题")`, 4000);
     const unfolded = await clickTestId(view, `mm-fold-${rootNode}`) && await waitUntil(view, `[...document.querySelectorAll('.mm-text')].some((el) => el.textContent === "窗口里的子主题")`, 4000);
@@ -188,8 +199,7 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     try {
       await clickTestId(view, "mindmap-export");
       await clickTestId(view, "mindmap-export-markdown");
-      await waitUntil(view, `true`, 100);
-      for (let i = 0; i < 40 && !fs.readdirSync(exportDir).length; i += 1) await sleep(100);
+      for (let i = 0; i < 80 && !fs.readdirSync(exportDir).length; i += 1) await sleep(50); // real time: poll exportDir for written markdown file
       const file = fs.readdirSync(exportDir)[0];
       exportedText = file ? fs.readFileSync(path.join(exportDir, file), "utf8") : "";
     } finally { testHooks.pick = undefined; }
@@ -208,7 +218,7 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
     const surface = await waitUntil(view, present("draft-surface"), 8000);
     const typed = surface && await js<boolean>(view, `(() => { const el = document.querySelector('[data-testid="draft-surface"]'); el.focus(); return document.execCommand("insertText", false, "窗口里写的文案第一句。"); })()`);
     const savedState = await waitUntil(view, `document.querySelector('[data-testid="draft-view"]')?.getAttribute("data-save-state") === "saved"`, 12_000);
-    await sleep(500);
+    await waitFrames(view, 2);
     const drafts = await value<{ drafts: Array<{ id: string }> }>("draft.list", { projectId });
     const stored = drafts.drafts.length ? await value<{ document?: { blocks?: Array<{ text?: string }> }; blocks?: Array<{ text?: string }> }>("draft.get", { draftId: drafts.drafts[0]!.id }) : null;
     const text = JSON.stringify(stored ?? {});
@@ -368,11 +378,11 @@ export async function runCreativeSmoke(input: { appService: MangaProductApp; gra
   for (const size of Object.keys(WINDOW_SIZES) as Array<keyof typeof WINDOW_SIZES>) {
     const [width, height] = WINDOW_SIZES[size];
     view.setContentSize(width, height);
-    await sleep(450);
+    await waitUntil(view, `Math.abs(window.innerWidth - ${width}) <= 4 && Math.abs(window.innerHeight - ${height}) <= 4`, 2000);
     const rows: Array<Record<string, unknown>> = [];
     for (const tab of TABS) {
       const shown = await openTab(tab);
-      await sleep(250);
+      await waitFrames(view, 2);
       const measured = shown ? await js<{ overflowX: boolean; tabbar: boolean; canvas: number | null; body: boolean }>(view, `(() => {
         const main = document.querySelector('[data-testid="shell-main"]') ?? document.body;
         const bar = document.querySelector('[data-testid="project-tabs"]');

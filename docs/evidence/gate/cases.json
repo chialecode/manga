@@ -1,14 +1,14 @@
 {
   "status": "passed",
-  "at": "2026-11-05T17:49:55.341Z",
-  "sourceFingerprint": "d916d04541ac9c5e26b8c8777aac766c65be5bf37f816465afc19626693c6dbb",
-  "lockFingerprint": "46a0d3219195c49466cf18199d6550aea3ab67662bc86d8b7424b4606bb81faf",
-  "buildScriptFingerprint": "4bfcee3b27774745f41a9f74d3da647db3ee95a6fbfc9abd0ba3b40878a9e698",
-  "gateScriptFingerprint": "7e4116d96406f064cd30ae04ea9aca7db5fb7fb12d59ec518a22cbde65992c2c",
-  "testScriptFingerprint": "a78b18dc06530e15d9c628d2c83a89007b2ce22304ff904ac8dce5db7aa8ca87",
-  "packageScriptFingerprint": "b22c03763c86d4d42a97f5504e787ccfaceb5d0482490b7ad34fe1831c3e5dc2",
-  "benchScriptFingerprint": "ccabc4bcbf8e20df65ceb65cbd233115a6124c6da96e7ca4040780cdda3144c7",
-  "installerScriptFingerprint": "357c50cb058889a402f2d594fbb30daf2068a6d65b5aae87148cc45ef49e44e2",
+  "at": "2026-11-08T07:13:10.695Z",
+  "sourceFingerprint": "fbd0b6994c782f5af1a2a32d915fc9b1b8f9a852d6a823e4d74cfefa4170da66",
+  "lockFingerprint": "9e3b406214305808bd8cefcc1a4ee403c62f0c5698c6dc0eb1145cb8774aeb06",
+  "buildScriptFingerprint": "0371340943049a28cf472347c426428b182b3dd697476168f5676e1a163d1282",
+  "gateScriptFingerprint": "5c3459906755130571c5bca29ca612c782f3d4f3fd0e093170c3ba035b5b3881",
+  "testScriptFingerprint": "cf6a51e8e9cc004d94aae456a325342e67e3a4150cd6c46134ad7c59f2156a5a",
+  "packageScriptFingerprint": "7802f4511e43de3a92ef28ebb69aa842217abf8f7515e6887d90265396503219",
+  "benchScriptFingerprint": "c73470c4c99069e45da9141f053d6e82507d8b21cf16cd414ef37a9b67f2eac0",
+  "installerScriptFingerprint": "92914f2e9a8b93f5e172a4f2308cdeba51e61b3041fc1f02bc0e905c4bc85d39",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -13104,6 +13104,11 @@
         },
         {
           "file": "tests/agent/trace.test.ts",
+          "name": "the trace of a task under the native runtime (AT-97) records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace.test.ts",
           "name": "the trace of a task under the native runtime (AT-97) keeps the context, the parameters and the tools that were sent, and what came back",
           "status": "passed"
         },
@@ -13145,6 +13150,11 @@
         {
           "file": "tests/agent/trace.test.ts",
           "name": "the trace of a task under the pi runtime (AT-97) lists the model requests, the tool call and their order, with times and tokens",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace.test.ts",
+          "name": "the trace of a task under the pi runtime (AT-97) records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)",
           "status": "passed"
         },
         {
@@ -15980,6 +15990,11 @@
         },
         {
           "file": "tests/shell/sidebar-tokens.test.ts",
+          "name": "AT-120 the sidebar's color keeps danger text (proposal warnings, \"不能撤销\", failed states) readable on the page in both themes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/sidebar-tokens.test.ts",
           "name": "AT-120 the sidebar's color is told apart from the frame and from the page by at least a visible step in each theme",
           "status": "passed"
         },
@@ -16941,7 +16956,12 @@
       "tests": [
         {
           "file": "tests/runtime/data-locations.test.ts",
-          "name": "where a new installation keeps things (AT-148) puts the application's data under LOCALAPPDATA and the person's files under the registered Documents and Downloads folders, per channel",
+          "name": "where a new installation keeps things (AT-148) puts the application's data under LOCALAPPDATA and the person's files under the registered Documents and Downloads folders, per channel, all lowercase",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/data-locations.test.ts",
+          "name": "where a new installation keeps things (AT-148) renames an existing uppercase MANGA folder in Documents or Downloads to lowercase manga, and rewrites uppercase overrides",
           "status": "passed"
         },
         {
@@ -17041,6 +17061,358 @@
         {
           "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150) names what is wrong in a configuration that would not do",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-151-proposal-delete-rename",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries keeps private backlink titles in the owner's card and persists a single proposal across tool replay and restart",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries rechecks a target when the owner handler runs, preserving a user edit made after confirmation was claimed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries invalidates a deletion when new references are added and an export when project contents change",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries keeps an export pending while the user only looks around the project (tabs, layout, a board's viewport)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries recovers a real process exit at proposal-applying without losing a draft or executing the deletion twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries recovers a real process exit at proposal-owner-after-effect without losing a draft or executing the deletion twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries recovers a real process exit at proposal-applying-after-command without losing a draft or executing the deletion twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries does not execute owner commands for an agent even if an internal caller supplies an owner grant",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries leaves decisions that do not fit in context unreported and includes every consumed decision before clipping other material",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries reports a concise failure category to the model without consuming an oversized owner diagnostic or exposing a host path",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-151 & AT-152 agent proposals: delete, rename, atomic confirm, revision check, recovery & limits proposes deleting and renaming objects with previews and backlink folding, applies and rejects via owner commands, and reports decisions once on the next turn",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-151 & AT-152 agent proposals: delete, rename, atomic confirm, revision check, recovery & limits consumes a proposal atomically once, marks proposals stale when the target is modified or deleted, recovers applying proposals on restart, and enforces the 20-proposal limit",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace.test.ts",
+          "name": "the trace of a task under the native runtime (AT-97) records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace.test.ts",
+          "name": "the trace of a task under the pi runtime (AT-97) records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) renders a delete proposal with irreversible warning and danger button, and calls proposal.apply / proposal.reject",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) opens directory picker for exportProject proposal and leaves proposal pending when cancelled",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) shows batch confirm/reject bar when >= 2 proposals are pending, opens batch modal on confirm, and displays decided statuses",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) confirms only the proposals shown when the dialog opened and continues after a failed item while showing its error",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) shows confirmation failures in the card and catches a failing save dialog without losing the pending action",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) shows export progress and a cancel action, and translates compatibility problems into Chinese",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-152-proposal-stale-once",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries keeps private backlink titles in the owner's card and persists a single proposal across tool replay and restart",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries rechecks a target when the owner handler runs, preserving a user edit made after confirmation was claimed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries invalidates a deletion when new references are added and an export when project contents change",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries keeps an export pending while the user only looks around the project (tabs, layout, a board's viewport)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries recovers a real process exit at proposal-applying without losing a draft or executing the deletion twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries recovers a real process exit at proposal-owner-after-effect without losing a draft or executing the deletion twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries recovers a real process exit at proposal-applying-after-command without losing a draft or executing the deletion twice",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries does not execute owner commands for an agent even if an internal caller supplies an owner grant",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries leaves decisions that do not fit in context unreported and includes every consumed decision before clipping other material",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-151 & AT-152 proposal integrity at the execution and recovery boundaries reports a concise failure category to the model without consuming an oversized owner diagnostic or exposing a host path",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-151 & AT-152 agent proposals: delete, rename, atomic confirm, revision check, recovery & limits proposes deleting and renaming objects with previews and backlink folding, applies and rejects via owner commands, and reports decisions once on the next turn",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-151 & AT-152 agent proposals: delete, rename, atomic confirm, revision check, recovery & limits consumes a proposal atomically once, marks proposals stale when the target is modified or deleted, recovers applying proposals on restart, and enforces the 20-proposal limit",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-153-proposal-roughcut",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery recovers a project export at proposal-export-before-publish, cleans only its own temporary file and never publishes a second package",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery recovers a project export at proposal-export-after-publish, cleans only its own temporary file and never publishes a second package",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery rolls back a roughcut job registration and its receipt together after a real process exit, then confirms once",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery keeps a roughcut export applying until it ends, and reports cancel as failure with no incomplete output",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery keeps a roughcut export applying until it ends, and reports fail as failure with no incomplete output",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-153 & AT-154 agent proposals: roughcut edit/export and project package export dry-runs roughcut edits on a copy, applies them as a single undoable Agent step, and exports the project package on confirmation",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-153 & AT-154 agent proposals: roughcut edit/export and project package export proposes and executes a lossless roughcut export into the work's roughcut folder",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-154-proposal-export-project",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery recovers a project export at proposal-export-before-publish, cleans only its own temporary file and never publishes a second package",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery recovers a project export at proposal-export-after-publish, cleans only its own temporary file and never publishes a second package",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery rolls back a roughcut job registration and its receipt together after a real process exit, then confirms once",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery keeps a roughcut export applying until it ends, and reports cancel as failure with no incomplete output",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposal-integrity.test.ts",
+          "name": "AT-153 & AT-154 export proposal completion and publication recovery keeps a roughcut export applying until it ends, and reports fail as failure with no incomplete output",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-153 & AT-154 agent proposals: roughcut edit/export and project package export dry-runs roughcut edits on a copy, applies them as a single undoable Agent step, and exports the project package on confirmation",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-153 & AT-154 agent proposals: roughcut edit/export and project package export proposes and executes a lossless roughcut export into the work's roughcut folder",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) renders a delete proposal with irreversible warning and danger button, and calls proposal.apply / proposal.reject",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) opens directory picker for exportProject proposal and leaves proposal pending when cancelled",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) shows batch confirm/reject bar when >= 2 proposals are pending, opens batch modal on confirm, and displays decided statuses",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) confirms only the proposals shown when the dialog opened and continues after a failed item while showing its error",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) shows confirmation failures in the card and catches a failing save dialog without losing the pending action",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "proposal cards & batch actions in MessageList (W4, AT-151, AT-154) shows export progress and a cancel action, and translates compatibility problems into Chinese",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-155-agent-opt-in",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-155 per-task opt-in tools: semantic.search & webpage.fetch runs semantic.search against the fake Embedding service within the task's scope and spoiler guard, and webpage.fetch against the loopback server",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace.test.ts",
+          "name": "the trace of a task under the native runtime (AT-97) records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/agent/trace.test.ts",
+          "name": "the trace of a task under the pi runtime (AT-97) records proposal.* tool calls and preserves frozen allowCommands on retry (AT-13, AT-151, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/grants-lifecycle.test.ts",
+          "name": "grants and lifecycle grants semantic.search and webpage.fetch only when explicitly opted in via allowCommands, without widening resource scope (AT-11, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/module-toggle.test.ts",
+          "name": "switching modules from settings refuses proposal.* and opt-in agent commands when their target module is turned off (AT-44, AT-155)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/proposals-ui.test.tsx",
+          "name": "Composer per-task opt-in menu & tags (W5, AT-155) shows semantic and webpage checkboxes only when enabled, and renders removable opt-in tags below the input",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-156-migrate-v14",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/library/schema-v14-migration.test.ts",
+          "name": "schema v14 migration (agent_proposals table and index, AT-156, A-121) backs up a v13 library to premigrate-v13, creates agent_proposals and its index, preserves every row and is a no-op on second open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v14-migration.test.ts",
+          "name": "schema v14 migration (agent_proposals table and index, AT-156, A-121) rolls back when interrupted before publishing the version, leaving v13 intact, and completes on retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v14-migration.test.ts",
+          "name": "schema v14 migration (agent_proposals table and index, AT-156, A-121) rolls back when a write fails during migration, and completes once the failure cause is removed",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v14-migration.test.ts",
+          "name": "schema v14 migration (agent_proposals table and index, AT-156, A-121) goes back by restoring premigrate-v13 and migrates again cleanly, and refuses a library newer than v14",
           "status": "passed"
         }
       ]

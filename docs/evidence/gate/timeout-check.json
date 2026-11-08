@@ -1,0 +1,23 @@
+{
+  "check": "smoke-wait-counterexample",
+  "at": "2026-11-07T15:12:20.1310525Z",
+  "status": "passed",
+  "phase": "workspace-migrated",
+  "timeoutMs": 4000,
+  "sourceRestored": true,
+  "probe": [
+    {
+      "status": "failed",
+      "ok": false,
+      "observations": [
+        {
+          "name": "migrated-profile",
+          "status": "failed",
+          "problems": [
+            "the project tab did not mount in the active context host"
+          ]
+        }
+      ]
+    }
+  ]
+}

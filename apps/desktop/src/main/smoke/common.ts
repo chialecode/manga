@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow, Event as ElectronEvent, WebContentsConsoleMessageEventParams } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
-import { DRAWN, PICK, clickTestId, sleep, trustedClick, waitUntil } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, trustedClick, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
 
 /** What every smoke flow shares: who calls, how a command is issued, how the evidence is written. */
 
@@ -16,7 +16,22 @@ export function caller(appService: MangaProductApp, grant: string) {
   return (commandId: string, input: Record<string, unknown>, key = createId("smoke")) => appService.call(actor, { commandId, idempotencyKey: key, input }, grant);
 }
 
-export const js = <T>(view: BrowserWindow, code: string): Promise<T> => view.webContents.executeJavaScript(code) as Promise<T>;
+/** Keep the renderer's actual error with the failing smoke step; Electron otherwise returns only "Script failed to execute". */
+export async function js<T>(view: BrowserWindow, code: string): Promise<T> {
+  let rendererError: string | undefined;
+  const onMessage = (details: ElectronEvent<WebContentsConsoleMessageEventParams>) => {
+    if (details.level === "error") rendererError = details.message.slice(0, 1000);
+  };
+  view.webContents.on("console-message", onMessage);
+  try {
+    return await view.webContents.executeJavaScript(code) as T;
+  } catch (error) {
+    const message = rendererError ?? (error instanceof Error ? error.message : String(error));
+    throw new Error(`${message}; smoke script: ${code.slice(0, 240)}`, { cause: error });
+  } finally {
+    view.webContents.off("console-message", onMessage);
+  }
+}
 
 /**
  * A screenshot is evidence, not a pass condition: a hidden window only yields frames with stayAwake (Electron 44 rejects a plain
@@ -71,11 +86,11 @@ export async function clickFirst(view: BrowserWindow, prefix: string, timeoutMs 
   })()`, timeoutMs);
 }
 
-/** The rail is there once the window has read its settings; a short wait lets the first tab of the context settle. */
+/** The rail is there once the window has read its settings; wait until the active context host (or settings view) is mounted and settled. */
 export async function toRail(view: BrowserWindow): Promise<boolean> {
-  await waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 10_000);
-  await sleep(500);
-  return waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 6000);
+  const ready = await waitUntil(view, `Boolean(document.querySelector('[data-testid="nav-home"]')) && Boolean(document.querySelector('[data-testid="context-host"][data-active="true"]') || document.querySelector('[data-testid="settings-area"]'))`, 10_000);
+  if (ready) await waitFrames(view);
+  return ready && await waitUntil(view, `Boolean(document.querySelector('[data-testid="nav-home"]'))`, 6000);
 }
 
 /**
@@ -91,9 +106,9 @@ export async function openSettingsPage(view: BrowserWindow, page: string): Promi
 /** Back to the workspace from the settings view, with the title bar's back arrow (it walks the pages visited, and the first page leaves); true once the settings view is gone. */
 export async function leaveSettings(view: BrowserWindow): Promise<boolean> {
   for (let step = 0; step < 14; step += 1) {
-    if (!(await waitUntil(view, `document.querySelector('[data-testid="settings-area"]')`, 300))) return true;
+    if (!(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="settings-area"]'))`))) return true;
     await clickTestId(view, "nav-back", 1000);
-    await sleep(80);
+    await waitFrames(view);
   }
   return waitUntil(view, `!document.querySelector('[data-testid="settings-area"]')`, 3000);
 }
@@ -106,8 +121,8 @@ export async function fullscreenRoundTrip(view: BrowserWindow, input: { button: 
   const wasFull = view.isFullScreen();
   const clicked = await trustedClick(view, input.button);
   const entered = clicked && await waitUntil(view, `document.fullscreenElement !== null`, 4000);
-  await sleep(300);
-  const windowFull = view.isFullScreen();
+  await waitFrames(view, 3);
+  const windowFull = entered && await waitWindowFullscreen(view, true);
   const state = await js<{ element: string | null; rootBox: { width: number; height: number } | null; inner: { width: number; height: number }; pressed: string | null }>(view, `(() => {
     const root = document.querySelector('[data-testid="${input.root}"]');
     const box = root ? root.getBoundingClientRect() : null;
@@ -121,12 +136,22 @@ export async function fullscreenRoundTrip(view: BrowserWindow, input: { button: 
   if (input.shot) await capturePage(view, input.evidenceDir, input.shot);
   // Within a pixel of the screen on both axes: the reader is the full-screen element, not a small box inside it.
   const fills = Boolean(state.rootBox) && Math.abs(state.rootBox!.width - state.inner.width) <= 1 && Math.abs(state.rootBox!.height - state.inner.height) <= 1;
+  const { restored, leftBy } = await exitScreenFullscreen(view, wasFull, input.button);
+  return { ok: Boolean(entered) && windowFull && fills && restored, entered: Boolean(entered), windowFull, fills, restored, leftBy, state };
+}
+
+/** Esc leaves the browser first, then the native window. A lagging native exit must never trigger a click that enters fullscreen again. */
+export async function exitScreenFullscreen(view: BrowserWindow, wasFull: boolean, button: string): Promise<{ left: boolean; restored: boolean; leftBy: string }> {
   view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
   view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
   let left = await waitUntil(view, `document.fullscreenElement === null`, 3000);
   let leftBy = "escape";
-  if (!left) { await trustedClick(view, input.button); left = await waitUntil(view, `document.fullscreenElement === null`, 3000); leftBy = "button"; }
-  await sleep(300);
-  const restored = left && view.isFullScreen() === wasFull;
-  return { ok: Boolean(entered) && windowFull && fills && restored, entered: Boolean(entered), windowFull, fills, restored, leftBy, state };
+  if (!left) {
+    await trustedClick(view, button);
+    left = await waitUntil(view, `document.fullscreenElement === null`, 3000);
+    leftBy = "button";
+  }
+  const restored = left && await waitWindowFullscreen(view, wasFull);
+  await waitFrames(view, 3);
+  return { left, restored, leftBy };
 }

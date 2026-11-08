@@ -4,6 +4,26 @@ import type { BrowserWindow } from "electron";
 
 export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Browser fullscreen changes before the native window finishes entering or leaving it; wait for both before the next click or resize. */
+export function waitWindowFullscreen(view: BrowserWindow, expected: boolean, timeoutMs = 3000): Promise<boolean> {
+  if (view.isDestroyed()) return Promise.resolve(false);
+  if (view.isFullScreen() === expected) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      view.off("enter-full-screen", finish);
+      view.off("leave-full-screen", finish);
+      view.off("closed", finish);
+      resolve(!view.isDestroyed() && view.isFullScreen() === expected);
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    if (expected) view.on("enter-full-screen", finish);
+    else view.on("leave-full-screen", finish);
+    view.on("closed", finish);
+    if (view.isFullScreen() === expected) finish();
+  });
+}
+
 /**
  * In the page: the element with this test id that the window draws. A context or a tab out of sight keeps its page mounted, so the same test id can be in the
  * page several times and the first of them is not always the one a person sees; when none is drawn the first stands.
@@ -24,7 +44,7 @@ export async function clickTestId(view: BrowserWindow, testId: string, timeoutMs
         el.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, cancelable: true }));
         resolve(true);
       } else if (Date.now() - started > ${timeoutMs}) resolve(false);
-      else setTimeout(tick, 50);
+      else setTimeout(tick, 16);
     };
     tick();
   })`) as Promise<boolean>;
@@ -45,7 +65,7 @@ export async function pointerClick(view: BrowserWindow, testId: string, timeoutM
         el.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, cancelable: true, detail: 1 }));
         resolve(true);
       } else if (Date.now() - started > ${timeoutMs}) resolve(false);
-      else setTimeout(tick, 50);
+      else setTimeout(tick, 16);
     };
     tick();
   })`) as Promise<boolean>;
@@ -63,7 +83,7 @@ export async function trustedClick(view: BrowserWindow, testId: string, timeoutM
       const box = el && !el.disabled ? el.getBoundingClientRect() : null;
       if (box && box.width > 0 && box.height > 0) resolve({ x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) });
       else if (Date.now() - started > ${timeoutMs}) resolve(null);
-      else setTimeout(tick, 50);
+      else setTimeout(tick, 16);
     };
     tick();
   })`) as { x: number; y: number } | null;
@@ -86,7 +106,15 @@ export async function revealNovelControls(view: BrowserWindow): Promise<boolean>
     root.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: box.left + box.width / 2, clientY: box.bottom - 12 }));
     return true;
   })()`) as boolean;
-  if (shown) await sleep(260);
+  if (shown) {
+    await waitDrawn(view, "reading-footer", 2000);
+    await waitUntil(
+      view,
+      `(() => { const root = document.querySelector('[data-testid="reading-page"]'); const foot = document.querySelector('[data-testid="reading-footer"]'); if (!root || !foot) return false; const rb = root.getBoundingClientRect(); const fb = foot.getBoundingClientRect(); const tf = getComputedStyle(foot).transform; return fb.bottom <= rb.bottom + 0.5 && (tf === "none" || tf === "matrix(1, 0, 0, 1, 0, 0)"); })()`,
+      2000,
+    );
+    await waitFrames(view);
+  }
   return shown;
 }
 
@@ -97,7 +125,7 @@ export async function revealNovelControls(view: BrowserWindow): Promise<boolean>
 export async function pressKey(view: BrowserWindow, keyCode: string, heldMs = 40): Promise<void> {
   view.webContents.focus();
   view.webContents.sendInputEvent({ type: "keyDown", keyCode });
-  await sleep(heldMs);
+  await sleep(heldMs); // real time: key held duration between keyDown and keyUp
   view.webContents.sendInputEvent({ type: "keyUp", keyCode });
 }
 
@@ -110,7 +138,7 @@ export async function waitForTestId(view: BrowserWindow, testId: string, attribu
       const ok = el && (${expected === null ? "true" : `el.getAttribute("${attribute}") === ${JSON.stringify(expected)}`});
       if (ok) resolve(true);
       else if (Date.now() - started > ${timeoutMs}) resolve(false);
-      else setTimeout(tick, 50);
+      else setTimeout(tick, 16);
     };
     tick();
   })`) as Promise<boolean>;
@@ -125,16 +153,37 @@ export async function waitUntil(view: BrowserWindow, expression: string, timeout
       try { ok = Boolean(${expression}); } catch { ok = false; }
       if (ok) resolve(true);
       else if (Date.now() - started > ${timeoutMs}) resolve(false);
-      else setTimeout(tick, 50);
+      else setTimeout(tick, 16);
     };
     tick();
+  })`) as Promise<boolean>;
+}
+
+/** Wait until the element with this test id contains the expected text. */
+export async function waitText(view: BrowserWindow, testId: string, expected: string, timeoutMs = 8000): Promise<boolean> {
+  return waitUntil(view, `(${PICK}(${JSON.stringify(testId)})?.textContent ?? "").includes(${JSON.stringify(expected)})`, timeoutMs);
+}
+
+/** Wait for a number of animation frames (or a short timer fallback when a backgrounded window throttles rAF) so React and layout settle. */
+export async function waitFrames(view: BrowserWindow, frames = 2): Promise<boolean> {
+  const count = Math.max(1, Math.floor(frames));
+  return view.webContents.executeJavaScript(`new Promise((resolve) => {
+    let left = ${count};
+    const done = () => { void document.body?.offsetHeight; resolve(true); };
+    const timer = setTimeout(done, ${Math.max(32, count * 20)});
+    const step = () => {
+      left -= 1;
+      if (left <= 0) { clearTimeout(timer); done(); }
+      else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   })`) as Promise<boolean>;
 }
 
 /** Type into a React-controlled input or textarea the way a user does: through the native setter, then an input event. */
 export async function setField(view: BrowserWindow, testId: string, value: string): Promise<boolean> {
   return view.webContents.executeJavaScript(`(() => {
-    const el = document.querySelector('[data-testid="${testId}"]');
+    const el = ${PICK}(${JSON.stringify(testId)});
     if (!el) return false;
     const proto = el instanceof window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const set = Object.getOwnPropertyDescriptor(proto, "value")?.set;
@@ -148,7 +197,7 @@ export async function setField(view: BrowserWindow, testId: string, value: strin
 /** Choose an option of a React-controlled select, the way a person's choice reaches it: the native setter, then a change event. */
 export async function setSelect(view: BrowserWindow, testId: string, value: string): Promise<boolean> {
   return view.webContents.executeJavaScript(`(() => {
-    const el = document.querySelector('[data-testid="${testId}"]');
+    const el = ${PICK}(${JSON.stringify(testId)});
     if (!el) return false;
     const set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
     if (!set) return false;
@@ -312,7 +361,7 @@ export async function closeTabs(view: BrowserWindow, kinds: readonly string[] | 
       if (chips.length === 0 || Date.now() - started > 8000) return resolve(closed);
       const button = chips[0].querySelector('[data-testid="tab-close"]');
       if (button) { button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); closed += 1; }
-      setTimeout(tick, 80);
+      setTimeout(tick, 20);
     };
     tick();
   })`) as Promise<number>;
@@ -342,6 +391,6 @@ export async function showTab(view: BrowserWindow, match: { id?: string; kind?: 
 export async function pressChord(view: BrowserWindow, keyCode: string, modifiers: readonly ("control" | "shift" | "alt")[] = [], heldMs = 40): Promise<void> {
   view.webContents.focus();
   view.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers: [...modifiers] } as never);
-  await sleep(heldMs);
+  await sleep(heldMs); // real time: chord held duration between keyDown and keyUp
   view.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers: [...modifiers] } as never);
 }

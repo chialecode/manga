@@ -29,7 +29,7 @@
 
 ## 执行与后续
 
-操作规则见 [Git 与 GitHub](../dev-rules/git-and-github.md)，建立与验证记录在提交 `dc925e9`（[归档](https://github.com/chialecode/manga/tree/dc925e9/docs/evidence)）。CI、Ruleset、App 配置和服务端实际生效分别核验；不把 JSON/YAML 文件存在当作已经启用。
+操作规则见 [Git 与 GitHub](../dev-rules/git-and-github.md)，建立与验证记录在提交 `ec9968d`（[归档](https://github.com/chialecode/manga/tree/ec9968d/docs/evidence)）。CI、Ruleset、App 配置和服务端实际生效分别核验；不把 JSON/YAML 文件存在当作已经启用。
 
 新增协作者、正式应用工程、外部贡献协议或产品发布要求时再修订相应部分。任何低频策略都不构成 GitHub 账号免于风控的保证。
 
@@ -56,6 +56,14 @@ A-20 同时规定 A 规划、B 执行、A 审查的重复协作流程；使用�
 ## 2026-10-03 提交签名
 
 用户决定以后所有提交都带 DCO `Signed-off-by` 签名（A-43），替代上文“DCO 本期不作为必需状态”中对提交签名的安排。签名使用提交者本人的 Git 身份，本仓通过 `prepare-commit-msg` hook 自动补签。GitHub 上的 DCO App 检查仍不是 Ruleset 必需检查，是否改为必需属于远端配置变更，另行授权。该阶段已推送的提交 `1d0524f` 没有签名；用户随后明确授权补签并强推，它与追加提交 `99b27a6` 归并为一个带签名的阶段提交，用 `--force-with-lease` 推送。这次授权只针对那个 PR，不构成以后自动改写远端历史的许可。
+
+## 2026-11-08 阶段编号与历史改写
+
+阶段按顺序编号（A-122）：阶段名是 M 加从 1 起的顺序号，不再有编号 0 的阶段，也不用字母后缀拆子阶段；编号与 PR 编号无关，以后引入 GitHub bot 后 PR 编号不再与阶段对应。人读的阶段标签用大写（正文、计划、决定记录与编号），机器标识用小写（路径、文件名、分支、提交 scope、数据目录、`currentStage`），细则见 [Git 与 GitHub 1.1](../dev-rules/git-and-github.md#11-分支边界与基点)。用户重建仓库时改写了 main 的历史并强推，结果是初始化提交加八个阶段提交，恰好各自对应 PR #1—#8；进行中的阶段改为 M9（分支 `feat/m9-next`）。改写前后对应提交的内容相同，所以文档里的提交哈希与固定归档链接都换成改写后的提交；没有对应提交的旧哈希（阶段分支上被归并的中间提交、试用包的构建版本）只作为历史记录保留。这次改写是用户本人的操作，不构成 Agent 以后改写远端历史的许可。
+
+## 2026-11-08 外部反馈只走 Discussions
+
+用户关闭了仓库的 Issues，开启 Discussions，PR 只允许协作者创建，来自 fork 的 PR 运行 workflow 前须维护者批准（A-123）。原因是防止 AI 批量生成的垃圾内容和难以处理的低质量 Issue。这修订了建立时“开启 Issues 与结构化表单、关闭 Discussions”的安排；Issue 表单随之删除。期望配置记录在 `.github/repository-settings.json` 与 `.github/actions-policy.json`，2026-11-08 用 GitHub API 核对过实际设置与之一致。
 
 ## 2026-09-20 远端操作时机
 

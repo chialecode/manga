@@ -4,7 +4,7 @@ import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createTranslator } from "@manga/i18n";
 import { testHooks } from "../test-hooks.ts";
-import { DRAWN, PICK, clickTestId, closeTabs, openLibrary, openShelf, pressKey, setField, sleep, viaSidebar, waitForTestId, waitUntil, type ShelfKind } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, closeTabs, openLibrary, openShelf, pressKey, setField, viaSidebar, waitForTestId, waitFrames, waitUntil, type ShelfKind } from "./driver.ts";
 import { js, openSettingsPage, toRail, type caller } from "./common.ts";
 import type { Observe } from "./reader-controls-walk.ts";
 
@@ -128,7 +128,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         if (!removed) problems.push("the library path of the video could not be removed in settings");
         detail.stateAfterRemoval = await openableOf(videoId);
         if (detail.stateAfterRemoval !== "outside") problems.push(`the removed path leaves the video "${String(detail.stateAfterRemoval)}", not "outside"`);
-        await sleep(400);
+        await waitFrames(view);
         detail.railAfter = await railState(videoId);
         detail.railRowShown = session ? await exists(`session-open-${session}`) : false;
         if (detail.railAfter === "open" || detail.railRowShown) problems.push("the rail still offers the video whose file is outside the library");
@@ -137,10 +137,10 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         await toRail(view);
         await openLibrary(view);
         const overviewShown = await waitFor(`document.querySelector('[data-testid="page-library"]')`, 8000);
-        await sleep(600);
+        await waitUntil(view, `!document.querySelector('[data-testid="work-menu-${videoWork.id}"]')`, 3000);
         const onOverview = await exists(`work-menu-${videoWork.id}`);
         const shelfShown = await openShelf(view, "video", 6000);
-        await sleep(600);
+        await waitUntil(view, `!document.querySelector('[data-testid="open-${videoId}"], [data-testid="open-work-${videoWork.id}"]')`, 3000);
         const onShelf = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="open-${videoId}"], [data-testid="open-work-${videoWork.id}"]'))`);
         detail.listed = { overviewShown, onOverview, shelfShown, onShelf };
         if (!overviewShown || !shelfShown) problems.push("the overview or the video shelf did not open");
@@ -189,7 +189,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         testHooks.pick = () => folders.video;
         const added = await clickTestId(view, "library-outside-add") && await gone(`library-outside-${videoId}`, 8000);
         testHooks.pick = undefined;
-        await sleep(500);
+        await waitUntil(view, `[...document.querySelectorAll('[data-testid="toast-notice"]')].some((el) => (el.textContent ?? "").includes(${JSON.stringify(t("content.folderAdded"))}))`, 3000);
         detail.folderAdded = added;
         detail.noticeAfterAdd = (await noticeText()).includes(t("content.folderAdded"));
         detail.stateAfterAdd = await openableOf(videoId);
@@ -204,7 +204,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         detail.opensAgain = opened;
         if (!opened) problems.push("the video does not open after its folder was added");
         await closeTabs(view, ["reader"]);
-        await sleep(300);
+        await waitFrames(view);
 
         // A file that is not where its library path says: the question is the other one, and locating the file again opens it. The novel's text file is
         // used (an archive or a film is held open by the application, and Windows keeps such a file's name after it is deleted).
@@ -219,7 +219,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
           const read = await openWorkPage("novel", novelWork.id, novelId) && await clickTestId(view, "work-read", 8000) && await waitFor(`document.querySelector('[data-testid="reading-page"]')`, 10_000);
           if (!read) problems.push("the novel did not open before its file was removed");
           await closeTabs(view, ["reader"]);
-          await sleep(300);
+          await waitFrames(view);
           fs.rmSync(file, { force: true });
           detail.stateMissing = await openableOf(novelId);
           const missing = await askFromOverview(novelWork.id);
@@ -231,7 +231,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
           await shot("open-blocked-missing");
           let restored = false;
           for (let attempt = 0; attempt < 20 && !restored; attempt += 1) {
-            try { fs.writeFileSync(file, bytes); restored = true; } catch { await sleep(250); }
+            try { fs.writeFileSync(file, bytes); restored = true; } catch { await waitFrames(view); }
           }
           if (!restored) problems.push("the file could not be put back");
           testHooks.pick = () => file;
@@ -240,7 +240,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
           detail.located = located;
           if (!located) problems.push("locating the file again did not open it");
           await closeTabs(view, ["reader"]);
-          await sleep(300);
+          await waitFrames(view);
         }
       }
     } catch (error) {
@@ -282,7 +282,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         await shot("entry-delete-dialog");
         await clickTestId(view, "delete-entry-confirm");
         const closed = await gone("delete-entry", 8000);
-        await sleep(500);
+        await waitUntil(view, `[...document.querySelectorAll('[data-testid="toast-notice"]')].some((el) => (el.textContent ?? "").includes(${JSON.stringify(t("unassigned.title"))}))`, 3000);
         const notice = await noticeText();
         detail.notice = notice;
         if (!closed) problems.push("the dialog stayed after the entry was deleted");
@@ -304,7 +304,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
           if (unsorted && unsorted.files.length > 0) {
             const onDisk = unsorted.files.filter((file) => { const where = appService.workFolders.pathOf(file.id); return Boolean(where) && fs.existsSync(where!); }).length;
             located = { relDir: unsorted.folder.relDir, files: unsorted.files.length, onDisk };
-          } else await sleep(250);
+          } else await waitFrames(view);
         }
         detail.files = located ? { under: "未分类", files: located.files, onDisk: located.onDisk } : null;
         if (!located) problems.push("the files of the comic did not move under 未分类");
@@ -359,12 +359,12 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
           warning: document.querySelector('[data-testid="conv-confirm-warning"]')?.textContent ?? "",
         }))()`);
         if (!confirm.removes || !confirm.keeps || !confirm.warning) problems.push("the question lacks what goes, what stays or the warning");
-        await sleep(400); // the dialog fades in; a picture taken at once shows the page without it
+        await waitFrames(view, 2);
         await shot("conversation-delete-confirm");
         await clickTestId(view, "conv-confirm-ok");
         const closed = await gone("conv-confirm", 8000);
         const rowGone = await gone(`conv-${pick}`, 8000);
-        await sleep(400);
+        await waitUntil(view, `[...document.querySelectorAll('[data-testid="toast-notice"]')].some((el) => (el.textContent ?? "").includes(${JSON.stringify(t("records.conv.done", { count: 1 }))}))`, 3000);
         const notice = await noticeText();
         const after = (await call("conversation.list", { limit: 1 })).value as { total?: number } | undefined;
         detail.after = after?.total ?? null;
@@ -394,7 +394,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
       else {
         // Nothing filled in: every field that is wrong says so beside itself, the dialog stays, and the first of them has the focus.
         await clickTestId(view, "connection-dialog-save");
-        await sleep(400);
+        await waitUntil(view, `document.querySelectorAll('[data-testid^="field-error-"]').length >= 3`, 2000);
         const errors = await js<{ fields: string[]; focus: string | null; open: boolean }>(view, `(() => ({
           fields: [...document.querySelectorAll('[data-testid^="field-error-"]')].map((el) => el.getAttribute("data-testid").slice("field-error-".length)),
           focus: document.activeElement?.getAttribute("data-field") ?? null,
@@ -413,7 +413,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
         await setField(view, "connection-model-id", "synthetic-chat");
         await setField(view, "connection-secret", SECRET);
         await setField(view, "connection-timeout", "5");
-        await sleep(150);
+        await waitFrames(view, 1);
         await clickTestId(view, "connection-dialog-save");
         const listed = await waitFor(`[...document.querySelectorAll('li.connection')].some((el) => (el.textContent || "").includes(${JSON.stringify(label)}))`, 8000);
         if (!listed) problems.push("the saved connection is not in the list");
@@ -441,7 +441,7 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
 
         // A change, then cancel: the question about the unsaved change; keeping goes on editing, discarding closes and leaves the saved label.
         await setField(view, "connection-label", `${label}（改）`);
-        await sleep(150);
+        await waitFrames(view, 1);
         await clickTestId(view, "connection-dialog-cancel");
         const asked = await waitFor(`document.querySelector('[data-testid="connection-discard"]')`, 3000);
         if (!asked) problems.push("cancelling with an unsaved change did not ask");
@@ -507,7 +507,8 @@ export async function runManagementWalk(env: ManagementEnv): Promise<void> {
       const FRONT = '[data-testid="context-host"][data-active="true"] [data-testid="tab-panel"][data-focused="true"]';
       const look = async (name: string, how: () => Promise<boolean>, titleSelector: string, expected: string, extra: Array<[string, string]> = [], front: string = FRONT) => {
         const arrived = await how();
-        await sleep(500);
+        await waitUntil(view, `(document.querySelector(${JSON.stringify(`${front} ${titleSelector}`)})?.textContent ?? "").trim() === ${JSON.stringify(expected)}`, 3000);
+        await waitFrames(view);
         const title = (await js<string>(view, `document.querySelector(${JSON.stringify(`${front} ${titleSelector}`)})?.textContent ?? ""`)).trim();
         const found = await leaks();
         const missingExtra = [];

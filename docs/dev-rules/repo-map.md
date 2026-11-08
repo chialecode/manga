@@ -46,7 +46,7 @@
 | `dist/desktop/native` | 与 Electron 版本/架构匹配的 native binding 和下载 staging；不覆盖 Node 测试 binding |
 | `dist/desktop/packages` | 当前未签名桌面包；最新指针 `dist/desktop/latest-package.json` 带源码指纹 |
 | `dist/desktop/installer` | `stage package` 用 electron-builder 做出的本通道按用户安装包（未签名，不发布） |
-| `dist/desktop/development` | `pnpm dev` 的开发 Profile、运行日志和指针；不会访问正式 Profile |
+| `dist/desktop/development` | `pnpm dev --isolated` 的开发 Profile、文档、下载与指针；不带 `--isolated` 时开发版用 `%LOCALAPPDATA%\manga-dev` 等自己的位置。两种都不访问正式版的数据 |
 | `dist/keys` | 第一方插件签名密钥（私钥不进仓库，公钥在 `packages/app-core/src/plugins/trust.ts`）；丢失后无法再签随包插件，须自行备份（见[用户待办](../../USER-ACTIONS.md)） |
 | `dist/plugins` | 构建并签名的随包插件 `.manga-plugin`；打包时复制到 `resources/plugins` |
 | `dist/samples/media` | 合成媒体/阅读/录音样本与清单；人工复测和包烟测使用，不提交私人收藏或真实资料 |
@@ -97,4 +97,4 @@
 
 ## 建立工程时登记
 
-Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md) 选定，当前实际目录/依赖按上表，产品验收另行记录。数据位置按 A-118 分两个根（应用数据在 `%LOCALAPPDATA%\manga`，用户文件在系统登记的“文档”下的 `MANGA`，下载在“下载”下的 `MANGA`；开发版各用 `-dev` 后缀），全部生成位置可配置、通道隔离，启动定位在 `packages/app-core/src/locations.ts`。组合运行时、写入宿主与媒体后端的技术定稿见[用户待办](../../USER-ACTIONS.md)与 [ADR-0007](../decisions/0007-technology-stack.md)。密钥示例用占位值，实际依赖由锁文件维护。
+Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md) 选定，当前实际目录/依赖按上表，产品验收另行记录。数据位置按 A-118 分两个根（应用数据在 `%LOCALAPPDATA%\manga`，用户文件在系统登记的“文档”下的 `manga`，下载在“下载”下的 `manga`；开发版各用 `-dev` 后缀，所有路径统一用小写的 `manga`），全部生成位置可配置、通道隔离，启动定位在 `packages/app-core/src/locations.ts`。组合运行时、写入宿主与媒体后端的技术定稿见[用户待办](../../USER-ACTIONS.md)与 [ADR-0007](../decisions/0007-technology-stack.md)。密钥示例用占位值，实际依赖由锁文件维护。

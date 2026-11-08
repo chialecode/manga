@@ -1,4 +1,4 @@
-import type { SourceLocator } from "@manga/contracts";
+import type { ProposalCard, SourceLocator } from "@manga/contracts";
 import { MangaError } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { readLayout } from "../domain/revision-layout.ts";
@@ -13,7 +13,16 @@ type SessionRow = { id: string; kind: string; target_id: string | null };
 
 const parse = <T>(raw: string | null | undefined, fallback: T): T => { if (!raw) return fallback; try { return JSON.parse(raw) as T; } catch { return fallback; } };
 
-export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | null, input: { sessionId: string; limit?: number; before?: string; from?: string }): { items: StreamItem[]; hasMore: boolean; session: { id: string; kind: string; targetId: string | null; workId: string | null; resourceId: string | null } } {
+export type ProposalStreamLike = {
+  byRunForSession(sessionId: string): Map<string, ProposalCard[]>;
+};
+
+export function sessionStream(
+  store: DrizzleStore,
+  voice: VoiceSessionLike | null,
+  input: { sessionId: string; limit?: number; before?: string; from?: string },
+  proposals?: ProposalStreamLike | null,
+): { items: StreamItem[]; hasMore: boolean; session: { id: string; kind: string; targetId: string | null; workId: string | null; resourceId: string | null } } {
   const session = store.sqlite.prepare("SELECT id, kind, target_id FROM agent_sessions WHERE id = ?").get(input.sessionId) as SessionRow | undefined;
   if (!session) throw new MangaError("NOT_FOUND", "session missing");
   // `from` reads every message from that time to the newest, at most FROM_CAP of them (a refresh that keeps the pages already loaded).
@@ -87,14 +96,17 @@ export function sessionStream(store: DrizzleStore, voice: VoiceSessionLike | nul
   const runs = store.sqlite.prepare("SELECT id, status, input_text, live_text, error_json, created_at, updated_at FROM agent_runs WHERE session_id = ? AND created_at < ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?").all(session.id, before, from, limit + 1) as Array<{
     id: string; status: string; input_text: string; live_text: string | null; error_json: string | null; created_at: string; updated_at: string;
   }>;
+  const proposalsByRun = proposals ? proposals.byRunForSession(session.id) : null;
   for (const run of runs) {
     const first = store.sqlite.prepare("SELECT payload_json FROM agent_messages WHERE run_id = ? AND role = 'user' ORDER BY created_at LIMIT 1").get(run.id) as { payload_json: string | null } | undefined;
     const quick = parse<{ quickTask?: { id?: string | null; name?: string } }>(first?.payload_json, {}).quickTask;
     items.push({ kind: "user", id: `${run.id}:user`, at: run.created_at, runId: run.id, text: run.input_text, quickTask: quick?.name ? { id: quick.id ?? null, name: quick.name } : null });
     const answer = (store.sqlite.prepare("SELECT text FROM agent_messages WHERE run_id = ? AND role = 'assistant' ORDER BY created_at").all(run.id) as Array<{ text: string }>).map((row) => row.text).filter(Boolean).join("\n");
+    const runProposals = proposalsByRun?.get(run.id);
     items.push({
       kind: "agent", id: `${run.id}:agent`, at: run.created_at, runId: run.id, status: run.status,
       text: (run.status === "running" || run.status === "queued" ? run.live_text : answer || run.live_text) ?? "", error: parse<{ code: string; message: string } | null>(run.error_json, null),
+      ...(runProposals?.length ? { proposals: runProposals } : {}),
     });
   }
 

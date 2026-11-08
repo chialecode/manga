@@ -5,39 +5,43 @@ import os from "node:os";
 import { currentStage, loadGate, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
 import { writeReport } from "./report.mjs";
 
+/** A new attempt supersedes the old result immediately, including when the test process exits before writing its report. */
+export function beginTestEvidence(evidence, fields) {
+  fs.rmSync(path.join(evidence, "cases.json"), { force: true });
+  const started = { ...fields, status: "running", at: new Date().toISOString(), runner: "vitest", productAcceptance: "not-run" };
+  fs.writeFileSync(path.join(evidence, "test-run.json"), `${JSON.stringify(started, null, 2)}\n`);
+}
+
 /** node scripts/stage.mjs test: every Vitest case plus the script self-tests, matched to the required cases. */
 export function runStageTest({ withReport = false } = {}) {
   const stage = currentStage();
   const config = loadGate();
   const root = repoRoot;
+  const evidence = runDir();
+  const fingerprints = stageFingerprints(root, config);
+  beginTestEvidence(evidence, { stage, ...fingerprints });
   const vitest = path.join(root, "node_modules/vitest/vitest.mjs");
   if (!fs.existsSync(vitest)) {
+    fs.writeFileSync(path.join(evidence, "test-run.json"), `${JSON.stringify({ stage, ...fingerprints, status: "failed", reason: "vitest is not installed", productAcceptance: "not-run" }, null, 2)}\n`);
     console.error("FAILED stage tests: vitest is not installed");
     return 1;
   }
-  const evidence = runDir();
   // Taken before the tests run: an edit made during the run leaves the result stale.
-  const fingerprints = stageFingerprints(root, config);
   const leftoversBefore = testTempEntries();
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "manga-vitest-"));
   const reporterFile = path.join(scratch, "vitest.json");
   // Stage evidence runs every test: the large files on, and never the CI switch that skips tests needing the media tools.
-  const env = { ...process.env, MANGA_LARGE_FILES: "1" };
+  // The global setup and its workers all live under this attempt's root. Keep it on failure; delete it after a successful run.
+  const env = { ...process.env, MANGA_LARGE_FILES: "1", MANGA_KEEP_TEST_TMP: "1", TMP: scratch, TEMP: scratch, TMPDIR: scratch };
   delete env.MANGA_MEDIA_PREREQUISITES;
   const result = spawnSync(process.execPath, [vitest, "run", "--config", "vitest.config.ts", "--reporter=default", "--reporter=json", `--outputFile.json=${reporterFile}`], {
     cwd: root,
     stdio: "inherit",
     env,
   });
-  const vitestReport = fs.existsSync(reporterFile) ? JSON.parse(fs.readFileSync(reporterFile, "utf8")) : undefined;
-  fs.rmSync(scratch, { recursive: true, force: true });
-  if (result.status !== 0 || !vitestReport) return result.status || 1;
-  // A test run leaves nothing in the system's temporary folder (LOOP-25); only the names the tests use are counted.
-  const leftovers = [...testTempEntries()].filter((name) => !leftoversBefore.has(name));
-  if (leftovers.length) {
-    console.error(JSON.stringify({ status: "failed", check: "stage-test", reason: "temporary directories left behind", count: leftovers.length, prefixes: [...new Set(leftovers.map((name) => name.replace(/[^-]*$/, "")))] }));
-    return 1;
-  }
+  const vitestReport = fs.existsSync(reporterFile) ? JSON.parse(fs.readFileSync(reporterFile, "utf8")) : {
+    success: false, testResults: [], numTotalTests: 0, numPassedTests: 0, numFailedTests: 0, numPendingTests: 0,
+  };
 
   const selfTests = ["scripts/stage-report.test.mjs", "scripts/check-docs.test.mjs"];
   const executed = [];
@@ -53,6 +57,7 @@ export function runStageTest({ withReport = false } = {}) {
     executed.push({ file, name: file, status: run.status === 0 ? "passed" : "failed" });
   }
 
+  const selfTestsPassed = executed.filter((entry) => selfTests.includes(entry.file)).every((entry) => entry.status === "passed");
   const cases = config.cases.map((def) => {
     const tests = [];
     for (const pattern of def.tests ?? []) {
@@ -64,9 +69,22 @@ export function runStageTest({ withReport = false } = {}) {
     const status = tests.some((entry) => entry.status !== "passed") ? (tests.some((entry) => entry.status === "failed") ? "failed" : "not-run") : "passed";
     return { caseId: def.id, kind: def.kind, status, tests };
   });
-  const selfTestsPassed = executed.filter((entry) => selfTests.includes(entry.file)).every((entry) => entry.status === "passed");
+  if (result.status === 0 && vitestReport.success && selfTestsPassed && cases.every((entry) => entry.status === "passed")) {
+    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 150 });
+  }
+  // A passed attempt leaves nothing; a failed attempt retains its synthetic profile and reporter for diagnosis.
+  const entriesAfter = testTempEntries();
+  const leftovers = [...entriesAfter].filter((name) => !leftoversBefore.has(name));
+  const tempDirs = {
+    before: leftoversBefore.size,
+    after: entriesAfter.size,
+    removed: fs.existsSync(scratch) ? 0 : 1,
+    left: leftovers.length,
+    prefixes: [...new Set(leftovers.map((name) => name.replace(/[^-]*$/, "")))],
+  };
   const testRun = {
-    status: vitestReport.success && selfTestsPassed && cases.every((entry) => entry.status === "passed") ? "passed" : "failed",
+    tempDirs,
+    status: result.status === 0 && vitestReport.success && selfTestsPassed && cases.every((entry) => entry.status === "passed") && tempDirs.left === 0 ? "passed" : "failed",
     at: new Date().toISOString(),
     stage,
     ...fingerprints,
@@ -83,6 +101,10 @@ export function runStageTest({ withReport = false } = {}) {
     productAcceptance: "not-run",
     cases,
   }, null, 2)}\n`);
+  if (tempDirs.left > 0) {
+    console.error(JSON.stringify({ status: "failed", check: "stage-test", reason: "temporary directories left behind", count: leftovers.length, ...tempDirs }));
+    return 1;
+  }
   if (testRun.status !== "passed") {
     console.error(JSON.stringify({ status: "failed", check: "stage-test", cases: cases.filter((entry) => entry.status !== "passed").map((entry) => entry.caseId) }));
     return 1;

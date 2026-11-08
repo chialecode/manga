@@ -188,6 +188,13 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     const framed = place?.kind === "comic" ? (regionTags.find((tag) => tag.pageId === place.pageId)?.region ?? composer.images.find((image) => image.pageId === place.pageId && image.region)?.region) : undefined;
     const placed = place?.kind === "video" && intervalTag ? { ...place, interval: { startMs: intervalTag.startMs, endMs: intervalTag.endMs } } : place;
     const mediaContext = placed ? mediaContextFor(placed, { region: framed, subtitleAheadMs: composer.subtitleAheadMin * 60_000 }) : undefined;
+    const conns = (s.settings?.connections as Array<{ purpose?: string }> | undefined) ?? [];
+    const canSemantic = s.facets.has("semantic") && conns.some((item) => item.purpose === "embedding");
+    const canWebpage = s.facets.has("research") && now.contextId !== null;
+    const allowCommands: string[] = [];
+    if (composer.allowOnline && s.facets.has("metadata")) allowCommands.push("metadata.search");
+    if (composer.allowSemantic && canSemantic) allowCommands.push("semantic.search");
+    if (composer.allowWebpage && canWebpage) allowCommands.push("webpage.fetch");
     const result = await attempt("agent.send", {
       sessionId: sid,
       text,
@@ -196,14 +203,14 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
       ...(mediaContext ? { mediaContext } : {}),
       ...(composer.recordings.length ? { captureSessionIds: composer.recordings } : {}),
       ...(imageIds.length ? { imageMaterialIds: imageIds.slice(0, 4) } : {}),
-      ...(composer.allowOnline ? { allowCommands: ["metadata.search"] } : {}),
+      ...(allowCommands.length ? { allowCommands } : {}),
       ...(input.quickTask ? { quickTask: input.quickTask } : {}),
       ...(selectionTag ? { selection: { resourceId: selectionTag.resourceId, resourceRevisionId: selectionTag.revisionId, partId: selectionTag.partId, start: selectionTag.start, end: selectionTag.end } } : {}),
     });
     if (!result.ok) { s.setError(result.error.message); return false; }
     setRun(result.value);
     // What was chosen for this task is spent: pictures, recordings, widening and online search are asked for again each time.
-    patch({ ...(text === composer.draft ? { draft: "" } : {}), images: [], recordings: [], allowOnline: false, subtitleAheadMin: 0 });
+    patch({ ...(text === composer.draft ? { draft: "" } : {}), images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, subtitleAheadMin: 0 });
     s.setError(undefined);
     s.conversationsChanged();
     await s.refresh();
@@ -227,6 +234,8 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
 
   const connections = (s.settings?.connections as Array<{ purpose?: string }> | undefined) ?? [];
   const noModel = s.settings !== null && !connections.some((item) => item.purpose === "text");
+  const semantic = s.facets.has("semantic") && connections.some((item) => item.purpose === "embedding");
+  const webpage = s.facets.has("research") && shown.contextId !== null;
   const resources = (s.workspace?.resources as Array<{ id: string; title: string }> | undefined) ?? [];
   const reader = readerContext.get();
   const mediaResourceId = shown.resourceId;
@@ -263,6 +272,8 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     onStop: () => void stop(),
     onRetry: (runId) => void retry(runId),
     online: s.facets.has("metadata"),
+    semantic,
+    webpage,
     resources,
     recordingsOf: s.voiceOn ? mediaResourceId ?? null : null,
     onAttach: (what) => void attachImage(what),

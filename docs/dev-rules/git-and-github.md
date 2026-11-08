@@ -1,6 +1,6 @@
 # Git 与 GitHub 协作规则
 
-本文是 MANGA 的版本管理、托管、CI、分支保护及外部集成正本。仓库为 [chialecode/manga](https://github.com/chialecode/manga)，默认分支为 `main`。选择理由见 [ADR-0002](../decisions/0002-local-first-github.md)，建立与验证记录在提交 `dc925e9`（[归档](https://github.com/chialecode/manga/tree/dc925e9/docs/evidence)）。
+本文是 MANGA 的版本管理、托管、CI、分支保护及外部集成正本。仓库为 [chialecode/manga](https://github.com/chialecode/manga)，默认分支为 `main`。选择理由见 [ADR-0002](../decisions/0002-local-first-github.md)，建立与验证记录在提交 `ec9968d`（[归档](https://github.com/chialecode/manga/tree/ec9968d/docs/evidence)）。
 
 ## 1. 本地优先与工作节奏
 
@@ -20,7 +20,7 @@
 
 1. 开始先执行 `git status --short --branch`、检查当前分支与跟踪关系。已有任务分支承载相同目标时继续使用，不因开启新聊天、换 Agent、补测试或收到 review 另建分支。
 2. 独立新目标默认从已更新的 `main` 建分支；在开始、交接或集成前按需 fetch 一次，不循环拉取。确认工作区干净或已有改动明确归属后再切换，不能自动 stash/reset/覆盖他人文件来凑干净状态。
-3. 命名使用 `feat/<目标>`、`fix/<问题>`、`docs/<专题>`、`chore/<维护>`，小写英文和连字符，例如 `feat/agent-foundation`、`fix/recording-seek`。名称描述交付内容，不使用 `temp`、`test2` 或仅以日期区分同一任务。
+3. 命名使用 `feat/<目标>`、`fix/<问题>`、`docs/<专题>`、`chore/<维护>`，小写英文和连字符，例如 `feat/agent-foundation`、`fix/recording-seek`。名称描述交付内容，不使用 `temp`、`test2` 或仅以日期区分同一任务。阶段按顺序编号（A-122）：阶段名是 M 加从 1 起的顺序号，下一阶段在上一阶段编号上加 1，不用字母后缀拆子阶段；编号与 PR 编号无关（bot 等也会占用 PR 编号）。写法按读者区分：给人读的地方用大写，即正文、计划、决定记录和带阶段前缀的编号（如 `MN-W01`、`MN-A-01`）；机器标识用小写，即路径、文件名、分支（`feat/mN-<目标>`）、提交 scope（`feat(mN)`）、数据目录与登记表的 `currentStage`。接受阶段名的命令行参数两种大小写都认，统一记为小写。
 4. 新目标依赖尚未合并的旧分支时，先把旧分支保存为可审查提交。可以从明确的旧提交建立依赖分支，并在交接/PR 标明基点、前置 PR 和临时目标分支；不得假装来自 main，也不要求无关工作全部停下。前置以 squash 合并后，整理后继分支使其只包含新工作，重新验证；已共享历史的改写或强推按单独授权处理。当前必需 CI 只对目标为 main 的 PR 触发，依赖分支不能宣称已获得该检查。
 5. 目标合并后新里程碑使用新分支；不把后续阶段继续叠在已合并分支上。main 只经 PR 集成，禁止日常直推。仅当范围确实需要独立验收、并行维护或独立回退时拆成交付子阶段；文件多、工作包多本身不要求增加分支或 PR。
 
@@ -122,7 +122,7 @@ node scripts/verify.mjs
 
 [repository-settings.json](../../.github/repository-settings.json)记录仓库开关，[actions-policy.json](../../.github/actions-policy.json)记录 Actions 策略。它们是可审阅的期望配置；不在 CI 中运行自动对账或自动修改设置。
 
-- 开启 Issues 与结构化表单；文档集中在 Git 中，关闭 Wiki、Projects 和 Discussions。确有协作需求时再启用相应入口。
+- 外部只开放 Discussions（A-123）：为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，关闭 Issues；保留 PR 但仅协作者可创建（`pull_request_creation_policy=collaborators_only`）。文档集中在 Git 中，关闭 Wiki 和 Projects。来自 fork 的 PR 运行 workflow 前须维护者批准（所有外部贡献者）。
 - 只允许 squash 合并，使用 PR 标题和正文形成提交消息；关闭自动合并，启用合并后分支删除。
 - Actions 默认令牌只读，不允许 Actions 创建/批准 PR；workflow 不包含写权限。
 - 保持 Secret scanning 和 Push protection 开启。忽略规则只是减少误提交，仍需人工核对暂存区；若秘密已经泄露，优先撤销或轮换凭据。

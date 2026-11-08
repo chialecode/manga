@@ -16,6 +16,12 @@ describe("AT-129 a tool result explains an empty scope", () => {
     expect(withEmptyScopeNote(grantOf({ readResourceIds: ["r1"] }), "library.find", found as never)).toBe(found);
     expect(withEmptyScopeNote(grantOf({ access: "owner" } as never), "library.find", found as never)).toBe(found);
     expect(withEmptyScopeNote(grantOf({}), "notes.create", found as never)).toBe(found);
+    // Semantic search with an empty scope also gets the empty-scope explanation.
+    const semEmpty = { status: "ok", value: { state: "ready", results: [], version: null } } as const;
+    const semNoted = withEmptyScopeNote(grantOf({}), "semantic.search", semEmpty as never);
+    expect((semNoted.value as any).scope.readable).toBe(0);
+    expect((semNoted.value as any).result).toEqual(semEmpty.value);
+    expect(withEmptyScopeNote(grantOf({ readResourceIds: ["r1"] }), "semantic.search", semEmpty as never)).toBe(semEmpty);
   });
 
   it("gives the model the note after its one find, so it can tell the person instead of asking again", async () => {

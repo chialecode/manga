@@ -23,6 +23,7 @@ export const LIST_CHANGING_COMMANDS = [
   "mindmap.create", "mindmap.rename", "mindmap.delete",
   "draft.create", "draft.rename", "draft.delete",
   "roughcut.create", "roughcut.rename", "roughcut.delete",
+  "proposal.apply",
 ] as const;
 
 /** The kinds of thing a project or "最近" lists in the sidebar. The home shows all of them, in this order. */

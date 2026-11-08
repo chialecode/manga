@@ -16,7 +16,7 @@ import { secretFor } from "./connections.ts";
 import { createDraftNote } from "./notes.ts";
 
 /** What these commands use of the application. */
-export type VoiceHost = Pick<MangaProductApp, "assertWritable" | "closed" | "covers" | "debugContext" | "grantOf" | "grants" | "interruptRuns" | "layout" | "listModules" | "media" | "pendingRecoveryJobs" | "projects" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "voice" | "workFolders">;
+export type VoiceHost = Pick<MangaProductApp, "assertWritable" | "closed" | "covers" | "debugContext" | "grantOf" | "grants" | "interruptRuns" | "layout" | "listModules" | "media" | "notify" | "pendingRecoveryJobs" | "projects" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "voice" | "workFolders">;
 
 /** The configured transcription connection, as the recording pipeline sees it. Audio goes nowhere else. */
 export function asrPort(app: VoiceHost): AsrPort {

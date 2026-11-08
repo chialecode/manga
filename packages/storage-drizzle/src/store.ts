@@ -5,7 +5,7 @@ import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createId, MangaError, type CommandResult, type SearchHit, type SearchQuery } from "@manga/contracts";
 import { migrateAgentMedia, type AgentMediaMigration } from "./migrate-agent-media.ts";
-import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V12_SCHEMA_SQL, V12_TABLES_SQL, V13_SCHEMA_SQL, V13_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
+import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V12_SCHEMA_SQL, V12_TABLES_SQL, V13_SCHEMA_SQL, V13_TABLES_SQL, V14_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
 import { ngramsFor, matchQuery } from "./ngrams.ts";
 import { migrateWorkspace, type WorkspaceMigration } from "./migrate-workspace.ts";
 import * as schema from "./schema.ts";
@@ -120,6 +120,7 @@ export class DrizzleStore {
       if (existingVersion < 13) this.sqlite.exec(V13_SCHEMA_SQL);
       this.sqlite.exec(V13_TABLES_SQL);
       const agentMedia = existingVersion > 0 && existingVersion < 13 ? migrateAgentMedia(this.sqlite, () => this.maybeCrash("agent-media-batch")) : undefined;
+      this.sqlite.exec(V14_TABLES_SQL);
       this.maybeCrash("migration-before-version");
       this.sqlite.prepare("INSERT OR IGNORE INTO schema_meta(key, value) VALUES (?, ?)").run("schemaVersion", String(PRODUCT_SCHEMA_VERSION));
       this.sqlite.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(String(PRODUCT_SCHEMA_VERSION));

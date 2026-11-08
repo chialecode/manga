@@ -84,12 +84,12 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     // The microphone really delivers sound: the level meter moves and the clock runs.
     const level = await until<number>(view, `(() => { const el = document.querySelector('[data-testid="record-level"]'); const v = Number(el?.getAttribute("data-level") ?? el?.getAttribute("aria-valuenow") ?? 0); return v > 0 ? v : null; })()`, 8000);
     const clock1 = await js<string>(view, `document.querySelector('[data-testid="record-time"]')?.textContent ?? ""`);
-    await sleep(1500);
+    await sleep(1500); // real time: 语音录制时长，观察录音计时器跳动
     const clock2 = await js<string>(view, `document.querySelector('[data-testid="record-time"]')?.textContent ?? ""`);
     record("microphone", Boolean(level) && clock1 !== clock2, { level, clock1, clock2 });
 
     // While the app window is behind others the floating box shows the same recording.
-    await sleep(500);
+    await sleep(500); // real time: 后台轮询定时器节流，等待置顶录音浮窗显示
     const windows = BrowserWindow.getAllWindows().filter((window) => window !== view && !window.isDestroyed());
     const overlay = windows.find((window) => window.isAlwaysOnTop());
     record("overlay", Boolean(overlay), { windows: windows.length, visible: overlay?.isVisible() ?? false });
@@ -99,7 +99,7 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     }
 
     // The clip is a few seconds long; let it play out, then stop.
-    await sleep(Number(process.env.MANGA_SMOKE_AUDIO_MS ?? 9000));
+    await sleep(Number(process.env.MANGA_SMOKE_AUDIO_MS ?? 9000)); // real time: 语音录制时长，等待合成语音样本播放完毕
     // The title bar's recording indicator is the stop button too.
     const stopped = await clickTestId(view, "record-stop");
     record("stop", stopped);
@@ -116,7 +116,7 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
         review = reviewed.value as typeof review;
         if (review?.session?.stage && TERMINAL.has(review.session.stage)) break;
       }
-      await sleep(500);
+      await sleep(500); // real time: 后台轮询定时器节流，等待语音转写完成
     }
     const segments = review?.segments ?? [];
     record("session", Boolean(sessionId) && review?.session?.stage === "done", { session: review?.session, segments: segments.length });

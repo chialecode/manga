@@ -39,6 +39,8 @@ export const TOOL_DESCRIPTIONS: Record<string, string> = {
   "comic.pages": "读取一部漫画的页面清单（页面 ID、序号、尺寸），不含图像。",
   "material.subtitleWindow": "读取本任务所给视频在某个位置之前的字幕文本；结果不会越过用户给定的位置或已看范围，这个限制不能放宽。",
   "metadata.search": "联网搜索外部资料源（本任务已由用户授权联网），只返回带来源的候选，不会改动资源库。",
+  "semantic.search": "在本次任务可读的资料范围内做语义检索（本任务已由用户开启语义检索，会调用 Embedding 服务），返回相似度最高的片段与出处，不会越过防剧透边界。",
+  "webpage.fetch": "按给定的 http/https 地址抓取一个网页并保存为本项目的网页版本（本任务已由用户授权抓取网页），只提取纯文本。",
   "library.scan.status": "读取资源库路径的扫描进度与最近几次结果（新增、变化、移动、不可用与失败的数量），不含本机路径。",
   "log.query": "按类别、结果、时间与关键字读取操作日志，了解用户、Agent 与系统做过哪些改动；日志不含正文与凭据。",
   "screenshot.list": "列出一个已授权资源的截图（时间或页、字幕文本、尺寸）；不含图像与本机路径，也不会给出用户尚未看到的时刻。",
@@ -68,6 +70,11 @@ export const TOOL_DESCRIPTIONS: Record<string, string> = {
   "excerpt.get": "读取本项目一条网页摘录的原文、出处与备注。",
   "webpage.list": "列出本项目摘录过的网页（只含已保存的版本，不会联网抓取）。",
   "webpage.get": "读取本项目摘录过的一个已保存网页的正文与本项目的摘录（正文过长时会截短并注明）。",
+  "proposal.delete": "提出删除本项目的一个对象（白板、思维导图、文稿或粗剪）：只写入待审提议并生成内容与引用预览，用户确认后才会删除。",
+  "proposal.rename": "提出重命名本项目（或其中的白板、思维导图、文稿、粗剪）：只写入待审提议并生成预览，用户确认后才会改名。",
+  "proposal.exportProject": "提出导出本项目的项目包：只写入待审提议并生成数量与大小预览，用户确认并选择文件夹后才会导出。",
+  "proposal.editRoughcut": "提出调整本项目的一个粗剪序列（加入、调整、移动、删除片段或修改说明）：先在副本上验证并生成步骤与时长预览，用户确认后才会应用（可在粗剪撤销列表里撤回）。",
+  "proposal.exportRoughcut": "提出导出本项目的一个粗剪序列：先生成导出计划与问题预览，用户确认后才会开始导出。",
 };
 
 /** What the receipt shows of a call's arguments; a long one ends with a hash, so two calls that start alike stay apart. */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { asArray, attempt } from "../lib/api.ts";
+import { onListsChanged } from "../lib/lists-changed.ts";
 import type { EmbedItem } from "./embed-types.ts";
 
 /** The embeds one note holds, by block id. `reload` is called after the note was saved, since saving is what registers them. */
@@ -18,5 +19,12 @@ export function useNoteEmbeds(objectId: string | null, enabled: boolean) {
   }, [enabled]);
 
   useEffect(() => { void reload(); }, [reload, objectId]);
+  useEffect(() => onListsChanged(() => { void reload(); }, 50), [reload]);
+  useEffect(() => {
+    const off = window.manga.onNotice?.((notice) => {
+      if (notice.topic === "proposal.changed" && notice.payload.status === "applied") void reload();
+    });
+    return () => { off?.(); };
+  }, [reload]);
   return { items, reload };
 }

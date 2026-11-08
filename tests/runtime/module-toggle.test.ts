@@ -146,4 +146,37 @@ describe("switching modules from settings", () => {
     expect(ctx.app.voice.activeId).toBeNull();
     expect((await modules(ctx)).every((item) => item.state === "active")).toBe(true);
   }, 120_000);
+
+  it("refuses proposal.* and opt-in agent commands when their target module is turned off (AT-44, AT-155)", async () => {
+    const ctx = await boot();
+    const project = ok<{ id: string }>(await run(ctx, "project.create", { name: "模块开关测试" }));
+    const board = ok<{ board: { id: string } }>(await run(ctx, "whiteboard.create", { projectId: project.id, title: "白板" }));
+    const opened = ok<{ id: string }>(await run(ctx, "session.open", { kind: "project", targetId: project.id, contextId: project.id }));
+    const agent = { kind: "agent" as const, id: "agent:mod-prop" };
+    const grant = ctx.app.issueAgentGrant(ctx.grant, agent, {
+      sessionId: opened.id,
+      runId: "run-mod-prop",
+      projectId: project.id,
+      readResourceIds: [],
+      allowCommands: ["semantic.search", "webpage.fetch"],
+    });
+
+    ok(await run(ctx, "settings.setModule", { featureId: "whiteboard", enabled: false }));
+    const delOff = await ctx.app.call(agent, { commandId: "proposal.delete", idempotencyKey: "mp-1", input: { kind: "whiteboard", targetId: board.board.id } }, grant.handle);
+    expect(delOff.status).toBe("error");
+    expect(["CAPABILITY_UNAVAILABLE", "MODULE_INACTIVE"]).toContain(delOff.error?.code);
+    ok(await run(ctx, "settings.setModule", { featureId: "whiteboard", enabled: true }));
+
+    ok(await run(ctx, "settings.setModule", { featureId: "semantic", enabled: false }));
+    const semOff = await ctx.app.call(agent, { commandId: "semantic.search", idempotencyKey: "mp-2", input: { text: "测试" } }, grant.handle);
+    expect(semOff.status).toBe("error");
+    expect(["CAPABILITY_UNAVAILABLE", "MODULE_INACTIVE"]).toContain(semOff.error?.code);
+    ok(await run(ctx, "settings.setModule", { featureId: "semantic", enabled: true }));
+
+    ok(await run(ctx, "settings.setModule", { featureId: "research", enabled: false }));
+    const webOff = await ctx.app.call(agent, { commandId: "webpage.fetch", idempotencyKey: "mp-3", input: { url: "https://example.org" } }, grant.handle);
+    expect(webOff.status).toBe("error");
+    expect(["CAPABILITY_UNAVAILABLE", "MODULE_INACTIVE"]).toContain(webOff.error?.code);
+    ok(await run(ctx, "settings.setModule", { featureId: "research", enabled: true }));
+  });
 });

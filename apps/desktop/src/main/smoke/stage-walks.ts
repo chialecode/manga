@@ -108,7 +108,7 @@ export async function runMigrateSmoke(input: Input): Promise<{ ok: boolean; obse
   const problems: string[] = [];
   const store = appService.store;
   const detail: Record<string, unknown> = { phase, schemaVersion: store.getMeta("schemaVersion"), migration: store.migration ?? null };
-  if (detail.schemaVersion !== "13") problems.push(`the library is at version ${String(detail.schemaVersion)}`);
+  if (detail.schemaVersion !== "14") problems.push(`the library is at version ${String(detail.schemaVersion)}`);
   if (phase === "migrate-v13") {
     if (store.migration?.from !== 12 || !store.migration.agentMedia) problems.push("the first start did not move the pictures of v12");
   } else if (store.migration) problems.push("the second start migrated again");
@@ -162,7 +162,7 @@ export async function runMigrateSmoke(input: Input): Promise<{ ok: boolean; obse
 
 /**
  * Where a packaged build keeps things (AT-148, AT-149, 计划 4.9), started by the harness with temporary LOCALAPPDATA, Documents and Downloads:
- * - `locations-seed` is an installation of the version before the split: its root under `<文档>\MANGA\<channel>` named by MANGA_PROFILE_ROOT, where it
+ * - `locations-seed` is an installation of the version before the split: its root under `<文档>\manga\<channel>` named by MANGA_PROFILE_ROOT, where it
  *   leaves a work with a content folder, a screenshot and a note file (the harness adds a download override to its pointer);
  * - `locations` reports where this start put each partition and whether what the person made still opens, and shows the three groups in settings.
  * The harness checks the folders themselves.

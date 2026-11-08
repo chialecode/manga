@@ -8,8 +8,8 @@ import path from "node:path";
  * both can be installed at once. Unsigned: no certificate is configured.
  */
 export const CHANNEL_INSTALL = {
-  release: { appId: "app.manga.desktop", productName: "MANGA", executableName: "MANGA", dirName: "manga", shortcutName: "MANGA" },
-  development: { appId: "app.manga.desktop.dev", productName: "MANGA Dev", executableName: "MANGA-dev", dirName: "manga-dev", shortcutName: "MANGA Dev" },
+  release: { appId: "app.manga.desktop", productName: "MANGA", executableName: "manga", dirName: "manga", shortcutName: "MANGA" },
+  development: { appId: "app.manga.desktop.dev", productName: "MANGA Dev", executableName: "manga-dev", dirName: "manga-dev", shortcutName: "MANGA Dev" },
 };
 
 /** The NSIS lines electron-builder includes: the default folder named for the channel unless an earlier installation or `/D=` chose another. */
@@ -81,7 +81,7 @@ export async function buildInstaller({ appDir, channel, workDir, version }) {
   fs.rmSync(staged, { recursive: true, force: true });
   fs.cpSync(appDir, staged, { recursive: true });
   fs.writeFileSync(path.join(staged, "resources", "channel.json"), `${JSON.stringify({ channel })}\n`);
-  if (meta.executableName !== "MANGA") fs.renameSync(path.join(staged, "MANGA.exe"), path.join(staged, `${meta.executableName}.exe`));
+  if (meta.executableName !== "manga") fs.renameSync(path.join(staged, "manga.exe"), path.join(staged, `${meta.executableName}.exe`));
   const include = path.join(workDir, `installer-${channel}.nsh`);
   fs.writeFileSync(include, installerInclude(channel));
   const output = path.join(workDir, `out-${channel}`);

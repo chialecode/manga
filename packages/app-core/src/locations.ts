@@ -42,9 +42,39 @@ export const APP_PARTITIONS = ["data", "cache", "logs", "backups", "runtime"] as
 /** What the person makes and looks for in the file manager: the Documents folder. Downloads go to the Downloads folder. */
 export const USER_PARTITIONS = ["works", "projects", "attachments", "resources", "exports"] as const satisfies readonly LocationPartition[];
 
-/** The folder names of each channel (计划 4.9): the release and the development build live side by side. A test always names its own root. */
+/** The folder names of each channel (A-118, 计划 4.9): all lowercase `manga`, with the release and the development build side by side. A test always names its own root. */
 const APP_FOLDER: Record<Channel, string> = { release: "manga", development: "manga-dev", test: "manga-test" };
-const FILES_FOLDER: Record<Channel, string> = { release: "MANGA", development: "MANGA-dev", test: "MANGA-test" };
+const FILES_FOLDER: Record<Channel, string> = { release: "manga", development: "manga-dev", test: "manga-test" };
+
+/** If a channel folder in Documents or Downloads still has an uppercase `MANGA` directory entry on disk, rename it in place to lowercase. */
+function lowercaseOnDisk(dir: string): void {
+  const parent = path.dirname(dir);
+  const wanted = path.basename(dir).toLowerCase();
+  if (!fs.existsSync(parent)) return;
+  try {
+    const actual = fs.readdirSync(parent).find((entry) => entry.toLowerCase() === wanted);
+    if (actual && actual !== wanted) fs.renameSync(path.join(parent, actual), path.join(parent, wanted));
+  } catch {
+    // Best effort: an open handle in Explorer keeps the directory entry until the next start.
+  }
+}
+
+/** Rewrite an uppercase `MANGA` / `MANGA-dev` / `MANGA-test` folder segment under Documents or Downloads to lowercase `manga`. */
+export function lowercaseMangaPath(target: string, bases: readonly string[]): string {
+  const resolved = path.resolve(target);
+  for (const base of bases) {
+    const root = path.resolve(base);
+    const prefix = `${comparablePath(root)}${path.sep}`;
+    if (!comparablePath(resolved).startsWith(prefix)) continue;
+    const rest = resolved.slice(root.length + 1).split(path.sep);
+    if (rest[0] && /^MANGA(-dev|-test)?$/.test(rest[0])) {
+      rest[0] = rest[0].toLowerCase();
+      lowercaseOnDisk(path.join(root, rest[0]));
+      return path.join(root, ...rest);
+    }
+  }
+  return resolved;
+}
 
 export function resolveDocumentsDir(override?: string): string {
   if (override) return path.resolve(override);
@@ -81,7 +111,7 @@ export function defaultPointerPath(localAppData: string, channel: Channel): stri
 }
 
 /** Where versions before the split kept everything, and their pointer (A-16, replaced by A-118). */
-export const legacyProfileRoot = (documentsDir: string, channel: Channel): string => path.join(documentsDir, "MANGA", channel);
+export const legacyProfileRoot = (documentsDir: string, channel: Channel): string => path.join(documentsDir, "manga", channel);
 export const legacyPointerPath = (documentsDir: string, channel: Channel): string => path.join(legacyProfileRoot(documentsDir, channel), "launcher", "pointer.json");
 
 export function inspectDirectory(dir: string): { writable: boolean; offline: boolean } {
@@ -175,16 +205,18 @@ function freeBytes(dir: string): number | null {
 }
 
 /**
- * The move of a profile from where earlier versions kept it (`<Documents>\MANGA\<channel>`, or the root their pointer named) to the new places (A-118,
+ * The move of a profile from where earlier versions kept it (`<Documents>\manga\<channel>`, or the root their pointer named) to the new places (A-118,
  * 计划 4.9), before the database is opened. Only the application's own partitions are copied (`cache` is rebuilt); the person's files stay where they
  * are and the new pointer names them as overrides. Every file is compared with its source and the database checked before the new pointer is written;
  * then the old root is marked so an older version follows. Nothing old is deleted. Any failure removes what was copied and leaves the old place working.
  */
-export function upgradeLegacyLocation(options: { channel: Channel; documentsRoot: string; appRoot: string; pointerPath: string; crashAt?: string }): LocationUpgradeResult | undefined {
+export function upgradeLegacyLocation(options: { channel: Channel; documentsRoot: string; downloadsRoot?: string; appRoot: string; pointerPath: string; crashAt?: string }): LocationUpgradeResult | undefined {
   const { channel, documentsRoot, appRoot } = options;
+  const bases = [documentsRoot, ...(options.downloadsRoot ? [options.downloadsRoot] : [])];
+  lowercaseOnDisk(path.join(documentsRoot, "manga"));
   const legacyPointer = followPointer(legacyPointerPath(documentsRoot, channel));
-  let from = legacyPointer?.profileRoot ? path.resolve(legacyPointer.profileRoot) : legacyProfileRoot(documentsRoot, channel);
-  try { from = authoritativeRoot(from).root; } catch { return undefined; }
+  let from = legacyPointer?.profileRoot ? lowercaseMangaPath(legacyPointer.profileRoot, bases) : legacyProfileRoot(documentsRoot, channel);
+  try { from = lowercaseMangaPath(authoritativeRoot(from).root, bases); } catch { return undefined; }
   if (!libraryExists(from) || pathsOverlap(from, appRoot)) return undefined;
   const legacyOverrides = legacyPointer?.partitions ?? {};
   const base = { from, to: appRoot, legacyPointerPath: legacyPointerPath(documentsRoot, channel) };
@@ -205,13 +237,13 @@ export function upgradeLegacyLocation(options: { channel: Channel; documentsRoot
   const copies: Array<{ name: LocationPartition; source: string; target: string }> = [];
   for (const name of APP_PARTITIONS) {
     // A partition the person moved themselves stays where they put it.
-    if (legacyOverrides[name]) { overrides[name] = path.resolve(legacyOverrides[name]!); continue; }
+    if (legacyOverrides[name]) { overrides[name] = lowercaseMangaPath(legacyOverrides[name]!, bases); continue; }
     if (name === "cache") continue;
     const source = path.join(from, name);
     if (fs.existsSync(source)) copies.push({ name, source, target: path.join(appRoot, name) });
   }
   for (const name of [...USER_PARTITIONS, "downloads"] as LocationPartition[]) {
-    const source = legacyOverrides[name] ? path.resolve(legacyOverrides[name]!) : path.join(from, name);
+    const source = legacyOverrides[name] ? lowercaseMangaPath(legacyOverrides[name]!, bases) : path.join(from, name);
     if (legacyOverrides[name] || fs.existsSync(source)) overrides[name] = source;
   }
   const carried = Object.keys(overrides) as LocationPartition[];
@@ -272,7 +304,14 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
     throw new MangaError("LOCATION_UNAVAILABLE", "test channel requires an isolated profile root");
   }
   const documentsRoot = resolveDocumentsDir(request.documentsDir);
+  const downloadsRoot = resolveDownloadsDir(request.downloadsDir);
   const localAppData = resolveLocalAppData(request.localAppDataDir);
+  const bases = [documentsRoot, downloadsRoot];
+  if (channel !== "test") {
+    lowercaseOnDisk(path.join(documentsRoot, "manga"));
+    lowercaseOnDisk(defaultFilesRoot(documentsRoot, channel));
+    lowercaseOnDisk(defaultDownloadsDir(downloadsRoot, channel));
+  }
   const appRoot = defaultAppRoot(localAppData, channel);
   const explicitRoot = request.profileRoot ?? process.env.MANGA_PROFILE_ROOT;
   const explicitPointer = request.pointerPath ?? process.env.MANGA_POINTER_FILE;
@@ -280,7 +319,7 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
   // The first start after the split: an old profile and no new pointer (计划 4.9).
   let upgrade: LocationUpgradeResult | undefined;
   if (!explicitRoot && !explicitPointer && channel !== "test" && !fs.existsSync(pointerPath)) {
-    upgrade = upgradeLegacyLocation({ channel, documentsRoot, appRoot, pointerPath, crashAt: request.crashAt });
+    upgrade = upgradeLegacyLocation({ channel, documentsRoot, downloadsRoot, appRoot, pointerPath, crashAt: request.crashAt });
     // A failed move keeps the old place working for this start, through its own pointer; the next start tries again.
     if (upgrade?.state === "failed") pointerPath = upgrade.legacyPointerPath;
   }
@@ -290,14 +329,14 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
   }
   const resolvedPointer = readPointer(pointerPath);
   let defaultRoot = explicitRoot
-    ?? (resolvedPointer?.profileRoot ? path.resolve(resolvedPointer.profileRoot) : upgrade?.state === "failed" ? upgrade.from : appRoot);
+    ?? (resolvedPointer?.profileRoot ? lowercaseMangaPath(resolvedPointer.profileRoot, bases) : upgrade?.state === "failed" ? upgrade.from : appRoot);
   const admitted = authoritativeRoot(defaultRoot);
   defaultRoot = admitted.root;
   // The default application root splits the profile: the person's files go to the Documents folder and downloads to the Downloads folder. A root the
   // person chose (or a test's isolated root) keeps every partition under it, as before.
   const split = !explicitRoot && comparablePath(defaultRoot) === comparablePath(appRoot);
   const filesRoot = split ? defaultFilesRoot(documentsRoot, channel) : defaultRoot;
-  const downloads = split ? defaultDownloadsDir(resolveDownloadsDir(request.downloadsDir), channel) : path.join(defaultRoot, "downloads");
+  const downloads = split ? defaultDownloadsDir(downloadsRoot, channel) : path.join(defaultRoot, "downloads");
   const overrides: Partial<Record<LocationPartition, string>> = {};
   const partitions = Object.fromEntries(LOCATION_PARTITIONS.map((name) => [
     name,
@@ -305,7 +344,7 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
   ])) as Record<LocationPartition, string>;
   for (const [name, value] of Object.entries(resolvedPointer?.partitions ?? {})) {
     if (value && (LOCATION_PARTITIONS as readonly string[]).includes(name)) {
-      partitions[name as LocationPartition] = path.resolve(value);
+      partitions[name as LocationPartition] = lowercaseMangaPath(value, bases);
       overrides[name as LocationPartition] = partitions[name as LocationPartition];
     }
   }

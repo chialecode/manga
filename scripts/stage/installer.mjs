@@ -21,8 +21,8 @@ const fingerprints = stageFingerprints(root, config);
 const built = (() => { try { return JSON.parse(fs.readFileSync(latestDesktopPackage, "utf8")); } catch { return null; } })();
 const stalePackage = ["sourceFingerprint", "lockFingerprint", "buildScriptFingerprint"].filter((key) => built?.[key] !== fingerprints[key]);
 if (stalePackage.length) throw new Error(`the packaged application was not built from the current ${stalePackage.join(", ")}; run node scripts/stage.mjs package first`);
-const appDir = path.join(desktopPackageDir, fs.readdirSync(desktopPackageDir).find((name) => name.startsWith("MANGA")) ?? "");
-if (!fs.existsSync(path.join(appDir, "MANGA.exe"))) throw new Error("no packaged application; run node scripts/stage.mjs package first");
+const appDir = path.join(desktopPackageDir, fs.readdirSync(desktopPackageDir).find((name) => name.startsWith("manga")) ?? "");
+if (!fs.existsSync(path.join(appDir, "manga.exe"))) throw new Error("no packaged application; run node scripts/stage.mjs package first");
 const version = JSON.parse(fs.readFileSync(path.join(root, "apps/desktop/package.json"), "utf8")).version;
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-installer-"));
 const places = { programs: path.join(temp, "Programs"), local: path.join(temp, "local"), documents: path.join(temp, "documents"), downloads: path.join(temp, "downloads"), work: path.join(temp, "build") };
@@ -68,7 +68,7 @@ const roamingNames = () => fs.readdirSync(process.env.APPDATA ?? "").filter((nam
 const installDir = (channel) => path.join(places.programs, CHANNEL_INSTALL[channel].dirName);
 const exeOf = (channel) => path.join(installDir(channel), `${CHANNEL_INSTALL[channel].executableName}.exe`);
 const isolatedEnv = () => {
-  const env = { ...process.env, LOCALAPPDATA: places.local, MANGA_DOCUMENTS_DIR: places.documents, MANGA_DOWNLOADS_DIR: places.downloads };
+  const env = { ...process.env, LOCALAPPDATA: places.local, MANGA_DOCUMENTS_DIR: places.documents, MANGA_DOWNLOADS_DIR: places.downloads, MANGA_WINDOW_HIDDEN: "1" };
   for (const name of ["MANGA_PROFILE_ROOT", "MANGA_POINTER_FILE", "MANGA_CHANNEL", "NODE_ENV", "ELECTRON_RUN_AS_NODE"]) delete env[name];
   return env;
 };
@@ -118,11 +118,11 @@ try {
   for (const channel of ["release", "development"]) {
     const result = spawnSync(exeOf(channel), ["--manga-smoke"], { env: { ...isolatedEnv(), MANGA_SMOKE_PHASE: "initial" }, timeout: 120_000, windowsHide: true });
     const appRoot = path.join(places.local, CHANNEL_INSTALL[channel].dirName);
-    const files = path.join(places.documents, channel === "release" ? "MANGA" : "MANGA-dev");
+    const files = path.join(places.documents, channel === "release" ? "manga" : "manga-dev");
     const report = path.join(appRoot, "logs", "smoke-initial.json");
     const ok = result.status === 0 && fs.existsSync(report) && JSON.parse(fs.readFileSync(report, "utf8")).status !== "failed";
     step(`${channel}: first start`, ok, { status: result.status });
-    step(`${channel}: data under LOCALAPPDATA, files under Documents, downloads under Downloads`, fs.existsSync(path.join(appRoot, "data", "manga.sqlite")) && fs.existsSync(path.join(appRoot, "launcher", "pointer.json")) && fs.existsSync(path.join(files, "works")) && fs.existsSync(path.join(places.downloads, channel === "release" ? "MANGA" : "MANGA-dev")) && !fs.existsSync(path.join(appRoot, "works")));
+    step(`${channel}: data under LOCALAPPDATA, files under Documents, downloads under Downloads`, fs.existsSync(path.join(appRoot, "data", "manga.sqlite")) && fs.existsSync(path.join(appRoot, "launcher", "pointer.json")) && fs.existsSync(path.join(files, "works")) && fs.existsSync(path.join(places.downloads, channel === "release" ? "manga" : "manga-dev")) && !fs.existsSync(path.join(appRoot, "works")));
   }
   step("nothing written to the roaming profile", JSON.stringify(roamingNames()) === JSON.stringify(roamingBefore), { before: roamingBefore.length, after: roamingNames().length });
   // Installing again over a running copy, without naming a folder: the installer closes it and keeps the folder of the first installation.
@@ -140,7 +140,7 @@ try {
     const appRoot = path.join(places.local, CHANNEL_INSTALL[channel].dirName);
     step(`${channel}: uninstalled`, removed.status === "removed", removed);
     step(`${channel}: Start menu, desktop shortcut, uninstall entry and the per-user key gone`, shortcuts(channel).every((file) => !fs.existsSync(file)) && !uninstallEntries().some((item) => item.DisplayName === CHANNEL_INSTALL[channel].productName) && powershell(`Test-Path 'HKCU:\\Software\\${keys[channel]}'`) === "False");
-    step(`${channel}: data and files kept`, fs.existsSync(path.join(appRoot, "data", "manga.sqlite")) && fs.existsSync(path.join(places.documents, channel === "release" ? "MANGA" : "MANGA-dev")));
+    step(`${channel}: data and files kept`, fs.existsSync(path.join(appRoot, "data", "manga.sqlite")) && fs.existsSync(path.join(places.documents, channel === "release" ? "manga" : "manga-dev")));
   }
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);

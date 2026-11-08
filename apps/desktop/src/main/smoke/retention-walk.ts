@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import type { BrowserWindow } from "electron";
 import { readPngText, type MangaProductApp } from "@manga/app-core";
-import { DRAWN, clickTestId, pressKey, setField, sleep, waitUntil } from "./driver.ts";
+import { DRAWN, clickTestId, pressKey, setField, waitFrames, waitUntil } from "./driver.ts";
 import { caller, ensureDock, js, leaveSettings } from "./common.ts";
 import { centreOf, hitTestOpenPopup, realClick } from "./player-menus-walk.ts";
 import type { Observe } from "./reader-controls-walk.ts";
@@ -38,7 +38,7 @@ const keptOf = (view: BrowserWindow) => js<Kept & { marked: string | null; loads
   };
 })()`);
 
-const pressKeyEscape = (view: BrowserWindow) => pressKey(view, "Escape").then(() => sleep(150));
+const pressKeyEscape = (view: BrowserWindow) => pressKey(view, "Escape").then(() => waitFrames(view));
 
 /** Pause the player in the middle of the film, mark the element, and count the times it would be loaded again. */
 async function settleAtMiddle(view: BrowserWindow): Promise<{ ok: boolean; time: number; width: number; height: number }> {
@@ -49,8 +49,15 @@ async function settleAtMiddle(view: BrowserWindow): Promise<{ ok: boolean; time:
     video.__loads = 0;
     video.addEventListener("loadstart", () => { video.__loads += 1; });
     video.pause();
-    video.currentTime = Math.max(0.5, (video.duration || 2) / 2);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    const target = Math.max(0.5, (video.duration || 2) / 2);
+    if (Math.abs(video.currentTime - target) > 0.05) {
+      await new Promise((resolve) => {
+        const done = () => resolve(true);
+        video.addEventListener("seeked", done, { once: true });
+        setTimeout(done, 400);
+        video.currentTime = target;
+      });
+    }
     return { ok: video.paused, time: video.currentTime, width: video.videoWidth, height: video.videoHeight };
   })()`);
 }
@@ -65,7 +72,7 @@ export async function walkSettingsRoundTrip(view: BrowserWindow, observe: Observ
   const middle = await settleAtMiddle(view);
   if (!middle.ok) problems.push("the player could not be paused in the middle");
   await setField(view, "agent-composer", "设置往返前还没发出的问题");
-  await sleep(300);
+  await waitUntil(view, `(document.querySelector('[data-testid="agent-composer"]')?.value ?? "").includes("设置往返前")`, 2000);
   const before = await keptOf(view);
   await shot("settings-roundtrip-before");
 
@@ -94,7 +101,7 @@ export async function walkSettingsRoundTrip(view: BrowserWindow, observe: Observ
 
   const back = await leaveSettings(view) && await waitUntil(view, `(() => { const shown = ${SHOWN}; const reader = document.querySelector('[data-testid="video-reader"]'); return Boolean(reader) && shown(reader); })()`, 6000);
   if (!back) problems.push("the player did not come back");
-  await sleep(400);
+  await waitFrames(view);
   const after = await keptOf(view);
   if (after.marked !== "kept") problems.push("the player was made again: its element is not the one that was left");
   if (after.loads !== 0) problems.push(`the player loaded its film ${after.loads} time(s) on the way back`);
@@ -145,7 +152,7 @@ async function putOnBoard(view: BrowserWindow, call: Call, boardId: string, shot
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const board = (await call("whiteboard.get", { boardId })).value;
     if (JSON.stringify(board ?? {}).includes(shotId)) return true;
-    await sleep(250);
+    await waitFrames(view);
   }
   return false;
 }
@@ -165,7 +172,7 @@ export function screenshotWalk(input: { view: BrowserWindow; appService: MangaPr
   /** The player is open and in front. */
   async function video(): Promise<void> {
     const middle = await settleAtMiddle(view);
-    await sleep(300);
+    await waitFrames(view);
     await pressKey(view, "s");
     const noticed = await waitUntil(view, `(document.querySelector('[data-testid="toast-notice"]')?.textContent ?? "").includes("截图")`, 8000);
     const notice = await noticeOf(view);
@@ -196,7 +203,7 @@ export function screenshotWalk(input: { view: BrowserWindow; appService: MangaPr
   async function comic(): Promise<void> {
     const pages = input.comicId ? ((await call("comic.pages", { resourceId: input.comicId })).value as { pages?: Array<{ width: number; height: number }> } | undefined)?.pages ?? [] : [];
     await waitUntil(view, `document.querySelector('.comic-page[data-state="ready"]')`, 20_000);
-    await sleep(300);
+    await waitFrames(view);
     const clicked = await clickTestId(view, "comic-screenshot", 4000);
     const noticed = clicked && await waitUntil(view, `(document.querySelector('[data-testid="toast-notice"]')?.textContent ?? "").includes("截图")`, 8000);
     const notice = await noticeOf(view);

@@ -28,7 +28,7 @@ export const LocationLayoutSchema = z.object({
   defaultRoot: z.string().min(1),
   /** Where the application keeps its own data (A-118): `%LOCALAPPDATA%/manga` by default; the root the person chose otherwise. */
   appRoot: z.string().min(1),
-  /** Where the person's own files go: `<Documents>/MANGA` by default; the same as `appRoot` for a root the person chose. */
+  /** Where the person's own files go: `<Documents>/manga` by default; the same as `appRoot` for a root the person chose. */
   filesRoot: z.string().min(1),
   pointerPath: z.string().min(1),
   partitions: z.record(LocationPartitionSchema, z.string().min(1)),

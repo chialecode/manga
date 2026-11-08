@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import {
   DRAWN, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressChord, pressKey, railTo, showTab, sleep, tabsOf, trustedClick, viaSidebar,
-  waitDrawn, waitForTestId, waitUntil,
+  waitDrawn, waitForTestId, waitFrames, waitUntil,
 } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller } from "./common.ts";
 
@@ -102,7 +102,7 @@ export async function settledHost(view: BrowserWindow): Promise<HostFacts | null
   const key = (facts: HostFacts | null) => JSON.stringify(facts && { key: facts.key, columns: facts.columns, ids: facts.ids, focused: facts.focused, single: facts.single });
   let facts = await hostFacts(view);
   for (let round = 0; round < 12; round += 1) {
-    await sleep(300);
+    await waitFrames(view, 2);
     const next = await hostFacts(view);
     if (key(next) === key(facts)) return next;
     facts = next;
@@ -196,7 +196,7 @@ async function walkFrame(env: WorkspaceEnv): Promise<void> {
   for (const size of ["wide", "narrow", "short"] as const) {
     await resize(size);
     await openLibrary(view, 6000);
-    await sleep(250);
+    await waitFrames(view);
     const ids = ["shell-top", "shell-rail", "shell-sidebar", "shell-main", "shell-dock", "shell-resize-sidebar", "shell-resize-dock", "shell-sidebar-toggle", "shell-dock-toggle", "nav-back", "nav-forward", "menubar", "menu-file", "menu-edit", "menu-view", "menu-help", ...RAIL_ICONS, "nav-settings", "window-controls", "window-close"];
     const got = await rectsOf(view, ids);
     const hit = await reaches(view, [...RAIL_ICONS, "nav-settings", "shell-sidebar-toggle", "nav-back", "nav-forward", "menu-file", "menu-edit", "menu-view", "menu-help", "window-minimize", "window-maximize", "window-close", "shell-main"]);
@@ -351,7 +351,7 @@ async function walkMenus(env: WorkspaceEnv): Promise<void> {
   await waitUntil(view, `!document.querySelector('[data-testid="project-name"]')`, 2000);
 
   const scan = await chooseMenu(view, "menu-file", "menu-file-scan");
-  await sleep(500);
+  await waitFrames(view);
   const scanErr = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="toast-error"]'))`);
   detail.scan = { scan, error: scanErr };
   if (!scan || scanErr) problems.push("File > Scan the library failed");
@@ -482,7 +482,12 @@ async function walkTabs(env: WorkspaceEnv): Promise<Opened> {
   if ((await hostFacts(view))?.key !== "") { await clickTestId(view, "context-open-recent"); await waitContext(view, ""); }
   const before = await tabsOf(view);
   const beforeHost = await hostFacts(view);
-  await sleep(900);
+  const saveDeadline = Date.now() + 3000;
+  while (Date.now() < saveDeadline) {
+    const cur = ((await call("workspace.loadContext", { contextId: null })).value as { state?: { tabs?: unknown[] } } | undefined)?.state?.tabs?.length ?? -1;
+    if (cur === before.length) break;
+    await waitFrames(view);
+  }
   await view.webContents.reload();
   await toRail(view);
   const restored = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${before.length}`, 15_000);
@@ -541,7 +546,7 @@ async function walkPresets(env: WorkspaceEnv): Promise<void> {
   for (const [name, columns] of want) {
     const chosen = await chooseMenu(view, "menu-view", `menu-view-layout-${name}`);
     const done = chosen && await waitUntil(view, `${HOST}.getAttribute("data-columns") === "${columns}" && [...${HOST}.querySelectorAll('.dv-groupview')].filter((group) => group.getClientRects().length > 0).length === ${columns}`, 5000);
-    await sleep(300);
+    await waitFrames(view);
     const facts = await hostFacts(view);
     const row: Record<string, unknown> = { name, columns, groups: facts?.groups, tabs: facts?.ids.length };
     rows.push(row);
@@ -603,7 +608,7 @@ async function walkMoveVideo(env: WorkspaceEnv, opened: Opened): Promise<void> {
   await js(view, `(() => { const el = ${VIDEO}; el.__walkMark = "marked"; el.__walkLoad = 0; el.__walkEmptied = 0; el.addEventListener("loadstart", () => { el.__walkLoad += 1; }); el.addEventListener("emptied", () => { el.__walkEmptied += 1; }); window.__walkVideo = el; return true; })()`);
 
   const check = async (label: string, before: Awaited<ReturnType<typeof state>>) => {
-    await sleep(1800);
+    await waitUntil(view, `(() => { const el = ${VIDEO}; return Boolean(el) && !el.paused && el.currentTime >= ${before.t + 0.15}; })()`, 3000);
     const after = await state();
     const column = await columnOf(view, video.id);
     detail[label] = { before: before.t, after: after.t, column, paused: after.paused, loadstart: after.loadstart, emptied: after.emptied };
@@ -650,7 +655,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   // The comic in one column and the video in the other.
   const comicColumn = await columnOf(view, comic.id);
   if ((await columnOf(view, video.id)) === comicColumn) await tabMenu(view, video.id, `move-${comicColumn === 1 ? 2 : 1}`);
-  await sleep(600);
+  await waitFrames(view);
   const videoColumn = await columnOf(view, video.id);
   const columnNow = await columnOf(view, comic.id);
   if (videoColumn === columnNow) { observe("split-focus-keys", false, { problems: ["the comic and the video are in one column"] }); return; }
@@ -694,15 +699,18 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   const comic0 = await comicPosition();
   const video0 = await videoFacts();
   await pressKey(view, "Space");
-  const afterKey: boolean[] = [];
-  for (const wait of [60, 200, 340]) { await sleep(wait); afterKey.push((await videoFacts()).paused); }
+  await waitUntil(view, `Boolean(document.querySelector('[data-testid="tab-panel"][data-tab="${video.id}"] video')?.paused) !== ${video0.paused}`, 2000);
+  const afterKey: boolean[] = [(await videoFacts()).paused];
   const video1 = await videoFacts();
   const comic1 = await comicPosition();
   detail.videoFocus = { focused: videoFocused, playing: !video0.paused, afterSpace: !video1.paused, pausedAfter: afterKey, comic: [comic0, comic1] };
   if (!videoFocused) problems.push(`Ctrl+${videoColumn} did not focus the video's column`);
   if (video1.paused === video0.paused) problems.push("Space in the focused video did not play or pause it");
   if (comic1 !== comic0) problems.push(`Space in the focused video turned the comic's page (${comic0} → ${comic1})`);
-  if (video1.paused) { await pressKey(view, "Space"); await sleep(400); }
+  if (video1.paused) {
+    await pressKey(view, "Space");
+    await waitUntil(view, `!document.querySelector('[data-testid="tab-panel"][data-tab="${video.id}"] video')?.paused`, 2000);
+  }
 
   // A column answers to Ctrl+<n> with the tab it shows: the comic is brought to the front of its column first.
   await showTab(view, { id: comic.id });
@@ -711,7 +719,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   const comicFocused = await focusedIs(comic.id);
   const video2 = await videoFacts();
   await pressKey(view, "Space");
-  await sleep(600);
+  await waitUntil(view, `(document.querySelector('[data-testid="tab-panel"][data-tab="${comic.id}"] [data-testid="comic-position"]')?.textContent ?? "") !== ${JSON.stringify(comic1)}`, 2000);
   const comic2 = await comicPosition();
   const video3 = await videoFacts();
   detail.comicFocus = { focused: comicFocused, comic: [comic1, comic2], video: [video2.paused, video3.paused] };
@@ -730,7 +738,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   await focusedIs(comic.id);
   await pressKey(view, "w");
   const entered = await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`, 4000);
-  await sleep(600);
+  await waitFrames(view);
   const full = await js<{ single: boolean; comic: boolean; video: boolean; fills: boolean }>(view, `(() => {
     const drawn = ${DRAWN};
     const comic = document.querySelector('[data-testid="tab-panel"][data-tab="${comic.id}"]');
@@ -746,7 +754,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   await shot("workspace-split-fullscreen");
   await pressKey(view, "Escape");
   const left = await waitUntil(view, `document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "false" && ${DOCK}?.getAttribute("data-single") === "false"`, 4000);
-  await sleep(500);
+  await waitFrames(view);
   const back = await js<{ comic: boolean; video: boolean }>(view, `({ comic: ${DRAWN}(document.querySelector('[data-testid="tab-panel"][data-tab="${comic.id}"]')), video: ${DRAWN}(document.querySelector('[data-testid="tab-panel"][data-tab="${video.id}"]')) })`);
   detail.back = { left, ...back };
   if (!left || !back.comic || !back.video) problems.push("Esc did not bring both columns back");
@@ -776,7 +784,8 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
   await showTab(view, { kind: "library" });
   await waitDrawn(view, "agent-composer", 5000);
   await js(view, `(() => { const el = document.querySelector('[data-testid="shell-dock"] [data-testid="agent-composer"]'); if (!el) return false; const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set; set?.call(el, "最近的草稿"); el.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`);
-  await sleep(900);
+  await waitUntil(view, `(document.querySelector('[data-testid="shell-dock"] [data-testid="agent-composer"]')?.value ?? "").includes("最近的草稿")`, 2000);
+  await waitFrames(view, 2);
   detail.recent = { columns: recent?.columns, tabs: recent?.ids.length };
 
   // A second project made from the sidebar becomes the context on screen and is empty of what 最近 holds.
@@ -798,7 +807,7 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
   // A tab only this project has: the projects page (the settings are not a tab any more). And another layout of its own.
   await openProjectsPage(view);
   const twoState = await settledHost(view);
-  await sleep(900);
+  await waitFrames(view, 2);
 
   // The first project, its own: one column, its project tab.
   await clickTestId(view, `context-open-${projectId}`);
@@ -809,7 +818,7 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
   // Back to 最近: four columns, the same tabs, the draft.
   await clickTestId(view, "context-open-recent");
   const home = await waitContext(view, "");
-  await sleep(500);
+  await waitFrames(view);
   const recentAgain = await settledHost(view);
   const draftBack = await js<string>(view, `document.querySelector('[data-testid="shell-dock"] [data-testid="agent-composer"]')?.value ?? ""`);
   detail.recentAgain = { columns: recentAgain?.columns, tabs: recentAgain?.ids.length, draft: draftBack.includes("最近的草稿") };
@@ -848,9 +857,13 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
     if (!oneAfter || oneAfter.ids.join() !== (inOne?.ids ?? []).join()) problems.push("opening a row of the second project changed the first project's tabs");
   }
   // What was saved for each is what is on screen.
-  await sleep(900);
   const saved = async (id: string | null) => ((await call("workspace.loadContext", { contextId: id })).value as { state?: { preset?: string; tabs?: unknown[] } } | undefined)?.state;
-  const [s0, s1, s2] = [await saved(null), await saved(projectId), await saved(two)];
+  const savedDeadline = Date.now() + 3000;
+  let [s0, s1, s2] = [await saved(null), await saved(projectId), await saved(two)];
+  while ((s0?.preset !== "quad" || s2?.preset !== "two") && Date.now() < savedDeadline) {
+    await waitFrames(view);
+    [s0, s1, s2] = [await saved(null), await saved(projectId), await saved(two)];
+  }
   detail.saved = { recent: [s0?.preset, s0?.tabs?.length], one: [s1?.preset, s1?.tabs?.length], two: [s2?.preset, s2?.tabs?.length] };
   if (s0?.preset !== "quad" || s2?.preset !== "two") problems.push(`saved layouts are ${s0?.preset} / ${s2?.preset}, not quad / two`);
   await shot("workspace-contexts");
@@ -871,7 +884,7 @@ async function walkSameFile(env: WorkspaceEnv, two: string, nameTwo: string): Pr
   const projectName = String(((await call("project.get", { projectId })).value as { project?: { name?: string } } | undefined)?.project?.name ?? "");
   // A position in 最近 and another in the first project; the second project has none. The later one is the project's.
   await call("progress.setPage", { contextId: null, resourceId: comicId, resourceRevisionId: revisionId, pageId: pages.pages[1]!.id });
-  await sleep(40);
+  await sleep(40); // real time: distinct millisecond timestamp for progress ordering
   await call("progress.setPage", { contextId: projectId, resourceId: comicId, resourceRevisionId: revisionId, pageId: pages.pages[2]!.id });
   const got = async (contextId: string | null) => ((await call("progress.get", { contextId, resourceId: comicId, resourceRevisionId: revisionId })).value as { percent?: number; locator?: { pageId?: string; index?: number } | null } | undefined);
   const p0 = await got(null), p1 = await got(projectId), p2 = await got(two);
@@ -888,7 +901,7 @@ async function walkSameFile(env: WorkspaceEnv, two: string, nameTwo: string): Pr
     await clickTestId(view, "section-all-comic");
     await waitDrawn(view, "shelf-comic", 6000);
     await waitUntil(view, `${FRONT}?.querySelector('[data-testid="open-${comicId}"]')`, 8000);
-    await sleep(200);
+    await waitFrames(view);
     // The note on this comic's card only: other works on the shelf carry notes of their own.
     return js<string>(view, `${FRONT}?.querySelector('[data-testid="open-${comicId}"]')?.closest("article")?.querySelector('[data-testid^="work-origin-"]')?.textContent ?? ""`);
   };
@@ -908,7 +921,7 @@ async function walkSameFile(env: WorkspaceEnv, two: string, nameTwo: string): Pr
     await closeTabs(view, ["library", "reader"]);
     const open = await openFromShelf(view, "comic", comicId, 10_000, ["library", "reader"]);
     const ready = open && await waitUntil(view, `${FRONT}?.querySelector('.comic-page[data-state="ready"]')`, 25_000);
-    await sleep(500);
+    await waitFrames(view);
     return { ready, position: ready ? await position() : "", bar: await js<string>(view, `${FRONT}?.querySelector('[data-testid="elsewhere-text"]')?.textContent ?? ""`) };
   };
   const inRecent = await read("");
@@ -932,12 +945,17 @@ async function walkSameFile(env: WorkspaceEnv, two: string, nameTwo: string): Pr
   await shot("workspace-same-file");
   // Going there is a choice: the line's button, and the position then becomes the second project's own; the other two stay as they were.
   if (await clickTestId(view, "elsewhere-jump", 2000)) {
-    await sleep(1200);
+    await waitUntil(view, `(${FRONT}?.querySelector('[data-testid="comic-position"]')?.textContent ?? "") === ${JSON.stringify(named?.position ?? "")}`, 3000);
     const jumped = await position();
     detail.jumped = jumped;
     if (jumped === inTwo.position || !named || jumped !== named.position) problems.push(`jumping went to ${jumped}, not to ${named?.position ?? "the position the line named"}`);
-    await sleep(900);
-    const after = [await got(null), await got(projectId), await got(two)];
+    const jumpDeadline = Date.now() + 3000;
+    let after2 = await got(two);
+    while (!(after2?.percent && after2.percent > 0) && Date.now() < jumpDeadline) {
+      await waitFrames(view);
+      after2 = await got(two);
+    }
+    const after = [await got(null), await got(projectId), after2];
     if (after[0]?.percent !== p0?.percent) problems.push("jumping in the second project changed the position in 最近");
     if (after[1]?.percent !== p1?.percent) problems.push("jumping in the second project changed the position in the first project");
     if (!(after[2]?.percent && after[2].percent > 0)) problems.push("the second project has no position of its own after jumping");
@@ -968,7 +986,7 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
 
   // A reader: the dock shows that resource's conversation in this context, named after the tab.
   const reader = await openReader(env, "comic", env.comicId);
-  await sleep(700);
+  await waitUntil(view, `(document.querySelector('[data-testid="shell-dock"] [data-testid="conversation-title"]')?.textContent ?? "").includes(${JSON.stringify(env.titles.comic)})`, 3000);
   const readerDock = { drawn: await dockDrawn(), title: await titleOfDock() };
   detail.reader = { ...readerDock, tab: reader?.title };
   if (!reader || !readerDock.drawn || !readerDock.title.includes(env.titles.comic)) problems.push(`with the comic in front the dock says "${readerDock.title}"`);
@@ -979,7 +997,7 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
 
   // The library again: back to the context's own conversation.
   await showTab(view, { kind: "library" });
-  await sleep(500);
+  await waitFrames(view, 2);
   // The library tab is on the work's page, where the conversation is the work's; on its overview the dock is the context's own conversation again.
   const onWork = await js<boolean>(view, `${DRAWN}(${FRONT}?.querySelector('[data-testid="page-work"]'))`);
   const back = { drawn: await dockDrawn(), title: await titleOfDock(), onWork };
@@ -988,7 +1006,7 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
   else if (onWork && !back.title.includes(env.titles.comic)) problems.push(`with the library on the work's page the dock says "${back.title}", not the work's "${env.titles.comic}"`);
   else if (!onWork && back.title !== libraryDock.title) problems.push(`with the library in front again the dock says "${back.title}", it said "${libraryDock.title}"`);
   await openLibrary(view, 6000);
-  await sleep(500);
+  await waitUntil(view, `(document.querySelector('[data-testid="shell-dock"] [data-testid="conversation-title"]')?.textContent ?? "") === ${JSON.stringify(libraryDock.title)}`, 3000);
   const overview = { drawn: await dockDrawn(), title: await titleOfDock() };
   detail.libraryOverview = overview;
   if (!overview.drawn || overview.title !== libraryDock.title) problems.push(`on the library's overview the dock says "${overview.title}", it said "${libraryDock.title}"`);
@@ -1000,7 +1018,7 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
   if (!conv && listed[0]) conv = false;
   if (!conv) problems.push("a new conversation opened no conversation tab");
   else {
-    await sleep(500);
+    await waitUntil(view, `!${DRAWN}(document.querySelector('[data-testid="shell-dock"]'))`, 3000);
     const hidden = !(await dockDrawn()) && !(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="shell-dock-toggle"]'))`));
     detail.conversationTab = { dockHidden: hidden };
     if (!hidden) problems.push("the dock stays when a conversation tab is in front");
@@ -1018,7 +1036,7 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
   await openProjectsPage(view);
   await waitUntil(view, `${HOST}.querySelector('[data-testid="tab"][data-kind="project"]')`, 5000);
   await showTab(view, { kind: "project" });
-  await sleep(700);
+  await waitUntil(view, `(document.querySelector('[data-testid="shell-dock"] [data-testid="conversation-title"]')?.textContent ?? "").includes(${JSON.stringify(projectName)})`, 3000);
   const projectDock = { drawn: await dockDrawn(), title: await titleOfDock() };
   detail.project = projectDock;
   if (!projectDock.drawn || !projectDock.title.includes(projectName)) problems.push(`with the project page in front the dock says "${projectDock.title}", not "${projectName}"`);
@@ -1042,7 +1060,7 @@ async function walkDock(env: WorkspaceEnv, opened: Opened): Promise<void> {
   const kinds = new Set((await tabsOf(view)).map((tab) => tab.kind));
   if (kinds.has("settings") || kinds.has("search") || kinds.has("keys") || kinds.has("plugins")) problems.push("a settings, search, shortcuts or plug-ins tab is among the tabs the dock follows");
   const settingsUp = await clickTestId(view, "nav-settings", 4000) && await waitDrawn(view, "settings-area", 6000);
-  await sleep(300);
+  await waitFrames(view);
   const dockInSettings = await dockDrawn();
   detail.settings = { up: settingsUp, dockDrawn: dockInSettings };
   if (!settingsUp) problems.push("the settings view did not open");

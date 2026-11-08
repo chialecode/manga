@@ -10,7 +10,7 @@ import { currentRuntime } from "./settings.ts";
 import { readCredential, saveCredential } from "../credentials.ts";
 
 /** What these commands use of the application. */
-export type ConnectionsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders">;
+export type ConnectionsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "notify" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders">;
 
 export function listConnections(app: ConnectionsHost) {
   const rows = app.store.sqlite.prepare("SELECT id, label, protocol, runtime, base_url, credential_ref, purpose, model_id, timeout_ms, verified_capabilities_json, profile_json, last_test_json, created_at FROM provider_connections").all() as Array<Record<string, string | number | null>>;
@@ -73,6 +73,7 @@ export async function upsertConnection(app: ConnectionsHost, envelope: CommandEn
     ON CONFLICT(id) DO UPDATE SET label=excluded.label, protocol=excluded.protocol, runtime=excluded.runtime, base_url=excluded.base_url, credential_ref=COALESCE(excluded.credential_ref, provider_connections.credential_ref), timeout_ms=excluded.timeout_ms, purpose=excluded.purpose, model_id=excluded.model_id, verified_capabilities_json='[]', profile_json=excluded.profile_json, last_test_json=CASE WHEN ? THEN NULL ELSE provider_connections.last_test_json END`).run(
     id, input.label, "openai-http", input.protocol, runtime, baseUrl, credentialRef ?? null, input.timeoutMs ?? 60_000, input.purpose, input.modelId, "[]", profileJson, new Date().toISOString(), retargeted ? 1 : 0,
   );
+  app.notify("settings.changed", {});
   return { id, baseUrl, runtime, credentialConfigured: Boolean(credentialRef ?? existing?.credential_ref) };
 }
 
@@ -343,5 +344,6 @@ export function deleteConnection(app: ConnectionsHost, envelope: CommandEnvelope
   const row = app.store.sqlite.prepare("SELECT credential_ref FROM provider_connections WHERE id = ?").get(input.connectionId) as { credential_ref: string | null } | undefined;
   app.store.sqlite.prepare("DELETE FROM provider_connections WHERE id = ?").run(input.connectionId);
   if (row?.credential_ref) app.store.sqlite.prepare("DELETE FROM credentials WHERE ref = ?").run(row.credential_ref);
+  app.notify("settings.changed", {});
   return { ok: true, credentialRemoved: Boolean(row?.credential_ref) };
 }

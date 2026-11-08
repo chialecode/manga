@@ -42,6 +42,8 @@ export type ExportRequest = {
   chapterTitles: Map<string, string>;
   destination: ExportDestination;
   fileName?: string;
+  /** Runs in the transaction that registers the job, before any background work begins. */
+  onRegistered?: (view: RoughcutExportView) => void;
 };
 
 const toSeconds = (ms: number) => (ms / 1000).toFixed(4);
@@ -132,8 +134,11 @@ export class RoughcutExports {
     const now = new Date().toISOString();
     const base = safeFileName((request.fileName ?? plan.title).replace(/\.(mp4|m4v|mov|mkv|webm)$/i, ""), "roughcut");
     const progress: Progress = { step: null, done: 0, bytes: null, check: null, timing: null, destination: request.destination.kind, folder: request.destination.label, files: [], commands: [] };
-    this.o.store.sqlite.prepare("INSERT INTO rough_cut_exports(id, cut_id, state, plan_json, result_json, tmp_name, final_name, error_json, created_at, updated_at) VALUES (?,?,?,?,?,NULL,NULL,NULL,?,?)")
-      .run(id, plan.cutId, "planned", JSON.stringify(plan), JSON.stringify(progress), now, now);
+    this.o.store.sqlite.transaction(() => {
+      this.o.store.sqlite.prepare("INSERT INTO rough_cut_exports(id, cut_id, state, plan_json, result_json, tmp_name, final_name, error_json, created_at, updated_at) VALUES (?,?,?,?,?,NULL,NULL,NULL,?,?)")
+        .run(id, plan.cutId, "planned", JSON.stringify(plan), JSON.stringify(progress), now, now);
+      request.onRegistered?.(this.get(id));
+    })();
     const controller = new AbortController();
     const done = this.run(id, request, base, controller.signal).catch(() => undefined).finally(() => { this.running.delete(id); });
     this.running.set(id, { controller, done });

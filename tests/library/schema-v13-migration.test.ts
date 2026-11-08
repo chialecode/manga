@@ -24,8 +24,8 @@ describe("schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05)",
     const before = fs.statSync(path.join(seeded.data, "manga.sqlite")).size;
     const store = new DrizzleStore({ profileDir: seeded.data, hostId: "migrate-v13" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(13);
-      expect(store.getMeta("schemaVersion")).toBe("13");
+      expect(PRODUCT_SCHEMA_VERSION).toBe(14);
+      expect(store.getMeta("schemaVersion")).toBe("14");
       expect(store.migration?.from).toBe(12);
       expect(store.migration?.agentMedia).toMatchObject({ runs: 300, images: seeded.images, unique: seeded.unique });
       // The same pictures, byte for byte, as many times as the runs refer to them.
@@ -79,7 +79,7 @@ describe("schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05)",
     half.close();
     const retried = new DrizzleStore({ profileDir: seeded.data, hostId: "retry-v13" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("13");
+      expect(retried.getMeta("schemaVersion")).toBe("14");
       expect(frozenImageHashes(retried.sqlite)).toEqual(seeded.hashes);
     } finally {
       retried.close();
@@ -101,7 +101,7 @@ describe("schema v13 migration (the frozen pictures of tasks, AT-144, LOOP-05)",
     after.close();
     const fixed = new DrizzleStore({ profileDir: seeded.data, hostId: "fixed-v13" });
     try {
-      expect(fixed.getMeta("schemaVersion")).toBe("13");
+      expect(fixed.getMeta("schemaVersion")).toBe("14");
       expect(frozenImageHashes(fixed.sqlite)).toEqual(seeded.hashes);
     } finally {
       fixed.close();

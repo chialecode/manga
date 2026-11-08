@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, openFromShelf, openRecords, revealNovelControls, selectText, setField, sleep, waitForTestId, waitUntil } from "./driver.ts";
+import { clickTestId, openFromShelf, openRecords, revealNovelControls, selectText, setField, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { caller, ensureDock, fullscreenRoundTrip, js, type FlowResult } from "./common.ts";
 
 /**
@@ -134,13 +134,12 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   // A note from the right pane: the picked passage is its source, the typed text is the user's own.
   await clickTestId(view, "chat-mode-note");
   await setField(view, "agent-composer", NOTE_TEXT);
-  await sleep(100);
+  await waitUntil(view, `(document.querySelector('[data-testid="agent-composer"]')?.value ?? "") === ${JSON.stringify(NOTE_TEXT)}`, 3000);
   const noteAt = Date.now();
   const noteSent = await clickTestId(view, "agent-send");
   const bubbleShown = noteSent && await waitUntil(view, `document.querySelector('[data-testid^="bubble-note-"]')`, 20_000);
   // The bubble is the receipt the user waits for, so the timing ends there and not at the click.
   const noteMs = Date.now() - noteAt;
-  await sleep(300);
   const workspace = await call("workspace.get", {});
   const notes = ((workspace.value as { notes?: Notes } | undefined)?.notes) ?? [];
   const recorded = notes.find((note) => note.title.includes("闭合样本"));
@@ -165,8 +164,9 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   const firstPageHasTail = await js<boolean>(view, TAIL_PAGE_SHOWN);
   let moved = false;
   for (let turn = 0; turn < 80 && !(await js<boolean>(view, TAIL_PAGE_SHOWN)); turn += 1) {
+    const startBefore = await js<string | null>(view, `document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-start") ?? null`);
     moved = await clickTestId(view, "reading-page-next");
-    await sleep(200);
+    await waitUntil(view, `document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-start") !== ${JSON.stringify(startBefore)}`, 3000);
   }
   const noMoreButton = await js<boolean>(view, `!document.querySelector('[data-testid="reading-more"]')`);
   const uiTailVisible = !firstPageHasTail && moved && noMoreButton && await waitUntil(view, TAIL_PAGE_SHOWN, 8000);
@@ -199,14 +199,14 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   await clickTestId(view, "reading-settings");
   const styleReachable = await waitForTestId(view, "reading-font-size-value", "data-present", null, 10_000);
   await clickTestId(view, "reading-theme-green");
-  await sleep(400);
+  await waitUntil(view, `document.querySelector('[data-testid="reading-page"]')?.getAttribute("data-theme") === "green" || document.querySelector('[data-testid="reading-theme-green"][aria-pressed="true"]')`, 3000);
   const shellAfter = await call("settings.getShell", {});
   const theme = (shellAfter.value as { reading?: { theme?: string } } | undefined)?.reading?.theme;
 
   // A bookmark taken in the reader has to be listed, openable and removable.
   const bookmarkAdded = await clickTestId(view, "reading-bookmark-add");
   await clickTestId(view, "reading-panel-bookmarks");
-  await sleep(500);
+  await waitUntil(view, `document.querySelector('[data-testid^="reading-bookmark-"]')`, 4000);
   const bookmarks = await call("reading.bookmarks", { resourceId });
   const bookmarkRows = (bookmarks.value as Array<{ id: string }> | undefined) ?? [];
   let bookmarkHighlighted = false;
@@ -218,8 +218,10 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   const beforeRemove = await call("library.read", { resourceId });
   const readRangesBefore = ((beforeRemove.value as { readRanges?: unknown[] } | undefined)?.readRanges ?? []).length;
   const progressStillAtTail = Number(((beforeRemove.value as { progress?: { restoredRange?: { start?: number } } } | undefined)?.progress?.restoredRange?.start) ?? 0) > 0;
-  if (bookmarkRows[0]) await clickTestId(view, `reading-bookmark-remove-${bookmarkRows[0].id}`);
-  await sleep(400);
+  if (bookmarkRows[0]) {
+    await clickTestId(view, `reading-bookmark-remove-${bookmarkRows[0].id}`);
+    await waitUntil(view, `!document.querySelector('[data-testid="reading-bookmark-${bookmarkRows[0].id}"]')`, 4000);
+  }
   const afterRemove = await call("reading.bookmarks", { resourceId });
   const bookmarkRemoved = ((afterRemove.value as unknown[] | undefined) ?? []).length === bookmarkRows.length - 1;
 
@@ -256,13 +258,13 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
     }
     await clickTestId(view, "chat-mode-ask");
     await setField(view, "agent-composer", ASK_TEXT);
-    await sleep(150);
+    await waitUntil(view, `(document.querySelector('[data-testid="agent-composer"]')?.value ?? "") === ${JSON.stringify(ASK_TEXT)}`, 3000);
     await clickTestId(view, "agent-send");
     let sentRun: { id: string } | undefined;
     for (let attempt = 0; attempt < 60 && !sentRun; attempt += 1) {
       const after = await call("workspace.get", {});
       sentRun = (((after.value as { runs?: Array<{ id: string; inputText?: string }> } | undefined)?.runs) ?? []).find((run) => run.inputText === ASK_TEXT);
-      if (!sentRun) await sleep(250);
+      if (!sentRun) await waitFrames(view, 2);
     }
     if (sentRun) {
       const detail = await call("agent.getRun", { runId: sentRun.id });

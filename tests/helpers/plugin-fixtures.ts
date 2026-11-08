@@ -89,10 +89,12 @@ export function packageBytes(options: FixtureOptions): Buffer {
   return buildPluginPackage({ manifest, files, privateKeyPem: options.key.privateKeyPem, signedAt: options.signedAt });
 }
 
+import { testTempRoot } from "./global-temp.ts";
+
 let dirs = 0;
 export function tmpDir(): string {
   dirs += 1;
-  return mkdtempSync(path.join(os.tmpdir(), `manga-plugin-${dirs}-`));
+  return mkdtempSync(path.join(testTempRoot(), `manga-plugin-${dirs}-`));
 }
 
 /** Writes a package into a fresh folder and returns its path. */
