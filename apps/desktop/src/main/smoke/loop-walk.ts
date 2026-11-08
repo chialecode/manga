@@ -4,6 +4,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { clickTestId, closeTabs, DRAWN, ensureSidebar, openFromShelf, pressChord, railTo, setField, sleep, tabsOf, viaSidebar, waitFrames, waitUntil } from "./driver.ts";
+import { seedLongSession, value, type Call } from "./fixtures.ts";
 import { caller, capturePage, ensureDock, js, openSettingsPage, leaveSettings, toRail, type FlowResult } from "./common.ts";
 
 /**
@@ -23,12 +24,6 @@ const DOCK = `document.querySelector('[data-testid="shell-dock"]')`;
 /** The scroll element of the right pane's message list (use-stick-to-bottom's own wrapper, the log's first child). */
 const SCROLLER = `${DOCK}?.querySelector('[data-testid="chat-log"]')?.firstElementChild`;
 
-type Call = ReturnType<typeof caller>;
-const value = async <T>(call: Call, commandId: string, input: Record<string, unknown>): Promise<T> => {
-  const result = await call(commandId, input);
-  if (result.status !== "ok") throw new Error(`${commandId}: ${JSON.stringify(result.error ?? null).slice(0, 300)}`);
-  return result.value as T;
-};
 
 /** A stand-in Chat Completions service that writes its answer a piece at a time for `ms`, so a reply grows in the window while it streams. */
 async function streamingModel(ms: number): Promise<{ url: string; close: () => Promise<void> }> {
@@ -58,36 +53,6 @@ async function streamingModel(ms: number): Promise<{ url: string; close: () => P
   return { url: `http://127.0.0.1:${port}/v1`, close: () => new Promise((resolve) => server.close(() => resolve())) };
 }
 
-/** A conversation of `total` messages on a book: notes spread through it and the rest questions and answers of every length (synthetic, LOOP-07). */
-export async function seedLongSession(appService: MangaProductApp, call: Call, total: number): Promise<{ resourceId: string; sessionId: string; noteIds: string[]; runIds: string[] }> {
-  const imported = await value<{ resourceId: string }>(call, "library.importDocument", { title: total === 5000 ? "长对话的书" : `长对话的书（${total}）`, format: "txt", bytes: [...new TextEncoder().encode("长对话用的合成正文。".repeat(200))] });
-  const sessionId = (await value<{ id: string }>(call, "session.open", { kind: "resource", targetId: imported.resourceId, contextId: null })).id;
-  const notes = Math.max(1, Math.round(total / 50));
-  const noteIds: string[] = [];
-  for (let index = 0; index < notes; index += 1) noteIds.push((await value<{ objectId: string }>(call, "notes.create", { title: `第${index}条笔记`, text: `合成笔记 ${index}：${"想法".repeat(5 + (index % 9) * 6)}`, resourceId: imported.resourceId })).objectId);
-  const sqlite = appService.store.sqlite;
-  const base = Date.UTC(2026, 0, 1);
-  const runs = Math.ceil((total - notes) / 2);
-  const step = Math.floor(((total - notes) / 2 + notes) / notes);
-  const at = (index: number) => new Date(base + index * 1000).toISOString();
-  const runIds: string[] = [];
-  const insert = sqlite.prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, live_text, created_at, updated_at) VALUES (?, ?, 'succeeded', 'smoke', '{}', ?, ?, ?, ?)");
-  const move = sqlite.prepare("UPDATE content_objects SET created_at = ? WHERE id = ?");
-  sqlite.transaction(() => {
-    let slot = 0;
-    let noteAt = 0;
-    for (let index = 0; index < runs; index += 1) {
-      if (noteAt < noteIds.length && index % step === 0) { move.run(at(slot), noteIds[noteAt]!); noteAt += 1; slot += 1; }
-      const id = total === 5000 ? `run_long_${String(index).padStart(5, "0")}` : `run_long${total}_${String(index).padStart(5, "0")}`;
-      runIds.push(id);
-      insert.run(id, sessionId, `第${index}个问题${"？".repeat(index % 4)}`, `第${index}个回答。${"这一段回答有长有短。".repeat(1 + (index % 13) * 3)}`, at(slot), at(slot));
-      slot += 1;
-    }
-    for (; noteAt < noteIds.length; noteAt += 1, slot += 1) move.run(at(slot), noteIds[noteAt]!);
-  })();
-  return { resourceId: imported.resourceId, sessionId, noteIds, runIds };
-}
-
 /** The message at the top of the right pane's viewport and how far its top is from the viewport's top, by the page's layout. */
 const topRow = (view: BrowserWindow) => js<{ id: string; offset: number } | null>(view, `(() => {
   const scroller = ${SCROLLER};
@@ -98,6 +63,26 @@ const topRow = (view: BrowserWindow) => js<{ id: string; offset: number } | null
   if (!first) return null;
   return { id: first.row.firstElementChild?.getAttribute("data-testid") ?? "", offset: Math.round(first.box.top - top) };
 })()`);
+/**
+ * The first message whose top is inside the viewport, and where it is. Whether the viewport moved is judged by that same message afterwards
+ * (`offsetOf`): the row that is first visible changes by itself when the top one is all but scrolled out and moves a pixel.
+ */
+const anchorRow = (view: BrowserWindow) => js<{ id: string; offset: number } | null>(view, `(() => {
+  const scroller = ${SCROLLER};
+  if (!scroller) return null;
+  const top = scroller.getBoundingClientRect().top;
+  const rows = [...scroller.querySelectorAll(".chat-row")].map((row) => ({ row, box: row.getBoundingClientRect() })).filter((item) => item.box.top >= top - 0.5).sort((a, b) => a.box.top - b.box.top);
+  const first = rows[0];
+  if (!first) return null;
+  return { id: first.row.firstElementChild?.getAttribute("data-testid") ?? "", offset: Math.round(first.box.top - top) };
+})()`);
+/** Where the message with this test id is now, from the viewport's top; null when it is not in the page. */
+const offsetOf = (view: BrowserWindow, id: string) => js<number | null>(view, `(() => {
+  const scroller = ${SCROLLER};
+  const row = scroller?.querySelector(${JSON.stringify(`[data-testid="${id}"]`)})?.closest(".chat-row");
+  return row ? Math.round(row.getBoundingClientRect().top - scroller.getBoundingClientRect().top) : null;
+})()`);
+const moved = (anchor: { id: string; offset: number } | null, now: number | null) => !anchor || now === null || Math.abs(anchor.offset - now) > 2;
 const loadedCount = (view: BrowserWindow) => js<number>(view, `Number(${DOCK}?.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? 0)`);
 const bottomGap = (view: BrowserWindow) => js<number>(view, `(() => { const s = ${SCROLLER}; return s ? Math.round(s.scrollHeight - s.scrollTop - s.clientHeight) : -1; })()`);
 const atBottom = (view: BrowserWindow) => js<boolean>(view, `(() => { const s = ${SCROLLER}; return Boolean(s) && s.scrollHeight - s.scrollTop - s.clientHeight <= 8; })()`);
@@ -135,31 +120,31 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     if (!grew) problems.push("scrolling to the top did not load the older page");
 
     // A notice from the host refreshes the list: the pages loaded stay, and the viewport does not move.
-    const anchor = await topRow(view);
+    const anchor = await anchorRow(view);
     const loadedBefore = await loadedCount(view);
     appService.notify("work.updated", { resourceId: seeded.resourceId });
     await sleep(600); // real time: host notification refresh window to verify viewport stays still
-    const afterNotice = await topRow(view);
+    const afterNotice = anchor ? await offsetOf(view, anchor.id) : null;
     const loadedAfterNotice = await loadedCount(view);
-    detail.notice = { anchor, after: afterNotice, loadedBefore, loadedAfterNotice };
+    detail.notice = { anchor, afterOffset: afterNotice, loadedBefore, loadedAfterNotice };
     if (loadedAfterNotice < loadedBefore) problems.push(`a refresh folded the loaded pages back (${loadedBefore} → ${loadedAfterNotice})`);
-    if (!anchor || !afterNotice || anchor.id !== afterNotice.id || Math.abs(anchor.offset - afterNotice.offset) > 2) problems.push("a refresh moved the message at the top of the viewport");
+    if (moved(anchor, afterNotice)) problems.push("a refresh moved the message at the top of the viewport");
 
     // An old message outside the viewport is deleted and the list refreshed: it is gone and the viewport stays.
     const loadedIds = await js<string[]>(view, `[...${DOCK}.querySelectorAll('[data-testid="chat-rows"] .chat-row > [data-testid^="bubble-"]')].map((el) => el.getAttribute("data-testid"))`);
     const victim = seeded.noteIds.find((id) => !loadedIds.includes(`bubble-note-${id}`) && appService.store.sqlite.prepare("SELECT created_at FROM content_objects WHERE id = ?").pluck().get(id) as string >= new Date(Date.UTC(2026, 0, 1) + (seeded.runIds.length + seeded.noteIds.length - 150) * 1000).toISOString());
     if (victim) {
       await value(call, "notes.delete", { objectId: victim });
-      const beforeDelete = await topRow(view);
+      const beforeDelete = await anchorRow(view);
       const count = await loadedCount(view);
       appService.notify("work.updated", { resourceId: seeded.resourceId });
       const dropped = await waitUntil(view, `${loadedCountExpr()} === ${count - 1}`, 5000);
       await waitUntil(view, `Boolean(${SCROLLER}?.querySelector(".chat-row"))`, 2000);
       await waitFrames(view, 2);
-      const afterDelete = await topRow(view);
-      detail.deleted = { dropped, before: beforeDelete, after: afterDelete };
+      const afterDelete = beforeDelete ? await offsetOf(view, beforeDelete.id) : null;
+      detail.deleted = { dropped, before: beforeDelete, afterOffset: afterDelete };
       if (!dropped) problems.push("the deleted message is still in the list after the refresh");
-      if (!beforeDelete || !afterDelete || beforeDelete.id !== afterDelete.id || Math.abs(beforeDelete.offset - afterDelete.offset) > 2) problems.push("deleting a message outside the viewport moved the viewport");
+      if (moved(beforeDelete, afterDelete)) problems.push("deleting a message outside the viewport moved the viewport");
     } else problems.push("no loaded note outside the viewport to delete");
     await capturePage(view, evidenceDir, "ui-chat-long-session.png");
 
@@ -171,6 +156,11 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     await setField(view, "agent-composer", "流式回答的时候贴着底部吗？");
     const sent = await clickTestId(view, "agent-send", 3000);
     const live = sent && await waitUntil(view, `${DOCK}?.querySelector('[data-testid^="bubble-agent-"][data-status="running"]')`, 10_000);
+    // The new reply's bubble appears below the fold and the list follows it with a smooth scroll;
+    // sample stickiness once it has caught up, so a sample taken mid-animation does not count as leaving the bottom.
+    const followStart = Date.now();
+    const followed = live && await waitUntil(view, `(() => { const s = ${SCROLLER}; const gap = s.scrollHeight - s.scrollTop - s.clientHeight; return gap >= 0 && gap <= 8; })()`, 2000);
+    const followMs = Date.now() - followStart;
     const stuck: boolean[] = [];
     const gaps: number[] = [];
     for (let i = 0; i < 12; i += 1) { const gap = await bottomGap(view); gaps.push(gap); stuck.push(gap >= 0 && gap <= 8); await sleep(150); } // real time: streaming chunk interval while checking bottom stickiness
@@ -180,8 +170,9 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     const held: number[] = [];
     for (let i = 0; i < 8; i += 1) { await sleep(150); held.push(await js<number>(view, `${SCROLLER}.scrollTop`)); } // real time: streaming chunk interval while checking scrolled-up position holds
     const stillRunning = await js<boolean>(view, `Boolean(${DOCK}?.querySelector('[data-testid^="bubble-agent-"][data-status="running"]'))`);
-    detail.stream = { live, stuck, gaps, upAt, held, stillRunning };
+    detail.stream = { live, followed, followMs, stuck, gaps, upAt, held, stillRunning };
     if (!live) problems.push("the reply did not start streaming");
+    if (live && !followed) problems.push("the list did not follow the new reply to the bottom within 2 s");
     if (stuck.some((value) => !value)) problems.push(`the list left the bottom while the reply streamed (${stuck.filter((v) => !v).length} of ${stuck.length} samples)`);
     if (held.some((value) => Math.abs(value - upAt) > 4)) problems.push("scrolled up while the reply streamed, the list was pulled back");
     await waitUntil(view, `!${DOCK}?.querySelector('[data-testid^="bubble-agent-"][data-status="running"]')`, 15_000);

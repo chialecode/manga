@@ -4,7 +4,7 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { MangaProductApp, TestVault } from "../../packages/app-core/src/index.ts";
-import { stageFingerprints, currentStage, loadGate, runDir, p95, repoRoot as root, packagedExecutable } from "./lib.mjs";
+import { stageFingerprints, fingerprintKeysOf, readJson, currentStage, loadGate, runDir, p95, repoRoot as root, packagedExecutable } from "./lib.mjs";
 import { NORMALIZATION_V1 } from "../../packages/contracts/src/index.ts";
 import { runScaleWindowBench, spawnWindow } from "./bench-scale.mjs";
 import { runScanPaneBench } from "./bench-scan-pane.mjs";
@@ -35,6 +35,10 @@ const BLOCKS = requiredScale.searchBlocks;
 const tempWatch = watchGateTemp("stage-bench");
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-"));
 const evidence = runDir();
+// Where the bench's time goes: seconds per section, recorded in bench.json (records.sectionSeconds), not a limit.
+const sectionSeconds = {};
+let sectionStarted = performance.now();
+const endSection = (name) => { const now = performance.now(); sectionSeconds[name] = Math.round((now - sectionStarted) / 100) / 10; sectionStarted = now; };
 const app = new MangaProductApp({
   profileRoot: profile,
   documentsDir: path.join(profile, "documents"),
@@ -177,6 +181,7 @@ for (let i = 0; i < 8; i += 1) {
   operationSaveMs.push(performance.now() - started);
 }
 app.close();
+endSection("service");
 
 const coldStartMs = [];
 for (let i = 0; i < 3; i += 1) {
@@ -189,6 +194,7 @@ for (let i = 0; i < 3; i += 1) {
   coldStartMs.push(JSON.parse(fs.readFileSync(out, "utf8")).ms);
 }
 
+endSection("coldStart");
 function electronBin() {
   const name = process.platform === "win32" ? "electron.exe" : "electron";
   return [path.join(root, "node_modules/electron/dist", name), path.join(root, "apps/desktop/node_modules/electron/dist", name)].find((file) => fs.existsSync(file));
@@ -242,6 +248,7 @@ for (let i = 0; i < 3; i += 1) {
   windowImportMs.push(windowMetrics.importToReadableMs);
 }
 
+endSection("window");
 // The same 6.2 baseline in a real window: seeded 10k/50k Profile, 10 MiB TXT and 30 MiB EPUB tails,
 // and UI/save samples taken while another 10 MiB book is still parsing.
 const appCommand = packagedApp()
@@ -255,24 +262,29 @@ if (!scaleLauncher) {
   process.exit(1);
 }
 const scaleWindow = await runScaleWindowBench({ launch: scaleLauncher });
+endSection("scaleWindow");
 if (!scaleWindow.ok) process.stderr.write(`scale window bench incomplete: ${JSON.stringify({ reason: scaleWindow.reason, failures: scaleWindow.failures, profile: scaleWindow.profile, measured: scaleWindow.measured, stderr: scaleWindow.stderr })}\n`);
 
 // A 5000-file scan, cover reads from the image table, and the right pane with 1000 messages.
 const scanPane = await runScanPaneBench({ launch: scaleLauncher });
+endSection("scanPane");
 if (!scanPane.ok) process.stderr.write(`scan and pane bench incomplete: ${JSON.stringify({ scan: scanPane.scan && { ok: scanPane.scan.ok, added: scanPane.scan.added, failed: scanPane.scan.failed }, pane: scanPane.pane && { ok: scanPane.pane.ok, reason: scanPane.pane.reason } })}\n`);
 // The creative workspace at the sizes the stage gate names; each result keeps its raw samples so the report can recompute the figure.
 const creative = {};
 // The whiteboard and the mind map run in the real window, once, on a board and a map the window seeds for itself.
 const canvasWanted = config.bench.canvas;
 const canvas = await runCanvasBench({ launch: scaleLauncher, ...canvasWanted });
+endSection("canvas");
 if (!canvas.ok) process.stderr.write(`canvas window bench incomplete: ${JSON.stringify({ reason: canvas.reason, failures: canvas.failures, stderr: canvas.stderr })}\n`);
 // The video player in the real window: an episode with thousands of comments, and a player kept behind settings.
 const readerWanted = config.bench.reader;
 const reader = await runReaderBench({ ...appCommand, ...readerWanted });
+endSection("reader");
 if (!reader.danmaku?.ok || !reader.memory?.ok) process.stderr.write(`reader window bench incomplete: ${JSON.stringify({ reason: reader.reason, danmaku: reader.danmaku && { ok: reader.danmaku.ok, reason: reader.danmaku.reason, failures: reader.danmaku.failures, stderr: reader.danmaku.stderr }, memory: reader.memory && { ok: reader.memory.ok, reason: reader.memory.reason, failures: reader.memory.failures, stderr: reader.memory.stderr } })}
 `);
 // The workspace in the real window: tabs, contexts, readers kept loaded, and four columns with a video playing.
 const workspace = await runWorkspaceBench({ ...appCommand, ...config.bench.workspace });
+endSection("workspace");
 if (workspace.window?.ok !== true || workspace.memory?.ok !== true) process.stderr.write(`workspace window bench incomplete: ${JSON.stringify({ reason: workspace.reason, window: workspace.window && { ok: workspace.window.ok, reason: workspace.window.reason, failures: workspace.window.failures, stderr: workspace.window.stderr, counts: workspace.window.counts }, memory: workspace.memory && { ok: workspace.memory.ok, failures: workspace.memory.failures } })}
 `);
 // The right pane with a conversation of 5000 messages in the real window (LOOP-07), on a Profile of its own the window seeds for itself.
@@ -292,8 +304,26 @@ function runChatBench() {
   }
 }
 const chat = runChatBench();
+endSection("chat");
 // A 60 s clip cut without re-encoding, a 4 MB picture frozen for a run; the v13 move and the copy of a 500 MB profile are recorded.
 const agentMedia = await runAgentMediaBench({ clipRuns: config.bench.creative.clip60?.minSamples ?? 8, freezeRuns: config.bench.creative.freeze4mb?.minSamples ?? 20 });
+endSection("agentMedia");
+
+// Record the actual packaged update and install-dev runs from this gate's installer evidence.
+const installerEvidence = readJson(evidence, "installer.json");
+if (installerEvidence?.status !== "passed" || fingerprintKeysOf(config, "installer.json").some((key) => installerEvidence[key] !== fingerprints[key])
+  || installerEvidence.updateRehearsal?.kind !== "electron-nsis" || !installerEvidence.updateRehearsal.development?.stayedAliveAfterWriteCompleted) {
+  throw new Error("current packaged update/install-dev rehearsal is required; run stage installer first");
+}
+const releaseEvidence = readJson(evidence, "release.json");
+const releaseMeasured = releaseEvidence?.status === "passed" && releaseEvidence.rehearsal?.kind === "electron-nsis"
+  && fingerprintKeysOf(config, "release.json").every((key) => releaseEvidence[key] === fingerprints[key]);
+const updateRecords = {
+  kind: "electron-nsis", artifactKind: installerEvidence.updateRehearsal.artifactKind, sourceEvidence: "installer.json",
+  ...installerEvidence.updateRehearsal.records,
+  stageReleaseMs: releaseMeasured ? releaseEvidence.totalMs : null,
+  stageRelease: releaseMeasured ? { status: "measured", sourceEvidence: "release.json", kind: "electron-nsis" } : { status: "not-run" },
+};
 const canvasRaw = {
   whiteboardOpen: { raw: canvas.whiteboardOpenMs, scale: { cards: canvas.scale?.cards ?? 0 } },
   whiteboardDrag: { raw: canvas.whiteboardDragMs, scale: { cards: canvas.scale?.cards ?? 0 } },
@@ -302,7 +332,9 @@ const canvasRaw = {
 };
 let importRuns;
 let proposalRuns;
+sectionStarted = performance.now();
 for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
+  const idStarted = performance.now();
   if (id === "semantic" || id === "semanticFallback") {
     const result = await runSemanticBench({ segments: wanted.scale.segments, runs: wanted.minSamples, vec: wanted.engine === "vec0" });
     creative[id] = { kind: "service-semantic-search", engine: result.engine, scale: { segments: wanted.scale.segments, chunks: result.chunks, dim: result.dim }, buildMs: result.buildMs, raw: result.samples };
@@ -366,6 +398,8 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
     const part = id === "proposalPropose" ? proposalRuns.propose : proposalRuns.apply;
     creative[id] = { kind: "service-agent-proposal", scale: { objects: proposalRuns.objects }, raw: part.samples, detail: part.detail };
   }
+  const idSeconds = Math.round((performance.now() - idStarted) / 100) / 10;
+  if (idSeconds >= 0.1) sectionSeconds[`creative.${id}`] = idSeconds;
 }
 const creativeMetrics = Object.fromEntries(Object.entries(config.bench.creative ?? {}).map(([id, wanted]) => [wanted.metric, creative[id]?.raw?.length ? (wanted.stat === "max" ? Math.max(...creative[id].raw) : p95(creative[id].raw)) : Number.POSITIVE_INFINITY]));
 const measurement = (raw, unit, note) => ({ unit, note, raw, p95: p95(raw) });
@@ -422,8 +456,8 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   arch: process.arch,
   node: process.version,
   metrics,
-  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the v14 proposal table migration, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open.
-  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, migrationV14: proposalRuns?.migrationV14 ?? null, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null },
+  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the v14 proposal table migration, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open, and the 4 Stage M10 update/release records.
+  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, migrationV14: proposalRuns?.migrationV14 ?? null, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null, update: updateRecords, sectionSeconds },
   targets: requiredBenchTargets,
   scale: { metadataCount: METADATA, searchBlocks: BLOCKS },
   samples: {

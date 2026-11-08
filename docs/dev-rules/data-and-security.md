@@ -43,3 +43,12 @@
 所有安装目录外的应用生成内容必须有可见、可配置的位置，开发与正式通道隔离。默认位置按 A-118：用户创建的文件在系统登记的“文档”下的 `manga`（下载在“下载”下的 `manga`），应用自己管理的数据在 `%LOCALAPPDATA%\manga`（开发版 `manga-dev`）；所有路径统一用小写的 `manga`；不写漫游的 `%APPDATA%`，不在用户主目录下建文件夹。具体分区、凭据密文与启动定位要求见 [领域模型](../design/domain-model.md#112-文件分区)。迁移前验证授权与空间，切换前校验，失败可恢复；不自动搬动仅索引的外部原件。从旧位置（`<文档>\manga\<通道>`）升级只复制应用数据、核对后写新指针，用户文件留在原处、记成分区覆盖，旧文件只在用户点“清理旧位置”后删除。卸载程序不删应用数据与用户文件（A-119）。
 
 模型外部调用按任务用途隔离：原始音频只允许路由到用户独立配置且授权的 ASR，LLM 只接收转录文本。ASR/Embedding 未配置或与任务错配时，必须在凭据解析和网络请求前失败，不沿用文本测试配置。参考模型目录或兼容 API 名称不能扩展数据发送授权。
+
+## 4. 应用更新与安装包安全（A-125）
+
+- **独立的更新签名密钥：** 正式版安装包使用独立于第一方插件密钥的 Ed25519 密钥对签名（私钥 `dist/keys/update-release.pem` 不入库且不进日志或证据，公钥 `dist/keys/update-release.pub` 内置在 `packages/app-core/src/update/signature.ts` 的 `RELEASE_UPDATE_PUBLIC_KEYS`）。两把密钥职责隔离，一把泄露不影响另一把。
+- **绑定版本与文件名的分离签名（`.sig`）：** 发布时为 `manga-setup-<版本>.exe` 生成分离签名 `manga-setup-<版本>.exe.sig`。签名原文是 UTF-8 的 `manga.update.signature.v1`、`version <版本>`、`fileName <文件名>`、`sha512 <base64>` 四行，每行末尾都有换行。`.sig` 另有字节数、密钥编号与签名时间；字节数由文件、清单和签名记录交叉核对，不在签名原文中。版本和文件名的绑定防止合法旧包被重命名冒充新版本。
+- **`publisherName` 强制触发与纵深防御校验：** 在未做 Windows Authenticode 代码签名时，`electron-updater` 6.8.11 的 `NsisUpdater.verifySignature` 只有在 `resources/app-update.yml` 含有 `publisherName` 时才会调用自定义 `verifyUpdateCodeSignature`，否则直接返回 `null` 跳过校验。因此正式版打包时强制写入 `publisherName: ["chialecode"]`（由 `checkAppUpdateConfig` 与测试守护，去掉时测试必须失败），同时 `UpdateService` 在标记更新“已就绪”以及调用安装程序（`restartToUpdate` / `installOnQuit`）前独立执行二次 Ed25519 签名、`SHA-512`、版本号与文件名核对——任何路径都绝不执行未经 Ed25519 校验通过的安装包。
+- **拒绝路径与清理：** 签名不符、文件被篡改 1 字节、缺失 `.sig`、缺失 `publisherName`、清单版本号不高于当前版本（`allowDowngrade = false`）或更新源地址非 `https://`（仅本机回环测试显式开启时例外）一律拒绝，立即删除已下载的临时文件，保留当前版本，向用户展示中文原因（`UPDATE_VERIFY_FAILED`）并写入操作日志（`update.rejected`）。
+- **下载与执行之间的校验：** 正式版先检查 `app-update.yml` 的 `publisherName` 与固定的 `updaterCacheDirName: updater`，拒绝重复或冲突字段。真实下载走上游 `NsisUpdater`，所有请求与重定向都检查 HTTPS，并去掉上游的用户分组标识。已就绪更新绑定验签 receipt；保存完成后重新读取文件与 `.sig` 验签，安装辅助程序按 receipt 中的预期 SHA-512 在准备和执行前各核对一次。
+- **隐私与更新前备份：** 正式版检查更新只访问 GitHub Releases（遵循系统代理），请求头只带应用版本与平台（`MANGA/<version> (<platform>; <arch>)`），不携带任何用户标识或本地数据；开发版与 `pnpm dev` 不做联网更新检查。安装前等待界面保存回执、录音保存与不可取消写入，再用 SQLite 快照生成 `manga.sqlite.preupdate-v<旧版本>.sqlite`，包含已提交但仍在 WAL 中的数据，通过临时文件原子替换。保存、备份或辅助程序准备失败时保留当前应用、恢复交互和待更新元数据，允许重试。资料库 schema 的升级仍先生成 `manga.sqlite.premigrate-v<旧版本>` 备份。

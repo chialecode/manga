@@ -41,6 +41,7 @@ run(process.execPath, ['--test', 'scripts/check-docs.test.mjs']);
 run(process.execPath, ['--test', 'scripts/stage-report.test.mjs']);
 run(process.execPath, ['--test', 'scripts/pre-push.test.mjs']);
 run(process.execPath, ['scripts/check-publication.mjs']);
+run(process.execPath, ['scripts/check-workflows.mjs']);
 const uncommentedSleeps = findUncommentedSmokeSleeps();
 if (uncommentedSleeps.length > 0) {
   console.error(`FAILED smoke sleep check: ${uncommentedSleeps.length} uncommented sleep( calls in apps/desktop/src/main/smoke:\n  ${uncommentedSleeps.join('\n  ')}`);

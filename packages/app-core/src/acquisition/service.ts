@@ -29,7 +29,10 @@ export type AcquisitionOptions = {
   runtime: PluginRuntime;
   scan: Pick<ScanService, "enqueue" | "whenIdle" | "status">;
   /** Where staged downloads live: `<root>/<jobId>/{data,engine}`. */
+  /** Where a download is held until it is published: the application's own cache (`<LOCALAPPDATA>mangacacheacquisition`), never the Downloads folder. */
   stagingRoot: string;
+  /** Where earlier versions held it (`<Downloads>mangaacquisition`): what is there moves to `stagingRoot` once, and the emptied folders go. */
+  legacyStagingRoot?: string;
   notify: (topic: string, payload: Record<string, unknown>) => void;
   /** The network the engine may use. The default reaches the public DHT; tests keep it to the loopback address. */
   network?: AcquisitionNetwork;
@@ -140,6 +143,7 @@ export class AcquisitionService {
   constructor(options: AcquisitionOptions) {
     this.o = options;
     fs.mkdirSync(options.stagingRoot, { recursive: true });
+    if (options.legacyStagingRoot) moveLegacyStaging(options.legacyStagingRoot, options.stagingRoot);
     this.off.push(options.runtime.onEvent((pluginId, name, payload) => this.onEvent(pluginId, name, payload)));
     this.off.push(options.runtime.onState((pluginId, info) => this.onState(pluginId, info.state)));
   }
@@ -843,4 +847,25 @@ export class AcquisitionService {
 
   /** The folder a job's files are staged in, for tests that look at what is left on disk. */
   stagingOf(jobId: string): string { return this.stateDir(jobId); }
+}
+
+/**
+ * Moves the jobs an earlier version staged under the Downloads folder into the application's cache, then removes the folders that are left empty
+ * (the staging folder, and the channel's Downloads folder when nothing else is in it). A job folder that cannot be moved stays where it is.
+ */
+export function moveLegacyStaging(legacyRoot: string, stagingRoot: string): void {
+  if (path.resolve(legacyRoot) === path.resolve(stagingRoot) || !fs.existsSync(legacyRoot)) return;
+  for (const name of fs.readdirSync(legacyRoot)) {
+    const from = path.join(legacyRoot, name);
+    const to = path.join(stagingRoot, name);
+    if (fs.existsSync(to)) continue;
+    try {
+      fs.renameSync(from, to);
+    } catch {
+      try { fs.cpSync(from, to, { recursive: true, errorOnExist: true }); fs.rmSync(from, { recursive: true, force: true }); } catch { fs.rmSync(to, { recursive: true, force: true }); }
+    }
+  }
+  for (const dir of [legacyRoot, path.dirname(legacyRoot)]) {
+    try { if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir); } catch { /* gone, or not empty */ }
+  }
 }

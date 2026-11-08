@@ -240,6 +240,8 @@ export function inventorySync(app: InventoryHost, signal: AbortSignal, grant: Sc
   const partitionItems = (["backups", "cache", "attachments", "resources", "works", "downloads", "exports"] as const).map((name) => {
     const location = app.layout.partitions[name];
     const exists = fs.existsSync(location);
+    // The Downloads folder is made when something is first saved there: not having it yet is not a missing location.
+    const notYet = name === "downloads" && !exists;
     const stats = partitionStat(name);
     return {
       id: name,
@@ -251,10 +253,10 @@ export function inventorySync(app: InventoryHost, signal: AbortSignal, grant: Sc
       indexed: false,
       available: exists,
       moduleEnabled: true,
-      status: exists ? "ready" as const : "missing" as const,
+      status: exists || notYet ? "ready" as const : "missing" as const,
       revealable: exists,
       scannedAt: stats?.scannedAt ?? null,
-      missing: Boolean(stats?.missing) || !exists,
+      missing: notYet ? false : Boolean(stats?.missing) || !exists,
       fileCount: stats?.fileCount ?? 0,
     };
   });

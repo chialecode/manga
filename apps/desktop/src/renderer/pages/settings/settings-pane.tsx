@@ -41,6 +41,7 @@ export function SettingsPane(props: { page: SettingsPageId; onPage: (page: Setti
         facets={new Set(s.facets)}
         scan={s.scan}
         pkg={s.pkg}
+        update={s.update}
         inventory={actions.inventory}
         migration={actions.migration}
         shell={s.shell}

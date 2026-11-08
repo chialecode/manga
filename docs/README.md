@@ -6,7 +6,7 @@
 | 编写日期 | 2026-09-19；2026-10-06 更新 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环都已合入 main（最近合并提交 `fd32430`）；当前阶段是 Agent 的待审操作与门禁提速（计划见[当前阶段计划](delivery/stage-plan.md)，报告见[当前阶段交付报告](delivery/stage-report.md)）。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
+| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速都已合入 main（最近合并提交 `c79f49a`）；当前阶段（安装与自动更新）已在 `feat/m10-install-update` 完成，A 集中审查已收敛，待用户授权 push、PR 与合并（计划见[当前阶段计划](delivery/stage-plan.md)，交付与审查见[当前阶段报告](delivery/stage-report.md)）。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
 
 ## 1. 阅读顺序
 
@@ -25,8 +25,7 @@
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
 | [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
 | [最近一次门禁证据](evidence/gate/) | 最近一次阶段门禁（test、package、bench、report）的脱敏结果，随阶段更新；过程文档与轮次证据按[阶段收尾清理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
-| [当前阶段计划](delivery/stage-plan.md) | 当前阶段唯一计划，覆盖整个阶段（A-46）：阶段开始的整理、依赖盘点、Agent 的待审操作（提出、确认、失效与 schema v14）、按任务加上的语义检索与网页抓取、窗口走查的条件等待、测试的临时目录、观察项与基准、人工检查与 B 的执行 prompt |
-| [当前阶段交付报告](delivery/stage-report.md) | 当前阶段工作包与验收映射、待审操作与状态机、v14 迁移、条件等待逐文件替换与用时、测试临时目录计数、迁移映射、依赖盘点与门禁证据 |
+| [当前阶段计划](delivery/stage-plan.md) / [当前阶段报告](delivery/stage-report.md) | 当前阶段唯一计划与交付报告，覆盖整个阶段（A-46）：阶段开始的整理、依赖盘点、版本号规则、开发版在本机自动更新、正式版联网更新与 Ed25519 校验、一条命令发布、GitHub Actions 上的每周发布、安装体验、观察项与基准、人工检查与门禁证据 |
 | [模块规格](modules/library.md) | 各内置模块的数据所有权、命令、上下文、停用与恢复 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 

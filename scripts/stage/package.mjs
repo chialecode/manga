@@ -13,10 +13,32 @@ import { startMockProvider } from "../../packages/model-protocol/src/index.ts";
 import { frozenImageHashes } from "../../packages/storage-drizzle/src/migrate-agent-media.ts";
 import Database from "better-sqlite3";
 import sharp from "sharp";
+import * as resedit from "resedit";
+import { MangaProductApp, TestVault, pngSize } from "../../packages/app-core/src/index.ts";
 import { desktopPackageDir, latestDesktopPackage } from "../desktop-paths.ts";
-import { buildInstaller, CHANNEL_INSTALL } from "./installer-lib.mjs";
+import { validateWorkflows } from "../check-workflows.mjs";
+import {
+  CHANNEL_INSTALL,
+  DEFAULT_ICON_ICO,
+  DEFAULT_ICON_PNG,
+  DEFAULT_ICON_SVG,
+  ICON_SIZES,
+  INSTALLER_META,
+  TEST_CHANNEL_INSTALL,
+  buildInstaller,
+  checkInstallerConfig,
+  compareRealInstallations,
+  installerConfig,
+  installerInclude,
+  inspectIco,
+  removeTestInstallations, snapshotRealInstallations,
+} from "./installer-lib.mjs";
+import { runInstallDev } from "./install-dev.mjs";
+import { decideWeeklyRelease } from "./release-decide.mjs";
+import { runStageRelease } from "./release.mjs";
+import { rawPublicKey, writeBuildInfo } from "./version-lib.mjs";
 import { watchGateTemp } from "./temp-dirs.mjs";
-import { currentStage, fingerprintKeysOf, loadGate, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
+import { currentStage, fingerprintKeysOf, loadGate, packagedFingerprintKeys, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
 
 const stage = currentStage();
 const config = loadGate();
@@ -37,20 +59,84 @@ if (!onlyPhases) {
   for (const name of ["package.json", "scenarios.json"]) fs.rmSync(path.join(runDir(), name), { force: true });
 }
 const outDir = desktopPackageDir;
-if (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases) {
+let smokePluginPublicKey = process.env.MANGA_SMOKE_PLUGIN_PUBLIC_KEY?.trim() || "";
+const ephemeralPluginKey = process.env.MANGA_BUILD_CHANNEL !== "release"
+  && !process.env.MANGA_PLUGIN_SIGNING_KEY
+  && !fs.existsSync(path.join(root, "dist/keys/plugin-first-party.pem"));
+// The gate's second and third runs (and a run again after a failure that changed nothing) package exactly the inputs the run before did. The build
+// stamp written after a build names those inputs (every fingerprint that goes into the package, the build's environment and the plugin signing key)
+// and the digest of every file of the packaged directory; when all of them are unchanged the directory is the build this run would make, and it is
+// used as it is. A key made for one run cannot be made again, so a build signed with one is never reused.
+const buildStamp = path.join(outDir, "build-stamp.json");
+const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
+const buildEnvDigest = () => {
+  const keyFile = process.env.MANGA_PLUGIN_SIGNING_KEY || path.join(root, "dist/keys/plugin-first-party.pem");
+  const envLocal = path.join(root, ".env.local");
+  return sha256(JSON.stringify({
+    env: Object.entries(process.env).filter(([name]) => name.startsWith("MANGA_") && !name.startsWith("MANGA_PACKAGE_")).sort(([a], [b]) => a.localeCompare(b)),
+    envLocal: fs.existsSync(envLocal) ? sha256(fs.readFileSync(envLocal)) : null,
+    pluginKey: fs.existsSync(keyFile) ? sha256(fs.readFileSync(keyFile)) : null,
+  }));
+};
+const directoryDigest = (dir) => {
+  const hash = crypto.createHash("sha256");
+  const visit = (relative) => {
+    const file = path.join(dir, relative);
+    if (fs.statSync(file).isDirectory()) { for (const name of fs.readdirSync(file).sort()) visit(path.join(relative, name)); return; }
+    hash.update(relative.replaceAll("\\", "/"));
+    hash.update(fs.readFileSync(file));
+  };
+  visit("");
+  return hash.digest("hex");
+};
+const packagedApp = () => {
+  const name = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((entry) => entry.startsWith("manga")) : undefined;
+  return name ? path.join(outDir, name) : null;
+};
+const reuseBuild = (() => {
+  if (onlyPhases || ephemeralPluginKey) return false;
+  const stamp = readEvidence(outDir, "build-stamp.json");
+  const app = packagedApp();
+  return Boolean(stamp && app && packagedFingerprintKeys(config).every((key) => stamp[key] === fingerprints[key])
+    && stamp.buildEnv === buildEnvDigest() && stamp.appDigest === directoryDigest(app));
+})();
+if (reuseBuild) console.log("[package] the packaged directory was built from these inputs and is unchanged: used as it is");
+if (!reuseBuild && (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases)) {
+  fs.rmSync(buildStamp, { force: true });
   if (fs.existsSync(outDir)) {
     for (const entry of fs.readdirSync(outDir)) if (entry.toLowerCase().startsWith("manga")) fs.rmSync(path.join(outDir, entry), { recursive: true, force: true });
   }
-  const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform", "win32", "--arch", "x64"], {
-    cwd: path.join(root, "apps/desktop"),
-    stdio: "inherit",
-    shell: true,
-  });
-  if (pnpm.status !== 0) process.exit(pnpm.status ?? 1);
+  const forgeEnv = { ...process.env };
+  let ephemeralKeyDir = null;
+  if (ephemeralPluginKey) {
+    ephemeralKeyDir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-smoke-key-"));
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+    const keyFile = path.join(ephemeralKeyDir, "plugin-smoke.pem");
+    fs.writeFileSync(keyFile, privateKey.export({ type: "pkcs8", format: "pem" }).toString(), "utf8");
+    forgeEnv.MANGA_PLUGIN_SIGNING_KEY = keyFile;
+    smokePluginPublicKey = rawPublicKey(publicKey).toString("base64");
+  }
+  try {
+    const pnpm = spawnSync("pnpm", ["exec", "electron-forge", "package", "--platform", "win32", "--arch", "x64"], {
+      cwd: path.join(root, "apps/desktop"),
+      stdio: "inherit",
+      shell: true,
+      env: forgeEnv,
+    });
+    if (pnpm.status !== 0) process.exit(pnpm.status ?? 1);
+  } finally {
+    if (ephemeralKeyDir) fs.rmSync(ephemeralKeyDir, { recursive: true, force: true });
+  }
+  const app = packagedApp();
+  if (app && !ephemeralPluginKey) {
+    const stamped = Object.fromEntries(packagedFingerprintKeys(config).map((key) => [key, fingerprints[key]]));
+    fs.writeFileSync(buildStamp, `${JSON.stringify({ ...stamped, buildEnv: buildEnvDigest(), appDigest: directoryDigest(app) }, null, 2)}\n`);
+  }
 }
-const built = fs.existsSync(outDir) ? fs.readdirSync(outDir).find((name) => name.startsWith("manga")) : undefined;
-if (!built) throw new Error("electron-forge package output missing");
-const appPath = path.join(outDir, built);
+const appPath = packagedApp();
+if (!appPath) throw new Error("electron-forge package output missing");
+// The digest of the directory as this run starts on it: the installer the run before made is reused only for this same directory (below).
+const appDigestAtStart = readEvidence(outDir, "build-stamp.json")?.appDigest ?? null;
 const evidence = runDir();
 // What this run makes in the system's temporary folder is removed when it passes and kept, by name in the log, when it fails (LOOP-26).
 const tempWatch = watchGateTemp("stage-package");
@@ -58,7 +144,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-"));
 const phases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
 // The window walk starts from an empty library (the app must open on the library paths), so it gets a Profile of its own; the creative walk and
 // the plugin walk make their own projects, library path and plugin, and do not share a Profile with the phases before them.
-const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13"]);
+const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13", "update"]);
 // The restart of the workspace is the next start of the Profile the window walk used (it left two contexts in a known shape); the upgrade check starts on a
 // synthetic v11 library made here, before the application has seen it.
 const SAME_PROFILE_AS = { "workspace-restart": "window-walk", "workspace-closed": "window-walk", "credentials-async-restart": "credentials-async", "migrate-v13-restart": "migrate-v13" };
@@ -96,7 +182,10 @@ ${"这是用于 BitTorrent 下载测试的一段合成文字。".repeat(300)}
 // The window walk's fake service answers from this process, so the application runs without blocking it.
 function spawnAsync(command, args, options) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: options.cwd, env: options.env, windowsHide: true });
+    const env = { ...options.env };
+    // A terminal may use Electron as a Node runner; the packaged window must start Electron normally.
+    for (const name of Object.keys(env)) if (name.toUpperCase() === "ELECTRON_RUN_AS_NODE") delete env[name];
+    const child = spawn(command, args, { cwd: options.cwd, env, windowsHide: true });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
@@ -207,12 +296,13 @@ async function smoke(phase) {
         MANGA_SMOKE_SAMPLES: samplesRoot,
         MANGA_SMOKE_AUDIO: speechClip,
         ELECTRON_ENABLE_LOGGING: "1",
+        ...(smokePluginPublicKey ? { MANGA_SMOKE_PLUGIN_PUBLIC_KEY: smokePluginPublicKey } : {}),
         ...(bt?.env ?? {}),
         ...(dandan ? { MANGA_SMOKE_DANDAN_ORIGIN: dandan.origin } : {}),
         ...(credentialServices?.env ?? {}),
         ...(phase.startsWith("migrate-v13") ? { MANGA_SMOKE_V12_SPEC: path.join(home, "v12-spec.json") } : {}),
       },
-      timeout: phase === "loop" ? 900_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
+      timeout: phase === "loop" ? 900_000 : phase === "update" ? 240_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
     });
   } finally {
     await bt?.swarm.close();
@@ -234,7 +324,7 @@ async function smoke(phase) {
     if (traffic.status !== "passed") throw new Error(`smoke ${phase}: ${traffic.detail.problems.join("; ")}`);
   }
   if (phase === "migrate-v13" || phase === "migrate-v13-restart") report.migrationFiles = migrationFiles(v12Seeds["migrate-v13"]);
-  if (phase === "loop" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
+  if (phase === "loop" || phase === "update" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
     if (report.notRun) throw new Error(`${phase} smoke did not run`);
     if (report.ok !== true) throw new Error(`${phase} smoke failed: ${(report.observations ?? []).filter((row) => row.status !== "passed").map((row) => row.name).join(", ")}`);
   }
@@ -311,6 +401,7 @@ async function smoke(phase) {
 // machine replaced by temporary ones (计划 4.9, 4.10). The packaged build is started with the variables a person's machine would give it.
 function packagedEnv(extra) {
   const env = { ...process.env, ELECTRON_ENABLE_LOGGING: "1", ...extra };
+  for (const name of Object.keys(env)) if (name.toUpperCase() === "ELECTRON_RUN_AS_NODE") delete env[name];
   for (const name of ["MANGA_PROFILE_ROOT", "MANGA_POINTER_FILE", "MANGA_DOCUMENTS_DIR", "MANGA_DOWNLOADS_DIR", "MANGA_UPGRADE_CRASH_AT", "MANGA_SMOKE_EVIDENCE_DIR"]) if (!(name in extra)) delete env[name];
   for (const name of Object.keys(env)) if (name.startsWith("MANGA_DIR_")) delete env[name];
   return env;
@@ -371,6 +462,9 @@ async function dataLocationsFresh() {
       for (const name of ["data", "cache", "logs", "backups", "runtime"]) if (!parts[name] || !under(parts[name], appRoot)) problems.push(`${name} is not under LocalAppData`);
       for (const name of ["works", "projects", "attachments", "resources", "exports"]) if (!parts[name] || !under(parts[name], files)) problems.push(`${name} is not under Documents`);
       if (!parts.downloads || !under(parts.downloads, downloads)) problems.push("downloads are not under Downloads");
+      // The Downloads folder is the person's: a start makes nothing there (download staging is in the application's cache).
+      if (fs.readdirSync(machine.downloads).length) problems.push("a first start made something in the Downloads folder");
+      if (!fs.existsSync(path.join(appRoot, "cache", "acquisition"))) problems.push("download staging is not in the application's cache");
       for (const file of [path.join("data", "manga.sqlite"), path.join("launcher", "pointer.json")]) if (!fs.existsSync(path.join(appRoot, file))) problems.push(`${file.replaceAll("\\", "/")} is not in the application's folder`);
       if (!fs.existsSync(path.join(appRoot, "runtime"))) problems.push("the browser runtime is not in the application's folder");
       // The Windows D3D11 user-mode driver (e.g. nvwgf2umx.dll) resolves its DirectX shader cache from %USERPROFILE%\appdata\local\NVIDIA\DXCache
@@ -454,7 +548,406 @@ async function dataLocationsUpgrade() {
   }
   return { ok: problems.length === 0, observations: [{ name: "data-locations-upgrade", status: problems.length ? "failed" : "passed", detail: { ...detail, problems } }] };
 }
-const DRIVEN = { "migrate-v13-newer": migrateNewer, "data-locations-fresh": dataLocationsFresh, "data-locations-upgrade": dataLocationsUpgrade };
+// AT-158: install-dev observation in an isolated temporary machine with testIdentity: true.
+async function observeInstallDev() {
+  const problems = [];
+  const detail = {};
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-install-dev-"));
+  let devApp = null;
+  let holdApp = null;
+  try {
+    const snapOpts = {
+      localAppDataDir: path.join(temp, "fake-real-local"),
+      roamingAppDataDir: path.join(temp, "fake-real-roaming"),
+      startMenuDir: path.join(temp, "fake-real-roaming", "StartMenu"),
+      desktopDir: path.join(temp, "fake-real-desktop"),
+      programsDir: path.join(temp, "fake-real-local", "Programs"),
+      registryEntries: [],
+    };
+    for (const d of [snapOpts.localAppDataDir, snapOpts.roamingAppDataDir, snapOpts.startMenuDir, snapOpts.desktopDir, snapOpts.programsDir]) {
+      fs.mkdirSync(d, { recursive: true });
+    }
+    const places = {
+      programs: path.join(temp, "Programs"),
+      local: path.join(temp, "local"),
+      documents: path.join(temp, "documents"),
+      downloads: path.join(temp, "downloads"),
+    };
+    for (const d of Object.values(places)) fs.mkdirSync(d, { recursive: true });
+
+    // Set up isolated `MANGA Test` (release) installation + running instance + SQLite data.
+    const relInstallDir = path.join(places.programs, "manga-test");
+    const relResourcesDir = path.join(relInstallDir, "resources");
+    fs.mkdirSync(relResourcesDir, { recursive: true });
+    fs.writeFileSync(path.join(relInstallDir, "manga-test.exe"), "release-binary-v0.1.1");
+    writeBuildInfo(relResourcesDir, {
+      version: "0.1.1",
+      channel: "release",
+      commit: "c79f49a",
+      builtAt: "2026-11-08T00:00:00.000Z",
+      schemaVersion: 14,
+    });
+    const relDataDir = path.join(places.local, "manga-test", "data");
+    const relRuntimeDir = path.join(places.local, "manga-test", "runtime");
+    fs.mkdirSync(relDataDir, { recursive: true });
+    fs.mkdirSync(relRuntimeDir, { recursive: true });
+    fs.writeFileSync(path.join(relDataDir, "manga.sqlite"), "release-sqlite-bytes");
+    fs.writeFileSync(
+      path.join(relRuntimeDir, "running-instance.json"),
+      JSON.stringify({ pid: process.pid, state: "ready", version: "0.1.1", channel: "release" }),
+    );
+
+    // Set up isolated `MANGA Dev Test` (development) installation + running MangaProductApp with unsaved note draft.
+    const devInstallDir = path.join(places.programs, "manga-dev-test");
+    const devResourcesDir = path.join(devInstallDir, "resources");
+    fs.mkdirSync(devResourcesDir, { recursive: true });
+    fs.writeFileSync(path.join(devInstallDir, "manga-dev-test.exe"), "dev-binary-old");
+    writeBuildInfo(devResourcesDir, {
+      version: "0.1.1-dev.202611080900",
+      channel: "development",
+      commit: "1111111",
+      builtAt: "2026-11-08T09:00:00.000Z",
+      schemaVersion: 14,
+    });
+
+    devApp = new MangaProductApp({
+      profileRoot: path.join(places.local, "manga-dev-test"),
+      localAppDataDir: places.local,
+      documentsDir: path.join(places.documents, "manga-dev-test"),
+      downloadsDir: path.join(places.downloads, "manga-dev-test"),
+      channel: "development",
+      testIdentity: true,
+      resourcesPath: devResourcesDir,
+      vault: new TestVault(),
+      ffmpegTools: null,
+      buildInfo: {
+        version: "0.1.1-dev.202611080900",
+        channel: "development",
+        commit: "1111111",
+        builtAt: "2026-11-08T09:00:00.000Z",
+        schemaVersion: 14,
+      },
+    });
+    await devApp.start();
+
+    const fakeNewInstaller = path.join(temp, "manga-dev-test-setup-0.1.1-dev.202611081530.exe");
+    fs.writeFileSync(fakeNewInstaller, "fake-installer-binary");
+
+    let devAlive = true;
+    let draftSavedOnQuit = false;
+    const updatedRes = await runInstallDev({
+      env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
+      testIdentity: true,
+      places,
+      installDir: devInstallDir,
+      installerPath: fakeNewInstaller,
+      newVersion: "0.1.1-dev.202611081530",
+      runningPid: 424242,
+      isProcessAliveFn: (pid) => (pid === 424242 ? devAlive : pid === process.pid),
+      requestQuitFn: async () => {
+        draftSavedOnQuit = true;
+        await devApp.prepareQuitForUpdate();
+        devApp.close();
+        devApp = null;
+        devAlive = false;
+      },
+      spawnInstallerFn: async (_installer, _args, targetDir) => {
+        writeBuildInfo(path.join(targetDir, "resources"), {
+          version: "0.1.1-dev.202611081530",
+          channel: "development",
+          commit: "2222222",
+          builtAt: "2026-11-08T15:30:00.000Z",
+          schemaVersion: 14,
+        });
+        return { status: 0 };
+      },
+      relaunchFn: async () => ({
+        relaunched: true,
+        pid: 434343,
+        draftPreserved: draftSavedOnQuit,
+      }),
+      outputFile: path.join(temp, "evidence", "install-dev-run.json"),
+      snapshotOptions: snapOpts,
+    });
+    detail.updated = {
+      status: updatedRes.status,
+      installed: updatedRes.installed,
+      wasRunning: updatedRes.wasRunning,
+      relaunched: updatedRes.relaunched,
+      previousVersion: updatedRes.previousVersion,
+      newVersion: updatedRes.newVersion,
+      draftPreserved: updatedRes.draftPreserved,
+      releaseUntouched: updatedRes.releaseUntouched,
+    };
+    if (
+      updatedRes.status !== "passed"
+      || !updatedRes.installed
+      || !updatedRes.wasRunning
+      || !updatedRes.relaunched
+      || updatedRes.draftPreserved !== true
+      || !updatedRes.releaseUntouched
+    ) {
+      problems.push(`install-dev update failed: ${JSON.stringify(detail.updated)}`);
+    }
+
+    // 2. 60-second non-cancellable write abort case (no force-kill)
+    holdApp = new MangaProductApp({
+      profileRoot: path.join(places.local, "manga-dev-test"),
+      localAppDataDir: places.local,
+      documentsDir: path.join(places.documents, "manga-dev-test"),
+      downloadsDir: path.join(places.downloads, "manga-dev-test"),
+      channel: "development",
+      testIdentity: true,
+      resourcesPath: devResourcesDir,
+      vault: new TestVault(),
+      ffmpegTools: null,
+      holdWriteMs: 60_000,
+    });
+    await holdApp.start();
+    let holdExited = false;
+    const abortRes = await runInstallDev({
+      env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
+      testIdentity: true,
+      places,
+      installDir: devInstallDir,
+      installerPath: fakeNewInstaller,
+      newVersion: "0.1.1-dev.202611081800",
+      quitTimeoutMs: 250,
+      runningPid: 515151,
+      isProcessAliveFn: (pid) => (pid === 515151 ? !holdExited : pid === process.pid),
+      requestQuitFn: () => {
+        void holdApp.prepareQuitForUpdate().then(() => { holdExited = true; });
+      },
+      outputFile: path.join(temp, "evidence", "install-dev-abort.json"),
+      snapshotOptions: snapOpts,
+    });
+    holdApp.releaseBlockingWrites();
+    await holdApp.waitForBlockingWrites();
+    holdApp.close();
+    holdApp = null;
+    detail.aborted = {
+      status: abortRes.status,
+      installed: abortRes.installed,
+      abortedPidStillAlive: abortRes.abortedPidStillAlive,
+      releaseUntouched: abortRes.releaseUntouched,
+    };
+    if (abortRes.status !== "aborted" || abortRes.installed || !abortRes.abortedPidStillAlive || !abortRes.releaseUntouched) {
+      problems.push(`install-dev 60s write abort failed: ${JSON.stringify(detail.aborted)}`);
+    }
+
+    // 3. Not-installed skip case & MANGA_DEV_AUTO_INSTALL=0 skip case
+    const notInstRes = await runInstallDev({
+      env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
+      registryEntries: [],
+      outputFile: path.join(temp, "evidence", "install-dev-not-installed.json"),
+      snapshotOptions: snapOpts,
+    });
+    const disabledRes = await runInstallDev({
+      env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "0", CI: "", GITHUB_ACTIONS: "" },
+      outputFile: path.join(temp, "evidence", "install-dev-disabled.json"),
+      snapshotOptions: snapOpts,
+    });
+    detail.skipped = {
+      notInstalled: { status: notInstRes.status, skipReason: notInstRes.skipReason },
+      disabled: { status: disabledRes.status, skipReason: disabledRes.skipReason },
+    };
+    if (notInstRes.status !== "skipped" || disabledRes.status !== "skipped") {
+      problems.push(`install-dev skip cases failed: ${JSON.stringify(detail.skipped)}`);
+    }
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    try { devApp?.close(); } catch { /* ignore */ }
+    try { holdApp?.close(); } catch { /* ignore */ }
+    fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+  return { name: "install-dev", status: problems.length === 0 ? "passed" : "failed", detail: { kind: "service-fixtures", ...detail, problems } };
+}
+
+// AT-163: release-workflow static validation, decideWeeklyRelease 3 scenarios, and missing-key guard.
+async function observeReleaseWorkflow() {
+  const problems = [];
+  const detail = {};
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-release-wf-"));
+  try {
+    const wf = validateWorkflows();
+    detail.workflowValidation = { ok: wf.ok, errors: wf.errors };
+    if (!wf.ok) problems.push(`release.yml validation failed: ${wf.errors.join("; ")}`);
+
+    const caseNoTags = decideWeeklyRelease({
+      tags: [],
+      commitsSinceTag: ["c79f49a\tfeat: 待审操作与门禁提速 (#9)"],
+      headSha: "c79f49a",
+    });
+    const caseNoCommits = decideWeeklyRelease({
+      tags: ["v0.1.1", "v0.1.3"],
+      commitsSinceTag: [],
+      headSha: "c79f49a",
+    });
+    const caseTwoPrs = decideWeeklyRelease({
+      tags: ["v0.1.1", "v0.1.3"],
+      commitsSinceTag: [
+        "1111111\tfeat: 安装与自动更新 (#10)",
+        "2222222\tchore(deps): 升级 electron-updater (#11)",
+      ],
+      headSha: "2222222",
+      schemaVersion: 15,
+      previousSchemaVersion: 14,
+      willUpgradeSchema: true,
+    });
+    detail.decide = {
+      noTags: { shouldRelease: caseNoTags.shouldRelease, version: caseNoTags.version },
+      noCommits: { shouldRelease: caseNoCommits.shouldRelease, reason: caseNoCommits.reason },
+      twoPrs: {
+        shouldRelease: caseTwoPrs.shouldRelease,
+        version: caseTwoPrs.version,
+        prCount: caseTwoPrs.pullRequests.length,
+        listsBothPrs: caseTwoPrs.notesMarkdown.includes("PR #10") && caseTwoPrs.notesMarkdown.includes("PR #11"),
+      },
+    };
+    if (!caseNoTags.shouldRelease || caseNoTags.version !== "0.1.1") problems.push("decide no-tags did not return 0.1.1");
+    if (caseNoCommits.shouldRelease || caseNoCommits.reason !== "本周没有新的合并") problems.push("decide no-commits did not skip");
+    if (!caseTwoPrs.shouldRelease || caseTwoPrs.version !== "0.1.4" || !detail.decide.twoPrs.listsBothPrs) {
+      problems.push("decide two-PRs did not produce 0.1.4 with both PRs");
+    }
+
+    const releaseRootDir = path.join(temp, "dist-release");
+    let missingKeyFailed = false;
+    try {
+      await runStageRelease({
+        ci: true,
+        version: "0.1.2",
+        gitStatusFn: () => "",
+        signingKeyPath: path.join(temp, "missing-key.pem"),
+        releaseRootDir,
+      });
+    } catch (error) {
+      missingKeyFailed = /update signing private key is missing/.test(error instanceof Error ? error.message : String(error));
+    }
+    const noUnsignedLeft = !fs.existsSync(path.join(releaseRootDir, "v0.1.2"));
+    detail.missingKey = { missingKeyFailed, noUnsignedLeft };
+    if (!missingKeyFailed || !noUnsignedLeft) {
+      problems.push(`stage release --ci without key did not fail cleanly: ${JSON.stringify(detail.missingKey)}`);
+    }
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+  return { name: "release-workflow", status: problems.length === 0 ? "passed" : "failed", detail: { kind: "service-fixtures", ...detail, problems } };
+}
+
+// AT-162: installer-info observation (Simplified Chinese NSIS UI, multi-res .ico icon, PE metadata, and Windows Uninstall entry).
+async function observeInstallerInfo() {
+  const problems = [];
+  const detail = {};
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-installer-info-"));
+  const realBefore = snapshotRealInstallations();
+  const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+  const ps = (cmd) => (spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { encoding: "utf8", windowsHide: true }).stdout ?? "").trim();
+  const cleanupTestRelease = () => removeTestInstallations(["release"]);
+  try {
+    const svgExists = fs.existsSync(DEFAULT_ICON_SVG);
+    const pngDims = fs.existsSync(DEFAULT_ICON_PNG) ? pngSize(fs.readFileSync(DEFAULT_ICON_PNG)) : null;
+    const icoInspection = fs.existsSync(DEFAULT_ICON_ICO) ? inspectIco(fs.readFileSync(DEFAULT_ICON_ICO)) : { valid: false, sizes: [], problems: ["missing ico"] };
+    detail.icons = { svgExists, pngDims, icoValid: icoInspection.valid, icoSizes: icoInspection.sizes };
+    if (!svgExists || pngDims?.width !== 512 || pngDims?.height !== 512 || !icoInspection.valid || icoInspection.sizes.length !== ICON_SIZES.length) {
+      problems.push(`icon verification failed: ${JSON.stringify(detail.icons)}`);
+    }
+
+    const cfg = installerConfig("release", { output: "out", include: "inc.nsh", version: "0.1.1", testIdentity: true });
+    const cfgProblems = checkInstallerConfig("release", cfg, installerInclude("release", { testIdentity: true }), { testIdentity: true });
+    detail.config = {
+      language: cfg.nsis.language,
+      installerLanguages: cfg.nsis.installerLanguages,
+      runAfterFinish: cfg.nsis.runAfterFinish,
+      publisherName: cfg.win.signtoolOptions.publisherName,
+      problems: cfgProblems,
+    };
+    if (cfgProblems.length > 0 || cfg.nsis.language !== "2052" || !cfg.nsis.installerLanguages.includes("zh_CN") || cfg.nsis.runAfterFinish !== true) {
+      problems.push(`installer config check failed: ${JSON.stringify(detail.config)}`);
+    }
+
+    await cleanupTestRelease();
+    const workDir = path.join(temp, "build");
+    const installTargetDir = path.join(temp, "Programs", TEST_CHANNEL_INSTALL.release.dirName);
+    fs.mkdirSync(workDir, { recursive: true });
+    fs.mkdirSync(installTargetDir, { recursive: true });
+
+    const builtInstaller = await buildInstaller({
+      appDir: appPath,
+      channel: "release",
+      workDir,
+      version: "0.1.1",
+      testIdentity: true,
+    });
+    const instRes = spawnSync(builtInstaller.installer, ["/S", `/D=${installTargetDir}`], { windowsHide: true, timeout: 300_000 });
+    const regText = ps(`Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName -eq 'MANGA Test') { [pscustomobject]@{ DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; Publisher = [string]$p.Publisher; DisplayIcon = [string]$p.DisplayIcon } } } | ConvertTo-Json -Compress`);
+    const regEntry = regText ? (Array.isArray(JSON.parse(regText)) ? JSON.parse(regText)[0] : JSON.parse(regText)) : null;
+
+    const installedExe = path.join(installTargetDir, `${TEST_CHANNEL_INSTALL.release.executableName}.exe`);
+    let exeIconsCount = 0;
+    let exeCompany = "";
+    if (fs.existsSync(installedExe)) {
+      const pe = resedit.NtExecutable.from(fs.readFileSync(installedExe), { ignoreCert: true });
+      const res = resedit.NtExecutableResource.from(pe);
+      const groups = resedit.Resource.IconGroupEntry.fromEntries(res.entries);
+      if (groups[0]) {
+        exeIconsCount = groups[0].icons.length;
+      }
+      const vi = resedit.Resource.VersionInfo.fromEntries(res.entries)[0];
+      const lang = vi?.getAllLanguagesForStringValues()[0];
+      if (vi && lang) {
+        exeCompany = vi.getStringValues(lang).CompanyName ?? "";
+      }
+    }
+
+    detail.installed = {
+      exitStatus: instRes.status,
+      displayName: regEntry?.DisplayName ?? null,
+      displayVersion: regEntry?.DisplayVersion ?? null,
+      publisher: regEntry?.Publisher ?? null,
+      hasDisplayIcon: Boolean(regEntry?.DisplayIcon),
+      exeIconsCount,
+      exeCompany,
+    };
+    if (
+      instRes.status !== 0
+      || regEntry?.DisplayName !== "MANGA Test"
+      || regEntry?.DisplayVersion !== "0.1.1"
+      || regEntry?.Publisher !== INSTALLER_META.author
+      || !regEntry?.DisplayIcon
+      || exeIconsCount < ICON_SIZES.length
+      || exeCompany !== INSTALLER_META.author
+    ) {
+      problems.push(`installed registry or PE metadata mismatch: ${JSON.stringify(detail.installed)}`);
+    }
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    await cleanupTestRelease();
+    fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+  const realAfter = snapshotRealInstallations();
+  const realDiff = compareRealInstallations(realBefore, realAfter);
+  detail.realInstallationsUntouched = realDiff.ok;
+  if (!realDiff.ok) problems.push(`real installations changed: ${realDiff.changes.join("; ")}`);
+  return { name: "installer-info", status: problems.length === 0 ? "passed" : "failed", detail: { ...detail, problems } };
+}
+
+async function runUpdatePhase() {
+  const windowReport = await smoke("update");
+  const extraObservations = [
+    await observeInstallDev(),
+    await observeReleaseWorkflow(),
+    await observeInstallerInfo(),
+  ];
+  const combined = [...(windowReport.observations ?? []), ...extraObservations];
+  const ok = windowReport.ok === true && combined.every((row) => row.status === "passed");
+  return { ...windowReport, ok, observations: combined };
+}
+
+const DRIVEN = { "migrate-v13-newer": migrateNewer, "data-locations-fresh": dataLocationsFresh, "data-locations-upgrade": dataLocationsUpgrade, update: runUpdatePhase };
 
 const smokeReports = {};
 const phaseTimings = {};
@@ -488,7 +981,7 @@ const observations = [
   ...(smokeReports.trace?.observations ?? []),
   // The dependency and Agent loop stage (计划第 7 节).
   ...(smokeReports.loop?.observations ?? []),
-  ...["credentials-async", "credentials-async-restart", "migrate-v13", "migrate-v13-restart", "migrate-v13-newer", "data-locations-fresh", "data-locations-upgrade"].flatMap((name) => smokeReports[name]?.observations ?? []),
+  ...["credentials-async", "credentials-async-restart", "migrate-v13", "migrate-v13-restart", "migrate-v13-newer", "data-locations-fresh", "data-locations-upgrade", "update"].flatMap((name) => smokeReports[name]?.observations ?? []),
 ];
 
 // A package that is missing a bundled tool must stop at start, naming it, instead of failing in the middle of a recording.
@@ -500,7 +993,7 @@ function missingAssetCheck() {
   try {
     const result = spawnSync(path.join(appPath, "manga.exe"), ["--manga-smoke"], {
       cwd: profileMissing,
-      env: { ...process.env, MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(profileMissing, "root"), MANGA_DOCUMENTS_DIR: path.join(profileMissing, "documents"), MANGA_POINTER_FILE: path.join(profileMissing, "launcher", "pointer.json"), MANGA_SMOKE_PHASE: "initial" },
+      env: packagedEnv({ MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(profileMissing, "root"), MANGA_DOCUMENTS_DIR: path.join(profileMissing, "documents"), MANGA_POINTER_FILE: path.join(profileMissing, "launcher", "pointer.json"), MANGA_SMOKE_PHASE: "initial" }),
       encoding: "utf8",
       timeout: 60_000,
       windowsHide: true,
@@ -519,10 +1012,27 @@ const missingAsset = missingAssetCheck();
 // The per-user installer of the package's own channel (计划 4.10): made from this directory and its configuration checked; installing it for real is
 // node scripts/stage.mjs installer, run on its own.
 const installerDir = path.join(path.dirname(desktopPackageDir), "installer");
-fs.rmSync(installerDir, { recursive: true, force: true });
 const packagedChannel = JSON.parse(fs.readFileSync(path.join(appPath, "resources", "channel.json"), "utf8")).channel;
-const madeInstaller = await buildInstaller({ appDir: appPath, channel: packagedChannel, workDir: installerDir, version: JSON.parse(fs.readFileSync(path.join(root, "apps/desktop/package.json"), "utf8")).version });
-const installerSummary = { channel: packagedChannel, output: path.relative(root, madeInstaller.installer).replaceAll("\\", "/"), megabytes: Math.round(madeInstaller.bytes / 1024 / 1024), seconds: Math.round(madeInstaller.ms / 1000), appId: madeInstaller.config.appId, perMachine: madeInstaller.config.nsis.perMachine, oneClick: madeInstaller.config.nsis.oneClick, deleteAppDataOnUninstall: madeInstaller.config.nsis.deleteAppDataOnUninstall, defaultFolder: CHANNEL_INSTALL[packagedChannel].dirName, signed: false };
+// With the build reused, the installer the run before made from the same directory is the one this run would make (its version is the build's own):
+// it is used when the record of it names the same inputs and directory, the directory is still that one after the walks, its bytes are the recorded
+// ones and its configuration still checks.
+const reusedInstaller = (() => {
+  if (!reuseBuild || !appDigestAtStart || directoryDigest(appPath) !== appDigestAtStart) return null;
+  const latest = (() => { try { return JSON.parse(fs.readFileSync(latestDesktopPackage, "utf8")); } catch { return null; } })();
+  const record = latest?.installer;
+  if (!record || latest.appDigest !== appDigestAtStart || record.channel !== packagedChannel || !packagedFingerprintKeys(config).every((key) => latest[key] === fingerprints[key])) return null;
+  const file = path.resolve(root, record.output);
+  const output = path.join(installerDir, `out-${packagedChannel}`);
+  const include = path.join(installerDir, `installer-${packagedChannel}.nsh`);
+  if (path.dirname(file) !== output || !fs.existsSync(file) || !fs.existsSync(include) || fs.statSync(file).size !== record.bytes || sha256(fs.readFileSync(file)) !== record.sha256) return null;
+  const made = installerConfig(packagedChannel, { output, include, version: record.version });
+  if (checkInstallerConfig(packagedChannel, made, fs.readFileSync(include, "utf8")).length) return null;
+  return { installer: file, bytes: record.bytes, ms: 0, config: made, version: record.version };
+})();
+if (reusedInstaller) console.log("[package] the installer made from this same directory is unchanged: used as it is");
+else fs.rmSync(installerDir, { recursive: true, force: true });
+const madeInstaller = reusedInstaller ?? await buildInstaller({ appDir: appPath, channel: packagedChannel, workDir: installerDir });
+const installerSummary = { channel: packagedChannel, version: madeInstaller.version, output: path.relative(root, madeInstaller.installer).replaceAll("\\", "/"), bytes: madeInstaller.bytes, sha256: crypto.createHash("sha256").update(fs.readFileSync(madeInstaller.installer)).digest("hex"), megabytes: Math.round(madeInstaller.bytes / 1024 / 1024), seconds: Math.round(madeInstaller.ms / 1000), appId: madeInstaller.config.appId, perMachine: madeInstaller.config.nsis.perMachine, oneClick: madeInstaller.config.nsis.oneClick, deleteAppDataOnUninstall: madeInstaller.config.nsis.deleteAppDataOnUninstall, defaultFolder: CHANNEL_INSTALL[packagedChannel].dirName, signed: false };
 fs.writeFileSync(path.join(evidence, "scenarios.json"), `${JSON.stringify({
   status: observations.length > 0 && observations.every((row) => row.status === "passed") ? "passed" : "failed",
   stage,
@@ -543,6 +1053,8 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   tempDirs,
   status: "passed",
   passStreak,
+  // Whether this run packaged again or used the unchanged build and installer of the run before it on the same inputs.
+  build: { reused: reuseBuild, installerReused: Boolean(reusedInstaller) },
   stage,
   ...fingerprints,
   productAcceptance: "not-run",
@@ -594,4 +1106,23 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   },
 }, null, 2)}\n`);
 console.log(JSON.stringify({ status: "passed", check: "stage-package", passStreak, output: appPath }));
-fs.writeFileSync(latestDesktopPackage, `${JSON.stringify({ target: path.relative(root, appPath).replaceAll("\\", "/"), evidence: path.relative(root, evidence).replaceAll("\\", "/"), stage, ...fingerprints }, null, 2)}\n`);
+fs.writeFileSync(latestDesktopPackage, `${JSON.stringify({ target: path.relative(root, appPath).replaceAll("\\", "/"), evidence: path.relative(root, evidence).replaceAll("\\", "/"), installer: installerSummary, appDigest: appDigestAtStart, stage, ...fingerprints }, null, 2)}\n`);
+// The local development install is updated once per change: after a `stage package` run on its own, or by the gate's last step (it runs this
+// file three times, and the installed app would be asked to quit and reopen each time).
+if (packagedChannel === "development" && process.env.MANGA_PACKAGE_IN_GATE === "1") {
+  console.log("[install-dev] left to the gate's last step");
+} else if (packagedChannel === "development") {
+  try {
+    const devInstall = await runInstallDev({
+      installerPath: madeInstaller.installer,
+      newVersion: madeInstaller.version,
+      expectedSha256: installerSummary.sha256,
+      packagedAppDir: appPath,
+      evidenceDir: evidence,
+    });
+    const { relaunchedPid: _pid, abortedPidStillAlive: _alive, ...devSummary } = devInstall;
+    console.log(JSON.stringify({ check: "stage-install-dev", ...devSummary }));
+  } catch (error) {
+    console.error(`[install-dev] ${error instanceof Error ? error.message : String(error)}`);
+  }
+}

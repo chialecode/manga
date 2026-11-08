@@ -2,7 +2,7 @@ import { app, type BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { clickTestId, DRAWN, openFromShelf, showTab, sleep, waitFrames, waitUntil } from "./driver.ts";
 import { caller, ensureDock, js, toRail } from "./common.ts";
-import { seedLongSession } from "./loop-walk.ts";
+import { seedLongSession } from "./fixtures.ts";
 
 /**
  * The right pane with a conversation of 5000 messages in the real window (LOOP-07, 计划第 7 节), on a Profile of its own, synthetic:

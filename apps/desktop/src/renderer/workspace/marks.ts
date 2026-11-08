@@ -18,6 +18,12 @@ export const tabMarks = {
   get(tabId: string): readonly TabMark[] {
     return held.get(tabId) ?? EMPTY;
   },
+  hasMark(mark: TabMark): boolean {
+    for (const marks of held.values()) {
+      if (marks.includes(mark)) return true;
+    }
+    return false;
+  },
   /** A tab closed: its marks go with it. */
   clear(tabId: string): void {
     if (!held.delete(tabId)) return;

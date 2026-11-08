@@ -98,6 +98,26 @@ describe("where a new installation keeps things (AT-148)", () => {
     expect(again.partitions).toEqual(app.layout.partitions);
   });
 
+  it("leaves the Downloads folder alone on a start and stages downloads in the application's cache, moving what an earlier version staged there", async () => {
+    for (const channel of ["release", "development"] as const) {
+      const folder = channel === "release" ? "manga" : "manga-dev";
+      const app = new MangaProductApp({ ...request(channel), hostId: "fresh", vault: new TestVault("s") });
+      await app.start();
+      expect(fs.existsSync(path.join(machine.local, folder, "cache", "acquisition"))).toBe(true);
+      app.close();
+      expect(fs.readdirSync(machine.downloads)).toEqual([]);
+    }
+    // An earlier version staged a job under <Downloads>mangaacquisition: it moves to the cache, and the emptied folders go.
+    const legacyJob = path.join(machine.downloads, "manga", "acquisition", "job-1", "data");
+    fs.mkdirSync(legacyJob, { recursive: true });
+    fs.writeFileSync(path.join(legacyJob, "part.bin"), "partial bytes");
+    const app = new MangaProductApp({ ...request("release"), hostId: "fresh", vault: new TestVault("s") });
+    await app.start();
+    app.close();
+    expect(fs.readFileSync(path.join(machine.local, "manga", "cache", "acquisition", "job-1", "data", "part.bin"), "utf8")).toBe("partial bytes");
+    expect(fs.readdirSync(machine.downloads)).toEqual([]);
+  });
+
   it("falls back to the home folder when LOCALAPPDATA is missing, keeps the variables and the person's overrides, and a test still needs its own root", () => {
     process.env.USERPROFILE = machine.home;
     process.env.HOME = machine.home;
@@ -110,6 +130,23 @@ describe("where a new installation keeps things (AT-148)", () => {
     const chosen = path.join(machine.root, "chosen");
     expect(resolveLaunchLayout({ ...request(), profileRoot: chosen }).partitions.works).toBe(path.join(chosen, "works"));
     expect(() => resolveLaunchLayout({ channel: "test", documentsDir: machine.documents })).toThrow(/isolated profile root/);
+  });
+
+  it("isolates test installation identities under manga-test and manga-dev-test while keeping their release/development channel (计划 4.8)", async () => {
+    // Even if a real legacy profile exists in Documents\manga\release, a test identity never touches or migrates it.
+    const realOld = await oldProfile("release");
+    for (const [channel, folder] of [["release", "manga-test"], ["development", "manga-dev-test"]] as const) {
+      const layout = resolveLaunchLayout({ ...request(channel), testIdentity: true });
+      expect(layout.channel).toBe(channel);
+      expect(layout.appRoot).toBe(path.join(machine.local, folder));
+      expect(layout.filesRoot).toBe(path.join(machine.documents, folder));
+      expect(layout.pointerPath).toBe(path.join(machine.local, folder, "launcher", "pointer.json"));
+      expect(layout.partitions.data).toBe(path.join(machine.local, folder, "data"));
+      expect(layout.partitions.works).toBe(path.join(machine.documents, folder, "works"));
+      expect(layout.partitions.downloads).toBe(path.join(machine.downloads, folder));
+      expect(layout.upgrade).toBeUndefined();
+    }
+    expect(fs.existsSync(path.join(realOld.root, "RELOCATED.json"))).toBe(false);
   });
 });
 

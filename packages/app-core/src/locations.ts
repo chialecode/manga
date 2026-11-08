@@ -26,6 +26,8 @@ export const RELOCATION_MARKER = "RELOCATED.json";
 
 export type LaunchRequest = {
   channel?: Channel;
+  /** Whether the process is running as the isolated test installation identity (`MANGA Test` / `MANGA Dev Test`, 计划 4.8). */
+  testIdentity?: boolean;
   profileRoot?: string;
   pointerPath?: string;
   /** The system's registered Documents folder (the main process asks Electron before it starts); else `MANGA_DOCUMENTS_DIR`, else `~/Documents`. */
@@ -45,6 +47,11 @@ export const USER_PARTITIONS = ["works", "projects", "attachments", "resources",
 /** The folder names of each channel (A-118, 计划 4.9): all lowercase `manga`, with the release and the development build side by side. A test always names its own root. */
 const APP_FOLDER: Record<Channel, string> = { release: "manga", development: "manga-dev", test: "manga-test" };
 const FILES_FOLDER: Record<Channel, string> = { release: "manga", development: "manga-dev", test: "manga-test" };
+
+export function channelFolderName(channel: Channel, testIdentity = false): string {
+  const base = APP_FOLDER[channel];
+  return testIdentity && channel !== "test" ? `${base}-test` : base;
+}
 
 /** If a channel folder in Documents or Downloads still has an uppercase `MANGA` directory entry on disk, rename it in place to lowercase. */
 function lowercaseOnDisk(dir: string): void {
@@ -67,7 +74,7 @@ export function lowercaseMangaPath(target: string, bases: readonly string[]): st
     const prefix = `${comparablePath(root)}${path.sep}`;
     if (!comparablePath(resolved).startsWith(prefix)) continue;
     const rest = resolved.slice(root.length + 1).split(path.sep);
-    if (rest[0] && /^MANGA(-dev|-test)?$/.test(rest[0])) {
+    if (rest[0] && /^MANGA(-dev(-test)?|-test)?$/.test(rest[0])) {
       rest[0] = rest[0].toLowerCase();
       lowercaseOnDisk(path.join(root, rest[0]));
       return path.join(root, ...rest);
@@ -101,13 +108,16 @@ export function defaultChannel(packaged = false): Channel {
   return packaged ? "release" : "development";
 }
 
-export const defaultAppRoot = (localAppData: string, channel: Channel): string => path.join(localAppData, APP_FOLDER[channel]);
-export const defaultFilesRoot = (documentsDir: string, channel: Channel): string => path.join(documentsDir, FILES_FOLDER[channel]);
-export const defaultDownloadsDir = (downloadsDir: string, channel: Channel): string => path.join(downloadsDir, FILES_FOLDER[channel]);
+export const defaultAppRoot = (localAppData: string, channel: Channel, testIdentity = false): string =>
+  path.join(localAppData, channelFolderName(channel, testIdentity));
+export const defaultFilesRoot = (documentsDir: string, channel: Channel, testIdentity = false): string =>
+  path.join(documentsDir, testIdentity && channel !== "test" ? `${FILES_FOLDER[channel]}-test` : FILES_FOLDER[channel]);
+export const defaultDownloadsDir = (downloadsDir: string, channel: Channel, testIdentity = false): string =>
+  path.join(downloadsDir, testIdentity && channel !== "test" ? `${FILES_FOLDER[channel]}-test` : FILES_FOLDER[channel]);
 
 /** The launcher pointer: beside the application's own data. */
-export function defaultPointerPath(localAppData: string, channel: Channel): string {
-  return path.join(defaultAppRoot(localAppData, channel), "launcher", "pointer.json");
+export function defaultPointerPath(localAppData: string, channel: Channel, testIdentity = false): string {
+  return path.join(defaultAppRoot(localAppData, channel, testIdentity), "launcher", "pointer.json");
 }
 
 /** Where versions before the split kept everything, and their pointer (A-16, replaced by A-118). */
@@ -300,6 +310,7 @@ export function upgradeLegacyLocation(options: { channel: Channel; documentsRoot
 
 export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string } = {}): LocationLayout {
   const channel = request.channel ?? defaultChannel(request.packaged);
+  const testIdentity = request.testIdentity ?? (process.env.MANGA_TEST_IDENTITY === "1");
   if (channel === "test" && !request.profileRoot && !process.env.MANGA_PROFILE_ROOT) {
     throw new MangaError("LOCATION_UNAVAILABLE", "test channel requires an isolated profile root");
   }
@@ -308,17 +319,17 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
   const localAppData = resolveLocalAppData(request.localAppDataDir);
   const bases = [documentsRoot, downloadsRoot];
   if (channel !== "test") {
-    lowercaseOnDisk(path.join(documentsRoot, "manga"));
-    lowercaseOnDisk(defaultFilesRoot(documentsRoot, channel));
-    lowercaseOnDisk(defaultDownloadsDir(downloadsRoot, channel));
+    if (!testIdentity) lowercaseOnDisk(path.join(documentsRoot, "manga"));
+    lowercaseOnDisk(defaultFilesRoot(documentsRoot, channel, testIdentity));
+    lowercaseOnDisk(defaultDownloadsDir(downloadsRoot, channel, testIdentity));
   }
-  const appRoot = defaultAppRoot(localAppData, channel);
+  const appRoot = defaultAppRoot(localAppData, channel, testIdentity);
   const explicitRoot = request.profileRoot ?? process.env.MANGA_PROFILE_ROOT;
   const explicitPointer = request.pointerPath ?? process.env.MANGA_POINTER_FILE;
-  let pointerPath = explicitPointer ?? defaultPointerPath(localAppData, channel);
-  // The first start after the split: an old profile and no new pointer (计划 4.9).
+  let pointerPath = explicitPointer ?? defaultPointerPath(localAppData, channel, testIdentity);
+  // The first start after the split: an old profile and no new pointer (计划 4.9). Test identities (计划 4.8) never touch the user's real legacy location.
   let upgrade: LocationUpgradeResult | undefined;
-  if (!explicitRoot && !explicitPointer && channel !== "test" && !fs.existsSync(pointerPath)) {
+  if (!explicitRoot && !explicitPointer && channel !== "test" && !testIdentity && !fs.existsSync(pointerPath)) {
     upgrade = upgradeLegacyLocation({ channel, documentsRoot, downloadsRoot, appRoot, pointerPath, crashAt: request.crashAt });
     // A failed move keeps the old place working for this start, through its own pointer; the next start tries again.
     if (upgrade?.state === "failed") pointerPath = upgrade.legacyPointerPath;
@@ -335,8 +346,8 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
   // The default application root splits the profile: the person's files go to the Documents folder and downloads to the Downloads folder. A root the
   // person chose (or a test's isolated root) keeps every partition under it, as before.
   const split = !explicitRoot && comparablePath(defaultRoot) === comparablePath(appRoot);
-  const filesRoot = split ? defaultFilesRoot(documentsRoot, channel) : defaultRoot;
-  const downloads = split ? defaultDownloadsDir(downloadsRoot, channel) : path.join(defaultRoot, "downloads");
+  const filesRoot = split ? defaultFilesRoot(documentsRoot, channel, testIdentity) : defaultRoot;
+  const downloads = split ? defaultDownloadsDir(downloadsRoot, channel, testIdentity) : path.join(defaultRoot, "downloads");
   const overrides: Partial<Record<LocationPartition, string>> = {};
   const partitions = Object.fromEntries(LOCATION_PARTITIONS.map((name) => [
     name,

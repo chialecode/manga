@@ -7,7 +7,17 @@ import path from "node:path";
  * homes there; a run that passed removes what it made under these prefixes and then must leave no other new `manga-*` entry, and a run that failed
  * keeps everything it made and names it in the log, for the person looking into the failure.
  */
-export const GATE_TEMP_PREFIXES = ["manga-package-", "manga-smoke-library-", "manga-bench-", "manga-cold-", "manga-installer-"];
+export const GATE_TEMP_PREFIXES = [
+  "manga-package-",
+  "manga-smoke-library-",
+  "manga-bench-",
+  "manga-cold-",
+  "manga-installer-",
+  "manga-release-rehearsal-",
+  "manga-release-build-",
+  "manga-update-",
+  "manga-smoke-key-",
+];
 
 const entries = () => {
   try { return new Set(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith("manga-"))); } catch { return new Set(); }

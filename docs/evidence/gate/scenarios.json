@@ -1,16 +1,21 @@
 {
   "status": "passed",
-  "stage": "m9",
-  "sourceFingerprint": "fbd0b6994c782f5af1a2a32d915fc9b1b8f9a852d6a823e4d74cfefa4170da66",
-  "lockFingerprint": "9e3b406214305808bd8cefcc1a4ee403c62f0c5698c6dc0eb1145cb8774aeb06",
-  "buildScriptFingerprint": "0371340943049a28cf472347c426428b182b3dd697476168f5676e1a163d1282",
-  "gateScriptFingerprint": "5c3459906755130571c5bca29ca612c782f3d4f3fd0e093170c3ba035b5b3881",
-  "testScriptFingerprint": "a681485d94b9b9c02cca3d20d54bf889198fb070120d0ee42c2ba9bab480b7a1",
-  "packageScriptFingerprint": "7802f4511e43de3a92ef28ebb69aa842217abf8f7515e6887d90265396503219",
-  "benchScriptFingerprint": "c73470c4c99069e45da9141f053d6e82507d8b21cf16cd414ef37a9b67f2eac0",
-  "installerScriptFingerprint": "92914f2e9a8b93f5e172a4f2308cdeba51e61b3041fc1f02bc0e905c4bc85d39",
+  "stage": "m10",
+  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
+  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
+  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
+  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
+  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
+  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
+  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
+  "testScriptFingerprint": "7ddec5774ad97e7d328fd606bc81a72e340e2d802989be7d3c85ee9442dfba85",
+  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
+  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
+  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
+  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
   "productAcceptance": "not-run",
-  "at": "2026-11-08T06:27:02.353Z",
+  "at": "2026-11-08T22:28:23.736Z",
   "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
@@ -45,7 +50,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 193,
+        "scanMs": 189,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -83,9 +88,9 @@
       "status": "passed",
       "detail": {
         "groups": 3,
-        "pages": 17,
-        "reached": 17,
-        "withPicture": 17,
+        "pages": 18,
+        "reached": 18,
+        "withPicture": 18,
         "missing": []
       }
     },
@@ -1182,7 +1187,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.645151,
+            "time": 0.616403,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1190,7 +1195,7 @@
         },
         "rewind": {
           "at": 23.7,
-          "after": 20.5,
+          "after": 20.1,
           "rewinding": true
         },
         "rightButton": {
@@ -1309,7 +1314,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 0.27733
+            "time": 0.272349
           },
           "hidden": {
             "video": {
@@ -1331,7 +1336,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 3.15499
+            "time": 3.142719
           },
           "back": {
             "video": {
@@ -1353,7 +1358,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 3.3376
+            "time": 3.328847
           }
         },
         "video-subtitles": {
@@ -1402,13 +1407,13 @@
           "judged": "page clock",
           "during": {
             "ok": true,
-            "enteredMs": 302,
+            "enteredMs": 306,
             "rate": 2,
             "holding": true
           },
           "after": {
             "ok": true,
-            "backMs": 1,
+            "backMs": 2,
             "rate": 1,
             "holding": false
           },
@@ -1422,7 +1427,7 @@
           "keptOnBar": true
         },
         "tap": {
-          "from": 10.06,
+          "from": 9.99,
           "step": 5.08,
           "downIdle": true,
           "upIdle": false
@@ -1443,7 +1448,7 @@
           "firstHold": true,
           "secondHold": true,
           "firstBack": true,
-          "moved": 0.62,
+          "moved": 0.63,
           "paused": true
         },
         "rateButton": true,
@@ -1465,7 +1470,7 @@
         "timings": [
           {
             "step": "first hold",
-            "ms": 312
+            "ms": 307
           },
           {
             "step": "second hold",
@@ -1473,7 +1478,7 @@
           },
           {
             "step": "after the lost key-up",
-            "ms": 1
+            "ms": 2
           },
           {
             "step": "from the repeats",
@@ -1481,7 +1486,7 @@
           },
           {
             "step": "after the repeats",
-            "ms": 1
+            "ms": 2
           },
           {
             "step": "before the change of source",
@@ -1636,8 +1641,8 @@
         },
         "aboveThePicture": {
           "bar": 192,
-          "canvasInk": 51,
-          "screenBright": 5791,
+          "canvasInk": 68,
+          "screenBright": 5792,
           "reach": true
         },
         "screenshot": {
@@ -1822,7 +1827,7 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 27,
+        "searchMs": 28,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
@@ -2074,7 +2079,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 7,
+        "hideLateMs": 12,
         "problems": []
       }
     },
@@ -2111,7 +2116,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 12,
+        "hideLateMs": 4,
         "problems": []
       }
     },
@@ -2148,7 +2153,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 7,
+        "hideLateMs": 15,
         "problems": []
       }
     },
@@ -2711,7 +2716,7 @@
           "keyBack": true,
           "keyForward": true
         },
-        "aboutVersion": "0.1.0"
+        "aboutVersion": "0.1.1-dev.202611081916"
       }
     },
     {
@@ -3024,11 +3029,11 @@
         "controlsShown": {
           "rect": {
             "x": 1142,
-            "y": -0.2116466462612152,
+            "y": -0.41820889711380005,
             "w": 138,
             "h": 36,
             "r": 1280,
-            "b": 35.788353353738785
+            "b": 35.5817911028862
           },
           "closeReachable": true
         },
@@ -3296,8 +3301,8 @@
             "reader:合成长篇 第一章",
             "library:合成漫画"
           ],
-          "focusedBefore": "tmw7g66xrb1b",
-          "focusedAfter": "tmw7g66xrb1b",
+          "focusedBefore": "tmw8ehki3bji",
+          "focusedAfter": "tmw8ehki3bji",
           "context": ""
         },
         "stored": 4
@@ -3353,15 +3358,15 @@
         "problems": [],
         "other-column": {
           "before": 12,
-          "after": 12.166631,
+          "after": 12.161422,
           "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 12.219512,
-          "after": 12.381252,
+          "before": 12.214906,
+          "after": 12.378248,
           "column": 3,
           "paused": false,
           "loadstart": 0,
@@ -3428,7 +3433,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw7g66xrb1b",
+            "within": "tmw8ehki3bji",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3439,7 +3444,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw7g66xrb1b",
+            "within": "tmw8ehki3bji",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3449,8 +3454,8 @@
             "key": "1",
             "code": "Digit1",
             "ctrl": true,
-            "at": "DIV",
-            "within": null,
+            "at": "tab-panel",
+            "within": "tmw8ehki3bji",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3461,7 +3466,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw7g66vs9be",
+            "within": "tmw8ehkg49qu",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3472,7 +3477,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmw7g66vs9be",
+            "within": "tmw8ehkg49qu",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3483,7 +3488,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw7g66vs9be",
+            "within": "tmw8ehkg49qu",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3494,7 +3499,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw7g66vs9be",
+            "within": "tmw8ehkg49qu",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3504,20 +3509,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmw7g66xrb1b",
-            "at": 1385,
+            "tab": "tmw8ehki3bji",
+            "at": 1313,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmw7g66xrb1b",
-            "at": 1432,
+            "tab": "tmw8ehki3bji",
+            "at": 1361,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmw7g66xrb1b",
-            "at": 1657,
+            "tab": "tmw8ehki3bji",
+            "at": 1567,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3838,8 +3843,8 @@
         "views": {
           "home": {
             "groups": [
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:3",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:3",
               "recent:8"
             ],
             "entries": [
@@ -3853,8 +3858,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:1",
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:1",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:1",
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3865,8 +3870,8 @@
           },
           "novel": {
             "rows": [
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
               "recent:2"
             ],
             "flat": 0,
@@ -3876,8 +3881,8 @@
           },
           "comic": {
             "rows": [
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:1",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3887,8 +3892,8 @@
           },
           "video": {
             "rows": [
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3902,8 +3907,8 @@
           },
           "note": {
             "rows": [
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded",
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:folded",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3918,8 +3923,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:2",
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:2",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3929,8 +3934,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3940,8 +3945,8 @@
           },
           "draft": {
             "rows": [
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3951,8 +3956,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:0",
-              "prj_9d91cf94-2978-41f9-8ffa-57f610b71d08:folded"
+              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
+              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
             ],
             "flat": 0,
             "entries": [
@@ -4091,9 +4096,9 @@
           "time": 0.38
         },
         "directory": {
-          "pages": 17,
-          "withPicture": 17,
-          "withText": 17,
+          "pages": 18,
+          "withPicture": 18,
+          "withText": 18,
           "groups": 3
         },
         "inside": {
@@ -4112,7 +4117,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 0.383564,
+            "time": 0.384536,
             "paused": true,
             "ready": 4
           }
@@ -4164,8 +4169,8 @@
           "boardOpen": true,
           "videoReady": true,
           "marked": [
-            "sidebar-item-resource-res_8402a2d6-6b1b-47c8-9c17-37864b367808",
-            "sidebar-item-resource-res_8402a2d6-6b1b-47c8-9c17-37864b367808"
+            "sidebar-item-resource-res_167b797b-f27b-4a3e-80e0-09fdff1548a1",
+            "sidebar-item-resource-res_167b797b-f27b-4a3e-80e0-09fdff1548a1"
           ]
         },
         "atBoard": {
@@ -4173,7 +4178,7 @@
           "focused": "whiteboard",
           "video": {
             "same": true,
-            "time": 0.271932,
+            "time": 0.276389,
             "paused": true,
             "loads": 0,
             "emptied": 0
@@ -4190,13 +4195,13 @@
           "main": "video",
           "video": {
             "same": true,
-            "time": 0.271932,
+            "time": 0.276389,
             "paused": true,
             "loads": 0,
             "emptied": 0
           },
           "dock": "合成动画",
-          "left": 0.271932,
+          "left": 0.276389,
           "episodeDock": "合成动画"
         },
         "home": {
@@ -4210,7 +4215,7 @@
           ]
         },
         "fromCard": {
-          "card": "wb-open-wbn_1b357138-e668-4b4c-af9c-e30ee2128729",
+          "card": "wb-open-wbn_988d930b-67d3-4f33-addf-5ea268222658",
           "switched": true,
           "there": "video"
         },
@@ -4349,7 +4354,7 @@
         "save": {
           "before": "two",
           "answered": true,
-          "ms": 6,
+          "ms": 7,
           "after": "single"
         },
         "problems": []
@@ -4604,7 +4609,7 @@
         ],
         "guides": {
           "current": "recent:rgb(173, 50, 104)",
-          "other": "prj_c8880801-ffba-4e77-b5bf-52ad0c59ec22:rgb(221, 225, 232)"
+          "other": "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:rgb(221, 225, 232)"
         },
         "narrow": {
           "width": 200,
@@ -4627,8 +4632,8 @@
           "novel/project/novel": "0=0"
         },
         "samples": {
-          "comic": "res_fe1faf00-c2f3-44df-a431-e0a5a3156ee2",
-          "novel": "res_43e5da74-5a6b-4e8e-ae31-ba68ad877801"
+          "comic": "res_f2d3f9d8-cf75-43d2-8771-cbbc4543f391",
+          "novel": "res_c29d2ee4-d82f-4c10-93ed-5f014416b037"
         },
         "before": {
           "comicOpened": true,
@@ -4656,14 +4661,14 @@
           "placeholders": 2,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_aa1bca73-5a65-481c-8ee9-25e258f0648a",
-            "sidebar-item-resource-res_e19ab319-7898-4a67-a138-c36e5626eef5"
+            "sidebar-item-resource-res_e912308e-6867-4b7b-8b61-9e0effa77a4e",
+            "sidebar-item-resource-res_756f83c5-55b9-4611-aee2-6a002ca33add"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_643d74a2-585d-4ff7-abf7-94fce97fd5a3",
-            "work:work_acced4e2-222d-4a52-b56d-4a40795dfc33"
+            "work:work_a48eebdd-51e7-45cc-bc71-de107ae9d602",
+            "work:work_728ddb99-a056-4cf0-b1e7-5490a407c8dc"
           ]
         },
         "comic": {
@@ -4673,12 +4678,12 @@
           "placeholders": 1,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_8896e961-a7d4-42cb-a420-4fdfd6710815"
+            "sidebar-item-resource-res_d49ddf5f-7203-4c96-aa94-c9719556f895"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "resource:res_8896e961-a7d4-42cb-a420-4fdfd6710815"
+            "resource:res_d49ddf5f-7203-4c96-aa94-c9719556f895"
           ]
         },
         "video": {
@@ -4688,12 +4693,12 @@
           "placeholders": 0,
           "images": 1,
           "keys": [
-            "sidebar-item-resource-res_8402a2d6-6b1b-47c8-9c17-37864b367808"
+            "sidebar-item-resource-res_167b797b-f27b-4a3e-80e0-09fdff1548a1"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_38a19aa4-41a0-4212-b130-b1f639110bda"
+            "work:work_e57f37c4-85dc-4e5f-9c27-748b3239af90"
           ]
         },
         "switch": {
@@ -4901,9 +4906,9 @@
       "name": "scan-incremental",
       "status": "passed",
       "detail": {
-        "progressAt": 1139,
-        "cardAt": 1185,
-        "cardAfterProgressMs": 46,
+        "progressAt": 1108,
+        "cardAt": 1144,
+        "cardAfterProgressMs": 36,
         "runningAtCard": true,
         "opened": {
           "read": true,
@@ -4912,8 +4917,8 @@
         "works": 20,
         "afterImport": {
           "calls": 2,
-          "first": 1138,
-          "finishedAt": 1509
+          "first": 1107,
+          "finishedAt": 1441
         },
         "cardsShown": 15,
         "problems": []
@@ -5061,8 +5066,8 @@
         "problems": [],
         "from": "two",
         "to": "single",
-        "answeredMs": 6,
-        "closedMs": 15,
+        "answeredMs": 7,
+        "closedMs": 17,
         "stored": "single",
         "columns": 1
       }
@@ -5216,7 +5221,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 3
+        "overheadMs": 5
       }
     },
     {
@@ -5680,7 +5685,7 @@
           "firstToken": true,
           "duration": true
         },
-        "copied": 56157,
+        "copied": 56224,
         "holdersChecked": 8,
         "leaks": [],
         "problems": []
@@ -5691,7 +5696,7 @@
       "status": "passed",
       "detail": {
         "first": {
-          "before": "对话 2026-11-08 14:25",
+          "before": "对话 2026-11-09 06:26",
           "tab": "帮我总结一下第一章的主要人物",
           "named": true,
           "stored": true
@@ -5742,7 +5747,7 @@
       "name": "chat-long-session",
       "status": "passed",
       "detail": {
-        "firstScreenMs": 184,
+        "firstScreenMs": 210,
         "firstScreen": {
           "drawn": true,
           "nodes": 9,
@@ -5763,29 +5768,25 @@
         },
         "notice": {
           "anchor": {
-            "id": "bubble-agent-run_long_02352:agent",
-            "offset": -60
+            "id": "bubble-user-run_long_02353:user",
+            "offset": 418
           },
-          "after": {
-            "id": "bubble-agent-run_long_02352:agent",
-            "offset": -61
-          },
+          "afterOffset": 417,
           "loadedBefore": 400,
           "loadedAfterNotice": 401
         },
         "deleted": {
           "dropped": true,
           "before": {
-            "id": "bubble-agent-run_long_02352:agent",
-            "offset": -61
+            "id": "bubble-user-run_long_02353:user",
+            "offset": 417
           },
-          "after": {
-            "id": "bubble-agent-run_long_02352:agent",
-            "offset": -61
-          }
+          "afterOffset": 417
         },
         "stream": {
           "live": true,
+          "followed": true,
+          "followMs": 0,
           "stuck": [
             true,
             true,
@@ -5970,8 +5971,8 @@
             "bytes": 5552,
             "origin": {
               "kind": "comic_region",
-              "resourceId": "res_b20baf67-7f13-4b64-a3a0-81067c2ab053",
-              "resourceRevisionId": "rev_4703542f-e8b7-4154-83e4-d7f0242aeded",
+              "resourceId": "res_6c77e687-cb47-43b5-ad69-192f8272851a",
+              "resourceRevisionId": "rev_617d24e7-1ccf-4e14-ab24-a4ab20e468ba",
               "pageId": "002.png",
               "region": {
                 "x": 0,
@@ -5981,7 +5982,7 @@
               }
             },
             "extraction": "第 2 页的选定区域，从原页面裁剪",
-            "id": "img_ad0a31b745134cb7b07c",
+            "id": "img_22901f766be24df59524",
             "hash": "e16c6a6b785ec666b58f330ee777f08c99a31ead5f1c01c074b6e7d719726ccf",
             "expired": true
           }
@@ -6123,7 +6124,7 @@
       "status": "passed",
       "detail": {
         "v14": {
-          "migrateMs": 25.4,
+          "migrateMs": 46.24,
           "backupExists": true,
           "versionAfter1": "14",
           "migration1": {
@@ -6191,7 +6192,7 @@
             "runs": 300,
             "images": 340,
             "unique": 201,
-            "ms": 16
+            "ms": 17
           }
         },
         "agentMedia": 201,
@@ -6280,10 +6281,286 @@
         },
         "older": {
           "exitStatus": 0,
-          "ms": 645,
+          "ms": 690,
           "data": true,
           "emulated": true
         },
+        "problems": []
+      }
+    },
+    {
+      "name": "version-about",
+      "status": "passed",
+      "detail": {
+        "computed": {
+          "computedFirst": "0.1.1",
+          "computedNext": "0.1.4",
+          "computedDev": "0.1.4-dev.202611081530"
+        },
+        "release": {
+          "helpOpenedRel": true,
+          "hasMenuCheckRel": true,
+          "aboutOpenedRel": true,
+          "name": "MANGA",
+          "version": "0.1.1",
+          "channel": "正式版",
+          "commit": "d92fd7f",
+          "builtAt": "2026年11月8日 18:00",
+          "license": "Apache-2.0",
+          "devHint": false,
+          "checkBtn": true,
+          "copiedLength": 78,
+          "hasLocalPath": false
+        },
+        "development": {
+          "hasMenuCheckDev": false,
+          "aboutOpenedDev": true,
+          "version": "0.1.2-dev.202611081530",
+          "channel": "开发版",
+          "devHint": "开发版：由本机构建自动更新",
+          "checkBtn": false,
+          "copiedLength": 95,
+          "hasLocalPath": false,
+          "updatePage": {
+            "openedDevUpdatePage": true,
+            "devModeText": "开发版：由本机构建自动更新",
+            "hasCheckBtn": false
+          }
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "update-flow",
+      "status": "passed",
+      "detail": {
+        "check": {
+          "state": "ready",
+          "availableVersion": "0.1.2",
+          "usedDifferential": true,
+          "downloadedBytes": 8192,
+          "totalBytes": 32768,
+          "willUpgradeSchema": true
+        },
+        "banner": {
+          "bannerShown": true,
+          "notesOpened": true,
+          "schemaNoticeText": "这次更新会升级资料库，升级前会自动备份"
+        },
+        "busy": {
+          "busyDialogShown": true,
+          "busyBodyText": "正在录音，现在重启会中断录音。确定要重启并更新吗？",
+          "installerRunsBeforeConfirm": 0
+        },
+        "restart": {
+          "installerRuns": 1,
+          "mode": "restart",
+          "args": [
+            "--updated",
+            "/S",
+            "--force-run",
+            "/D=<installDir>"
+          ],
+          "backupExists": true
+        },
+        "firstLaunchB": {
+          "version": "0.1.2",
+          "justUpdatedShown": true,
+          "justUpdatedNotesOpened": true,
+          "justUpdatedDismissed": true,
+          "dataIntact": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "update-on-quit",
+      "status": "passed",
+      "detail": {
+        "bannerReady": true,
+        "installedOnQuit": true,
+        "quitRuns": 1,
+        "mode": "quit",
+        "args": [
+          "--updated",
+          "/S",
+          "/D=<installDir>"
+        ],
+        "versionOnNextStart": "0.1.2",
+        "justUpdatedOnNextStart": true,
+        "problems": []
+      }
+    },
+    {
+      "name": "update-rejected",
+      "status": "passed",
+      "detail": {
+        "tampered": {
+          "state": "error",
+          "errorCode": "UPDATE_VERIFY_FAILED",
+          "fileDeleted": true,
+          "uiText": "更新包校验失败，已保留当前版本"
+        },
+        "wrongVersionSig": {
+          "state": "error",
+          "errorCode": "UPDATE_VERIFY_FAILED",
+          "fileDeleted": true
+        },
+        "missingSig": {
+          "state": "error",
+          "errorCode": "UPDATE_VERIFY_FAILED",
+          "fileDeleted": true
+        },
+        "downgrade": {
+          "state": "error",
+          "errorCode": "UPDATE_VERIFY_FAILED",
+          "uiText": "拒绝安装旧版本更新包，已保留当前版本"
+        },
+        "nonHttps": {
+          "state": "error",
+          "errorCode": "UPDATE_VERIFY_FAILED",
+          "uiText": "更新源必须使用 HTTPS，已保留当前版本"
+        },
+        "withoutPublisherName": {
+          "configProblems": [
+            "missing publisherName chialecode"
+          ],
+          "nsisSkippedVerificationWhenMissing": true,
+          "serviceRejected": true,
+          "fileDeleted": true
+        },
+        "rejectedLogsCount": 6,
+        "versionRemained": "0.1.1",
+        "problems": []
+      }
+    },
+    {
+      "name": "update-offline",
+      "status": "passed",
+      "detail": {
+        "autoOffline": {
+          "state": "idle",
+          "error": null,
+          "silentInUi": true
+        },
+        "manualOffline": {
+          "pageOpened": true,
+          "clickedCheck": true,
+          "errorShown": true,
+          "uiErrorText": "无法连接更新源，请检查网络后重试",
+          "autoCheckOff": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "install-dev",
+      "status": "passed",
+      "detail": {
+        "kind": "service-fixtures",
+        "updated": {
+          "status": "passed",
+          "installed": true,
+          "wasRunning": true,
+          "relaunched": true,
+          "previousVersion": "0.1.1-dev.202611080900",
+          "newVersion": "0.1.1-dev.202611081530",
+          "draftPreserved": true,
+          "releaseUntouched": true
+        },
+        "aborted": {
+          "status": "aborted",
+          "installed": false,
+          "abortedPidStillAlive": true,
+          "releaseUntouched": true
+        },
+        "skipped": {
+          "notInstalled": {
+            "status": "skipped",
+            "skipReason": "development channel is not installed"
+          },
+          "disabled": {
+            "status": "skipped",
+            "skipReason": "MANGA_DEV_AUTO_INSTALL=0"
+          }
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "release-workflow",
+      "status": "passed",
+      "detail": {
+        "kind": "service-fixtures",
+        "workflowValidation": {
+          "ok": true,
+          "errors": []
+        },
+        "decide": {
+          "noTags": {
+            "shouldRelease": true,
+            "version": "0.1.1"
+          },
+          "noCommits": {
+            "shouldRelease": false,
+            "reason": "本周没有新的合并"
+          },
+          "twoPrs": {
+            "shouldRelease": true,
+            "version": "0.1.4",
+            "prCount": 2,
+            "listsBothPrs": true
+          }
+        },
+        "missingKey": {
+          "missingKeyFailed": true,
+          "noUnsignedLeft": true
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "installer-info",
+      "status": "passed",
+      "detail": {
+        "icons": {
+          "svgExists": true,
+          "pngDims": {
+            "width": 512,
+            "height": 512
+          },
+          "icoValid": true,
+          "icoSizes": [
+            16,
+            24,
+            32,
+            48,
+            64,
+            128,
+            256
+          ]
+        },
+        "config": {
+          "language": "2052",
+          "installerLanguages": [
+            "zh_CN"
+          ],
+          "runAfterFinish": true,
+          "publisherName": [
+            "chialecode"
+          ],
+          "problems": []
+        },
+        "installed": {
+          "exitStatus": 0,
+          "displayName": "MANGA Test",
+          "displayVersion": "0.1.1",
+          "publisher": "chialecode",
+          "hasDisplayIcon": true,
+          "exeIconsCount": 7,
+          "exeCompany": "chialecode"
+        },
+        "realInstallationsUntouched": true,
         "problems": []
       }
     }

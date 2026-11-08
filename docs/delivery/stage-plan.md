@@ -1,14 +1,12 @@
-# 当前阶段计划（M9）：Agent 的待审操作与门禁提速
+# 当前阶段计划（M10）：安装与自动更新
 
-日期：2026-11-06。角色：A 规划；B 连续实施与自检；A 集中审查。本文是整个阶段的唯一计划，兼作跨模块变更提案（A-46）。B 的执行 prompt 在[第 11 节](#prompt)，不另建 prompt 文件。路径固定、不带阶段名；下一阶段开始时由 A 按[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)改写。上一阶段的计划与报告在合并提交里：[计划归档](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-plan.md)、[报告归档](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md)。
+日期：2026-11-08。角色：A 规划；B 连续实施与自检；A 集中审查。本文是整个阶段的唯一计划，兼作跨模块变更提案（A-46）。B 的执行 prompt 在[第 11 节](#prompt)，不另建 prompt 文件。路径固定、不带阶段名；下一阶段开始时由 A 按[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)改写。上一阶段的计划与报告在合并提交里：[计划归档](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-plan.md)、[报告归档](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-report.md)。
 
-用户 2026-11-06 在上一阶段合并后说“开始下一个阶段”，没有提新的产品要求。按 A-39（MVP 已贯通，之后按反馈循环迭代）与[执行状态的后续 loop](status.md#followup-loops)，A 选的范围是：
+用户 2026-11-08 要求下一阶段主要解决安装问题：本机同时装着正式版和开发版；每次修改完成后，本机的开发版自动更新；正式版通过互联网更新；整个更新流程尽量自动化。版本号先保持 0.1.x 的形式。Windows 代码签名暂不做：个人开发者能拿到的签名要么收费，要么有资格限制，同类的个人开源项目普遍不签名（调研见 3.1）。
 
-1. **Agent 的待审操作（LOOP-09）。** 路线 2026-10-08 已定（A-74），一直顺延。删除、重命名、项目包导出、粗剪的编辑与导出，由 Agent 提出、界面列出将要发生的变化、用户确认后才由所有者命令执行。语义检索与网页抓取像 `metadata.search` 一样，由用户为一次任务加上。这是现在 Agent 在项目里“只能建议、不能收尾”的主要缺口：整理一个项目时，用户仍要自己去删旧白板、改名、导出。
-2. **门禁提速（LOOP-29）。** 用户 2026-11-06 指出门禁效率太低，上一阶段审查已把测试并行并加了 `stage gate`；剩下最大的一块是窗口走查里约 430 处固定等待（每次 `stage package` 约 12 分钟里约 7 分钟），而本阶段要连续三次 `stage package`。顺带补拍模型弹窗的截图。
-3. **测试的临时目录（LOOP-28）。** 一次 `stage test` 在系统临时目录留约 4 个目录。
+用户同日补充：本阶段也要做在 GitHub Actions 上构建与发布，发布周期是**每周一次：上次发布以来有新的 PR 合并，就发布一个正式版**。原来登记为后续项的“在 CI 上构建发布”因此并入本阶段（W9，A-126）。
 
-记为 **A-120**（本阶段的范围）与 **A-121**（待审操作的设计：不暂停任务的提议、确认时重新核对、只执行一次）。A 的推荐与理由见 3.1 与第 4 节。没说到的细节 A 先定了默认值，登记为[用户待办的 Q-37](../../USER-ACTIONS.md#q-37)，B 按默认实现，用户以后可以改。插件与下载继续只由所有者操作（A-74）；项目包**导入**不开放给 Agent，因为它要用户先选一个文件（Q-37 第 3 项）。需求是 AGENT-01、AGENT-03、AGENT-04、DATA-01（[需求](../product/requirements.md)），验收是 [AT-151—AT-156](roadmap-and-acceptance.md#at-proposals)。
+范围记为 **A-124**，更新的设计记为 **A-125**，CI 构建与每周发布记为 **A-126**。A 没说到的细节先定了默认值，登记为[用户待办的 Q-38](../../USER-ACTIONS.md#q-38)，B 按默认实现，用户以后可以改。需求是 DATA-06、DATA-07（[需求](../product/requirements.md)），验收是 [AT-157—AT-163](roadmap-and-acceptance.md#at-updates)。
 
 本计划一次列出本阶段的全部交付、退出条件和收尾流程。B 连续完成全部工作包后一次交付，A 一次集中审查。人工检查与待决问题按 A-53 记在用户待办，不阻塞开发。
 
@@ -16,150 +14,157 @@
 
 | 项目 | 约定 |
 | --- | --- |
-| 阶段 | Agent 的待审操作与门禁提速：提议的存放与 schema v14（W1）；五种提议（W2）；确认、拒绝与失效（W3）；对话里的提议卡片（W4）；按任务加上的语义检索与网页抓取（W5）；窗口走查的条件等待（W6，LOOP-29）；测试的临时目录（W7，LOOP-28）；阶段开始的整理；依赖盘点 |
-| 代码基线 | `main @ fd32430`（[PR #8](https://github.com/chialecode/manga/pull/8) 于 2026-11-06 squash 合并）；没有未合并的前置分支 |
-| 工作分支 | `feat/m9-next`，A 已从基线创建。本计划所在的提交是阶段提交的起点；B 的实施、A 的审查修复与人工反馈修复全部 amend 进同一提交 |
-| 关联需求 | AGENT-01、AGENT-03、AGENT-04、DATA-01；受影响的既有行为：AGENT-06（对话的列表里出现提议卡片；删除对话连同它的提议）、AGENT-07（调用追踪记录提议工具）、CREATE 类需求里的删除、重命名与导出（行为不变，多一个由提议触发的入口）、SEARCH-02（语义检索多一个 Agent 的入口） |
-| 关联验收 | 新增 AT-151—AT-156；授权相关的既有用例按新工具重跑并扩充：AT-11、AT-13、AT-44、AT-85、AT-129。窗口走查改为条件等待后，全部打包烟测与窗口观察重跑 |
-| 可连续执行 | 本地实现；第 3 节列出的依赖试用与安装；合成样本、测试、打包、基准、文档同步；第 5.1 节的整理；阶段提交与 amend。不逐工作包询问 |
-| 外部操作 | 未授权：push、PR、合并、发布。不需要真实模型、Embedding、网页或 Bangumi 的调用：语义检索用本地的假 Embedding 服务，网页抓取用本机回环地址上的假网页服务；真实 Embedding 调用仍受 ACT-05 约束。数据库 schema 升到 v14（4.1），按数据与安全规则做迁移：迁移前备份、失败回滚、中断后可继续、较旧版本拒绝打开，并有测试 |
+| 阶段 | 安装与自动更新：版本号规则（W1）；开发版本地自动更新（W2）；正式版联网更新（W3）；更新的安全（W4）；一条命令发布（W5）；安装体验修整（W6）；测试、走查与演练（W7）；文档（W8）；GitHub Actions 上的构建与每周发布（W9）；阶段开始的整理（C0）；依赖盘点（D1） |
+| 代码基线 | `main @ c79f49a`（[PR #9](https://github.com/chialecode/manga/pull/9) 于 2026-11-08 squash 合并）；没有未合并的前置分支 |
+| 工作分支 | `feat/m10-install-update`，A 已从基线创建。本计划所在的提交是阶段提交的起点；B 的实施、A 的审查修复与人工反馈修复全部 amend 进同一提交 |
+| 关联需求 | DATA-06（安装与卸载，去掉“签名与自动更新另定”）、新增 DATA-07（版本与更新）；受影响的既有行为：DATA-01（更新后首次启动的迁移与备份）、UI 的设置页与帮助菜单 |
+| 关联验收 | 新增 AT-157—AT-163；安装相关的既有观察（`installer` 步骤、数据位置的升级 `data-locations-upgrade`）按新版本号重跑 |
+| 可连续执行 | 本地实现；第 3 节列出的依赖安装；合成样本、测试、打包、基准、文档同步；第 5.1 节的整理；阶段提交与 amend |
+| 外部操作 | 未授权：push、PR、合并。每周自动发布是用户 2026-11-08 定下的发布方式（A-126），合并本阶段后由 workflow 按周执行；仓库侧的一次性配置已由 A 按 [ACT-17](../../USER-ACTIONS.md#act-17) 的授权在 2026-11-08 完成（`release` 环境只允许 `main`、不设审批人；secrets `MANGA_PLUGIN_SIGNING_KEY_PEM` 与 `MANGA_UPDATE_SIGNING_KEY_PEM`；允许列表加了两个 Action；期望配置记在 `.github/actions-policy.json`），合并后的第一次试运行也已授权。B 不改仓库设置与 secrets。本阶段的测试不访问 GitHub：更新源用本机回环地址上的假发布服务；workflow 用本地的静态检查与“只构建不发布”的模式验证；本机的 `stage release` 只在有授权时发布，默认只生成全部文件 |
 
 **退出条件与覆盖**
 
 | 条件 | 做法 | 工作包 | 验收证据 |
 | --- | --- | --- | --- |
-| Agent 只能提出，不能直接执行 | 项目对话里的 Agent 有五个提议工具；调用只写一条提议，不改动任何对象；“最近”的对话没有这些工具；命令层拒绝 Agent 直接调用删除、重命名、导出与粗剪编辑 | W1、W2 | AT-151；AT-11、AT-85 |
-| 用户看到将要发生的变化 | 提议卡片列出对象、变化前后、引用它的地方、能否撤销；删除写明不能撤销 | W2、W4 | AT-151、AT-153、AT-154 |
-| 确认后只执行一次、按当时的对象执行 | 确认时原子地把提议从“待确认”改为“执行中”；对象在提议后被改过或删掉时不执行、标为“已失效”；执行用所有者命令与提议的幂等键；中途退出后再启动能判断执行了没有 | W3 | AT-152 |
-| 拒绝与结果回到 Agent | 拒绝不改动任何东西；下一次任务的上下文里有这次会话里已处理提议的结果（执行、拒绝、失效、失败与原因） | W3 | AT-151 |
-| 粗剪的编辑与导出 | 编辑的提议列出每一步与前后的片段数、总时长；确认后进入粗剪的撤销列表，标为 Agent 的一步；导出的提议先给出导出计划与问题，确认后照常导出、可取消 | W2、W3 | AT-153 |
-| 项目包导出 | 确认时选保存位置；取消选择时提议仍待确认；导出的包与用户自己导出的相同 | W2、W3 | AT-154 |
-| 语义检索与网页抓取按任务加上 | 输入框的“本次任务”里新增两项；没加时工具不出现、命令层拒绝；加了只对这一次任务有效，重试沿用；模块没开或不在项目里时不显示对应项 | W5 | AT-155；AT-13 |
-| schema v14 | v13 → v14 新增提议表；迁移前备份、失败回滚、可重复执行、较旧版本拒绝打开；删除对话连同它的提议 | W1 | AT-156 |
-| 窗口走查更快 | 固定等待改为等到条件满足，只留按真实时间流逝的等待并写明原因；断言与门槛不变；`window-walk` ≤ 240 s；模型弹窗截图拍到“模型能力”一节 | W6 | `stage package` 的阶段用时；新增的固定等待检查 |
-| 测试不留临时目录 | 测试辅助件的临时目录放进全局的测试临时根并在结束时删除；`stage test` 前后各数一次，多出的算失败 | W7 | `test-run.json` 的计数 |
+| 版本号按规则生成 | 正式版 `0.1.x`，开发版 `<下一个正式版号>-dev.<UTC 年月日时分>`；由脚本统一算出并写进安装包，不手改 `package.json`；“关于”里显示版本与提交 | W1 | AT-157 |
+| 开发版在本机自动更新 | `stage package` 或 `stage gate` 通过后，若本机装了开发版：让运行中的开发版保存并退出，静默安装新包，原来在运行就重新打开；正式版不受影响；没装开发版就跳过；可以关闭 | W2 | AT-158 |
+| 正式版联网更新 | 启动后与每隔一段时间检查 GitHub Releases；后台下载（只下载变化的部分）；下载好后提示“重启以更新”，不打断播放、录音、导出与 Agent 任务；不理会时退出应用时安装；更新后第一次启动显示更新内容；资料库的迁移照常先备份 | W3 | AT-159 |
+| 更新不能被篡改 | 安装包须有对应的 Ed25519 签名，公钥内置在应用里；签名不对、被改过、版本更旧、来源不是 HTTPS 的，一律拒绝并保留现版本，告诉用户原因；离线时不打扰 | W4 | AT-160 |
+| 一条命令发布 | `node scripts/stage.mjs release` 在门禁通过的同一份源码上，生成正式版安装包、差分块图、更新清单、SHA256SUMS、签名与发布说明，先在临时目录演练“从上一版升级到这一版”；有授权时创建标签与 GitHub Release | W5 | AT-161 |
+| 安装体验 | 应用图标（不再是默认的 Electron 图标）、中文的安装界面、发布者与描述信息、“安装的应用”里显示版本 | W6 | AT-162 |
+| CI 构建与每周发布 | `.github/workflows/release.yml`：每周定时与手动触发；上次发布以来没有新的合并就跳过；在 Windows 运行器上跑检查、打包、安装与升级演练，全部通过才签名并发布；密钥只在受保护的环境里，写权限只给不装依赖的发布那一步 | W9 | AT-163 |
 | 阶段开始的整理 | 上一阶段的报告提炼后删除；去掉以前阶段的标签；按内容整理文件 | C0 | 文档检查；报告的整理记录 |
 | 依赖盘点 | 按 A-35 与 ADR-0007 的复查条件逐项处理 | D1 | ADR-0007 版本表；完整回归 |
 
-**阶段完成的判定。** 以下依次满足后，Agent 侧完成，可以请求用户授权 push、PR 与合并（A-24、A-53）：（1）B 自检的必需用例与门禁全部通过；（2）A 集中审查收敛。人工检查与待答复问题记在用户待办，不是合并的前提；`productAcceptance` 保持 not-run。
+**阶段完成的判定。** 以下依次满足后，Agent 侧完成，可以请求用户授权 push、PR 与合并（A-24、A-53）：（1）B 自检的必需用例与门禁全部通过；（2）A 集中审查收敛。第一次真正的联网发布在合并之后：ACT-17 的仓库配置完成后，先手动以“只构建不发布”试运行一次，之后按周自动发布。人工检查与待答复问题记在用户待办，不是合并的前提；`productAcceptance` 保持 not-run。
 
 **阶段完成后，用户可以：**
 
-- 在项目对话里说“把这三块旧白板删掉、把导图改名叫《第二季结构》”，对话里出现两张提议卡片，写清删掉什么、哪里引用了它、不能撤销；点“确认”才执行，点“拒绝”什么都不变，Agent 下一轮知道你的决定；
-- 让 Agent 调整粗剪（“把第 3 段挪到最后，删掉重复的两段”），确认前看到每一步与前后的时长，确认后不满意可以在粗剪里撤销；让它导出粗剪或项目包，确认时选保存位置；
-- 发起一次任务时勾上“语义检索”或“抓取网页”，只有这次任务能用；
-- 门禁的一次 `stage package` 从约 12 分钟降到约 9 分钟以内，一次完整的 `stage gate` 少约 10 分钟；测试跑完不在临时目录留东西。
+- 改完代码、门禁通过后，开发版自己装上新版本，原来开着的会自动重开；
+- 每周一次，只要上周有 PR 合并，GitHub Actions 就自动检查、打包并发布新的正式版，谁都不用动手（也可以手动触发一次）；装着的正式版过一会儿提示“新版本已下载，重启以更新”，点一下或下次退出时就更新好了，更新内容在第一次启动时显示；
+- 在“设置 › 更新”里看到当前版本、手动检查更新、关闭自动检查或自动下载。
 
 ## 2. A 已核对的现场
 
-- **Agent 的命令清单**（`packages/app-core/src/commands/access.ts`）：`AGENT_COMMANDS`（资料读取、笔记的创建与修改等 22 个）、`AGENT_OPT_IN_COMMANDS = ["metadata.search"]`；项目范围的在 `creative/agent-access.ts`：`AGENT_PROJECT_READS`（18 个）与 `AGENT_PROJECT_WRITES`（`whiteboard.edit`、`mindmap.edit`、`project.addMaterial`、`project.addTerm`、`draft.suggest`）。`agentToolSchema` 去掉任务自带的参数（`contextId`、`projectId`）与 Agent 不能用的参数；`AgentRule` 在命令层拒绝别的项目与不属于本项目的对象。`AGENT_LOGGED_COMMANDS` 决定哪些 Agent 写入进操作日志；`AGENT_EDIT_LABEL = "Agent："` 标在白板与导图的撤销列表里。
-- **任务的授权。** `product-app.ts` 第 495 行按 `AGENT_COMMANDS`、项目命令与 `input.allowCommands`（只认 `AGENT_OPT_IN_COMMANDS`）组出 `allowedCommands`；`commands/agent-run.ts` 第 231 行据此给模型工具清单；`commands/agent.ts` 第 329 行在加了 `metadata.search` 时要求对应模块开启、第 447 行把它记为 `allowedNetworkCommands`。契约 `contracts/src/inputs.ts` 第 247 行：`allowCommands: z.array(z.enum(["metadata.search"])).max(1)`。界面 `renderer/workspace/agent.tsx` 第 199 行：输入框的 `allowOnline` 对应 `metadata.search`。工具的中文说明在 `product-helpers.ts`（第 41 行起）。
-- **已有的“提出—采纳”。** 文稿建议：`draft.suggest` 由 Agent 写一条建议，用户在文稿里 `draft.adopt` / `draft.discardSuggestion`；这是唯一现成的“Agent 提出、用户决定”的做法，但它挂在文稿上，不是通用的。
-- **要开放的所有者命令**（`commands/creative.ts`）：`whiteboard.delete` / `rename`、`mindmap.delete` / `rename`、`draft.delete` / `rename`、`roughcut.delete` / `rename`、`project.update`（项目改名）、`project.exportPackage { projectId, pathHandle }`（`pathHandle` 来自保存对话框，`renderer/hooks/use-package.ts`）、`roughcut.edit { cutId, label?, actions[1..200] }`（有撤销与重做）、`roughcut.plan`、`roughcut.export { cutId, pathHandle?, fileName?, options? }`（不给 `pathHandle` 时写进导出分区）。白板、导图、文稿与粗剪的删除是直接删除，没有回收站（B 核对；有的话预览写明可以恢复）。引用关系可以从 `embed.backlinks` 查到。
-- **语义检索与网页抓取。** `semantic.search`（`contracts/src/inputs-semantic.ts`）需要语义模块开启并配好 Embedding 连接；`webpage.fetch { url }`（`inputs-research.ts`）抓取网页并存为项目里的网页版本，`webpage.list` / `get` 已经是 Agent 的项目读取命令。
-- **存储。** `packages/storage-drizzle/src/sql.ts` 的 `PRODUCT_SCHEMA_VERSION = 13`；`command_requests` 表记录幂等回执（操作者、会话、幂等键）；迁移、备份与回滚走 `store.ts` 的现有流程。删除对话（A-89）连同运行、消息、工具事件、追踪、检查点与冻结的材料。
-- **窗口走查**（`apps/desktop/src/main/smoke/`）：`sleep(` 的调用 2026-11-06 数到约 430 处，最多的是 `shell-walk.ts`（50）、`rail-walk.ts` 与 `media.ts`（各 27）、`workspace-walk.ts`（27）、`frame-walk.ts`（25）、`novel-walk.ts` 与 `view-walk.ts`（各 23）。`driver.ts` 已有 `waitUntil(view, expression, timeoutMs)` 与 `waitForTestId`，`common.ts` 有 `capturePage`。上一阶段最终门禁里每次 `stage package` 约 700 s，其中 `window-walk` 约 7 分钟。模型弹窗截图 `ui-model-limits` 停在弹窗顶部（[上一阶段报告第 10 节](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md#limits)）。
-- **测试的临时目录。** `vitest.config.ts` 的 `globalSetup` 是 `tests/helpers/global-temp.ts`，它建一个全局的测试临时根；但 `tests/helpers/plugin-fixtures.ts` 的 `tmpDir()`（`manga-plugin-*`）与 `tests/helpers/app.ts`（`manga-test-*`）直接用 `os.tmpdir()`，个别用例没有删。
-- **门禁。** `node scripts/stage.mjs gate` 按 verify → test → package → installer → bench → package 直到连续三次 → report 跑，跳过结果仍有效的步骤（[质量门禁第 2 节](../dev-rules/quality-gates.md)）。
+- **安装包**（`scripts/stage/installer-lib.mjs`）：electron-builder 26.18.0 的 NSIS 目标，`--prepackaged` 打 Forge 的输出；`CHANNEL_INSTALL` 定义两个通道（正式版 `app.manga.desktop` / `MANGA` / `manga.exe`，开发版 `app.manga.desktop.dev` / `MANGA Dev` / `manga-dev.exe`）；按用户安装、可改目录、卸载保留数据；`win.signAndEditExecutable: false`，`publish: null`，不生成更新清单。`buildInstaller` 把通道写进 `resources/channel.json` 并给开发版的可执行文件改名。
+- **通道**（`apps/desktop/forge.config.ts`）：`MANGA_BUILD_CHANNEL=release` 打正式版，否则开发版；`stage package` 默认打开发版，并在 `dist/desktop/installer/out-development/` 生成开发版安装包（`scripts/stage/package.mjs` 第 524 行）。`stage installer` 在临时目录里打两个通道、真正安装、启动、卸载；它按卸载项的显示名 `MANGA` / `MANGA Dev` 认出真实安装，发现已装任一通道就拒绝运行。**这与本阶段的目标冲突**：用户以后会同时装着两个通道，门禁的安装步骤会被挡住，见 4.8。
+- **版本号**：`apps/desktop/package.json` 是 `0.1.0`，安装包名为 `manga-dev-setup-0.1.0.exe`；`app.getVersion()` 在主进程两处使用（`apps/desktop/src/main/index.ts`）。没有任何更新机制，也没有“关于”页。
+- **打包的提示**：electron-builder 每次报 “default Electron icon is used”“description is missed”“author is missed”，应用与安装包都还是默认图标。
+- **签名材料**：`dist/keys/` 里只有第一方插件的 Ed25519 密钥（ACT-08）；插件包的验签代码在插件模块里（Ed25519、内置公钥），更新可以照同样的做法，但用另一把密钥。
+- **数据位置与迁移**：正式版 `%LOCALAPPDATA%\manga`、开发版 `%LOCALAPPDATA%\manga-dev`（A-118）；每次结构升级前自动留 `manga.sqlite.premigrate-v<旧版本>` 备份，较旧的应用拒绝打开较新的资料（`API_INCOMPATIBLE`）。
+- **仓库**：`chialecode/manga` 公开；还没有任何标签与 Release。
+- **现有 CI**（`.github/workflows/ci.yml`、`.github/actions-policy.json`、Git 与 GitHub 第 2 节）：只有一个在 Ubuntu 上跑 `verify` 的必需检查 `repository-quality`，没有 Windows 的媒体前置（FFmpeg、语音模型、合成样本），这些用例记为跳过；规则写着不做定时运行、不用 secrets 与写权限；Actions 只允许 `actions/checkout` 与 `actions/setup-node`，并要求固定完整 SHA。本阶段的发布 workflow 是这些规则的有意例外，只限 `release.yml`，`ci.yml` 不变（A-126）。
+- **打包要用的私钥**：随包的第一方插件在打包时用 `dist/keys/plugin-first-party.pem` 签名（`scripts/desktop-plugins.ts`，也可以用 `MANGA_PLUGIN_SIGNING_KEY` 指定）；所以在 CI 上打正式版需要插件私钥与更新私钥两把。
+- **媒体前置的获取**：`scripts/tools/fetch-ffmpeg.mjs`、`fetch-silero-vad.mjs`、`fetch-subtitle-font.mjs` 按锁文件下载并校验；合成样本由 `scripts/samples/` 生成。
 
-## 3. 开源查证（2026-11-06）
+## 3. 开源查证（2026-11-08）
 
-查询来源：npm registry 的发行时间、GitHub 仓库与官方文档。“满 14 天”以实施当天计算，B 实施时重查一次。本地参考索引里“Agent 功能”一项没有工具审批的做法，按开发流程 2.5 记为“未找到对应参考”。
+查询来源：npm registry 的发行时间、官方文档与 GitHub 仓库。“满 14 天”以实施当天计算，B 实施时重查一次。本地参考索引里没有安装与更新的条目，按开发流程 2.5 记为“未找到对应参考”。
 
 ### 3.1 候选
 
 | 需要 | 候选 | 版本与日期 | 许可证 | 判断 |
 | --- | --- | --- | --- | --- |
-| 工具调用的人工审批 | OpenAI Agents SDK（JS）的 human-in-the-loop（[指南](https://openai.github.io/openai-agents-js/guides/human-in-the-loop/)，2026-11-06 查阅） | `@openai/agents` 0.21.0（2026-10-20） | MIT | **借鉴做法，不引入**：工具设 `needsApproval`，调用时不执行、记为 `RunToolApprovalItem`，一轮结束时任务暂停并在 `result.interruptions` 里交出；`state.approve` / `reject` 后用序列化的 `RunState` 恢复。它的安全提示直接适用：界面只拿不透明的编号与显示内容，完整状态留在主进程；决定要对照存下的请求核对，并且**原子地只消费一次**，防止重放 |
-| 同上 | Vercel AI SDK 的工具执行审批（[工具调用文档](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)，2026-11-06 查阅） | `ai` 7.0.163（2026-11-05） | Apache-2.0 | **借鉴做法，不引入**：`toolApproval`（旧的 `needsApproval` 已标为废弃）让调用**不暂停地返回**，内容里带 `tool-approval-request`；应用收集决定后把 `tool-approval-response` 放回消息再调一次，拒绝时模型收到 `execution-denied` 并可以回应。MANGA 采用同样“不暂停、下一轮带上决定”的形状（4.1） |
-| 同上 | LangGraph 的 `interrupt()` 与 `Command({ resume })`（[中断文档](https://docs.langchain.com/oss/javascript/langgraph/interrupts)，2026-11-06 查阅） | `@langchain/langgraph` 1.7.0（2026-11-05） | MIT | 不采用：暂停要有检查点，恢复时节点从头重跑，副作用必须放在审批之后或幂等。MANGA 的任务循环是自己的（自研与 pi 两个运行时，A-11），换成图运行时代价大。借鉴“副作用在确认之后、可重复执行”的要求 |
-| 提议的存放与执行 | 现有的 SQLite、命令网关与幂等回执 | — | — | **自写**：一张提议表（4.1），确认时经命令网关以所有者身份执行，幂等键是提议编号。不引入工作流或审批库：五种提议都是已有命令，缺的只是“先存下来、确认后执行一次”。理由写进 ADR-0007 |
-| 粗剪编辑的预览 | 现有的粗剪模型 | — | — | **复用**：在副本上试应用动作，得到前后的片段数与总时长，不写库 |
-| 条件等待 | 现有的 `waitUntil` / `waitForTestId`（`driver.ts`） | — | — | **复用**：不引入 Playwright 等测试框架；窗口走查本来就在 Electron 主进程里用 `executeJavaScript` 驱动 |
+| 应用内更新 | electron-updater（[文档](https://www.electron.build/docs/features/auto-update/)，与现用的 electron-builder 同一项目） | 6.8.11（2026-10-20，已满 14 天）；6.8.12（10-26，11-09 起满）；7.0.0 仍是 alpha | MIT | **采用 6.8.x**：支持 NSIS 安装包、GitHub Releases 与通用 HTTP 源、按块图只下载变化的部分、`autoInstallOnAppQuit`、拒绝降级（`allowDowngrade`）。7.x 改为“没有 Windows 签名就拒绝更新”，正式发行后再评估 |
+| 同上 | Electron 自带的 `autoUpdater` 与 update.electronjs.org（[文档](https://www.electronjs.org/docs/latest/tutorial/updates)） | — | — | 不采用：Windows 上依赖 Squirrel.Windows 的安装方式，与已定的 NSIS 按用户安装（A-119）不同，要换安装包 |
+| 同上 | Velopack（[仓库](https://github.com/velopack/velopack)） | npm `velopack` 1.3.39（2026-10-17） | MIT | 不采用：自带安装器与更新器，会替换现在的 NSIS 安装包与安装目录约定；Electron 不是它的主要场景。需要换安装方式时再评估 |
+| 更新包的校验 | Node 内置 `crypto` 的 Ed25519 | — | — | **自写**：插件包已经这样验签；更新用单独的一把密钥。原因见 4.4 |
+| 发布到 GitHub | GitHub CLI `gh release` | 本机已登录 | MIT | **复用**：草稿、上传资源与发布都用它；不引入 electron-builder 的上传（避免把令牌交给构建过程） |
+| CI 的 Windows 机器 | GitHub 托管运行器 `windows-2025`（[运行器镜像](https://github.com/actions/runner-images)；`windows-latest` 目前也指向它） | Windows Server 2025 | — | **采用，固定写 `windows-2025`**，不用会随时迁移的 `-latest`。它不是 Windows 11：本机门禁仍是阶段合并的依据，CI 上的结果只决定这一次能不能发布。公开仓库使用标准运行器不计费，B 实施时以 GitHub 的计费文档复核 |
+| 在 job 之间传文件 | `actions/upload-artifact`、`actions/download-artifact`（GitHub 官方） | v7.0.2、v8.0.2（均 2026-10-07，已满 14 天） | MIT | **采用**：让“构建与签名”和“发布”分在两个 job，发布的 job 拿写权限但不装依赖、不碰私钥。按现有规则固定完整 SHA，并加进 Actions 允许列表（仓库设置的修改归 ACT-17） |
+| 创建 Release | 运行器自带的 `gh`；第三方的 release Action | — | — | **用 `gh`**，不引入第三方 Action（避免扩大允许列表）；electron-builder 自带的上传同样不用 |
+| Windows 代码签名 | Azure Artifact Signing、Certum 开源证书、SignPath Foundation、Microsoft Store（MSIX） | — | — | **暂不签名**（Q-09 当前默认）：Azure 的个人开发者只开放给美国和加拿大；Certum 开源证书约 €49/年，个人、非商业开源项目可申请；SignPath 免费但要求 CI 构建、签名政策与项目知名度；Store 免费签名只适用于 MSIX，与 NSIS 安装方式冲突。准备给更多人用时按 Q-09 再定 |
+
+**一个必须处理的细节。** electron-updater 6.8.11 的 `NsisUpdater` 只有在安装目录的 `app-update.yml` 里写了 `publisherName` 时才调用校验函数，否则直接跳过校验（`verifySignature` 返回 null）。所以不签名时必须给正式版的 `app-update.yml` 写上发布者名，并把 `verifyUpdateCodeSignature` 换成 4.4 的 Ed25519 校验；否则下载的安装包完全不经校验就会被执行。B 用测试证明：去掉这一项时测试失败。
 
 ### 3.2 依赖盘点（A-35，D1）
 
-2026-11-06 的 `pnpm outdated -r`，按“满 14 天的最新版本”（当天满 14 天即 2026-10-23 及以前发行）：
-
-| 依赖 | 现用 | 最新 | 满 14 天的最新（2026-11-06） | 处理 |
-| --- | --- | --- | --- | --- |
-| @earendil-works/pi-ai | 1.3.0 | 1.5.0（11-02） | 1.4.0（10-21） | 升级；1.5.0 自 11-16 起满 14 天，实施末重查。1.4 的 `telemetryContext` 改名为 `telemetry`、删除 `getPiUserAgent()`；1.5 不再转出 TypeBox（上一阶段已改为直接写 JSON Schema） |
-| electron | 45.0.0 | 45.2.3（11-04） | 45.0.0 | 实施末重查：45.1.0（10-27）11-10 起满 14 天，45.2.x 随后；补丁与小版本升级后全部打包烟测与基准重跑 |
-| dockview-react | 8.6.1 | 8.8.3（10-30） | 8.6.1 | 实施末重查（8.8.x 约 11-12 起）；升级后复查标签上的 Delete / Backspace 是否仍要自己拦 |
-| vitest | 5.0.5 | 5.1.0（11-02） | 5.0.5 | 实施末重查（11-16 起）；升级后核对按文件并行与 `--no-wasm-code-gc`（LOOP-08） |
-| @tanstack/react-virtual | 3.14.21 | 3.14.26 | 3.14.22（10-22） | 升级；长对话的基准与 `chat-long-session` 照跑 |
-| linkedom | 0.18.13 | 0.18.15 | 0.18.14（10-21） | 升级 |
-| pdfjs-dist、onnxruntime-web、@napi-rs/canvas、knip、@vitejs/plugin-react、tiptap、@xyflow/react、tailwindcss、mdast-util-to-markdown、jassub、lucide-react、d3-hierarchy | — | 有补丁或小版本 | 多数还是现用版本 | 实施末重查，满 14 天的补丁与小版本照常升级；pdfjs-dist 6.5（11-15 起）与 onnxruntime-web 1.31（11-09 起）是小版本，升级后跑阅读器与语音的回归 |
-| @types/node | 24.19.2 | 26.x | — | 留在 24.x：与 Electron 45 的 Node 24 和 CI 的 `.node-version` 一致 |
-
-主版本或行为变化的升级先单独做并跑对应的回归，失败时回退到原版本，在 ADR-0007 的例外表写明尝试的版本、失败的命令、上游限制与复查条件。最小发行龄策略不绕过，不接受自动写入的豁免。
+B 实施开始与门禁之前各跑一次 `pnpm outdated -r`，按“满 14 天的最新版本”处理；electron-builder 26.18.1（2026-10-26）11-09 起满 14 天，与 electron-updater 一起升级，安装包与更新的全部用例重跑。主版本或行为变化的升级先单独做并跑对应的回归，失败时回退到原版本，在 ADR-0007 的例外表写明尝试的版本、失败的命令、上游限制与复查条件。最小发行龄策略不绕过。
 
 ## 4. 设计
 
-### 4.1 提议的存放与生命周期（W1，A-121，schema v14）
+### 4.1 版本号（W1）
 
-- **不暂停任务。** Agent 调用提议工具时，主进程校验参数、核对对象属于本项目、算出预览，写一条提议，工具结果是 `{ proposalId, status: "pending", summary }`，任务照常继续或结束；Agent 应该告诉用户“我提出了……，请在下面确认”。不做“任务停在工具调用上等确认”：那要把运行状态序列化、跨重启恢复，两个运行时都得改，而 A-74 只要求“提出、列出变化、确认后执行”。
-- **一张表**（v14 新增，`sql.ts`）：`agent_proposals(id, session_id, run_id, project_id, kind, command_id, input_json, preview_json, target_json, reason, status, result_json, created_at, decided_at)`，`(session_id, status, created_at)` 上有索引。`target_json` 记下提议时对象的编号与修订（按现有行、内容与操作历史计算摘要字符串，删除/项目导出附加依赖摘要）。状态：`pending` → `applying` → `applied` / `failed`；`pending` → `rejected` / `stale`，确认后变化可由 `applying` → `stale`。创建提议与工具回执一起提交，模型只拿编号、状态与摘要。
-- **上限。** 每个对话同时待确认的提议至多 20 条；第 21 条被拒绝，工具结果说明原因（让用户先处理已有的提议）。
-- **跟随对话与项目。** 删除对话（A-89）连同它的提议；删除项目时它的提议随之删除。提议不进项目包与资料包；数据库备份照常包含。
-- **迁移。** v13 → v14 只新增表与索引；迁移前备份、失败回滚、可重复执行、较旧版本拒绝打开 v14，与以前的迁移同一套流程与测试。
+- **正式版**：`0.1.x`。脚本从 GitHub 上最高的 `v0.1.*` 标签（本机用 `git tag` 与 `gh release list` 核对）算出下一个号；还没有任何发布时从 `0.1.1` 开始，保证比已经打过的 `0.1.0` 大。`apps/desktop/package.json` 的 `version` 只表示版本线（`0.1.0`），不为每次发布提交改动。
+- **开发版**：`<下一个正式版号>-dev.<UTC 年月日时分>`，例如 `0.1.2-dev.202611081530`（预发布标识是一个不带前导零的数字）。开发版与正式版是两个独立的通道，互不比较。
+- **写进安装包**：`buildInstaller` 的 `version` 参数由同一个函数给出；应用里 `app.getVersion()` 得到它。提交的短哈希与构建时间写进 `resources/build.json`，“关于”与调用追踪、诊断信息里显示。
+- 升级到 `0.2` 或 `1.0` 由用户决定，不由脚本自动做。
 
-### 4.2 五种提议（W2）
+### 4.2 开发版在本机自动更新（W2）
 
-Agent 看到的工具（项目对话才有，`AGENT_PROJECT_PROPOSALS` 并入 `AGENT_PROJECT_COMMANDS`；工具的中文说明写明“只提出，用户确认后才执行”）：
+- **触发**：`stage package` 通过、或 `stage gate` 整体通过之后，作为最后一步执行 `stage install-dev`（也可以单独运行）。环境变量 `MANGA_DEV_AUTO_INSTALL=0` 时跳过；CI 上跳过。
+- **只碰开发版**：按卸载项与 `CHANNEL_INSTALL.development` 确认本机装了开发版，没装就跳过并说明。绝不安装、关闭或改动正式版。
+- **运行中的开发版**：通过单实例通道请它保存并退出（新增启动参数 `--quit-for-update`：保存工作区、结束录音与写入、取消可取消的任务后退出）；30 秒内没退出就放弃本次安装、不强杀，给出原因。
+- **安装**：用刚打出的开发版安装包静默安装（`/S`），沿用上次的安装目录；完成后核对已装版本等于新版本号。原来在运行的，重新启动它。
+- **结果**：写进门禁证据（`install-dev.json`：是否装过、旧版本、新版本、用时、跳过原因），不影响门禁本身的结论；失败时门禁仍按测试结果判定，`install-dev` 单独报失败。
 
-| 工具 | 输入（项目由任务提供） | 预览 | 确认后执行的所有者命令 |
-| --- | --- | --- | --- |
-| `proposal.delete` | `kind`（`whiteboard` / `mindmap` / `draft` / `roughcut`）、对象编号、可选的理由 | 对象类型与标题；内容规模（卡片、节点、版本、片段数）；被哪些笔记、白板、导图、文稿引用（`embed.backlinks`），删除后这些引用显示为已删除；“删除后不能撤销” | `<kind>.delete` |
-| `proposal.rename` | `kind`（上面四种加 `project`）、对象编号、新标题 | 原标题 → 新标题；新标题与项目里同类对象重名时提示 | `<kind>.rename` / `project.update` |
-| `proposal.exportProject` | 可选的理由 | 项目标题、材料与各类对象的数量、估计大小；“确认时选择保存位置” | `project.exportPackage`（`pathHandle` 由确认时的保存对话框给出） |
-| `proposal.editRoughcut` | 粗剪编号、`label`、`actions`（与 `roughcut.edit` 相同，至多 200 步） | 每一步的中文说明（加入、移动、调整、删除、备注）；前后的片段数与总时长；在副本上试应用，失败的动作在提出时就拒绝 | `roughcut.edit`，撤销列表里标为 `Agent：<label>` |
-| `proposal.exportRoughcut` | 粗剪编号、可选的文件名与选项 | `roughcut.plan` 的结果：请求区间与实际区间、问题逐项、输出时长；默认写进导出分区 | `roughcut.export`（进度与取消照旧） |
+### 4.3 正式版联网更新（W3）
 
-- 预览算出来就存进 `preview_json`；卡片只显示存下的预览，不再按模型的参数重算，确认时再核对对象没变（4.3）。
-- 提议工具与其他项目命令一样过 `AgentRule`：别的项目的对象、不存在的对象、`kind` 与对象不符，都在提出时拒绝。
-- 命令层仍拒绝 Agent 直接调用 `*.delete`、`*.rename`、`project.update`、`project.exportPackage`、`roughcut.edit`、`roughcut.export`（授权用例 AT-11、AT-85 加这些命令）。
+- **只在正式版启用**：开发版与 `pnpm dev` 不检查联网更新。更新源是 GitHub Releases（`chialecode/manga`），只取正式发布的 Release，草稿与预发布不算。
+- **检查**：启动 10 分钟后检查一次，之后每 6 小时一次；“帮助 › 检查更新…”与“设置 › 更新”里的按钮可以手动检查。离线或失败时静默，记进操作日志，手动检查时才显示错误。
+- **下载**：默认自动在后台下载，按块图只下载变化的部分；下载与校验（4.4）都通过后才算“已就绪”。
+- **提示**：已就绪时在顶部一行右侧显示一个不打断的提示：“新版本 0.1.x 已就绪 · 重启以更新 · 稍后”，可以展开看更新内容（来自 Release 的说明）。正在播放、录音、导出、下载或有 Agent 任务在运行时，“重启以更新”先说明会中断什么、要求确认。
+- **安装**：点“重启以更新”或退出应用时，由 MANGA 等待保存、写升级前备份并重新验签后安装。上游 `autoInstallOnAppQuit=false`，避免它绕过 MANGA 的保存与备份流程；用户可观察到的退出安装行为不变。更新后的第一次启动显示一次“已更新到 0.1.x”，可以点开更新内容。
+- **资料库**：新版本需要升级资料库时，照常在迁移前自动备份；提示里写明“这次更新会升级资料库，升级前会自动备份”（更新清单里带上新版本的 `schemaVersion`，与本机比较）。
+- **设置 › 更新**：当前版本与提交、上次检查时间、“自动检查更新”（默认开）、“自动下载”（默认开）、“检查更新”按钮。关闭自动检查后不再联网检查。
+- **隐私**：检查更新只访问 GitHub，只带应用版本与平台，不带任何用户数据；遵循系统代理。
 
-### 4.3 确认、拒绝与失效（W3）
+### 4.4 更新的安全（W4）
 
-- **所有者命令。** `proposal.list { sessionId?, projectId?, status? }`、`proposal.apply { proposalId, pathHandle? }`、`proposal.reject { proposalId }`。三者只在 `OWNER_COMMANDS` 里，Agent 调用一律拒绝。
-- **只执行一次。** `proposal.apply` 先用一条条件更新把 `pending` 改为 `applying`（改动行数不是 1 就返回“已经处理过”）；然后核对对象仍在、修订与 `target_json` 相同，不同就改为 `stale` 并说明；再经命令网关以所有者身份执行，幂等键是提议编号，操作日志记“Agent 提出、用户确认”与提议编号。网关异步处理后，同步删除、改名与粗剪编辑在所有者处理函数里再次核对，并把效果与成功回执一起提交。删除还核对反向引用，项目导出还核对包内内容与快照。成功为 `applied`、失败为 `failed`，`result_json` 存结果或分类原因。`failed` 不自动重试，用户可以让 Agent 再提一次。
-- **中途退出。** 只有命令一致且成功的 `operations` 回执证明同步效果已执行；`command_requests` 只代表开始。项目包导出在发布前记录私有输出摘要，重启核对成品大小与哈希后可补回执；没有完成证据的提议回到 `pending`，不自动执行。粗剪的任务与回执一起登记，卡片在输出完成前保持 `applying`；取消、失败或重启后中断成为 `failed`。
-- **导出要选位置。** `proposal.exportProject` 的确认先弹保存对话框，取消就什么都不做、提议仍待确认。
-- **结果回到 Agent。** 下一次任务组装上下文时，在用户消息之前加一段“上次以来提议的结果”：类型、对象标题、结果与原因（不含预览全文），计入预算；只消费实际容纳的结果，在创建本轮任务的事务里标记，剩余留给后续轮次。同一条结果只带一次，重试沿用冻结的上下文。
-- **其他变化。** 对象被用户删掉或改过时，卡片在列表刷新时显示为失效，不等用户点确认；对话被删除时提议一并删除。
+- **一把单独的密钥**：A 已在 2026-11-08 生成 `dist/keys/update-release.pem`（Ed25519，PKCS#8 PEM，不入库）与 `dist/keys/update-release.pub`（与插件公钥同一格式：一行 base64 的原始 32 字节公钥），同一份私钥已放进 `release` 环境；B 把公钥写进应用源码，**不得重新生成或覆盖**这把密钥（否则本机与 CI 的签名对不上）。`stage release` 在密钥缺失时明确失败，不自动生成。与插件密钥分开：一把泄露不影响另一把。备份提醒在用户待办 ACT-08。
+- **签什么**：对正式版安装包签一个分离签名 `manga-setup-<版本>.exe.sig`，签名内容包含文件的 SHA-512、版本号与文件名，防止把旧版本的合法安装包冒充新版本。签名随 Release 一起上传。
+- **怎么验**：正式版的 `app-update.yml` 写上 `publisherName`（使校验函数被调用，见 3.1），`verifyUpdateCodeSignature` 换成自己的函数：下载对应的 `.sig`，用内置公钥验证，核对 SHA-512、版本与文件名；任何一项不符就拒绝，删除下载的文件，保留现版本，界面显示“更新包校验失败，已保留当前版本”。
+- **其他拒绝**：版本不比当前新（`allowDowngrade=false`）；不是 HTTPS；清单格式不对。都记进操作日志。
+- **密钥轮换**：换密钥需要先发布一个用旧密钥签名、内置了新公钥的版本，步骤写进 Git 与 GitHub 规则；本阶段只实现一把密钥，轮换作为文档里的操作说明。
 
-### 4.4 对话里的提议卡片（W4）
+### 4.5 一条命令发布（W5）
 
-- 卡片出现在提出它的那次回答下面（停靠栏与对话标签都显示），按提出的顺序排列。待确认时有“确认”“拒绝”；处理后显示结果与时间（“已执行 · 14:03”“已拒绝”“已失效：……”“执行失败：……”）。删除类的卡片在“确认”旁写“不能撤销”，确认按钮用危险样式。
-- 同一次回答里有两条以上待确认的提议时，卡片组上方有“全部确认（N）”与“全部拒绝”；“全部确认”先弹一个列出全部变化的确认框，再逐条执行，每条各自记结果。执行清单固定为打开确认框时展示的卡片；之后到达的提议需要另外确认。一条失败不阻止其他条，取消目录选择保留该条待确认；选择器或命令错误在卡片旁显示。
-- 对话列表是虚拟化的（上一阶段的 LOOP-07）：卡片是消息行的一部分，高度变化照旧由列表测量；贴底与跳转不受影响。
-- 项目对象的侧栏不显示提议；只在对话里处理。
+`node scripts/stage.mjs release` 依次（本机与 CI 用同一个脚本；CI 上的差别见 4.9）：
 
-### 4.5 按任务加上的语义检索与网页抓取（W5）
+1. **前提**：在 `main` 上、工作区干净、与 `origin/main` 一致；当前源码指纹的 `stage gate` 结果全部有效（否则先跑 `stage gate`）。阶段的 squash 合并提交与阶段分支最后一次提交的内容相同，门禁结果按指纹直接复用。
+2. **打包**：用门禁里同一份打包目录打正式版安装包（版本号见 4.1），生成 `latest.yml`、块图、`.sig`、`SHA256SUMS`。
+3. **演练**：在临时目录里装上一个正式版（第一次发布时没有，就装用同一源码打的 `0.1.0` 临时包），用回环地址上的假发布服务提供新版本，让它自己检查、下载、校验、安装、重启，核对新版本号、资料完好、迁移有备份；再用一个被改过一个字节的安装包确认会被拒绝。演练失败就停止，不发布。
+4. **发布说明**：从这个阶段的合并提交消息与执行状态生成中文的发布说明（新增、修复、需要注意的事，例如“会升级资料库”）。
+5. **发布**：本机只在用户当次授权时执行（CI 上的发布见 4.9）：在合并提交上创建标签 `v0.1.x`，用 `gh release create` 上传全部文件并发布。没有授权时只把全部文件与发布说明放在 `dist/release/v0.1.x/`，并输出需要用户授权的那一步。
+6. **证据**：`release.json`（版本、源码指纹、文件大小与 SHA-256、演练结果、是否已发布与 Release 链接），不含本机路径。
 
-- `AGENT_OPT_IN_COMMANDS` 改为 `["metadata.search", "semantic.search", "webpage.fetch"]`；契约 `allowCommands` 的枚举随之扩大、上限改为 3；运行的快照冻结它，重试沿用。
-- 输入框的“本次任务”菜单（现在只有“联网搜索资料”）加两项：“语义检索”只在语义模块开启并配好 Embedding 连接时显示；“抓取网页”只在项目对话里显示（抓到的网页存为本项目的网页版本）。两项都写明会产生外部调用。
-- `commands/agent.ts` 对每一项要求对应模块开启，并记进 `allowedNetworkCommands`；`semantic.search` 的范围与资料读取的范围相同（不因加上它而放宽），防剧透照旧。`webpage.fetch` 过 `AgentRule` 的项目范围。
-- 测试只对假 Embedding 服务与回环地址上的假网页服务；真实调用仍受 ACT-05 约束。
+**本机发布的位置**：正式发布由 4.9 的 workflow 每周进行；本机的 `stage release` 用于发布前的演练与 CI 不可用时的备用，真正发布仍需用户当次的授权。
 
-### 4.6 窗口走查的条件等待（W6，LOOP-29）
+### 4.6 安装体验修整（W6）
 
-- 逐个文件把 `sleep(n)` 换成等到条件满足：元素出现或消失（`waitForTestId`）、属性或文字改变、页面上的状态（`waitUntil`）、画出新的一帧（`requestAnimationFrame` 两次）。超时沿用各处现有的上限，等不到算失败，断言不变。
-- 只保留必须按真实时间流逝的等待：播放推进、按住时长、去抖与节流的时间窗、动画时长。每一处在同一行或上一行写 `// real time: <原因>`。新增一个快速检查（单元用例或 verify 的一步）：`apps/desktop/src/main/smoke/` 里没有原因注释的 `sleep(` 为 0。
-- 目标：`window-walk` ≤ 240 s（开发机，上一阶段约 7 分钟）；每个阶段的用时写进 `package.json` 的证据（已有就沿用）。三条曾偶发失败的观察（LOOP-27）的判断方式不变。
-- 模型弹窗截图先滚动到“模型能力”一节再拍，确认截图里有三个上限的输入框。
+- **图标**：先由 Agent 用产品主色画一个简单的“M”字图标（SVG 源文件入库，生成 `.ico` 与各尺寸 PNG），应用窗口、任务栏、安装包、卸载项与快捷方式都用它；用户以后可以换（Q-38 第 6 项）。
+- **安装界面**：中文（electron-builder 的 NSIS 语言设置），安装完成后可以勾选“启动 MANGA”。
+- **信息**：`description`、`author`（发布者名与 4.4 的 `publisherName` 一致）、版权与主页链接写进包信息；“安装的应用”里显示名称、版本、发布者与图标；去掉打包时的三条提示。
+- **覆盖安装**：在正式版运行时安装新版本，先提示关闭（沿用现有的检查）；覆盖安装保留安装目录与数据。
 
-### 4.7 测试的临时目录（W7，LOOP-28）
+### 4.7 命令与契约
 
-- `plugin-fixtures.ts` 的 `tmpDir()` 与 `tests/helpers/app.ts` 的临时目录改为建在 `global-temp.ts` 的全局测试临时根下（经它设置的环境变量），全局清理时一并删除；个别需要系统临时目录的用例自己删除。
-- `stage test` 前后各数一次系统临时目录里 `manga-*` 的数量，多出的写进 `test-run.json` 并判为失败（与 `stage package` 的做法一致，失败时保留现场）。
+- 新增所有者命令：`update.status`（当前版本、通道、上次检查、状态：空闲 / 检查中 / 下载中 / 已就绪 / 失败与原因）、`update.check`、`update.restartToUpdate`、`update.settings.get` / `set`。Agent 不能调用。契约在 `packages/contracts/src/`，命令快照用例随之更新。
+- 更新状态变化发主机通知，界面按现有方式刷新。
+- 新的错误码：`UPDATE_VERIFY_FAILED`、`UPDATE_UNAVAILABLE`（开发版或离线），各有中文说明。
 
-### 4.8 命令与契约
+### 4.8 测试用的安装身份
 
-- 新增命令：`proposal.delete`、`proposal.rename`、`proposal.exportProject`、`proposal.editRoughcut`、`proposal.exportRoughcut`（Agent，项目对话）；`proposal.list`、`proposal.apply`、`proposal.reject`（所有者）。契约在 `packages/contracts/src/`（新文件 `inputs-proposals.ts`），命令快照用例随之更新。
-- 新的错误码：`PROPOSAL_DECIDED`（已处理过）、`PROPOSAL_STALE`（对象已改变）、`PROPOSAL_LIMIT`（待确认太多），各有中文说明。
-- 会话流（`session.stream`）带上每条消息关联的提议，界面不另取；提议的状态变化发主机通知，列表按现有的方式刷新。
+按用户安装的卸载项、开始菜单与桌面快捷方式按应用 ID 与产品名区分，临时目录装出来的测试副本若用真实的身份，就会覆盖用户真实安装的卸载项与快捷方式。所以：
+
+- `installer-lib.mjs` 增加两个**测试身份**：`app.manga.desktop.test` / `MANGA Test` / 安装目录 `manga-test`，`app.manga.desktop.dev.test` / `MANGA Dev Test` / `manga-dev-test`；数据目录同样加 `-test`。除身份外，安装包的内容与真实通道相同（通道仍分别是正式版与开发版）。
+- `stage installer`、升级演练（4.5 第 3 步）与窗口观察里的安装与更新，一律用测试身份，不再因为本机装了真实版本而拒绝运行；只在本机已有**测试身份**的残留时先清理它（上次失败留下的）。
+- 每次运行前后对真实身份做一次快照（卸载项、安装目录里可执行文件的版本与修改时间、开始菜单与桌面快捷方式、数据目录是否存在），前后必须相同，不同就判失败并写明哪一项变了。
+- 只有 `stage install-dev`（4.2）会动真实的开发版，它从不动真实的正式版；它同样记录正式版的快照，前后必须相同。
+
+### 4.9 GitHub Actions 上的构建与每周发布（W9）
+
+新增 `.github/workflows/release.yml`，与 `ci.yml` 分开，必需检查 `repository-quality` 不变。
+
+- **触发**：`schedule` 每周一 00:00 UTC（北京时间 08:00，用户 2026-11-08 指定；cron `0 0 * * 1`），外加 `workflow_dispatch`（输入 `dry_run`，默认 `true`：只构建、演练，不发布）。不响应 `push`、`pull_request` 与任何来自 fork 的事件；`concurrency` 组 `release`，不取消正在进行的那一次。
+- **判断要不要发布**（job `decide`，Ubuntu，`contents: read`，不装依赖）：取最高的 `v0.1.*` 标签，看 `main` 在它之后有没有新的提交（`main` 只能经 PR 的 squash 合并进来，一个提交就是一个合并的 PR；用户确认任何合并进 `main` 的 PR 都算，包括 Dependabot 的）。没有就以“本周没有新的合并”成功结束，不构建；有就算出下一个版本号，并列出这些 PR 作为发布说明的素材。还没有任何标签时视为有新合并，发布 `0.1.1`。
+- **检查**（job `check`，`windows-2025`，`contents: read`，**没有任何 secret**）：按锁文件取得媒体前置、生成合成样本，跑 `verify`、`stage test`、一次 `stage package`（打包烟测与窗口走查）与 `stage installer`（4.8 的测试身份）。不跑基准：共享运行器的速度不稳定，基准以本机最后一次门禁的证据为准，`release.json` 写明基准证据的源码指纹与它是否等于这次发布的源码。任何一步失败，这一周不发布。
+- **构建与签名**（job `build`，`windows-2025`，`contents: read`，`environment: release`）：同一个提交上打正式版的包（插件私钥只给打包那一步），生成安装包、块图、`latest.yml`、`.sig`（更新私钥只给签名那一步）、`SHA256SUMS` 与发布说明，跑 4.5 第 3 步的升级演练（上一版从已发布的 Release 下载，并先核对它的签名）。私钥来自环境的 secrets `MANGA_PLUGIN_SIGNING_KEY_PEM`、`MANGA_UPDATE_SIGNING_KEY_PEM`（PEM 内容），只映射给对应的那一步，写到运行器的临时文件后用文件路径交给脚本（插件用现有的 `MANGA_PLUGIN_SIGNING_KEY`），用完即删，不打印、不进日志与 artifact。产物以 artifact 交给下一步，保留 7 天。
+- **发布**（job `publish`，Ubuntu，`contents: write`，没有 secret，不 checkout 源码以外的东西、不装依赖）：下载 artifact，核对 `SHA256SUMS` 与 `.sig`（用仓库里的公钥），确认这个标签还不存在，用 `gh release create v0.1.x --target <提交>` 上传全部文件并发布。`dry_run` 时跳过本步。
+- **发布说明**：中文；列出上次发布以来合并的 PR（标题与链接）与合并提交里的说明；新版本会升级资料库时写在最前面；写明这次没有跑基准、人工检查的状态见用户待办。
+- **失败时**：workflow 失败、不发布，GitHub 按通知设置告诉维护者；Agent 下次开工时用 `gh run list --workflow release.yml` 看一眼最近一次的结果，失败就作为当前阶段的修复项。不自动重跑，不自动改代码。
+- **安全边界**：所有 Action 固定完整 SHA；`permissions` 默认 `{}`，每个 job 只给自己需要的；`release` 环境只允许 `main` 部署；两把私钥只在这个环境里；CI 的令牌不能触发别的 workflow。workflow 文件由一个本地测试做静态检查（触发条件、每个 job 的权限、secret 只出现在 `build` 的指定步骤、Action 都固定 SHA 且在允许列表里、`publish` 没有安装步骤），随 `verify` 运行。
+- **长期不活动**：公开仓库 60 天没有活动时 GitHub 会停用定时 workflow；有合并就不会发生，发生时在 Actions 页面重新启用即可（写进 Git 与 GitHub 规则）。
 
 ## 5. 工作包与顺序
 
@@ -169,131 +174,119 @@ Agent 看到的工具（项目对话才有，`AGENT_PROJECT_PROPOSALS` 并入 `A
 
 **A 已做（在本计划所在的提交里）：**
 
-- 上一阶段的报告提炼后删除。仍有效的内容已经在正本里：门禁的做法在质量门禁第 2、3 节，验证基线在执行状态，LOOP-13、26、27 的结论在执行状态，ADR-0007 有自写与选型的理由。还没有正本的“从笔记跳到一条还没载入的消息没有产品入口”写成执行状态的 LOOP-30。入链改为归档链接 `https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md#<锚点>`；文档导航与 GitBook 目录里去掉报告（B 新建后加回）。
-- 登记表 `currentStage` 改为 `m9`，本计划的 `retireAfter` 改为 `m9`，报告的条目去掉。
-- 新增 A-120、A-121；需求 AGENT-01、AGENT-03、AGENT-04 按本阶段改写；验收 AT-151—AT-156；交付路线 2.2 改为本阶段，上一阶段的能力并入 2.1；ACT-15 的完成写回用户待办与执行状态；新增 Q-37。
-- 执行状态里 Agent 一行的运行时版本改为现用的 pi-ai 1.3.0。
-- **2026-11-07 用户补充“路径不再使用大写的 manga，而是全部用小写的 manga”（A-118、A-119）：** A 已直接改好 `packages/app-core/src/locations.ts`、`packages/app-core/src/commands/settings.ts`、`apps/desktop/forge.config.ts`、`scripts/stage/*`、测试与文档正本：`<文档>\manga`（开发版 `manga-dev`）、`<下载>\manga`（开发版 `manga-dev`）、打包输出 `dist/desktop/packages/manga-win32-x64/manga.exe`、安装可执行文件 `manga.exe` / `manga-dev.exe` 全部小写，已有的大写 `MANGA` 文件夹在启动时自动改名为小写并修正指针与旧位置记录；B 保留这些改动，跑本阶段 `stage gate` 时一并重新生成包、安装包与 `ui-settings-locations.png` 截图。
+- 上一阶段的报告提炼后删除。仍有效的内容已在正本里：待审操作的设计在 A-121、领域模型与 Agent 协议；A 审查的两条修复在执行状态；门禁做法在质量门禁。入链改为归档链接 `https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-report.md#<锚点>`；文档导航与 GitBook 目录里去掉报告（B 新建后加回）。
+- 登记表 `currentStage` 改为 `m10`，本计划的 `retireAfter` 改为 `m10`，报告的条目去掉。报告第 11 节里“看过、不改”的一条观察项登记为 LOOP-33。
+- 新增 A-124、A-125、A-126；需求 DATA-06 改写、新增 DATA-07；验收 AT-157—AT-163；交付路线 2.2 改为本阶段，上一阶段的能力并入 2.1；ACT-16 的完成写回用户待办与执行状态；新增 Q-38、ACT-17。
 
 **B 执行时再核对一遍：**
 
 | 位置 | 内容判断 | 处理 |
 | --- | --- | --- |
 | `.env.local` | 开发者的本地配置与凭据，必需 | 保留；不读取与任务无关的值 |
-| `dist/design-refs/`、`dist/tools/`、`dist/samples/` | 用户提供的界面参考、固定版本的工具、合成样本 | 原样保留；本阶段新增的样本按第 7 节生成 |
-| `dist/desktop/`、`dist/installer/`（若有）、`dist/plugins/` | 上一阶段最后的打包产物与安装包 | 阶段末重新打包时覆盖 |
-| `dist/keys/` | 第一方插件的签名私钥（ACT-08） | 原样保留，不读不输出 |
-| `dist/evidence-runs/` | `current/`（上一阶段最后一次门禁）与推送前日志 | `current/` 在本阶段第一次门禁运行时覆盖；其余零散日志删除 |
-| 系统临时目录里的 `manga-*` | 上一阶段测试留下的（LOOP-28） | 确认没有正在运行的门禁后删除，只记数量 |
-| 上一阶段的本地分支 | 内容已全部合入 `main @ fd32430` | 保留，不由 Agent 删除 |
+| `dist/design-refs/`、`dist/tools/`、`dist/samples/` | 用户提供的界面参考、固定版本的工具、合成样本 | 原样保留 |
+| `dist/desktop/`、`dist/plugins/` | 上一阶段最后的打包产物与安装包 | 阶段末重新打包时覆盖 |
+| `dist/keys/` | 第一方插件的签名私钥（ACT-08）；本阶段新增更新签名私钥 | 原样保留，不读不输出私钥 |
+| `dist/evidence-runs/` | `current/`（上一阶段最后一次门禁）与零散日志 | `current/` 在本阶段第一次门禁时覆盖；其余零散日志删除 |
+| 系统临时目录里的 `manga-*` | 以前失败运行留下的现场 | 确认没有正在运行的门禁后删除，只记数量 |
+| 本地分支 `rebuild/m1`—`rebuild/m8`、`feat/m6-project-workspace`、旧的阶段分支 | 历史改写时留下的备份与已合并的分支 | 保留，不由 Agent 删除；在报告里列出，用户可以自行删除 |
+| `backup/main-pre-rewrite` | 历史改写前的本地 `main`（A 在同步 `main` 前留的备份） | 保留，不由 Agent 删除 |
 | `docs/evidence/gate/` | 上一阶段最后一次门禁的证据 | 本阶段最后一次门禁时整体替换 |
 
-**去掉以前阶段的标签（A-57）。** 运行文档检查，把报出的 `M8` / `m8` 标签逐个改写。Git 提交信息与固定归档链接里的路径不改。
+**去掉以前阶段的标签（A-57）。** A 已运行文档检查并改写了报出的一处（ADR-0002 的历史改写一节）；B 交付前再运行一次。`docs/evidence/gate/` 里的 `stage` 字段随本阶段最后一次门禁整体替换。Git 提交信息与固定归档链接里的路径不改。
 
 ### 5.2 D1 依赖盘点
 
-按 3.2 的表执行。实施开始与门禁之前各跑一次 `pnpm outdated -r`。ADR-0007 的版本表与例外表按结果更新。
+按 3.2 执行。ADR-0007 的版本表新增 electron-updater，并写明 3.1 的选择理由。
 
 ### 5.3 工作包
 
 | 包 | 内容 | 关键失败路径 | 验收 |
 | --- | --- | --- | --- |
-| W1 提议的存放 | 4.1：v14 的表与迁移、状态机、上限、随对话与项目删除 | 迁移中途强制结束后再启动能完成；迁移失败回滚、资料不变；v13 的应用拒绝打开 v14；第 21 条提议被拒绝且说明原因 | AT-156 |
-| W2 五种提议 | 4.2：工具、预览、`AgentRule`、命令层拒绝直接调用 | 别的项目的对象；对象不存在；`kind` 与对象不符；粗剪动作在副本上失败；新标题为空或过长；“最近”的对话没有这些工具 | AT-151、AT-153、AT-154 |
-| W3 确认与失效 | 4.3：`apply` / `reject` / `list`、原子消费、修订核对、幂等执行、启动时恢复 `applying`、下一轮的结果 | 同时点两次确认（或两个窗口）只执行一次；提议后对象被改或被删；执行失败；执行中退出；导出时取消保存对话框；拒绝后 Agent 下一轮看得到 | AT-152 |
-| W4 提议卡片 | 4.4：卡片、全部确认与拒绝、危险样式、状态变化的刷新 | 卡片高度变化时贴底与锚点；对话很长时卡片在虚拟列表里；停靠栏与对话标签同时显示同一条提议，一边确认后另一边更新 | AT-151 |
-| W5 按任务加上 | 4.5：枚举、界面两项、模块检查、范围 | 模块关着时不显示、命令层拒绝；“最近”的对话没有“抓取网页”；重试沿用；没加时工具不出现 | AT-155 |
-| W6 条件等待 | 4.6：替换固定等待、`// real time` 注释与检查、截图滚动 | 条件写错导致假通过：每处替换后的条件要能在失败时超时（B 抽查：故意改坏一个元素，看到对应观察失败）；阶段用时 | `window-walk` 用时；检查 |
-| W7 测试临时目录 | 4.7 | 并行的测试进程共用全局根时不互删；失败时保留现场 | `test-run.json` |
-| W8 走查、测试与基准 | 见第 7 节；改写依赖旧结构的测试（命令清单快照、`allowCommands` 的枚举、`sleep` 的走查），断言不减，迁移映射写进报告 | — | 第 7 节 |
-| W9 文档 | 需求 AGENT-01、03、04 按实现改为“已实现”；交付路线 AT-151—AT-156 在实现后改为“已实现”；领域模型（提议表、状态）；数据与安全（v14 迁移、提议不进项目包）；Agent 与插件协议（提议工具、按任务加上的三项、所有者命令）；交互设计（提议卡片、“本次任务”菜单）；质量门禁（条件等待的规则与检查、测试的临时目录计数）；ADR-0007（版本表、自写的理由）；执行状态（LOOP-09、28、29 的状态） | — | 文档检查 |
+| W1 版本号 | 4.1：版本号函数、安装包与 `build.json`、“关于” | 没有任何标签时从 0.1.1 开始；标签不连续时取最高；开发版标识没有前导零；两个通道版本互不影响 | AT-157 |
+| W2 开发版自动更新 | 4.2：`stage install-dev`、`--quit-for-update`、门禁衔接 | 开发版没装；开发版在运行且有未保存的工作区；30 秒内不退出；安装失败；正式版在运行（不受影响）；CI 上跳过 | AT-158 |
+| W3 正式版更新 | 4.3：electron-updater 接入、检查与下载、提示、退出时安装、更新内容、设置页与帮助菜单 | 离线；下载中断后续传；下载中退出；有任务运行时点重启；关闭自动检查；新版本要升级资料库 | AT-159 |
+| W4 更新的安全 | 4.4：密钥、`.sig`、`publisherName` 与自定义校验、拒绝降级与非 HTTPS | 安装包改一个字节；签名换成别的版本的；没有 `.sig`；版本比当前旧；去掉 `publisherName` 时测试必须失败 | AT-160 |
+| W5 发布命令 | 4.5：`stage release` 的前提、打包、演练、发布说明、有授权时发布 | 工作区不干净；门禁结果过期；演练失败时不发布；没有授权时不调用 `gh release create`；`gh` 未登录 | AT-161 |
+| W6 安装体验 | 4.6：图标、中文安装界面、包信息、覆盖安装 | 高 DPI 下的图标；卸载项的图标与版本 | AT-162 |
+| W7 测试、走查与演练 | 见第 7 节；4.8 的测试身份与真实安装的快照；回环地址上的假发布服务；`installer` 步骤扩展为“装旧版 → 更新 → 核对” | 本机同时装着真实的正式版与开发版时跑 `stage installer` 与 `stage gate`：照常运行，真实安装的快照前后相同 | 第 7 节 |
+| W9 CI 构建与每周发布 | 4.9：`release.yml`、`stage release --ci`、版本与发布说明的生成、workflow 的静态检查、`actions-policy.json` 的允许列表 | 本周没有新合并（跳过且成功）；标签已存在；`check` 失败时不进入 `build`；`dry_run` 不发布；上一版的下载或签名核对失败时不发布；私钥没配置时 `build` 明确失败、不产出未签名的包 | AT-163 |
+| W8 文档 | 需求 DATA-06、DATA-07 按实现改为“已实现”；AT-157—AT-163；Git 与 GitHub 第 2、3、5 节（发布 workflow 作为 `ci.yml` 规则的例外、`release` 环境与两把私钥、允许列表、每周发布与停用定时的处理、失败时怎么看）；数据与安全（更新的密钥与校验、更新前的备份）；Git 与 GitHub（标签、Release、密钥轮换、发布授权）；质量门禁（`install-dev`、`release` 与演练）；仓库地图（新脚本与 `dist/release/`）；交互设计（更新提示、设置 › 更新、帮助菜单、“关于”）；ADR-0007；执行状态；README 的安装与更新说明 | — | 文档检查 |
 
 ### 5.4 顺序
 
-1. C0；D1 的第一次盘点与已满 14 天的升级（pi-ai 1.4.0、react-virtual 3.14.22、linkedom 0.18.14）。
-2. **W7 → W6 先做**：门禁变快后，后面每次验证都省时间。W6 改完先单独跑 `window-walk`（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`），确认通过与用时。
-3. W1 → W2 → W3 → W4（依次依赖）。
-4. W5（与 W1—W4 独立，可以穿插）。
-5. W8、W9；最后一次 `pnpm outdated -r` 与满 14 天的升级；`stage gate`；报告与整理记录。
+1. C0；D1 的第一次盘点。
+2. W1 → W6（版本号与安装包信息是后面所有工作的基础）。
+3. W2（只涉及本机，先让开发流程受益）。
+4. W3 → W4（更新与校验一起做，W4 的拒绝路径与 W3 同时测）。
+5. W5（依赖 W1、W3、W4）；W9（依赖 W5）；W7、W8；最后一次 `pnpm outdated -r`；`stage gate`；报告与整理记录。
 
 可以按依赖调整顺序，但不得跳过任何一个工作包。
 
 ## 6. 界面要点
 
-- 视觉沿用现有主题；提议卡片用现有的卡片、按钮与危险按钮样式，深浅主题都要有。
-- 卡片标题是动词加对象（“删除白板《旧分镜》”“重命名导图：《结构》→《第二季结构》”“导出项目包”“调整粗剪《预告》：5 步”“导出粗剪《预告》”）；正文是预览的几行，引用多于 5 处时折叠为“还有 N 处”。
-- 待确认的卡片在对话里醒目但不打断：不弹窗、不抢焦点；“全部确认”才弹确认框。
-- “本次任务”菜单里的三项是复选，写明“会联网”“会调用 Embedding 服务”；勾上的项在输入框下方以小标签显示，发出后清空（与现在的“联网”一致）。
-- 所有新控件有可访问名称；卡片的按钮可以用键盘操作，结果的变化对读屏软件可见。
+- 更新提示在顶部一行右侧，用现有的小按钮与气泡样式，深浅主题都要有；不弹窗、不抢焦点。只有“重启以更新”会中断正在进行的事时才弹确认框。
+- “设置 › 更新”放在“设置 › 常规”之后；“帮助”菜单新增“检查更新…”与“关于 MANGA”；“关于”显示名称、版本、通道、提交、构建时间与许可证，有“复制版本信息”按钮（反馈问题时用）。
+- 开发版的“关于”写明“开发版：由本机构建自动更新”，不显示检查更新的按钮。
+- 所有新控件有可访问名称，可以用键盘操作；状态变化对读屏软件可见。
 
 ## 7. 样本、门禁与基准
 
-**样本。** 全部合成：沿用 `dist/samples/` 与现有的规模样本；补：一个项目，含 3 块白板（其中一块被笔记与导图引用）、2 张导图、2 篇文稿与一个 12 段的粗剪；一份 v13 资料（含几次对话与运行）用来迁移；假 Embedding 服务与回环地址上的假网页服务沿用已有的。
+**样本。** 全部合成：回环地址上的假发布服务（按 GitHub Releases 的文件布局提供 `latest.yml`、安装包、块图与 `.sig`）；测试用的另一把 Ed25519 密钥（测试里生成，不入库）；一份旧版本的资料用来核对更新后的迁移。
 
-**窗口观察（打包烟测，新增，必需）：**
+**窗口与安装观察（新增，必需）：**
 
 | 观察 | 内容 |
 | --- | --- |
-| `proposal-delete-rename` | 假模型在项目对话里依次调用删除白板（有引用的那块）与重命名导图：两张卡片出现，删除卡片列出引用并写“不能撤销”；数据库与侧栏都没变；确认删除 → 白板消失、引用显示为已删除、卡片显示已执行；拒绝重命名 → 导图名不变；下一轮请求里带有两条结果 |
-| `proposal-stale-once` | 提议删除一篇文稿后在文稿里改一个字，再确认：显示已失效、文稿还在；另一条提议在停靠栏与对话标签里同时点确认：只执行一次，两边都显示已执行 |
-| `proposal-roughcut` | 假模型提出 5 步的粗剪编辑：卡片列出 5 步与前后时长；确认后粗剪变化、撤销列表里有 `Agent：` 的一步，撤销后复原；再提出导出：卡片显示导出计划，确认后产出文件并通过输出校验 |
-| `proposal-export-project` | 提出导出项目包：确认后（走查给保存对话框一个临时路径）导出完成，包与所有者导出的同一项目内容一致；再提一次，保存对话框取消，提议仍待确认 |
-| `proposal-restart` | 一条待确认、一条模拟执行中（在 `applying` 状态结束进程）后重启：待确认的仍可确认；执行中的按回执判为已执行或回到待确认 |
-| `agent-opt-in` | 项目对话里只勾“抓取网页”发起任务：工具清单里有 `webpage.fetch`、没有 `semantic.search`，抓到假网页并存为网页版本；下一次任务不勾，工具清单里没有它；语义模块开启时勾“语义检索”，对假 Embedding 服务检索成功；“最近”的对话里看不到“抓取网页” |
-| `migrate-v14` | 用 v13 资料启动：迁移前有备份，迁移后提议表存在、其余数据不变；第二次启动不再改动；较旧版本拒绝打开 |
+| `version-about` | 正式版与开发版的“关于”显示各自的版本号格式、提交与通道；开发版没有检查更新的按钮 |
+| `update-flow` | 在临时目录装版本 A 的正式版，假发布服务提供版本 B：启动后检查、下载、校验通过，顶部出现提示；点“重启以更新”后重启为 B，资料完好，迁移有备份，显示一次“已更新到 B” |
+| `update-on-quit` | 同上，但不点提示直接退出：再次启动时已是 B |
+| `update-rejected` | 假发布服务分别提供改过一个字节的安装包、别的版本的签名、没有签名、比当前旧的版本：都被拒绝，仍是 A，界面显示原因 |
+| `update-offline` | 假发布服务不可达：自动检查不打扰；手动检查显示无法连接 |
+| `install-dev` | 在临时的“机器”里装开发版并让它运行，执行 `install-dev`：开发版保存后退出、被更新并重新打开；同一台临时机器上的正式版不受影响 |
+| `release-workflow` | 静态检查 `release.yml`（见 4.9 的安全边界）；用脚本模拟 `decide`：没有标签、标签后没有提交、标签后有两个合并时分别得到“发布 0.1.1”“跳过”“发布下一个版本并列出两个 PR”；`stage release --ci` 在缺私钥时失败且不留未签名的包 |
+| `installer-info` | 安装包是中文界面，“安装的应用”里显示名称、版本、发布者与图标 |
 
-上一阶段全部的窗口观察保留，W6 改为条件等待后全部重跑；`hold-rate-hint-only`、`hold-rate-recovers`、`frame-window-controls` 的判断方式不变。
+上一阶段全部的窗口观察保留。截图只留关键状态：顶部的更新提示（浅色与深色）、“设置 › 更新”、“关于”。截图不含本机路径。
 
-截图只留关键状态：对话里的删除提议卡片（待确认，浅色与深色各一张）、处理后的卡片组、“本次任务”菜单、模型弹窗的“模型能力”一节。截图不含本机路径。
+**基准（记录项，不设门槛）**：一次更新的下载量（差分与完整）、从点“重启以更新”到新版本可操作的用时、`install-dev` 的用时、`stage release` 的用时。现有门槛与观察全部保留，目标与测量方法不改。
 
-**基准（新增门槛）：**
-
-| 指标 | 门槛 |
-| --- | --- |
-| 提出一条删除提议（含引用查询与预览，项目有 500 个对象），p95 | ≤ 150 ms |
-| 确认一条提议到对象与卡片都更新，p95 | ≤ 300 ms |
-
-记录项（不设门槛）：`window-walk` 与每次 `stage package` 的用时（替换前后对照）；v13 → v14 迁移的耗时；一次完整 `stage gate` 的用时。
-
-现有门槛与观察全部保留，目标与测量方法不改。跑基准前确认机器空闲、启动它的应用在前台（[LOOP-13](status.md#loop-13)）；跑的过程中不执行改动工作树的 git 命令；不锁屏（走查要用剪贴板）。
-
-**门禁。** 修复先用子集确认（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`、单个测试文件），最后在最终源码上跑一次 `node scripts/stage.mjs gate`（verify、test、package 连续三次、installer、bench、report 都通过）；门禁运行时不改工作树。证据整体替换 `docs/evidence/gate/`，总量不超过 5 MiB，复制前先看过新截图，不含本机路径。
+**门禁。** 修复先用子集确认（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`、单个测试文件），最后在最终源码上跑一次 `node scripts/stage.mjs gate`（跑前确认机器空闲、启动它的应用在前台，不锁屏；跑的过程中不改工作树）。证据整体替换 `docs/evidence/gate/`，总量不超过 5 MiB，复制前先看过新截图，不含本机路径。
 
 ## 8. 人工检查
 
-B 在用户待办里新增人工检查（编号从 H-88 起），写到用户能直接照做：在一个项目里让 Agent 删除一块旧白板并重命名一张导图，看卡片写清的变化，拒绝一条、确认一条，再问 Agent 刚才的结果；提议后自己改动那个对象再确认，看到“已失效”；让 Agent 调整粗剪，确认后在粗剪里撤销；让 Agent 导出项目包，确认时选位置；发起任务时勾“抓取网页”（需要能联网的模型连接与网页）；感受一次 `stage package` 变快不需要人工检查。已有 H 项里受影响的（对话列表、项目对象的删除与改名）只在说法变了时改文字。人工检查保持 not-run，不由脚本代填。
+B 在用户待办里新增人工检查（编号从 H-92 起），写到用户能直接照做：门禁通过后看开发版是否自己更新并重开；在“关于”里看版本；第一次真正发布后，装着的正式版收到更新、看提示、点重启、看更新内容；在“设置 › 更新”关掉自动检查；安装界面是中文、“安装的应用”里的信息。H-84、H-85 按新的版本号与安装方式改写。人工检查保持 not-run，不由脚本代填。
 
 ## 9. B 交付与 A 审查
 
-- B 新建本阶段报告 `docs/delivery/stage-report.md`（并加回登记表、`docs/README.md` 与 `docs/SUMMARY.md`）：按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射；写明提议的状态机与原子消费的实现、修订核对用的字段、启动时恢复的判断、五种提议的预览内容、v14 迁移、`sleep` 替换前后的数量与用时（逐文件）、保留的真实时间等待及原因、测试临时目录的计数、迁移映射（测试与走查）、依赖盘点结果、整理记录（含临时目录的数量）、基准数值与源码指纹。
+- B 新建本阶段报告 `docs/delivery/stage-report.md`（并加回登记表、`docs/README.md` 与 `docs/SUMMARY.md`）：按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射；写明版本号的算法、开发版自动更新的退出与安装流程、正式版更新的状态机、校验的内容与拒绝路径、发布命令每一步的产物、演练结果、依赖盘点结果、整理记录、基准数值与源码指纹。
 - B 交付前自检：第 1 节的退出条件逐条有证据；`stage gate` 通过；文档检查通过；暂存内容核对过；一个带 DCO 签名的阶段提交（amend 本计划所在的提交，消息按最终结果重写）。
-- A 审查时重点看：Agent 的任何路径都不能不经确认执行删除、重命名、导出与粗剪编辑（工具清单、命令层、所有者命令的操作者核对）；`apply` 的原子消费与幂等键；修订核对没有漏掉的对象类型；启动时对 `applying` 的判断；拒绝与失效的结果确实进入下一轮、只带一次；删除对话与项目时提议一并删除；按任务加上的三项不放宽资料范围、模块关着时命令层拒绝；条件等待没有放宽任何断言、超时能真的失败，保留的 `sleep` 都有原因；测试临时目录的清理不误删并行进程的目录。
+- A 审查时重点看：任何路径都不能执行未经 Ed25519 校验的安装包（包括 `publisherName` 缺失、`.sig` 缺失、下载中断后续传的文件）；开发版的自动更新绝不碰正式版；测试与演练只用测试身份，真实安装的快照前后相同；发布命令在没有授权时不对外发布；`release.yml` 的权限与 secret 只在 4.9 写明的 job 与步骤里，没有新合并时不发布，`dry_run` 不发布；私钥不进仓库、证据与日志；更新不打断正在进行的录音与导出；版本号在两条通道上都单调递增。
 
 ## 10. 待处理事项入口
 
-- 需要用户的：[Q-37](../../USER-ACTIONS.md#q-37)（本阶段 Agent 先用的默认值）；仍待答复的 [Q-36](../../USER-ACTIONS.md#q-36)、[Q-35](../../USER-ACTIONS.md#q-35)、[Q-33](../../USER-ACTIONS.md#q-33)；可选的 [ACT-14](../../USER-ACTIONS.md#act-14)、[ACT-11](../../USER-ACTIONS.md#act-11)。都不阻塞本阶段。
-- 顺延的 Agent 侧后续项：LOOP-17 里的音频输入与 PDF 按页截取、LOOP-16（弹幕密度曲线）、LOOP-18（截图候选栏）、LOOP-21（弹幕搜索偶发无响应）、LOOP-30（跳到一条还没载入的消息的入口），留在[执行状态的后续 loop](status.md#followup-loops)。
-- 本阶段发现的非阻塞问题按开发流程新增 LOOP 条目，不扩大本阶段范围。
+- 需要用户的：[Q-38](../../USER-ACTIONS.md#q-38)（本阶段先用的默认值）；[ACT-17](../../USER-ACTIONS.md#act-17)（仓库配置已完成，合并后的试运行已授权）；[Q-09](../../USER-ACTIONS.md#q-09)（签名与分发，本阶段按“暂不签名”实现）；仍待答复的 [Q-37](../../USER-ACTIONS.md#q-37)、[Q-36](../../USER-ACTIONS.md#q-36)。都不阻塞本阶段。
+- 新增的后续项：winget 清单（LOOP-31）；新版本启动失败时的回退帮助（LOOP-32）；上一阶段 A 审查时记下的观察项：粗剪模块停用时执行中的导出提议停在“执行中”（LOOP-33）。留在[执行状态的后续 loop](status.md#followup-loops)。
+- 顺延的 Agent 侧后续项保持不变（LOOP-16、17、18、21、30）。
 
 <a id="prompt"></a>
 ## 11. 交给 B 的执行 prompt
 
 ```text
-你是 Agent B，在本仓库的分支 feat/m9-next 上连续完成当前阶段（Agent 的待审操作与门禁提速）。
+你是 Agent B，在本仓库的分支 feat/m10-install-update 上连续完成当前阶段（安装与自动更新）。
 
-依据：AGENTS.md；docs/delivery/stage-plan.md（本阶段唯一计划，全部工作包 C0、D1、W1—W9）；确认记录 A-74、A-120、A-121；需求 AGENT-01、AGENT-03、AGENT-04、DATA-01；验收 AT-151—AT-156 与计划第 1 节列出的重跑用例（AT-11、AT-13、AT-44、AT-85、AT-129）；执行状态的 LOOP-09、28、29；用户待办 Q-37（按其中的默认实现；用户答复后以答复为准）。
+依据：AGENTS.md；docs/delivery/stage-plan.md（本阶段唯一计划，全部工作包 C0、D1、W1—W9，设计 4.1—4.9）；确认记录 A-118、A-119、A-124、A-125、A-126；需求 DATA-06、DATA-07；验收 AT-157—AT-163；用户待办 Q-38（按其中的默认实现；用户答复后以答复为准）、ACT-17、Q-09。
 
 要求：
-1. 先核对现场（git status、分支基于 main@fd32430、计划所在的提交，保留 A 已完成的路径全小写改动），再按计划第 5.4 节的顺序连续实施，不逐工作包询问。W7、W6 先做，让后面的验证变快。
-2. 依赖按计划 3.2 处理：取实施当天满 14 天的最新精确版本，不绕过最小发行龄；升级失败就回退，并在 ADR-0007 写明尝试的版本、失败的命令、上游限制与复查条件。
-3. 待审操作按计划 4.1—4.4：Agent 只能写提议，任何路径都不能不经用户确认执行删除、重命名、导出与粗剪编辑；确认用条件更新原子消费、核对对象修订、以提议编号为幂等键经所有者命令执行；启动时恢复 applying 的提议；拒绝与失效的结果在下一轮上下文里只带一次。
-4. schema v14 迁移按数据与安全规则：迁移前备份、失败回滚、中断后可继续、较旧版本拒绝打开，并有测试。
-5. 按任务加上的语义检索与网页抓取（计划 4.5）不放宽资料范围，模块关着时命令层拒绝；只对假 Embedding 服务与回环地址上的假网页服务测试。
-6. W6 把窗口走查的固定等待换成条件等待，断言与门槛不变；只保留按真实时间流逝的等待并写 // real time: 原因；加检查保证没有原因的 sleep( 为 0；抽查条件能真的超时失败。window-walk 目标 ≤ 240 s。模型弹窗截图先滚到“模型能力”。
-7. W7 让测试的临时目录都在全局测试临时根下并被清理；stage test 前后计数，多出的判失败。
-8. 改写测试与走查时断言不减；删除的断言在迁移映射里写明由什么替代。
-9. 只用合成样本；不发真实模型、Embedding、网页、弹弹play、Bangumi 请求；真实资源库只读试验可选，只记聚合，不写名称与路径。
-10. 修复先用子集确认（MANGA_PACKAGE_PHASES + MANGA_PACKAGE_REUSE_BUILD、单个测试文件）；最后在最终源码上跑一次 node scripts/stage.mjs gate（跑前确认机器空闲、启动它的应用在前台，不锁屏；跑的过程中不改工作树、不执行改动工作树的 git 命令）；证据替换 docs/evidence/gate/（≤ 5 MiB，截图不含本机路径，复制前先看过新截图）。
-11. 新建本阶段报告 docs/delivery/stage-report.md（计划第 9 节，并加回登记表、docs/README.md 与 docs/SUMMARY.md），更新用户待办的人工检查（计划第 8 节，从 H-88 起）、执行状态与各正本；把全部改动 amend 进本阶段唯一的 DCO 签名提交，消息按最终结果写。不 push。
+1. 先核对现场（git status、分支基于 main@c79f49a、计划所在的提交），再按计划第 5.4 节的顺序连续实施，不逐工作包询问。
+2. 依赖按计划 3.2 处理：electron-updater 与 electron-builder 取实施当天满 14 天的最新 6.x / 26.x 精确版本，不用 7.x / 27.x 的 alpha；不绕过最小发行龄。
+3. 版本号按 4.1：正式版 0.1.x 从标签算出，开发版 <下一个正式版号>-dev.<UTC 年月日时分>；不为发布提交改 package.json。
+4. 测试与演练里的安装一律用 4.8 的测试身份，本机装着真实版本时门禁照常运行、真实安装的快照前后相同。开发版自动更新按 4.2：只碰开发版；运行中的开发版先保存再退出，不强杀；正式版绝不受影响；CI 与 MANGA_DEV_AUTO_INSTALL=0 时跳过；结果写 install-dev.json。
+5. 正式版更新按 4.3、校验按 4.4：只在正式版启用；任何路径都不能执行未经 Ed25519 校验的安装包；必须给 app-update.yml 写 publisherName 让校验函数被调用，并有测试证明去掉它时测试失败；拒绝降级、非 HTTPS、签名不符。私钥只在 dist/keys/，不进仓库、证据与日志。
+6. 发布命令按 4.5：更新密钥已在 dist/keys/update-release.pem，不得重新生成或覆盖；门禁结果过期或工作区不干净时拒绝；演练失败不发布；本机没有用户当次的发布授权时绝不调用 gh release create 或推送标签，只生成 dist/release/v0.1.x/。本阶段的测试只用回环地址上的假发布服务，不访问 GitHub。
+7. CI 构建与每周发布按 4.9：release.yml 与 ci.yml 分开；检查的 job 没有 secret，私钥只给 build 里打包与签名的那两步，写权限只给不装依赖的 publish；所有 Action 固定完整 SHA 并同步 actions-policy.json；workflow 有随 verify 运行的静态检查。本阶段不 push、不触发 workflow、不改仓库设置与 secrets（归 ACT-17）。
+8. 安装体验按 4.6；图标先用 Agent 画的占位图标，SVG 源文件入库。
+9. 改写测试与走查时断言不减；删除的断言在迁移映射里写明由什么替代。只用合成样本。
+10. 修复先用子集确认；最后在最终源码上跑一次 node scripts/stage.mjs gate（跑前确认机器空闲、启动它的应用在前台，不锁屏；跑的过程中不改工作树）；证据替换 docs/evidence/gate/（≤ 5 MiB，截图不含本机路径，复制前先看过新截图）。
+11. 新建本阶段报告 docs/delivery/stage-report.md（计划第 9 节，并加回登记表、docs/README.md 与 docs/SUMMARY.md），更新用户待办的人工检查（计划第 8 节，从 H-92 起）、执行状态与各正本；把全部改动 amend 进本阶段唯一的 DCO 签名提交，消息按最终结果写。不 push。
 12. 结束时按开发流程 2.4 给出首选下一步：推荐交给 A 集中审查，并附审查 prompt。
 ```

@@ -5,6 +5,8 @@ import { repoRoot, evidenceRunDir } from "../desktop-paths.ts";
 
 export { repoRoot };
 
+/** The window walks and bench drivers that run inside the packaged application under --manga-smoke. */
+const SMOKE_DIR = "apps/desktop/src/main/smoke";
 const SKIP = new Set(["node_modules", "dist", "out", ".vite", ".cache", "coverage"]);
 
 /** The stage being developed, from the document registry. */
@@ -37,9 +39,16 @@ export function storedBytes(bytes) {
   return Buffer.from(bytes.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
 }
 
+/**
+ * One fingerprint over the named files and folders. An entry that starts with `!` leaves that path out of the rest (gate.json: the window walks live
+ * under apps/desktop but have groups of their own, so a change to a walk does not make the bench or the tests stale).
+ */
 export function hashTree(root, entries) {
   const hash = createHash("sha256");
+  const excluded = entries.filter((entry) => entry.startsWith("!")).map((entry) => entry.slice(1));
+  const left = (relative) => excluded.some((entry) => relative === entry || relative.startsWith(`${entry}/`));
   const visit = (relative) => {
+    if (left(relative)) return;
     const file = path.join(root, relative);
     if (!fs.existsSync(file)) return;
     const stat = fs.statSync(file);
@@ -50,7 +59,7 @@ export function hashTree(root, entries) {
       hash.update(storedBytes(fs.readFileSync(file)));
     }
   };
-  for (const entry of entries) visit(entry);
+  for (const entry of entries) if (!entry.startsWith("!")) visit(entry);
   return hash.digest("hex");
 }
 
@@ -66,14 +75,26 @@ export const fingerprintKey = (group) => (group === "source" || group === "lock"
  */
 export function stageFingerprints(root, config) {
   const groups = config.fingerprint;
-  const named = Object.values(groups).flat();
-  for (const dir of ["scripts/stage", "scripts/samples"]) {
+  const names = (entries, file) => {
+    const excluded = entries.filter((entry) => entry.startsWith("!")).map((entry) => entry.slice(1));
+    if (excluded.some((entry) => file === entry || file.startsWith(`${entry}/`))) return false;
+    return entries.some((entry) => !entry.startsWith("!") && (file === entry || file.startsWith(`${entry}/`)));
+  };
+  for (const dir of ["scripts/stage", "scripts/samples", SMOKE_DIR]) {
     for (const name of fs.readdirSync(path.join(root, dir))) {
       const file = `${dir}/${name}`;
-      if (!named.some((entry) => file === entry || file.startsWith(`${entry}/`))) throw new Error(`gate.json: no fingerprint group names ${file}`);
+      if (!Object.values(groups).some((entries) => names(entries, file))) throw new Error(`gate.json: no fingerprint group names ${file}`);
     }
   }
   return Object.fromEntries(Object.entries(groups).map(([group, entries]) => [fingerprintKey(group), hashTree(root, entries)]));
+}
+
+/**
+ * The fingerprint keys of everything that goes into the packaged application: the product source, the lock file, the build code and the window
+ * walks bundled with it (gate.json `packaged`). A package, an installer or a release is current only when all of them match.
+ */
+export function packagedFingerprintKeys(config = loadGate()) {
+  return (config.packaged ?? ["source", "lock", "build"]).map(fingerprintKey);
 }
 
 /** The fingerprint keys a result file must match: the groups gate.json `fingerprintOf` names for it, else every group. */

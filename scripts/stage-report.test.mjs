@@ -48,6 +48,12 @@ function creativeEntry(wanted) {
 
 function passing() {
   const dir = scratch("manga-stage-report-");
+  const updateCases = ["restart", "quit"].map((mode) => ({
+    mode, downloader: "electron-updater", downloadBytes: mode === "restart" ? 2048 : 512, fullBytes: 2048, readyMs: 3000,
+    usedDifferential: mode === "quit", oldProcessExited: true, newProcessStarted: true, verifiedInstallerExecuted: true,
+    draftWasUnsaved: true, draftPreserved: true, backupContainsSavedDraft: true, workspaceRestored: true,
+  }));
+  const update = { downloadBytes: { fullBytes: 2048, differentialBytes: 512, savedRatio: 0.75 }, restartToReadyMs: 3000, installDevMs: 2000 };
   const cases = config.cases.map((def) => ({
     caseId: def.id,
     kind: def.kind,
@@ -60,6 +66,7 @@ function passing() {
     ...fingerprints,
     status: "passed",
     productAcceptance: "not-run",
+    records: { update: { kind: "electron-nsis", artifactKind: "test-identity-repackage", sourceEvidence: "installer.json", ...update, stageReleaseMs: null, stageRelease: { status: "not-run" } } },
     targets,
     metrics: Object.fromEntries(Object.keys(targets).map((key) => [key, targets[key] === 0 ? 0 : 1])),
     creative: Object.fromEntries(Object.entries(config.bench.creative ?? {}).map(([id, wanted]) => [id, creativeEntry(wanted)])),
@@ -96,7 +103,16 @@ function passing() {
     },
     measurements: Object.fromEntries((config.bench.measurements ?? []).map((item) => [item.id, { raw: Array.from({ length: item.minSamples ?? 3 }, () => 1), p95: 1 }])),
   });
-  write(dir, "installer.json", { ...fingerprints, status: "passed" });
+  write(dir, "installer.json", {
+    ...fingerprints, status: "passed", steps: [{ ok: true }], updateRehearsal: {
+      kind: "electron-nsis", artifactKind: "test-identity-repackage", ok: true, verifiedInstallerExecuted: true,
+      dataIntact: true, backupCreated: true, tamperedRejected: true, justUpdatedOnce: true, realInstallationsUntouched: true,
+      appAsarSha256: "a".repeat(64), previousAsarSha256: "a".repeat(64), cases: updateCases, records: update,
+      development: { kind: "electron-nsis", timeoutMs: 30_000, installDevMs: 2000, installed: true, relaunched: true,
+        draftWasUnsaved: true, draftPreserved: true, releaseProcessKeptRunning: true, releaseExecutableUntouched: true,
+        timedOutWithoutForceKill: true, stayedAliveAfterWriteCompleted: true },
+    },
+  });
   write(dir, "package.json", {
     ...fingerprints,
     status: "passed",
@@ -137,6 +153,39 @@ test("report rejects a missing evidence file", () => {
   assert.ok(report.errors.some((error) => error.includes("missing")));
 });
 
+test("update evidence rejects service fixtures, a different executed installer, lost drafts and late exit after timeout", () => {
+  for (const mutate of [
+    (rehearsal) => { rehearsal.kind = "service-fixtures"; },
+    (rehearsal) => { rehearsal.cases[0].verifiedInstallerExecuted = false; },
+    (rehearsal) => { rehearsal.cases[1].backupContainsSavedDraft = false; },
+    (rehearsal) => { rehearsal.cases[1].downloadBytes = rehearsal.cases[1].fullBytes; },
+    (rehearsal) => { rehearsal.development.stayedAliveAfterWriteCompleted = false; },
+  ]) {
+    const dir = passing();
+    const installer = read(dir, "installer.json");
+    mutate(installer.updateRehearsal);
+    write(dir, "installer.json", installer);
+    const report = evaluate(dir);
+    assert.equal(report.engineeringReviewable, false);
+    assert.ok(report.errors.some((error) => error.startsWith("installer.json:")));
+  }
+});
+
+test("update timing records must follow real installer evidence and explicitly distinguish an unrun release", () => {
+  for (const mutate of [
+    (records) => { records.restartToReadyMs = 20; },
+    (records) => { records.downloadBytes.differentialBytes = 1; },
+    (records) => { records.stageReleaseMs = 144; },
+    (records) => { records.stageRelease = { status: "measured", sourceEvidence: "release.json" }; records.stageReleaseMs = 144; },
+  ]) {
+    const dir = passing();
+    const bench = read(dir, "bench.json");
+    mutate(bench.records.update);
+    write(dir, "bench.json", bench);
+    assert.equal(evaluate(dir).engineeringReviewable, false);
+  }
+});
+
 test("report rejects a stale fingerprint and a failed case", () => {
   const dir = passing();
   const cases = read(dir, "cases.json");
@@ -160,6 +209,34 @@ test("a result goes stale only with the inputs it depends on (gate.json fingerpr
   const source = evaluate(passing(), { ...fingerprints, sourceFingerprint: "source-edited" });
   const stale = new Set(source.errors.filter((error) => error.includes("stale")).map((error) => error.split(":")[0]));
   for (const file of ["cases.json", "test-run.json", "bench.json", "package.json", "installer.json", ...(config.scenarios?.length ? ["scenarios.json"] : [])]) assert.ok(stale.has(file), file);
+  // A window walk changed: only the package results; the bench, the installer and the tests did not run it.
+  const walkOnly = evaluate(passing(), { ...fingerprints, smokeWalkScriptFingerprint: "walk-edited" });
+  assert.deepEqual(walkOnly.errors.filter((error) => error.includes("stale")).map((error) => error.split(":")[0]).sort(), ["package.json", ...(config.scenarios?.length ? ["scenarios.json"] : [])]);
+  // A bench driver changed: only the bench.
+  const benchDriver = evaluate(passing(), { ...fingerprints, smokeBenchScriptFingerprint: "bench-driver-edited" });
+  assert.deepEqual(benchDriver.errors.filter((error) => error.includes("stale")).map((error) => error.split(":")[0]), ["bench.json"]);
+});
+
+test("the window walks are left out of the product source and fingerprinted by their own groups", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-fingerprint-"));
+  try {
+    const write = (file, text) => { fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true }); fs.writeFileSync(path.join(root, file), text); };
+    write("apps/desktop/src/main/index.ts", "product");
+    write("apps/desktop/src/main/smoke/loop-walk.ts", "walk");
+    const source = () => hashTree(root, ["apps/desktop", "!apps/desktop/src/main/smoke"]);
+    const walk = () => hashTree(root, ["apps/desktop/src/main/smoke/loop-walk.ts"]);
+    const [sourceBefore, walkBefore] = [source(), walk()];
+    write("apps/desktop/src/main/smoke/loop-walk.ts", "walk edited");
+    assert.equal(source(), sourceBefore);
+    assert.notEqual(walk(), walkBefore);
+    write("apps/desktop/src/main/index.ts", "product edited");
+    assert.notEqual(source(), sourceBefore);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  // Every walk file is named by a group: a new walk that no group names is refused, not silently left out of every fingerprint.
+  const narrowed = { ...config, fingerprint: { ...config.fingerprint, smokeWalk: config.fingerprint.smokeWalk.filter((entry) => !entry.endsWith("/loop-walk.ts")) } };
+  assert.throws(() => stageFingerprints(process.cwd(), narrowed), /loop-walk.ts/);
 });
 
 test("every file of the gate's code belongs to a fingerprint group", () => {

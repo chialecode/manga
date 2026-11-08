@@ -1,8 +1,8 @@
 # 当前执行状态
 
-核对日期：2026-11-08。用例定义与需求追踪矩阵仅在[交付计划](roadmap-and-acceptance.md)维护；本页汇总实际状态并链接证据。本页不按阶段、不按轮次追加：只写已实现的能力、当前阶段在做什么、已知限制和后续 loop。以前阶段的过程文档不在工作树里，需要时用固定的 Git 链接回看（[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)）。
+核对日期：2026-11-09。用例定义与需求追踪矩阵仅在[交付计划](roadmap-and-acceptance.md)维护；本页汇总实际状态并链接证据。本页不按阶段、不按轮次追加：只写已实现的能力、当前阶段在做什么、已知限制和后续 loop。以前阶段的过程文档不在工作树里，需要时用固定的 Git 链接回看（[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)）。
 
-开发顺序按 A-39：先贯通[全部基本功能 MVP](roadmap-and-acceptance.md#mvp-loop)，再根据反馈循环迭代。全部基本功能的 MVP 已合入 main：[chialecode/manga#5](https://github.com/chialecode/manga/pull/5) 于 2026-10-15 squash 合并为 `b72b508`（含推送后修复一个只在没有媒体前置的 CI 上失败的用例的追加提交）。MVP 那一阶段的三轮试用反馈与返工、A 的审查与复核、真实服务契约与真实 Profile 迁移的重放，见[归档的阶段报告](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md)。随后的单一工作区（A-94—A-102：不分模式、按项目组织、标签页与分屏、图标栏按功能切换侧栏）已合入 main：[chialecode/manga#6](https://github.com/chialecode/manga/pull/6) 于 2026-10-24 squash 合并为 `b94b33a`，CI 第一次运行就通过；它的审查、试用反馈的返工与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md)。体验与代码整理（A-103—A-116，范围见 A-106：视图与主区联动、侧栏的列表与封面、拖动收起、图标栏排序、播放器、资源库位置与扫描、小说按页阅读、命令注册的拆分）已合入 main：[chialecode/manga#7](https://github.com/chialecode/manga/pull/7) 于 2026-11-03 squash 合并为 `66b6413`，CI 第一次运行在一个测试的时序上失败，以追加提交修复后通过；它的审查与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/66b6413/docs/delivery/stage-report.md)。依赖升级与 Agent 工程循环（A-117—A-119：Electron 45、pi-ai 1.x、长对话虚拟列表、任务图像保留、PDF 与视频原生输入、小写 `manga` 数据位置与按用户安装包）已合入 main：[chialecode/manga#8](https://github.com/chialecode/manga/pull/8) 于 2026-11-06 squash 合并为 `fd32430`；它的审查与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md)。当前阶段是 Agent 的待审操作与门禁提速（A-120、A-121），B 已按[计划](stage-plan.md)重新检查并补齐执行、导出恢复、范围与上下文预算的缺口，最终门禁已通过（见[当前阶段交付报告](stage-report.md)），待 A 集中审查。产品验收没有任何一项被自动标为通过。
+开发顺序按 A-39：先贯通[全部基本功能 MVP](roadmap-and-acceptance.md#mvp-loop)，再根据反馈循环迭代。全部基本功能的 MVP 已合入 main：[chialecode/manga#5](https://github.com/chialecode/manga/pull/5) 于 2026-10-15 squash 合并为 `b72b508`（含推送后修复一个只在没有媒体前置的 CI 上失败的用例的追加提交）。MVP 那一阶段的三轮试用反馈与返工、A 的审查与复核、真实服务契约与真实 Profile 迁移的重放，见[归档的阶段报告](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md)。随后的单一工作区（A-94—A-102：不分模式、按项目组织、标签页与分屏、图标栏按功能切换侧栏）已合入 main：[chialecode/manga#6](https://github.com/chialecode/manga/pull/6) 于 2026-10-24 squash 合并为 `b94b33a`，CI 第一次运行就通过；它的审查、试用反馈的返工与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md)。体验与代码整理（A-103—A-116，范围见 A-106：视图与主区联动、侧栏的列表与封面、拖动收起、图标栏排序、播放器、资源库位置与扫描、小说按页阅读、命令注册的拆分）已合入 main：[chialecode/manga#7](https://github.com/chialecode/manga/pull/7) 于 2026-11-03 squash 合并为 `66b6413`，CI 第一次运行在一个测试的时序上失败，以追加提交修复后通过；它的审查与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/66b6413/docs/delivery/stage-report.md)。依赖升级与 Agent 工程循环（A-117—A-119：Electron 45、pi-ai 1.x、长对话虚拟列表、任务图像保留、PDF 与视频原生输入、小写 `manga` 数据位置与按用户安装包）已合入 main：[chialecode/manga#8](https://github.com/chialecode/manga/pull/8) 于 2026-11-06 squash 合并为 `fd32430`；它的审查与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md)。Agent 的待审操作与门禁提速（A-120、A-121：删除、重命名、项目包导出、粗剪的编辑与导出由 Agent 提出、用户确认后执行，schema v14；窗口走查改为条件等待）已合入 main：[chialecode/manga#9](https://github.com/chialecode/manga/pull/9) 于 2026-11-08 squash 合并为 `c79f49a`，CI 第一次运行就通过；它的审查与复核见[归档的阶段报告](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-report.md#a-review)。当前阶段是安装与自动更新（A-124—A-126），在 `feat/m10-install-update` 按[计划](stage-plan.md)完成，A 的集中审查已收敛（[阶段报告第 13 节](stage-report.md#a-review)），待用户授权 push、PR 与合并（[ACT-19](../../USER-ACTIONS.md#act-19)）。产品验收没有任何一项被自动标为通过。
 
 本页是 Agent 侧的状态入口。用户需要做的事（待决定、人工检查、授权与外部配置）只在[用户待办](../../USER-ACTIONS.md)。两边互不等待：人工检查和非阻塞决定不绑定阶段，可以顺延（A-53）。
 
@@ -10,7 +10,7 @@
 
 | 阶段 | 状态 | 依据 |
 | --- | --- | --- |
-| Agent 的待审操作与门禁提速 | A 已集中审查并收敛：修了项目包导出提议在切换标签或翻页后误判失效（A-01）与深色主题危险文字对比度不足（A-02），最终源码的 `stage gate` 通过（[报告第 11 节](stage-report.md#a-review)）；待用户授权远端操作（ACT-16）。此前 B 已重新检查并修复执行事务、提议重放、导出恢复、预览范围、结果预算与批量确认的缺口，最终源码的 `stage gate` 已通过，待 A 集中审查。本阶段：Agent 提出删除、重命名、项目包导出、粗剪的编辑与导出，用户在对话里确认后原子消费并按对象修订与幂等键执行（LOOP-09，A-121，schema v14）；语义检索与网页抓取按任务加上；窗口走查的固定等待改为条件等待（LOOP-29）；测试不留临时目录（LOOP-28）；阶段开始的整理与依赖盘点 | [当前阶段计划](stage-plan.md)、[当前阶段交付报告](stage-report.md)；需求 AGENT-01、AGENT-03、AGENT-04、DATA-01、DATA-04；验收 [AT-151—AT-156](roadmap-and-acceptance.md#at-proposals)；确认记录 A-118、A-119、A-120、A-121；用户待办 [Q-37](../../USER-ACTIONS.md#q-37) |
+| 安装与自动更新 | 全部工作包（C0、D1、W1—W9）在 `feat/m10-install-update` 完成；最终源码的 `stage gate` 与本地发布演练通过；A 审查收敛，修了两处不稳定的窗口观察、给门禁提速、开发版每次门禁只装一次，让测试不再改写真实的启动指针，下载暂存移出“下载”目录，门禁按结果文件而不只按退出码判断一步是否通过（A-01—A-08），待用户授权 push、PR 与合并（[ACT-19](../../USER-ACTIONS.md#act-19)）。本阶段：版本号规则（正式版 `0.1.x`、开发版带构建时间）；门禁通过后本机的开发版自动更新；正式版从 GitHub Releases 联网更新，安装包用单独的 Ed25519 密钥校验；一条命令发布；GitHub Actions 每周检查有没有新合并的 PR，有就在 Windows 运行器上检查、打包、演练并发布；安装包的图标、中文界面与发布者信息；阶段开始的整理与依赖盘点 | [当前阶段计划](stage-plan.md)、[当前阶段报告](stage-report.md)；需求 DATA-06、DATA-07；验收 [AT-157—AT-163](roadmap-and-acceptance.md#at-updates)；确认记录 A-119、A-124、A-125、A-126；用户待办 [ACT-19](../../USER-ACTIONS.md#act-19)、[Q-38](../../USER-ACTIONS.md#q-38)、[ACT-17](../../USER-ACTIONS.md#act-17)、[Q-09](../../USER-ACTIONS.md#q-09) |
 
 ## 已实现的能力
 
@@ -33,67 +33,70 @@
 | 语义检索（可选） | 嵌入索引按模型、向量长度与切法分版本，重建期间旧版本继续回答；sqlite-vec 引擎，扩展无法加载时退回 JavaScript 计算（结果与排序规则相同）；范围先于相似度，正文命中可按已读位置防剧透；默认关闭，关闭时全文搜索不受影响 | 自动化 passed（两条路径同一套用例）；打包窗口里实际加载 `vec0` 并完成最近邻查询；真实 Embedding 契约 passed（2026-10-09，合成笔记按意思搜索排第一的正确，[阶段报告第 19 节](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md#live-contracts)） |
 | 粗剪 | 单序列：添加（含播放器里的“加入粗剪”）、移动、调整、备注、撤销与重做（历史持久）；导出前计划给出请求区间与实际区间、起点是否在关键帧上、帧数；15 类不兼容或不可切的问题逐项说明；无转码导出：逐段复制、拼接、核对时长与帧数后改名放入所选目录，不覆盖，可取消，中断后清理；有帧时间表时时间轴画出关键帧刻度，可跳到上一个或下一个关键帧，切点吸附到关键帧（可关闭）；导出前可以选音轨与字幕轨，合并成一个文件（可把片段写成章节）或每段单独一个文件，默认放进作品内容文件夹，导出详情显示实际执行的 FFmpeg 参数 | 自动化 passed（真实 FFmpeg 与合成素材）；打包窗口里导出并逐帧核对；成片手感 not-run（[H-24](../../USER-ACTIONS.md#h-24)、[H-45](../../USER-ACTIONS.md#h-45)） |
 | 插件与下载 | 插件包（Ed25519 签名、信任库、第一方公钥内置且不可移除）；安装、升级、回退、卸载与数据保留；每个可执行插件在独立进程里运行（故障边界，不是沙箱，只收可信发布者）；随应用的第一方 BitTorrent 获取插件（默认不安装）；下载任务：选文件、下载、校验、发布、入库，每步可重复、不覆盖、可单独重试；暂停与恢复、预算、做种（默认关） | 自动化 passed（回环蜂群，不连公网）；打包窗口 `plugins` 阶段 passed：安装插件后在页面里下载并入库；公网与真实资源 not-run（[H-25](../../USER-ACTIONS.md#h-25)） |
-| 工程与门禁 | 公开内容检查、依赖边界检查、文档检查（含阶段标签规则）、烟测条件等待检查（`findUncommentedSmokeSleeps`）、阶段门禁（`stage gate` 一条命令跑 test、package、installer、bench、report，跳过结果仍有效的步骤，指纹按结果区分，测试与打包前后均统计临时目录且要求剩 0 个）、打包烟测；基准关闭自己进程的节能降速（LOOP-13） | 最终源码：verify、test、package ×3、installer、bench、report 全部 passed（[当前阶段交付报告第 9 节](stage-report.md#gate)） |
+| 安装与自动更新 | 正式版 `0.1.x`（从最高 `v0.1.*` 标签递增，无标签时从 `0.1.1` 起）与开发版 `<下一个正式版号>-dev.<UTC 年月日时分>`（写进 `resources/build.json`，不手改 `package.json`）；“关于 MANGA”对话框显示名称、版本、通道、提交、构建时间、许可证并提供无本机路径的“复制版本信息”；`stage install-dev` 在打包与门禁通过后自动检测本机已装开发版，经 `--quit-for-update` 请运行中的开发版保存草稿与工作区后退出（30 秒内未退出则放弃、绝不强杀）、静默覆盖安装新版本并按原运行态重开，正式版零触碰；正式版接入 `electron-updater` 6.8.11 与 `UpdateService`：启动 10 分钟后与每 6 小时检查 GitHub Releases、按 `.blockmap` 块图差分下载（没有可用的旧缓存或差分失败时完整下载）与断点续传、独立 Ed25519 分离签名（`.sig`，签 SHA-512 + 版本号 + 文件名）与 `app-update.yml` 的 `publisherName: ["chialecode"]` 加上纵深防御双重校验（篡改 1 字节、跨版签名、缺 `.sig`、降级、非 HTTPS、缺 `publisherName` 一律拒绝并删除下载文件）、顶部不抢焦点就绪提示与录音/播放/粗剪/下载/Agent 繁忙确认、退出时安装（上游 `autoInstallOnAppQuit` 关闭，由 MANGA 先等保存、写升级前备份、重新验签再执行安装包）、资料库升级前提示与 `manga.sqlite.preupdate-v<旧版本>.sqlite` 自动备份、更新后首次启动显示“已更新到 0.1.x”、“设置 › 更新”页（自动检查与自动下载开关、手动检查，关闭自动下载时可手动“下载更新”）；`stage release` 单命令生成发布产物并完成真实的 NSIS 升级演练；`.github/workflows/release.yml` 每周一 `00:00 UTC`（及手动 `dry_run`）执行 `decide` → `check` → `build` → `publish` 四阶段隔离发布；多尺寸 M 字图标（SVG/PNG/ICO）、简体中文 NSIS 安装界面与测试安装身份 `MANGA Test` / `MANGA Dev Test` | 自动化 passed（`tests/runtime/version-build.test.ts`、`tests/runtime/installer-config.test.ts`、`tests/update/*.test.ts`、`tests/shell/update-ui.test.tsx`）；打包窗口 `update` 阶段 8 项观察（`version-about`、`update-flow`、`update-on-quit`、`update-rejected`、`update-offline`、`install-dev`、`release-workflow`、`installer-info`）passed；`stage installer` 的真实下载、校验与 NSIS 升级演练和本地发布演练 passed（[阶段报告第 11 节](stage-report.md#gate)）；GitHub 上的 workflow 运行与真实 Release not-run（合并后按 ACT-17 第（4）项试运行）；人工检查 [H-84](../../USER-ACTIONS.md#h-84)、[H-85](../../USER-ACTIONS.md#h-85)、[H-92](../../USER-ACTIONS.md#h-92)—[H-95](../../USER-ACTIONS.md#h-95) not-run |
+| 工程与门禁 | 公开内容检查、依赖边界检查、文档检查（含阶段标签规则）、GitHub Actions 工作流静态安全检查（`check-workflows.mjs`）、烟测条件等待检查（`findUncommentedSmokeSleeps`）、阶段门禁（`stage gate` 一条命令跑 test、package、installer、bench、report、install-dev，跳过结果仍有效的步骤，指纹按结果区分，窗口走查装置按谁运行它单独分组、只改走查时只重跑 package，输入不变时连续几次打包沿用同一份构建与安装包，基准记录分段用时，测试与打包前后均统计临时目录且要求剩 0 个，安装与演练使用测试身份并核对真实安装快照前后一致）、打包烟测；基准关闭自己进程的节能降速（LOOP-13） | 最终源码：verify、test、package ×3、installer、bench、report passed，install-dev passed（本机开发版更新一次），本地发布演练 passed（[阶段报告第 11 节](stage-report.md#gate)） |
 
 ## 当前事实
 
 | 项目 | 状态 | 依据 / 下一动作 |
 | --- | --- | --- |
-| 技术栈 | pnpm 11 hoisted workspace；Electron 45.0.0、Vite 8、React 19、Zod 4、Vitest 5、TypeScript 7、better-sqlite3 13 + Drizzle；dockview-react 8.6.1（标签页与分屏）、lucide-react 1.61.0；PDF.js 6.4.299；原生 `video` + FFmpeg 8.1 LGPL + JASSUB；Silero VAD；创作与获取新增 @xyflow/react、d3-hierarchy、sqlite-vec、Readability + linkedom、fflate 和插件内的 webtorrent 3.0.21（版本、许可证与排除项见[阶段报告](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md)）；双 runtime 的 pi 侧为 pi-ai 1.4.0；长对话列表用 @tanstack/react-virtual 3.14.22 与 use-stick-to-bottom；Windows 安装包由 electron-builder 的 NSIS 目标生成（不签名，[阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md)）；运行时/宿主与双 runtime 已定稿 | [ADR-0007](../decisions/0007-technology-stack.md)（版本表、例外与复查条件） |
+| 技术栈 | pnpm 11 hoisted workspace；Electron 45.0.0、Vite 8、React 19、Zod 4、Vitest 5、TypeScript 7、better-sqlite3 13 + Drizzle；dockview-react 8.6.1（标签页与分屏）、lucide-react 1.61.0；PDF.js 6.4.299；原生 `video` + FFmpeg 8.1 LGPL + JASSUB；Silero VAD；创作与获取新增 @xyflow/react、d3-hierarchy、sqlite-vec、Readability + linkedom、fflate 和插件内的 webtorrent 3.0.21（版本、许可证与排除项见[阶段报告](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md)）；双 runtime 的 pi 侧为 pi-ai 1.4.0；长对话列表用 @tanstack/react-virtual 3.14.22 与 use-stick-to-bottom；Windows 安装包由 electron-builder 26.18.0 的 NSIS 目标生成（简体中文界面、多尺寸图标、不签名，[阶段报告](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md)），正式版应用内更新采用 electron-updater 6.8.11 加独立 Ed25519 分离签名校验；无用代码检查为 knip 6.43.0；运行时/宿主与双 runtime 已定稿 | [ADR-0007](../decisions/0007-technology-stack.md)（版本表、例外与复查条件） |
 | 真实调用 | Bangumi 只读（9 个请求）与 ASR（合成语音 3 个请求）的有限契约测试已按 A-28/A-29 执行并通过；2026-10-09 按用户授权做了真实模型契约（文本、看图、Embedding，全部合成内容）与弹弹play 开放接口契约，最后一次运行全部通过（[阶段报告第 19 节](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md#live-contracts)）；2026-10-15 按用户授权在上一阶段的最终源码上复测两份契约，全部通过；真实 Profile 已在 v11，用最终源码重放迁移，结果与它一致（[第 21 节](https://github.com/chialecode/manga/blob/b72b508/docs/delivery/stage-report.md#a-recheck-3)）；单独的视觉连接与 Responses 真实端点 not-run | [ACT-05](../../USER-ACTIONS.md#act-05)、[ACT-10](../../USER-ACTIONS.md#act-10) |
-| 人工反馈 | 见[人工检查历史](#manual-history)；正式人工检查 H-06—H-91 与 H-01 复核全部 not-run（H-19、H-26、H-27、H-34、H-35 已作废；本阶段新增 H-88—H-91） | [用户待办的人工检查](../../USER-ACTIONS.md#checks) |
+| 人工反馈 | 见[人工检查历史](#manual-history)；正式人工检查 H-06—H-95 与 H-01 复核全部 not-run（H-19、H-26、H-27、H-34、H-35 已作废；H-88—H-91 是待审操作的检查，H-84、H-85、H-92—H-95 是安装与自动更新的检查） | [用户待办的人工检查](../../USER-ACTIONS.md#checks) |
 | 文档治理 | 登记表有 `currentStage` 与 `retireAfter`，过期文档由检查拒绝；阶段开始时按内容整理无用的文件，不论是否纳入 Git（A-56）；文档、代码、测试名不带以前阶段的标签，只区分已实现与待实现（A-57），由 `scripts/check-docs.mjs` 检查；本地功能参考索引（A-55） | [文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)、[开发流程 2.5](../dev-rules/development-workflow.md#local-reference) |
-| Git、CI 与分支规则 | main 保护保持，必需检查 `repository-quality`；所有提交带 DCO 签名（A-43）；CI（Linux）跳过需要 Windows 媒体前置的用例，由本地 `verify` 与阶段入口覆盖；当前阶段的分支 `feat/m9-next`（见[当前阶段计划](stage-plan.md)第 1 节）基于 `fd32430`，尚未 push；上一阶段的 PR #8 已于 2026-11-06 squash 合并；2026-11-08 main 的历史改写为一个阶段一个提交（A-122），文档中的哈希已换成改写后的提交 | [Git 与 GitHub](../dev-rules/git-and-github.md) |
+| Git、CI 与分支规则 | main 保护保持，必需检查 `repository-quality`；所有提交带 DCO 签名（A-43）；CI（Linux）跳过需要 Windows 媒体前置的用例，由本地 `verify` 与阶段入口覆盖；每周自动发布工作流 `.github/workflows/release.yml` 作为 `ci.yml` 规则的有意例外（A-126，由 `scripts/check-workflows.mjs` 静态检查）；当前阶段的分支 `feat/m10-install-update`（见[当前阶段计划](stage-plan.md)第 1 节）基于 `c79f49a`，尚未 push；上一阶段的 PR #9 已于 2026-11-08 squash 合并；同日按 ACT-17 建了 `release` 环境（只允许 `main`，存两把签名私钥）并在 Actions 允许列表加了上传与下载 artifact 的两个官方 Action（GitHub 上“要求固定完整 SHA”的开关是关的，与期望配置不一致，见 ACT-18）；main 的历史改写为一个阶段一个提交（A-122），文档中的哈希已换成改写后的提交 | [Git 与 GitHub](../dev-rules/git-and-github.md) |
 | 许可证与公开检查 | Apache-2.0；工作树/暂存检查接入统一入口；随包 FFmpeg（LGPL，附许可文本与源码获取说明）、JASSUB、Silero 的许可声明由打包脚本随安装包放入（`scripts/desktop-assets.ts`），分发决定为 Q-17 | [公开门禁](../dev-rules/quality-gates.md#11-公开内容检查) |
 | GitBook、自动 AI reviewer | GitBook 仅准备配置；不启用自动 AI review | ADR-0002；[ACT-04](../../USER-ACTIONS.md#act-04) |
 
 ## 验证基线
 
-最终源码的门禁在 Windows 开发机、Node 26.12.1 上通过，该机器不是基准参考机；证据在 [`docs/evidence/gate/`](../evidence/gate/)，逐项映射、复用范围与每步用时见[当前阶段交付报告第 9 节](stage-report.md#gate)。
+最终源码的门禁在 Windows 开发机、Node 26.12.1 上通过（2026-11-09，整套约 36 分钟），该机器不是基准参考机；证据在 [`docs/evidence/gate/`](../evidence/gate/)，逐项映射、复用范围与每步用时见[阶段报告第 11 节](stage-report.md#gate)。
 
 | 检查 | 结果 |
 | --- | --- |
-| `node scripts/stage.mjs test` | passed（69 s）：Vitest 2859 项，2849 passed、0 failed、10 skipped；本轮临时目录剩 0 个 |
-| `node scripts/stage.mjs package` | 连续三次 passed（319、333、307 s）；最终 `window-walk` 113 s；本轮临时目录剩 0 个 |
-| `node scripts/stage.mjs installer` | passed（101 s）：两个通道的按用户安装包装到临时目录、启动、卸载，开始菜单、快捷方式与卸载项都清掉，数据保留 |
-| `node scripts/stage.mjs bench` | passed：60 项门槛全部在目标内；基准自己的进程与窗口关闭节能降速（[LOOP-13](#loop-13)） |
+| `node scripts/stage.mjs test` | passed（73 s）：Vitest 2910 项，2900 passed、0 failed、10 skipped；2 项脚本自测 passed；本轮临时目录剩 0 个 |
+| `node scripts/stage.mjs package` | 连续三次 passed（353、334、352 s，`passStreak: 3`）；132 项窗口观察全部 passed，`window-walk` 113 s、`update` 69 s、`loop` 40 s；后两次沿用同一份构建与安装包，三次都不安装开发版；本轮临时目录剩 0 个 |
+| `node scripts/stage.mjs installer` | passed（408 s）：两个通道以测试身份（`MANGA Test` / `MANGA Dev Test`）安装、并存、覆盖、卸载，真实的 `electron-updater` 下载、Ed25519 校验与 NSIS 升级演练，真实安装快照前后一致（24 步全绿） |
+| `node scripts/stage.mjs bench` | passed（588 s）：60 项门槛全部在目标内；最慢的几段是工作区 145 s、规模窗口 137 s、扫描与停靠栏 103 s、阅读器 79 s（`records.sectionSeconds`） |
 | `node scripts/stage.mjs report` | passed：self-check-passed；`productAcceptance` 恒为 not-run |
-| `node scripts/verify.mjs` | passed：类型检查、knip、文档检查、发布检查、依赖边界、烟测条件等待检查与 Vitest；2859 项中 2847 passed、12 skipped、0 failed |
+| `node scripts/stage.mjs install-dev` | passed（13.3 s）：本机真实的 `MANGA Dev` 在门禁最后一步更新一次（未在运行，`releaseUntouched: true`）；运行中时的保存退出、静默更新与重开由 `update` 阶段的 `install-dev` 观察与 `installer` 的演练验证 |
+| 本地发布演练（`runStageRelease`，`publish: false`） | passed（268 s）：阶段分支的干净工作树上生成 `dist/release/v0.1.1/` 的 7 个文件，首版种子 `0.1.0 → 0.1.1` 真实 NSIS 升级、篡改 1 字节被拒绝，没有创建标签、没有请求 GitHub（命令本身只在 `main` 上运行） |
+| `node scripts/verify.mjs` | passed：类型检查、knip、文档检查、发布检查、工作流静态安全检查、依赖边界、烟测条件等待检查与 Vitest |
 
-本次性能样本见 [`bench.json`](../evidence/gate/bench.json)：提出删除提议和确认提议 p95 分别为 2.32、7.16 ms。以下为补修前一次门禁的历史性能（p95，单位 ms；规模 Profile 为 1 万条元数据、5 万个检索块、10 MiB TXT 与 30 MiB EPUB 尾部，每次冷启动），不代表最终源码的测量值：
+以下为最终源码门禁的性能结果（[`bench.json`](../evidence/gate/bench.json)，p95，单位 ms；规模 Profile 为 1 万条元数据、5 万个检索块、10 MiB TXT 与 30 MiB EPUB 尾部，每次冷启动）：
 
 | 指标 | 结果 | 目标 |
 | --- | --- | --- |
-| 检索 / 上下文构建 / 已索引首屏（服务层） | 0.6 / 0.8 / 1.1 | ≤ 500 / 150 / 2000 |
-| 笔记保存 / 进度保存 / 冷启动（服务层） | 1.6 / 2.1 / 21.8 | ≤ 1000 / 1000 / 5000 |
-| 窗口：导航 → 页面 / 书架 → 正文可见 / 输入 → 保存回执 / 导入 → 可读 | 17 / 86 / 432 / 202 | ≤ 8000 / 2000 / 1000 / 5000 |
-| 规模 Profile：启动 → 资源库可操作 / 页面切换反馈 | 511 / 17.3 | ≤ 5000 / 100 |
-| 规模 Profile：10 MiB TXT 末尾 / 30 MiB EPUB 末尾 | 488.8 / 723.4 | ≤ 2000 |
-| 规模 Profile：保存回执 / 后台解析期间页面切换 / 保存回执 | 553.3 / 19.4 / 559.0 | ≤ 1000 / 100 / 1000 |
-| 5000 个文件的后台扫描期间：主进程事件循环延迟 p99 / 常用操作答复 | 40.7 / 35.7 | ≤ 100 / 100 |
-| 创作：白板 500 张卡片打开 / 拖动 p95 / 缩放 p95 | 34.7 / 6.7 / 2.4 | ≤ 1500 / 50 / 50 |
-| 创作：导图 1000 个节点折叠展开 | 46.5 | ≤ 100 |
-| 创作：语义检索 1 万分段（vec0 / 无扩展的回退） | 20.8 / 66.7 | ≤ 300 |
-| 粗剪 10 个片段导出：除媒体工具外的开销（最大值） | 21.1 | ≤ 2000 |
+| 检索 / 上下文构建 / 已索引首屏（服务层） | 0.8 / 0.7 / 1.2 | ≤ 500 / 150 / 2000 |
+| 笔记保存 / 进度保存 / 冷启动（服务层） | 1.7 / 2.3 / 59.0 | ≤ 1000 / 1000 / 5000 |
+| 窗口：导航 → 页面 / 书架 → 正文可见 / 输入 → 保存回执 / 导入 → 可读 | 9 / 89 / 428 / 209 | ≤ 8000 / 2000 / 1000 / 5000 |
+| 规模 Profile：启动 → 资源库可操作 / 页面切换反馈 | 546 / 17.4 | ≤ 5000 / 100 |
+| 规模 Profile：10 MiB TXT 末尾 / 30 MiB EPUB 末尾 | 467.2 / 720.8 | ≤ 2000 |
+| 规模 Profile：保存回执 / 后台解析期间页面切换 / 保存回执 | 552.0 / 17.1 / 585.3 | ≤ 1000 / 100 / 1000 |
+| 5000 个文件的后台扫描期间：主进程事件循环延迟 p99 / 常用操作答复 | 40.4 / 36.4 | ≤ 100 / 100 |
+| 创作：白板 500 张卡片打开 / 拖动 p95 / 缩放 p95 | 36.3 / 3.4 / 1.5 | ≤ 1500 / 50 / 50 |
+| 创作：导图 1000 个节点折叠展开 | 41.7 | ≤ 100 |
+| 创作：语义检索 1 万分段（vec0 / 无扩展的回退） | 20.2 / 66.1 | ≤ 300 |
+| 粗剪 10 个片段导出：除媒体工具外的开销（最大值） | 23.3 | ≤ 2000 |
 | BT 回环 200 MiB 下载：未校验的分片数 | 0 | ≤ 0 |
-| 视频导入：50 个合成视频到整季列为一部作品（毫秒）/ 导入期间读遍数据包的次数 | 1674 / 0 | ≤ 10000 / 0 |
-| 弹幕：一集 3000 条评论播放时晚到帧的占比（%，五次取最大） | 0.1 | ≤ 2 |
-| 阅读器：设置盖在视频阅读器上时应用工作集的增量（MiB，三个窗口取最大） | 161.8 | ≤ 300 |
-| 调用追踪：一次约 80 KiB 请求的记录开销 p95（ms） | 2.5 | ≤ 10 |
-| 笔记文件：属于一个资源的 200 块笔记，改一块文字后排队写 Markdown 文件，占用主进程的时间 p95（ms） | 3.5 | ≤ 25 |
-| 工作区：切换标签（目标已挂载）到内容可见 | 17.6 | ≤ 100 |
-| 工作区：切换上下文到焦点标签可见（已挂载 / 重启后首次恢复） | 7.1 / 23.1 | ≤ 300 / 2000 |
-| 工作区：四宫格（两路视频其一播放、漫画、项目的文稿页）播放时晚到帧的占比（%，五次取最大） | 0.1 | ≤ 2 |
-| 工作区：四宫格相对单栏视频的应用工作集增量（MiB，三次取最大） | 38.9 | ≤ 600 |
+| 视频导入：50 个合成视频到整季列为一部作品（毫秒）/ 导入期间读遍数据包的次数 | 1647 / 0 | ≤ 10000 / 0 |
+| 弹幕：一集 3000 条评论播放时晚到帧的占比（%，五次取最大） | 0.31 | ≤ 2 |
+| 阅读器：设置盖在视频阅读器上时应用工作集的增量（MiB，三个窗口取最大） | 161.2 | ≤ 300 |
+| 调用追踪：一次约 80 KiB 请求的记录开销 p95（ms） | 2.9 | ≤ 10 |
+| 笔记文件：属于一个资源的 200 块笔记，改一块文字后排队写 Markdown 文件，占用主进程的时间 p95（ms） | 3.8 | ≤ 25 |
+| 工作区：切换标签（目标已挂载）到内容可见 | 18.7 | ≤ 100 |
+| 工作区：切换上下文到焦点标签可见（已挂载 / 重启后首次恢复） | 8.2 / 26.1 | ≤ 300 / 2000 |
+| 工作区：四宫格（两路视频其一播放、漫画、项目的文稿页）播放时晚到帧的占比（%，五次取最大） | 0 | ≤ 2 |
+| 工作区：四宫格相对单栏视频的应用工作集增量（MiB，三次取最大） | 56.0 | ≤ 600 |
 | 工作区：打开 10 个阅读器标签并轮流切换后，挂载的阅读器数比可见栏数多几个 | 2 | ≤ 2 |
-| 图标栏：点图标切换视图到侧栏列表画好（规模 Profile，每个视图四轮） | 21.8 | ≤ 100 |
-| 搜索框：输入后名字结果出现（规模 Profile） | 3.4 | ≤ 200 |
-| 设置：进入设置与离开设置回到工作区画好（两个方向都是样本） | 26.0 | ≤ 150 |
-| 对话栏 5000 条消息：打开到最新一屏 / 输入到提交并布局 / 连续滚动晚到帧（%）/ 向上载入一页 | 56.2 / 7.1 / 0.2 / 24.6 | ≤ 300 / 50 / 2 / 150 |
-| Agent 材料：截取 60 s 视频片段（无转码）/ 冻结 4 MB 图像 | 118.5 / 20.5 | ≤ 2000 / 200 |
-| Agent 待审提议：500 个对象项目里提出删除提议（含引用查询与预览）/ 确认提议到对象与卡片更新 | 1.0 / 6.7 | ≤ 150 / 300 |
+| 图标栏：点图标切换视图到侧栏列表画好（规模 Profile，每个视图四轮） | 20.0 | ≤ 100 |
+| 搜索框：输入后名字结果出现（规模 Profile） | 2.8 | ≤ 200 |
+| 设置：进入设置与离开设置回到工作区画好（两个方向都是样本） | 23.3 | ≤ 150 |
+| 对话栏 5000 条消息：打开到最新一屏 / 输入到提交并布局 / 连续滚动晚到帧（%）/ 向上载入一页 | 67.5 / 3.0 / 0 / 24.8 | ≤ 300 / 50 / 2 / 150 |
+| Agent 材料：截取 60 s 视频片段（无转码）/ 冻结 4 MB 图像 | 126.5 / 21.7 | ≤ 2000 / 200 |
+| Agent 待审提议：500 个对象项目里提出删除提议（含引用查询与预览）/ 确认提议到对象与卡片更新 | 1.8 / 7.3 | ≤ 150 / 300 |
 
-记录项（不设门槛）：扫描吞吐 162—183 文件/秒（基准关闭节能降速后；交给 Windows 时同一台机器约 72）；v12 → v13 迁移（300 次运行、340 张图像去重为 201 份）14 ms，库 3.5 MiB → 2.5 MiB；v13 → v14 迁移（100 次运行、备份加建提议表）21.9 ms；从旧位置升级复制 501 MiB 应用数据 1.4 s；对话栏 1000 条与 5000 条时的应用内存 495 与 512 MiB；`window-walk` 耗时 83 s（条件等待替换前约 420 s），单次 `stage package` 耗时 332—336 s（替换前约 780 s），整套 `stage gate` 耗时 1831 s。基准对机器状态敏感：开发机长时间运行或启动它的应用不在前台时，Windows 的节能降速会让所有指标慢 2.5—3.7 倍；现在 `stage bench` 为自己的进程与窗口关闭节流（[LOOP-13](#loop-13)），复跑时仍先确认机器空闲。结论留给参考机上的基准。
+记录项（不设门槛）：扫描吞吐 168—177 文件/秒（基准关闭节能降速后；交给 Windows 时同一台机器约 72）；v12 → v13 迁移（300 次运行、340 张图像去重为 201 份）15 ms，库 3.5 MiB → 2.5 MiB；v13 → v14 迁移（100 次运行、备份加建提议表）57.4 ms；从旧位置升级复制 501 MiB 应用数据 1.4 s；对话栏 1000 条与 5000 条时的应用内存 511 与 526 MiB；更新与发布记录项（`records.update`，取自 `installer` 的真实演练）：完整下载 212 MB、按块图差分下载 435 KB（节省 99.8%），点“重启以更新”到新版本就绪 22.1 s，开发版保存、退出、安装、重开 13.8 s；本地发布演练 268 s；`window-walk` 耗时 113 s，单次 `stage package` 耗时 334—353 s，整套 `stage gate` 约 36 分钟（基准各段用时见 `records.sectionSeconds`）。基准对机器状态敏感：开发机长时间运行或启动它的应用不在前台时，Windows 的节能降速会让所有指标慢 2.5—3.7 倍；现在 `stage bench` 为自己的进程与窗口关闭节流（[LOOP-13](#loop-13)），复跑时仍先确认机器空闲。结论留给参考机上的基准。
 
 <a id="support-matrix"></a>
 ## 支持矩阵（动画）
@@ -166,6 +169,7 @@
 - 语义检索：默认关闭；默认切法 `paragraph-600`；只用用户配置的 Embedding 连接，不回退到别的连接；不同模型的向量永不比较。
 - 粗剪：起点退到请求处或之前最近的关键帧，终点进到请求处或之后第一帧，实际区间永远包含请求区间；成片的容器取第一个片段的容器；核对不符时什么都不留下；视频模块关闭不影响序列的编辑与导出。
 - 插件与下载：只收签名可信的包；权限逐项确认，升级带来的新权限重新确认；升级后的新版本无法启动时自动退回上一版本；卸载默认保留插件的数据；下载完成即停止做种，做种默认上传比例 1.0；引擎默认加入公共 DHT，本地发现、UPnP、NAT-PMP、WebRTC、web seed、uTP 关闭；每个任务的最严限速应用于整个引擎；磁力链接不在任何视图、通知与日志里出现。
+- 安装与自动更新（[Q-38](../../USER-ACTIONS.md#q-38) 的推荐默认）：`stage package` 或 `stage gate` 通过后默认自动更新本机已装开发版（`MANGA_DEV_AUTO_INSTALL=0` 关闭），原来开着的重新打开，30 秒内未退出则放弃、不强杀；正式版默认开启自动检查（启动 10 分钟后与每 6 小时）与后台自动下载，只提示“新版本已就绪 · 重启以更新”，不主动重启，未点提示直接退出应用时自动安装，更新后第一次启动显示一次“已更新到 0.1.x”；第一个正式版号为 `0.1.1`；每周一北京时间 08:00（UTC 00:00）只要自上次发布以来有 PR 合并进 `main`（含 Dependabot）就自动构建并发布新正式版；应用图标先使用 Agent 绘制的玫瑰主色“M”字矢量与多尺寸图标。
 
 ## 已处理的审查发现（回归守护）
 
@@ -257,9 +261,13 @@ AT-01 以来的验收用例不按一次技术报告或一次总体人工反馈�
 | <a id="loop-25"></a>LOOP-25 已处理（测试夹具统一带清理，阶段入口在 Vitest 前后数目录，多出来算失败） | 测试临时目录没有清干净：一次完整的 Vitest 在系统临时目录留下一千多个 `manga-*` 目录（测试造的合成资料），开发机上历次累积到 11 万个。不影响结果，占磁盘并拖慢目录枚举 | 开发者；磁盘空间紧张，或下一次涉及测试夹具的循环 | 找出不清理的夹具（`tests/helpers` 里创建临时目录的地方），统一用带清理的创建函数；整理阶段删除遗留目录 |
 | <a id="loop-26"></a>LOOP-26 已处理 | 打包烟测与基准的临时目录（`manga-package-*`、`manga-smoke-library-*`、`manga-bench-*`、`manga-cold-*`、`manga-installer-*`）以前运行后留在系统临时目录。现在阶段入口在通过时删除自己建的这些目录，再要求没有别的新 `manga-*` 目录；失败时保留现场。证据里记 `tempDirs`（只记数量） | 开发者 | 已退出 |
 | <a id="loop-27"></a>LOOP-27 已处理 | 三个窗口观察以前偶发失败：`frame-window-controls` 的悬停取色在前台被别的窗口抢走时失败；`hold-rate-hint-only` 与 `hold-rate-recovers` 按脚本这边的时钟判断。现在两条按住观察按页面内的时间（`performance.now()`）判断，取色前确认窗口有焦点、指针命中按钮，被抢走时重新聚焦重做一次并记录。门槛、按住时长与取色判定都没改。`search-box-ui` 的时序问题只改测试（先等搜索框出现）。A 审查时（2026-11-06）一并处理门禁的效率：最终门禁一轮约 68 分钟，B 在约 5 小时里开了 7 轮，因为任何改动都让全部结果过期、测试逐个文件跑两遍、基准排在最后才暴露问题。现在 Vitest 按文件并行（约 70 s，原约 480 s；`sidebar-ui` 一处在首次渲染后同步取元素的用例改为等它出现）；`stage gate` 按最早暴露失败的顺序跑、跳过结果仍有效的步骤，指纹按结果区分，连续三次打包与安装由报告核对；打包用本地的 Electron 校验和（[质量门禁第 2 节](../dev-rules/quality-gates.md#2-阶段证据入口)） | 开发者 | 已退出；判断方式前后对照见[阶段报告第 7 节](https://github.com/chialecode/manga/blob/fd32430/docs/delivery/stage-report.md#loop-27)，门禁效率见第 9 节 |
-| <a id="loop-28"></a>LOOP-28 已处理 | 一次完整的 `stage test` 以前会在系统临时目录留下约 4 个目录（`manga-plugin-*`、`manga-test-*`）。现在 `tests/helpers/global-temp.ts` 设置 `MANGA_TEST_TMP_ROOT`，`plugin-fixtures.ts` 与 `tests/helpers/app.ts` 的临时目录都建在全局测试临时根下并随测试结束统一清理；`stage test` 前后各统计一次系统临时目录里 `manga-*` 的数量并写入 `test-run.json`（`tempDirs.left === 0`），多出则判失败并保留现场 | 开发者 | 已退出；见[阶段报告第 7 节](stage-report.md#w7-tempdirs) |
-| <a id="loop-29"></a>LOOP-29 已处理 | 窗口走查使用 `waitUntil`、`waitForTestId`、`waitText`、`waitFrames`、`waitDrawn` 和 `waitWindowFullscreen` 等条件等待；必须按真实时间流逝或后台轮询节流的等待注明 `// real time: <原因>`；`verify.mjs` 调用 `findUncommentedSmokeSleeps()` 强制未注明原因的 `sleep(` 为 0；最终 `window-walk` 为 114 s，低于 240 s 目标；模型弹窗截图先滚动到“模型能力”一节再拍 | 开发者 | 已退出；抽查超时验证见[阶段报告第 6 节](stage-report.md#w6-waits) |
+| <a id="loop-28"></a>LOOP-28 已处理 | 一次完整的 `stage test` 以前会在系统临时目录留下约 4 个目录（`manga-plugin-*`、`manga-test-*`）。现在 `tests/helpers/global-temp.ts` 设置 `MANGA_TEST_TMP_ROOT`，`plugin-fixtures.ts` 与 `tests/helpers/app.ts` 的临时目录都建在全局测试临时根下并随测试结束统一清理；`stage test` 前后各统计一次系统临时目录里 `manga-*` 的数量并写入 `test-run.json`（`tempDirs.left === 0`），多出则判失败并保留现场 | 开发者 | 已退出；见[阶段报告第 7 节](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-report.md#w7-tempdirs) |
+| <a id="loop-29"></a>LOOP-29 已处理 | 窗口走查使用 `waitUntil`、`waitForTestId`、`waitText`、`waitFrames`、`waitDrawn` 和 `waitWindowFullscreen` 等条件等待；必须按真实时间流逝或后台轮询节流的等待注明 `// real time: <原因>`；`verify.mjs` 调用 `findUncommentedSmokeSleeps()` 强制未注明原因的 `sleep(` 为 0；最终 `window-walk` 为 114 s，低于 240 s 目标；模型弹窗截图先滚动到“模型能力”一节再拍 | 开发者 | 已退出；抽查超时验证见[阶段报告第 6 节](https://github.com/chialecode/manga/blob/c79f49a/docs/delivery/stage-report.md#w6-waits) |
 | <a id="loop-30"></a>LOOP-30 已登记 | 长对话的列表能跳到一条还没载入的消息（先载入更早的页、再居中并高亮），有单元用例；但产品里还没有请求它的入口（例如从笔记里引用的那条对话消息跳回去），所以 `chat-long-session` 的跳转一步记为 not-run，人工检查 H-81 写明了这一点 | 开发者；用户想从笔记或别处跳回对话里的某条消息时 | 在笔记的来源卡片与搜索结果里给对话消息加“在对话中查看”，打开对应的对话并调用列表的跳转；先核对笔记是否记下了消息编号 |
+| <a id="loop-31"></a>LOOP-31 已登记 | 没有 winget 等包管理器的清单，只能从 GitHub Releases 下载安装包 | 开发者；准备给更多人用时 | 按 winget 的社区仓库要求提交清单；不签名的安装包在 winget 上的限制先核对 |
+| <a id="loop-32"></a>LOOP-32 已登记 | 更新后的新版本若启动即崩溃，用户只能手动去下载旧版本；没有“上次启动失败，回到上一版”的帮助 | 开发者；出现过一次更新后无法启动时 | 记录启动是否走到首屏，连续失败时提示并给出上一版的下载与资料备份的位置；不自动降级（资料库可能已升级） |
+| <a id="loop-33"></a>LOOP-33 已登记 | 应用重启时粗剪模块被关掉的极端情况下，执行中的粗剪导出提议要等模块重新开启才变成“失败”，卡片多停留在“执行中” | 开发者；用户反馈提议卡片一直停在“执行中”时 | 启动恢复时对所属模块已停用的执行中提议直接标为失败并写明原因 |
+| <a id="loop-34"></a>LOOP-34 已登记 | “设置 › 更新”底部的“更新内容”一段贴着卡片的左边框，没有内边距（[截图](../evidence/gate/screenshots/ui-settings-update.png)，阶段报告 A-04） | 开发者；下一次改设置页时 | 给“更新内容”加与上面各行一致的内边距，深浅主题各截一张 |
 
 已关闭：界面按参考图重做、页面/组件/数据 hooks 分离（最终视觉仍由 Q-08 评审）；Electron 44.9.3 等升级后完整回归与打包烟测通过，保留旧版的例外及复查条件见 [ADR-0007](../decisions/0007-technology-stack.md)（单一工作区那一阶段复试了 jsdom、lucide-react、pdfjs-dist、jassub 与 CodeMirror，linkedom 回退）；打包烟测里 PDF 选区的偶发失败：PDF 页只在打开宽度绘制一次、之后的宽度变化去抖，formats 阶段在 20 个线程满载下连续 10 次通过，完整 `package` 再次通过，烟测记录单次绘制且选中节点仍在文档中。
 
@@ -267,6 +275,6 @@ AT-01 以来的验收用例不按一次技术报告或一次总体人工反馈�
 
 ## 当前推荐下一步
 
-**请用户授权本阶段的远端操作（[ACT-16](../../USER-ACTIONS.md#act-16)）。** A 已集中审查分支 `feat/m9-next` 并收敛，A-01、A-02 已修复，最终源码的 `node scripts/stage.mjs gate` 通过（[阶段报告第 11 节](stage-report.md#a-review)）。授权后 push、创建 PR，按授权范围合并。产品验收仍为 not-run。
+**把当前阶段交由 Agent A 集中审查。** B 已按[计划](stage-plan.md)在分支 `feat/m10-install-update` 上连续完成全部工作包与最终门禁自检，交付详情与可直接复制给 A 的审查 prompt 见[阶段报告第 12 节](stage-report.md#next-step)。A 集中审查收敛后，即可向用户请求授权 push、创建 PR 与合并。每周发布的仓库配置（[ACT-17](../../USER-ACTIONS.md#act-17)：`release` 环境、两把私钥、Actions 允许列表）A 已于 2026-11-08 完成，本阶段合并后由 Agent 按已有授权手动以 `dry_run=true` 试运行一次发布 workflow，之后每周一 UTC 0 点自动发布。产品验收仍为 not-run。
 
-[Q-37](../../USER-ACTIONS.md#q-37)、[Q-36](../../USER-ACTIONS.md#q-36)、[Q-35](../../USER-ACTIONS.md#q-35)、[Q-33](../../USER-ACTIONS.md#q-33)、人工检查 [H-58](../../USER-ACTIONS.md#h-58)—[H-91](../../USER-ACTIONS.md#h-91)、[ACT-11](../../USER-ACTIONS.md#act-11) 与可选的 [ACT-14](../../USER-ACTIONS.md#act-14) 都不阻塞，可以在任何时候做。
+[Q-38](../../USER-ACTIONS.md#q-38)、[ACT-17](../../USER-ACTIONS.md#act-17)、[ACT-18](../../USER-ACTIONS.md#act-18)、[Q-37](../../USER-ACTIONS.md#q-37)、[Q-36](../../USER-ACTIONS.md#q-36)、[Q-35](../../USER-ACTIONS.md#q-35)、[Q-33](../../USER-ACTIONS.md#q-33)、人工检查 [H-58](../../USER-ACTIONS.md#h-58)—[H-95](../../USER-ACTIONS.md#h-95)、[ACT-11](../../USER-ACTIONS.md#act-11) 与可选的 [ACT-14](../../USER-ACTIONS.md#act-14) 都不阻塞，可以在任何时候做。

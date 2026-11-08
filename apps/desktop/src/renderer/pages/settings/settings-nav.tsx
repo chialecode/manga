@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import {
-  Bot, Boxes, Cpu, Gauge, HardDrive, Keyboard, Library, MessageSquareText, Mic, Palette, Puzzle, ScrollText, Search, SlidersHorizontal, Sparkles, X, Zap, BookOpen, Globe,
+  Bot, Boxes, Cpu, Gauge, HardDrive, Keyboard, Library, MessageSquareText, Mic, Palette, Puzzle, RefreshCw, ScrollText, Search, SlidersHorizontal, Sparkles, X, Zap, BookOpen, Globe,
   type LucideIcon,
 } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
@@ -9,6 +9,7 @@ import { SETTINGS_GROUPS, type SettingsPageId } from "../../lib/shell-model.ts";
 /** The picture at the head of each page of the directory (交互设计 2.12). */
 export const SETTINGS_ICON: Record<SettingsPageId, LucideIcon> = {
   general: SlidersHorizontal,
+  update: RefreshCw,
   appearance: Palette,
   reading: BookOpen,
   recording: Mic,

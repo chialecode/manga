@@ -1,4 +1,5 @@
 /** The renderer's one door to the main process: typed `window.manga`, and `call` for commands that throw on failure. */
+import type { BuildInfo } from "@manga/contracts";
 import { announceCommand } from "./lists-changed.ts";
 
 export type CommandResult<T = Record<string, unknown>> = {
@@ -24,6 +25,7 @@ export type HostState = {
   vaultAvailable: boolean;
   packaged?: boolean;
   appVersion?: string;
+  buildInfo?: BuildInfo;
 };
 
 /** `defaultPath` only says where the dialog opens; the choice itself is still the person's. */

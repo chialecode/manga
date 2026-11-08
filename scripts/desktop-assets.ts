@@ -151,6 +151,17 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
     assets.push(record(resourcesDir, id, name));
   }
 
+  // Application icons (计划 4.6, AT-162): the multi-size Windows icon and the 512×512 PNG for the window and the installer.
+  const iconDir = existsSync(path.join(root, "apps", "desktop", "assets", "icon.ico"))
+    ? path.join(root, "apps", "desktop", "assets")
+    : path.join(repoRoot, "apps", "desktop", "assets");
+  if (!existsSync(path.join(iconDir, "icon.ico")) || !existsSync(path.join(iconDir, "icon.png"))) {
+    fail(`application icons (icon.ico / icon.png) are missing from ${iconDir}`);
+  }
+  copyFiles(iconDir, resourcesDir, ["icon.ico", "icon.png"]);
+  assets.push(record(resourcesDir, "app-icon-ico", "icon.ico"));
+  assets.push(record(resourcesDir, "app-icon-png", "icon.png"));
+
   // PDF.js: its CMaps, standard fonts and WebAssembly decoders, and the offline build the main process and the parse worker load.
   // It sits beside the unpacked native modules because it looks for `@napi-rs/canvas` (to paint pages) by walking up from its own file.
   const pdfjs = path.join(root, "node_modules", "pdfjs-dist");

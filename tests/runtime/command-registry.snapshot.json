@@ -2683,6 +2683,51 @@
       "noteContent": false
     },
     {
+      "commandId": "update.check",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "update.restartToUpdate",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "update.settings.get",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "update.settings.set",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "update.status",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "usage.query",
       "moduleId": "manga.settings",
       "owner": true,

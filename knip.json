@@ -5,7 +5,7 @@
     ".": {
       "entry": ["scripts/**/*.{mjs,ts}", "tests/helpers/acquisition-crash-child.ts", "tests/helpers/proposal-crash-child.ts", "tests/helpers/bt-swarm.mjs"],
       "project": ["scripts/**/*.{mjs,ts}", "tests/**/*.{ts,tsx,mjs}"],
-      "ignoreDependencies": ["sharp", "fflate", "@napi-rs/canvas", "@tiptap/core", "bencode", "create-torrent", "bittorrent-tracker", "webtorrent", "@electron-forge/cli", "electron"]
+      "ignoreDependencies": ["sharp", "fflate", "@napi-rs/canvas", "@tiptap/core", "bencode", "create-torrent", "bittorrent-tracker", "webtorrent", "@electron-forge/cli", "electron", "electron-updater", "resedit", "semver"]
     },
     "apps/desktop": {
       "entry": ["src/main/index.ts", "src/preload/preload.ts", "src/main/parse-worker.ts", "src/renderer/main.tsx", "forge.config.ts", "vite.*.config.ts", "danmaku-define.ts"],

@@ -37,6 +37,7 @@ export const OWNER_COMMANDS = [
   "acquisition.list", "acquisition.get", "acquisition.add", "acquisition.select", "acquisition.pause", "acquisition.resume", "acquisition.cancel", "acquisition.remove", "acquisition.retryPublish", "acquisition.retryImport", "acquisition.restart", "acquisition.setSeeding",
   "research.search", "webpage.fetch", "webpage.list", "webpage.get", "webpage.delete", "excerpt.create", "excerpt.list", "excerpt.get", "excerpt.update", "excerpt.delete", "excerpt.follow",
   "proposal.apply", "proposal.reject", "proposal.list",
+  "update.status", "update.check", "update.restartToUpdate", "update.settings.get", "update.settings.set",
 ];
 
 /** Commands that change the blocks of a note, after which the note's embeds are reconciled with them. */
