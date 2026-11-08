@@ -176,8 +176,13 @@ async function updateFixture(options: FixtureUpdateOptions = {}, upstream = fals
   return { app, env, keys, server, fileName, bytes, oldBytes, blockSize, signed, manifest, updater, publisherCalls: () => publisherCalls };
 }
 
+// The upstream NsisUpdater asks for the manifest of the platform it runs on (latest-linux.yml on Linux, latest.yml only on Windows), so its real
+// check, download and differential paths run where NSIS updates run: the Windows development machine's stage gate and the weekly release
+// workflow's check on windows-2025. The pull-request CI on Linux runs the rest of the update tests.
+const nsisPlatform = process.platform === "win32";
+
 describe("Update review: actual electron-updater paths and recovery (AT-159, AT-160)", () => {
-  it("uses upstream full, differential and cached downloads and always invokes the publisher gate", async () => {
+  it.skipIf(!nsisPlatform)("uses upstream full, differential and cached downloads and always invokes the publisher gate", async () => {
     for (const differential of [false, true]) {
       const fixture = await updateFixture({}, true);
       const { app, bytes, oldBytes, blockSize, server, fileName, updater } = fixture;
@@ -202,7 +207,7 @@ describe("Update review: actual electron-updater paths and recovery (AT-159, AT-
     }
   });
 
-  it("resumes an upstream interrupted download at a complete block boundary and verifies the assembled bytes", async () => {
+  it.skipIf(!nsisPlatform)("resumes an upstream interrupted download at a complete block boundary and verifies the assembled bytes", async () => {
     const { app, server, blockSize, bytes, fileName } = await updateFixture({}, true);
     const resumeDir = path.join(app.layout.partitions.cache, "updater/resume");
     fs.mkdirSync(resumeDir, { recursive: true });
@@ -222,7 +227,7 @@ describe("Update review: actual electron-updater paths and recovery (AT-159, AT-
     expect(fs.existsSync(path.join(app.layout.partitions.cache, "updater/resume", `${fileName}.part`))).toBe(false);
   });
 
-  it("rejects unsafe redirects in both the manifest fetch and the upstream installer request without contacting the target", async () => {
+  it.skipIf(!nsisPlatform)("rejects unsafe redirects in both the manifest fetch and the upstream installer request without contacting the target", async () => {
     const first = await updateFixture({ netFetch: async () => new Response(null, { status: 302, headers: { location: "http://192.0.2.1/unsafe" } }) });
     expect((await first.app.update.check()).errorCode).toBe("UPDATE_VERIFY_FAILED");
     const second = await updateFixture({}, true);

@@ -10,7 +10,7 @@
 
 | 阶段 | 状态 | 依据 |
 | --- | --- | --- |
-| 安装与自动更新 | 全部工作包（C0、D1、W1—W9）在 `feat/m10-install-update` 完成；最终源码的 `stage gate` 与本地发布演练通过；A 审查收敛，修了两处不稳定的窗口观察、给门禁提速、开发版每次门禁只装一次，让测试不再改写真实的启动指针，下载暂存移出“下载”目录，门禁按结果文件而不只按退出码判断一步是否通过（A-01—A-08），待用户授权 push、PR 与合并（[ACT-19](../../USER-ACTIONS.md#act-19)）。本阶段：版本号规则（正式版 `0.1.x`、开发版带构建时间）；门禁通过后本机的开发版自动更新；正式版从 GitHub Releases 联网更新，安装包用单独的 Ed25519 密钥校验；一条命令发布；GitHub Actions 每周检查有没有新合并的 PR，有就在 Windows 运行器上检查、打包、演练并发布；安装包的图标、中文界面与发布者信息；阶段开始的整理与依赖盘点 | [当前阶段计划](stage-plan.md)、[当前阶段报告](stage-report.md)；需求 DATA-06、DATA-07；验收 [AT-157—AT-163](roadmap-and-acceptance.md#at-updates)；确认记录 A-119、A-124、A-125、A-126；用户待办 [ACT-19](../../USER-ACTIONS.md#act-19)、[Q-38](../../USER-ACTIONS.md#q-38)、[ACT-17](../../USER-ACTIONS.md#act-17)、[Q-09](../../USER-ACTIONS.md#q-09) |
+| 安装与自动更新 | 全部工作包（C0、D1、W1—W9）在 `feat/m10-install-update` 完成；最终源码的 `stage gate` 与本地发布演练通过；A 审查收敛，修了两处不稳定的窗口观察、给门禁提速、开发版每次门禁只装一次，让测试不再改写真实的启动指针，下载暂存移出“下载”目录，门禁按结果文件而不只按退出码判断一步是否通过，真实 NSIS 更新器的测试只在 Windows 上运行（A-01—A-09），待用户授权 push、PR 与合并（[ACT-19](../../USER-ACTIONS.md#act-19)）。本阶段：版本号规则（正式版 `0.1.x`、开发版带构建时间）；门禁通过后本机的开发版自动更新；正式版从 GitHub Releases 联网更新，安装包用单独的 Ed25519 密钥校验；一条命令发布；GitHub Actions 每周检查有没有新合并的 PR，有就在 Windows 运行器上检查、打包、演练并发布；安装包的图标、中文界面与发布者信息；阶段开始的整理与依赖盘点 | [当前阶段计划](stage-plan.md)、[当前阶段报告](stage-report.md)；需求 DATA-06、DATA-07；验收 [AT-157—AT-163](roadmap-and-acceptance.md#at-updates)；确认记录 A-119、A-124、A-125、A-126；用户待办 [ACT-19](../../USER-ACTIONS.md#act-19)、[Q-38](../../USER-ACTIONS.md#q-38)、[ACT-17](../../USER-ACTIONS.md#act-17)、[Q-09](../../USER-ACTIONS.md#q-09) |
 
 ## 已实现的能力
 
