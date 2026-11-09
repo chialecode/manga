@@ -132,11 +132,16 @@ describe("recording commands", () => {
     ok(await run(ctx, "capture.stop", { sessionId: started.sessionId }));
   });
 
-  it("keeps recording settings, rejects two commands on one key, and keeps media preferences", async () => {
+  it("AT-172 keeps recording settings with position-only overlay, migrates legacy 280×84 coordinates, rejects key clashes, and keeps media preferences", async () => {
     const ctx = await boot();
-    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300 });
-    ok(await run(ctx, "settings.setRecording", { holdKey: "F7", retention: "discard", overlay: { width: 320 } }));
-    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F7", retention: "discard", overlay: { width: 320, height: 84 } });
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, overlay: {} });
+    ok(await run(ctx, "settings.setRecording", { holdKey: "F7", retention: "discard", overlay: { x: 420, y: 120 } }));
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F7", retention: "discard", overlay: { x: 420, y: 120 } });
+    // Legacy 280×84 setting in meta is converted on read by right-edge alignment (x + 280 - 116) and stripped of width/height.
+    ctx.app.store.setMeta("settings.recording", JSON.stringify({ holdKey: "F7", toggleKey: "F8", retention: "discard", overlay: { x: 1624, y: 16, width: 280, height: 84 } }));
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ overlay: { x: 1788, y: 16 } });
+    ok(await run(ctx, "settings.setRecording", { overlay: { x: null, y: null } }));
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ overlay: {} });
     expect((await run(ctx, "settings.setRecording", { holdKey: "F8" })).status).toBe("error");
     // The next recording follows the setting when the command names none.
     const started = ok(await run(ctx, "capture.start", { mode: "hold" }));

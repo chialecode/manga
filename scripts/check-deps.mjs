@@ -88,6 +88,59 @@ export function checkTree(base = root) {
   return errors;
 }
 
+/**
+ * Light open (A-128, 4.1): what the bootstrap entry, light open's main process and its page reach, followed import by import from each entry. The
+ * bootstrap uses Node and Electron alone; light open's main process reaches the application only through `@manga/app-core/light`; its page only
+ * the readers' hooks and controls, the base controls and the theme. None of them may reach the library database, plugins, the Agent or updates.
+ */
+const LIGHT_FORBIDDEN_PACKAGES = [/^better-sqlite3$/, /^drizzle-orm/, /^@manga\/storage-drizzle/, /^electron-updater$/, /^sharp$/, /^@manga\/kernel/, /^@manga\/plugin-sdk/, /^@manga\/model-protocol/, /^@manga\/app-core$/, /^@napi-rs\/canvas/, /^sqlite-vec/];
+const LIGHT_FORBIDDEN_FILES = [
+  /product-app\.ts$/,
+  /packages\/app-core\/src\/(plugins|update|semantic|acquisition|ops|commands|danmaku|voice|metadata|creative|library-scan)\//,
+  /packages\/app-core\/src\/agent/,
+  /renderer\/(workspace|voice|agent|chat|creative|notes|library|settings|shelf|shell|workbench)/,
+  /renderer\/components\/(chat|screenshot|add-to|work-picker|trace)/,
+  /danmaku/,
+  /screenshot/,
+  /renderer\/hooks\/(?!use-window-state)/,
+  /renderer\/lib\/(works|use-work|reader-context|quote-tags|chat|plugin|download|semantic|trace|materials|shell-model)/,
+];
+export const LIGHT_ENTRIES = [
+  { entry: "apps/desktop/src/main/bootstrap.ts", packages: [/^node:/, /^electron$/] },
+  { entry: "apps/desktop/src/main/light/main.ts", packages: [/^node:/, /^electron$/, /^@manga\/contracts(\/[\w.-]+)?$/, /^yauzl$/] },
+  { entry: "apps/desktop/src/light/main.tsx", packages: [/^react(-dom)?(\/[\w.-]+)?$/, /^lucide-react$/, /^@manga\/i18n$/, /^@manga\/contracts(\/[\w.-]+)?$/, /^clsx$/, /^tailwind-merge$/, /^jassub/, /^pdfjs-dist/, /^@radix-ui\//] },
+];
+const ANY_IMPORT = /(?:from|import)\s+["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
+
+export function checkLightClosure(base = root, entries = LIGHT_ENTRIES) {
+  const errors = [];
+  for (const { entry, packages } of entries) {
+    const seen = new Set();
+    const queue = [path.join(base, entry)];
+    while (queue.length) {
+      const file = queue.pop();
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const relative = path.relative(base, file).replaceAll("\\", "/");
+      if (LIGHT_FORBIDDEN_FILES.some((re) => re.test(relative))) errors.push(`${entry}: reaches ${relative}`);
+      // An import the walk cannot follow (no such file, or no extension) would hide everything behind it.
+      if (!fs.existsSync(file)) { errors.push(`${entry}: cannot follow the import of ${relative} (name the file with its extension)`); continue; }
+      if (/\.(css|wasm|json)$/.test(file)) continue;
+      // Comments, and type-only imports (erased from the bundle), are not imports.
+      const text = fs.readFileSync(file, "utf8").replace(/^\s*(\/\/|\*).*$/gm, "").replace(/^\s*(import|export)\s+type\s[^;]*;/gm, "");
+      for (const match of text.matchAll(ANY_IMPORT)) {
+        const spec = (match[1] ?? match[2]).replace(/\?.*$/, "");
+        if (spec.startsWith(".")) { queue.push(path.resolve(path.dirname(file), spec)); continue; }
+        if (spec === "@manga/app-core/light") { queue.push(path.join(base, "packages/app-core/src/light/index.ts")); continue; }
+        if (LIGHT_FORBIDDEN_PACKAGES.some((re) => re.test(spec))) { errors.push(`${entry}: ${relative} imports ${spec}`); continue; }
+        // Inside app-core the package's own pure helpers are followed above; any other package the entry does not list is refused.
+        if (!packages.some((re) => re.test(spec))) errors.push(`${entry}: ${relative} imports ${spec}, which is not allowed here`);
+      }
+    }
+  }
+  return errors;
+}
+
 // Electron 45 deprecates the synchronous safeStorage interface and 46 removes it (计划 4.1): product and test code use only the asynchronous one.
 // The one exception is the sample that reproduces what the Electron 44 release wrote.
 const SYNC_SAFE_STORAGE = /\b(?:isEncryptionAvailable|encryptString|decryptString)\s*\(/;
@@ -128,6 +181,12 @@ function selfTest() {
   put("apps/desktop/src/vault.ts", ["const ok = safeStorage.isEncryptionAvailable();"]);
   put("apps/desktop/src/async.ts", ["const ok = await safeStorage.isAsyncEncryptionAvailable(); const c = await safeStorage.encryptStringAsync(x);"]);
   const syncErrors = checkSyncSafeStorage(dir);
+  fs.mkdirSync(path.join(dir, "apps/desktop/src/main/light"), { recursive: true });
+  put("apps/desktop/src/main/light/main.ts", ['import { app } from "electron";', 'import { x } from "./helper.ts";', 'import { y } from "./hidden";']);
+  put("apps/desktop/src/main/light/helper.ts", ['import Database from "better-sqlite3";']);
+  const lightErrors = checkLightClosure(dir, [{ entry: "apps/desktop/src/main/light/main.ts", packages: [/^electron$/] }]);
+  if (!lightErrors.some((item) => item.includes("better-sqlite3"))) throw new Error("dependency gate self-test did not follow light open's imports to the library database");
+  if (!lightErrors.some((item) => item.includes("cannot follow the import") && item.includes("hidden"))) throw new Error("dependency gate self-test let an import it cannot follow through");
   const errors = checkTree(dir);
   fs.rmSync(dir, { recursive: true, force: true });
   if (!syncErrors.some((item) => item.includes("vault.ts")) || syncErrors.some((item) => item.includes("async.ts"))) {
@@ -151,7 +210,7 @@ function selfTest() {
 }
 
 selfTest();
-const errors = [...checkTree(root), ...checkSyncSafeStorage(root)];
+const errors = [...checkTree(root), ...checkSyncSafeStorage(root), ...checkLightClosure(root)];
 if (process.argv.includes("--self-test-only")) {
   console.log(JSON.stringify({ status: "passed", check: "dependency-boundary-self-test" }));
   process.exit(0);

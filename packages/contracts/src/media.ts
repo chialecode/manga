@@ -199,9 +199,11 @@ export type WorkSummary = {
   shelf: ShelfState;
   coverId: string | null;
   lastResource: { id: string; title: string; ordinalLabel: string | null; revisionId: string | null } | null;
-  /** Fraction in [0, 1] of the last opened resource, the latest position in any context (A-96). */
+  /** Fraction in [0, 1] of the shown resource's furthest position across all contexts (A-129). */
   progress: number;
-  /** The context that latest position is from: a project id and its name, or null id for "最近"; null when there is no position yet. A card notes it when it is not the current context. */
+  /** True when the work is completed (finished in at least one context for every resource of the work, A-129). */
+  progressCompleted?: boolean;
+  /** The context that furthest position is from: a project id and its name, or null id for "最近"; null when there is no position yet. */
   progressContext: { contextId: string | null; name: string } | null;
   /** Resources of this work whose progress says finished, and how many resources it has. */
   finishedCount: number;
@@ -233,4 +235,19 @@ export type WorkResourceRow = {
   available: boolean;
   /** Imported on its own, outside every library path (A-69). */
   outside: boolean;
+};
+
+/** Display-only position of one context ("最近" or a project) on a work's homepage (A-129). */
+export type WorkContextPosition = {
+  contextId: string | null;
+  contextName: string;
+  resourceId: string;
+  resourceTitle: string;
+  ordinalLabel: string | null;
+  percent: number;
+  completion: string;
+  locator: unknown | null;
+  pageNumber: number | null;
+  pageCount: number | null;
+  lastInteractionAt: string;
 };

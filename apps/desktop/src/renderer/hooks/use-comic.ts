@@ -101,7 +101,7 @@ export function useComic(deps: ComicDeps) {
     const [saved, progress, touched] = await Promise.all([
       attempt<{ comic?: Partial<ComicSettings> }>("settings.getMedia"),
       attempt<{ locator: { kind?: string; pageId?: string } | null; completion?: string; elsewhere?: Elsewhere | null }>("progress.get", { contextId, resourceId, resourceRevisionId: value.revisionId }),
-      attempt<{ workId: string | null }>("works.open", { resourceId }),
+      attempt<{ workId: string | null }>("works.open", { resourceId, contextId }),
     ]);
     if (request !== viewRequest.current) return;
     if (saved.ok && saved.value.comic) setSettings({ ...DEFAULT_COMIC_SETTINGS, ...saved.value.comic });

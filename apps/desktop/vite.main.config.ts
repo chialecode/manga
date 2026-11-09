@@ -34,7 +34,8 @@ export const mainBuild = {
     lib: {
       entry: "src/main/index.ts",
       formats: ["cjs" as const],
-      fileName: () => "main.cjs",
+      // The full application; the packaged entry main.cjs is the bootstrap (vite.bootstrap.config.ts), which loads this file or light-main.cjs.
+      fileName: () => "full-main.cjs",
     },
     rollupOptions: {
       external: ["electron", ...NATIVE, /^@napi-rs\/canvas/, ...nodeBuiltins],

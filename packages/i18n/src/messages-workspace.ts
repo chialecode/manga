@@ -149,6 +149,9 @@ export const zhCNWorkspace = {
   "update.later": "稍后",
   "update.banner.ready": "新版本 {version} 已就绪",
   "update.schemaNotice": "这次更新会升级资料库，升级前会自动备份",
+  "update.skipped": "已跳过 {version}",
+  "update.skippedHint": "这个版本上次没能正常启动，已回到之前的版本；有更新的版本时会照常更新",
+  "update.unskip": "取消跳过",
   "update.justUpdated": "已更新到 {version}",
   "update.busy.title": "确认重启并更新",
   "update.busy.body": "正在{items}，现在重启会中断{items}。确定要重启并更新吗？",
@@ -230,6 +233,8 @@ export const zhCNWorkspace = {
   "work.move.newPlaceholder": "或输入新作品的名称",
   "work.move.newGo": "新建并移动",
   "work.move.done": "已移动",
+  "work.contextPos.entry": "{context}：{position}",
+  "work.contextPos.page": "第 {page} 页",
 
   // ---- matching a work with Bangumi ----
   "match.menu": "Bangumi 选项",
@@ -716,4 +721,7 @@ export const zhCNWorkspace = {
   "log.update.backup": "更新前已备份资料库（版本 {version}）",
   "log.update.installed": "已从 {from} 更新到 {to}",
   "log.update.installOnQuit": "退出时安装更新",
+  "log.update.unskip": "取消了跳过的更新版本",
+  "log.update.rolledBack": "{from} 没能正常启动，已回到 {to}",
+  "log.update.rolledBackRestored": "{from} 没能正常启动，已回到 {to}，并恢复了更新前的资料库（原资料库改名为 {keptAs}）",
 } as const;

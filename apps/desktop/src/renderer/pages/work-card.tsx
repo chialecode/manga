@@ -78,11 +78,12 @@ export const WorkCard = memo(function WorkCard(props: {
 }) {
   const { t, work, actions } = props;
   const landscape = work.mediaKind === "video";
-  const percent = percentOf(work.progress);
+  const completed = work.progressCompleted === true || (work.resourceCount > 0 && work.finishedCount >= work.resourceCount);
+  const percent = completed ? 100 : percentOf(work.progress);
   const line = progressLine(t, work);
   const open = () => actions.onOpen(work);
   const state = work.shelf !== "none" ? shelfLabel(t, work.shelf, work.mediaKind) : null;
-  // A position of the current context is not noted; one from another context is (A-96).
+  // A position of the current context is not noted; one from another context is (A-96, A-129).
   const origin = percent > 0 && props.context !== undefined && work.progressContext && work.progressContext.contextId !== props.context ? work.progressContext.name : null;
   // Facts of the entry beyond its files: how many versions it has, that it stands outside every library path, that its files are gone.
   const flags = [work.versionCount > 1 ? t("card.versions", { count: work.versionCount }) : "", work.outsideCount > 0 ? t("card.outside") : "", (work.missingCount ?? 0) > 0 ? t("card.missing") : "", work.resourceCount === 0 ? t("card.noResource") : ""].filter(Boolean);
@@ -115,7 +116,7 @@ export const WorkCard = memo(function WorkCard(props: {
           {percent > 0 ? (
             <span className="work-progress" data-testid={`work-progress-${work.id}`}>
               <span className="work-progress-head">
-                <span className="work-progress-label">{t(landscape ? "card.watched" : "card.read", { percent })}</span>
+                <span className="work-progress-label">{completed ? shelfLabel(t, "finished", work.mediaKind) : t(landscape ? "card.watched" : "card.read", { percent })}</span>
                 {origin ? <span className="work-origin" data-testid={`work-origin-${work.id}`} title={t("card.origin", { name: origin })}>{t("card.origin", { name: origin })}</span> : null}
               </span>
               <span className="work-progress-bar" aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>

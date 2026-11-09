@@ -1,19 +1,19 @@
 {
   "status": "passed",
-  "at": "2026-11-08T22:46:49.889Z",
-  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
-  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "at": "2026-11-12T00:27:27.910Z",
+  "sourceFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
+  "smokeScriptFingerprint": "84aea18197957e49a49e8e9c4e4f55cac9ace6e98a212af2b3b5d3f1c1cd4a55",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
-  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
-  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
-  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
-  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
-  "testScriptFingerprint": "ee50e236dd1c52512c0aa6c074f90fcf11b7067434c633bc964c0ef562930e4e",
-  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
-  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
-  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
-  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
+  "smokeBenchScriptFingerprint": "1532610373b76fedac5903c47c3350ad4d0e209b853f60015d693de9206ba143",
+  "smokeWalkScriptFingerprint": "58fa4c5cdfe4d1187bb6c02cd57b242c1523d81c5ab046d8183439b9926053ce",
+  "lockFingerprint": "97e74474b5207dfe933e28f2977cfc9db778c3475cbbf65d56ba4e25bb52c2c3",
+  "buildScriptFingerprint": "3cb3dbe850da3702a24a419087d2f8a678b49f319ce5a68e5de61db21b86599b",
+  "gateScriptFingerprint": "342b275147cf13da9687ca2a88d32824c5b0a99f35bfaee6b4f22b31391a05fc",
+  "testScriptFingerprint": "0d93bca6a89864c7e04ec6b6bcc791fc00808f6046d1da4d57e3ba3d122771c8",
+  "packageScriptFingerprint": "9fe76d800c26f18029352ad7a3bd55b55f1dd3085a9754b92dbd3dd352187972",
+  "benchScriptFingerprint": "a143abb87f2ecf8de46dec88bda61bbd5b1da23dd0b9ddac625c26e896c4628f",
+  "installerScriptFingerprint": "ccf083e32fc67946d607c5ff9911f6b03ac7b75e515929527716e96cea7c11dd",
+  "releaseScriptFingerprint": "68a9a41eb30d145a9ee18864651ab0bf45dae245efb9fa9977e48a20693e9665",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -2520,7 +2520,7 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 59 for settings.setMedia",
+          "name": "media command contracts rejects counterexample 59 for settings.setRecording",
           "status": "passed"
         },
         {
@@ -2570,7 +2570,7 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 69 for settings.setModule",
+          "name": "media command contracts rejects counterexample 69 for settings.setMedia",
           "status": "passed"
         },
         {
@@ -2580,7 +2580,7 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 71 for capture.start",
+          "name": "media command contracts rejects counterexample 71 for settings.setModule",
           "status": "passed"
         },
         {
@@ -2590,7 +2590,7 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 73 for capture.append",
+          "name": "media command contracts rejects counterexample 73 for capture.start",
           "status": "passed"
         },
         {
@@ -2605,7 +2605,7 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 76 for capture.event",
+          "name": "media command contracts rejects counterexample 76 for capture.append",
           "status": "passed"
         },
         {
@@ -2620,22 +2620,22 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 79 for capture.stop",
+          "name": "media command contracts rejects counterexample 79 for capture.event",
           "status": "passed"
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 80 for capture.retain",
+          "name": "media command contracts rejects counterexample 80 for capture.stop",
           "status": "passed"
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 81 for capture.reviseSegment",
+          "name": "media command contracts rejects counterexample 81 for capture.retain",
           "status": "passed"
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 82 for capture.addTerm",
+          "name": "media command contracts rejects counterexample 82 for capture.reviseSegment",
           "status": "passed"
         },
         {
@@ -2645,7 +2645,7 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 84 for material.region",
+          "name": "media command contracts rejects counterexample 84 for capture.addTerm",
           "status": "passed"
         },
         {
@@ -2655,12 +2655,17 @@
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 86 for material.frame",
+          "name": "media command contracts rejects counterexample 86 for material.region",
           "status": "passed"
         },
         {
           "file": "tests/contracts/media-contracts.test.ts",
-          "name": "media command contracts rejects counterexample 87 for material.subtitleWindow",
+          "name": "media command contracts rejects counterexample 87 for material.frame",
+          "status": "passed"
+        },
+        {
+          "file": "tests/contracts/media-contracts.test.ts",
+          "name": "media command contracts rejects counterexample 88 for material.subtitleWindow",
           "status": "passed"
         },
         {
@@ -2998,12 +3003,12 @@
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box keeps a saved place that is still on a screen, including a second screen",
+          "name": "AT-172 the floating recording box AT-172 keeps a saved place that is still on a screen, including a second screen",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box pulls a box that hangs off the edge of its screen back in",
+          "name": "AT-172 the floating recording box AT-172 pulls a box that hangs off the edge of its screen back in",
           "status": "passed"
         },
         {
@@ -4778,37 +4783,37 @@
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box goes to the top right of the main screen when no place was saved",
+          "name": "AT-172 the floating recording box AT-172 goes to the top right of the main screen at fixed 116×36 when no place was saved",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box keeps a saved place that is still on a screen, including a second screen",
+          "name": "AT-172 the floating recording box AT-172 keeps a saved place that is still on a screen, including a second screen",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box returns to the main screen when its monitor is gone",
+          "name": "AT-172 the floating recording box AT-172 returns to the main screen top right when its monitor is gone",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box accepts a well-formed state and clamps what can be out of range",
+          "name": "AT-172 the floating recording box accepts a well-formed state and clamps what can be out of range",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box drops anything that is not a state, instead of showing it",
+          "name": "AT-172 the floating recording box drops anything that is not a state, instead of showing it",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "the floating recording box shows text with textContent, has no network or storage, and has a stop button that the script wires",
+          "name": "AT-172 the floating recording box AT-172 renders only the clock in visible text, puts status/mode/retention/device in aria-label, freezes clock on stopping, and keeps preload minimal",
           "status": "passed"
         },
         {
           "file": "tests/shell/settings-media.test.tsx",
-          "name": "settings for media, recording and metadata restores the floating box's place and size",
+          "name": "settings for media, recording and metadata AT-172 restores the floating box's default position without size controls",
           "status": "passed"
         },
         {
@@ -6040,12 +6045,12 @@
         },
         {
           "file": "tests/package/smoke-isolation.test.ts",
-          "name": "test hooks stay out of a normal start the entry point loads it only with a dynamic import under the smoke flag",
+          "name": "test hooks stay out of a normal start the entry points load smoke only with a dynamic import under the smoke flag",
           "status": "passed"
         },
         {
           "file": "tests/package/smoke-isolation.test.ts",
-          "name": "test hooks stay out of a normal start the smoke directory is not reachable from the other main-process modules at all",
+          "name": "test hooks stay out of a normal start the smoke modules are not reachable from the other main-process modules at all",
           "status": "passed"
         }
       ]
@@ -6708,7 +6713,7 @@
         },
         {
           "file": "tests/shell/settings-media.test.tsx",
-          "name": "settings for media, recording and metadata restores the floating box's place and size",
+          "name": "settings for media, recording and metadata AT-172 restores the floating box's default position without size controls",
           "status": "passed"
         },
         {
@@ -6739,6 +6744,11 @@
         {
           "file": "tests/shell/settings-media.test.tsx",
           "name": "settings for media, recording and metadata shows that a token is saved and clears it on request",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-media.test.tsx",
+          "name": "settings for media, recording and metadata AT-172 drives the compact overlay DOM across silent, speaking, reduced-motion, and stopping states",
           "status": "passed"
         }
       ]
@@ -15450,7 +15460,7 @@
         },
         {
           "file": "tests/library/progress-contexts.test.ts",
-          "name": "the three readings of progress (plan 4.7) shows the latest position in any context on the work card, and says which context it is from",
+          "name": "the three readings of progress (plan 4.7) shows the furthest position across contexts on the work card (A-129), while progress_latest still tracks the newest action",
           "status": "passed"
         },
         {
@@ -17080,6 +17090,11 @@
         },
         {
           "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) registers \"Open with\" by its own ProgIDs, never by file associations or an extension's default value (AT-166, 4.5)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150, AT-162) ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)",
           "status": "passed"
         },
@@ -17526,6 +17541,11 @@
         },
         {
           "file": "tests/update/install-dev-recovery.test.ts",
+          "name": "Development installer recovery review (AT-158) asks light open to leave first and installs nothing, asking nothing of the full app, when it does not (4.6)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/install-dev-recovery.test.ts",
           "name": "Development installer recovery review (AT-158) refuses a live competing lock, the wrong process identity and missing installed build metadata (AT-158)",
           "status": "passed"
         },
@@ -17579,6 +17599,26 @@
         {
           "file": "tests/update/update-service.test.ts",
           "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) propagates save, SQLite backup and installer failures, restores pending metadata and allows retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) keeps the running version's installer as the way back, one at a time, only when it is still the recorded one (AT-165, 4.2, LOOP-32)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) updates without a way back when the cached installer is not this version's",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) skips the version it went back from until the person cancels the skip, and logs the rollback once (AT-165, 4.2)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) does not install while light open will not leave, and says so (AT-169, 4.6)",
           "status": "passed"
         },
         {
@@ -17669,11 +17709,6 @@
       "status": "passed",
       "tests": [
         {
-          "file": "tests/runtime/installer-config.test.ts",
-          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
-          "status": "passed"
-        },
-        {
           "file": "tests/update/release-integrity.test.ts",
           "name": "Release integrity review (AT-161, AT-163) rejects incomplete or duplicate checksums, misleading manifest text and mismatched release target (AT-160, AT-161)",
           "status": "passed"
@@ -17701,6 +17736,26 @@
         {
           "file": "tests/update/update-service.test.ts",
           "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) propagates save, SQLite backup and installer failures, restores pending metadata and allows retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) keeps the running version's installer as the way back, one at a time, only when it is still the recorded one (AT-165, 4.2, LOOP-32)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) updates without a way back when the cached installer is not this version's",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) skips the version it went back from until the person cancels the skip, and logs the rollback once (AT-165, 4.2)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) does not install while light open will not leave, and says so (AT-169, 4.6)",
           "status": "passed"
         },
         {
@@ -17756,6 +17811,11 @@
         {
           "file": "tests/update/update-service.test.ts",
           "name": "W3 & W4: Release UpdateService, Ed25519 signature verification & publisherName enforcement (AT-159, AT-160) proves NsisUpdater skips verification without publisherName and UpdateService refuses unverified packages when publisherName is removed (计划 3.1, AT-160)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
           "status": "passed"
         },
         {
@@ -17844,6 +17904,11 @@
         },
         {
           "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) registers \"Open with\" by its own ProgIDs, never by file associations or an extension's default value (AT-166, 4.5)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150, AT-162) ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)",
           "status": "passed"
         },
@@ -17867,6 +17932,11 @@
         {
           "file": "tests/update/release-and-install-dev.test.ts",
           "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) statically validates `.github/workflows/release.yml` and rejects security boundary violations (AT-163)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) accepts only month-end FFmpeg builds and commit-hash pins, and names the tool whose address is gone (AT-164)",
           "status": "passed"
         },
         {
@@ -17902,6 +17972,461 @@
         {
           "file": "tests/update/release-integrity.test.ts",
           "name": "Release integrity review (AT-161, AT-163) verifies every previous release artifact before extraction and never falls back after a failed download (AT-161, AT-163)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-164-release-tools",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/release-and-install-dev.test.ts",
+          "name": "W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and `--ci` missing-key guard (AT-163) accepts only month-end FFmpeg builds and commit-hash pins, and names the tool whose address is gone (AT-164)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-165-update-rollback",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "the starts after an update are watched, and two failures in a row ask (AT-165, 4.2) does not watch a start that did not come by an update",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "the starts after an update are watched, and two failures in a row ask (AT-165, 4.2) counts only the first three starts, a ready window clears the marker, and a later failure is not counted",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "the starts after an update are watched, and two failures in a row ask (AT-165, 4.2) asks after two failed starts in a row, and 'try again' starts the count again",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "the starts after an update are watched, and two failures in a row ask (AT-165, 4.2) words the question with the previous version, or without a one-click way back",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "going back (AT-165, 4.2) runs only a kept installer whose bytes are the recorded ones",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "going back (AT-165, 4.2) keeps the library in use under a new name, puts back the backup, skips the version and leaves a record",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "going back (AT-165, 4.2) leaves the library alone when the new version did not change its schema",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "going back (AT-165, 4.2) prefers manga.sqlite.premigrate-v<schemaVersion> when present and falls back to previous.backup otherwise",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "going back (AT-165, 4.2) re-verifies the kept installer after the dialog answers 'back' before touching the database",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "going back (AT-165, 4.2) writes update-skip.json and rollback-record.json to path.dirname(previous.database) when the data dir was relocated",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "bootstrap start guard rules (AT-165, 4.1, 4.2) never counts unpackaged pnpm dev, development builds, --quit-for-update or --manga-light",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "bootstrap start guard rules (AT-165, 4.1, 4.2) ignores MANGA_TEST_FAIL_LAUNCH when testIdentity is false, and honors it only for a test identity",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) keeps the running version's installer as the way back, one at a time, only when it is still the recorded one (AT-165, 4.2, LOOP-32)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) skips the version it went back from until the person cancels the skip, and logs the rollback once (AT-165, 4.2)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-166-open-with",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) registers \"Open with\" by its own ProgIDs, never by file associations or an extension's default value (AT-166, 4.5)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-167-light-video",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open answers the full app's commands in the same shapes (AT-167, AT-168, 4.3) comic.pages and comic.pageHandles of a CBZ, and the video commands of an MP4",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) refuses every command it does not list, and any session it did not open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) takes only its types, says when a file is gone, and never serves an entry that climbs out of its archive",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) opens an image as its folder from that image, in natural order, and a folder of images as a comic",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) stops serving a video whose file changed after it was opened",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) writes nothing but its cache folder",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) evicts the least-recently-used play copy when light open's cache budget is exceeded (AT-167, 4.3)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) keeps at most 500 positions by hash, never a name or a path, and starts a finished file from the beginning",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) AT-168 keeps a comic page by the hash of its id, never the page's name, and finds it again among the pages",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) opens 960×600 first, then where the last window was, one step down and right for each open window, and back on a screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) finds the file after --manga-light and skips Chromium's own switches",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-ui.test.tsx",
+          "name": "LightApp window shell, unsupported drop, and menu (AT-167, 4.4, 6) shows the empty drag-and-drop prompt with supported types, explains an unsupported dropped file in-window, and opens About (AT-167)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-168-light-comic",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open answers the full app's commands in the same shapes (AT-167, AT-168, 4.3) comic.pages and comic.pageHandles of a CBZ, and the video commands of an MP4",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) refuses every command it does not list, and any session it did not open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) takes only its types, says when a file is gone, and never serves an entry that climbs out of its archive",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) opens an image as its folder from that image, in natural order, and a folder of images as a comic",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) stops serving a video whose file changed after it was opened",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) writes nothing but its cache folder",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) evicts the least-recently-used play copy when light open's cache budget is exceeded (AT-167, 4.3)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) keeps at most 500 positions by hash, never a name or a path, and starts a finished file from the beginning",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) AT-168 keeps a comic page by the hash of its id, never the page's name, and finds it again among the pages",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) opens 960×600 first, then where the last window was, one step down and right for each open window, and back on a screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) finds the file after --manga-light and skips Chromium's own switches",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-169-light-lifecycle",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "light open leaves before an install (AT-169, 4.6) is a plain yes when nothing is running or the marker is left by a process that is gone",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "light open leaves before an install (AT-169, 4.6) waits for a light open that leaves, and gives up on one that does not, taking its request back",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "light open leaves before an install (AT-169, 4.6) does not wait out the time for a light open that said no",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/launch-guard.test.ts",
+          "name": "light open leaves before an install (AT-169, 4.6) finds light open's folder under the channel's data root, and a test identity's apart from the real one",
+          "status": "passed"
+        },
+        {
+          "file": "tests/update/update-service.test.ts",
+          "name": "Update review: actual electron-updater paths and recovery (AT-159, AT-160) does not install while light open will not leave, and says so (AT-169, 4.6)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-170-light-boundary",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) refuses every command it does not list, and any session it did not open",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) takes only its types, says when a file is gone, and never serves an entry that climbs out of its archive",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) opens an image as its folder from that image, in natural order, and a folder of images as a comic",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) stops serving a video whose file changed after it was opened",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) writes nothing but its cache folder",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6) evicts the least-recently-used play copy when light open's cache budget is exceeded (AT-167, 4.3)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) keeps at most 500 positions by hash, never a name or a path, and starts a finished file from the beginning",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) AT-168 keeps a comic page by the hash of its id, never the page's name, and finds it again among the pages",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) opens 960×600 first, then where the last window was, one step down and right for each open window, and back on a screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/light/light-open.test.ts",
+          "name": "light open's positions and windows (AT-167, AT-168, AT-170, 4.4, 6) finds the file after --manga-light and skips Chromium's own switches",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-171-bench-loops",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/agent/proposals.test.ts",
+          "name": "AT-171 LOOP-33 startup recovery when a proposal's module is disabled marks applying proposals for disabled modules as failed ('模块已关闭') on startup and never executes them if the module is re-enabled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-172-voice-overlay",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/voice-commands.test.ts",
+          "name": "recording commands AT-172 keeps recording settings with position-only overlay, migrates legacy 280×84 coordinates, rejects key clashes, and keeps media preferences",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 goes to the top right of the main screen at fixed 116×36 when no place was saved",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 keeps a saved place that is still on a screen, including a second screen",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 converts legacy 280×84 top-right-aligned coordinates so a box at the right edge stays at the right edge",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 pulls a box that hangs off the edge of its screen back in",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 returns to the main screen top right when its monitor is gone",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box accepts a well-formed state and clamps what can be out of range",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box drops anything that is not a state, instead of showing it",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 computes silent gray, volume-graded brand colors, reduced-motion binary color, and accessible summary",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "AT-172 the floating recording box AT-172 renders only the clock in visible text, puts status/mode/retention/device in aria-label, freezes clock on stopping, and keeps preload minimal",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-media.test.tsx",
+          "name": "settings for media, recording and metadata AT-172 restores the floating box's default position without size controls",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/settings-media.test.tsx",
+          "name": "settings for media, recording and metadata AT-172 drives the compact overlay DOM across silent, speaking, reduced-motion, and stopping states",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-173-recent-progress",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/library/recent-and-furthest.test.ts",
+          "name": "dismissing items from 最近 (A-129, AT-173) hides a work and a standalone resource from 最近 without touching progress, notes, bookmarks, screenshots, recordings, conversations, projects or shelves, and supports undo",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/recent-and-furthest.test.ts",
+          "name": "dismissing items from 最近 (A-129, AT-173) keeps a dismissed item hidden when opened or read in a project, and restores it at 最近's own position when reopened in 最近",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/recent-and-furthest.test.ts",
+          "name": "dismissing items from 最近 (A-129, AT-173) cleans up recent_dismissals when a work or standalone outside resource is deleted, and rejects non-owner or invalid calls",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/recent-and-furthest.test.ts",
+          "name": "library furthest progress and work homepage per-context positions (A-129, AT-173) reports 80% from 最近 over a newer 10% in 项目 A, marks works completed only in a project as completed, sorts by furthest progress, and lists per-context positions",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v15-migration.test.ts",
+          "name": "schema v15 migration (recent_dismissals, cascade triggers, progress_furthest, A-129, AT-173) backs up v14, creates recent_dismissals, cascade triggers and progress_furthest, preserves existing data, and is idempotent",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v15-migration.test.ts",
+          "name": "schema v15 migration (recent_dismissals, cascade triggers, progress_furthest, A-129, AT-173) rolls back when interrupted before publishing the version, leaving v14 intact, and completes on retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v15-migration.test.ts",
+          "name": "schema v15 migration (recent_dismissals, cascade triggers, progress_furthest, A-129, AT-173) rolls back cleanly when a write error occurs inside the migration transaction",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v15-migration.test.ts",
+          "name": "schema v15 migration (recent_dismissals, cascade triggers, progress_furthest, A-129, AT-173) restores from premigrate-v14 cleanly, starts fresh DBs at v15, and refuses newer schemas",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/recent-remove.test.tsx",
+          "name": "AT-173 sidebar 从最近移除 menu, keyboard access, and undoable toast removes a comic from 最近 via right-click and Shift+F10, shows an undoable toast, restores on 撤销, and never offers 从最近移除 on projects, notes or conversations",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/recent-remove.test.tsx",
+          "name": "AT-173 library Shelf cards and WorkHome furthest progress & per-context positions renders furthest progress and project-only completion on Shelf cards, lists per-context positions on WorkHome, and opens the active context's own episode",
           "status": "passed"
         }
       ]

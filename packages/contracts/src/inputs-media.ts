@@ -105,7 +105,7 @@ export const MediaCommandInputs = {
     locked: z.array(MetadataFieldKeySchema).max(32),
     cleared: z.array(MetadataFieldKeySchema).max(32),
   }).strict(),
-  "works.open": z.object({ resourceId: id }).strict(),
+  "works.open": z.object({ resourceId: id, contextId: ContextIdSchema.optional() }).strict(),
 
   "covers.list": z.object({ workId: id }).strict(),
   "covers.select": z.object({ workId: id, coverId: id }).strict(),
@@ -234,10 +234,8 @@ export const MediaCommandInputs = {
     /** Set a connection's limit, or give `null` to go back to the general one. */
     promptCharsByConnection: z.record(z.string().min(1).max(256), z.number().int().min(PROMPT_LIMIT_MIN).max(PROMPT_LIMIT_MAX).nullable()).optional(),
     overlay: z.object({
-      x: z.number().int().min(-20000).max(20000).optional(),
-      y: z.number().int().min(-20000).max(20000).optional(),
-      width: z.number().int().min(160).max(640).optional(),
-      height: z.number().int().min(48).max(320).optional(),
+      x: z.number().int().min(-20000).max(20000).nullable().optional(),
+      y: z.number().int().min(-20000).max(20000).nullable().optional(),
     }).strict().optional(),
   }).strict(),
   "settings.getModules": z.object({}).strict(),

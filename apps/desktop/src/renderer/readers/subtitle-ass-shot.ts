@@ -1,4 +1,4 @@
-import { hasInk } from "./screenshot-capture.ts";
+import { hasInk } from "./canvas-ink.ts";
 
 /**
  * An ASS subtitle at the video's own size, for a screenshot (NOTE-05, A-92). JASSUB draws in a worker onto a canvas the page has handed over, but the

@@ -140,6 +140,16 @@ providers/
 
 Electron 的上下文隔离、渲染沙箱和 IPC 校验是宿主基础约束。它们不能替代对任意第三方 Node 插件的权限隔离。
 
+### 4.4 引导入口与轻量进程边界（A-128）
+
+桌面宿主的打包主入口拆为三份独立构建产物，使“用 MANGA 打开文件”的轻量窗口无需加载完整资料库、插件与 Agent：
+
+- **`.vite/build/main.cjs`（`apps/desktop/src/main/bootstrap.ts`）：** 极薄引导入口，仅依赖 Node 内置模块、Electron 与启动路径/启动守卫模块（`launch-paths.ts`、`launch-guard.ts`）。收到 `--manga-light` 时直接动态加载 `./light-main.cjs`；常规启动、完整应用的 `--manga-smoke` 各阶段与 `--quit-for-update` 先执行正式版的启动守卫（`launch-guard.ts`），再加载 `./full-main.cjs`。
+- **`.vite/build/full-main.cjs`（`apps/desktop/src/main/index.ts`）：** 完整工作区宿主，装配 `MangaProductApp`、SQLite 存储、模型与 Agent、插件子进程及自动更新服务。
+- **`.vite/build/light-main.cjs`（`apps/desktop/src/main/light/main.ts`）+ `preload-light.cjs` + `light_window`：** 独立轻量宿主与渲染包。轻量主进程在调用 `app.requestSingleInstanceLock()` 前先把 `userData` 与 `sessionData` 设到 `<应用数据根>\light\runtime`，因此拥有独立于完整应用的单实例锁：完整应用已打开时轻量打开仍走轻量进程，连续打开多个文件复用同一个轻量进程并关闭最后一个窗口即退出。
+- **`@manga/app-core/light`（`packages/app-core/src/light/index.ts`）：** 供轻量主进程调用的媒体子入口，复用 `media/`（FFmpeg 定位与探测、媒体句柄与 `manga-media:` 范围响应、任务队列、ZIP 池与安全限制、字幕回退字体）、`video/`（播放决策与音字幕轨、同目录外挂字幕、关键帧索引、受预算约束的播放副本 `JsonPlayCopyStore`）、`comic/comicinfo.ts` 与自然排序，只暴露视频播放与漫画阅读所需的 10 条媒体命令（`LIGHT_COMMANDS`）。
+- **静态与打包双重边界守护：** `scripts/check-deps.mjs` 的 `checkLightClosure` 从 `bootstrap.ts`、`src/main/light/`、`src/preload/preload-light.ts`、`src/light/` 与 `packages/app-core/src/light/` 做传递导入闭包检查，打包烟测的 `light-boundary` 阶段再扫描 `app.asar` 内的 `main.cjs`、`light-main.cjs`、`preload-light.cjs` 与 `light_window` 产物，禁止出现 `better-sqlite3`、`drizzle-orm`、`@manga/storage-drizzle`、`MangaProductApp`、插件、Agent、`electron-updater`、资料库位置管理、弹幕、录音、笔记、创作工作区、语义检索或获取模块。
+
 ## 5. 数据流与事务
 
 ### 5.1 查询

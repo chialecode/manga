@@ -65,7 +65,7 @@ function extractStepsFromJobBlock(jobBlock) {
 
 /**
  * Validate `.github/workflows/ci.yml` and `.github/workflows/release.yml` against `.github/actions-policy.json`
- * and the Stage M10 security boundaries (计划 4.9, AT-163).
+ * and the release workflow's security boundaries (A-126, AT-163).
  */
 export function validateWorkflows({
   root = rootDir,
@@ -182,6 +182,14 @@ export function validateWorkflows({
     }
     if (/\b(?:pnpm|npm|yarn)\s+install\b/.test(jobs.decide)) {
       errors.push("release.yml: job decide must not install dependencies");
+    }
+    // The tool addresses are checked on the cheap runner before a Windows runner is taken (A-127): after the decision,
+    // and only when a release will be cut.
+    const toolLinks = /^\s+- name:[^\n]*\n\s+id:\s*tool-links\s*\n\s+if:\s*steps\.decide\.outputs\.should_release\s*==\s*'true'\s*\n\s+run:\s*node scripts\/tools\/check-tool-links\.mjs\s*$/m;
+    if (!toolLinks.test(jobs.decide)) {
+      errors.push("release.yml: job decide must run node scripts/tools/check-tool-links.mjs (step id tool-links) when should_release is true");
+    } else if (jobs.decide.indexOf("id: tool-links") < jobs.decide.indexOf("id: decide")) {
+      errors.push("release.yml: job decide must check the tool links after the decide step");
     }
   }
 

@@ -1,9 +1,11 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
+import { DrizzleStore } from "@manga/storage-drizzle";
 import { startMockProvider } from "@manga/model-protocol";
 import { startApp, tempProfile, waitForRun } from "../helpers/app.ts";
 import { all, makeProject, ok, one, run } from "../helpers/creative-project.ts";
@@ -513,5 +515,182 @@ describe("AT-155 per-task opt-in tools: semantic.search & webpage.fetch", () => 
       await ctx.app.call(agentActor, { commandId: "webpage.list", idempotencyKey: "ok-web-list", input: {} }, optedGrant.handle),
     );
     expect(pages.pages.map((p) => p.id)).toContain(webRes.page.id);
+  });
+});
+
+describe("AT-171 LOOP-33 startup recovery when a proposal's module is disabled", () => {
+  requireSamples(["video-roughcut"]);
+
+  it.skipIf(mediaPrerequisitesAbsent)("marks applying proposals for disabled modules as failed ('模块已关闭') on startup and never executes them if the module is re-enabled", async () => {
+    const profileRoot = tempProfile();
+    const ctx1 = await startApp({
+      profileRoot,
+      options: {
+        network: { allowPrivate: (host) => host === "127.0.0.1" },
+      },
+    });
+    apps.push(ctx1);
+    const a = await makeProject(ctx1, "重启恢复项目");
+    const videoFolder = path.join(tempProfile(), "video-loop33");
+    fs.mkdirSync(videoFolder, { recursive: true });
+    const videoFile = path.join(videoFolder, "a.mp4");
+    fs.copyFileSync(samplePath("video-roughcut", "a.mp4"), videoFile);
+    const vid = ok<{ resourceId: string; workId: string }>(await run(ctx1, "library.importDocument", {
+      title: "样片LOOP33",
+      kind: "video",
+      pathHandle: ctx1.app.registerPath("file", inLibrary(ctx1.app, videoFile, "video")),
+    }));
+    ok(await run(ctx1, "project.addMaterial", { projectId: a.projectId, kind: "work", targetId: vid.workId }));
+    const cutId = ok<{ cut: { id: string } }>(await run(ctx1, "roughcut.create", { projectId: a.projectId, title: "中断粗剪" })).cut.id;
+    ok(await run(ctx1, "roughcut.edit", {
+      cutId,
+      actions: [{ type: "add", resourceId: vid.resourceId, inMs: 2000, outMs: 5500 }],
+    }));
+
+    const session = ok<{ id: string }>(await run(ctx1, "session.open", { kind: "project", targetId: a.projectId, contextId: a.projectId }));
+    const grant = ctx1.app.issueAgentGrant(ctx1.grant, agentActor, {
+      sessionId: session.id,
+      runId: "run-loop33",
+      readResourceIds: [a.book.resourceId, vid.resourceId],
+      projectId: a.projectId,
+    });
+    const asAgent1 = (commandId: string, input: Record<string, unknown>) =>
+      ctx1.app.call(agentActor, { commandId, idempotencyKey: `ag-loop33-${++counter}`, input }, grant.handle);
+
+    const pJob = ok<{ proposalId: string }>(await asAgent1("proposal.exportRoughcut", {
+      cutId,
+      fileName: "never-exported-1.mp4",
+      reason: "已登记导出任务后崩溃",
+    }));
+    const pUncommitted = ok<{ proposalId: string }>(await asAgent1("proposal.exportRoughcut", {
+      cutId,
+      fileName: "never-exported-2.mp4",
+      reason: "尚未登记导出任务时中断",
+    }));
+    const pBoard = ok<{ proposalId: string }>(await asAgent1("proposal.rename", {
+      kind: "whiteboard",
+      targetId: a.boardId,
+      title: "不应生效的新名称",
+    }));
+    const pKeepPending = ok<{ proposalId: string }>(await asAgent1("proposal.rename", {
+      kind: "mindmap",
+      targetId: a.mapId,
+      title: "仍开着模块的导图",
+    }));
+    const dataDir = ctx1.app.layout.partitions.data;
+    ctx1.app.close();
+
+    // Real child-process crash right after `roughcut.export` registered its job (`operations` receipt + `applying` proposal).
+    const crashed = spawnSync(process.execPath, [path.resolve("tests/helpers/proposal-crash-child.ts")], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        MANGA_PROPOSAL_TEST_PROFILE: profileRoot,
+        MANGA_PROPOSAL_TEST_ID: pJob.proposalId,
+        MANGA_PROPOSAL_TEST_CRASH: "proposal-applying-after-command",
+      },
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 60_000,
+    });
+    expect(crashed.status, crashed.stderr || crashed.stdout).toBe(99);
+
+    // Put `pUncommitted`, `pBoard`, and `pKeepPending` into `applying` without receipts, and disable `roughcut` + `whiteboard` in `lastValidProfile` before restart.
+    const rawStore = new DrizzleStore({ profileDir: dataDir });
+    try {
+      expect((rawStore.sqlite.prepare("SELECT status FROM agent_proposals WHERE id = ?").get(pJob.proposalId) as { status: string }).status).toBe("applying");
+      const interruptedAt = new Date().toISOString();
+      rawStore.sqlite.prepare("UPDATE agent_proposals SET status = 'applying', decided_at = ? WHERE id IN (?, ?, ?)").run(
+        interruptedAt, pUncommitted.proposalId, pBoard.proposalId, pKeepPending.proposalId,
+      );
+      rawStore.sqlite.prepare(
+        "INSERT INTO command_requests(idempotency_key, command_id, input_hash, actor_kind, actor_id) VALUES (?, 'whiteboard.rename', 'hash-loop33', 'user', ?)",
+      ).run(pBoard.proposalId, ctx1.actor.id);
+      // Force the registered roughcut export back to `planned` in case fast FFmpeg finished in the milliseconds before exit(99).
+      rawStore.sqlite.prepare("UPDATE rough_cut_exports SET state = 'planned', final_name = NULL, error_json = NULL WHERE cut_id = ?").run(cutId);
+
+      const savedProfile = JSON.parse(rawStore.getMeta("lastValidProfile")!) as {
+        profileId: string;
+        revision: number;
+        enabledFeatures: string[];
+        disabledFeatures: string[];
+        preferredProviders: Record<string, string>;
+      };
+      rawStore.setMeta("lastValidProfile", JSON.stringify({
+        ...savedProfile,
+        revision: savedProfile.revision + 1,
+        enabledFeatures: savedProfile.enabledFeatures.filter((id) => id !== "roughcut" && id !== "whiteboard"),
+        disabledFeatures: [...new Set([...savedProfile.disabledFeatures, "roughcut", "whiteboard"])],
+      }));
+    } finally {
+      rawStore.close();
+    }
+
+    // Restart on the same profile: `roughcut` and `whiteboard` are disabled during `start()`.
+    const ctx2 = await startApp({
+      profileRoot,
+      options: { network: { allowPrivate: (host) => host === "127.0.0.1" } },
+    });
+    apps.push(ctx2);
+
+    const listedAfterRestart = ok<{ proposals: Array<{ id: string; status: string; result: Record<string, any> | null }> }>(
+      await run(ctx2, "proposal.list", { sessionId: session.id }),
+    ).proposals;
+    const byId = new Map(listedAfterRestart.map((item) => [item.id, item]));
+
+    for (const id of [pJob.proposalId, pUncommitted.proposalId, pBoard.proposalId]) {
+      expect(byId.get(id)).toMatchObject({
+        id,
+        status: "failed",
+        result: {
+          reason: "模块已关闭",
+          recovered: true,
+          error: {
+            code: "CAPABILITY_UNAVAILABLE",
+            message: "模块已关闭",
+            details: { reason: "module-disabled" },
+          },
+        },
+      });
+    }
+    // `mindmap` stayed enabled, so its uncommitted `applying` proposal still reverts to `pending` as before.
+    expect(byId.get(pKeepPending.proposalId)?.status).toBe("pending");
+    // Uncommitted `command_requests` row for `pBoard` was cleaned up, and the planned `rough_cut_exports` row is no longer `planned`/`running`.
+    expect(one<{ n: number }>(ctx2, "SELECT COUNT(*) AS n FROM command_requests WHERE idempotency_key = ?", pBoard.proposalId).n).toBe(0);
+    expect(one<{ n: number }>(ctx2, "SELECT COUNT(*) AS n FROM rough_cut_exports WHERE cut_id = ? AND state IN ('planned', 'running')", cutId).n).toBe(0);
+
+    // Re-enable `roughcut` and `whiteboard`: none of the failed proposals may run or change state!
+    ok(await run(ctx2, "settings.setModule", { featureId: "roughcut", enabled: true }));
+    ok(await run(ctx2, "settings.setModule", { featureId: "whiteboard", enabled: true }));
+    await ctx2.app.roughcuts.exports.whenIdle();
+
+    for (const id of [pJob.proposalId, pUncommitted.proposalId, pBoard.proposalId]) {
+      const card = ctx2.app.proposals.getCard(id);
+      expect(card.status).toBe("failed");
+      expect(card.result).toMatchObject({ reason: "模块已关闭" });
+      expect(failure(await run(ctx2, "proposal.apply", { proposalId: id })).code).toBe("PROPOSAL_DECIDED");
+    }
+    const exportsAfterReenable = ok<{ exports: Array<{ state: string; fileName: string | null }> }>(
+      await run(ctx2, "roughcut.exports", { cutId }),
+    ).exports;
+    expect(exportsAfterReenable.every((exp) => exp.state === "failed" && exp.fileName === null)).toBe(true);
+    expect(one<{ title: string }>(ctx2, "SELECT title FROM whiteboards WHERE id = ?", a.boardId).title).not.toBe("不应生效的新名称");
+
+    // Next Agent turn receives `执行失败（模块已关闭）` once and does not repeat it on the subsequent turn.
+    const seenBodies: Array<Record<string, any>> = [];
+    const server = await startMockProvider({ onRequest: ({ body }) => { if (body.stream) seenBodies.push(body); } });
+    closers.push(server.close);
+    ok(await run(ctx2, "connections.upsert", {
+      label: "文本恢复核对", protocol: "openai-chat-completions", baseUrl: server.url, modelId: "m", purpose: "text",
+      credentialHandle: ctx2.app.stashSecret("prop-loop33-key"),
+    }));
+    const turn1 = ok<{ runId: string; contextText: string }>(await run(ctx2, "agent.send", { sessionId: session.id, text: "汇报恢复状态" }));
+    await waitForRun(ctx2.app, ctx2.actor, ctx2.grant.handle, turn1.runId, 20_000);
+    expect(turn1.contextText).toContain("执行失败（模块已关闭）");
+    expect(JSON.stringify(seenBodies[0]?.messages ?? [])).toContain("执行失败（模块已关闭）");
+
+    const turn2 = ok<{ runId: string; contextText: string }>(await run(ctx2, "agent.send", { sessionId: session.id, text: "继续" }));
+    await waitForRun(ctx2.app, ctx2.actor, ctx2.grant.handle, turn2.runId, 20_000);
+    expect(turn2.contextText).not.toContain("执行失败（模块已关闭）");
   });
 });

@@ -1,21 +1,21 @@
 {
   "status": "passed",
-  "stage": "m10",
-  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
-  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "stage": "m11",
+  "sourceFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
+  "smokeScriptFingerprint": "84aea18197957e49a49e8e9c4e4f55cac9ace6e98a212af2b3b5d3f1c1cd4a55",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
-  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
-  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
-  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
-  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
-  "testScriptFingerprint": "7ddec5774ad97e7d328fd606bc81a72e340e2d802989be7d3c85ee9442dfba85",
-  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
-  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
-  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
-  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
-  "at": "2026-11-08T22:00:22.822Z",
-  "seconds": 407.15,
+  "smokeBenchScriptFingerprint": "1532610373b76fedac5903c47c3350ad4d0e209b853f60015d693de9206ba143",
+  "smokeWalkScriptFingerprint": "58fa4c5cdfe4d1187bb6c02cd57b242c1523d81c5ab046d8183439b9926053ce",
+  "lockFingerprint": "97e74474b5207dfe933e28f2977cfc9db778c3475cbbf65d56ba4e25bb52c2c3",
+  "buildScriptFingerprint": "3cb3dbe850da3702a24a419087d2f8a678b49f319ce5a68e5de61db21b86599b",
+  "gateScriptFingerprint": "342b275147cf13da9687ca2a88d32824c5b0a99f35bfaee6b4f22b31391a05fc",
+  "testScriptFingerprint": "0d93bca6a89864c7e04ec6b6bcc791fc00808f6046d1da4d57e3ba3d122771c8",
+  "packageScriptFingerprint": "9fe76d800c26f18029352ad7a3bd55b55f1dd3085a9754b92dbd3dd352187972",
+  "benchScriptFingerprint": "a143abb87f2ecf8de46dec88bda61bbd5b1da23dd0b9ddac625c26e896c4628f",
+  "installerScriptFingerprint": "ccf083e32fc67946d607c5ff9911f6b03ac7b75e515929527716e96cea7c11dd",
+  "releaseScriptFingerprint": "68a9a41eb30d145a9ee18864651ab0bf45dae245efb9fa9977e48a20693e9665",
+  "at": "2026-11-12T00:34:46.422Z",
+  "seconds": 448.69,
   "format": "unsigned per-user NSIS installer (electron-builder, --prepackaged, testIdentity)",
   "electronBuilder": "26.18.0",
   "steps": [
@@ -27,37 +27,49 @@
       "name": "release: installer built and configured",
       "ok": true,
       "version": "0.1.1",
-      "megabytes": 202,
+      "megabytes": 203,
       "seconds": 47
     },
     {
       "name": "development: installer built and configured",
       "ok": true,
-      "version": "0.1.1-dev.202611082200",
-      "megabytes": 202,
-      "seconds": 46
+      "version": "0.1.1-dev.202611120034",
+      "megabytes": 203,
+      "seconds": 47
     },
     {
       "name": "release: installed per user without elevation into the chosen folder",
       "ok": true,
       "version": "0.1.1",
       "publisher": "chialecode",
-      "seconds": 9
+      "seconds": 8
     },
     {
       "name": "release: Start menu and desktop shortcuts",
       "ok": true
     },
     {
+      "name": "release: \"Open with\" registered for 21 types, extension defaults untouched",
+      "ok": true,
+      "values": 77,
+      "wrong": []
+    },
+    {
       "name": "development: installed per user without elevation into the chosen folder",
       "ok": true,
-      "version": "0.1.1-dev.202611082200",
+      "version": "0.1.1-dev.202611120034",
       "publisher": "chialecode",
       "seconds": 9
     },
     {
       "name": "development: Start menu and desktop shortcuts",
       "ok": true
+    },
+    {
+      "name": "development: \"Open with\" registered for 21 types, extension defaults untouched",
+      "ok": true,
+      "values": 77,
+      "wrong": []
     },
     {
       "name": "both channels installed at once",
@@ -82,10 +94,16 @@
       "ok": true
     },
     {
+      "name": "release: the registered \"Open with\" command starts light open on the file",
+      "ok": true,
+      "status": 0,
+      "phase": "light-unsupported"
+    },
+    {
       "name": "nothing written to the roaming profile",
       "ok": true,
-      "before": 0,
-      "after": 0
+      "before": 2,
+      "after": 2
     },
     {
       "name": "release: upgraded from 0.1.1 to 0.1.2 over a running copy, which was closed, into the same folder with data preserved",
@@ -93,6 +111,48 @@
       "previousVersion": "0.1.1",
       "upgradedVersion": "0.1.2",
       "registryVersion": "0.1.2"
+    },
+    {
+      "name": "release: \"Open with\" registration preserved after 0.1.1 -> 0.1.2 over-install, extension defaults untouched",
+      "ok": true,
+      "values": 77,
+      "wrong": []
+    },
+    {
+      "name": "update-rollback: two failed starts ask; 再试一次 keeps the new version",
+      "ok": true,
+      "failed": [
+        3,
+        3
+      ],
+      "asked": 0,
+      "dialogShot": true,
+      "answer": "retry",
+      "buttons": [
+        "回到 0.1.1",
+        "再试一次",
+        "打开下载页"
+      ]
+    },
+    {
+      "name": "update-rollback: 回到 0.1.1 reinstalls it, puts the backup back, keeps the library in use, skips 0.1.2 and logs it",
+      "ok": true,
+      "failedAgain": [
+        3,
+        3
+      ],
+      "back": 0,
+      "answer": "back",
+      "reinstalled": true,
+      "relaunched": true,
+      "recorded": true,
+      "keptAs": 1,
+      "skipped": "0.1.2",
+      "restored": true
+    },
+    {
+      "name": "update-rollback",
+      "ok": true
     },
     {
       "name": "development: uninstalled",
@@ -103,6 +163,18 @@
     {
       "name": "development: Start menu, desktop shortcut, uninstall entry and the per-user key gone",
       "ok": true
+    },
+    {
+      "name": "development: \"Open with\" registration removed, extension defaults untouched",
+      "ok": true,
+      "left": 0,
+      "keys": 0
+    },
+    {
+      "name": "release: \"Open with\" registration unaffected by development uninstall, extension defaults untouched",
+      "ok": true,
+      "values": 77,
+      "wrong": []
     },
     {
       "name": "development: data and files kept",
@@ -119,6 +191,12 @@
       "ok": true
     },
     {
+      "name": "release: \"Open with\" registration removed, extension defaults untouched",
+      "ok": true,
+      "left": 0,
+      "keys": 0
+    },
+    {
       "name": "release: data and files kept",
       "ok": true
     },
@@ -126,7 +204,7 @@
       "name": "packaged electron-updater: full restart, differential quit, signature rejection and saved drafts",
       "ok": true,
       "kind": "electron-nsis",
-      "seconds": 176.96
+      "seconds": 186.24
     },
     {
       "name": "real install-dev: saved draft, relaunch, release isolation and abandoned quit",
@@ -152,8 +230,8 @@
     },
     "previousVersion": "0.1.1",
     "upgradedVersion": "0.1.2",
-    "appAsarSha256": "6caeb41fb2b04b26a234f0ae1ff10a48e6f2720f6da270c01f1d785e5086ceda",
-    "previousAsarSha256": "6caeb41fb2b04b26a234f0ae1ff10a48e6f2720f6da270c01f1d785e5086ceda",
+    "appAsarSha256": "4ac7df77a4128415bd34946356497ffc7166aa9fa53f3cfa70f0c79c3aa8aa84",
+    "previousAsarSha256": "4ac7df77a4128415bd34946356497ffc7166aa9fa53f3cfa70f0c79c3aa8aa84",
     "verifiedInstallerExecuted": true,
     "dataIntact": true,
     "backupCreated": true,
@@ -166,8 +244,8 @@
         "previousVersion": "0.1.1",
         "version": "0.1.2",
         "downloader": "electron-updater",
-        "downloadBytes": 212173026,
-        "fullBytes": 212173026,
+        "downloadBytes": 212522053,
+        "fullBytes": 212522053,
         "usedDifferential": false,
         "oldProcessExited": true,
         "newProcessStarted": true,
@@ -178,15 +256,15 @@
         "workspaceRestored": true,
         "savedTabSelectedBeforeNavigation": true,
         "emptyLibraryOnboarding": true,
-        "readyMs": 22084
+        "readyMs": 22661
       },
       {
         "mode": "quit",
         "previousVersion": "0.1.1",
         "version": "0.1.2",
         "downloader": "electron-updater",
-        "downloadBytes": 434622,
-        "fullBytes": 212173026,
+        "downloadBytes": 486027,
+        "fullBytes": 212522053,
         "usedDifferential": true,
         "oldProcessExited": true,
         "newProcessStarted": true,
@@ -197,13 +275,13 @@
         "workspaceRestored": true,
         "savedTabSelectedBeforeNavigation": true,
         "emptyLibraryOnboarding": true,
-        "readyMs": 20895
+        "readyMs": 22156
       }
     ],
     "development": {
       "kind": "electron-nsis",
-      "oldVersion": "0.1.1-dev.202611082200",
-      "newVersion": "0.1.1-dev.202611082201",
+      "oldVersion": "0.1.1-dev.202611120034",
+      "newVersion": "0.1.1-dev.202611120035",
       "draftWasUnsaved": true,
       "draftPreserved": true,
       "installed": true,
@@ -213,17 +291,17 @@
       "timeoutMs": 30000,
       "timedOutWithoutForceKill": true,
       "stayedAliveAfterWriteCompleted": true,
-      "installDevMs": 13830
+      "installDevMs": 16288
     },
     "records": {
       "downloadBytes": {
-        "fullBytes": 212173026,
-        "differentialBytes": 434622,
-        "savedRatio": 0.9979515680753877
+        "fullBytes": 212522053,
+        "differentialBytes": 486027,
+        "savedRatio": 0.9977130514544766
       },
-      "restartToReadyMs": 22084,
-      "installDevMs": 13830
+      "restartToReadyMs": 22661,
+      "installDevMs": 16288
     },
-    "seconds": 176.96
+    "seconds": 186.24
   }
 }

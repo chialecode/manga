@@ -1,0 +1,18 @@
+/* Light open's window (READ-05, 交互设计): the app's title bar over one player or reader, with the same theme variables and controls. */
+html, body, #root { height: 100%; margin: 0; }
+.light-shell { display: flex; flex-direction: column; height: 100%; background: var(--color-bg); color: var(--color-text); font-size: 14px; }
+.light-top { gap: 6px; }
+.light-brand { display: inline-flex; align-items: center; color: var(--color-accent); padding: 0 4px; }
+.light-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 60%; }
+.light-menu { display: inline-flex; }
+.light-shell[data-immersive] .light-top { display: none; }
+.light-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.light-body > .reader { flex: 1 1 auto; min-height: 0; }
+.light-shell[data-dragging] .light-body { outline: 2px dashed var(--color-accent); outline-offset: -8px; }
+.light-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; }
+.light-empty-title { font-size: 15px; font-weight: 600; }
+.light-empty-types { color: var(--color-subtle); font-size: 12px; max-width: 520px; line-height: 1.7; }
+.light-notice { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); padding: 6px 12px; border-radius: 8px; background: var(--color-surface); box-shadow: var(--shadow-control); font-size: 12px; z-index: 30; }
+.light-about { position: absolute; inset: 0; margin: auto; width: min(420px, 90%); height: max-content; padding: 18px; border-radius: 12px; background: var(--color-surface); box-shadow: var(--shadow-control); display: flex; flex-direction: column; gap: 14px; align-items: flex-end; z-index: 40; line-height: 1.7; }
+.light-about p { align-self: stretch; }
+.light-resumed-comic { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: var(--color-player-shade); color: var(--color-on-player); font-size: 12px; z-index: 20; }

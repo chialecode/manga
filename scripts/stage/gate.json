@@ -81,7 +81,10 @@
       "apps/desktop/package.json",
       "apps/desktop/vite.main.config.ts",
       "apps/desktop/vite.renderer.config.ts",
-      "apps/desktop/vite.preload.config.ts"
+      "apps/desktop/vite.preload.config.ts",
+      "apps/desktop/vite.bootstrap.config.ts",
+      "apps/desktop/vite.light.config.ts",
+      "apps/desktop/vite.light-renderer.config.ts"
     ],
     "gate": [
       "scripts/stage.mjs",
@@ -113,6 +116,7 @@
     ],
     "package": [
       "scripts/stage/package.mjs",
+      "scripts/stage/light-open.mjs",
       "scripts/stage/installer-lib.mjs",
       "scripts/stage/version-lib.mjs",
       "scripts/stage/install-dev.mjs",
@@ -129,6 +133,7 @@
     ],
     "bench": [
       "scripts/stage/bench.mjs",
+      "scripts/stage/light-open.mjs",
       "scripts/stage/installer.mjs",
       "scripts/stage/bench-agent-media.mjs",
       "scripts/stage/bench-bt.mjs",
@@ -151,7 +156,8 @@
       "scripts/stage/update-rehearsal.mjs",
       "scripts/stage/temp-dirs.mjs",
       "scripts/samples",
-      "tests/helpers"
+      "tests/helpers",
+      "scripts/stage/rollback-rehearsal.mjs"
     ],
     "installer": [
       "scripts/stage/installer.mjs",
@@ -162,7 +168,8 @@
       "scripts/stage/release-decide.mjs",
       "scripts/stage/release-publish-verify.mjs",
       "scripts/stage/release-previous.mjs",
-      "scripts/stage/update-rehearsal.mjs"
+      "scripts/stage/update-rehearsal.mjs",
+      "scripts/stage/rollback-rehearsal.mjs"
     ],
     "release": [
       "scripts/stage/release.mjs",
@@ -296,7 +303,10 @@
       "clip60P95Ms": 2000,
       "freeze4mbP95Ms": 200,
       "proposalProposeP95Ms": 150,
-      "proposalApplyP95Ms": 300
+      "proposalApplyP95Ms": 300,
+      "lightVideoFirstFrameMs": 2000,
+      "lightComicFirstPageMs": 1500,
+      "lightSecondOpenMs": 800
     },
     "scale": {
       "metadataCount": 10000,
@@ -739,6 +749,9 @@
       "memory": {
         "runs": 3
       }
+    },
+    "light": {
+      "runs": 5
     }
   },
   "package": {
@@ -770,6 +783,7 @@
       "migrate-v13-newer",
       "data-locations-fresh",
       "data-locations-upgrade",
+      "light",
       "update"
     ],
     "pluginSteps": [
@@ -1230,8 +1244,8 @@
         "^novel reader offers single and double pages, the five backgrounds and a size step",
         "^recording controls the toggle key starts and stops, and the hold key records only while it is down",
         "^settings for media, recording and metadata picks a key by pressing it",
-        "^the floating recording box keeps a saved place that is still on a screen",
-        "^the floating recording box pulls a box that hangs off the edge of its screen back in",
+        "^AT-172 the floating recording box AT-172 keeps a saved place that is still on a screen",
+        "^AT-172 the floating recording box AT-172 pulls a box that hangs off the edge of its screen back in",
         "^window colors the window uses the page color of the app, and the system draws no buttons over the page",
         "^resource overview categories for media ",
         "^the resource overview's media categories "
@@ -1496,13 +1510,13 @@
         "^recording controls a hold key whose release was lost ends the recording after the repeats stop",
         "^recording controls publishes the floating box state while recording and clears it after",
         "^recording controls the hold button records while pressed and stops on release",
-        "^the floating recording box goes to the top right of the main screen when no place was saved",
-        "^the floating recording box keeps a saved place that is still on a screen, including a second screen",
-        "^the floating recording box returns to the main screen when its monitor is gone",
-        "^the floating recording box accepts a well-formed state and clamps what can be out of range",
-        "^the floating recording box drops anything that is not a state",
-        "^the floating recording box shows text with textContent, has no network or storage, and has a stop button",
-        "^settings for media, recording and metadata restores the floating box's place and size",
+        "^AT-172 the floating recording box AT-172 goes to the top right of the main screen at fixed 116×36 when no place was saved",
+        "^AT-172 the floating recording box AT-172 keeps a saved place that is still on a screen, including a second screen",
+        "^AT-172 the floating recording box AT-172 returns to the main screen top right when its monitor is gone",
+        "^AT-172 the floating recording box accepts a well-formed state and clamps what can be out of range",
+        "^AT-172 the floating recording box drops anything that is not a state",
+        "^AT-172 the floating recording box AT-172 renders only the clock in visible text, puts status/mode/retention/device in aria-label, freezes clock on stopping, and keeps preload minimal",
+        "^settings for media, recording and metadata AT-172 restores the floating box's default position without size controls",
         "^recorder a release before the session exists ends it at once"
       ]
     },
@@ -1632,8 +1646,8 @@
       "kind": "automated",
       "tests": [
         "^test hooks stay out of a normal start no module outside the smoke directory ",
-        "^test hooks stay out of a normal start the entry point loads it only ",
-        "^test hooks stay out of a normal start the smoke directory is not reachable "
+        "^test hooks stay out of a normal start the entry points load smoke only ",
+        "^test hooks stay out of a normal start the smoke modules are not reachable "
       ]
     },
     {
@@ -3002,6 +3016,76 @@
       "tests": [
         "AT-163(?!\\d)"
       ]
+    },
+    {
+      "id": "AT-164-release-tools",
+      "kind": "automated",
+      "tests": [
+        "AT-164(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-165-update-rollback",
+      "kind": "automated",
+      "tests": [
+        "AT-165(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-166-open-with",
+      "kind": "automated",
+      "tests": [
+        "AT-166(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-167-light-video",
+      "kind": "automated",
+      "tests": [
+        "AT-167(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-168-light-comic",
+      "kind": "automated",
+      "tests": [
+        "AT-168(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-169-light-lifecycle",
+      "kind": "automated",
+      "tests": [
+        "AT-169(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-170-light-boundary",
+      "kind": "automated",
+      "tests": [
+        "AT-170(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-171-bench-loops",
+      "kind": "automated",
+      "tests": [
+        "AT-171(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-172-voice-overlay",
+      "kind": "automated",
+      "tests": [
+        "AT-172(?!\\d)"
+      ]
+    },
+    {
+      "id": "AT-173-recent-progress",
+      "kind": "automated",
+      "tests": [
+        "AT-173(?!\\d)"
+      ]
     }
   ],
   "scenarios": [
@@ -3132,6 +3216,35 @@
     "update-offline",
     "install-dev",
     "release-workflow",
-    "installer-info"
+    "installer-info",
+    "light-boundary",
+    "light-video-first-frame",
+    "light-video-plays",
+    "light-video-pause",
+    "light-video-seek-key",
+    "light-video-rate",
+    "light-video-audio-track",
+    "light-video-subtitles",
+    "light-video-next",
+    "light-video-resume",
+    "light-video-copy-reason",
+    "light-video-copy-plays",
+    "light-comic-first-page",
+    "light-comic-start-page",
+    "light-comic-turn",
+    "light-comic-direction",
+    "light-comic-layouts",
+    "light-comic-page-jump",
+    "light-comic-next-volume",
+    "light-comic-resume",
+    "light-image-start-page",
+    "light-empty-window",
+    "light-unsupported-file",
+    "light-writes-only-its-folder",
+    "light-multi-one-process",
+    "light-separate-lock",
+    "light-update",
+    "voice-overlay",
+    "recent-remove"
   ]
 }

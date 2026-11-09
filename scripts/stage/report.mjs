@@ -155,6 +155,33 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
       }
       if (entry.p95 !== p95(entry.raw)) errors.push(`bench.json: measurement ${item.id} p95 does not match its raw samples`);
     }
+    // Light open (第 7 节, AT-170): 5 cold video opens, 5 cold CBZ opens, 5 warm second opens, working-set memory and full-app comparison.
+    const light = bench.light;
+    const lightRuns = config.bench.light?.runs ?? 5;
+    if (light?.kind !== "electron-light-open" || light.ok !== true || (Array.isArray(light.failures) && light.failures.length > 0)) {
+      errors.push("bench.json: light open benchmark missing or failed");
+    }
+    for (const [rawKey, metric] of [
+      ["videoFirstFrameMs", "lightVideoFirstFrameMs"],
+      ["comicFirstPageMs", "lightComicFirstPageMs"],
+      ["secondOpenMs", "lightSecondOpenMs"],
+    ]) {
+      const values = light?.raw?.[rawKey];
+      if (!Array.isArray(values) || values.length < lightRuns || values.some((value) => !Number.isFinite(value) || value < 0)) {
+        errors.push(`bench.json: light ${rawKey} samples invalid`);
+        continue;
+      }
+      if (targets[metric] !== undefined && p95(values) > targets[metric]) errors.push(`bench.json: light ${rawKey} exceeds ${metric} target`);
+      if (bench.metrics?.[metric] !== p95(values)) errors.push(`bench.json: ${metric} does not match light ${rawKey} samples`);
+    }
+    const lightMemory = light?.records?.workingSetMiB;
+    if (!Array.isArray(lightMemory) || lightMemory.length < lightRuns || lightMemory.some((value) => !Number.isFinite(value) || value <= 0)) {
+      errors.push("bench.json: light workingSetMiB record missing or invalid");
+    }
+    const fullOpen = light?.records?.fullAppOpenVideo;
+    if (!fullOpen || !Number.isFinite(fullOpen.firstFrameMs) || fullOpen.firstFrameMs <= 0 || !Number.isFinite(fullOpen.listedMs) || fullOpen.listedMs <= 0) {
+      errors.push("bench.json: light fullAppOpenVideo comparison record missing or invalid");
+    }
     if (bench.productAcceptance === "passed") errors.push("bench.json: product acceptance must not be computed");
   }
 
@@ -176,6 +203,26 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
       || required.some((key) => rehearsal?.[key] !== true) || !/^[0-9a-f]{64}$/.test(rehearsal?.appAsarSha256 ?? "")
       || !/^[0-9a-f]{64}$/.test(rehearsal?.previousAsarSha256 ?? "") || !Array.isArray(installer?.steps) || !installer.steps.length || installer.steps.some((step) => step.ok !== true)) {
       errors.push("installer.json: real packaged update rehearsal missing or incomplete");
+    }
+    const installerSteps = Array.isArray(installer?.steps) ? installer.steps : [];
+    const hasPassedStep = (match) => installerSteps.some((step) => step?.ok === true && typeof step.name === "string" && (typeof match === "string" ? step.name === match : match.test(step.name)));
+    if (
+      !hasPassedStep("update-rollback")
+      || !hasPassedStep("update-rollback: two failed starts ask; 再试一次 keeps the new version")
+      || !hasPassedStep(/^update-rollback: 回到 .+ reinstalls it, puts the backup back, keeps the library in use, skips .+ and logs it$/)
+    ) {
+      errors.push("installer.json: update-rollback rehearsal steps missing or failed");
+    }
+    if (
+      !hasPassedStep(/^release: "Open with" registered for \d+ types, extension defaults untouched$/)
+      || !hasPassedStep(/^development: "Open with" registered for \d+ types, extension defaults untouched$/)
+      || !hasPassedStep('release: the registered "Open with" command starts light open on the file')
+      || !hasPassedStep('release: "Open with" registration preserved after 0.1.1 -> 0.1.2 over-install, extension defaults untouched')
+      || !hasPassedStep('release: "Open with" registration unaffected by development uninstall, extension defaults untouched')
+      || !hasPassedStep('development: "Open with" registration removed, extension defaults untouched')
+      || !hasPassedStep('release: "Open with" registration removed, extension defaults untouched')
+    ) {
+      errors.push("installer.json: Open with registration, over-install, channel isolation or uninstall steps missing or failed");
     }
     const cases = rehearsal?.cases;
     if (!Array.isArray(cases) || cases.length !== 2 || new Set(cases.map((item) => item.mode)).size !== 2) {
@@ -254,6 +301,14 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
     }
     for (const asset of config.package.assets ?? []) {
       if (pack.assets?.[asset] !== true) errors.push(`package.json: packaged asset ${asset} missing or not verified`);
+    }
+    if (
+      pack.light?.ok !== true
+      || !Number.isFinite(pack.light?.timings?.videoFirstFrameMs) || pack.light.timings.videoFirstFrameMs < 0
+      || !Number.isFinite(pack.light?.timings?.comicFirstPageMs) || pack.light.timings.comicFirstPageMs < 0
+      || !Number.isFinite(pack.light?.timings?.videoMemoryMiB) || pack.light.timings.videoMemoryMiB <= 0
+    ) {
+      errors.push("package.json: light open smoke missing, failed or incomplete");
     }
     if (pack.productAcceptance === "passed") errors.push("package.json: product acceptance must not be computed");
   }

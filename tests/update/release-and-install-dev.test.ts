@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MangaProductApp, TestVault, rawPublicKey, writeBuildInfo } from "@manga/app-core";
 import { inspectPublication } from "../../scripts/check-publication.mjs";
 import { validateWorkflows } from "../../scripts/check-workflows.mjs";
+import { checkLinksOnline, checkLockPins, isMonthEndAutobuild, lockLinks } from "../../scripts/tools/check-tool-links.mjs";
 import { runInstallDev } from "../../scripts/stage/install-dev.mjs";
 import { decideWeeklyRelease } from "../../scripts/stage/release-decide.mjs";
 import { publishVerifiedRelease, verifyReleasePublishArtifacts } from "../../scripts/stage/release-publish-verify.mjs";
@@ -362,7 +363,7 @@ describe("W5: One-command release `stage release` & upgrade rehearsal (AT-161)",
       ci: false,
       publish: false,
       version: "0.1.2",
-      stage: "m10",
+      stage: "fixture-stage",
       fingerprints: {
         sourceFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         lockFingerprint: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -437,7 +438,7 @@ describe("W5: One-command release `stage release` & upgrade rehearsal (AT-161)",
         ci: false,
         publish: false,
         version: "0.1.3",
-        stage: "m10",
+        stage: "fixture-stage",
         fingerprints: { sourceFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
         gitStatusFn: () => "",
         branchCheckFn: () => ({ ok: true }),
@@ -504,6 +505,49 @@ describe("W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and
     );
     expect(withoutExitCheck).not.toBe(releaseYaml);
     expect(validateWorkflows({ releaseYamlText: withoutExitCheck }).ok).toBe(false);
+
+    // The tool addresses are checked in `decide` before the Windows runner is taken (AT-164).
+    const withoutToolLinks = releaseYaml.replace(/\n {6}- name: Check that the pinned tool downloads still exist\n(?: {8}[^\n]*\n)+/, "\n");
+    expect(withoutToolLinks).not.toBe(releaseYaml);
+    const missing = validateWorkflows({ releaseYamlText: withoutToolLinks });
+    expect(missing.ok).toBe(false);
+    expect(missing.errors.join("\n")).toContain("check-tool-links");
+  });
+
+  it("accepts only month-end FFmpeg builds and commit-hash pins, and names the tool whose address is gone (AT-164)", async () => {
+    expect(checkLockPins()).toEqual([]);
+    expect(isMonthEndAutobuild("autobuild-2026-10-31-12-59")).toBe(true);
+    expect(isMonthEndAutobuild("autobuild-2024-02-29-13-02")).toBe(true);
+    expect(isMonthEndAutobuild("autobuild-2026-10-01-13-06")).toBe(false);
+    expect(isMonthEndAutobuild("autobuild-2026-11-30-25-00")).toBe(false);
+    expect(isMonthEndAutobuild("latest")).toBe(false);
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-tool-pins-"));
+    try {
+      fs.mkdirSync(path.join(root, "scripts", "tools"), { recursive: true });
+      for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "subtitle-font.lock.json"]) fs.copyFileSync(path.resolve("scripts/tools", name), path.join(root, "scripts", "tools", name));
+      const ffmpegFile = path.join(root, "scripts", "tools", "ffmpeg.lock.json");
+      const ffmpeg = JSON.parse(fs.readFileSync(ffmpegFile, "utf8"));
+      // Back to a daily build: verify fails.
+      fs.writeFileSync(ffmpegFile, JSON.stringify({ ...ffmpeg, source: { ...ffmpeg.source, tag: "autobuild-2026-10-01-13-06", url: ffmpeg.source.url.replace(ffmpeg.source.tag, "autobuild-2026-10-01-13-06") } }));
+      expect(checkLockPins(root).join("\n")).toContain("not a month-end");
+      fs.writeFileSync(ffmpegFile, JSON.stringify(ffmpeg));
+      // A branch name instead of a commit: verify fails.
+      const fontFile = path.join(root, "scripts", "tools", "subtitle-font.lock.json");
+      fs.writeFileSync(fontFile, fs.readFileSync(fontFile, "utf8").replaceAll(/\/[0-9a-f]{40}\//g, "/main/"));
+      expect(checkLockPins(root).join("\n")).toContain("subtitle-font.lock.json");
+
+      // Online: one address answers 404, the result names it.
+      const links = lockLinks(root);
+      expect(links.length).toBe(5);
+      const gone = links[0].url;
+      const results = await checkLinksOnline(root, { fetchImpl: async (url) => ({ status: url === gone ? 404 : 200 }) as Response });
+      expect(results.filter((entry) => !entry.ok).map((entry) => entry.tool)).toEqual(["ffmpeg.lock.json"]);
+      const failing = await checkLinksOnline(root, { fetchImpl: async () => { throw new Error("offline"); } });
+      expect(failing.every((entry) => !entry.ok && entry.status === 0)).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("handles all 3 `decideWeeklyRelease` scenarios: no tag, no commits since tag, and 2 merged PRs since tag (AT-163)", () => {

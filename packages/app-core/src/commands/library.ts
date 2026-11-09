@@ -71,6 +71,17 @@ export function libraryModule(app: LibraryHost): MangaModule {
       app.runtime.registerCommand("manga.library", "workspace.items", (envelope) => app.sidebar.items(envelope.input as Parameters<SidebarService["items"]>[0]));
       app.runtime.registerCommand("manga.library", "workspace.objects", (envelope) => app.sidebar.objects(envelope.input as Parameters<SidebarService["objects"]>[0]));
       app.runtime.registerCommand("manga.library", "workspace.find", (envelope) => app.sidebar.find(envelope.input as Parameters<SidebarService["find"]>[0]));
+      app.runtime.registerCommand("manga.library", "workspace.dismissRecent", (envelope) => {
+        ownerOnly(envelope);
+        app.assertWritable();
+        return app.sidebar.dismissRecent((envelope.input as { key: string }).key, envelope);
+      });
+      app.runtime.registerCommand("manga.library", "workspace.undismissRecent", (envelope) => {
+        ownerOnly(envelope);
+        app.assertWritable();
+        const input = envelope.input as { key: string; previousDismissedAt?: string | null };
+        return app.sidebar.undismissRecent(input.key, input.previousDismissedAt, envelope);
+      });
       app.runtime.registerCommand("manga.library", "workspace.saveContext", (envelope) => {
         app.assertWritable();
         const input = envelope.input as { contextId: ContextId; state: WorkspaceState };
@@ -233,7 +244,7 @@ export function libraryModule(app: LibraryHost): MangaModule {
       });
       app.runtime.registerCommand("manga.library", "works.open", (envelope) => {
         app.assertWritable();
-        return openResource(app.store, envelope, envelope.input as { resourceId: string });
+        return openResource(app.store, envelope, envelope.input as { resourceId: string; contextId?: ContextId });
       });
       app.runtime.registerCommand("manga.library", "reader.resolveAnchor", (envelope) => {
         const grant = app.grantOf(envelope);

@@ -33,6 +33,9 @@
 .detail-shelf { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-subtle); }
 .detail-shelf select, .detail-section select, .detail-section input[type="text"], .match-search input, .match-search select { padding: 5px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font-size: 13px; }
 .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.work-progress-block { display: grid; gap: 2px; }
+.work-progress-text { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--color-accent); font-weight: 500; margin: 0; }
+.work-context-positions { margin: 0; line-height: 1.5; }
 .detail-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--color-border); }
 .detail-tabs button { padding: 7px 14px; font-size: 13px; color: var(--color-subtle); border-bottom: 2px solid transparent; }
 .detail-tabs button[aria-selected="true"], .detail-tabs button[data-state="active"] { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }

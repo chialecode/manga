@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
+import { PRODUCT_SCHEMA_VERSION } from "@manga/storage-drizzle";
 import { startMockProvider } from "@manga/model-protocol";
 import { waitUntil } from "./driver.ts";
 import { caller, capturePage, js, leaveSettings, openSettingsPage, toRail } from "./common.ts";
@@ -108,7 +109,7 @@ export async function runMigrateSmoke(input: Input): Promise<{ ok: boolean; obse
   const problems: string[] = [];
   const store = appService.store;
   const detail: Record<string, unknown> = { phase, schemaVersion: store.getMeta("schemaVersion"), migration: store.migration ?? null };
-  if (detail.schemaVersion !== "14") problems.push(`the library is at version ${String(detail.schemaVersion)}`);
+  if (detail.schemaVersion !== String(PRODUCT_SCHEMA_VERSION)) problems.push(`the library is at version ${String(detail.schemaVersion)}`);
   if (phase === "migrate-v13") {
     if (store.migration?.from !== 12 || !store.migration.agentMedia) problems.push("the first start did not move the pictures of v12");
   } else if (store.migration) problems.push("the second start migrated again");

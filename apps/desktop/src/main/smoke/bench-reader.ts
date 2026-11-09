@@ -16,8 +16,8 @@ import { caller, js, leaveSettings, toRail } from "./common.ts";
  *   mounted behind the settings tab, and the number of readers the page holds is read with it.
  */
 
-export type DanmakuBenchSpec = { runs: number; baselineRuns: number; playMs: number; comments: number };
-export type MemoryBenchSpec = { runs: number };
+export type DanmakuBenchSpec = { runs: number; baselineRuns: number; playMs: number; comments: number; resourceId?: string };
+export type MemoryBenchSpec = { runs: number; resourceId?: string };
 
 const SAMPLE = "video-mp4-h264-aac";
 
@@ -79,8 +79,8 @@ export async function measureDanmakuBench(appService: MangaProductApp, grant: st
   const call = caller(appService, grant);
   const failures: string[] = [];
   view.showInactive();
-  await call("settings.skipAi", {});
-  const resourceId = await seedVideo(appService, call);
+  if (!spec.resourceId) await call("settings.skipAi", {});
+  const resourceId = spec.resourceId ?? await seedVideo(appService, call);
   if (!resourceId) return { ok: false, failures: ["the synthetic video could not be put in a library path"] };
   const chosen = await call("danmaku.choose", { resourceId, episodeId: 900102, animeId: 9001, animeTitle: "样例动画", episodeTitle: "第2话" });
   if (chosen.status !== "ok") failures.push(`the episode could not be chosen: ${chosen.error?.message ?? "failed"}`);
@@ -160,7 +160,7 @@ export async function readMemory(): Promise<{ total: number; byType: Record<stri
   const values: Array<ReturnType<typeof snapshot>> = [];
   for (let i = 0; i < 5; i += 1) {
     values.push(snapshot());
-    await sleep(300); // real time: 多次进程工作集内存采样的固定间隔
+    if (i + 1 < 5) await sleep(300); // real time: 多次进程工作集内存采样的固定间隔
   }
   return values.sort((a, b) => a.total - b.total)[Math.floor(values.length / 2)]!;
 }
@@ -169,10 +169,10 @@ export async function measureMemoryBench(appService: MangaProductApp, grant: str
   const call = caller(appService, grant);
   const failures: string[] = [];
   view.showInactive();
-  await call("settings.skipAi", {});
-  const resourceId = await seedVideo(appService, call);
+  if (!spec.resourceId) await call("settings.skipAi", {});
+  const resourceId = spec.resourceId ?? await seedVideo(appService, call);
   if (!resourceId) return { ok: false, failures: ["the synthetic video could not be put in a library path"] };
-  await view.webContents.reload();
+  if (!spec.resourceId) await view.webContents.reload();
   await toRail(view);
   const raw: number[] = [];
   const rows: Array<Record<string, unknown>> = [];
@@ -202,16 +202,43 @@ export async function measureMemoryBench(appService: MangaProductApp, grant: str
     // A reading that came out lower is noise in what the allocator gave back; the figure is what the player costs, so it is not below nothing. The row keeps what was read.
     raw.push(Math.max(0, grew));
     rows.push({ withoutMiB: Math.round(without.total), withMiB: Math.round(withReader.total), grewMiB: grew, grewByProcessMiB: grewBy, kept, mountedReaders });
-    // Settings are left with the back arrow and the player is in front again (its title in the strip), and is closed for the next run: the cross of its tab.
-    const back = await leaveSettings(view) && await showTab(view, { kind: "reader" }) && await waitUntil(view, `${DRAWN}(${PICK}("video-reader"))`, 6000);
-    if (!back) failures.push(`run ${run + 1}: the player did not come back to the front`);
-    await closeTabs(view, ["reader"]);
-    const closed = await waitUntil(view, `!document.querySelector('[data-testid="video-element"]')`, 6000);
-    if (!closed) { failures.push(`run ${run + 1}: the player could not be closed again`); break; }
-    await sleep(800); // real time: 关闭播放器标签后等待资源释放再进入下一轮内存测量
+    if (run + 1 < spec.runs) {
+      // Settings are left with the back arrow and the player is in front again (its title in the strip), and is closed for the next run: the cross of its tab.
+      const back = await leaveSettings(view) && await showTab(view, { kind: "reader" }) && await waitUntil(view, `${DRAWN}(${PICK}("video-reader"))`, 6000);
+      if (!back) failures.push(`run ${run + 1}: the player did not come back to the front`);
+      await closeTabs(view, ["reader"]);
+      const closed = await waitUntil(view, `!document.querySelector('[data-testid="video-element"]')`, 6000);
+      if (!closed) { failures.push(`run ${run + 1}: the player could not be closed again`); break; }
+      await sleep(800); // real time: 关闭播放器标签后等待资源释放再进入下一轮内存测量
+    }
   }
   for (const folder of seedFolders.splice(0)) {
     try { fs.rmSync(folder, { recursive: true, force: true }); } catch { /* ignore */ }
   }
   return { ok: failures.length === 0 && raw.length === spec.runs, failures, raw, rows, unit: "MiB", processes: app.getAppMetrics().map((item) => item.type).sort() };
+}
+
+/**
+ * The full application's comparison for light open (第 7 节, recorded, not a limit): from the start of its process to the first frame of a video
+ * that is not in the library yet. Its folder is added as a library path, scanned, and the video opened from the shelf, as a person would.
+ */
+export async function measureOpenVideo(appService: MangaProductApp, grant: string, view: BrowserWindow, file: string): Promise<Record<string, unknown> & { ok: boolean }> {
+  const started = Number(process.env.MANGA_SMOKE_SPAWNED_AT) || Date.now();
+  const call = caller(appService, grant);
+  view.showInactive();
+  await call("settings.skipAi", {});
+  const added = await call("library.paths.add", { pathHandle: appService.registerPath("directory", path.dirname(file)), mediaKind: "video", autoScan: true });
+  if (added.status !== "ok") return { ok: false, failures: ["the folder could not be added"] };
+  await appService.scan.whenIdle();
+  const works = ((await call("works.list", { limit: 20, group: false })).value as { items?: Array<{ id: string }> } | undefined)?.items ?? [];
+  const got = works[0] ? (await call("works.get", { workId: works[0].id })).value as { resources?: Array<{ id: string }>; lastResource?: { id: string } | null } | undefined : undefined;
+  const resourceId = got?.lastResource?.id ?? got?.resources?.[0]?.id;
+  if (!resourceId) return { ok: false, failures: ["the video was not listed"] };
+  const listedMs = Date.now() - started;
+  await view.webContents.reload();
+  await toRail(view);
+  const opened = await openFromShelf(view, "video", resourceId, 20_000);
+  const shown = opened && await waitUntil(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return Boolean(v && v.readyState >= 2 && v.videoWidth > 0); })()`, 30_000);
+  const firstFrameMs = Date.now() - started;
+  return { ok: Boolean(shown), failures: shown ? [] : ["the first frame did not come"], firstFrameMs, listedMs };
 }

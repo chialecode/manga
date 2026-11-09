@@ -19,14 +19,17 @@ export type RecordingSettings = {
   /** How long the dictionary hint sent with each block of audio may be, and the lengths set for single connections. */
   promptChars: number;
   promptCharsByConnection: Record<string, number>;
-  overlay: { x?: number; y?: number; width: number; height: number };
+  overlay: { x?: number; y?: number };
 };
 
-/** What a save may carry: the same fields, and a connection's hint length that is `null` goes back to the general one. */
-export type RecordingPatch = Partial<Omit<RecordingSettings, "promptCharsByConnection">> & { promptCharsByConnection?: Record<string, number | null> };
+/** What a save may carry: the same fields, and a connection's hint length or overlay position that is `null` goes back to its default. */
+export type RecordingPatch = Partial<Omit<RecordingSettings, "promptCharsByConnection" | "overlay">> & {
+  promptCharsByConnection?: Record<string, number | null>;
+  overlay?: { x?: number | null; y?: number | null };
+};
 
 export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
-  deviceId: null, holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, language: null, promptChars: 600, promptCharsByConnection: {}, overlay: { width: 280, height: 84 },
+  deviceId: null, holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, language: null, promptChars: 600, promptCharsByConnection: {}, overlay: {},
 };
 
 export type RecorderDeps = {
@@ -44,7 +47,7 @@ export type RecorderDeps = {
 
 const REPEAT_SILENCE_MS = 1500;
 const HOLD_CHECK_MS = 500;
-const OVERLAY_EVERY_MS = 200;
+const OVERLAY_EVERY_MS = 85;
 
 /**
  * Recording as the app uses it: one recorder, the saved recording settings, the in-app keys (hold and toggle), the
@@ -76,8 +79,12 @@ export function useRecorder(deps: RecorderDeps) {
 
   const saveSettings = useCallback(async (patch: RecordingPatch) => {
     setSettings((current) => {
-      const { promptCharsByConnection, ...rest } = patch;
-      const next = { ...current, ...rest };
+      const { promptCharsByConnection, overlay, ...rest } = patch;
+      const next: RecordingSettings = { ...current, ...rest };
+      if (overlay) {
+        if (overlay.x === null || overlay.y === null) next.overlay = {};
+        else next.overlay = { ...(typeof overlay.x === "number" ? { x: overlay.x } : current.overlay.x !== undefined ? { x: current.overlay.x } : {}), ...(typeof overlay.y === "number" ? { y: overlay.y } : current.overlay.y !== undefined ? { y: current.overlay.y } : {}) };
+      }
       if (promptCharsByConnection) {
         const merged: Record<string, number> = { ...current.promptCharsByConnection };
         for (const [id, value] of Object.entries(promptCharsByConnection)) { if (value === null) delete merged[id]; else merged[id] = value; }
@@ -214,6 +221,7 @@ export function useRecorder(deps: RecorderDeps) {
       strings: {
         recording: i18n.t("record.recording"), stopping: i18n.t("record.stopping"), stop: i18n.t("record.stop"),
         keep: i18n.t("record.keep"), discard: i18n.t("record.discard"), hold: i18n.t("record.modeHold"), toggle: i18n.t("record.modeToggle"),
+        mic: i18n.t("msettings.device"),
       },
     });
   }, [state.phase, state.elapsedMs, state.level, state.retention, state.mode, state.deviceLabel, i18n]);

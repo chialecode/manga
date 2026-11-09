@@ -2,7 +2,7 @@ import { MangaError, PROMPT_LIMIT_DEFAULT, PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } 
 import { checkOverrides, type KeyOverrides } from "@manga/contracts/keys";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 
-export type Overlay = { x?: number; y?: number; width: number; height: number };
+export type Overlay = { x?: number; y?: number };
 
 export type RecordingSettings = {
   /** `null` is the system default microphone. */
@@ -29,7 +29,7 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   retention: "keep",
   duckPlayback: "lower",
   boundaryMarginMs: 300,
-  overlay: { width: 280, height: 84 },
+  overlay: {},
   language: null,
   promptChars: PROMPT_LIMIT_DEFAULT,
   promptCharsByConnection: {},
@@ -104,18 +104,41 @@ function read<T extends object>(store: DrizzleStore, key: string, fallback: T): 
   }
 }
 
-export function readRecordingSettings(store: DrizzleStore): RecordingSettings {
-  return read(store, RECORDING_KEY, DEFAULT_RECORDING_SETTINGS);
+const LEGACY_OVERLAY_TARGET_WIDTH = 116;
+
+function normalizeOverlay(raw: unknown): Overlay {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const box = raw as { x?: unknown; y?: unknown; width?: unknown };
+  if (typeof box.x !== "number" || !Number.isFinite(box.x) || typeof box.y !== "number" || !Number.isFinite(box.y)) return {};
+  const x = typeof box.width === "number" && Number.isFinite(box.width) && box.width !== LEGACY_OVERLAY_TARGET_WIDTH
+    ? Math.round(box.x + box.width - LEGACY_OVERLAY_TARGET_WIDTH)
+    : Math.round(box.x);
+  return { x, y: Math.round(box.y) };
 }
 
-export function writeRecordingSettings(store: DrizzleStore, patch: Partial<Omit<RecordingSettings, "overlay" | "promptCharsByConnection">> & { overlay?: Partial<Overlay>; promptCharsByConnection?: Record<string, number | null> }): RecordingSettings {
+export function readRecordingSettings(store: DrizzleStore): RecordingSettings {
+  const settings = read(store, RECORDING_KEY, DEFAULT_RECORDING_SETTINGS);
+  return { ...settings, overlay: normalizeOverlay(settings.overlay) };
+}
+
+export function writeRecordingSettings(store: DrizzleStore, patch: Partial<Omit<RecordingSettings, "overlay" | "promptCharsByConnection">> & { overlay?: { x?: number | null; y?: number | null }; promptCharsByConnection?: Record<string, number | null> }): RecordingSettings {
   const current = readRecordingSettings(store);
   const byConnection = { ...current.promptCharsByConnection };
   for (const [connectionId, value] of Object.entries(patch.promptCharsByConnection ?? {})) {
     if (value === null) delete byConnection[connectionId];
     else byConnection[connectionId] = value;
   }
-  const next: RecordingSettings = { ...current, ...patch, promptCharsByConnection: byConnection, overlay: { ...current.overlay, ...(patch.overlay ?? {}) } };
+  let overlay: Overlay = { ...current.overlay };
+  if (patch.overlay) {
+    if (patch.overlay.x === null || patch.overlay.y === null) {
+      overlay = {};
+    } else {
+      if (typeof patch.overlay.x === "number" && Number.isFinite(patch.overlay.x)) overlay.x = Math.round(patch.overlay.x);
+      if (typeof patch.overlay.y === "number" && Number.isFinite(patch.overlay.y)) overlay.y = Math.round(patch.overlay.y);
+      if (overlay.x === undefined || overlay.y === undefined) overlay = {};
+    }
+  }
+  const next: RecordingSettings = { ...current, ...patch, promptCharsByConnection: byConnection, overlay };
   if (next.deviceId === undefined) next.deviceId = null;
   for (const key of [next.holdKey, next.toggleKey]) {
     if (!KEY_NAME.test(key)) throw new MangaError("VALIDATION_ERROR", "a recording key must be a key name such as F9");

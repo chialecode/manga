@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -37,6 +38,37 @@ import {
 
 export const DEFAULT_UPDATE_INITIAL_DELAY_MS = 10 * 60 * 1000;
 export const DEFAULT_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** The version the person went back from after it did not start (4.2); written by the bootstrap's rollback, cleared from 设置 › 更新. */
+export const UPDATE_SKIP_FILE = "update-skip.json";
+/** The bootstrap's note of a rollback, put in the operation log by the version it went back to. */
+export const UPDATE_ROLLBACK_RECORD = "rollback-record.json";
+/** The version and SHA-512 of the installer kept in the updater cache (`installer.exe`), so the next update can keep it as the way back. */
+const CACHED_INSTALLER_RECORD = "installer.json";
+const PREVIOUS_DIR = "previous";
+
+function sha512HexOfFile(file: string): string {
+  const hash = createHash("sha512");
+  const fd = fs.openSync(file, "r");
+  try {
+    const buffer = Buffer.alloc(1024 * 1024);
+    for (;;) {
+      const read = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (read === 0) break;
+      hash.update(buffer.subarray(0, read));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest("hex");
+}
+
+function writeJsonAtomic(file: string, body: unknown): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const staging = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(staging, `${JSON.stringify(body, null, 2)}\n`);
+  fs.renameSync(staging, file);
+}
+
 export const DEFAULT_GITHUB_FEED_URL = "https://github.com/chialecode/manga/releases/latest/download";
 
 /** The desktop supplies electron-updater; the service owns settings, trust, saving and recovery. */
@@ -182,6 +214,7 @@ export class UpdateService {
     this.lastCheckedAt = this.store.getMeta(META_LAST_CHECKED) ?? null;
     this.state = this.buildInfo.channel === "release" ? "idle" : "unavailable";
 
+    this.recordRollback();
     this.detectFirstLaunchAfterUpdate();
   }
 
@@ -246,6 +279,7 @@ export class UpdateService {
       }
     }
     if (patch.detectFirstLaunch) {
+      this.recordRollback();
       this.detectFirstLaunchAfterUpdate();
     }
     this.emitStatus();
@@ -256,6 +290,97 @@ export class UpdateService {
     fs.mkdirSync(this.cacheDir, { recursive: true });
     fs.writeFileSync(path.join(this.cacheDir, "installer.exe"), installerBytes);
     fs.writeFileSync(path.join(this.cacheDir, "current.blockmap"), blockMapGzipBytes);
+    this.recordCachedInstaller(this.buildInfo.version);
+  }
+
+  private recordCachedInstaller(version: string, sha512Hex?: string): void {
+    try {
+      const file = path.join(this.cacheDir, "installer.exe");
+      writeJsonAtomic(path.join(this.cacheDir, CACHED_INSTALLER_RECORD), { version, sha512Hex: sha512Hex ?? sha512HexOfFile(file) });
+    } catch {
+      // Without the record the next update simply offers no one-click way back.
+    }
+  }
+
+  /**
+   * Keep the installer of the running version as the way back (4.2): copied to `cache\updater\previous\` with its version and SHA-512, one at a
+   * time. Only an installer recorded as this version, whose bytes are still the recorded ones, is kept; without one the update goes on as before
+   * and a failed start offers the download page instead.
+   */
+  keepPreviousInstaller(target: { version: string; schemaVersion: number | null; backup: string | null }): boolean {
+    const previousDir = path.join(this.cacheDir, PREVIOUS_DIR);
+    try {
+      const cached = path.join(this.cacheDir, "installer.exe");
+      const record = JSON.parse(fs.readFileSync(path.join(this.cacheDir, CACHED_INSTALLER_RECORD), "utf8")) as { version?: string; sha512Hex?: string };
+      if (record.version !== this.buildInfo.version || typeof record.sha512Hex !== "string" || !fs.existsSync(cached)) return false;
+      const sha512Hex = sha512HexOfFile(cached);
+      if (sha512Hex !== record.sha512Hex.toLowerCase()) return false;
+      fs.rmSync(previousDir, { recursive: true, force: true });
+      fs.mkdirSync(previousDir, { recursive: true });
+      const file = `installer-${this.buildInfo.version.replace(/[^A-Za-z0-9._-]/g, "_")}.exe`;
+      fs.copyFileSync(cached, path.join(previousDir, `${file}.part`));
+      fs.renameSync(path.join(previousDir, `${file}.part`), path.join(previousDir, file));
+      writeJsonAtomic(path.join(previousDir, "previous.json"), {
+        version: this.buildInfo.version,
+        sha512Hex,
+        file,
+        schemaVersion: this.buildInfo.schemaVersion,
+        targetVersion: target.version,
+        targetSchemaVersion: target.schemaVersion,
+        database: this.databaseFile(),
+        backup: target.backup,
+        keptAt: new Date(this.now()).toISOString(),
+      });
+      return true;
+    } catch {
+      try { fs.rmSync(previousDir, { recursive: true, force: true }); } catch { /* nothing kept */ }
+      return false;
+    }
+  }
+
+  private databaseFile(): string | null {
+    const name = (this.store.sqlite as { name?: unknown }).name;
+    return typeof name === "string" && name !== "" && name !== ":memory:" ? path.resolve(name) : null;
+  }
+
+  /** The version skipped after going back from it (4.2), or null. */
+  skippedVersion(): string | null {
+    try {
+      const body = JSON.parse(fs.readFileSync(path.join(this.layout.partitions.data, UPDATE_SKIP_FILE), "utf8")) as { version?: unknown };
+      return typeof body.version === "string" && body.version ? body.version : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** "取消跳过": the skipped version is offered again at the next check. */
+  unskip(): UpdateStatus {
+    // The command itself is what the operation log records (update.unskip).
+    if (this.skippedVersion()) {
+      fs.rmSync(path.join(this.layout.partitions.data, UPDATE_SKIP_FILE), { force: true });
+      this.emitStatus();
+    }
+    return this.status();
+  }
+
+  /** The bootstrap went back to this version: put that in the operation log once. */
+  private recordRollback(): void {
+    const file = path.join(this.layout.partitions.data, UPDATE_ROLLBACK_RECORD);
+    let body: { from?: unknown; to?: unknown; databaseRestored?: unknown; keptAs?: unknown };
+    try { body = JSON.parse(fs.readFileSync(file, "utf8")) as typeof body; } catch { return; }
+    try { fs.rmSync(file, { force: true }); } catch { /* recorded once is enough */ }
+    if (typeof body.from !== "string" || typeof body.to !== "string") return;
+    this.log.record({
+      actorKind: "user",
+      category: "settings",
+      action: "update.rolledBack",
+      objectKind: "update",
+      objectId: body.from,
+      objectLabel: body.from,
+      summaryKey: body.databaseRestored === true ? "log.update.rolledBackRestored" : "log.update.rolledBack",
+      summaryParams: { from: body.from, to: body.to, ...(typeof body.keptAs === "string" ? { keptAs: body.keptAs } : {}) },
+      outcome: "ok",
+    });
   }
 
   private readStoredSettings(): UpdateSettings {
@@ -446,6 +571,7 @@ export class UpdateService {
       errorCode: this.errorCode,
       settings: this.settings,
       justUpdated: this.justUpdated,
+      skippedVersion: this.buildInfo.channel === "release" ? this.skippedVersion() : null,
     });
   }
 
@@ -642,6 +768,14 @@ export class UpdateService {
     }
     if (cmp === 0) {
       this.state = this.verifiedReceipt ? "ready" : "idle";
+      this.emitStatus();
+      return this.status();
+    }
+    // The version the person went back from is not offered again until a newer one comes or they cancel the skip (4.2).
+    if (this.skippedVersion() === manifest.version) {
+      this.state = "idle";
+      this.availableVersion = null;
+      this.pendingManifest = null;
       this.emitStatus();
       return this.status();
     }
@@ -1178,7 +1312,8 @@ export class UpdateService {
     try {
       await this.onBeforeInstall?.(mode);
       this.lifecycle.signal.throwIfAborted();
-      if (!this.writePreUpdateBackup(this.buildInfo.version, { refresh: true })) {
+      const backup = this.writePreUpdateBackup(this.buildInfo.version, { refresh: true });
+      if (!backup) {
         throw new MangaError("UPDATE_UNAVAILABLE", "更新前备份失败，已保留当前版本");
       }
       this.store.setMeta(META_PENDING_FROM, this.buildInfo.version);
@@ -1191,9 +1326,12 @@ export class UpdateService {
         throw new MangaError("UPDATE_VERIFY_FAILED", finalVerification.message);
       }
 
+      // The running version's installer becomes the way back before the new one takes its place in the cache.
+      this.keepPreviousInstaller({ version: receipt.version, schemaVersion: this.targetSchemaVersion, backup });
       try {
         fs.mkdirSync(this.cacheDir, { recursive: true });
         fs.copyFileSync(receipt.installerPath, path.join(this.cacheDir, "installer.exe"));
+        this.recordCachedInstaller(receipt.version, Buffer.from(receipt.sha512, "base64").toString("hex"));
         const pendingBlockMap = path.join(this.pendingDir, "current.blockmap");
         if (fs.existsSync(pendingBlockMap)) {
           fs.copyFileSync(pendingBlockMap, path.join(this.cacheDir, "current.blockmap"));

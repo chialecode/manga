@@ -37,9 +37,9 @@ describe("schema v12 migration (one workspace: conversations, positions, tabs an
     before.close();
     const store = new DrizzleStore({ profileDir: seeded.data, worksDir: seeded.works, hostId: "migrate-v12" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(14);
-      expect(store.getMeta("schemaVersion")).toBe("14");
-      expect(store.migration).toMatchObject({ from: 11, to: 14, workspace: { convertedToShared: 2, fromDeletedProjects: 0, contexts: 2, tabs: 2, lastContext: "proj-a" } });
+      expect(PRODUCT_SCHEMA_VERSION).toBe(15);
+      expect(store.getMeta("schemaVersion")).toBe("15");
+      expect(store.migration).toMatchObject({ from: 11, to: 15, workspace: { convertedToShared: 2, fromDeletedProjects: 0, contexts: 2, tabs: 2, lastContext: "proj-a" } });
 
       // The backup is v11, untouched: the old progress key, the mark of closed conversations, the old shell preference.
       expect(fs.readdirSync(seeded.data).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v11"]);
@@ -116,7 +116,7 @@ describe("schema v12 migration (one workspace: conversations, positions, tabs an
     db.close();
     const store = new DrizzleStore({ profileDir: seeded.data, worksDir: seeded.works, hostId: "orphan-v12" });
     try {
-      expect(store.migration).toMatchObject({ from: 11, to: 14, workspace: { convertedToShared: 2, fromDeletedProjects: 1 } });
+      expect(store.migration).toMatchObject({ from: 11, to: 15, workspace: { convertedToShared: 2, fromDeletedProjects: 1 } });
       expect(store.sqlite.prepare("SELECT kind, target_id, title, project_id FROM agent_sessions WHERE id = 'ses-proj-gone'").get()).toEqual({ kind: "shared", target_id: null, title: "已删除的项目", project_id: null });
       expect(store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_sessions WHERE kind = 'project' AND project_id NOT IN (SELECT id FROM projects)").get()).toEqual({ n: 0 });
       expect(store.getMeta("conversation.current.project.proj-gone")).toBeUndefined();
@@ -169,7 +169,7 @@ describe("schema v12 migration (one workspace: conversations, positions, tabs an
     const reference = seedV11();
     const direct = new DrizzleStore({ profileDir: reference.data, worksDir: reference.works, hostId: "direct-v12" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("14");
+      expect(retried.getMeta("schemaVersion")).toBe("15");
       expect(fs.readdirSync(seeded.data).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v11"]);
       // Contexts are saved with fresh tab ids, so the comparison is on everything but those.
       const strip = (state: ReturnType<typeof dumpState>) => ({ ...state, contexts: state.contexts.map((row) => ({ context_id: (row as { context_id: string }).context_id })), shell: { revision: (state.shell as { revision: number }).revision } });
@@ -190,7 +190,7 @@ describe("schema v12 migration (one workspace: conversations, positions, tabs an
     fs.rmSync(path.join(seeded.data, "manga.sqlite.premigrate-v11"));
     const again = new DrizzleStore({ profileDir: seeded.data, worksDir: seeded.works, hostId: "restore-again" });
     try {
-      expect(again.migration).toMatchObject({ from: 11, to: 14 });
+      expect(again.migration).toMatchObject({ from: 11, to: 15 });
       const strip = (state: ReturnType<typeof dumpState>) => ({ ...state, contexts: state.contexts.map((row) => ({ context_id: (row as { context_id: string }).context_id })) });
       expect(strip(dumpState(again.sqlite))).toEqual(strip(once));
     } finally {
@@ -215,7 +215,7 @@ describe("schema v12 migration (one workspace: conversations, positions, tabs an
     const { dir } = makeLegacyProfile(10);
     const chained = new DrizzleStore({ profileDir: dir, hostId: "chain-v12" });
     try {
-      expect(chained.migration).toMatchObject({ from: 10, to: 14, workspace: { convertedToShared: 0, contexts: 0, tabs: 0, lastContext: null } });
+      expect(chained.migration).toMatchObject({ from: 10, to: 15, workspace: { convertedToShared: 0, contexts: 0, tabs: 0, lastContext: null } });
       expect(fs.readdirSync(dir).filter((name) => name.includes("premigrate"))).toEqual(["manga.sqlite.premigrate-v10"]);
       expect(names(chained.sqlite, "progress")).toContain("context_id");
       expect(chained.sqlite.prepare("SELECT context_id FROM progress").all()).toEqual([{ context_id: "" }]);
@@ -225,7 +225,7 @@ describe("schema v12 migration (one workspace: conversations, positions, tabs an
     }
     const fresh = new DrizzleStore({ profileDir: fs.mkdtempSync(path.join(os.tmpdir(), "manga-v12-fresh-")), hostId: "fresh-v12" });
     try {
-      expect(fresh.getMeta("schemaVersion")).toBe("14");
+      expect(fresh.getMeta("schemaVersion")).toBe("15");
       expect(fresh.migration).toBeNull();
       expect(tablesOf(fresh.sqlite)).toEqual(expect.arrayContaining(["workspace_contexts", "project_material_exclusions", "progress_latest"]));
       expect(tablesOf(fresh.sqlite)).not.toContain("closed_sessions");

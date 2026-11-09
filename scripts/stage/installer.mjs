@@ -8,11 +8,13 @@ import {
   TEST_CHANNEL_INSTALL,
   buildInstaller,
   compareRealInstallations,
+  readOpenWithState,
   removeTestInstallations,
   snapshotRealInstallations,
 } from "./installer-lib.mjs";
 import { readBuildInfoIfPresent, resolveBuildVersion } from "./version-lib.mjs";
 import { runPackagedUpdateRehearsal } from "./update-rehearsal.mjs";
+import { rehearseRollback } from "./rollback-rehearsal.mjs";
 
 /**
  * A real installation, upgrade rehearsal (`0.1.1` -> `0.1.2`), and removal of both channels on this machine using isolated test installation identities
@@ -56,7 +58,7 @@ const step = (name, ok, detail = {}) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function powershell(command) {
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command], { encoding: "utf8", windowsHide: true, timeout: 20_000 });
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`], { encoding: "utf8", windowsHide: true, timeout: 20_000 });
   if (result.status !== 0) throw new Error("could not inspect the test installation state");
   return (result.stdout ?? "").trim();
 }
@@ -120,6 +122,7 @@ const evidence = runDir();
 const startedAt = new Date().toISOString();
 fs.rmSync(path.join(evidence, "installer.json"), { force: true });
 const realBefore = snapshotRealInstallations();
+const extensionDefaultsBefore = readOpenWithState("release", { testIdentity: true }).extensionDefaults;
 const roamingBefore = roamingNames();
 let failure = null;
 let updateRehearsal = null;
@@ -164,6 +167,13 @@ try {
       { version: entry?.DisplayVersion ?? null, publisher: entry?.Publisher ?? null, seconds: Math.round(result.ms / 1000) },
     );
     step(`${channel}: Start menu and desktop shortcuts`, shortcuts(channel).every((file) => fs.existsSync(file)));
+    // "Open with" (4.5, AT-166): every ProgID, OpenWithProgids value, Applications entry and Capabilities value is there with this folder's
+    // executable, and no extension's own default value changed.
+    const openWith = readOpenWithState(channel, { testIdentity: true, exePath: exeOf(channel) });
+    const wrong = openWith.values.filter((value) => value.actual !== value.expected);
+    step(`${channel}: "Open with" registered for ${openWith.values.filter((value) => value.key.endsWith("OpenWithProgids")).length} types, extension defaults untouched`,
+      wrong.length === 0 && openWith.extensionDefaults === extensionDefaultsBefore,
+      { values: openWith.values.length, wrong: wrong.slice(0, 3).map((value) => `${value.key}|${value.name}`) });
     keys[channel] = entry?.Key;
   }
   step("both channels installed at once", uninstallEntries().length === 2);
@@ -186,6 +196,22 @@ try {
         && !fs.existsSync(downloads)
         && !fs.existsSync(path.join(appRoot, "works")),
     );
+  }
+  // The registered command opens a file in light open: run exactly what Explorer would, on a file light open does not take, and read its answer.
+  {
+    const command = readOpenWithState("release", { testIdentity: true, exePath: exeOf("release") }).values.find((value) => value.key.endsWith("\\MANGA.Test.Video\\shell\\open\\command"))?.actual ?? "";
+    const parts = [...command.matchAll(/"([^"]*)"|(\S+)/g)].map((match) => match[1] ?? match[2]);
+    const sample = path.join(temp, "notes.txt");
+    fs.writeFileSync(sample, "not a comic\n");
+    const report = path.join(temp, "open-with-report.json");
+    const result = spawnSync(parts[0], [...parts.slice(1).map((part) => (part === "%1" ? sample : part)), "--manga-smoke"], {
+      env: { ...isolatedEnv(), MANGA_SMOKE_PHASE: "light-unsupported", MANGA_SMOKE_REPORT: report }, timeout: 120_000, windowsHide: true,
+    });
+    const body = (() => { try { return JSON.parse(fs.readFileSync(report, "utf8")); } catch { return null; } })();
+    step("release: the registered \"Open with\" command starts light open on the file",
+      path.resolve(parts[0] ?? "").toLowerCase() === path.resolve(exeOf("release")).toLowerCase() && parts[1] === "--manga-light" && parts[2] === "%1"
+        && result.status === 0 && body?.ok === true && fs.existsSync(path.join(places.local, TEST_CHANNEL_INSTALL.release.dirName, "light")),
+      { status: result.status, phase: body?.phase ?? null });
   }
   step("nothing written to the roaming profile", JSON.stringify(roamingNames()) === JSON.stringify(roamingBefore), { before: roamingBefore.length, after: roamingNames().length });
 
@@ -225,6 +251,27 @@ try {
       && fs.existsSync(path.join(releaseAppRoot, "logs", "smoke-initial.json")),
     { previousVersion: releaseVersionA, upgradedVersion: upgradedBuild?.version ?? null, registryVersion: upgradedEntry?.DisplayVersion ?? null },
   );
+  {
+    const openWithAfterUpgrade = readOpenWithState("release", { testIdentity: true, exePath: exeOf("release") });
+    const wrongAfterUpgrade = openWithAfterUpgrade.values.filter((value) => value.actual !== value.expected);
+    step(
+      "release: \"Open with\" registration preserved after 0.1.1 -> 0.1.2 over-install, extension defaults untouched",
+      wrongAfterUpgrade.length === 0
+        && Object.values(openWithAfterUpgrade.keys).every(Boolean)
+        && openWithAfterUpgrade.extensionDefaults === extensionDefaultsBefore,
+      { values: openWithAfterUpgrade.values.length, wrong: wrongAfterUpgrade.slice(0, 3).map((value) => `${value.key}|${value.name}`) },
+    );
+  }
+
+  // The way back after an update that does not start (4.2, update-rollback): 0.1.2 fails on purpose, the third start asks, "再试一次" stays and
+  // "回到 0.1.1" reinstalls 0.1.1 with the library from before the update.
+  const rollback = await rehearseRollback({
+    exe: exeOf("release"), installDir: installDir("release"), appRoot: releaseAppRoot, previousInstaller: installers.release,
+    previousVersion: releaseVersionA, nextVersion: releaseVersionB, env: isolatedEnv(), schemaVersion: upgradedBuild?.schemaVersion ?? 15,
+    evidenceDir: evidence,
+  });
+  for (const item of rollback.steps) step(item.name, item.ok, Object.fromEntries(Object.entries(item).filter(([key]) => key !== "name" && key !== "ok")));
+  step("update-rollback", rollback.ok);
 
   // Removing each leaves the data and the person's files, and nothing of the installation.
   for (const channel of ["development", "release"]) {
@@ -238,6 +285,21 @@ try {
         && !uninstallEntries().some((item) => item.DisplayName === TEST_CHANNEL_INSTALL[channel].productName)
         && powershell(`Test-Path 'HKCU:\\Software\\${keys[channel]}'`) === "False",
     );
+    const openWith = readOpenWithState(channel, { testIdentity: true, exePath: exeOf(channel) });
+    step(`${channel}: "Open with" registration removed, extension defaults untouched`,
+      openWith.values.every((value) => value.actual === null) && Object.values(openWith.keys).every((present) => !present) && openWith.extensionDefaults === extensionDefaultsBefore,
+      { left: openWith.values.filter((value) => value.actual !== null).length, keys: Object.values(openWith.keys).filter(Boolean).length });
+    if (channel === "development") {
+      const releaseOpenWith = readOpenWithState("release", { testIdentity: true, exePath: exeOf("release") });
+      const releaseWrong = releaseOpenWith.values.filter((value) => value.actual !== value.expected);
+      step(
+        "release: \"Open with\" registration unaffected by development uninstall, extension defaults untouched",
+        releaseWrong.length === 0
+          && Object.values(releaseOpenWith.keys).every(Boolean)
+          && releaseOpenWith.extensionDefaults === extensionDefaultsBefore,
+        { values: releaseOpenWith.values.length, wrong: releaseWrong.slice(0, 3).map((value) => `${value.key}|${value.name}`) },
+      );
+    }
     step(`${channel}: data and files kept`, fs.existsSync(path.join(appRoot, "data", "manga.sqlite")) && fs.existsSync(path.join(places.documents, dirName)));
   }
   preparedInstallers.developmentNext = await buildInstaller({

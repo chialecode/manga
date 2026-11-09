@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MangaProductApp, TestVault } from "../../packages/app-core/src/index.ts";
 import { inspectPublication } from "../check-publication.mjs";
-import { desktopPackageDir, latestDesktopPackage } from "../desktop-paths.ts";
+import { desktopPackageDir, latestDesktopPackage, updateSigningKeyFile } from "../desktop-paths.ts";
 import {
   TEST_CHANNEL_INSTALL,
   appUpdateYaml,
@@ -397,7 +397,7 @@ export async function runStageRelease(options = {}) {
   const evidenceDir = options.evidenceDir ?? runDir();
   const releaseRootDir = options.releaseRootDir ?? path.join(cwd, "dist/release");
   const signingKeyPath = options.signingKeyPath
-    ?? (process.env.MANGA_UPDATE_SIGNING_KEY?.trim() || path.join(cwd, "dist/keys/update-release.pem"));
+    ?? (process.env.MANGA_UPDATE_SIGNING_KEY?.trim() || updateSigningKeyFile);
 
   // ---- Step 1: Prerequisites (前提) ----
   const gitStatus = options.gitStatusFn ? options.gitStatusFn(cwd) : defaultGitStatusPorcelain(cwd);

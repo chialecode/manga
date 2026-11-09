@@ -1,6 +1,6 @@
 # 仓库地图与环境事实
 
-核对日期：2026-10-06。本文区分真实文件与目标结构。
+核对日期：2026-11-11。本文区分真实文件与目标结构。
 
 ## 当前存在
 
@@ -14,8 +14,8 @@
 | `packages/storage-drizzle` | better-sqlite3 + Drizzle + FTS5 产品存储与迁移 |
 | `packages/i18n` | 中文消息键、伪本地化、日期数字 |
 | `packages/model-protocol` | OpenAI Responses/Chat/转录适配、视觉输入与本地 mock |
-| `packages/app-core` | UI 与 Agent 共用的产品应用服务（命令注册按领域在 `src/commands/`：`access`、`agent`、`agent-run`、`connections`、`creative`、`inventory`、`library`、`library-io`、`media`、`notes`、`settings`、`voice`，`product-app.ts` 只负责装配，由命令注册快照守护）：资料库/阅读/进度/笔记/Agent，以及 `version.ts`（版本号计算与 `build.json`）、`update/`（`service.ts` 正式版更新状态机与块图差分下载、`signature.ts` Ed25519 分离签名校验）、`comic/`（扫描、页面、ComicInfo）、`media/`（FFmpeg、句柄与自定义协议、任务队列、缩略图、zip 池）、`video/`（探测、字幕/音轨、帧索引、播放副本）、`metadata/`（Bangumi、本地文件元数据、封面、多来源、`ref.ts` 链接/ID 解析、`images.ts` 图片表）、`library-scan/`（资源库路径扫描：`walker.ts` 在 worker 遍历、`plan.ts` 比对计划、`service.ts` 调度/进度/取消）、`ops/`（操作日志、记录列表、使用记录、会话消息流、调试脱敏）、`quick-tasks.ts`（快捷任务模板）、`voice/`（录音会话、人声筛选、转录、整理、位置映射）、`creative/`（项目、白板、导图、互嵌、文稿、材料搜寻、粗剪及项目包）、`semantic/`（语义索引与检索）、`plugins/`（插件包、信任、独立进程运行）、`acquisition/`（获取任务、发布与入库）、`net/`（网络代理：只放行 http/https，每跳重定向检查私网） |
-| `apps/desktop` | React + Vite + Electron Forge Windows 宿主：`assets/`（应用图标 `icon.svg`、`icon.png`、多尺寸 `icon.ico`），`src/main`（窗口、权限、`updater.ts` 的 `NsisUpdater` 校验接入、自定义媒体协议、解析 worker、`bundled-assets.ts`、仅测试用的 `smoke/`，按检查内容分文件：`agent`、`reading-loop`、`formats`、`media`、`voice`、`window-walk`、`creative-walk`、`plugins-walk`、`trace-walk`、`update-walk`、`player-menus-walk`、`danmaku-walk`、`rework-walk`、`bench-window`、`bench-canvas`、`bench-reader`），`danmaku-credentials.ts` 与构建注入 `danmaku-define.ts` 只在主进程里给弹幕签名，`plugin-process.ts` 把插件作为 Electron utility process 启动、`src/preload`、`src/renderer`（`shell.tsx` 与 `lib/shell-model.ts` 的壳与导航、`hooks/use-update.ts` 更新状态、`components/chat/` 右栏聊天窗口、`pages/` 的书架/作品主页/调试面板/导入与匹配、`pages/settings/` 的独立设置各页（含 `update-page.tsx`）、阅读器与播放器、`voice/` 录音界面、按领域拆分的样式） |
+| `packages/app-core` | UI 与 Agent 共用的产品应用服务（命令注册按领域在 `src/commands/`：`access`、`agent`、`agent-run`、`connections`、`creative`、`inventory`、`library`、`library-io`、`media`、`notes`、`settings`、`voice`，`product-app.ts` 只负责装配，由命令注册快照守护）：资料库/阅读/进度/笔记/Agent，以及独立子入口 `light/`（`index.ts`、`service.ts`、`positions.ts`、`image-size.ts`：供 `--manga-light` 复用的无数据库轻量视频与漫画服务）、`version.ts`（版本号计算与 `build.json`）、`update/`（`service.ts` 正式版更新状态机、块图差分下载与上一版安装包留存、`signature.ts` Ed25519 分离签名校验）、`comic/`（扫描、页面、ComicInfo）、`media/`（FFmpeg、句柄与自定义协议、任务队列、缩略图、zip 池）、`video/`（探测、字幕/音轨、帧索引、播放副本与 `play-copy-store.ts`）、`metadata/`（Bangumi、本地文件元数据、封面、多来源、`ref.ts` 链接/ID 解析、`images.ts` 图片表）、`library-scan/`（资源库路径扫描：`walker.ts` 在 worker 遍历、`plan.ts` 比对计划、`service.ts` 调度/进度/取消）、`ops/`（操作日志、记录列表、使用记录、会话消息流、调试脱敏）、`quick-tasks.ts`（快捷任务模板）、`voice/`（录音会话、人声筛选、转录、整理、位置映射）、`creative/`（项目、白板、导图、互嵌、文稿、材料搜寻、粗剪及项目包）、`semantic/`（语义索引与检索）、`plugins/`（插件包、信任、独立进程运行）、`acquisition/`（获取任务、发布与入库）、`net/`（网络代理：只放行 http/https，每跳重定向检查私网） |
+| `apps/desktop` | React + Vite + Electron Forge Windows 宿主：`assets/`（应用图标 `icon.svg`、`icon.png`、多尺寸 `icon.ico`），三主入口配置（`vite.bootstrap.config.ts` → `main.cjs`、`vite.main.config.ts` → `full-main.cjs`、`vite.light.config.ts` → `light-main.cjs` 及 `vite.light-renderer.config.ts` → `light_window`），`src/main`（极薄路由入口 `bootstrap.ts`、启动失败守卫与回退 `launch-guard.ts`、`launch-paths.ts`、轻量退出握手 `light-runtime.ts`、轻量主进程 `light/main.ts` 与 `light/smoke.ts`、完整主进程窗口与权限、`overlay.ts` 紧凑录音悬浮框、`updater.ts` 的 `NsisUpdater` 校验接入、自定义媒体协议、解析 worker、`bundled-assets.ts`、仅测试用的 `smoke/`，按检查内容分文件：`agent`、`reading-loop`、`formats`、`media`、`voice`、`window-walk`、`creative-walk`、`plugins-walk`、`trace-walk`、`update-walk`、`player-menus-walk`、`danmaku-walk`、`rework-walk`、`bench-window`、`bench-canvas`、`bench-reader`），`danmaku-credentials.ts` 与构建注入 `danmaku-define.ts` 只在主进程里给弹幕签名，`plugin-process.ts` 把插件作为 Electron utility process 启动，`src/preload`（完整桥与 `preload-light.ts` 窄桥），`src/light`（轻量视频播放器与漫画阅读器前端），`src/renderer`（`shell.tsx` 与 `lib/shell-model.ts` 的壳与导航、`hooks/use-update.ts` 更新状态、`components/chat/` 右栏聊天窗口、`pages/` 的书架/作品主页/调试面板/导入与匹配、`pages/settings/` 的独立设置各页（含 `update-page.tsx`）、阅读器与播放器、`voice/` 录音界面、按领域拆分的样式） |
 | `tests/` | 按能力分目录：`acquisition`、`agent`、`comic`、`contracts`、`creative`、`library`、`media`、`metadata`、`net`、`notes`、`package`、`plugins`、`reading`、`runtime`、`samples`、`semantic`、`shell`、`update`、`video`、`voice`、`real`（默认关闭的真实服务/本机资源）；`helpers/`、`fixtures/` 为共享件。不按阶段或审查轮次命名 |
 | `plugins/` | 随应用的第一方插件源码（`acquisition-bt`：BitTorrent 获取引擎，含构建时替换原生库的桩）；`scripts/pack-plugin.mjs` 构建并用第一方私钥签名到 `dist/plugins`，打包时随包放进 `resources/plugins` |
 | `docs/modules/` | 内置模块规格（agent、library、notes、settings、inventory、comic、video、metadata、voice、projects、whiteboard、mindmap、embeds、copywriting、research、semantic、roughcut、plugins、acquisition） |
@@ -23,11 +23,11 @@
 | `docs/product-rules/`、`docs/dev-rules/`、`docs/design-rules/` | 按任务触发的持续约束 |
 | `docs/governance/`、`docs/decisions/` | 文档登记、治理和决定 |
 | `docs/delivery/`、`docs/evidence/gate/`、`docs/templates/` | 当前阶段计划、报告与状态；最近一次阶段门禁的最终证据；模板 |
-| `scripts/verify.mjs` | 统一入口：语法、文档、公开内容、依赖方向、类型、全部 Vitest、`git diff --check` |
-| `scripts/stage.mjs`、`scripts/stage/` | 阶段门禁与发布入口：`gate`/`test`/`bench`/`package`/`installer`/`install-dev`/`release`/`report`（含 `version-lib.mjs`、`installer-lib.mjs`、`install-dev.mjs`、`release.mjs`、`release-decide.mjs`、`release-publish-verify.mjs`）；当前阶段取自登记表的 `currentStage`，门禁定义在 `scripts/stage/gate.json`（按输入分组的指纹与每份结果依赖哪些组、必需用例、基准目标、包烟测阶段与窗口场景） |
-| `scripts/check-docs.mjs`、`check-deps.mjs`、`check-publication.mjs`、`check-workflows.mjs` 及其 `.test.mjs` | 文档与登记、包依赖方向、公开内容检查及反例、GitHub Actions 工作流安全检查；`stage-report.test.mjs` 为阶段报告门禁反例 |
+| `scripts/verify.mjs` | 统一入口：语法、文档、工具锁引用形态、公开内容、依赖方向与轻量边界、类型、全部 Vitest、`git diff --check` |
+| `scripts/stage.mjs`、`scripts/stage/` | 阶段门禁与发布入口：`gate`/`test`/`bench`/`package`/`installer`/`install-dev`/`release`/`report`（含 `version-lib.mjs`、`installer-lib.mjs`、`install-dev.mjs`、`light-open.mjs`、`rollback-rehearsal.mjs`、`release.mjs`、`release-decide.mjs`、`release-publish-verify.mjs`）；当前阶段取自登记表的 `currentStage`，门禁定义在 `scripts/stage/gate.json`（按输入分组的指纹与每份结果依赖哪些组、必需用例、基准目标、包烟测阶段与窗口场景） |
+| `scripts/check-docs.mjs`、`check-deps.mjs`、`check-publication.mjs`、`check-workflows.mjs` 及其 `.test.mjs` | 文档与登记、包依赖方向与轻量入口闭包、公开内容检查及反例、GitHub Actions 工作流安全检查；`stage-report.test.mjs` 为阶段报告门禁反例 |
 | `scripts/samples/` | 合成样本生成：媒体（`generate-media-samples.mjs`，输出 `dist/samples/media`）、阅读样本（`build-reading-samples.py`）与扫描页 PDF（`build-scan-pdf-sample.py`，需要本机 Python 与 PDF 库） |
-| `scripts/tools/` | 随包工具的下载与锁定（FFmpeg LGPL 构建、Silero VAD 模型及其哈希） |
+| `scripts/tools/` | 随包工具的下载、锁定与链接预检（月末保留标签的 FFmpeg LGPL 构建、40 位提交 SHA 的 Silero VAD 模型与字幕字体及其哈希，`check-tool-links.mjs`） |
 | `scripts/desktop-assets.ts`、`desktop-paths.ts`、`dev-desktop.mjs`、`verify-electron-sqlite.mjs` | 打包资产暂存、生成物路径（正本）、开发启动、Electron SQLite ABI 校验 |
 | `scripts/inventory-deps.mjs`、`generate-bangumi-types.mjs`、`live-models.mjs`、`pack-plugin.mjs`、`desktop-plugins.ts` | 依赖盘点、Bangumi OpenAPI 类型再生、模型有限真实短测、插件构建与签名 |
 | `.node-version` | CI 与本地 Node 版本 |
@@ -47,7 +47,6 @@
 | `dist/desktop/packages` | 当前未签名桌面包；最新指针 `dist/desktop/latest-package.json` 带源码指纹 |
 | `dist/desktop/installer` | `stage package` 用 electron-builder 做出的本通道按用户安装包（未签名，不发布） |
 | `dist/desktop/development` | `pnpm dev --isolated` 的开发 Profile、文档、下载与指针；不带 `--isolated` 时开发版用 `%LOCALAPPDATA%\manga-dev` 等自己的位置。两种都不访问正式版的数据 |
-| `dist/keys` | 第一方插件签名密钥（`plugin-first-party.pem`，公钥在 `packages/app-core/src/plugins/trust.ts`）与正式版更新签名密钥（`update-release.pem`，公钥 `update-release.pub` 内置在 `packages/app-core/src/update/signature.ts`）；私钥不进仓库，须自行备份（见[用户待办](../../USER-ACTIONS.md)） |
 | `dist/release/v0.1.x` | `node scripts/stage.mjs release` 生成的正式版发布包、块图 `.blockmap`、`latest.yml`、Ed25519 分离签名 `.sig`、`SHA256SUMS`、`RELEASE-NOTES.md` 与 `release.json` |
 | `dist/plugins` | 构建并签名的随包插件 `.manga-plugin`；打包时复制到 `resources/plugins` |
 | `dist/samples/media` | 合成媒体/阅读/录音样本与清单；人工复测和包烟测使用，不提交私人收藏或真实资料 |
@@ -56,6 +55,8 @@
 | `apps/desktop/.vite` | Forge/Vite 工具管理的编译缓存；保留其约定，不是业务数据 |
 | OS 临时目录中的 `manga-*` | 自动化合成夹具与故障子进程数据；每次独立，不提交 |
 | `docs/evidence/gate/` | 最近一次阶段门禁的经脱敏、可审阅的 JSON/截图（≤ 5 MiB）；下一阶段的门禁覆盖它 |
+
+签名密钥不在仓库里：第一方插件签名私钥 `%APPDATA%\manga-release\plugin-signing.key`（公钥在 `packages/app-core/src/plugins/trust.ts`），正式版更新签名私钥 `%APPDATA%\manga-release\update-signing.key`（公钥 `update-signing.pub` 内置在 `packages/app-core/src/update/signature.ts`）；须自行备份（见[用户待办](../../USER-ACTIONS.md)）。
 
 路径计算正本为 `scripts/desktop-paths.ts`。生成目录在 Git 忽略范围内；包含 Profile 的目录不是可随意自动删除的缓存。开发机本地的界面参考图放在 `dist/design-refs`，不进入仓库，文字正本见[交互设计 3.4](../design/interaction-and-workflows.md#34-三媒介界面2026-10-03-参考)。
 
@@ -81,7 +82,7 @@
 | `node scripts/samples/generate-media-samples.mjs` | 可用 | 生成合成漫画/视频/字幕/录音样本到 `dist/samples/media` |
 | `node scripts/tools/fetch-ffmpeg.mjs`、`fetch-silero-vad.mjs`、`fetch-subtitle-font.mjs` | 需网络 | 按锁文件下载并校验随包工具 |
 | `node scripts/inventory-deps.mjs` | 需网络 | 依赖版本盘点（npm 与锁文件） |
-| `node scripts/pack-plugin.mjs [目录] [--out 目录]` | 需第一方私钥 | 构建 `plugins/` 下的插件并签名到 `dist/plugins`；私钥取自 `MANGA_PLUGIN_SIGNING_KEY` 或 `dist/keys/plugin-first-party.pem`，不输出私钥 |
+| `node scripts/pack-plugin.mjs [目录] [--out 目录]` | 需第一方私钥 | 构建 `plugins/` 下的插件并签名到 `dist/plugins`；私钥取自 `MANGA_PLUGIN_SIGNING_KEY` 或 `%APPDATA%\manga-release\plugin-signing.key`，不输出私钥 |
 | `node scripts/check-docs.mjs`、`check-deps.mjs`、`check-publication.mjs` | 可用 | 文档/依赖方向/公开内容，含反例自测 |
 
 真实服务与本机资源的开关见[质量门禁 2.1](quality-gates.md#21-真实服务与本机资源默认关闭不进-ci)。原生输入法的受影响路径与真实声学需要人工，尚未实现的校准/设备恢复由开发者先补齐，不要求用户代替工程验证。

@@ -92,49 +92,60 @@ export function UpdatePage(props: {
                 onChange={(event) => void update.setSettings({ autoDownload: event.target.checked })}
               />
             </SettingsRow>
-            <div className="msettings-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                data-testid="update-check-now"
-                disabled={update.checking || status?.state === "checking" || status?.state === "downloading"}
-                onClick={() => void update.check()}
-              >
-                {update.checking || status?.state === "checking" ? t("update.checkingNow") : t("update.checkNow")}
-              </button>
-              {status?.state === "idle" && status.availableVersion ? (
+            {status?.skippedVersion ? (
+              <SettingsRow label={t("update.skipped", { version: status.skippedVersion })} hint={t("update.skippedHint")}>
+                <button type="button" className="secondary-button" data-testid="update-unskip" onClick={() => void update.unskip()}>
+                  {t("update.unskip")}
+                </button>
+              </SettingsRow>
+            ) : null}
+            <div className="settings-row">
+              <div className="msettings-actions">
                 <button
                   type="button"
-                  className="primary-button"
-                  data-testid="update-download-now"
-                  disabled={update.checking}
-                  onClick={() => void update.check({ download: true })}
+                  className="secondary-button"
+                  data-testid="update-check-now"
+                  disabled={update.checking || status?.state === "checking" || status?.state === "downloading"}
+                  onClick={() => void update.check()}
                 >
-                  {t("update.downloadNow")}
+                  {update.checking || status?.state === "checking" ? t("update.checkingNow") : t("update.checkNow")}
                 </button>
-              ) : null}
-              {status?.state === "ready" ? (
-                <button
-                  type="button"
-                  className="primary-button"
-                  data-testid="update-page-restart"
-                  onClick={() => void update.requestRestart()}
-                >
-                  {t("update.restart")}
-                </button>
-              ) : null}
+                {status?.state === "idle" && status.availableVersion ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    data-testid="update-download-now"
+                    disabled={update.checking}
+                    onClick={() => void update.check({ download: true })}
+                  >
+                    {t("update.downloadNow")}
+                  </button>
+                ) : null}
+                {status?.state === "ready" ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    data-testid="update-page-restart"
+                    onClick={() => void update.requestRestart()}
+                  >
+                    {t("update.restart")}
+                  </button>
+                ) : null}
+              </div>
             </div>
             {status?.state === "ready" ? (
-              <div className="mt-3 text-sm" data-testid="update-page-notes">
-                <h4>{t("update.notes")}</h4>
-                {status.willUpgradeSchema ? (
-                  <p className="font-medium mt-1" data-testid="update-schema-notice">
-                    {t("update.schemaNotice")}
+              <div className="settings-row settings-row-stacked text-sm" data-testid="update-page-notes">
+                <div>
+                  <h4 className="settings-row-name font-medium">{t("update.notes")}</h4>
+                  {status.willUpgradeSchema ? (
+                    <p className="font-medium mt-1" data-testid="update-schema-notice">
+                      {t("update.schemaNotice")}
+                    </p>
+                  ) : null}
+                  <p className="detail-muted mt-1 whitespace-pre-wrap">
+                    {status.releaseNotes || t("update.notesEmpty")}
                   </p>
-                ) : null}
-                <p className="detail-muted mt-1 whitespace-pre-wrap">
-                  {status.releaseNotes || t("update.notesEmpty")}
-                </p>
+                </div>
               </div>
             ) : null}
           </>

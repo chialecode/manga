@@ -6,6 +6,7 @@ import { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
 import { clickTestId, openFromShelf, sleep, waitForTestId } from "./driver.ts";
 import { ensureDock } from "./common.ts";
+import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../overlay-model.ts";
 
 /**
  * Recording (started from the right pane's microphone) through the real packaged window with a synthetic speech clip as the microphone (Chromium's fake capture
@@ -33,13 +34,44 @@ async function until<T>(view: BrowserWindow, expression: string, timeoutMs: numb
   })`);
 }
 
+async function waitForOverlay(view: BrowserWindow, present: boolean, timeoutMs = 5000): Promise<BrowserWindow | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const found = BrowserWindow.getAllWindows().find((win) => win !== view && !win.isDestroyed() && win.isAlwaysOnTop() && win.isVisible());
+    if (present && found) return found;
+    if (!present && !found) return undefined;
+    await sleep(25); // real time: 等待录音悬浮窗打开或关闭完成
+  }
+  return BrowserWindow.getAllWindows().find((win) => win !== view && !win.isDestroyed() && win.isAlwaysOnTop());
+}
+
+function dragOverlayBy(overlay: BrowserWindow, dx: number, dy: number): void {
+  const grabX = 32;
+  const grabY = 18;
+  overlay.webContents.sendInputEvent({ type: "mouseDown", x: grabX, y: grabY, button: "left", clickCount: 1 });
+  const steps = 4;
+  const stepDx = dx / steps;
+  const stepDy = dy / steps;
+  for (let i = 1; i <= steps; i += 1) {
+    overlay.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(grabX + stepDx), y: Math.round(grabY + stepDy), button: "left" });
+  }
+  overlay.webContents.sendInputEvent({ type: "mouseUp", x: grabX, y: grabY, button: "left", clickCount: 1 });
+}
+
+function clickOverlayStop(overlay: BrowserWindow): void {
+  overlay.webContents.sendInputEvent({ type: "mouseDown", x: 98, y: 18, button: "left", clickCount: 1 });
+  overlay.webContents.sendInputEvent({ type: "mouseUp", x: 98, y: 18, button: "left", clickCount: 1 });
+}
+
 export async function runVoiceSmoke(input: Input): Promise<Record<string, unknown> & { ok: boolean }> {
   const { appService, grant, view } = input;
   const clip = process.env.MANGA_SMOKE_AUDIO;
   if (!clip || !fs.existsSync(clip)) return { ok: true, notRun: true, reason: "MANGA_SMOKE_AUDIO does not point at a synthetic speech clip" };
   const call = (commandId: string, body: Record<string, unknown>) => appService.call(actor, { commandId, idempotencyKey: createId("smoke"), input: body }, grant);
   const evidence = input.evidenceDir;
+  const shotsDir = evidence ? path.join(evidence, "screenshots") : undefined;
   const steps: Array<{ id: string; ok: boolean; detail?: unknown }> = [];
+  const observations: Array<{ name: string; status: "passed" | "failed"; detail?: unknown }> = [];
   const record = (id: string, ok: boolean, detail?: unknown) => { steps.push({ id, ok, ...(detail !== undefined ? { detail } : {}) }); console.error(`voice step ${id}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, 1500)}`); return ok; };
   view.showInactive();
 
@@ -63,7 +95,7 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     const secret = appService.stashSecret("smoke-asr-credential");
     const connection = await call("connections.upsert", { label: "smoke-asr", protocol: "openai-chat-completions", baseUrl: `http://127.0.0.1:${port}/v1`, modelId: "asr-smoke", purpose: "transcription", credentialHandle: secret });
     record("connection", connection.status === "ok", connection.status === "ok" ? undefined : connection.error);
-    await call("settings.setRecording", { retention: "keep" });
+    await call("settings.setRecording", { retention: "keep", overlay: { x: null, y: null } });
 
     const body = "录音烟测正文。".repeat(40);
     const imported = await call("library.importDocument", { title: "录音烟测书", format: "txt", bytes: [...Buffer.from(body)] });
@@ -84,27 +116,67 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     // The microphone really delivers sound: the level meter moves and the clock runs.
     const level = await until<number>(view, `(() => { const el = document.querySelector('[data-testid="record-level"]'); const v = Number(el?.getAttribute("data-level") ?? el?.getAttribute("aria-valuenow") ?? 0); return v > 0 ? v : null; })()`, 8000);
     const clock1 = await js<string>(view, `document.querySelector('[data-testid="record-time"]')?.textContent ?? ""`);
-    await sleep(1500); // real time: 语音录制时长，观察录音计时器跳动
+    await sleep(1200); // real time: 语音录制时长，观察录音计时器跳动
     const clock2 = await js<string>(view, `document.querySelector('[data-testid="record-time"]')?.textContent ?? ""`);
     record("microphone", Boolean(level) && clock1 !== clock2, { level, clock1, clock2 });
 
-    // While the app window is behind others the floating box shows the same recording.
-    await sleep(500); // real time: 后台轮询定时器节流，等待置顶录音浮窗显示
-    const windows = BrowserWindow.getAllWindows().filter((window) => window !== view && !window.isDestroyed());
-    const overlay = windows.find((window) => window.isAlwaysOnTop());
-    record("overlay", Boolean(overlay), { windows: windows.length, visible: overlay?.isVisible() ?? false });
-    if (overlay && evidence) {
-      fs.mkdirSync(evidence, { recursive: true });
-      try { fs.writeFileSync(path.join(evidence, "ui-voice-overlay.png"), (await overlay.webContents.capturePage(undefined, { stayAwake: true })).toPNG()); } catch { /* evidence only */ }
+    // V1 / AT-172: compact 116×36 pill, speaking color progression, accessible summary without visible device label, and drag persistence.
+    const overlay = await waitForOverlay(view, true, 4000);
+    record("overlay", Boolean(overlay), { visible: overlay?.isVisible() ?? false });
+
+    let overlayDom: {
+      boxWidth: number;
+      boxHeight: number;
+      visibleText: string;
+      ariaLabel: string;
+      title: string;
+      speakingColor: string;
+      stopLabel: string;
+    } | null = null;
+    let initialBounds: { x: number; y: number; width: number; height: number } | null = null;
+    let afterDrag1: { x: number; y: number } | null = null;
+
+    if (overlay) {
+      initialBounds = overlay.getBounds();
+      // Wait for a speaking frame so the microphone icon shows its primary brand color for inspection and the key screenshot.
+      overlayDom = await until(overlay, `(() => {
+        const box = document.getElementById("box");
+        const mic = document.getElementById("mic");
+        const stop = document.getElementById("stop");
+        if (!box || !mic || !stop || mic.getAttribute("data-speaking") !== "true") return null;
+        const rect = box.getBoundingClientRect();
+        return {
+          boxWidth: Math.round(rect.width),
+          boxHeight: Math.round(rect.height),
+          visibleText: (box.textContent || "").trim(),
+          ariaLabel: box.getAttribute("aria-label") || "",
+          title: box.getAttribute("title") || "",
+          speakingColor: mic.getAttribute("data-color") || "",
+          stopLabel: stop.getAttribute("aria-label") || "",
+        };
+      })()`, 5000);
+      if (shotsDir) {
+        fs.mkdirSync(shotsDir, { recursive: true });
+        try { fs.writeFileSync(path.join(shotsDir, "ui-voice-overlay.png"), (await overlay.webContents.capturePage(undefined, { stayAwake: true })).toPNG()); } catch { /* evidence only */ }
+      }
+      // Drag #1 during recording.
+      dragOverlayBy(overlay, -200, 120);
+      await sleep(60); // real time: 输入事件派发后等待窗口位置同步
+      const moved = overlay.getBounds();
+      afterDrag1 = { x: moved.x, y: moved.y };
     }
 
-    // The clip is a few seconds long; let it play out, then stop.
-    await sleep(Number(process.env.MANGA_SMOKE_AUDIO_MS ?? 9000)); // real time: 语音录制时长，等待合成语音样本播放完毕
-    // The title bar's recording indicator is the stop button too.
+    // Let the remaining synthetic speech clip play out so the transcription pipeline gets the full utterances.
+    const elapsedAlready = Date.now() - started;
+    const targetAudioMs = Number(process.env.MANGA_SMOKE_AUDIO_MS ?? 9000);
+    if (targetAudioMs > elapsedAlready) {
+      await sleep(targetAudioMs - elapsedAlready); // real time: 语音录制时长，等待合成语音样本播放完毕
+    }
     const stopped = await clickTestId(view, "record-stop");
+    await waitForOverlay(view, false, 5000);
     record("stop", stopped);
 
-    // The session is saved and goes through filtering and transcription without a model for anything but the stand-in.
+    // Wait for the main speech session to finish filtering and transcription.
     let sessionId = "";
     let review: { session?: { stage?: string }; segments?: Array<{ text?: string; anchors?: unknown[] }> } | undefined;
     for (let attempt = 0; attempt < 120; attempt += 1) {
@@ -122,6 +194,68 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     record("session", Boolean(sessionId) && review?.session?.stage === "done", { session: review?.session, segments: segments.length });
     record("transcript", segments.some((segment) => String(segment.text ?? "").includes("合成转写")), { uploads: requests.length, types: [...new Set(requests.map((item) => item.contentType))], bytes: requests.map((item) => item.bytes) });
     record("source", segments.length > 0 && segments.every((segment) => (segment.anchors?.length ?? 0) > 0), { sample: segments[0]?.anchors ?? null });
+
+    // AT-172 reopen #1 (verifies Drag #1 persisted) + Drag #2 + immediate stop (< 50 ms) via overlay stop button + reopen #2.
+    let reopen1Pos: { x: number; y: number } | null = null;
+    let afterDrag2: { x: number; y: number } | null = null;
+    let reopen2Pos: { x: number; y: number } | null = null;
+    await clickTestId(view, "chat-mic");
+    const overlay2 = await waitForOverlay(view, true, 5000);
+    if (overlay2) {
+      await until(overlay2, `Boolean(document.getElementById("box")?.getAttribute("aria-label"))`, 3000);
+      const b2 = overlay2.getBounds();
+      reopen1Pos = { x: b2.x, y: b2.y };
+      dragOverlayBy(overlay2, -120, 80);
+      const moved2 = overlay2.getBounds();
+      afterDrag2 = { x: moved2.x, y: moved2.y };
+      // Stop immediately (< 50 ms after dragging) by clicking the overlay's own square stop button!
+      clickOverlayStop(overlay2);
+      await waitForOverlay(view, false, 5000);
+    }
+
+    await until(view, `!document.querySelector('[data-testid="record-indicator"]')`, 5000);
+    await clickTestId(view, "chat-mic");
+    const overlay3 = await waitForOverlay(view, true, 5000);
+    if (overlay3) {
+      await until(overlay3, `Boolean(document.getElementById("box")?.getAttribute("aria-label"))`, 3000);
+      const b3 = overlay3.getBounds();
+      reopen2Pos = { x: b3.x, y: b3.y };
+      clickOverlayStop(overlay3);
+      await waitForOverlay(view, false, 5000);
+    }
+    await until(view, `!document.querySelector('[data-testid="record-indicator"]')`, 5000);
+    await call("settings.setRecording", { overlay: { x: null, y: null } });
+
+    const expectedDrag1 = initialBounds ? { x: initialBounds.x - 200, y: initialBounds.y + 120 } : null;
+    const expectedDrag2 = afterDrag1 ? { x: afterDrag1.x - 120, y: afterDrag1.y + 80 } : null;
+    const pillOk = Boolean(
+      overlayDom
+      && overlayDom.boxWidth === OVERLAY_WIDTH
+      && overlayDom.boxHeight === OVERLAY_HEIGHT
+      && /^\d+:\d{2}$/.test(overlayDom.visibleText)
+      && overlayDom.ariaLabel.includes("，")
+      && overlayDom.ariaLabel === overlayDom.title
+      && overlayDom.speakingColor !== "#9CA3AF"
+      && overlayDom.speakingColor.startsWith("#")
+      && overlayDom.stopLabel.length > 0,
+    );
+    const drag1Persisted = Boolean(expectedDrag1 && afterDrag1 && reopen1Pos && reopen1Pos.x === afterDrag1.x && reopen1Pos.y === afterDrag1.y && afterDrag1.x === expectedDrag1.x && afterDrag1.y === expectedDrag1.y);
+    const immediateStopPersisted = Boolean(expectedDrag2 && afterDrag2 && reopen2Pos && reopen2Pos.x === afterDrag2.x && reopen2Pos.y === afterDrag2.y && afterDrag2.x === expectedDrag2.x && afterDrag2.y === expectedDrag2.y);
+    const voiceOverlayOk = pillOk && drag1Persisted && immediateStopPersisted;
+    const overlayDetail = {
+      initialBounds,
+      overlayDom: overlayDom ? { ...overlayDom, ariaLabelHasMic: overlayDom.ariaLabel.includes("麦克风："), ariaLabelLength: overlayDom.ariaLabel.length, ariaLabel: "[redacted-device-summary]", title: "[redacted-device-summary]" } : null,
+      afterDrag1,
+      reopen1Pos,
+      afterDrag2,
+      reopen2Pos,
+      pillOk,
+      drag1Persisted,
+      immediateStopPersisted,
+    };
+    record("voice-overlay", voiceOverlayOk, overlayDetail);
+    observations.push({ name: "voice-overlay", status: voiceOverlayOk ? "passed" : "failed", detail: overlayDetail });
+
     if (evidence) {
       fs.mkdirSync(evidence, { recursive: true });
       try { fs.writeFileSync(path.join(evidence, "ui-voice-after.png"), (await view.webContents.capturePage(undefined, { stayAwake: true })).toPNG()); } catch { /* evidence only */ }
@@ -131,6 +265,6 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     await new Promise<void>((resolve) => { server.close(() => resolve()); });
   }
   const failed = steps.filter((step) => !step.ok).map((step) => step.id);
-  if (evidence) fs.writeFileSync(path.join(evidence, "voice-smoke.json"), `${JSON.stringify({ steps }, null, 2)}\n`);
-  return { ok: failed.length === 0, failed, steps };
+  if (evidence) fs.writeFileSync(path.join(evidence, "voice-smoke.json"), `${JSON.stringify({ steps, observations }, null, 2)}\n`);
+  return { ok: failed.length === 0, failed, steps, observations };
 }

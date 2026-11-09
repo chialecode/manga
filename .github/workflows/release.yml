@@ -46,6 +46,10 @@ jobs:
       - name: Decide whether to cut a weekly release
         id: decide
         run: node scripts/stage/release-decide.mjs
+      - name: Check that the pinned tool downloads still exist
+        id: tool-links
+        if: steps.decide.outputs.should_release == 'true'
+        run: node scripts/tools/check-tool-links.mjs
 
   check:
     name: check

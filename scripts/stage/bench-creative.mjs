@@ -455,15 +455,15 @@ export async function runProposalBench({ objects = 500, proposeRuns = 30, applyR
     const migInfo = migApp.store.migration;
     const backupExists = fs.existsSync(path.join(v13DataDir, "manga.sqlite.premigrate-v13"));
     migApp.close();
-    if (migInfo?.from !== 13 || migInfo?.to !== 14 || !backupExists) {
-      throw new Error(`v13 -> v14 migration benchmark check failed: ${JSON.stringify({ migInfo, backupExists })}`);
+    if (migInfo?.from !== 13 || (migInfo?.to ?? 0) < 14 || !backupExists) {
+      throw new Error(`v13 -> v14+ migration benchmark check failed: ${JSON.stringify({ migInfo, backupExists })}`);
     }
 
     return {
       objects: totalObjects,
       propose: { samples: proposeSamples, p95: p95(proposeSamples), detail: { ok: true, objects: totalObjects, backlinksQueried: true } },
       apply: { samples: applySamples, p95: p95(applySamples), detail: { ok: true, objects: totalObjects } },
-      migrationV14: { ok: true, ms: migrateV14Ms, from: 13, to: 14, backupCreated: backupExists, runs: 100 },
+      migrationV14: { ok: true, ms: migrateV14Ms, from: 13, to: migInfo.to, backupCreated: backupExists, runs: 100 },
     };
   } finally {
     app.close();

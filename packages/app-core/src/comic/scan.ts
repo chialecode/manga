@@ -5,52 +5,21 @@ import path from "node:path";
 import { MangaError } from "@manga/contracts";
 import type { ComicManifest, ComicPage, ComicSource } from "@manga/contracts";
 import { htmlImageSources, htmlSvgImageHrefs, palmdocDecompress, resolveArchiveReference } from "../domain/formats.ts";
-import { naturalCompare } from "../domain/ordinal.ts";
+import { comparePaths, naturalCompare } from "../domain/natural-sort.ts";
+import { ARCHIVE_EXTENSIONS, VIDEO_EXTENSIONS, isIgnoredName, isImageName } from "../media/kinds.ts";
 import { Lane } from "../media/process-runner.ts";
 import { verifyDecodes } from "../media/thumbnails.ts";
 import type { ZipPool } from "../media/zip-pool.ts";
 import { parseComicInfo, type ComicInfo } from "./comicinfo.ts";
 
-export const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".gif", ".avif", ".bmp", ".tif", ".tiff"]);
-/** Formats a Chromium `<img>` shows as is. Everything else is converted when displayed. */
-export const BROWSER_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif", "image/bmp"]);
-export const VIDEO_EXTENSIONS = new Set([".mkv", ".mp4", ".m4v", ".mov", ".avi", ".webm", ".ts", ".m2ts", ".flv", ".wmv", ".ogv", ".mpg", ".mpeg"]);
-const ARCHIVE_EXTENSIONS = new Set([".cbz", ".zip"]);
+export { BROWSER_IMAGE_TYPES, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, isIgnoredName, isImageName, mediaTypeForName } from "../media/kinds.ts";
+export { comparePaths } from "../domain/natural-sort.ts";
+
 const DOCUMENT_EXTENSIONS = new Set([".pdf", ".epub", ".mobi", ".azw3"]);
 export const NOVEL_EXTENSIONS = new Set([".txt", ".epub", ".mobi", ".azw3", ".pdf"]);
 const MAX_PAGES = 5000;
 const MAX_PAGE_BYTES = 256 * 1024 * 1024;
 const DECODE_CONCURRENCY = 4;
-
-const MEDIA_TYPES: Record<string, string> = {
-  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".jpe": "image/jpeg", ".jfif": "image/jpeg", ".webp": "image/webp",
-  ".gif": "image/gif", ".avif": "image/avif", ".bmp": "image/bmp", ".tif": "image/tiff", ".tiff": "image/tiff",
-};
-
-export function isImageName(name: string): boolean {
-  return IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase());
-}
-
-export function mediaTypeForName(name: string): string {
-  return MEDIA_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
-}
-
-/** Names the operating system and archive tools leave behind; they are never pages. */
-export function isIgnoredName(name: string): boolean {
-  const base = name.split("/").pop() ?? name;
-  return /^(thumbs\.db|desktop\.ini|\.ds_store)$/i.test(base) || base.startsWith("._") || (base.startsWith(".") && base !== ".") || name.split("/").some((segment) => segment === "__MACOSX");
-}
-
-export function comparePaths(left: string, right: string): number {
-  const a = left.split("/");
-  const b = right.split("/");
-  for (let i = 0; i < Math.min(a.length, b.length); i += 1) {
-    // A directory sorts with its siblings by name, so "vol 2/…" comes before "vol 10/…".
-    const diff = naturalCompare(a[i]!, b[i]!);
-    if (diff !== 0) return diff;
-  }
-  return a.length - b.length;
-}
 
 export type ScanOptions = {
   signal?: AbortSignal;

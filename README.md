@@ -48,8 +48,15 @@ pnpm dev
 ### 安装、双通道并存与自动更新
 
 - **按用户安装、双通道并存**：Windows 安装程序不需要管理员权限，默认装到 `%LOCALAPPDATA%\Programs\manga`（开发版为 `manga-dev`），安装时可以改目录；正式版（`MANGA`）与开发版（`MANGA Dev`）拥有各自的应用 ID、快捷方式、安装目录与数据目录，可以在同一台机器上同时安装、互不干扰；卸载只删程序与快捷方式，保留应用数据与个人文件。
-- **开发版本地自动更新**：本机安装了开发版（`MANGA Dev`）后，每次运行 `node scripts/stage.mjs package` 或 `node scripts/stage.mjs gate` 通过时，会自动执行 `stage install-dev`：如果开发版正在运行，先请它保存工作区与草稿并退出，静默安装新打出的开发版（版本号形如 `0.1.x-dev.<UTC 时间>`），再自动重新打开；正式版完全不受影响（设 `MANGA_DEV_AUTO_INSTALL=0` 可关闭）。
-- **正式版每周发布与联网更新**：GitHub Actions 每周一自动检查上次发布以来是否有新的 PR 合并，有则运行检查、打包、安装与升级演练，通过后用独立的 Ed25519 私钥签名并发布 `v0.1.x` 到 GitHub Releases。已安装的正式版在后台按块图只下载变化的部分，经内置公钥校验通过后在顶部一行右侧提示“新版本已就绪 · 重启以更新”（也可以在下次退出应用时自动安装），可在“设置 › 更新”查看版本、手动检查或关闭自动检查。
+- **开发版本地自动更新**：本机安装了开发版（`MANGA Dev`）后，每次运行 `node scripts/stage.mjs package` 或 `node scripts/stage.mjs gate` 通过时，会自动执行 `stage install-dev`：如果开发版或其轻量窗口正在运行，先请它们保存工作区、草稿与播放位置并退出，静默安装新打出的开发版（版本号形如 `0.1.x-dev.<UTC 时间>`），再自动重新打开；正式版完全不受影响（设 `MANGA_DEV_AUTO_INSTALL=0` 可关闭）。
+- **正式版每周发布、联网更新与失败退路**：GitHub Actions 每周一自动检查上次发布以来是否有新的 PR 合并，预检随包工具链接可用后运行检查、打包、安装与升级演练，通过后用独立的 Ed25519 私钥签名并发布 `v0.1.x` 到 GitHub Releases。已安装的正式版在后台按块图只下载变化的部分，经内置公钥校验通过后在顶部一行右侧提示“新版本已就绪 · 重启以更新”（也可以在下次退出应用时自动安装）；若更新后连续两次启动未完成，第三次启动会提供校验过哈希的“回到上一版”退路并保护资料库备份。可在“设置 › 更新”查看版本、手动检查、取消已跳过版本或关闭自动检查。
+
+### 用 MANGA 打开文件
+
+安装后，Windows 资源管理器的右键“打开方式”和“设置 › 默认应用”会出现 `MANGA`（开发版为 `MANGA Dev`），安装过程不会改动你原有的默认播放器或看图软件：
+
+- 从资源管理器对视频（`.mp4`、`.mkv` 等）、漫画压缩包（`.cbz`）或图片（`.png`、`.jpg`、`.webp` 等）选择“用 MANGA 打开”（或设为默认应用后双击），会直接启动独立的轻量窗口（`--manga-light`），无需等待完整工作区、资料库、插件或 Agent 加载。
+- 轻量窗口支持内嵌/外挂字幕、多音轨、倍速、逐帧、同目录上下集切换、单双页与条漫阅读、点击单张图片按所在文件夹连续翻页以及按文件摘要记住上次看到的位置；数据严格隔离在 `%LOCALAPPDATA%\manga\light` 下，不改动你的主资料库，也不会在后台与完整版抢占单实例锁。
 
 | 命令 | 用途 |
 | --- | --- |
@@ -97,7 +104,7 @@ Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockv
 | 架构与数据 | [总体架构](docs/design/architecture.md)、[可组合与 AI-Native 架构](docs/design/composable-ai-native-architecture.md)、[领域模型](docs/design/domain-model.md) |
 | Agent 与插件 | [Agent、上下文与插件协议](docs/design/agent-and-plugins.md)、[外部数据源与下载扩展](docs/design/external-providers-and-acquisition.md) |
 | 界面 | [界面与工作流](docs/design/interaction-and-workflows.md)、[设计规则](DESIGN.md) |
-| 进度 | [执行状态](docs/delivery/status.md)、[当前阶段计划](docs/delivery/stage-plan.md)、[已确认的决定](docs/decisions/confirmed-decisions.md) |
+| 进度 | [执行状态](docs/delivery/status.md)、[当前阶段计划](docs/delivery/stage-plan.md)、[当前阶段报告](docs/delivery/stage-report.md)、[已确认的决定](docs/decisions/confirmed-decisions.md) |
 
 ## 参与开发
 

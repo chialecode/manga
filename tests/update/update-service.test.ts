@@ -1,4 +1,4 @@
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -21,6 +21,8 @@ import {
 } from "@manga/app-core";
 import { appUpdateYaml } from "../../scripts/stage/installer-lib.mjs";
 import { attachNsisUpdater, createConfiguredNsisUpdater, invokeNsisVerifySignature } from "../../apps/desktop/src/main/updater.ts";
+import { guardPaths, verifiedPrevious } from "../../apps/desktop/src/main/launch-guard.ts";
+import { MangaError } from "@manga/contracts";
 
 function makeTestKeyPair() {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -277,6 +279,78 @@ describe("Update review: actual electron-updater paths and recovery (AT-159, AT-
       expect(restoreCalls).toBe(1);
       expect(await app.update.installOnQuit()).toBe(false);
     }
+  });
+
+  it("keeps the running version's installer as the way back, one at a time, only when it is still the recorded one (AT-165, 4.2, LOOP-32)", async () => {
+    const { app, oldBytes, bytes, blockSize } = await updateFixture();
+    const cache = path.join(app.layout.partitions.cache, "updater");
+    app.update.seedCurrentInstallerCache(oldBytes, serializeBlockMapGzip(buildBlockMap(oldBytes, blockSize)));
+    expect(JSON.parse(fs.readFileSync(path.join(cache, "installer.json"), "utf8"))).toEqual({ version: "0.1.1", sha512Hex: createHash("sha512").update(oldBytes).digest("hex") });
+    fs.mkdirSync(path.join(cache, "previous"), { recursive: true });
+    fs.writeFileSync(path.join(cache, "previous", "installer-0.1.0.exe"), "an older way back");
+    expect((await app.update.check()).state).toBe("ready");
+    expect((await app.update.restartToUpdate()).restarted).toBe(true);
+    const record = JSON.parse(fs.readFileSync(path.join(cache, "previous", "previous.json"), "utf8"));
+    expect(record).toMatchObject({ version: "0.1.1", file: "installer-0.1.1.exe", schemaVersion: 14, targetVersion: "0.1.2", targetSchemaVersion: 14 });
+    expect(record.sha512Hex).toBe(createHash("sha512").update(oldBytes).digest("hex"));
+    expect(path.basename(record.backup)).toBe("manga.sqlite.preupdate-v0.1.1.sqlite");
+    expect(path.resolve(record.database)).toBe(path.resolve(app.layout.partitions.data, "manga.sqlite"));
+    expect(fs.readdirSync(path.join(cache, "previous")).sort()).toEqual(["installer-0.1.1.exe", "previous.json"]);
+    const kept = verifiedPrevious(guardPaths(app.layout.appRoot));
+    expect(kept?.version).toBe("0.1.1");
+    // The installer now in the cache is the new version's, recorded as such for the update after it.
+    expect(JSON.parse(fs.readFileSync(path.join(cache, "installer.json"), "utf8"))).toEqual({ version: "0.1.2", sha512Hex: createHash("sha512").update(bytes).digest("hex") });
+    // A kept installer whose bytes changed is not offered.
+    fs.appendFileSync(path.join(cache, "previous", "installer-0.1.1.exe"), "x");
+    expect(verifiedPrevious(guardPaths(app.layout.appRoot))).toBeNull();
+  });
+
+  it("updates without a way back when the cached installer is not this version's", async () => {
+    const { app, oldBytes, blockSize } = await updateFixture();
+    const cache = path.join(app.layout.partitions.cache, "updater");
+    app.update.seedCurrentInstallerCache(oldBytes, serializeBlockMapGzip(buildBlockMap(oldBytes, blockSize)));
+    fs.writeFileSync(path.join(cache, "installer.json"), JSON.stringify({ version: "0.1.0", sha512Hex: "00" }));
+    expect((await app.update.check()).state).toBe("ready");
+    expect((await app.update.restartToUpdate()).restarted).toBe(true);
+    expect(fs.existsSync(path.join(cache, "previous"))).toBe(false);
+  });
+
+  it("skips the version it went back from until the person cancels the skip, and logs the rollback once (AT-165, 4.2)", async () => {
+    const { app } = await updateFixture();
+    const data = app.layout.partitions.data;
+    fs.writeFileSync(path.join(data, "update-skip.json"), JSON.stringify({ version: "0.1.2", at: "2026-11-09T00:00:00.000Z" }));
+    const skipped = await app.update.check();
+    expect(skipped).toMatchObject({ state: "idle", availableVersion: null, skippedVersion: "0.1.2" });
+    const grant = app.issueOwnerGrant({ kind: "user", id: "u1" }).handle;
+    const actor = { kind: "user" as const, id: "u1" };
+    const unskipped = await app.call(actor, { commandId: "update.unskip", idempotencyKey: "unskip-1", input: {} }, grant);
+    expect(unskipped).toMatchObject({ status: "ok", value: { skippedVersion: null } });
+    expect(app.update.status().skippedVersion).toBeNull();
+    expect(fs.existsSync(path.join(data, "update-skip.json"))).toBe(false);
+    expect((await app.update.check()).state).toBe("ready");
+    const logged = app.store.sqlite.prepare("SELECT action, summary_key, summary_params_json FROM operation_log WHERE action LIKE 'update.%' ORDER BY id").all() as Array<{ action: string; summary_key: string; summary_params_json: string }>;
+    expect(logged.some((row) => row.action === "update.unskip")).toBe(true);
+
+    fs.writeFileSync(path.join(data, "rollback-record.json"), JSON.stringify({ from: "0.1.2", to: "0.1.1", at: "2026-11-09T00:00:00.000Z", databaseRestored: true, keptAs: "manga.sqlite.rolledback-x" }));
+    app.update.configure({ resetState: true, detectFirstLaunch: true });
+    app.update.configure({ resetState: true, detectFirstLaunch: true });
+    const rolled = (app.store.sqlite.prepare("SELECT summary_key, summary_params_json FROM operation_log WHERE action = 'update.rolledBack'").all() as Array<{ summary_key: string; summary_params_json: string }>);
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0]!.summary_key).toBe("log.update.rolledBackRestored");
+    expect(JSON.parse(rolled[0]!.summary_params_json)).toEqual({ from: "0.1.2", to: "0.1.1", keptAs: "manga.sqlite.rolledback-x" });
+    expect(fs.existsSync(path.join(data, "rollback-record.json"))).toBe(false);
+  });
+
+  it("does not install while light open will not leave, and says so (AT-169, 4.6)", async () => {
+    let installerRuns = 0;
+    const { app } = await updateFixture({
+      onBeforeInstall: () => { throw new MangaError("UPDATE_UNAVAILABLE", "请先关闭轻量播放窗口", { details: { reason: "light-open-running" } }); },
+      runInstaller: () => { installerRuns += 1; return true; },
+    });
+    expect((await app.update.check()).state).toBe("ready");
+    await expect(app.update.restartToUpdate()).rejects.toMatchObject({ code: "UPDATE_UNAVAILABLE", message: "请先关闭轻量播放窗口", details: { reason: "light-open-running" } });
+    expect(installerRuns).toBe(0);
+    expect(app.update.status()).toMatchObject({ state: "ready", error: "请先关闭轻量播放窗口" });
   });
 
   it("includes committed WAL data in the pre-update backup even when the main SQLite file lacks it", async () => {
@@ -593,7 +667,7 @@ describe("W3 & W4: Release UpdateService, Ed25519 signature verification & publi
         channel: "release",
         commit: "bbbb222",
         builtAt: "2026-11-08T15:00:00.000Z",
-        schemaVersion: 14,
+        schemaVersion: 15,
       },
       update: {
         feedUrl: server.baseUrl,
@@ -918,7 +992,7 @@ describe("W3 & W4: Release UpdateService, Ed25519 signature verification & publi
         channel: "release",
         commit: "aaaa111",
         builtAt: "2026-11-01T00:00:00.000Z",
-        schemaVersion: 14,
+        schemaVersion: 15,
       },
       update: {
         feedUrl: server.baseUrl,

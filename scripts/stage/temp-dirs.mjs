@@ -17,6 +17,8 @@ export const GATE_TEMP_PREFIXES = [
   "manga-release-build-",
   "manga-update-",
   "manga-smoke-key-",
+  "manga-light-",
+  "manga-full-open-",
 ];
 
 const entries = () => {

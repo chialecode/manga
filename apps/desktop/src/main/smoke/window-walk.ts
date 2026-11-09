@@ -474,7 +474,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
 
   // ---- 8. the workspace (AT-110 — AT-118): tabs, the split, the contexts, the same file in three of them, the dock that follows the tab in front ------------------
   await runWorkspaceWalk({
-    view, call, observe, shot, resize, comicId, videoId, novelId,
+    view, appService, call, observe, shot, resize, comicId, videoId, novelId,
     titles: { comic: titleOf("comic"), video: titleOf("video"), novel: titleOf("novel") },
     projectId, boardId,
   });

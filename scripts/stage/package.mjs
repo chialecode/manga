@@ -11,11 +11,12 @@ import { startFakeBangumi } from "../../tests/helpers/fake-bangumi.ts";
 import { LEGACY_CREDENTIALS } from "../../tests/helpers/legacy-credentials.ts";
 import { startMockProvider } from "../../packages/model-protocol/src/index.ts";
 import { frozenImageHashes } from "../../packages/storage-drizzle/src/migrate-agent-media.ts";
+import { PRODUCT_SCHEMA_VERSION } from "../../packages/storage-drizzle/src/sql.ts";
 import Database from "better-sqlite3";
 import sharp from "sharp";
 import * as resedit from "resedit";
 import { MangaProductApp, TestVault, pngSize } from "../../packages/app-core/src/index.ts";
-import { desktopPackageDir, latestDesktopPackage } from "../desktop-paths.ts";
+import { desktopPackageDir, latestDesktopPackage, pluginSigningKeyFile } from "../desktop-paths.ts";
 import { validateWorkflows } from "../check-workflows.mjs";
 import {
   CHANNEL_INSTALL,
@@ -38,6 +39,7 @@ import { decideWeeklyRelease } from "./release-decide.mjs";
 import { runStageRelease } from "./release.mjs";
 import { rawPublicKey, writeBuildInfo } from "./version-lib.mjs";
 import { watchGateTemp } from "./temp-dirs.mjs";
+import { checkLightBoundary, observeLightUpdate, observeLightOpen } from "./light-open.mjs";
 import { currentStage, fingerprintKeysOf, loadGate, packagedFingerprintKeys, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
 
 const stage = currentStage();
@@ -62,7 +64,7 @@ const outDir = desktopPackageDir;
 let smokePluginPublicKey = process.env.MANGA_SMOKE_PLUGIN_PUBLIC_KEY?.trim() || "";
 const ephemeralPluginKey = process.env.MANGA_BUILD_CHANNEL !== "release"
   && !process.env.MANGA_PLUGIN_SIGNING_KEY
-  && !fs.existsSync(path.join(root, "dist/keys/plugin-first-party.pem"));
+  && !fs.existsSync(pluginSigningKeyFile);
 // The gate's second and third runs (and a run again after a failure that changed nothing) package exactly the inputs the run before did. The build
 // stamp written after a build names those inputs (every fingerprint that goes into the package, the build's environment and the plugin signing key)
 // and the digest of every file of the packaged directory; when all of them are unchanged the directory is the build this run would make, and it is
@@ -70,7 +72,7 @@ const ephemeralPluginKey = process.env.MANGA_BUILD_CHANNEL !== "release"
 const buildStamp = path.join(outDir, "build-stamp.json");
 const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
 const buildEnvDigest = () => {
-  const keyFile = process.env.MANGA_PLUGIN_SIGNING_KEY || path.join(root, "dist/keys/plugin-first-party.pem");
+  const keyFile = process.env.MANGA_PLUGIN_SIGNING_KEY || pluginSigningKeyFile;
   const envLocal = path.join(root, ".env.local");
   return sha256(JSON.stringify({
     env: Object.entries(process.env).filter(([name]) => name.startsWith("MANGA_") && !name.startsWith("MANGA_PACKAGE_")).sort(([a], [b]) => a.localeCompare(b)),
@@ -415,9 +417,10 @@ const filesIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: 
 async function migrateNewer() {
   const home = homes["migrate-v13"];
   if (!home) throw new Error("migrate-v13-newer needs the Profile of migrate-v13");
+  const newerVersion = String(PRODUCT_SCHEMA_VERSION + 1);
   const file = path.join(home, "root", "data", "manga.sqlite");
   const db = new Database(file);
-  db.prepare("UPDATE schema_meta SET value = '15' WHERE key = 'schemaVersion'").run();
+  db.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(newerVersion);
   db.pragma("wal_checkpoint(TRUNCATE)");
   db.close();
   const result = await launch(home, packagedEnv({ MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: path.join(home, "root"), MANGA_POINTER_FILE: path.join(home, "launcher", "pointer.json"), MANGA_DOCUMENTS_DIR: path.join(home, "documents"), MANGA_SMOKE_PHASE: "migrate-v13-newer" }), 90_000);
@@ -425,7 +428,7 @@ async function migrateNewer() {
   const after = new Database(file, { readonly: true });
   const version = after.prepare("SELECT value FROM schema_meta WHERE key = 'schemaVersion'").get()?.value;
   after.close();
-  const refused = result.status !== 0 && /newer than this application/.test(String(report.error ?? "")) && version === "15";
+  const refused = result.status !== 0 && /newer than this application/.test(String(report.error ?? "")) && version === newerVersion;
   const observation = { name: "migrate-v13-newer", status: refused ? "passed" : "failed", detail: { exitStatus: result.status, refused, versionAfter: version } };
   if (!refused) throw new Error(`a library newer than the build was not refused: ${JSON.stringify(observation.detail)}`);
   return { ok: true, observations: [observation] };
@@ -844,7 +847,7 @@ async function observeInstallerInfo() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-installer-info-"));
   const realBefore = snapshotRealInstallations();
   const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
-  const ps = (cmd) => (spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { encoding: "utf8", windowsHide: true }).stdout ?? "").trim();
+  const ps = (cmd) => (spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${cmd}`], { encoding: "utf8", windowsHide: true }).stdout ?? "").trim();
   const cleanupTestRelease = () => removeTestInstallations(["release"]);
   try {
     const svgExists = fs.existsSync(DEFAULT_ICON_SVG);
@@ -941,13 +944,23 @@ async function runUpdatePhase() {
     await observeInstallDev(),
     await observeReleaseWorkflow(),
     await observeInstallerInfo(),
+    // Light open leaves before install-dev installs, or nothing is installed (4.6).
+    ...await observeLightUpdate({ appPath, samplesRoot, runInstallDev }),
   ];
   const combined = [...(windowReport.observations ?? []), ...extraObservations];
   const ok = windowReport.ok === true && combined.every((row) => row.status === "passed");
   return { ...windowReport, ok, observations: combined };
 }
 
-const DRIVEN = { "migrate-v13-newer": migrateNewer, "data-locations-fresh": dataLocationsFresh, "data-locations-upgrade": dataLocationsUpgrade, update: runUpdatePhase };
+// Light open (READ-05, A-128, 第 7 节): its windows, its footprint, its own lock beside the full application's, and what its bundles carry.
+async function runLightPhase() {
+  const boundary = checkLightBoundary(appPath);
+  const windows = await observeLightOpen({ appPath, samplesRoot, evidenceDir: evidence });
+  const observations = [boundary, ...windows.observations];
+  return { ok: observations.every((row) => row.status === "passed"), observations, timings: windows.timings };
+}
+
+const DRIVEN = { light: runLightPhase, "migrate-v13-newer": migrateNewer, "data-locations-fresh": dataLocationsFresh, "data-locations-upgrade": dataLocationsUpgrade, update: runUpdatePhase };
 
 const smokeReports = {};
 const phaseTimings = {};
@@ -981,6 +994,8 @@ const observations = [
   ...(smokeReports.trace?.observations ?? []),
   // The dependency and Agent loop stage (计划第 7 节).
   ...(smokeReports.loop?.observations ?? []),
+  ...(smokeReports.voice?.observations ?? []),
+  ...(smokeReports.light?.observations ?? []),
   ...["credentials-async", "credentials-async-restart", "migrate-v13", "migrate-v13-restart", "migrate-v13-newer", "data-locations-fresh", "data-locations-upgrade", "update"].flatMap((name) => smokeReports[name]?.observations ?? []),
 ];
 
@@ -1086,6 +1101,8 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   installer: installerSummary,
   media: smokeReports.media ? { steps: smokeReports.media.steps, matrix: smokeReports.media.matrix, timings: smokeReports.media.timings } : null,
   voice: smokeReports.voice ? { steps: smokeReports.voice.steps } : null,
+  // Light open in the packaged window: the first frame and page of one run, and the working set after a video opened (the bench measures them five times).
+  light: smokeReports.light ? { ok: smokeReports.light.ok, timings: smokeReports.light.timings } : null,
   // Operation-level timing from the real reading-loop run, not from click dispatch.
   readingLoop: {
     readLastChapter: smokeReports["reading-loop"]?.readLastChapter ?? false,

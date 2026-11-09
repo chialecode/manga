@@ -6,7 +6,7 @@ import type { ComicSettings } from "../readers/comic-reader.tsx";
 import type { VideoSettings } from "../readers/video-player.tsx";
 import { CustomRate, RateList } from "./settings-rates.tsx";
 import { listMicrophones } from "../voice/mic.ts";
-import type { RecordingSettings } from "../voice/use-recorder.ts";
+import type { RecordingPatch, RecordingSettings } from "../voice/use-recorder.ts";
 
 type T = Translator["t"];
 
@@ -103,7 +103,7 @@ export function Modules(props: { t: T; onChanged: () => Promise<void> | void }) 
   );
 }
 
-export function Recording(props: { t: T; settings: RecordingSettings; save: (patch: Partial<RecordingSettings>) => Promise<void>; onNotice: (message: string) => void }) {
+export function Recording(props: { t: T; settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void>; onNotice: (message: string) => void }) {
   const { t, settings } = props;
   const [devices, setDevices] = useState<Array<{ id: string; label: string }>>([]);
   const [clash, setClash] = useState(false);
@@ -153,7 +153,7 @@ export function Recording(props: { t: T; settings: RecordingSettings; save: (pat
         <input type="number" min={0} max={2000} step={50} data-testid="msettings-margin" value={settings.boundaryMarginMs} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) void props.save({ boundaryMarginMs: Math.max(0, Math.min(2000, Math.round(value))) }); }} />
       </label>
       <div>
-        <button type="button" className="secondary-button" data-testid="msettings-overlay-reset" onClick={() => { void props.save({ overlay: { width: 280, height: 84 } }).then(() => props.onNotice(t("msettings.overlayDone"))); }}>{t("msettings.overlayReset")}</button>
+        <button type="button" className="secondary-button" data-testid="msettings-overlay-reset" onClick={() => { void props.save({ overlay: { x: null, y: null } }).then(() => props.onNotice(t("msettings.overlayDone"))); }}>{t("msettings.overlayReset")}</button>
       </div>
     </section>
   );

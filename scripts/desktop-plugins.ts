@@ -4,17 +4,17 @@ import path from "node:path";
 import { build } from "esbuild";
 import { buildPluginPackage } from "../packages/app-core/src/plugins/package.ts";
 import { MANIFEST_NAME, sha256File, type AssetManifest } from "../apps/desktop/src/main/bundled-assets.ts";
-import { repoRoot } from "./desktop-paths.ts";
+import { pluginSigningKeyFile, repoRoot } from "./desktop-paths.ts";
 
 /** Where the first party's signing key is kept on a maintainer's machine. It is never in the repository; the public half is in `packages/app-core/src/plugins/trust.ts`. */
-export const defaultSigningKey = path.join(repoRoot, "dist/keys/plugin-first-party.pem");
+export const defaultSigningKey = pluginSigningKeyFile;
 export const pluginBuildDir = path.join(repoRoot, "dist/plugins");
 
 /** The private key as text: the value of `MANGA_PLUGIN_SIGNING_KEY` (the text itself, or the path of a file that holds it), else the default file. */
 export function signingKey(): string {
   const configured = process.env.MANGA_PLUGIN_SIGNING_KEY?.trim();
   if (configured) return configured.includes("BEGIN") ? configured : fs.readFileSync(configured, "utf8");
-  if (!fs.existsSync(defaultSigningKey)) throw new Error("no signing key: set MANGA_PLUGIN_SIGNING_KEY to a key file, or keep the first party's key at dist/keys/plugin-first-party.pem");
+  if (!fs.existsSync(defaultSigningKey)) throw new Error("no signing key: set MANGA_PLUGIN_SIGNING_KEY to a key file, or keep the first party's key at %APPDATA%\\manga-release\\plugin-signing.key");
   return fs.readFileSync(defaultSigningKey, "utf8");
 }
 

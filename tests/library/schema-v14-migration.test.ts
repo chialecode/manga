@@ -65,9 +65,9 @@ describe("schema v14 migration (agent_proposals table and index, AT-156, A-121)"
 
     const store = new DrizzleStore({ profileDir: seeded.data, hostId: "migrate-v14" });
     try {
-      expect(PRODUCT_SCHEMA_VERSION).toBe(14);
-      expect(store.getMeta("schemaVersion")).toBe("14");
-      expect(store.migration).toMatchObject({ from: 13, to: 14 });
+      expect(PRODUCT_SCHEMA_VERSION).toBe(15);
+      expect(store.getMeta("schemaVersion")).toBe("15");
+      expect(store.migration).toMatchObject({ from: 13, to: 15 });
       expect(tablesOf(store.sqlite)).toContain("agent_proposals");
       expect(columnsOf(store.sqlite, "agent_proposals")).toEqual([
         "id", "session_id", "run_id", "project_id", "kind", "command_id",
@@ -112,7 +112,7 @@ describe("schema v14 migration (agent_proposals table and index, AT-156, A-121)"
 
     const retried = new DrizzleStore({ profileDir: seeded.data, hostId: "retry-v14" });
     try {
-      expect(retried.getMeta("schemaVersion")).toBe("14");
+      expect(retried.getMeta("schemaVersion")).toBe("15");
       expect(tablesOf(retried.sqlite)).toContain("agent_proposals");
       expect(indexesOf(retried.sqlite, "agent_proposals")).toContain("agent_proposals_session_status");
     } finally {
@@ -124,7 +124,7 @@ describe("schema v14 migration (agent_proposals table and index, AT-156, A-121)"
     const seeded = seedV13();
     const db = new Database(path.join(seeded.data, "manga.sqlite"));
     const beforeDump = dumpV13(db);
-    db.exec("CREATE TRIGGER refuse_v14 BEFORE UPDATE OF value ON schema_meta WHEN NEW.key = 'schemaVersion' AND NEW.value = '14' BEGIN SELECT RAISE(ABORT, 'v14 write refused'); END;");
+    db.exec("CREATE TRIGGER refuse_v14 BEFORE UPDATE OF value ON schema_meta WHEN NEW.key = 'schemaVersion' AND NEW.value = '15' BEGIN SELECT RAISE(ABORT, 'v14 write refused'); END;");
     db.close();
 
     expect(() => new DrizzleStore({ profileDir: seeded.data, hostId: "fail-v14" })).toThrow(/v14 write refused/);
@@ -138,7 +138,7 @@ describe("schema v14 migration (agent_proposals table and index, AT-156, A-121)"
 
     const fixed = new DrizzleStore({ profileDir: seeded.data, hostId: "fixed-v14" });
     try {
-      expect(fixed.getMeta("schemaVersion")).toBe("14");
+      expect(fixed.getMeta("schemaVersion")).toBe("15");
       expect(tablesOf(fixed.sqlite)).toContain("agent_proposals");
       expect(dumpV13(fixed.sqlite)).toEqual(beforeDump);
     } finally {
@@ -158,7 +158,7 @@ describe("schema v14 migration (agent_proposals table and index, AT-156, A-121)"
 
     const restored = new DrizzleStore({ profileDir: seeded.data, hostId: "restored-v14" });
     try {
-      expect(restored.migration).toMatchObject({ from: 13, to: 14 });
+      expect(restored.migration).toMatchObject({ from: 13, to: 15 });
       expect(dumpV13(restored.sqlite)).toEqual(once);
     } finally {
       restored.close();
@@ -172,7 +172,7 @@ describe("schema v14 migration (agent_proposals table and index, AT-156, A-121)"
     const freshDir = fs.mkdtempSync(path.join(process.env.MANGA_TEST_TMP_ROOT ?? os.tmpdir(), "manga-v14-fresh-"));
     const fresh = new DrizzleStore({ profileDir: freshDir, hostId: "fresh-v14" });
     try {
-      expect(fresh.getMeta("schemaVersion")).toBe("14");
+      expect(fresh.getMeta("schemaVersion")).toBe("15");
       expect(tablesOf(fresh.sqlite)).toContain("agent_proposals");
     } finally {
       fresh.close();

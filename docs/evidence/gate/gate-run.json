@@ -1,64 +1,64 @@
 {
   "status": "passed",
-  "at": "2026-11-08T21:52:50.632Z",
-  "seconds": 2149,
+  "at": "2026-11-12T00:25:25.204Z",
+  "seconds": 2329,
   "steps": [
     {
       "name": "verify",
       "outcome": "passed",
-      "seconds": 25
+      "seconds": 27
     },
     {
       "name": "test",
       "outcome": "passed",
-      "seconds": 73
+      "seconds": 95
     },
     {
       "name": "package",
       "outcome": "passed",
-      "seconds": 353
+      "seconds": 438
     },
     {
       "name": "installer",
       "outcome": "passed",
-      "seconds": 408
+      "seconds": 449
     },
     {
       "name": "bench",
       "outcome": "passed",
-      "seconds": 588,
+      "seconds": 515,
       "slowest": [
         {
           "name": "workspace",
-          "seconds": 144.8
-        },
-        {
-          "name": "scaleWindow",
-          "seconds": 136.6
+          "seconds": 143.2
         },
         {
           "name": "scanPane",
-          "seconds": 103
+          "seconds": 92.7
         },
         {
           "name": "reader",
-          "seconds": 78.9
+          "seconds": 74.2
+        },
+        {
+          "name": "scaleWindow",
+          "seconds": 66.3
         },
         {
           "name": "chat",
-          "seconds": 40.2
+          "seconds": 40
         }
       ]
     },
     {
       "name": "package (pass 2 of 3)",
       "outcome": "passed",
-      "seconds": 334
+      "seconds": 397
     },
     {
       "name": "package (pass 3 of 3)",
       "outcome": "passed",
-      "seconds": 352
+      "seconds": 388
     },
     {
       "name": "report",
@@ -68,7 +68,7 @@
     {
       "name": "install-dev",
       "outcome": "passed",
-      "seconds": 14
+      "seconds": 16
     }
   ]
 }

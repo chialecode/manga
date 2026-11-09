@@ -21,6 +21,7 @@ export type UpdateHandle = {
   reload: () => Promise<UpdateStatus | null>;
   check: (options?: { download?: boolean }) => Promise<UpdateStatus | null>;
   setSettings: (patch: UpdateSettingsPatch) => Promise<void>;
+  unskip: () => Promise<void>;
   requestRestart: (extraBusyReasons?: UpdateBusyReason[]) => Promise<void>;
   confirmBusyRestart: () => Promise<void>;
   dismissJustUpdated: () => Promise<void>;
@@ -110,6 +111,17 @@ export function useUpdate(options: {
     await reload();
   }, [options, reload]);
 
+  /** "取消跳过" (4.2): the version skipped after going back from it is offered again at the next check. */
+  const unskip = useCallback(async (): Promise<void> => {
+    const res = await attempt<UpdateStatus>("update.unskip", {});
+    if (!res.ok) {
+      options.setError(res.error.message);
+      return;
+    }
+    if (res.value && typeof res.value.version === "string") setStatus(res.value);
+    else await reload();
+  }, [options, reload]);
+
   const requestRestart = useCallback(async (extraBusyReasons: UpdateBusyReason[] = []): Promise<void> => {
     const combined = [...new Set([...detectRendererBusy({ recordingActive: options.recordingActive }), ...extraBusyReasons])];
     const res = await attempt<UpdateRestartResult>("update.restartToUpdate", {
@@ -177,6 +189,7 @@ export function useUpdate(options: {
     reload,
     check,
     setSettings,
+    unskip,
     requestRestart,
     confirmBusyRestart,
     dismissJustUpdated,

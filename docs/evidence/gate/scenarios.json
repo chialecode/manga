@@ -1,21 +1,21 @@
 {
   "status": "passed",
-  "stage": "m10",
-  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
-  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "stage": "m11",
+  "sourceFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
+  "smokeScriptFingerprint": "84aea18197957e49a49e8e9c4e4f55cac9ace6e98a212af2b3b5d3f1c1cd4a55",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
-  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
-  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
-  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
-  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
-  "testScriptFingerprint": "7ddec5774ad97e7d328fd606bc81a72e340e2d802989be7d3c85ee9442dfba85",
-  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
-  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
-  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
-  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
+  "smokeBenchScriptFingerprint": "1532610373b76fedac5903c47c3350ad4d0e209b853f60015d693de9206ba143",
+  "smokeWalkScriptFingerprint": "58fa4c5cdfe4d1187bb6c02cd57b242c1523d81c5ab046d8183439b9926053ce",
+  "lockFingerprint": "97e74474b5207dfe933e28f2977cfc9db778c3475cbbf65d56ba4e25bb52c2c3",
+  "buildScriptFingerprint": "3cb3dbe850da3702a24a419087d2f8a678b49f319ce5a68e5de61db21b86599b",
+  "gateScriptFingerprint": "342b275147cf13da9687ca2a88d32824c5b0a99f35bfaee6b4f22b31391a05fc",
+  "testScriptFingerprint": "0d93bca6a89864c7e04ec6b6bcc791fc00808f6046d1da4d57e3ba3d122771c8",
+  "packageScriptFingerprint": "9fe76d800c26f18029352ad7a3bd55b55f1dd3085a9754b92dbd3dd352187972",
+  "benchScriptFingerprint": "a143abb87f2ecf8de46dec88bda61bbd5b1da23dd0b9ddac625c26e896c4628f",
+  "installerScriptFingerprint": "ccf083e32fc67946d607c5ff9911f6b03ac7b75e515929527716e96cea7c11dd",
+  "releaseScriptFingerprint": "68a9a41eb30d145a9ee18864651ab0bf45dae245efb9fa9977e48a20693e9665",
   "productAcceptance": "not-run",
-  "at": "2026-11-08T22:28:23.736Z",
+  "at": "2026-11-12T01:03:55.844Z",
   "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
@@ -50,7 +50,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 189,
+        "scanMs": 178,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -1187,7 +1187,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.616403,
+            "time": 0.601309,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1314,7 +1314,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 0.272349
+            "time": 0.272946
           },
           "hidden": {
             "video": {
@@ -1336,7 +1336,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 3.142719
+            "time": 3.13956
           },
           "back": {
             "video": {
@@ -1358,7 +1358,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 3.328847
+            "time": 3.325416
           }
         },
         "video-subtitles": {
@@ -1407,7 +1407,7 @@
           "judged": "page clock",
           "during": {
             "ok": true,
-            "enteredMs": 306,
+            "enteredMs": 304,
             "rate": 2,
             "holding": true
           },
@@ -1427,8 +1427,8 @@
           "keptOnBar": true
         },
         "tap": {
-          "from": 9.99,
-          "step": 5.08,
+          "from": 10.06,
+          "step": 5.07,
           "downIdle": true,
           "upIdle": false
         },
@@ -1448,7 +1448,7 @@
           "firstHold": true,
           "secondHold": true,
           "firstBack": true,
-          "moved": 0.63,
+          "moved": 0.62,
           "paused": true
         },
         "rateButton": true,
@@ -1470,7 +1470,7 @@
         "timings": [
           {
             "step": "first hold",
-            "ms": 307
+            "ms": 310
           },
           {
             "step": "second hold",
@@ -1478,7 +1478,7 @@
           },
           {
             "step": "after the lost key-up",
-            "ms": 2
+            "ms": 1
           },
           {
             "step": "from the repeats",
@@ -1486,15 +1486,15 @@
           },
           {
             "step": "after the repeats",
-            "ms": 2
+            "ms": 1
           },
           {
             "step": "before the change of source",
-            "ms": 307
+            "ms": 311
           },
           {
             "step": "after the change of source",
-            "ms": 1
+            "ms": 0
           }
         ],
         "problems": []
@@ -1827,7 +1827,7 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 28,
+        "searchMs": 26,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
@@ -2079,7 +2079,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 12,
+        "hideLateMs": 6,
         "problems": []
       }
     },
@@ -2116,7 +2116,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 4,
+        "hideLateMs": 9,
         "problems": []
       }
     },
@@ -2153,7 +2153,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 15,
+        "hideLateMs": 7,
         "problems": []
       }
     },
@@ -2716,7 +2716,7 @@
           "keyBack": true,
           "keyForward": true
         },
-        "aboutVersion": "0.1.1-dev.202611081916"
+        "aboutVersion": "0.1.1-dev.202611120027"
       }
     },
     {
@@ -3029,11 +3029,11 @@
         "controlsShown": {
           "rect": {
             "x": 1142,
-            "y": -0.41820889711380005,
+            "y": -0.07889407873153687,
             "w": 138,
             "h": 36,
             "r": 1280,
-            "b": 35.5817911028862
+            "b": 35.92110592126846
           },
           "closeReachable": true
         },
@@ -3301,8 +3301,8 @@
             "reader:合成长篇 第一章",
             "library:合成漫画"
           ],
-          "focusedBefore": "tmw8ehki3bji",
-          "focusedAfter": "tmw8ehki3bji",
+          "focusedBefore": "tmwcuc7web6k",
+          "focusedAfter": "tmwcuc7web6k",
           "context": ""
         },
         "stored": 4
@@ -3358,15 +3358,15 @@
         "problems": [],
         "other-column": {
           "before": 12,
-          "after": 12.161422,
+          "after": 12.157529,
           "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 12.214906,
-          "after": 12.378248,
+          "before": 12.212107,
+          "after": 12.375543,
           "column": 3,
           "paused": false,
           "loadstart": 0,
@@ -3433,7 +3433,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw8ehki3bji",
+            "within": "tmwcuc7web6k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3444,7 +3444,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw8ehki3bji",
+            "within": "tmwcuc7web6k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3455,7 +3455,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmw8ehki3bji",
+            "within": "tmwcuc7web6k",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3466,7 +3466,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw8ehkg49qu",
+            "within": "tmwcuc7uf9eh",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3477,7 +3477,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmw8ehkg49qu",
+            "within": "tmwcuc7uf9eh",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3488,7 +3488,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw8ehkg49qu",
+            "within": "tmwcuc7uf9eh",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3499,7 +3499,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmw8ehkg49qu",
+            "within": "tmwcuc7uf9eh",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3509,20 +3509,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmw8ehki3bji",
-            "at": 1313,
+            "tab": "tmwcuc7web6k",
+            "at": 1380,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmw8ehki3bji",
-            "at": 1361,
+            "tab": "tmwcuc7web6k",
+            "at": 1428,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmw8ehki3bji",
-            "at": 1567,
+            "tab": "tmwcuc7web6k",
+            "at": 1634,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3597,12 +3597,12 @@
           "recent": "第 2 / 5 页",
           "one": "第 3 / 5 页",
           "two": "第 1 / 5 页",
-          "barTwo": "你在“窗口截图项目”里已经看到 60%",
+          "barTwo": "你在“最近”里已经看到 40%",
           "barRecent": "",
           "barOne": "",
-          "named": "窗口截图项目"
+          "named": "最近"
         },
-        "jumped": "第 3 / 5 页",
+        "jumped": "第 2 / 5 页",
         "title": "set"
       }
     },
@@ -3843,8 +3843,8 @@
         "views": {
           "home": {
             "groups": [
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:3",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded",
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:3",
               "recent:8"
             ],
             "entries": [
@@ -3858,8 +3858,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:1",
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:1",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:1",
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3870,8 +3870,8 @@
           },
           "novel": {
             "rows": [
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded",
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:0",
               "recent:2"
             ],
             "flat": 0,
@@ -3881,8 +3881,8 @@
           },
           "comic": {
             "rows": [
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:1",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded",
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3892,8 +3892,8 @@
           },
           "video": {
             "rows": [
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded",
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3907,8 +3907,8 @@
           },
           "note": {
             "rows": [
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded",
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:folded",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded",
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3923,8 +3923,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:2",
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:2",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3934,8 +3934,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:0",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3945,8 +3945,8 @@
           },
           "draft": {
             "rows": [
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:0",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3956,8 +3956,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:0",
-              "prj_ea2dfcc6-8e56-4aaf-a0c2-7be0da90b622:folded"
+              "prj_5614453a-8048-485e-870b-8c84d76b94b7:0",
+              "prj_a5245961-d7b5-42eb-b944-68ba1d6bbeac:folded"
             ],
             "flat": 0,
             "entries": [
@@ -4117,7 +4117,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 0.384536,
+            "time": 0.393102,
             "paused": true,
             "ready": 4
           }
@@ -4139,7 +4139,7 @@
           "same": true,
           "emptied": 0,
           "loads": 0,
-          "time": 0.38,
+          "time": 0.39,
           "paused": true,
           "ready": 4,
           "before": 0.38
@@ -4169,8 +4169,8 @@
           "boardOpen": true,
           "videoReady": true,
           "marked": [
-            "sidebar-item-resource-res_167b797b-f27b-4a3e-80e0-09fdff1548a1",
-            "sidebar-item-resource-res_167b797b-f27b-4a3e-80e0-09fdff1548a1"
+            "sidebar-item-resource-res_cef862d9-a26a-46d6-bc96-8d773e1b0667",
+            "sidebar-item-resource-res_cef862d9-a26a-46d6-bc96-8d773e1b0667"
           ]
         },
         "atBoard": {
@@ -4178,7 +4178,7 @@
           "focused": "whiteboard",
           "video": {
             "same": true,
-            "time": 0.276389,
+            "time": 0.263676,
             "paused": true,
             "loads": 0,
             "emptied": 0
@@ -4195,13 +4195,13 @@
           "main": "video",
           "video": {
             "same": true,
-            "time": 0.276389,
+            "time": 0.263676,
             "paused": true,
             "loads": 0,
             "emptied": 0
           },
           "dock": "合成动画",
-          "left": 0.276389,
+          "left": 0.263676,
           "episodeDock": "合成动画"
         },
         "home": {
@@ -4215,7 +4215,7 @@
           ]
         },
         "fromCard": {
-          "card": "wb-open-wbn_988d930b-67d3-4f33-addf-5ea268222658",
+          "card": "wb-open-wbn_8eca1aac-37f2-4cde-b199-ea5460f64a4b",
           "switched": true,
           "there": "video"
         },
@@ -4609,7 +4609,7 @@
         ],
         "guides": {
           "current": "recent:rgb(173, 50, 104)",
-          "other": "prj_1d69ce01-7c17-4998-baaa-981ac13635c7:rgb(221, 225, 232)"
+          "other": "prj_5614453a-8048-485e-870b-8c84d76b94b7:rgb(221, 225, 232)"
         },
         "narrow": {
           "width": 200,
@@ -4632,8 +4632,8 @@
           "novel/project/novel": "0=0"
         },
         "samples": {
-          "comic": "res_f2d3f9d8-cf75-43d2-8771-cbbc4543f391",
-          "novel": "res_c29d2ee4-d82f-4c10-93ed-5f014416b037"
+          "comic": "res_b55be96e-4496-4191-add8-d739b46e2748",
+          "novel": "res_f08ae71e-651f-41ba-917b-5d4b569a4c1f"
         },
         "before": {
           "comicOpened": true,
@@ -4661,14 +4661,14 @@
           "placeholders": 2,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_e912308e-6867-4b7b-8b61-9e0effa77a4e",
-            "sidebar-item-resource-res_756f83c5-55b9-4611-aee2-6a002ca33add"
+            "sidebar-item-resource-res_c35f8ab3-671a-40e6-b193-3a3e5fb7804a",
+            "sidebar-item-resource-res_5ddf7f52-edfb-4d7d-bb88-e9d9e9d83884"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_a48eebdd-51e7-45cc-bc71-de107ae9d602",
-            "work:work_728ddb99-a056-4cf0-b1e7-5490a407c8dc"
+            "work:work_c925189b-b786-4266-b51d-469995ff4b78",
+            "work:work_cdf79f08-6b39-41ae-9296-65751f196aed"
           ]
         },
         "comic": {
@@ -4678,12 +4678,12 @@
           "placeholders": 1,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_d49ddf5f-7203-4c96-aa94-c9719556f895"
+            "sidebar-item-resource-res_1375db1c-434b-4230-84a6-d3aff5b5cbfc"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "resource:res_d49ddf5f-7203-4c96-aa94-c9719556f895"
+            "resource:res_1375db1c-434b-4230-84a6-d3aff5b5cbfc"
           ]
         },
         "video": {
@@ -4693,12 +4693,12 @@
           "placeholders": 0,
           "images": 1,
           "keys": [
-            "sidebar-item-resource-res_167b797b-f27b-4a3e-80e0-09fdff1548a1"
+            "sidebar-item-resource-res_cef862d9-a26a-46d6-bc96-8d773e1b0667"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_e57f37c4-85dc-4e5f-9c27-748b3239af90"
+            "work:work_cfa11cd0-ea37-4b7a-8fa6-b4590f1d90d0"
           ]
         },
         "switch": {
@@ -4762,55 +4762,55 @@
         },
         "epub": {
           "start": 0,
-          "end": 435,
+          "end": 404,
           "page": 1,
-          "total": 8,
+          "total": 9,
           "chapter": "第1章"
         },
         "bookmark": {
           "marked": {
-            "start": 435,
-            "end": 875,
+            "start": 404,
+            "end": 833,
             "page": 2,
-            "total": 8,
+            "total": 9,
             "chapter": "第1章"
           },
           "back": {
-            "start": 435,
-            "end": 875,
+            "start": 404,
+            "end": 833,
             "page": 2,
-            "total": 8,
+            "total": 9,
             "chapter": "第1章"
           },
           "hit": true
         },
         "nextChapter": {
           "start": 0,
-          "end": 435,
+          "end": 404,
           "page": 1,
-          "total": 8,
+          "total": 9,
           "chapter": "第2章"
         },
         "previousChapter": {
-          "start": 3075,
+          "start": 3324,
           "end": 3363,
-          "page": 8,
-          "total": 8,
+          "page": 9,
+          "total": 9,
           "chapter": "第1章"
         },
         "double": {
           "twoFrom": {
-            "start": 2764,
-            "end": 3111,
-            "page": 17,
-            "total": 20,
+            "start": 3190,
+            "end": 3363,
+            "page": 21,
+            "total": 22,
             "chapter": "第1章"
           },
           "twoTo": {
-            "start": 2418,
-            "end": 2764,
-            "page": 15,
-            "total": 20,
+            "start": 2870,
+            "end": 3190,
+            "page": 19,
+            "total": 22,
             "chapter": "第1章"
           }
         },
@@ -4832,14 +4832,14 @@
           },
           "before": {
             "start": 0,
-            "end": 481,
+            "end": 444,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
           },
           "after": {
             "start": 0,
-            "end": 481,
+            "end": 444,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
@@ -4856,14 +4856,14 @@
           },
           "before": {
             "start": 0,
-            "end": 481,
+            "end": 444,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
           },
           "after": {
             "start": 0,
-            "end": 481,
+            "end": 444,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
@@ -4879,14 +4879,14 @@
           },
           "before": {
             "start": 0,
-            "end": 481,
+            "end": 444,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
           },
           "after": {
             "start": 0,
-            "end": 481,
+            "end": 444,
             "page": 1,
             "total": 8,
             "chapter": "第2章"
@@ -4906,9 +4906,9 @@
       "name": "scan-incremental",
       "status": "passed",
       "detail": {
-        "progressAt": 1108,
-        "cardAt": 1144,
-        "cardAfterProgressMs": 36,
+        "progressAt": 1131,
+        "cardAt": 1190,
+        "cardAfterProgressMs": 59,
         "runningAtCard": true,
         "opened": {
           "read": true,
@@ -4917,8 +4917,8 @@
         "works": 20,
         "afterImport": {
           "calls": 2,
-          "first": 1107,
-          "finishedAt": 1441
+          "first": 1131,
+          "finishedAt": 1513
         },
         "cardsShown": 15,
         "problems": []
@@ -5067,7 +5067,7 @@
         "from": "two",
         "to": "single",
         "answeredMs": 7,
-        "closedMs": 17,
+        "closedMs": 19,
         "stored": "single",
         "columns": 1
       }
@@ -5221,7 +5221,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 5
+        "overheadMs": 3
       }
     },
     {
@@ -5696,7 +5696,7 @@
       "status": "passed",
       "detail": {
         "first": {
-          "before": "对话 2026-11-09 06:26",
+          "before": "对话 2026-11-12 09:01",
           "tab": "帮我总结一下第一章的主要人物",
           "named": true,
           "stored": true
@@ -5747,7 +5747,7 @@
       "name": "chat-long-session",
       "status": "passed",
       "detail": {
-        "firstScreenMs": 210,
+        "firstScreenMs": 183,
         "firstScreen": {
           "drawn": true,
           "nodes": 9,
@@ -5786,7 +5786,7 @@
         "stream": {
           "live": true,
           "followed": true,
-          "followMs": 0,
+          "followMs": 18,
           "stuck": [
             true,
             true,
@@ -5815,16 +5815,16 @@
             1,
             1
           ],
-          "upAt": 49686,
+          "upAt": 49654,
           "held": [
-            49686,
-            49686,
-            49686,
-            49686,
-            49686,
-            49686,
-            49686,
-            49686
+            49654,
+            49654,
+            49654,
+            49654,
+            49654,
+            49654,
+            49654,
+            49654
           ],
           "stillRunning": true
         },
@@ -5971,8 +5971,8 @@
             "bytes": 5552,
             "origin": {
               "kind": "comic_region",
-              "resourceId": "res_6c77e687-cb47-43b5-ad69-192f8272851a",
-              "resourceRevisionId": "rev_617d24e7-1ccf-4e14-ab24-a4ab20e468ba",
+              "resourceId": "res_5b4b3cd8-52b4-40b9-8c4e-77dde46a92fb",
+              "resourceRevisionId": "rev_f71c3e7c-f215-476e-843c-3dbff9f366f4",
               "pageId": "002.png",
               "region": {
                 "x": 0,
@@ -5982,7 +5982,7 @@
               }
             },
             "extraction": "第 2 页的选定区域，从原页面裁剪",
-            "id": "img_22901f766be24df59524",
+            "id": "img_a08fbd1161574e009c65",
             "hash": "e16c6a6b785ec666b58f330ee777f08c99a31ead5f1c01c074b6e7d719726ccf",
             "expired": true
           }
@@ -6091,11 +6091,18 @@
         "restart": {
           "recovery": {
             "applied": 1,
-            "reverted": 1
+            "reverted": 1,
+            "failed": 1
           },
           "committedStatus": "applied",
           "uncommittedStatus": "pending",
           "pendingStatus": "pending",
+          "disabledStatus": "failed",
+          "disabledReason": "模块已关闭",
+          "disabledDomStatus": "failed",
+          "disabledDomText": "执行失败：模块已关闭",
+          "disabledAfterReenable": "failed",
+          "disabledNeverExported": true,
           "pendingApplied": true
         },
         "problems": []
@@ -6124,12 +6131,12 @@
       "status": "passed",
       "detail": {
         "v14": {
-          "migrateMs": 46.24,
+          "migrateMs": 48.86,
           "backupExists": true,
-          "versionAfter1": "14",
+          "versionAfter1": "15",
           "migration1": {
             "from": 13,
-            "to": 14,
+            "to": 15,
             "coversImported": 0
           },
           "proposalsTable": true,
@@ -6138,6 +6145,460 @@
           "newerRefused": true
         },
         "problems": []
+      }
+    },
+    {
+      "name": "recent-remove",
+      "status": "passed",
+      "detail": {
+        "initiallyShown": true,
+        "goneAfterRemove1": true,
+        "toastText": "已从最近移除《合成远进度漫画》撤销",
+        "restoredAfterUndo": true,
+        "goneAfterRemove2": true,
+        "cardAText": "已读 80%",
+        "cardDoneText": "已读来自“项目 A”",
+        "workSummaryText": "已读 80%来自“最近”最近：第 8 页 · 项目 A：第 1 页",
+        "contextPositionsText": "最近：第 8 页 · 项目 A：第 1 页",
+        "readerPage": 8,
+        "reappearedInRecent": true,
+        "screenshot": "ui-work-context-positions.png",
+        "problems": []
+      }
+    },
+    {
+      "name": "voice-overlay",
+      "status": "passed",
+      "detail": {
+        "initialBounds": {
+          "x": 2428,
+          "y": 16,
+          "width": 116,
+          "height": 38
+        },
+        "overlayDom": {
+          "boxWidth": 116,
+          "boxHeight": 36,
+          "visibleText": "0:01",
+          "ariaLabel": "[redacted-device-summary]",
+          "title": "[redacted-device-summary]",
+          "speakingColor": "#C1497C",
+          "stopLabel": "停止录音",
+          "ariaLabelHasMic": true,
+          "ariaLabelLength": 48
+        },
+        "afterDrag1": {
+          "x": 2228,
+          "y": 136
+        },
+        "reopen1Pos": {
+          "x": 2228,
+          "y": 136
+        },
+        "afterDrag2": {
+          "x": 2108,
+          "y": 216
+        },
+        "reopen2Pos": {
+          "x": 2108,
+          "y": 216
+        },
+        "pillOk": true,
+        "drag1Persisted": true,
+        "immediateStopPersisted": true
+      }
+    },
+    {
+      "name": "light-boundary",
+      "status": "passed",
+      "detail": {
+        "markers": [
+          {
+            "name": "better-sqlite3",
+            "inFull": true,
+            "foundIn": []
+          },
+          {
+            "name": "drizzle",
+            "inFull": true,
+            "foundIn": []
+          },
+          {
+            "name": "MangaProductApp (the library schema)",
+            "inFull": true,
+            "foundIn": []
+          },
+          {
+            "name": "electron-updater",
+            "inFull": true,
+            "foundIn": []
+          },
+          {
+            "name": "plugin runtime",
+            "inFull": true,
+            "foundIn": []
+          },
+          {
+            "name": "agent runtime",
+            "inFull": true,
+            "foundIn": []
+          }
+        ],
+        "bytes": {
+          "bootstrap": 11828,
+          "lightMain": 266877,
+          "fullMain": 3073026,
+          "lightPage": 3595854
+        },
+        "problems": []
+      }
+    },
+    {
+      "name": "light-video-first-frame",
+      "status": "passed",
+      "detail": {
+        "ms": 554
+      }
+    },
+    {
+      "name": "light-video-plays",
+      "status": "passed",
+      "detail": {
+        "before": 0.022113
+      }
+    },
+    {
+      "name": "light-video-pause",
+      "status": "passed",
+      "detail": {
+        "pausedAt": 1.231233
+      }
+    },
+    {
+      "name": "light-video-seek-key",
+      "status": "passed",
+      "detail": {
+        "from": 1.231233,
+        "to": 6.231233
+      }
+    },
+    {
+      "name": "light-video-rate",
+      "status": "passed",
+      "detail": {
+        "rate": 1.5
+      }
+    },
+    {
+      "name": "light-video-screenshot",
+      "status": "passed",
+      "detail": {
+        "files": [
+          "ui-light-video-light.png",
+          "ui-light-video-dark.png"
+        ]
+      }
+    },
+    {
+      "name": "light-video-audio-track",
+      "status": "passed",
+      "detail": {
+        "picked": true,
+        "offered": true,
+        "back": true
+      }
+    },
+    {
+      "name": "light-video-subtitles",
+      "status": "passed",
+      "detail": null
+    },
+    {
+      "name": "light-video-next",
+      "status": "passed",
+      "detail": {
+        "before": "第 01 话.mp4",
+        "after": "第 02 话.mp4"
+      }
+    },
+    {
+      "name": "light-video-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 1,
+        "remembered": 2
+      }
+    },
+    {
+      "name": "light-video-exits-with-its-window",
+      "status": "passed",
+      "detail": {
+        "status": 0
+      }
+    },
+    {
+      "name": "light-video-resume",
+      "status": "passed",
+      "detail": {
+        "at": 4.037777,
+        "resumed": true
+      }
+    },
+    {
+      "name": "light-video-resume-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 1,
+        "remembered": 2
+      }
+    },
+    {
+      "name": "light-video-copy-reason",
+      "status": "passed",
+      "detail": {
+        "reason": "音频编码不能直接播放，会转换为 AAC。"
+      }
+    },
+    {
+      "name": "light-video-copy-plays",
+      "status": "passed",
+      "detail": {
+        "badge": true,
+        "copies": 1
+      }
+    },
+    {
+      "name": "light-video-copy-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 1,
+        "remembered": 3
+      }
+    },
+    {
+      "name": "light-comic-first-page",
+      "status": "passed",
+      "detail": {
+        "ms": 262
+      }
+    },
+    {
+      "name": "light-comic-start-page",
+      "status": "passed",
+      "detail": {
+        "start": 0,
+        "expectStart": 0
+      }
+    },
+    {
+      "name": "light-comic-turn",
+      "status": "passed",
+      "detail": {
+        "start": 0,
+        "turned": 1,
+        "direction": "rtl"
+      }
+    },
+    {
+      "name": "light-comic-direction",
+      "status": "passed",
+      "detail": {
+        "from": "rtl",
+        "to": "ltr"
+      }
+    },
+    {
+      "name": "light-comic-layouts",
+      "status": "passed",
+      "detail": {
+        "pair": 2,
+        "stripPage": 1,
+        "backPage": 1
+      }
+    },
+    {
+      "name": "light-comic-page-jump",
+      "status": "passed",
+      "detail": {
+        "jumped": 2
+      }
+    },
+    {
+      "name": "light-comic-screenshot",
+      "status": "passed",
+      "detail": {
+        "file": "ui-light-comic.png"
+      }
+    },
+    {
+      "name": "light-comic-next-volume",
+      "status": "passed",
+      "detail": {
+        "before": "第 1 卷.cbz",
+        "after": "第 2 卷.cbz"
+      }
+    },
+    {
+      "name": "light-comic-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 1,
+        "remembered": 5
+      }
+    },
+    {
+      "name": "light-comic-resume",
+      "status": "passed",
+      "detail": {
+        "page": 2
+      }
+    },
+    {
+      "name": "light-comic-resume-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 1,
+        "remembered": 5
+      }
+    },
+    {
+      "name": "light-image-first-page",
+      "status": "passed",
+      "detail": {
+        "ms": 258
+      }
+    },
+    {
+      "name": "light-image-start-page",
+      "status": "passed",
+      "detail": {
+        "start": 2,
+        "expectStart": 2
+      }
+    },
+    {
+      "name": "light-image-turn",
+      "status": "passed",
+      "detail": {
+        "start": 2,
+        "turned": 3,
+        "direction": "ltr"
+      }
+    },
+    {
+      "name": "light-image-direction",
+      "status": "passed",
+      "detail": {
+        "from": "ltr",
+        "to": "rtl"
+      }
+    },
+    {
+      "name": "light-image-layouts",
+      "status": "passed",
+      "detail": {
+        "pair": 2,
+        "stripPage": 3,
+        "backPage": 3
+      }
+    },
+    {
+      "name": "light-image-page-jump",
+      "status": "passed",
+      "detail": {
+        "jumped": 2
+      }
+    },
+    {
+      "name": "light-image-screenshot",
+      "status": "passed",
+      "detail": {
+        "file": null
+      }
+    },
+    {
+      "name": "light-image-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 1,
+        "remembered": 6
+      }
+    },
+    {
+      "name": "light-empty-window",
+      "status": "passed",
+      "detail": {
+        "file": "ui-light-empty.png"
+      }
+    },
+    {
+      "name": "light-empty-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 0,
+        "remembered": 6
+      }
+    },
+    {
+      "name": "light-unsupported-file",
+      "status": "passed",
+      "detail": null
+    },
+    {
+      "name": "light-unsupported-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 0,
+        "remembered": 6
+      }
+    },
+    {
+      "name": "light-writes-only-its-folder",
+      "status": "passed",
+      "detail": {
+        "outside": [],
+        "positions": 6,
+        "keysOnly": true
+      }
+    },
+    {
+      "name": "light-multi-windows",
+      "status": "passed",
+      "detail": {
+        "windows": 3,
+        "want": 3,
+        "pid": 24912
+      }
+    },
+    {
+      "name": "light-multi-sessions",
+      "status": "passed",
+      "detail": {
+        "open": 3,
+        "remembered": 6
+      }
+    },
+    {
+      "name": "light-multi-one-process",
+      "status": "passed",
+      "detail": {
+        "fullReady": true,
+        "lightPid": 24912,
+        "windowsPid": 24912,
+        "handedOverMs": [
+          90,
+          91
+        ],
+        "fullStillRunning": true,
+        "secondFullStatus": 0
+      }
+    },
+    {
+      "name": "light-separate-lock",
+      "status": "passed",
+      "detail": {
+        "lightUserData": "root/light/runtime",
+        "fullUserData": "root/runtime"
       }
     },
     {
@@ -6183,10 +6644,10 @@
       "status": "passed",
       "detail": {
         "phase": "migrate-v13",
-        "schemaVersion": "14",
+        "schemaVersion": "15",
         "migration": {
           "from": 12,
-          "to": 14,
+          "to": 15,
           "coversImported": 0,
           "agentMedia": {
             "runs": 300,
@@ -6213,7 +6674,7 @@
       "status": "passed",
       "detail": {
         "phase": "migrate-v13-restart",
-        "schemaVersion": "14",
+        "schemaVersion": "15",
         "migration": null,
         "agentMedia": 201,
         "agentRunMedia": 340,
@@ -6230,7 +6691,7 @@
       "detail": {
         "exitStatus": 1,
         "refused": true,
-        "versionAfter": "15"
+        "versionAfter": "16"
       }
     },
     {
@@ -6265,7 +6726,7 @@
         "move": {
           "exitStatus": 0,
           "state": "migrated",
-          "files": 61,
+          "files": 67,
           "carried": [
             "works",
             "projects",
@@ -6281,7 +6742,7 @@
         },
         "older": {
           "exitStatus": 0,
-          "ms": 690,
+          "ms": 725,
           "data": true,
           "emulated": true
         },
@@ -6304,7 +6765,7 @@
           "name": "MANGA",
           "version": "0.1.1",
           "channel": "正式版",
-          "commit": "d92fd7f",
+          "commit": "6e06a9f",
           "builtAt": "2026年11月8日 18:00",
           "license": "Apache-2.0",
           "devHint": false,
@@ -6346,6 +6807,15 @@
           "bannerShown": true,
           "notesOpened": true,
           "schemaNoticeText": "这次更新会升级资料库，升级前会自动备份"
+        },
+        "updateNotesLayout": {
+          "rowPaddingLeft": "16px",
+          "rowPaddingRight": "16px",
+          "notesPaddingLeft": "16px",
+          "notesPaddingRight": "16px",
+          "notesPaddingTop": "12px",
+          "notesPaddingBottom": "12px",
+          "hasLocalPath": false
         },
         "busy": {
           "busyDialogShown": true,
@@ -6562,6 +7032,37 @@
         },
         "realInstallationsUntouched": true,
         "problems": []
+      }
+    },
+    {
+      "name": "light-update",
+      "status": "passed",
+      "detail": {
+        "checks": [
+          {
+            "name": "light-update-leaves-then-installs",
+            "status": "passed",
+            "detail": {
+              "status": "passed",
+              "installed": true,
+              "installs": 1,
+              "lightExit": 0,
+              "remembered": 1,
+              "reason": null
+            }
+          },
+          {
+            "name": "light-update-refused-not-installed",
+            "status": "passed",
+            "detail": {
+              "status": "aborted",
+              "installed": false,
+              "reason": "请先关闭轻量播放窗口 (light open did not leave within 10s; nothing was installed)",
+              "lightStillOpen": true,
+              "waitedMs": 264
+            }
+          }
+        ]
       }
     }
   ]

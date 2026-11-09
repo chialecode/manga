@@ -21,8 +21,14 @@ import {
   installerConfig,
   installerInclude,
   inspectIco,
+  OPEN_WITH_TYPES,
+  openWithIdentity,
+  openWithNsis,
+  openWithValues,
   snapshotRealInstallations,
+  writesExtensionDefault,
 } from "../../scripts/stage/installer-lib.mjs";
+import { LIGHT_COMIC_EXTENSIONS, LIGHT_IMAGE_EXTENSIONS, LIGHT_VIDEO_EXTENSIONS } from "@manga/app-core/light";
 
 // AT-150 / AT-160 / AT-162 / 计划 4.6, 4.8, 4.10: per user, no elevation, the folder can be changed and defaults to manga / manga-dev under
 // %LOCALAPPDATA%\Programs, uninstalling keeps the data, Simplified Chinese UI, application icons, publisher/description/copyright metadata,
@@ -92,11 +98,57 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, perMachine: true } }, installerInclude("release"))).toEqual(["not per user"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, deleteAppDataOnUninstall: true } }, installerInclude("release"))).toEqual(["uninstall deletes data"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, oneClick: true, allowElevation: true } }, installerInclude("release"))).toEqual(["one-click", "asks for elevation"]);
-    expect(checkInstallerConfig("release", config, installerInclude("development"))).toEqual(["default folder"]);
+    expect(checkInstallerConfig("release", config, installerInclude("development"))).toEqual(["default folder", "\"Open with\" registration missing or different"]);
     expect(checkInstallerConfig("development", config, installerInclude("development"))).toEqual(["appId app.manga.desktop", "productName MANGA"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, language: "1033", installerLanguages: ["en_US"] } }, installerInclude("release"))).toEqual(["not Simplified Chinese (zh_CN / 2052)"]);
     expect(checkInstallerConfig("release", { ...config, win: { ...config.win, icon: "" } }, installerInclude("release"))).toEqual(["missing icon"]);
     expect(checkInstallerConfig("release", { ...config, extraMetadata: { ...config.extraMetadata, author: { name: "" } } }, installerInclude("release"))).toEqual(["missing author"]);
+  });
+
+  it("registers \"Open with\" by its own ProgIDs, never by file associations or an extension's default value (AT-166, 4.5)", () => {
+    expect(OPEN_WITH_TYPES.video).toEqual([...LIGHT_VIDEO_EXTENSIONS].sort());
+    expect(OPEN_WITH_TYPES.comic).toEqual(LIGHT_COMIC_EXTENSIONS);
+    expect([...OPEN_WITH_TYPES.image].sort()).toEqual([...LIGHT_IMAGE_EXTENSIONS].sort());
+    expect(OPEN_WITH_TYPES.video).toHaveLength(13);
+    const ids = [
+      openWithIdentity("release"), openWithIdentity("development"),
+      openWithIdentity("release", { testIdentity: true }), openWithIdentity("development", { testIdentity: true }),
+    ];
+    expect(ids.map((id) => id.progIds.video)).toEqual(["MANGA.Video", "MANGA.Dev.Video", "MANGA.Test.Video", "MANGA.DevTest.Video"]);
+    expect(ids.map((id) => id.progIds.comic)).toEqual(["MANGA.Comic", "MANGA.Dev.Comic", "MANGA.Test.Comic", "MANGA.DevTest.Comic"]);
+    expect(ids.map((id) => id.progIds.image)).toEqual(["MANGA.Image", "MANGA.Dev.Image", "MANGA.Test.Image", "MANGA.DevTest.Image"]);
+    // No identity shares a name with another, so a test identity never touches the real one it stands for.
+    const names = (id: (typeof ids)[number]) => [...Object.values(id.progIds), id.exe, id.capabilitiesRoot, id.registeredName];
+    for (const [a, b] of [[0, 2], [1, 3], [0, 1], [2, 3]] as const) for (const name of names(ids[a]!)) expect(names(ids[b]!)).not.toContain(name);
+
+    const values = openWithValues("release");
+    const command = values.find(([key]) => key === "Software\\Classes\\MANGA.Video\\shell\\open\\command");
+    expect(command?.[2]).toBe('"$INSTDIR\\manga.exe" --manga-light "%1"');
+    expect(values).toContainEqual(["Software\\Classes\\.mp4\\OpenWithProgids", "MANGA.Video", ""]);
+    expect(values).toContainEqual(["Software\\Classes\\.cbz\\OpenWithProgids", "MANGA.Comic", ""]);
+    expect(values).toContainEqual(["Software\\Classes\\Applications\\manga.exe", "FriendlyAppName", "MANGA"]);
+    expect(values).toContainEqual(["Software\\Classes\\Applications\\manga.exe\\SupportedTypes", ".webp", ""]);
+    expect(values).toContainEqual(["Software\\MANGA\\Release\\Capabilities\\FileAssociations", ".jpg", "MANGA.Image"]);
+    expect(values).toContainEqual(["Software\\RegisteredApplications", "MANGA", "Software\\MANGA\\Release\\Capabilities"]);
+    // No value is written on an extension key itself, and .zip is never registered.
+    expect(values.filter(([key]) => /^Software\\Classes\\\.[^\\]+$/.test(key))).toEqual([]);
+    expect(values.some(([key]) => key.includes(".zip"))).toBe(false);
+
+    const nsis = openWithNsis("release").join("\n");
+    expect(writesExtensionDefault(nsis)).toBe(false);
+    expect(nsis).toContain("SHChangeNotify(i 0x08000000");
+    // Uninstalling removes MANGA's own value from OpenWithProgids and deletes an extension key only when nothing is left in it.
+    expect(nsis).toContain('DeleteRegValue HKCU "Software\\Classes\\.mkv\\OpenWithProgids" "MANGA.Video"');
+    expect(nsis).toContain('!insertmacro MangaDeleteBareKey "Software\\Classes\\.mkv"');
+    expect(nsis).not.toMatch(/DeleteRegKey(?: \/ifempty)? HKCU "Software\\Classes\\\./);
+    expect(nsis).toContain('DeleteRegKey HKCU "Software\\MANGA\\Release"');
+
+    const config = make("release");
+    expect(checkInstallerConfig("release", { ...config, fileAssociations: [{ ext: "mp4", name: "Video" }] }, installerInclude("release"))).toEqual(["fileAssociations is set"]);
+    expect(checkInstallerConfig("release", config, `${installerInclude("release")}\r\n  WriteRegStr HKCU "Software\\Classes\\.mp4" "" "MANGA.Video"`)).toEqual(["writes an extension's default value"]);
+    expect(checkInstallerConfig("release", config, installerInclude("release").replace(/^.*MANGA\.Image\\shell.*$/m, ""))).toEqual(["\"Open with\" registration missing or different"]);
+    expect(writesExtensionDefault('WriteRegStr HKCR ".cbz" "" "MANGA.Comic"')).toBe(true);
+    expect(writesExtensionDefault('WriteRegStr HKCU "Software\\Classes\\.cbz\\OpenWithProgids" "MANGA.Comic" ""')).toBe(false);
   });
 
   it("ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)", () => {

@@ -144,7 +144,8 @@ export function useNovel(deps: NovelDeps) {
     setHits([]);
     setSearched(false);
     setAgentSelection(null);
-    const touched = await run("works.open", { resourceId });
+    const touched = await run("works.open", { resourceId, contextId });
+    if (touched.status === "ok") announceCommand("works.open", { resourceId, contextId });
     if (request !== viewRequest.current) return;
     const ownerWork = touched.status === "ok" ? ((touched.value as { workId?: string | null } | undefined)?.workId ?? null) : null;
     setWorkId(ownerWork);

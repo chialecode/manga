@@ -13,9 +13,12 @@ import { PACKAGED_PLUGIN_ASSETS, REQUIRED_ASSETS, verifyBundledAssets } from "./
 import { createNetFetch } from "./net-fetch.ts";
 import { builtInDanmakuCredentials, SMOKE_DANMAKU_CREDENTIALS } from "./danmaku-credentials.ts";
 import { attachNsisUpdater } from "./updater.ts";
-import { CHANNELS, createId, LOCATION_PARTITIONS, type Channel } from "@manga/contracts";
+import { CHANNELS, createId, LOCATION_PARTITIONS, MangaError, type Channel } from "@manga/contracts";
 import { safeStorage } from "electron";
 import { utilitySpawner } from "./plugin-process.ts";
+import { launchSucceeded } from "./launch-guard.ts";
+import { appRootOf, channelInfoOf, lightDirsOf } from "./launch-paths.ts";
+import { askLightToQuit, LIGHT_QUIT_WAIT_MS } from "./light-runtime.ts";
 
 /** How long a closing window waits for the page to save what waits for its save. */
 const SAVE_BEFORE_CLOSE_MS = 1500;
@@ -152,6 +155,8 @@ let instanceReady = false;
 function writeRunningInstance(state: "starting" | "ready", extras: Record<string, unknown> = {}): void {
   if (quitForUpdateFlag || !layout.writable) return;
   instanceReady = state === "ready";
+  // The bootstrap watches the first starts of a version that came by an update (4.2): a window that is ready makes this start a good one.
+  if (instanceReady && process.env.MANGA_LAUNCH_ATTEMPT_FILE) launchSucceeded(process.env.MANGA_LAUNCH_ATTEMPT_FILE);
   try {
     fs.mkdirSync(runtimeDir, { recursive: true });
     fs.writeFileSync(
@@ -248,7 +253,11 @@ function handleQuitForUpdate(): Promise<void> {
 
 if (!quitForUpdateFlag && layout.writable) {
   try {
-    if (!app.requestSingleInstanceLock({ channel: layout.channel, testIdentity: channelInfo.testIdentity })) app.exit(0);
+    if (!app.requestSingleInstanceLock({ channel: layout.channel, testIdentity: channelInfo.testIdentity })) {
+      // A second start that hands over to the running one is not a failed start.
+      if (process.env.MANGA_LAUNCH_ATTEMPT_FILE) launchSucceeded(process.env.MANGA_LAUNCH_ATTEMPT_FILE);
+      app.exit(0);
+    }
   } catch {
     // ignore
   }
@@ -276,6 +285,15 @@ if (!quitForUpdateFlag && layout.writable) {
     }
   }, 120);
   quitPollTimer.unref?.();
+}
+
+/** Light open's runtime folder for this channel (where its running marker and the quit request are). */
+function lightRuntimeDir(): string {
+  return lightDirsOf(appRootOf(channelInfoOf({ resourcesPath: process.resourcesPath, packaged: app.isPackaged }))).runtime;
+}
+
+function lightOpenRunning(error: unknown): boolean {
+  return error instanceof MangaError && (error.details as { reason?: unknown } | undefined)?.reason === "light-open-running";
 }
 
 async function runDetachedWindowsInstaller(input: { installerPath: string; mode: "restart" | "quit"; expectedSha512: string }): Promise<boolean> {
@@ -484,6 +502,10 @@ async function bootService(): Promise<void> {
         if (window && !window.isDestroyed()) window.setEnabled(true);
       },
       onBeforeInstall: async () => {
+        // Light open runs the same executable the installer replaces: it is asked to keep its positions and leave first (4.6), and when it does not
+        // within 10 seconds nothing is installed.
+        const light = await askLightToQuit(lightRuntimeDir(), { timeoutMs: LIGHT_QUIT_WAIT_MS });
+        if (!light.ok) throw new MangaError("UPDATE_UNAVAILABLE", "请先关闭轻量播放窗口", { details: { reason: "light-open-running" } });
         try {
           if (!updateFixtureSmoke) {
             preparingUpdate = true;
@@ -627,9 +649,9 @@ if (!quitForUpdateFlag) app.whenReady().then(async () => {
     preload: path.join(__dirname, "preload.cjs"),
     readRect: async () => {
       const saved = (await callOwner("settings.getRecording", {}))?.value as { overlay?: { x?: number; y?: number; width?: number; height?: number } } | undefined;
-      return { width: 280, height: 84, ...(saved?.overlay ?? {}) };
+      return saved?.overlay ?? {};
     },
-    saveRect: (rect) => { void callOwner("settings.setRecording", { overlay: rect }); },
+    saveRect: (pos) => { void callOwner("settings.setRecording", { overlay: { x: pos.x, y: pos.y } }); },
     onStopRequest: () => { if (window && !window.isDestroyed()) window.webContents.send("manga:overlay-stop"); },
   });
   window.on("closed", () => overlay.close());
@@ -648,7 +670,14 @@ if (!quitForUpdateFlag) app.whenReady().then(async () => {
       try {
         // A ready update is prepared while the page can still acknowledge its saves.
         if (appService?.update.status().state === "ready" && !updateFixtureSmoke) {
-          if (!await appService.update.installOnQuit()) await flushWindowSaves();
+          let installed = false;
+          try {
+            installed = await appService.update.installOnQuit();
+          } catch (error) {
+            // A light window that would not leave keeps the update for next time; quitting is not held up by it.
+            if (!lightOpenRunning(error)) throw error;
+          }
+          if (!installed) await flushWindowSaves();
         } else {
           await flushWindowSaves();
         }

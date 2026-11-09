@@ -136,14 +136,14 @@ async function switchBuildState(
 }
 
 /**
- * Packaged-window observations for Stage M10 (`MANGA_SMOKE_PHASE=update`, 计划第 7 节, AT-157—AT-160):
+ * Packaged-window observations for installation and updates (`MANGA_SMOKE_PHASE=update`, AT-157—AT-160):
  * - `version-about`
  * - `update-flow`
  * - `update-on-quit`
  * - `update-rejected`
  * - `update-offline`
- * Also captures the 4 required sanitized screenshots (`ui-update-banner-light.png`, `ui-update-banner-dark.png`,
- * `ui-settings-update.png`, `ui-about-dialog.png`).
+ * Also captures the 5 required sanitized screenshots (`ui-update-banner-light.png`, `ui-update-banner-dark.png`,
+ * `ui-settings-update.png`, `ui-settings-update-dark.png`, `ui-about-dialog.png`).
  */
 export async function runUpdateSmoke(input: {
   appService: MangaProductApp;
@@ -493,7 +493,7 @@ export async function runUpdateSmoke(input: {
         await js(view, `document.documentElement.removeAttribute("data-theme"); true`);
         await waitFrames(view, 2);
 
-        // Close popover and capture `ui-settings-update.png`
+        // Close popover and capture light + dark screenshots of Settings › Update (`ui-settings-update.png`, `ui-settings-update-dark.png`, LOOP-34)
         await clickTestId(view, "update-notes-button", 3000);
         const updatePageOpened = await openSettingsPage(view, "update");
         const updatePageReady = updatePageOpened && await waitUntil(
@@ -501,7 +501,47 @@ export async function runUpdateSmoke(input: {
           `(document.querySelector('[data-testid="update-state-label"]')?.textContent ?? "").includes("0.1.2") && Boolean(document.querySelector('[data-testid="update-page-notes"]'))`,
           4000,
         );
+        const updateNotesLayout = await js<{
+          rowPaddingLeft: string;
+          rowPaddingRight: string;
+          notesPaddingLeft: string;
+          notesPaddingRight: string;
+          notesPaddingTop: string;
+          notesPaddingBottom: string;
+          hasLocalPath: boolean;
+        }>(view, `(() => {
+          const row = document.querySelector('[data-testid="update-policy-section"] .settings-row');
+          const notes = document.querySelector('[data-testid="update-page-notes"]');
+          const page = document.querySelector('[data-testid="settings-page-update"]');
+          const rs = row ? getComputedStyle(row) : null;
+          const ns = notes ? getComputedStyle(notes) : null;
+          const text = page?.textContent ?? "";
+          return {
+            rowPaddingLeft: rs?.paddingLeft ?? "",
+            rowPaddingRight: rs?.paddingRight ?? "",
+            notesPaddingLeft: ns?.paddingLeft ?? "",
+            notesPaddingRight: ns?.paddingRight ?? "",
+            notesPaddingTop: ns?.paddingTop ?? "",
+            notesPaddingBottom: ns?.paddingBottom ?? "",
+            hasLocalPath: /(^|[^A-Za-z])[A-Za-z]:[\\\\/]/.test(text),
+          };
+        })()`);
+        detail.updateNotesLayout = updateNotesLayout;
+        if (
+          !updateNotesLayout.notesPaddingLeft
+          || updateNotesLayout.notesPaddingLeft === "0px"
+          || updateNotesLayout.notesPaddingLeft !== updateNotesLayout.rowPaddingLeft
+          || updateNotesLayout.notesPaddingRight !== updateNotesLayout.rowPaddingRight
+          || updateNotesLayout.hasLocalPath
+        ) {
+          problems.push(`update-page-notes padding or path hygiene failed: ${JSON.stringify(updateNotesLayout)}`);
+        }
         await captureUpdateShot(view, evidenceDir, "ui-settings-update.png", "settings-page-update");
+        await js(view, `document.documentElement.setAttribute("data-theme", "dark"); true`);
+        await waitFrames(view, 2);
+        await captureUpdateShot(view, evidenceDir, "ui-settings-update-dark.png", "settings-page-update");
+        await js(view, `document.documentElement.removeAttribute("data-theme"); true`);
+        await waitFrames(view, 2);
         await leaveSettings(view);
         if (!updatePageReady) problems.push("Settings › Update page did not display ready state and release notes");
 

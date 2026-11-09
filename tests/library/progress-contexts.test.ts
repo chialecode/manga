@@ -119,7 +119,7 @@ describe("a position is the position in one context (A-96)", () => {
 });
 
 describe("the three readings of progress (plan 4.7)", () => {
-  it("shows the latest position in any context on the work card, and says which context it is from", async () => {
+  it("shows the furthest position across contexts on the work card (A-129), while progress_latest still tracks the newest action", async () => {
     const ctx = await boot();
     const comic = seedComic(ctx.app, { title: "卡片上的漫画", pageCount: 10 });
     const a = await project(ctx, "项目甲");
@@ -127,9 +127,11 @@ describe("the three readings of progress (plan 4.7)", () => {
     await setPage(ctx, a, comic, 2);
     stamp(ctx, null, comic.resourceId, "2026-10-01T00:00:00.000Z");
     stamp(ctx, a, comic.resourceId, "2026-10-02T00:00:00.000Z");
-    const listed = async () => (ok<{ items: Array<{ id: string; progress: number }> }>(await run(ctx, "works.list", {}))).items.find((item) => item.id === comic.workId)!;
-    // The latest reading is the project's, which is nearer the start.
-    expect((await listed()).progress).toBeCloseTo(0.3, 5);
+    const listed = async () => (ok<{ items: Array<{ id: string; progress: number; progressContext: { contextId: string | null; name: string } | null }> }>(await run(ctx, "works.list", {}))).items.find((item) => item.id === comic.workId)!;
+    // The latest reading is the project's, yet the library card keeps the furthest reading ("最近" at 90%) and names where it came from.
+    expect(ctx.app.store.sqlite.prepare("SELECT context_id AS contextId FROM progress_latest WHERE resource_id = ?").get(comic.resourceId)).toEqual({ contextId: a });
+    expect((await listed()).progress).toBeCloseTo(0.9, 5);
+    expect((await listed()).progressContext).toEqual({ contextId: null, name: "最近" });
     stamp(ctx, null, comic.resourceId, "2026-10-05T00:00:00.000Z");
     expect((await listed()).progress).toBeCloseTo(0.9, 5);
     expect(ctx.app.store.sqlite.prepare("SELECT context_id AS contextId FROM progress_latest WHERE resource_id = ?").get(comic.resourceId)).toEqual({ contextId: "" });

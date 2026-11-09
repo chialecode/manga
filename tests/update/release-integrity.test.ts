@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
+import { BUILD_SCHEMA_VERSION } from "@manga/contracts";
 import { rawPublicKey } from "@manga/app-core";
 import { runStageRelease } from "../../scripts/stage/release.mjs";
 import { loadPreviousRelease } from "../../scripts/stage/release-previous.mjs";
@@ -123,7 +124,7 @@ describe("Release integrity review (AT-161, AT-163)", () => {
       extracted += 1;
       fs.mkdirSync(path.join(destination, "resources"), { recursive: true });
       fs.writeFileSync(path.join(destination, "manga.exe"), "synthetic extracted executable");
-      fs.writeFileSync(path.join(destination, "resources/build.json"), JSON.stringify({ version: "0.1.2", channel: "release", schemaVersion: 14 }));
+      fs.writeFileSync(path.join(destination, "resources/build.json"), JSON.stringify({ version: "0.1.2", channel: "release", schemaVersion: BUILD_SCHEMA_VERSION }));
       return destination;
     };
     const load = (name: string) => loadPreviousRelease({ tag: "v0.1.2", destination: path.join(root, name), publicKeyBase64, fetchFn, extractFn });

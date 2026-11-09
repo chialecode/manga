@@ -145,7 +145,7 @@ export function decideWeeklyRelease({
   commitsSinceTag = [],
   headSha = "",
   repository = "chialecode/manga",
-  schemaVersion = 14,
+  schemaVersion = 15,
   previousSchemaVersion = null,
   willUpgradeSchema = false,
   ciMode = true,

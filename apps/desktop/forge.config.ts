@@ -108,10 +108,14 @@ export default {
     new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       build: [
+        // Three main process files (A-128): the bootstrap main.cjs picks full-main.cjs or light-main.cjs.
+        { entry: "src/main/bootstrap.ts", config: "vite.bootstrap.config.ts", target: "main" },
         { entry: "src/main/index.ts", config: "vite.main.config.ts", target: "main" },
+        { entry: "src/main/light/main.ts", config: "vite.light.config.ts", target: "main" },
         { entry: "src/preload/preload.ts", config: "vite.preload.config.ts", target: "preload" },
+        { entry: "src/preload/preload-light.ts", config: "vite.preload.config.ts", target: "preload" },
       ],
-      renderer: [{ name: "main_window", config: "vite.renderer.config.ts" }],
+      renderer: [{ name: "main_window", config: "vite.renderer.config.ts" }, { name: "light_window", config: "vite.light-renderer.config.ts" }],
     }),
   ],
 };

@@ -7,6 +7,7 @@ import { ContextIdSchema, WorkspaceStateSchema } from "./workspace-state.ts";
 const id = z.string().min(1).max(256);
 const iso = z.string().min(10).max(40);
 const kind = z.enum(["novel", "comic", "video"]);
+const recentKey = z.string().regex(/^(work|resource):[A-Za-z0-9._:-]+$/).max(300);
 
 /** Library paths and the background scan (A-50). Adding or removing a path comes from the interface only: the model never supplies a path. */
 export const SCAN_INTERVAL_MINUTES = [0, 30, 60, 360, 1440] as const;
@@ -60,6 +61,10 @@ export const WorkspaceCommandInputs = {
     view: RailViewSchema.optional(),
     perType: z.number().int().min(1).max(FIND_PER_TYPE_MAX).default(4),
   }).strict(),
+  /** Hide a work or standalone resource in “最近” until a newer action on it happens there (A-129). */
+  "workspace.dismissRecent": z.object({ key: recentKey }).strict(),
+  /** Undo a dismissal in “最近”, restoring the previous dismissal timestamp when one existed (A-129). */
+  "workspace.undismissRecent": z.object({ key: recentKey, previousDismissedAt: iso.nullable().optional() }).strict(),
   "library.paths.list": z.object({}).strict(),
   "library.paths.add": z.object({ pathHandle: id, mediaKind: kind, autoScan: z.boolean().optional() }).strict(),
   "library.paths.update": z.object({ pathId: id, mediaKind: kind.optional(), autoScan: z.boolean().optional(), pathHandle: id.optional() }).strict(),

@@ -42,7 +42,7 @@ export type OverlayState = {
   retention: "keep" | "discard";
   mode: "hold" | "toggle";
   label: string;
-  strings: { recording: string; stopping: string; stop: string; keep: string; discard: string; hold: string; toggle: string };
+  strings: { recording: string; stopping: string; stop: string; keep: string; discard: string; hold: string; toggle: string; mic?: string };
 };
 
 export type WindowControlsState = { controls: boolean; maximized: boolean };

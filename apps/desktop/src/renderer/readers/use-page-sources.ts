@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, messageOf } from "../lib/api.ts";
-import { closePdfDocument } from "./pdf-doc.ts";
 import { evictFarthest } from "./comic-model.ts";
 
 export type PageSource =
@@ -19,6 +18,9 @@ type Handle = {
 };
 
 const BATCH = 12;
+
+/** PDF.js comes in with the first PDF page (comic-page.tsx); only a book that had one closes a document. */
+const closePdfDocument = (url: string): void => { void import("./pdf-doc.ts").then((pdf) => pdf.closePdfDocument(url)); };
 
 /**
  * Display sources for the pages of one comic revision, loaded on demand. Handles are asked for in batches, a page that

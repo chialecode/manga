@@ -248,15 +248,16 @@ Progress 至少保存 `resourceId`、`resourceRevisionId`、`lastLocator`、`con
 
 工作上下文是“在哪里工作”：一个项目，或“最近”。上下文的编号是项目编号，“最近”在数据库里是空字符串、在命令的参数里是 `null`。标签与布局、对话、阅读观看进度、对话停靠栏显示哪段对话按上下文分开；资源、作品、笔记、录音、截图、书签、词典与项目对象不分上下文，各只有一份。
 
-`progress` 的主键是（`context_id`、`resource_id`、`resource_revision_id`）：同一个资源修订在每个上下文里各有一份最后位置、已消费区间与完成状态。视图 `progress_latest` 给出每个修订在所有上下文里最近一次的那份。读进度的地方分三类，同一个文件在多个上下文里打开时各取其所需：
+`progress` 的主键是（`context_id`、`resource_id`、`resource_revision_id`）：同一个资源修订在每个上下文里各有一份最后位置、已消费区间与完成状态。视图 `progress_latest` 给出每个修订在所有上下文里最近一次互动的那份；视图 `progress_furthest`（A-129，schema v15）给出每个修订在所有上下文里看得最远的那份（任何一处 `completion_state = 'completed'` 即优先取已完成，否则取 `percent` 最大的一行，相同时取较新互动）。此外，“最近”媒介列表的移除记录存在 `recent_dismissals(key PRIMARY KEY, dismissed_at)`（`work:<id>` 或 `resource:<id>`），只隐藏最后互动不晚于 `dismissed_at` 的“最近”列表项，不删 `progress` 与用户内容。读进度的地方分四类，同一个文件在多个上下文里打开时各取其所需：
 
 | 用途 | 取哪份 | 读取处 |
 | --- | --- | --- |
 | 阅读器恢复与保存位置、`progress.get` / `progress.set`、已读区间、续读续看、手动标记与重置 | 当前上下文的 | `progress-service`、`reading-service`、`product-app`（会话打开） |
-| 资源库卡片的百分比与“已读/已看”、最近打开的排序、作品主页的继续阅读 | 所有上下文里最近一次的；不是当前上下文的，卡片注明来自哪个上下文 | `works-service`、`works-versions`、`resource-content`、`works-delete`（最近打开） |
+| 资源库卡片的百分比与“已读/已看”、按进度排序、作品主页展示的总进度 | 所有上下文里看得最远的（`progress_furthest`；任何一处读完就算读完）；不是当前上下文的，注明来自哪一处；作品主页另列出各上下文各自的位置 | `works-service`、`works-versions`、`resource-content` |
+| “最近打开”排序与侧栏“最近”分组 | 所有上下文（或“最近”上下文）里最近一次互动的（`progress_latest` / `last_interaction_at`） | `works-service`、`works-delete`、`sidebar-service` |
 | 防剧透的已看前沿、Agent 的已看范围、字幕窗口 | 所有上下文里最远的 | `progress-service` 的 `frontierConsumed` 与 `frontierProgress`，经 `agent-materials`、`reading-service`（`rangeConsumed`）与截图的已看检查调用 |
 
-在一个上下文里第一次打开别处看过的资源，从头开始，标签顶部提示“在「某上下文」看到某位置，跳过去”；跳过去后按当前上下文记录。重复报告相同的位置不抬高“最近一次”的时间（`last_interaction_at` 只在位置、已消费区间或完成状态变化时更新），所以在上下文之间来回切换不会改变资源库卡片上显示的来源。
+在一个上下文里第一次打开别处看过的资源，从头开始，标签顶部提示“在「某上下文」看到某位置，跳过去”；跳过去后按当前上下文记录。重复报告相同的位置不抬高“最近一次”的时间（`last_interaction_at` 只在位置、已消费区间或完成状态变化时更新），所以在上下文之间来回切换不会改变排序或来源标注。
 
 ## 7. 笔记、白板和思维导图
 
@@ -381,7 +382,7 @@ interface CapturePositionEvent {
 
 ## 11. SQLite 与文件存储
 
-正式存储适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 better-sqlite3 + Drizzle（产品已使用，当前库结构版本 14）。驱动/ORM 替换须保持本文对象身份、修订、事务事件、迁移与资料包协议，不能因更换库重建用户数据或直接采用其他产品的数据表。
+正式存储适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 better-sqlite3 + Drizzle（产品已使用，当前库结构版本 15）。驱动/ORM 替换须保持本文对象身份、修订、事务事件、迁移与资料包协议，不能因更换库重建用户数据或直接采用其他产品的数据表。
 
 ### 11.1 建议逻辑表
 
@@ -479,6 +480,15 @@ interface CapturePositionEvent {
 
 迁移的用例（`tests/library/schema-v14-migration.test.ts`，v13 资料由 `tests/helpers/legacy-v12.ts` 建出后补入项目、会话与创作对象并去掉 v14 产物）：迁移前有 `manga.sqlite.premigrate-v13` 备份、迁移后 `agent_proposals` 表与索引存在且其余数据不变、中断后再次启动能完成、写入失败回滚到 v13、第二次启动不再改动、v15 的资料被拒绝打开；打包观察 `migrate-v14` 在打包产物上验证。
 
+**库结构增量（版本 14 → 15，A-129）。** 一次迁移完成，做法同上（迁移前备份 `manga.sqlite.premigrate-v14`、单事务、失败回滚、中断后重做、较旧的版本拒绝打开）：
+
+| 分组 | 新增或改动 | 说明 |
+| --- | --- | --- |
+| “最近”移除记录 | `recent_dismissals(key TEXT PRIMARY KEY, dismissed_at TEXT NOT NULL)`；删除触发器 `recent_dismissals_work_gone`、`recent_dismissals_resource_gone` | `key` 与侧栏列表项的键相同（`work:<id>` 或 `resource:<id>`）。“最近”媒介列表只列最后动作时间晚于 `dismissed_at` 的项，撤销移除或再次在“最近”里产生新的阅读观看动作后恢复显示；不影响进度、笔记、截图、录音、对话、项目列表与资源库。作品或资源从数据库删除时由 `AFTER DELETE` 触发器一并清掉对应的移除行 |
+| 看得最远的进度视图 | 视图 `progress_furthest` | 对每个（`resource_id`、`resource_revision_id`）按 `(completion_state = 'completed') DESC, percent DESC, last_interaction_at DESC, context_id` 取第一行，供资源库卡片百分比、“已读/已看”标记、按进度排序与作品主页展示使用；`progress_latest` 保留供按最近打开排序等场景使用 |
+
+迁移的用例（合成 v14 资料升级到 v15）：迁移前有 `manga.sqlite.premigrate-v14` 备份、迁移后 `recent_dismissals` 表与删除触发器及 `progress_furthest` 视图存在且既有数据不变、中断后再次启动完成、失败回滚到 v14、第二次启动不再改动、v16 的资料被拒绝打开。
+
 创作对象的规范载荷初期可以保存在 content_object 的版本化 JSON 中，附件另存文件；文本块和检索关系建立派生投影。以后迁移为规范化子表时，保持公共对象和导出格式兼容。
 
 reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系变化在统一事务内提交。列表查询只读取摘要，不加载所有大载荷。
@@ -502,6 +512,8 @@ reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系�
 改变托管位置是可恢复迁移：暂停相关写入、生成计划和检查点、验证复制后的指纹/一致性，再切换位置配置；失败保留旧数据和回退入口，不自动删除旧文件。仅索引的外部原件不会因改变默认根而移动。资源 ID、引用、任务与修订保持不变，路径变化不能创建重复资源。
 
 启动定位在 Electron 初始化前确定所有写入目录，涵盖 userData/sessionData、缓存、日志和崩溃转储（`resolveLaunchLayout`）。可用 `MANGA_PROFILE_ROOT` 与 `MANGA_POINTER_FILE` 定位 Profile，`LOCALAPPDATA`、`MANGA_DOCUMENTS_DIR`、`MANGA_DOWNLOADS_DIR` 替换系统位置（测试与门禁用临时目录）；启动指针的位置在设置里展示，不暗中固定一个不可配置的业务副本。附件清理继续按引用、任务状态与用户保留策略执行。
+
+轻量打开（`--manga-light`，A-128）不读取也不写入上述资料库分区与启动指针，全部运行时与缓存固定在 `<应用数据根>\light\`（`runtime`、`positions.json`、`window.json`、`cache`、`logs`），详见[数据与安全](../dev-rules/data-and-security.md#light-open-isolation)。
 
 ## 12. 资料包、备份与迁移
 

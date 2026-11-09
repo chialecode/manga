@@ -1,6 +1,6 @@
 import {
-  OBJECT_KINDS, SIDEBAR_ITEM_TYPES, contextKey, itemTypeOfView, sidebarShown,
-  type ContextId, type FindGroup, type FindItem, type FindType, type ObjectListKind, type ObjectRow, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType,
+  MangaError, OBJECT_KINDS, SIDEBAR_ITEM_TYPES, contextKey, itemTypeOfView, sidebarShown,
+  type CommandEnvelope, type ContextId, type FindGroup, type FindItem, type FindType, type ObjectListKind, type ObjectRow, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType,
   type SidebarProgress, type SidebarSection, type SidebarView,
 } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
@@ -170,6 +170,8 @@ export class SidebarService {
       const recent = places.get("");
       if (recent && (!one || only === "")) {
         // "最近" lists a work once (A-105): the resource of it last read or watched there is what opens. A resource of no work is its own entry.
+        // An item dismissed in “最近” stays hidden until a newer action on it happens in “最近” (A-129).
+        const dismissals = new Map(this.all<{ key: string; at: string }>("SELECT key, dismissed_at AS at FROM recent_dismissals").map((row) => [row.key, row.at]));
         const seen = new Set<string>();
         for (const row of this.all<Row>(
           `SELECT r.id AS id, r.title AS title, r.work_id AS workId, w.title AS wTitle, w.projection_json AS wProjection, w.cover_id AS coverId, p.last_interaction_at AS at
@@ -180,6 +182,8 @@ export class SidebarService {
           const key = workId ? `work:${workId}` : `resource:${id}`;
           if (seen.has(key) || !scan.openable(id)) continue;
           seen.add(key);
+          const dismissedAt = dismissals.get(key);
+          if (dismissedAt !== undefined && String(row.at) <= dismissedAt) continue;
           const title = workId ? workTitle(row.wTitle, row.wProjection) : shownName(String(row.title));
           add("", this.item(recent, {
             key, type, title, open: { kind: "resource", id, workId, mediaKind: type }, updatedAt: String(row.at),
@@ -266,6 +270,50 @@ export class SidebarService {
     const offset = cursor && /^\d{1,7}$/.test(cursor) ? Number(cursor) : 0;
     const next = offset + limit < items.length ? String(offset + limit) : null;
     return { type: "download", total: items.length, items: items.slice(offset, offset + limit), loaded: true, nextCursor: next };
+  }
+
+  /** Hide a work (`work:<id>`) or standalone resource (`resource:<id>`) in "最近" until a newer action happens there (A-129). */
+  dismissRecent(key: string, envelope?: CommandEnvelope): { key: string; dismissedAt: string; previousDismissedAt: string | null } {
+    const colon = key.indexOf(":");
+    const kind = colon > 0 ? key.slice(0, colon) : "";
+    const targetId = colon > 0 ? key.slice(colon + 1) : "";
+    if ((kind !== "work" && kind !== "resource") || !targetId) throw new MangaError("VALIDATION_ERROR", "invalid recent item key");
+    const exists = kind === "work"
+      ? this.one("SELECT 1 AS ok FROM works WHERE id = ?", targetId)
+      : this.one("SELECT 1 AS ok FROM resources WHERE id = ?", targetId);
+    if (!exists) throw new MangaError("NOT_FOUND", "the recent item does not exist");
+    const previous = this.one<{ at: string }>("SELECT dismissed_at AS at FROM recent_dismissals WHERE key = ?", key)?.at ?? null;
+    const latest = kind === "work"
+      ? this.one<{ at: string | null }>("SELECT MAX(p.last_interaction_at) AS at FROM progress p JOIN resources r ON r.id = p.resource_id WHERE p.context_id = '' AND r.work_id = ?", targetId)?.at ?? null
+      : this.one<{ at: string | null }>("SELECT MAX(last_interaction_at) AS at FROM progress WHERE context_id = '' AND resource_id = ?", targetId)?.at ?? null;
+    const now = new Date().toISOString();
+    const dismissedAt = latest && latest > now ? latest : now;
+    const result = { key, dismissedAt, previousDismissedAt: previous };
+    this.store.commit({
+      mutations: [{ sql: "INSERT INTO recent_dismissals(key, dismissed_at) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET dismissed_at = excluded.dismissed_at", params: [key, dismissedAt] }],
+      events: [{ type: "recent.dismissed", payload: { key, dismissedAt } }],
+      idempotencyKey: envelope?.idempotencyKey,
+      commandId: envelope?.commandId,
+      result,
+    });
+    return result;
+  }
+
+  /** Restore an item dismissed in “最近” (`workspace.undismissRecent`, A-129). */
+  undismissRecent(key: string, previousDismissedAt?: string | null, envelope?: CommandEnvelope): { key: string; restored: boolean } {
+    const result = { key, restored: true };
+    this.store.commit({
+      mutations: [
+        previousDismissedAt
+          ? { sql: "INSERT INTO recent_dismissals(key, dismissed_at) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET dismissed_at = excluded.dismissed_at", params: [key, previousDismissedAt] }
+          : { sql: "DELETE FROM recent_dismissals WHERE key = ?", params: [key] },
+      ],
+      events: [{ type: "recent.undismissed", payload: { key } }],
+      idempotencyKey: envelope?.idempotencyKey,
+      commandId: envelope?.commandId,
+      result,
+    });
+    return result;
   }
 
   /** The sidebar of one view (`workspace.sidebar`). */

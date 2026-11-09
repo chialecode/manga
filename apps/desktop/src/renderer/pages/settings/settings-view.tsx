@@ -120,6 +120,7 @@ export function SettingsView(props: SettingsViewProps) {
           reload: async () => null,
           check: async () => null,
           setSettings: async () => undefined,
+          unskip: async () => undefined,
           requestRestart: async () => undefined,
           confirmBusyRestart: async () => undefined,
           dismissJustUpdated: async () => undefined,

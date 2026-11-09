@@ -42,6 +42,9 @@ run(process.execPath, ['--test', 'scripts/stage-report.test.mjs']);
 run(process.execPath, ['--test', 'scripts/pre-push.test.mjs']);
 run(process.execPath, ['scripts/check-publication.mjs']);
 run(process.execPath, ['scripts/check-workflows.mjs']);
+// The pinned tool downloads must stay downloadable: a month-end FFmpeg build and commit-hash pins (offline; the release
+// workflow and the pre-push check also send HEAD requests).
+run(process.execPath, ['scripts/tools/check-tool-links.mjs', '--pins']);
 const uncommentedSleeps = findUncommentedSmokeSleeps();
 if (uncommentedSleeps.length > 0) {
   console.error(`FAILED smoke sleep check: ${uncommentedSleeps.length} uncommented sleep( calls in apps/desktop/src/main/smoke:\n  ${uncommentedSleeps.join('\n  ')}`);

@@ -17,6 +17,7 @@ import { runVideoImportBench } from "./bench-import.mjs";
 import { watchGateTemp } from "./temp-dirs.mjs";
 import { runAgentMediaBench } from "./bench-agent-media.mjs";
 import { benchProcessNoThrottle } from "./power-throttling.mjs";
+import { benchLightOpen } from "./light-open.mjs";
 
 // LOOP-13: this process (where the service-layer figures are measured) and the bench windows (apps/desktop/src/main/smoke/power-throttling.ts) ask
 // Windows not to slow them down for power, so a figure does not depend on which application is in front. Only the bench acts on it;
@@ -65,10 +66,13 @@ for (let i = 0; i < METADATA; i += 1) {
   insertResource.run(resourceId, null, "novel", `r${i}`, JSON.stringify([`r${i}`]), now);
   insertRevision.run(`rev_b${i}`, resourceId, `fp${i}`, "bench-parser", JSON.stringify({ normalized: `检索块 ${i} 日本語` }), now);
 }
+const indexStmts = new Map();
 for (let i = 0; i < BLOCKS; i += 1) {
   const resourceId = `res_b${i % METADATA}`;
   for (const mutation of app.store.indexFragment({ id: `frag_b${i}`, resourceId, resourceRevisionId: `rev_b${i % METADATA}`, partId: "body", start: 0, end: 8, kind: "body", text: `检索块 ${i} 日本語 中文` })) {
-    app.store.sqlite.prepare(mutation.sql).run(...(mutation.params ?? []));
+    let stmt = indexStmts.get(mutation.sql);
+    if (!stmt) { stmt = app.store.sqlite.prepare(mutation.sql); indexStmts.set(mutation.sql, stmt); }
+    stmt.run(...(mutation.params ?? []));
   }
 }
 app.store.sqlite.exec("COMMIT");
@@ -308,6 +312,11 @@ endSection("chat");
 // A 60 s clip cut without re-encoding, a 4 MB picture frozen for a run; the v13 move and the copy of a 500 MB profile are recorded.
 const agentMedia = await runAgentMediaBench({ clipRuns: config.bench.creative.clip60?.minSamples ?? 8, freezeRuns: config.bench.creative.freeze4mb?.minSamples ?? 20 });
 endSection("agentMedia");
+// Light open (第 7 节): cold opens of a 1080p video and of a CBZ, opens into a running light open, its memory and the full application beside it.
+const light = packagedApp()
+  ? await benchLightOpen({ appPath: path.dirname(packagedApp()), samplesRoot: path.join(root, "dist/samples/media"), runs: config.bench.light?.runs ?? 5 })
+  : { ok: false, failures: ["light open is measured in the packaged application; run stage package first"], videoFirstFrameMs: [], comicFirstPageMs: [], secondOpenMs: [] };
+endSection("light");
 
 // Record the actual packaged update and install-dev runs from this gate's installer evidence.
 const installerEvidence = readJson(evidence, "installer.json");
@@ -444,9 +453,12 @@ const metrics = {
   // shelf and settings use while it runs (p95).
   scanEventLoopP99Ms: scanPane.scan?.loopLag?.p99 ?? Number.POSITIVE_INFINITY,
   scanInteractionP95Ms: scanPane.scan?.interaction?.p95 ?? Number.POSITIVE_INFINITY,
+  lightVideoFirstFrameMs: light.videoFirstFrameMs.length ? p95(light.videoFirstFrameMs) : Number.POSITIVE_INFINITY,
+  lightComicFirstPageMs: light.comicFirstPageMs.length ? p95(light.comicFirstPageMs) : Number.POSITIVE_INFINITY,
+  lightSecondOpenMs: light.secondOpenMs.length ? p95(light.secondOpenMs) : Number.POSITIVE_INFINITY,
   ...creativeMetrics,
 };
-const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
+const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
 fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   status: passed ? "passed" : "failed",
   stage,
@@ -456,7 +468,7 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   arch: process.arch,
   node: process.version,
   metrics,
-  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the v14 proposal table migration, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open, and the 4 Stage M10 update/release records.
+  // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the v14 proposal table migration, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open, and the 4 update/release records.
   records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, migrationV14: proposalRuns?.migrationV14 ?? null, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null, update: updateRecords, sectionSeconds },
   targets: requiredBenchTargets,
   scale: { metadataCount: METADATA, searchBlocks: BLOCKS },
@@ -499,6 +511,23 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
     },
   },
   measurements,
+  light: {
+    kind: "electron-light-open",
+    ok: light.ok === true,
+    failures: light.failures,
+    raw: { videoFirstFrameMs: light.videoFirstFrameMs, comicFirstPageMs: light.comicFirstPageMs, secondOpenMs: light.secondOpenMs },
+    // Recorded, not limits.
+    records: {
+      workingSetMiB: light.workingSetMiB ?? [],
+      firstEverMs: light.firstEverMs ?? null,
+      fullAppOpenVideo: { firstFrameMs: light.fullAppFirstFrameMs ?? null, listedMs: light.fullAppListedMs ?? null, note: "the full application from the start of its process: the folder added as a library path, scanned, the video opened from the shelf, to its first frame" },
+    },
+    requirement: {
+      lightVideoFirstFrameMs: "第 7 节 冷启动用 --manga-light 打开可直接播放的 1080p H.264 合成视频到第一帧，5 次 p95 ≤ 2000 ms",
+      lightComicFirstPageMs: "第 7 节 冷启动打开 CBZ 到第一页，5 次 p95 ≤ 1500 ms",
+      lightSecondOpenMs: "第 7 节 轻量进程已在运行时再打开一个视频到第一帧，5 次 p95 ≤ 800 ms",
+    },
+  },
   creative,
   scanPane: {
     kind: "service-scan-and-electron-pane",

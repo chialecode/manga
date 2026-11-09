@@ -464,7 +464,7 @@ export const zhCNMedia = {
   "msettings.duckLower": "降低音量",
   "msettings.duckPause": "暂停播放",
   "msettings.margin": "句子边界余量（毫秒）",
-  "msettings.overlayReset": "还原悬浮框位置和大小",
+  "msettings.overlayReset": "恢复默认位置",
   "msettings.overlayDone": "悬浮框已还原到默认位置",
   "msettings.comic": "漫画阅读",
   "msettings.comicDirection": "默认翻页方向",

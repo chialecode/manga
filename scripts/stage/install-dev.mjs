@@ -14,6 +14,7 @@ import {
 } from "./installer-lib.mjs";
 import { currentStage, loadGate, packagedFingerprintKeys, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
 import { readBuildInfoIfPresent } from "./version-lib.mjs";
+import { askLightToQuit, LIGHT_QUIT_WAIT_MS } from "../../apps/desktop/src/main/light-runtime.ts";
 
 const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,7 +41,7 @@ export function readRunningInstance(runtimeDir) {
 
 function readUninstallEntries() {
   if (process.platform !== "win32") return [];
-  const cmd = `Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress`;
+  const cmd = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress`;
   const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], {
     encoding: "utf8",
     windowsHide: true,
@@ -98,7 +99,7 @@ export function findDefaultDevInstaller({ testIdentity = false, fingerprints, la
 
 function runningDevProcesses(executable) {
   if (process.platform !== "win32") return [];
-  const script = "$target = [IO.Path]::GetFullPath($env:MANGA_DEV_EXECUTABLE); @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target -and $_.CommandLine -notmatch '(?:^|\\s)--type=' } | ForEach-Object { [int]$_.ProcessId }) | ConvertTo-Json -Compress";
+  const script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $target = [IO.Path]::GetFullPath($env:MANGA_DEV_EXECUTABLE); @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target -and $_.CommandLine -notmatch '(?:^|\\s)--type=' } | ForEach-Object { [int]$_.ProcessId }) | ConvertTo-Json -Compress";
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { env: { ...process.env, MANGA_DEV_EXECUTABLE: executable }, encoding: "utf8", windowsHide: true, timeout: 20_000 });
   if (result.status !== 0) throw new Error("unable to inspect the installed development process");
   const text = result.stdout.trim();
@@ -171,7 +172,7 @@ export async function runInstallDev(options = {}) {
   const quitTimeoutMs = options.quitTimeoutMs ?? 30_000;
   const relaunchReadyTimeoutMs = options.relaunchReadyTimeoutMs ?? 30_000;
 
-  let stage = "m10";
+  let stage = "unknown";
   let fingerprints = {};
   try {
     stage = currentStage();
@@ -322,6 +323,13 @@ export async function runInstallDev(options = {}) {
     if (!(options.relaunchEnv && key in options.relaunchEnv)) {
       delete targetEnv[key];
     }
+  }
+
+  // Light open runs the same executable: it keeps its positions and leaves first (4.6, within 10 seconds), or nothing is installed.
+  const lightRuntimeDir = path.join(localAppData, meta.dirName, "light", "runtime");
+  const light = await (options.askLightToQuitFn ?? askLightToQuit)(lightRuntimeDir, { timeoutMs: options.lightQuitTimeoutMs ?? LIGHT_QUIT_WAIT_MS });
+  if (!light.ok) {
+    return finalize({ status: "aborted", wasRunning: false, previousVersion, newVersion: expectedNewVersion, reason: "请先关闭轻量播放窗口 (light open did not leave within 10s; nothing was installed)" });
   }
 
   const runningInstance = readRunningInstance(devRuntimeDir);

@@ -102,9 +102,36 @@ function passing() {
       windowImportMs: { kind: "electron-import-to-readable" },
     },
     measurements: Object.fromEntries((config.bench.measurements ?? []).map((item) => [item.id, { raw: Array.from({ length: item.minSamples ?? 3 }, () => 1), p95: 1 }])),
+    light: {
+      kind: "electron-light-open",
+      ok: true,
+      failures: [],
+      raw: {
+        videoFirstFrameMs: Array.from({ length: config.bench.light?.runs ?? 5 }, () => 1),
+        comicFirstPageMs: Array.from({ length: config.bench.light?.runs ?? 5 }, () => 1),
+        secondOpenMs: Array.from({ length: config.bench.light?.runs ?? 5 }, () => 1),
+      },
+      records: {
+        workingSetMiB: Array.from({ length: config.bench.light?.runs ?? 5 }, () => 120),
+        firstEverMs: 900,
+        fullAppOpenVideo: { firstFrameMs: 1400, listedMs: 600, note: "full app comparison" },
+      },
+    },
   });
+  const installerSteps = [
+    { name: 'release: "Open with" registered for 16 types, extension defaults untouched', ok: true },
+    { name: 'development: "Open with" registered for 16 types, extension defaults untouched', ok: true },
+    { name: 'release: the registered "Open with" command starts light open on the file', ok: true },
+    { name: 'release: "Open with" registration preserved after 0.1.1 -> 0.1.2 over-install, extension defaults untouched', ok: true },
+    { name: "update-rollback: two failed starts ask; 再试一次 keeps the new version", ok: true },
+    { name: "update-rollback: 回到 0.1.1 reinstalls it, puts the backup back, keeps the library in use, skips 0.1.2 and logs it", ok: true },
+    { name: "update-rollback", ok: true },
+    { name: 'development: "Open with" registration removed, extension defaults untouched', ok: true },
+    { name: 'release: "Open with" registration unaffected by development uninstall, extension defaults untouched', ok: true },
+    { name: 'release: "Open with" registration removed, extension defaults untouched', ok: true },
+  ];
   write(dir, "installer.json", {
-    ...fingerprints, status: "passed", steps: [{ ok: true }], updateRehearsal: {
+    ...fingerprints, status: "passed", steps: installerSteps, updateRehearsal: {
       kind: "electron-nsis", artifactKind: "test-identity-repackage", ok: true, verifiedInstallerExecuted: true,
       dataIntact: true, backupCreated: true, tamperedRejected: true, justUpdatedOnce: true, realInstallationsUntouched: true,
       appAsarSha256: "a".repeat(64), previousAsarSha256: "a".repeat(64), cases: updateCases, records: update,
@@ -132,6 +159,7 @@ function passing() {
     trace: { ok: true, observations: 1 },
     plugins: { ok: true, steps: (config.package.pluginSteps ?? []).map((id) => ({ id, ok: true })) },
     assets: Object.fromEntries((config.package.assets ?? []).map((name) => [name, true])),
+    light: { ok: true, timings: { videoFirstFrameMs: 450, comicFirstPageMs: 320, videoMemoryMiB: 118 } },
     readingLoop: {
       readLastChapter: true,
       recordedNote: true,
@@ -532,4 +560,81 @@ test("a fingerprint follows the stored text, not the line ends a tool left in th
   const binary = make({ "a.ts": "one\ntwo\n", "b.bin": Buffer.from([0, 10, 1]) });
   assert.notEqual(hashTree(lf, ["b.bin"]), hashTree(binary, ["b.bin"]));
   for (const dir of [lf, crlf, edited, binary]) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("report enforces packaged light open smoke, bench light raw samples/p95/records, and installer rollback/OpenWith steps", () => {
+  // 1. `package.json`: `pack.light` must pass with finite timings and working-set memory.
+  for (const mutate of [
+    (pack) => { delete pack.light; },
+    (pack) => { pack.light.ok = false; },
+    (pack) => { delete pack.light.timings.videoFirstFrameMs; },
+    (pack) => { pack.light.timings.comicFirstPageMs = -1; },
+    (pack) => { pack.light.timings.videoMemoryMiB = 0; },
+  ]) {
+    const dir = passing();
+    const pack = read(dir, "package.json");
+    mutate(pack);
+    write(dir, "package.json", pack);
+    const report = evaluate(dir);
+    assert.equal(report.engineeringReviewable, false);
+    assert.ok(report.errors.some((error) => error.includes("package.json: light open smoke")));
+  }
+
+  // 2. `bench.json`: `bench.light` raw samples, p95 agreement, workingSetMiB and fullAppOpenVideo comparison record.
+  for (const [index, mutate] of [
+    (bench) => { delete bench.light; },
+    (bench) => { bench.light.ok = false; },
+    (bench) => { bench.light.kind = "service"; },
+    (bench) => { bench.light.failures = ["video run 1 failed"]; },
+    (bench) => { bench.light.raw.videoFirstFrameMs = [1, 1, 1, 1]; },
+    (bench) => { bench.light.raw.comicFirstPageMs = [-1, 1, 1, 1, 1]; },
+    (bench) => { bench.light.raw.secondOpenMs = [1, 1, 1, 1, 400]; bench.metrics.lightSecondOpenMs = 1; },
+    (bench) => { bench.light.raw.secondOpenMs = [900, 900, 900, 900, 900]; bench.metrics.lightSecondOpenMs = 900; },
+    (bench) => { bench.light.records.workingSetMiB = [120, 120]; },
+    (bench) => { bench.light.records.workingSetMiB[0] = 0; },
+    (bench) => { delete bench.light.records.fullAppOpenVideo; },
+    (bench) => { bench.light.records.fullAppOpenVideo.firstFrameMs = 0; },
+    (bench) => { bench.light.records.fullAppOpenVideo.listedMs = null; },
+  ].entries()) {
+    const dir = passing();
+    const bench = read(dir, "bench.json");
+    mutate(bench);
+    write(dir, "bench.json", bench);
+    const report = evaluate(dir);
+    assert.equal(report.engineeringReviewable, false, `bench.light variant ${index}`);
+    assert.ok(report.errors.some((error) => error.startsWith("bench.json:")), `bench.light error ${index}`);
+  }
+  {
+    const dir = passing();
+    const bench = read(dir, "bench.json");
+    bench.light.raw.videoFirstFrameMs = [310, 320, 330, 340, 480];
+    bench.light.raw.comicFirstPageMs = [200, 210, 220, 240, 350];
+    bench.light.raw.secondOpenMs = [120, 130, 140, 150, 260];
+    bench.metrics.lightVideoFirstFrameMs = p95(bench.light.raw.videoFirstFrameMs);
+    bench.metrics.lightComicFirstPageMs = p95(bench.light.raw.comicFirstPageMs);
+    bench.metrics.lightSecondOpenMs = p95(bench.light.raw.secondOpenMs);
+    write(dir, "bench.json", bench);
+    assert.deepEqual(evaluate(dir).errors, []);
+  }
+
+  // 3. `installer.json`: `update-rollback` and `Open with` registration / over-install / cross-channel / uninstall steps.
+  for (const [index, dropPattern] of [
+    /^update-rollback$/,
+    /^update-rollback: 回到 /,
+    /^release: "Open with" registered for /,
+    /^development: "Open with" registered for /,
+    /starts light open on the file/,
+    /0\.1\.1 -> 0\.1\.2 over-install/,
+    /unaffected by development uninstall/,
+    /^development: "Open with" registration removed/,
+    /^release: "Open with" registration removed/,
+  ].entries()) {
+    const dir = passing();
+    const installer = read(dir, "installer.json");
+    installer.steps = installer.steps.filter((step) => !dropPattern.test(step.name));
+    write(dir, "installer.json", installer);
+    const report = evaluate(dir);
+    assert.equal(report.engineeringReviewable, false, `installer step variant ${index}`);
+    assert.ok(report.errors.some((error) => error.startsWith("installer.json:")), `installer step error ${index}`);
+  }
 });
