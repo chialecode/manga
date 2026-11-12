@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { serveMedia } from "../../packages/app-core/src/media/index.ts";
 import { startApp } from "../helpers/app.ts";
-import { inLibrary, requireSamples, samplePath } from "../helpers/samples.ts";
+import { inLibrary, isAvailable, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 type App = Awaited<ReturnType<typeof startApp>>;
@@ -156,9 +156,18 @@ describe.skipIf(mediaPrerequisitesAbsent)("playback decisions", () => {
       const noHw = await plan("video-mkv-hevc-8bit");
       expect(noHw.plan).toMatchObject({ decision: "play_copy", copy: { reason: "no_hardware_hevc", video: "encode", audio: "copy" } });
       expect((await plan("video-mkv-hevc-8bit", { hardwareHevc: true })).plan.decision).toBe("direct");
-      expect((await plan("video-mkv-hevc-10bit", { hardwareHevc: true })).plan.decision).toBe("direct");
       const ac3 = await plan("video-ac3");
       expect(ac3.plan).toMatchObject({ decision: "play_copy", copy: { reason: "unsupported_audio", video: "copy", audio: "aac" } });
+    } finally { ctx.app.close(); }
+  });
+
+  // The 10-bit sample needs a GPU encoder to make (an optional sample); without it this is reported as skipped.
+  it.skipIf(!isAvailable("video-mkv-hevc-10bit"))("plays HEVC 10-bit directly where the machine decodes HEVC", async () => {
+    const ctx = await startApp();
+    try {
+      const item = await importVideo(ctx, "video-mkv-hevc-10bit");
+      const planned = ok<{ plan: { decision: string } }>(await run(ctx, "video.playbackPlan", { resourceId: item.resourceId, hardwareHevc: true }));
+      expect(planned.plan.decision).toBe("direct");
     } finally { ctx.app.close(); }
   });
 });
@@ -334,7 +343,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("play copies", () => {
     } finally { ctx.app.close(); }
   }, 120_000);
 
-  it("encodes HEVC 10-bit into a copy with the machine's best encoder, and the frame times still match", async () => {
+  it.skipIf(!isAvailable("video-mkv-hevc-10bit"))("encodes HEVC 10-bit into a copy with the machine's best encoder, and the frame times still match", async () => {
     const ctx = await startApp();
     try {
       const item = await importVideo(ctx, "video-mkv-hevc-10bit");
@@ -373,7 +382,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("play copies", () => {
     } finally { ctx.app.close(); }
   }, 120_000);
 
-  it("leaves nothing behind when a copy is cancelled, or when the module is turned off while it runs", async () => {
+  it.skipIf(!isAvailable("video-mkv-hevc-10bit"))("leaves nothing behind when a copy is cancelled, or when the module is turned off while it runs", async () => {
     const previous = process.env.MANGA_PLAYCOPY_ENCODER;
     process.env.MANGA_PLAYCOPY_ENCODER = "libsvtav1";
     const ctx = await startApp();

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { FfmpegService, locateFfmpeg, redactToolText, runTool, timelineFromPackets } from "../../packages/app-core/src/media/index.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { isAvailable, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-ffmpeg-"));
@@ -54,7 +54,8 @@ describe.skipIf(mediaPrerequisitesAbsent)("probing the synthetic videos", () => 
     expect(probe.chapters).toHaveLength(2);
   });
 
-  it("tells HEVC 8-bit from 10-bit and keeps the profile", async () => {
+  // The 10-bit sample needs a GPU encoder to make (an optional sample); without it this is reported as skipped.
+  it.skipIf(!isAvailable("video-mkv-hevc-10bit"))("tells HEVC 8-bit from 10-bit and keeps the profile", async () => {
     const eight = (await service.probe(samplePath("video-mkv-hevc-8bit"))).streams.find((stream) => stream.type === "video")!;
     const ten = (await service.probe(samplePath("video-mkv-hevc-10bit"))).streams.find((stream) => stream.type === "video")!;
     expect(eight).toMatchObject({ codec: "hevc", bitDepth: 8 });
@@ -179,7 +180,8 @@ describe.skipIf(mediaPrerequisitesAbsent)("running tools safely", () => {
       onSpawn: (pid) => { setTimeout(() => { if (pid !== undefined) priorities[label] = os.getPriority(pid); }, 500); },
     });
     await Promise.all([watch("normal", {}), watch("background", { lowPriority: true })]);
-    expect(priorities.background).toBeGreaterThan(priorities.normal!);
+    // Other work keeps the caller's priority; the caller itself may already run below normal (a CI runner does).
+    expect(priorities.normal).toBe(os.getPriority());
     expect(priorities.background).toBe(os.constants.priority.PRIORITY_BELOW_NORMAL);
   });
 
