@@ -522,7 +522,11 @@ const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Unin
 function runPowershell(command) {
   if (process.platform !== "win32") return "";
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`], { encoding: "utf8", windowsHide: true, timeout: 30_000 });
-  if (result.status !== 0) throw new Error("unable to inspect Windows installation state");
+  if (result.status !== 0) {
+    const reason = result.error ? String(result.error.message) : `exit ${result.status ?? result.signal}`;
+    const detail = typeof result.stderr === "string" ? result.stderr.trim().split(/\r?\n/)[0]?.slice(0, 200) : "";
+    throw new Error(`unable to inspect Windows installation state (${reason}${detail ? `: ${detail}` : ""})`);
+  }
   return typeof result.stdout === "string" ? result.stdout.trim() : "";
 }
 
@@ -575,9 +579,10 @@ export function readOpenWithState(channel, { testIdentity = false, exePath } = {
   };
 }
 
+// A user that never installed anything per-user (a fresh CI account) has no uninstall key at all; reading it is then an empty list, not an error.
 export function readRegistryInstallations() {
   const text = runPowershell(
-    `Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; Publisher = [string]$p.Publisher; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress`,
+    `if (Test-Path -LiteralPath '${UNINSTALL_KEY}') { Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; Publisher = [string]$p.Publisher; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress }`,
   );
   if (!text) return [];
   try {
