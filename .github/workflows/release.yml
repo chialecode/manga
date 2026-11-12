@@ -93,7 +93,7 @@ jobs:
         run: |
           node scripts/verify.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/stage.mjs test
+          node scripts/stage.mjs test --ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/stage.mjs package
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
