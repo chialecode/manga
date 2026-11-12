@@ -20,7 +20,7 @@ afterEach(() => { cleanup(); while (disposers.length) disposers.pop()!(); while 
 
 /** A real application whose plugins start as real processes, and the page talking to it; `pick` answers with what the test queued. */
 async function boot(bundledDir?: string) {
-  const ctx = await startApp({ options: { plugins: { firstPartyKeys: [{ publicKey: first.publicKey, label: first.label }], bundledDir, limits: { readyMs: 2000, graceMs: 200, pingMs: 100 } } } });
+  const ctx = await startApp({ options: { plugins: { firstPartyKeys: [{ publicKey: first.publicKey, label: first.label }], bundledDir, limits: { readyMs: 2000, graceMs: 200, pingMs: 1000 } } } });
   apps.push(ctx);
   const queue: Array<{ mode: "file" | "directory"; path: string }> = [];
   const pick = vi.fn(async (request: { mode: "file" | "directory" }) => {
