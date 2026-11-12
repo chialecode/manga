@@ -15,7 +15,27 @@ export type PermissionFacts = {
   fromAppWindow: boolean;
 };
 
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
 const base = (url: string): string => url.split("#")[0]!.split("?")[0]!;
+
+const canonical = new Map<string, string>();
+/**
+ * One spelling for a page's file. Started through a short (8.3) name, the app builds its own page address from that spelling while the page
+ * reports its long one; both name the same file, so they are compared as the file's real path (and without case on Windows).
+ */
+function samePageFile(href: string): string {
+  const known = canonical.get(href);
+  if (known !== undefined) return known;
+  let file: string;
+  try { file = fileURLToPath(href); } catch { file = href; }
+  try { file = fs.realpathSync.native(file); } catch { /* not there: compare as written */ }
+  if (process.platform === "win32") file = file.toLowerCase();
+  if (canonical.size > 64) canonical.clear();
+  canonical.set(href, file);
+  return file;
+}
 
 /** Whether a URL is the app's own page: the same document, or for the dev server the same origin. */
 export function isAppPage(url: string, appUrl: string): boolean {
@@ -23,7 +43,7 @@ export function isAppPage(url: string, appUrl: string): boolean {
   try {
     const page = new URL(url);
     const app = new URL(appUrl);
-    if (app.protocol === "file:") return page.protocol === "file:" && base(page.href) === base(app.href);
+    if (app.protocol === "file:") return page.protocol === "file:" && (base(page.href) === base(app.href) || samePageFile(base(page.href)) === samePageFile(base(app.href)));
     return page.origin === app.origin;
   } catch {
     return false;

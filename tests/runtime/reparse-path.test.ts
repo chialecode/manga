@@ -3,7 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterAll, describe, expect, it } from "vitest";
+import { pathToFileURL } from "node:url";
 import { assertSafeMigrationTarget, isReparsePath } from "../../packages/app-core/src/locations.ts";
+import { isAppPage } from "../../apps/desktop/src/main/permissions.ts";
 
 /** The 8.3 short form of an existing path, or null where the volume does not make short names. */
 function shortPath(target: string): string | null {
@@ -39,5 +41,25 @@ describe.skipIf(process.platform !== "win32")("telling a link from another spell
     if (!short) ctx.skip();
     expect(isReparsePath(short!)).toBe(false);
     expect(() => assertSafeMigrationTarget(path.join(root, "profile"), short!)).not.toThrow();
+  });
+});
+
+describe.skipIf(process.platform !== "win32")("the app's own page started through a short name", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-page-"));
+  const folder = path.join(root, "an installation folder");
+  fs.mkdirSync(folder, { recursive: true });
+  const page = path.join(folder, "index.html");
+  fs.writeFileSync(page, "<!doctype html>\n");
+  const other = path.join(root, "other.html");
+  fs.writeFileSync(other, "<!doctype html>\n");
+
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it("is the same page whether its address uses the short or the long name", () => {
+    const short = shortPath(folder);
+    if (!short) return; // the volume makes no short names
+    const appUrl = pathToFileURL(path.join(short, "index.html")).href;
+    expect(isAppPage(`${pathToFileURL(page).href}#/light`, appUrl)).toBe(true);
+    expect(isAppPage(pathToFileURL(other).href, appUrl)).toBe(false);
   });
 });

@@ -246,7 +246,8 @@ export async function runLightSmoke(input: Input): Promise<void> {
       rows.push({ name: "light-empty-window", status: empty ? "passed" : "failed", detail: { file: await shot(window, "light-empty") } });
     } else if (phase === "light-unsupported") {
       const said = await waitFor(window, `document.querySelector('[data-testid="light-error"][data-error="unsupported"]')`, 15_000);
-      rows.push({ name: "light-unsupported-file", status: said ? "passed" : "failed" });
+      const shown = said ? null : await js<unknown>(window, `(() => { const e = document.querySelector('[data-testid="light-error"]'); return { shell: !!document.querySelector('[data-testid="light-shell"]'), empty: !!document.querySelector('[data-testid="light-empty"]'), error: e?.getAttribute('data-error') ?? null, text: e?.textContent?.slice(0, 200) ?? null }; })()`);
+      rows.push({ name: "light-unsupported-file", status: said ? "passed" : "failed", ...(shown ? { detail: { shown } } : {}) });
     } else if (phase === "light-bench") {
       const kind = process.env.MANGA_SMOKE_BENCH_KIND ?? "video";
       const started = Number(process.env.MANGA_SMOKE_SPAWNED_AT) || Date.now();
