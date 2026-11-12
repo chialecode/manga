@@ -12,7 +12,9 @@ type View = { id: string; version: string; state: string; error: string | null; 
 
 const first = makeKey("MANGA（第一方，测试）");
 const stranger = makeKey("陌生发布者");
-const LIMITS = { readyMs: 1500, pingMs: 40, missedPings: 3, graceMs: 150, callMs: 3000, maxRestarts: 2, restartBaseMs: 20, restartWindowMs: 60_000 };
+// The heartbeat leaves a busy machine room: three missed pings at 40 ms ended healthy plugins on a loaded CI runner.
+// The test of a plugin that stops answering asks for the short heartbeat itself.
+const LIMITS = { readyMs: 1500, pingMs: 1000, missedPings: 3, graceMs: 150, callMs: 3000, maxRestarts: 2, restartBaseMs: 20, restartWindowMs: 60_000 };
 
 const apps: App[] = [];
 afterEach(() => { while (apps.length) { try { apps.pop()!.app.close(); } catch { /* closed already */ } } });
@@ -429,7 +431,7 @@ describe("the door a plugin asks the host through", () => {
 
 describe("a plugin that misbehaves does not take the application with it", () => {
   it("ends a plugin that stops answering, and says why", async () => {
-    const ctx = await boot();
+    const ctx = await boot(undefined, undefined, { pingMs: 40 });
     ok(await install(ctx, { key: first, mode: "no-pong" }));
     const pid = ctx.app.pluginRuntime.info("demo.tool").pid;
     const item = await until(() => view(ctx), (value) => value.state !== "running", 6000);
