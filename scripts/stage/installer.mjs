@@ -211,7 +211,13 @@ try {
     step("release: the registered \"Open with\" command starts light open on the file",
       path.resolve(parts[0] ?? "").toLowerCase() === path.resolve(exeOf("release")).toLowerCase() && parts[1] === "--manga-light" && parts[2] === "%1"
         && result.status === 0 && body?.ok === true && fs.existsSync(path.join(places.local, TEST_CHANNEL_INSTALL.release.dirName, "light")),
-      { status: result.status, phase: body?.phase ?? null });
+      {
+        status: result.status,
+        phase: body?.phase ?? null,
+        ok: body?.ok ?? null,
+        failed: (body?.observations ?? []).filter((row) => row.status !== "passed"),
+        lightDir: fs.existsSync(path.join(places.local, TEST_CHANNEL_INSTALL.release.dirName, "light")),
+      });
   }
   step("nothing written to the roaming profile", JSON.stringify(roamingNames()) === JSON.stringify(roamingBefore), { before: roamingBefore.length, after: roamingNames().length });
 
