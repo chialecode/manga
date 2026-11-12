@@ -40,7 +40,8 @@ import { runStageRelease } from "./release.mjs";
 import { rawPublicKey, writeBuildInfo } from "./version-lib.mjs";
 import { watchGateTemp } from "./temp-dirs.mjs";
 import { checkLightBoundary, observeLightUpdate, observeLightOpen } from "./light-open.mjs";
-import { currentStage, fingerprintKeysOf, loadGate, packagedFingerprintKeys, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
+import { currentStage, fingerprintKeysOf, loadGate, optionalSamplesMissing, packagedFingerprintKeys, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
+import { loadManifest } from "../samples/media-manifest.mjs";
 
 const stage = currentStage();
 const config = loadGate();
@@ -143,7 +144,7 @@ const evidence = runDir();
 // What this run makes in the system's temporary folder is removed when it passes and kept, by name in the log, when it fails (LOOP-26).
 const tempWatch = watchGateTemp("stage-package");
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-"));
-const phases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
+const selectedPhases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
 // The window walk starts from an empty library (the app must open on the library paths), so it gets a Profile of its own; the creative walk and
 // the plugin walk make their own projects, library path and plugin, and do not share a Profile with the phases before them.
 const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13", "update"]);
@@ -159,6 +160,15 @@ const homes = {};
 // The media and recording phases drive the real window with synthetic samples; they have to exist for the gate to mean anything.
 const samplesRoot = path.join(root, "dist/samples/media");
 const speechClip = path.join(samplesRoot, "voice/tts-clips/zh-CN-1.wav");
+// The release workflow's check (`--ci`): a phase gate.json `optionalSamplePhases` ties to optional samples this runner could not make is left out
+// and named with the reason in package.json; any other phase still has to pass. Stage evidence never passes `--ci`.
+const ciRun = process.argv.includes("--ci");
+const sampleManifest = loadManifest(samplesRoot);
+const excusedPhases = selectedPhases
+  .filter((phase) => ciRun && optionalSamplesMissing(config.optionalSamplePhases?.[phase], sampleManifest))
+  .map((phase) => ({ phase, reason: `optional samples not generated on this machine: ${config.optionalSamplePhases[phase].join(", ")}` }));
+const phases = selectedPhases.filter((phase) => !excusedPhases.some((entry) => entry.phase === phase));
+for (const entry of excusedPhases) console.log(JSON.stringify({ check: "stage-package", excused: entry.phase, reason: entry.reason }));
 for (const phase of phases) {
   if (phase === "credentials-async" && !fs.existsSync(path.join(legacyCredentials, "legacy.json"))) throw new Error("the legacy credentials Profile is missing; run: node --experimental-strip-types scripts/samples/build-legacy-credentials.mjs");
   if ((phase === "media" || phase === "voice" || phase === "window-walk" || phase === "creative" || phase === "loop") && !fs.existsSync(path.join(samplesRoot, "manifest.json"))) throw new Error("synthetic samples are missing; run: node scripts/samples/generate-media-samples.mjs");
@@ -1078,6 +1088,7 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   electron: electronVersion,
   output: path.relative(root, appPath).replaceAll("\\", "/"),
   smoke: phases,
+  ...(excusedPhases.length ? { excusedPhases } : {}),
   phaseTimings,
   formats: {
     pages: smokeReports.formats?.pages ?? false,

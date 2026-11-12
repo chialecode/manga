@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
-import { currentStage, loadGate, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
+import { currentStage, loadGate, optionalSamplesMissing, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
 import { writeReport } from "./report.mjs";
 import { loadManifest } from "../samples/media-manifest.mjs";
 
@@ -20,10 +20,9 @@ export function beginTestEvidence(evidence, fields) {
  * Without `--ci` every required test must pass, as stage evidence requires.
  */
 export function excusedBy(config, ci, manifest = loadManifest()) {
-  const unavailable = new Set((manifest?.samples ?? []).filter((sample) => sample.status === "unavailable").map((sample) => sample.id));
   return (pattern) => {
     const samples = config.optionalSampleTests?.[pattern];
-    return ci && samples?.length && samples.every((id) => unavailable.has(id)) ? `optional samples not generated on this machine: ${samples.join(", ")}` : null;
+    return ci && optionalSamplesMissing(samples, manifest) ? `optional samples not generated on this machine: ${samples.join(", ")}` : null;
   };
 }
 

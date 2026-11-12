@@ -804,6 +804,9 @@
       "enabled-again"
     ]
   },
+  "optionalSamplePhases": {
+    "voice": ["voice-tts-clips"]
+  },
   "optionalSampleTests": {
     "^probing the synthetic videos tells HEVC 8-bit from 10-bit": ["video-mkv-hevc-10bit"],
     "^play copies encodes HEVC 10-bit into a copy": ["video-mkv-hevc-10bit"],

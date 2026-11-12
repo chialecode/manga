@@ -17,6 +17,17 @@ export function currentStage() {
 }
 
 /** The stage gate: required cases, scenarios, bench targets and fingerprinted inputs. One file, rewritten for each stage. */
+/**
+ * The release workflow's check (`--ci`) runs on a hosted runner, where optional samples cannot be made (a GPU encoder, Windows voices). What gate.json
+ * ties to optional samples is excused there only when every one of those samples is marked unavailable in the sample manifest; stage evidence
+ * never passes `--ci`.
+ */
+export function optionalSamplesMissing(samples, manifest) {
+  if (!samples?.length) return false;
+  const unavailable = new Set((manifest?.samples ?? []).filter((sample) => sample.status === "unavailable").map((sample) => sample.id));
+  return samples.every((id) => unavailable.has(id));
+}
+
 export function loadGate() {
   const file = path.join(repoRoot, "scripts/stage/gate.json");
   return JSON.parse(fs.readFileSync(file, "utf8"));
