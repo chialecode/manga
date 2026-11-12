@@ -511,6 +511,9 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     await clickTestId(view, "comic-window-fullscreen");
     const entered = await waitFor(`document.querySelector('[data-testid="shell-root"]')?.getAttribute("data-immersive") === "true"`, 4000);
     await waitUntil(view, `(document.querySelector('[data-testid="shell-top"]')?.getBoundingClientRect().bottom ?? 100) <= 1`, 2000);
+    // The panels are laid out again from a resize observer, a few frames after the rail and the sidebar go: on a machine that draws without
+    // a GPU (a CI runner) the first measure caught the reader at its old size. Wait for the layout to settle; the checks below stay as strict.
+    await waitUntil(view, `(() => { const r = document.querySelector('[data-testid="comic-reader"]')?.getBoundingClientRect(); return Boolean(r && Math.abs(r.x) <= 1 && Math.abs(r.width - window.innerWidth) <= 1 && Math.abs(r.height - window.innerHeight) <= 1); })()`, 5000);
     const full = await topState();
     fullDetail.entered = entered;
     const vw = await js<number>(view, `window.innerWidth`);
