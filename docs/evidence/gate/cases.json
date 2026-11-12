@@ -1,19 +1,19 @@
 {
   "status": "passed",
-  "at": "2026-11-12T00:27:27.910Z",
-  "sourceFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
-  "smokeScriptFingerprint": "84aea18197957e49a49e8e9c4e4f55cac9ace6e98a212af2b3b5d3f1c1cd4a55",
+  "at": "2026-11-13T18:53:22.460Z",
+  "sourceFingerprint": "5e200d35cdf0098a4bcc45afa16dfd0a2c79948a7cbe43293a555f2cde4174c2",
+  "smokeScriptFingerprint": "b2c8e77be997469010ec989d106cb874f233023dcfec344114f7b4e51b4455dc",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "1532610373b76fedac5903c47c3350ad4d0e209b853f60015d693de9206ba143",
-  "smokeWalkScriptFingerprint": "58fa4c5cdfe4d1187bb6c02cd57b242c1523d81c5ab046d8183439b9926053ce",
-  "lockFingerprint": "97e74474b5207dfe933e28f2977cfc9db778c3475cbbf65d56ba4e25bb52c2c3",
-  "buildScriptFingerprint": "3cb3dbe850da3702a24a419087d2f8a678b49f319ce5a68e5de61db21b86599b",
-  "gateScriptFingerprint": "342b275147cf13da9687ca2a88d32824c5b0a99f35bfaee6b4f22b31391a05fc",
-  "testScriptFingerprint": "0d93bca6a89864c7e04ec6b6bcc791fc00808f6046d1da4d57e3ba3d122771c8",
-  "packageScriptFingerprint": "9fe76d800c26f18029352ad7a3bd55b55f1dd3085a9754b92dbd3dd352187972",
-  "benchScriptFingerprint": "a143abb87f2ecf8de46dec88bda61bbd5b1da23dd0b9ddac625c26e896c4628f",
-  "installerScriptFingerprint": "ccf083e32fc67946d607c5ff9911f6b03ac7b75e515929527716e96cea7c11dd",
-  "releaseScriptFingerprint": "68a9a41eb30d145a9ee18864651ab0bf45dae245efb9fa9977e48a20693e9665",
+  "smokeBenchScriptFingerprint": "c7277cf4a5547e093413e230654d58262c5cbe67302569e4ba1d469b884f892c",
+  "smokeWalkScriptFingerprint": "0ac6e678b9648c801af1f63afe1bf3a748c75a3526eed05908c2d38d8d7226bb",
+  "lockFingerprint": "f66f660c5687fac3a2e0305de6149de2a874d456b2c452a41204271501f8a951",
+  "buildScriptFingerprint": "8d89734043d4054648698ec4d01802964ff9a3f30a08114a4ed7362a59af5cda",
+  "gateScriptFingerprint": "b5b8efb0fa24dc6fbb91e3abab596c2964b11ac511ce8d5f0a9de73efc1febd4",
+  "testScriptFingerprint": "6c4bfbbfd2e16cc5a7680f6239b21cc21eeccffd99cda43bf51df861e2c85212",
+  "packageScriptFingerprint": "681cc0f80c931e687b1419b5a5ca82233cb05e5b2f2135ce2f4baa6f2ffd1ca6",
+  "benchScriptFingerprint": "61ced7ba4b65523a5727540ddb0b417d7f8ac367dfa99e64736b83e9960804ec",
+  "installerScriptFingerprint": "e71dac1ced8d95d9c7c00cc8eb5eea061836c9553a34650d7695b69e29f23a09",
+  "releaseScriptFingerprint": "305a24bbbd8a8a61ccb9da3d626c5db276597fd63f64ad941bbeab1fed19ccab",
   "generator": "scripts/stage/test.mjs",
   "productAcceptance": "not-run",
   "cases": [
@@ -5877,7 +5877,7 @@
         },
         {
           "file": "tests/package/bundled-assets.test.ts",
-          "name": "what a package carries finds the tools where the app looks for them in a packaged build",
+          "name": "what a package carries finds the tools where the app looks for them in a packaged build, and never bundles ASR models",
           "status": "passed"
         },
         {
@@ -5912,7 +5912,7 @@
         },
         {
           "file": "tests/package/bundled-assets.test.ts",
-          "name": "packaging stops when a tool is not in the cache names the command that fetches FFmpeg, and the one that fetches the voice model",
+          "name": "packaging stops when a tool is not in the cache names the command that fetches FFmpeg, the voice filter model, and the GTCRN denoiser model",
           "status": "passed"
         },
         {
@@ -17080,6 +17080,11 @@
         },
         {
           "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) makes the shortcuts itself: both optional in the wizard, both on a silent first install, only dev's desktop one again on a silent over-install",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150, AT-162) keeps the two channels apart in what Windows tells apart",
           "status": "passed"
         },
@@ -17096,6 +17101,16 @@
         {
           "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150, AT-162) ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) gives the development channel its own icon: the mark on dark gray with an amber \"DEV\" badge, in the same sizes (AT-162)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) draws every icon size by averaging one 1024 px render, so small sizes keep the strokes' weight",
           "status": "passed"
         },
         {
@@ -17709,6 +17724,11 @@
       "status": "passed",
       "tests": [
         {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
+          "status": "passed"
+        },
+        {
           "file": "tests/update/release-integrity.test.ts",
           "name": "Release integrity review (AT-161, AT-163) rejects incomplete or duplicate checksums, misleading manifest text and mismatched release target (AT-160, AT-161)",
           "status": "passed"
@@ -17814,11 +17834,6 @@
           "status": "passed"
         },
         {
-          "file": "tests/runtime/installer-config.test.ts",
-          "name": "the per-user installer's configuration (AT-150, AT-162) requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)",
-          "status": "passed"
-        },
-        {
           "file": "tests/shell/update-ui.test.tsx",
           "name": "Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner & Post-Update Notice (AT-157, AT-159, AT-160) offers a manual download after autoDownload is disabled without changing that policy (AT-159)",
           "status": "passed"
@@ -17894,6 +17909,11 @@
         },
         {
           "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) makes the shortcuts itself: both optional in the wizard, both on a silent first install, only dev's desktop one again on a silent over-install",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150, AT-162) keeps the two channels apart in what Windows tells apart",
           "status": "passed"
         },
@@ -17910,6 +17930,16 @@
         {
           "file": "tests/runtime/installer-config.test.ts",
           "name": "the per-user installer's configuration (AT-150, AT-162) ships a valid SVG source, a 512x512 PNG, and a multi-resolution Windows ICO with 16..256 px frames (AT-162)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) gives the development channel its own icon: the mark on dark gray with an amber \"DEV\" badge, in the same sizes (AT-162)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/runtime/installer-config.test.ts",
+          "name": "the per-user installer's configuration (AT-150, AT-162) draws every icon size by averaging one 1024 px render, so small sizes keep the strokes' weight",
           "status": "passed"
         },
         {
@@ -18427,6 +18457,471 @@
         {
           "file": "tests/shell/recent-remove.test.tsx",
           "name": "AT-173 library Shelf cards and WorkHome furthest progress & per-context positions renders furthest progress and project-only completion on Shelf cards, lists per-context positions on WorkHome, and opens the active context's own episode",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-174-dictation-surfaces-and-keys",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Dictation controller, capsule, and inline revert/suggestion pill (U1) streams hold-to-talk audio on solo RightAlt, inserts raw then polished text, expands replacements, and reverts to raw",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Dictation controller, capsule, and inline revert/suggestion pill (U1) supports final_only mode, <350ms double-tap hands-free lock with 结束 button, Esc cancel, and combo key abort",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Dictation controller, capsule, and inline revert/suggestion pill (U1) shows copy notice when target unmounts mid-recognition and surfaces inline learned suggestion after user edit",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Dictation controller, capsule, and inline revert/suggestion pill (U1) switches DictationCapsule to 2-state sound/silent indicator under prefers-reduced-motion",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Dictation controller, capsule, and inline revert/suggestion pill (U1) separates Chat Composer mic behavior: ask mode triggers dictation into draft without sending, note mode uses recorder",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) inserts, replaces, and reverts in React 19 controlled <textarea> (Chat Composer / Capsule)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) supports <input type='search'> and <input type='text'> (SearchBox) while ignoring password, readOnly, and disabled inputs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) creates discrete NoteEditor undo steps for rich Tiptap insert, polish replace, and revert without coalescing",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) creates discrete NoteEditor undo steps when dictating into CodeMirror 6 SourceEditor",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) inserts and replaces in DraftEditor with discrete ProseMirror Ctrl+Z history steps",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) preserves transient blur-committing inputs (WhiteboardNodes / MindmapTab) on mousedown-prevented controls and observes edits before unmount",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) inserts at current cursor when target was modified during recognition, and returns false when target unmounts",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) fires 60s timer edit observation only when user actually modified the inserted text",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/editable-target.test.ts",
+          "name": "EditableTargetAdapter across all 6 surfaces (U1) waits for active IME compositionend before starting, and aborts cleanly if released mid-composition",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-keys.test.ts",
+          "name": "dictation shortcut and recording key conflict rules registers global.dictationHold with RightAlt default and renders 右 Alt",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-keys.test.ts",
+          "name": "dictation shortcut and recording key conflict rules recognizes standalone AltRight without breaking LeftAlt+Arrow or AltGr combinations",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-keys.test.ts",
+          "name": "dictation shortcut and recording key conflict rules checks conflicts against recording holdKey (F9) and toggleKey (F8)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-integration.test.ts",
+          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-174 / AT-182: runs full dictation stream_replace lifecycle, 24h retranscribe, learn-from-edits loop, and excludes dictation_history from backups & exports",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-175-audio-capture-and-gtcrn",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Audio capture constraints, system loopback AEC fallback, and DebugPanel diagnostics (A1) disables browser noiseSuppression by default, falls back when echoCancellation 'all' is unsupported, and renders applied settings in DebugPanel",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-service.test.ts",
+          "name": "asr-protocol pure helpers (GTCRN mix, hotwords CSV, model language mapping) mixes 75% GTCRN denoised + 25% raw dry signal and clamps to [-1, 1]",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-service.test.ts",
+          "name": "asr-host.cjs real sherpa-onnx-node 2.0.1 + GTCRN + SenseVoice integration loads sherpa-onnx-node 2.0.1 in a separate process, runs GTCRN denoise (enableExternalBuffer: false), and transcribes zh-CN-1.wav",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-176-silence-trimmer-and-diagnostics",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/silence-trimmer.test.ts",
+          "name": "voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix returns status: no_speech on empty audio, pure silence, and transient noise clicks (< 250 ms)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/silence-trimmer.test.ts",
+          "name": "voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix pads 300 ms around outer speech boundaries and clamps cleanly to [0, totalMs]",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/silence-trimmer.test.ts",
+          "name": "voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix keeps pauses <= 1000 ms intact and compresses pauses > 1000 ms down to 400 ms",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/silence-trimmer.test.ts",
+          "name": "voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix computes low_volume (< -30 dBFS) and clipping (>= 1% full scale) warnings on speech frames without blocking",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/silence-trimmer.test.ts",
+          "name": "voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix streams Int16/WAV inputs through a VadEngine instance and closes the stream cleanly",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/silence-trimmer.test.ts",
+          "name": "voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix exports GTCRN_WET_MIX = 0.75 and blends 0.75 * denoised + 0.25 * raw accurately",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-177-unified-asr-engines",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/asr-engine.test.ts",
+          "name": "unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter forwards temperature on TextRequest (when reasoningEffort is unset) and supports transcribeChatAudio in mock-server",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-engine.test.ts",
+          "name": "unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter formats capability-specific hints across hotwords, promptChars, context, and zero-hint engines",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-engine.test.ts",
+          "name": "unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter enforces zero cross-engine fallback across unconfigured, uninstalled, load_failed, 401, timeout, and upload-limit errors",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-engine.test.ts",
+          "name": "unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter runs optional GTCRN pre-ASR denoise for both local and external engines, and chunks 3-minute audio into <= 30s blocks",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-engine.test.ts",
+          "name": "unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter detects hotword/prompt/context echoes in isHintEcho while preserving real single-term dictation, and retries once without hints",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Voice transcription settings 5 sections, local ASR models, dictionary extensions, history, and ConnectionDialog offers transcriptionInterface selector in ConnectionDialog when purpose is transcription",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-integration.test.ts",
+          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-177: routes audio_transcriptions, chat_input_audio, local ASR + GTCRN denoise across dictation, capture & transcribeAudio with zero cross-engine fallback",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-178-local-model-download-and-import",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/model-downloader.test.ts",
+          "name": "voice local model catalog, downloader, and tar verifier populates all 3 verified production models with exact SHA-256 digests and GitHub-only release URLs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/model-downloader.test.ts",
+          "name": "voice local model catalog, downloader, and tar verifier requires confirmed: true before issuing any network request and enforces HTTPS + host allowlist on redirects",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/model-downloader.test.ts",
+          "name": "voice local model catalog, downloader, and tar verifier resumes with HTTP Range 206 after mid-stream drop, and restarts from byte 0 on .part tamper, ETag change, or 200 response",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/model-downloader.test.ts",
+          "name": "voice local model catalog, downloader, and tar verifier supports pause, resume, cancel, disk-full rejection, multi-source fallback, and manual sourceId selection",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/model-downloader.test.ts",
+          "name": "voice local model catalog, downloader, and tar verifier rejects 1-byte tampered archives, traversal/drive/symlink/hardlink/tar-bomb archives, missing tar.exe, and cleans .staging",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/model-downloader.test.ts",
+          "name": "voice local model catalog, downloader, and tar verifier verifies archive & folder imports, calls unloadModel before delete, and returns freedBytes",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/dictation-ui.test.tsx",
+          "name": "Voice transcription settings 5 sections, local ASR models, dictionary extensions, history, and ConnectionDialog renders all 5 sections, confirms local model download before starting, manages batch/suggestions/enrich, and retranscribes history",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-integration.test.ts",
+          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-178: enforces download confirmation, supports pause + HTTP 206 Range resume, cleans staging on checksum mismatch, and unloads active model before delete",
+          "status": "passed"
+        },
+        {
+          "file": "tests/package/bundled-assets.test.ts",
+          "name": "what a package carries finds the tools where the app looks for them in a packaged build, and never bundles ASR models",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-179-asr-utility-process-isolation",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/asr-service.test.ts",
+          "name": "AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal serializes concurrent load/denoise/recognize requests in strict FIFO order",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-service.test.ts",
+          "name": "AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal unloads and exits the utility process on idle timeout, then transparently respawns and reloads on the next recognize()",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-service.test.ts",
+          "name": "AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal isolates crashes: 1st crash restarts on next request; 2nd crash within 60s marks model load_failed until reset",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/asr-service.test.ts",
+          "name": "AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal terminates an active recognition child immediately when dispose() / close() is called on app quit",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-180-dictionary-bangumi-and-migration",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/dictionary-bangumi.test.ts",
+          "name": "Bangumi infobox parsing, detail enrichment, batch import and hotword ranking (X1) handles null infobox, duplicate 简体中文名 / 别名 keys, and keyless { v } items",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictionary-bangumi.test.ts",
+          "name": "Bangumi infobox parsing, detail enrichment, batch import and hotword ranking (X1) enriches main -> supporting -> actors sequentially, caches details, demotes Japanese name to alias, and preserves manual terms",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictionary-bangumi.test.ts",
+          "name": "Bangumi infobox parsing, detail enrichment, batch import and hotword ranking (X1) strictly caps detail requests at 60 per work and supports mid-flight cancellation, 403 and 429 handling",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictionary-bangumi.test.ts",
+          "name": "Bangumi infobox parsing, detail enrichment, batch import and hotword ranking (X1) supports batch import, hotword ordering/sanitization/cap, disabled toggle, and incremental phonetic index updates",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v16-migration.test.ts",
+          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) synchronizes PRODUCT_SCHEMA_VERSION and BUILD_SCHEMA_VERSION at 16",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v16-migration.test.ts",
+          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) backs up v15 (stripping agent_requests), backfills dictionary categories & heard aliases without losing a row, and is idempotent",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v16-migration.test.ts",
+          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) rolls back cleanly when interrupted before version publication and completes on retry",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v16-migration.test.ts",
+          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) rolls back on write error inside the migration transaction, matches fresh DB shape, and rejects v17 with API_INCOMPATIBLE",
+          "status": "passed"
+        },
+        {
+          "file": "tests/library/schema-v16-migration.test.ts",
+          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) strips dictation_history & agent_requests from copyForBackup and pre-update backups, and excludes dictation_history & bangumi_details from library packages",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-integration.test.ts",
+          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-180 / AT-181: enforces Bangumi 60-request cap & infobox edge cases, syncs PhoneticCorrector incrementally, and enforces PolishService guardrails + OpenCC term protection",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-181-phonetic-corrector-and-polish-guards",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) exports threshold constants and enforces hIsTone && iIsTone cost rule",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) replaces Mandarin retroflex, nasal/lateral, and front/back nasal confusions for current-work and manual terms",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) routes non-current-work auto terms and 0.75..0.90 partial matches into recalled candidates (capped at 15)",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) handles exact alias, kana, romaji, and Latin camelCase matches while respecting ASCII word boundaries",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) prefers longer compound terms when one term is a substring of another",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) respects per-term blocked surface forms and protects ordinary words in non-entity sentences",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) supports incremental upsertTerm, removeTerm, disabled terms, and phoneticSimilarity",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/phonetic-correct.test.ts",
+          "name": "voice phonetic recall & deterministic replacement (R1) corrects a sentence against 10,000 dictionary terms with p95 <= 30 ms",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/polish-guards.test.ts",
+          "name": "voice dictation LLM polish, 4 guardrails & OpenCC (P1) Guardrail 1: skips LLM in raw mode, when unconfigured, or in clean light mode without candidates or disfluencies",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/polish-guards.test.ts",
+          "name": "voice dictation LLM polish, 4 guardrails & OpenCC (P1) Guardrails 2 & 3: passes ONLY recalled candidates (<=15) with anti-forcing notice and temperature=0.1",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/polish-guards.test.ts",
+          "name": "voice dictation LLM polish, 4 guardrails & OpenCC (P1) supports custom light/formal prompts and restoring defaults",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/polish-guards.test.ts",
+          "name": "voice dictation LLM polish, 4 guardrails & OpenCC (P1) Guardrail 4: rejects outputs failing length ratio [0.4, 1.4], hallucinated entities/Latin/katakana, repetition, errors, or >5s timeout",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/polish-guards.test.ts",
+          "name": "voice dictation LLM polish, 4 guardrails & OpenCC (P1) converts Traditional <-> Simplified Chinese via OpenCC while protecting canonical dictionary spellings",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-182-dictation-revert-history-and-isolation",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/dictation-history-learn.test.ts",
+          "name": "Dictation session state machine, 30d history / 24h audio, and learn-from-edits (H1 + U1) transitions recording -> trimming -> recognizing -> correcting -> polishing -> done without touching capture_sessions",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-history-learn.test.ts",
+          "name": "Dictation session state machine, 30d history / 24h audio, and learn-from-edits (H1 + U1) handles no_speech, hotword prompt echo, 5-min max duration auto-stop, cancel, failure, and module-disable generation guard",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-history-learn.test.ts",
+          "name": "Dictation session state machine, 30d history / 24h audio, and learn-from-edits (H1 + U1) prunes >30d history, expires >24h WAV files, supports retranscribe with another engine, and excludes history from backups & packages",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-history-learn.test.ts",
+          "name": "Dictation session state machine, 30d history / 24h audio, and learn-from-edits (H1 + U1) learns 2..16 char phonetic edits (>= 0.6), handles existing terms on accept, and suppresses ignored pairs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/dictation-integration.test.ts",
+          "name": "voice dictation end-to-end integration (M12 Wave 3A) Agent Isolation: denies Agent grants on all dictation/asrModel/dictionary commands and leaks zero dictation_history or suggestions in search & context",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "caseId": "AT-183-voice-correction-eval-gate",
+      "kind": "automated",
+      "status": "passed",
+      "tests": [
+        {
+          "file": "tests/voice/correction-eval-gate.test.ts",
+          "name": "AT-181 / AT-183: 200+ pair voice correction quality & 10k-term latency gate validates 220+ authentic multi-model & phonetic-confusion pairs with complete provenance",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/correction-eval-gate.test.ts",
+          "name": "AT-181 / AT-183: 200+ pair voice correction quality & 10k-term latency gate achieves proper-noun recall >= 0.85 (deterministic replacement + recalled candidates) on entity pairs",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/correction-eval-gate.test.ts",
+          "name": "AT-181 / AT-183: 200+ pair voice correction quality & 10k-term latency gate keeps non-entity sentence false-modification rate <= 0.01 (1%) across near-homophone traps",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/correction-eval-gate.test.ts",
+          "name": "AT-181 / AT-183: 200+ pair voice correction quality & 10k-term latency gate meets 10,000-term single-sentence correction p95 <= 30 ms and supports incremental index updates",
           "status": "passed"
         }
       ]

@@ -267,6 +267,7 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     contextId: shown.contextId,
     formatDate: i18n.formatDate,
     recorder: s.voiceOn ? s.recorder : null,
+    dictation: s.voiceOn ? s.dictation ?? null : null,
     noModel,
     onSettings: () => s.open.settings("models"),
     onStop: () => void stop(),

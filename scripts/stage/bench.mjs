@@ -18,6 +18,7 @@ import { watchGateTemp } from "./temp-dirs.mjs";
 import { runAgentMediaBench } from "./bench-agent-media.mjs";
 import { benchProcessNoThrottle } from "./power-throttling.mjs";
 import { benchLightOpen } from "./light-open.mjs";
+import { collectVoiceRecords, runDictationCorrectionBench, runDictationWindowBench } from "./bench-dictation.mjs";
 
 // LOOP-13: this process (where the service-layer figures are measured) and the bench windows (apps/desktop/src/main/smoke/power-throttling.ts) ask
 // Windows not to slow them down for power, so a figure does not depend on which application is in front. Only the bench acts on it;
@@ -341,6 +342,7 @@ const canvasRaw = {
 };
 let importRuns;
 let proposalRuns;
+let dictationWindowRun;
 sectionStarted = performance.now();
 for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
   const idStarted = performance.now();
@@ -407,9 +409,37 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
     const part = id === "proposalPropose" ? proposalRuns.propose : proposalRuns.apply;
     creative[id] = { kind: "service-agent-proposal", scale: { objects: proposalRuns.objects }, raw: part.samples, detail: part.detail };
   }
+  if (id === "dictationLocalReleaseToText") {
+    dictationWindowRun = await runDictationWindowBench({
+      launch: scaleLauncher,
+      runs: wanted.minSamples,
+      audioSeconds: wanted.scale.audioSeconds ?? 4,
+    });
+    creative[id] = {
+      kind: "electron-dictation",
+      scale: { audioSeconds: dictationWindowRun.ok ? dictationWindowRun.audioSeconds : 0 },
+      raw: dictationWindowRun.raw,
+      detail: dictationWindowRun.detail,
+    };
+  }
+  if (id === "dictationCorrection") {
+    const result = runDictationCorrectionBench({
+      terms: wanted.scale.terms ?? 10_000,
+      runs: wanted.minSamples,
+    });
+    creative[id] = {
+      kind: "service-dictation-correction",
+      scale: { terms: result.terms },
+      raw: result.samples,
+      detail: result.detail,
+    };
+  }
   const idSeconds = Math.round((performance.now() - idStarted) / 100) / 10;
   if (idSeconds >= 0.1) sectionSeconds[`creative.${id}`] = idSeconds;
 }
+const voiceRecordsStarted = performance.now();
+const voiceRecords = await collectVoiceRecords({ windowBench: dictationWindowRun });
+sectionSeconds.voiceRecords = Math.round((performance.now() - voiceRecordsStarted) / 100) / 10;
 const creativeMetrics = Object.fromEntries(Object.entries(config.bench.creative ?? {}).map(([id, wanted]) => [wanted.metric, creative[id]?.raw?.length ? (wanted.stat === "max" ? Math.max(...creative[id].raw) : p95(creative[id].raw)) : Number.POSITIVE_INFINITY]));
 const measurement = (raw, unit, note) => ({ unit, note, raw, p95: p95(raw) });
 const measurements = scanPane.ok
@@ -458,7 +488,7 @@ const metrics = {
   lightSecondOpenMs: light.secondOpenMs.length ? p95(light.secondOpenMs) : Number.POSITIVE_INFINITY,
   ...creativeMetrics,
 };
-const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
+const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && (dictationWindowRun ? dictationWindowRun.ok === true : true) && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
 fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   status: passed ? "passed" : "failed",
   stage,
@@ -469,7 +499,7 @@ fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   node: process.version,
   metrics,
   // Recorded, not limits (计划第 7 节): the v13 move of 300 runs' pictures, the v14 proposal table migration, the copy of a 500 MB profile to the new place, memory with 1000 and 5000 messages open, and the 4 update/release records.
-  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, migrationV14: proposalRuns?.migrationV14 ?? null, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null, update: updateRecords, sectionSeconds },
+  records: { powerThrottling: process.env.MANGA_BENCH_NO_THROTTLE === "1" ? { benchProcess: benchProcessThrottlingOff ? "off" : "could not be turned off", windows: "off" } : "left to Windows", migrationV13: agentMedia.migration, migrationV14: proposalRuns?.migrationV14 ?? null, upgradeCopy: agentMedia.upgrade, chatMemoryMiB: chat.memoryMiB ?? null, voice: voiceRecords, update: updateRecords, sectionSeconds },
   targets: requiredBenchTargets,
   scale: { metadataCount: METADATA, searchBlocks: BLOCKS },
   samples: {

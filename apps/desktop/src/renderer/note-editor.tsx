@@ -13,6 +13,7 @@ import { EmbedHostContext, MangaEmbed } from "./embed/embed-node.tsx";
 import { EmbedPicker } from "./embed/embed-picker.tsx";
 import { MangaScreenshot, ScreenshotHostContext, ScreenshotPicker, type ScreenshotHost } from "./embed/screenshot-node.tsx";
 import type { EmbedAttr, EmbedHost, EmbedItem } from "./embed/embed-types.ts";
+import { registerCodeMirrorView, registerTiptapEditor } from "./voice/editable-target.ts";
 
 /** How long consecutive keystrokes collapse into one undo step. */
 const COALESCE_MS = 700;
@@ -253,6 +254,7 @@ export function NoteEditor(props: {
   const current = useRef(props.document.blocks);
   const draftOwner = useRef(props.objectId);
   const history = useRef<{ past: HistoryEntry[]; future: NoteBlock[][] }>({ past: [], future: [] });
+  const breakNextHistory = useRef(false);
   const dirty = useRef(false);
   const inFlight = useRef(false);
   const save = useRef(props.onSave);
@@ -285,6 +287,11 @@ export function NoteEditor(props: {
       record(next, caret ? `text:${caret.blockId}` : "text:doc", { mirror: false });
     },
   });
+
+  useEffect(() => registerTiptapEditor(() => editor, {
+    kind: "note",
+    onBeforeStep: () => { breakNextHistory.current = true; },
+  }), [editor]);
 
   const schedule = useCallback((next: NoteBlock[]) => {
     pending.current = next;
@@ -396,10 +403,13 @@ export function NoteEditor(props: {
   function record(next: NoteBlock[], coalesceKey?: string, options: { mirror?: boolean } = {}) {
     const previous = current.current;
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
+    const forceBreak = breakNextHistory.current;
+    breakNextHistory.current = false;
+    const effectiveKey = forceBreak ? undefined : coalesceKey;
     const top = history.current.past[history.current.past.length - 1];
     const now = Date.now();
-    const coalesce = Boolean(coalesceKey && top && top.coalesceKey === coalesceKey && now - top.at < COALESCE_MS);
-    if (!coalesce) history.current.past.push({ blocks: previous, coalesceKey, at: now });
+    const coalesce = Boolean(!forceBreak && effectiveKey && top && top.coalesceKey === effectiveKey && now - top.at < COALESCE_MS);
+    if (!coalesce) history.current.past.push({ blocks: previous, coalesceKey: effectiveKey, at: now });
     else top!.at = now;
     if (history.current.past.length > 200) history.current.past.shift();
     history.current.future = [];
@@ -687,6 +697,7 @@ export function NoteEditor(props: {
         <SourceEditor
           blockId={source.id}
           text={source.text}
+          onBeforeStep={() => { breakNextHistory.current = true; }}
           onChange={(text) => {
             // Source edits go through the same authoritative path, so the rich view cannot overwrite them.
             const next = current.current.map((block) => block.id === source.id ? { ...block, text } : block);
@@ -704,15 +715,18 @@ export function NoteEditor(props: {
   );
 }
 
-function SourceEditor(props: { blockId: string; text: string; onChange: (text: string) => void; onComposition: (active: boolean) => void }) {
+function SourceEditor(props: { blockId: string; text: string; onBeforeStep?: () => void; onChange: (text: string) => void; onComposition: (active: boolean) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const onChange = useRef(props.onChange);
   const onComposition = useRef(props.onComposition);
+  const onBeforeStep = useRef(props.onBeforeStep);
   onChange.current = props.onChange;
   onComposition.current = props.onComposition;
+  onBeforeStep.current = props.onBeforeStep;
   const view = useRef<EditorView | null>(null);
   useEffect(() => {
     if (!host.current) return;
+    let bridge: ReturnType<typeof registerCodeMirrorView> | null = null;
     const created = new EditorView({
       state: EditorState.create({
         doc: props.text,
@@ -720,6 +734,7 @@ function SourceEditor(props: { blockId: string; text: string; onChange: (text: s
         extensions: [
           keymap.of([...defaultKeymap]),
           EditorView.updateListener.of((update) => {
+            bridge?.onUpdate(update);
             if (update.docChanged) onChange.current(update.state.doc.toString());
           }),
           EditorView.domEventHandlers({
@@ -730,8 +745,9 @@ function SourceEditor(props: { blockId: string; text: string; onChange: (text: s
       }),
       parent: host.current,
     });
+    bridge = registerCodeMirrorView(created, { onBeforeStep: () => onBeforeStep.current?.() });
     view.current = created;
-    return () => { created.destroy(); view.current = null; };
+    return () => { bridge?.unregister(); created.destroy(); view.current = null; };
     // The view is rebuilt per block so an external change never writes into another block's buffer.
   }, [props.blockId]);
   useEffect(() => {

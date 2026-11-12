@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { BrowserWindow } from "electron";
 import { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
-import { clickTestId, openFromShelf, sleep, waitForTestId } from "./driver.ts";
+import { clickTestId, openFromShelf, pressChord, sleep, waitForTestId } from "./driver.ts";
 import { ensureDock } from "./common.ts";
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../overlay-model.ts";
 
@@ -176,6 +176,21 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     await waitForOverlay(view, false, 5000);
     record("stop", stopped);
 
+    // AT-175: verify actual MediaStreamTrack.getSettings() values captured during recording via DebugPanel diagnostics.
+    await pressChord(view, "D", ["control", "shift"]);
+    const appliedRaw = await until<string>(view, `document.querySelector('[data-testid="debug-audio-applied"]')?.textContent ?? null`, 4000);
+    await clickTestId(view, "debug-close", 2000);
+    let appliedAudio: Record<string, unknown> = {};
+    try { appliedAudio = appliedRaw ? (JSON.parse(appliedRaw) as Record<string, unknown>) : {}; } catch { appliedAudio = {}; }
+    const constraintsOk = appliedAudio.echoCancellation === true && appliedAudio.noiseSuppression === false;
+    record("audio-constraints", constraintsOk, {
+      echoCancellation: appliedAudio.echoCancellation ?? null,
+      noiseSuppression: appliedAudio.noiseSuppression ?? null,
+      autoGainControl: appliedAudio.autoGainControl ?? null,
+      channelCount: appliedAudio.channelCount ?? null,
+      sampleRate: appliedAudio.sampleRate ?? null,
+    });
+
     // Wait for the main speech session to finish filtering and transcription.
     let sessionId = "";
     let review: { session?: { stage?: string }; segments?: Array<{ text?: string; anchors?: unknown[] }> } | undefined;
@@ -255,6 +270,56 @@ export async function runVoiceSmoke(input: Input): Promise<Record<string, unknow
     };
     record("voice-overlay", voiceOverlayOk, overlayDetail);
     observations.push({ name: "voice-overlay", status: voiceOverlayOk ? "passed" : "failed", detail: overlayDetail });
+
+    // AT-177 / AT-179: switch captureEngine to local `sense-voice-funasr-nano-int8`, record synthetic speech, and verify local transcription completes.
+    const localModelDir = process.env.MANGA_SMOKE_ASR_MODEL_DIR;
+    if (localModelDir && fs.existsSync(localModelDir)) {
+      const priorList = await call("capture.list", { resourceId });
+      const priorIds = new Set(((priorList.value as { sessions?: Array<{ id: string }> } | undefined)?.sessions ?? []).map((item) => item.id));
+      const cloudUploadsBefore = requests.length;
+      const modelHandle = appService.registerPath("directory", localModelDir);
+      const importedModel = await call("asrModel.import", { modelId: "sense-voice-funasr-nano-int8", pathHandle: modelHandle, kind: "directory" });
+      await call("settings.setRecording", { captureEngine: { kind: "local", modelId: "sense-voice-funasr-nano-int8" } });
+
+      await clickTestId(view, "chat-mic");
+      await until<boolean>(view, `Boolean(document.querySelector('[data-testid="record-indicator"]'))`, 5000);
+      await sleep(5500); // real time: 本地语音引擎录制时长，采集合成语音句子
+      await clickTestId(view, "record-stop");
+      await waitForOverlay(view, false, 5000);
+      await until(view, `!document.querySelector('[data-testid="record-indicator"]')`, 5000);
+
+      let localSessionId = "";
+      let localReview: { session?: { stage?: string }; segments?: Array<{ text?: string }> } | undefined;
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const list = await call("capture.list", { resourceId });
+        const sessions = (list.value as { sessions?: Array<{ id: string }> } | undefined)?.sessions ?? [];
+        const newest = sessions.find((item) => !priorIds.has(item.id));
+        if (newest) {
+          localSessionId = newest.id;
+          const reviewed = await call("capture.review", { sessionId: localSessionId });
+          localReview = reviewed.value as typeof localReview;
+          if (localReview?.session?.stage && TERMINAL.has(localReview.session.stage)) break;
+        }
+        await sleep(500); // real time: 后台轮询定时器节流，等待本地引擎录音转写完成
+      }
+      const localSegments = localReview?.segments ?? [];
+      const localTexts = localSegments.map((seg) => String(seg.text ?? "").trim()).filter(Boolean);
+      const localCaptureOk = importedModel.status === "ok"
+        && Boolean(localSessionId)
+        && localReview?.session?.stage === "done"
+        && localTexts.some((txt) => /[\u4e00-\u9fff]/.test(txt))
+        && requests.length === cloudUploadsBefore;
+      record("local-capture", localCaptureOk, {
+        importedOk: importedModel.status === "ok",
+        stage: localReview?.session?.stage ?? null,
+        segments: localSegments.length,
+        sampleLength: localTexts[0]?.length ?? 0,
+        cloudUploadsDelta: requests.length - cloudUploadsBefore,
+      });
+      await call("settings.setRecording", { captureEngine: null });
+    } else {
+      record("local-capture", false, { reason: "MANGA_SMOKE_ASR_MODEL_DIR missing" });
+    }
 
     if (evidence) {
       fs.mkdirSync(evidence, { recursive: true });

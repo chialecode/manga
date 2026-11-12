@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DictionaryAliasInputSchema, DictionaryCategorySchema } from "./dictation.ts";
 import { ContextIdSchema, MATERIAL_ORIGINS } from "./workspace-state.ts";
 
 const id = z.string().min(1).max(256);
@@ -77,10 +78,27 @@ export const CreativeCommandInputs = {
   "dictionary.list": z.object({ scope: z.enum(DICTIONARY_SCOPES).optional(), workId: id.optional() }).strict(),
   /** Works whose entry was deleted and that still have terms (A-87). */
   "dictionary.removedWorks": z.object({}).strict(),
-  "dictionary.add": z.object({ scope: z.enum(DICTIONARY_SCOPES), workId: id.optional(), term: z.string().trim().min(1).max(128), heard: z.string().max(128).optional() }).strict()
+  "dictionary.add": z.object({
+    scope: z.enum(DICTIONARY_SCOPES),
+    workId: id.optional(),
+    term: z.string().trim().min(1).max(128),
+    heard: z.string().max(128).optional(),
+    category: DictionaryCategorySchema.optional(),
+    disabled: z.boolean().optional(),
+    aliases: z.array(DictionaryAliasInputSchema).max(64).optional(),
+    blocked: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
+  }).strict()
     .refine((value) => (value.scope === "work") === Boolean(value.workId), { message: "a work term needs a work, a global term has none" }),
-  "dictionary.update": z.object({ termId: id, term: z.string().trim().min(1).max(128).optional(), heard: z.string().max(128).nullable().optional() }).strict(),
+  "dictionary.update": z.object({
+    termId: id,
+    term: z.string().trim().min(1).max(128).optional(),
+    heard: z.string().max(128).nullable().optional(),
+    category: DictionaryCategorySchema.optional(),
+    disabled: z.boolean().optional(),
+    aliases: z.array(DictionaryAliasInputSchema).max(64).optional(),
+    blocked: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
+  }).strict(),
   "dictionary.remove": z.object({ termId: id }).strict(),
-  "dictionary.importMetadata": z.object({ workId: id }).strict(),
+  "dictionary.importMetadata": z.object({ workId: id, enrichDetails: z.boolean().optional(), refresh: z.boolean().optional() }).strict(),
   "dictionary.prompt": z.object({ workId: id.optional() }).strict(),
 };

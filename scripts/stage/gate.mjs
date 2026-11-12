@@ -18,8 +18,8 @@ const config = loadGate();
 const evidence = runDir();
 const startedAt = new Date();
 const steps = [];
-// MANGA_PACKAGE_IN_GATE: a package run inside the gate leaves the local development install to the gate's last step (install-dev), once.
-const node = (args) => spawnSync(process.execPath, args, { cwd: root, stdio: "inherit", env: { ...process.env, MANGA_PACKAGE_IN_GATE: "1" } }).status ?? 1;
+// The gate does not update the local development install: the agent runs `stage install-dev` whenever the next step is the person's manual check (development-workflow), not on every package or gate run.
+const node = (args) => spawnSync(process.execPath, args, { cwd: root, stdio: "inherit" }).status ?? 1;
 const record = (name, outcome, ms = 0) => {
   steps.push({ name, outcome, seconds: Math.round(ms / 1000) });
   console.log(`[gate] ${name}: ${outcome}${ms ? ` (${Math.round(ms / 1000)} s)` : ""}`);
@@ -98,11 +98,4 @@ if (realPlacesNow.length) {
   finish("failed");
 }
 run("report", ["scripts/stage.mjs", "report"]);
-{
-  const started = Date.now();
-  const status = node(["--experimental-strip-types", "scripts/stage/install-dev.mjs"]);
-  const devResult = readJson(evidence, "install-dev.json");
-  const outcome = devResult?.status ?? (status === 0 ? "passed" : `failed (exit ${status})`);
-  record("install-dev", outcome, Date.now() - started);
-}
 finish("passed");

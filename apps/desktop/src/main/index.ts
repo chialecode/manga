@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, net, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, session, shell } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -16,6 +16,7 @@ import { attachNsisUpdater } from "./updater.ts";
 import { CHANNELS, createId, LOCATION_PARTITIONS, MangaError, type Channel } from "@manga/contracts";
 import { safeStorage } from "electron";
 import { utilitySpawner } from "./plugin-process.ts";
+import { AsrService } from "./asr-service.ts";
 import { launchSucceeded } from "./launch-guard.ts";
 import { appRootOf, channelInfoOf, lightDirsOf } from "./launch-paths.ts";
 import { askLightToQuit, LIGHT_QUIT_WAIT_MS } from "./light-runtime.ts";
@@ -33,11 +34,14 @@ if (smoke) {
   app.commandLine.appendSwitch("disable-background-timer-throttling");
   app.commandLine.appendSwitch("mute-audio");
 }
-// The recording smoke uses Chromium's fake capture device, which plays a synthetic speech clip instead of a microphone.
-if (smoke && process.env.MANGA_SMOKE_PHASE === "voice" && process.env.MANGA_SMOKE_AUDIO) {
+// The recording and dictation smoke/bench phases use Chromium's fake capture device, which plays a synthetic speech clip instead of a microphone.
+if (smoke && process.env.MANGA_SMOKE_AUDIO && (process.env.MANGA_SMOKE_PHASE === "voice" || process.env.MANGA_SMOKE_PHASE === "dictation" || process.env.MANGA_SMOKE_PHASE === "bench-dictation")) {
   app.commandLine.appendSwitch("use-fake-device-for-media-stream");
   app.commandLine.appendSwitch("use-fake-ui-for-media-stream");
-  app.commandLine.appendSwitch("use-file-for-fake-audio-capture", `${process.env.MANGA_SMOKE_AUDIO}%noloop`);
+  const captureArg = process.env.MANGA_SMOKE_PHASE === "voice"
+    ? `${process.env.MANGA_SMOKE_AUDIO}%noloop`
+    : process.env.MANGA_SMOKE_AUDIO;
+  app.commandLine.appendSwitch("use-file-for-fake-audio-capture", captureArg);
 }
 function pinPdfjsDir(): void {
   const packaged = path.join(process.resourcesPath, "app.asar.unpacked", "pdfjs");
@@ -93,11 +97,13 @@ if (buildInfo.version) {
 }
 
 function windowIconPath(): string | undefined {
+  // An installed copy carries its channel's icon in resources/ (the development installer puts the "DEV" one there); a source run picks by channel.
+  const source = layout.channel === "development" ? "icon-dev" : "icon";
   const candidates = [
     path.join(process.resourcesPath, "icon.ico"),
     path.join(process.resourcesPath, "icon.png"),
-    path.resolve(__dirname, "../../assets/icon.ico"),
-    path.resolve(__dirname, "../../assets/icon.png"),
+    path.resolve(__dirname, `../../assets/${source}.ico`),
+    path.resolve(__dirname, `../../assets/${source}.png`),
   ];
   return candidates.find((file) => fs.existsSync(file));
 }
@@ -142,6 +148,7 @@ if (!quitForUpdateFlag && layout.writable) {
 }
 
 let appService: MangaProductApp | undefined;
+const asrService = new AsrService({ resourcesPath: process.resourcesPath });
 let ownerGrant: string | undefined;
 const actor = { kind: "user" as const, id: "desktop-user" };
 let window: BrowserWindow | undefined;
@@ -233,6 +240,7 @@ function handleQuitForUpdate(): Promise<void> {
       cancelled.signal.throwIfAborted();
       if (!requestStillCurrent()) throw new Error("update quit request withdrawn");
       cleanupInstanceFiles();
+      asrService.dispose();
       appService?.close();
       appService = undefined;
       app.exit(0);
@@ -413,6 +421,7 @@ async function runDetachedWindowsInstaller(input: { installerPath: string; mode:
     if (input.mode === "restart") {
       setTimeout(() => {
         cleanupInstanceFiles();
+        asrService.dispose();
         appService?.close();
         appService = undefined;
         app.exit(0);
@@ -476,6 +485,8 @@ async function bootService(): Promise<void> {
     buildInfo,
     // Packaged builds carry FFmpeg and the voice-filter model next to the app; development builds look at the local tool cache.
     resourcesPath: process.resourcesPath,
+    localAsr: asrService,
+    ...(smoke && process.env.MANGA_SMOKE_ALLOW_LOOPBACK_MODEL === "1" ? { asrModels: { allowLoopbackHttp: true } } : {}),
     // Metadata requests go through Chromium's network stack, so the system proxy and certificates apply.
     netFetch: createNetFetch(net),
     // Plugins run in utility processes; the packages that come with the application sit next to it and are offered for installation, never installed by themselves.
@@ -534,6 +545,10 @@ async function bootService(): Promise<void> {
     ].find((file) => fs.existsSync(file)),
   });
   await appService.start();
+  if (smoke && process.env.MANGA_ASR_IDLE_MS) {
+    const smokeIdleMs = Number(process.env.MANGA_ASR_IDLE_MS);
+    if (Number.isFinite(smokeIdleMs) && smokeIdleMs > 0) asrService.setIdleTimeoutMs(smokeIdleMs);
+  }
   if (layout.channel === "release" && app.isPackaged && !updateFixtureSmoke) {
     attachNsisUpdater({
       updateService: appService.update,
@@ -614,6 +629,10 @@ if (!quitForUpdateFlag) app.whenReady().then(async () => {
       ...(smoke ? { backgroundThrottling: false } : {}),
     },
   });
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+    window.removeMenu();
+  }
   window.setMenuBarVisibility(false);
   if (hideWindow) {
     window.webContents.setAudioMuted(true);
@@ -621,6 +640,9 @@ if (!quitForUpdateFlag) app.whenReady().then(async () => {
     window.on("show", yieldFocus);
     window.on("leave-full-screen", yieldFocus);
   }
+  // A smoke run drives the page with its own input events (webContents.sendInputEvent). Once a walk shows the window, the person's real mouse moving
+  // over it would mix real moves into a drag or a click and break it at random, so a smoke window lets the system's mouse pass through.
+  if (smoke) window.setIgnoreMouseEvents(true);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const appUrl = rendererUrl();
   // The window stays on the app's own page; links open only through `manga:open-external`.
@@ -866,14 +888,24 @@ if (!quitForUpdateFlag) app.whenReady().then(async () => {
   writeRunningInstance("ready", smoke ? { justUpdated: appService?.update.status().justUpdated ?? null } : {});
   if (smoke && process.env.MANGA_SMOKE_PHASE === "update-driver") return;
   if (smoke) {
-    const { runSmoke } = await import("./smoke/index.ts");
-    await runSmoke({ appService, ownerGrant, window, layout });
+    try {
+      const { runSmoke } = await import("./smoke/index.ts");
+      await runSmoke({ appService, ownerGrant, window, layout, asrService });
+    } catch (error) {
+      console.error(error);
+      app.exit(1);
+    }
   }
+});
+
+app.on("before-quit", () => {
+  asrService.dispose();
 });
 
 app.on("window-all-closed", () => {
   void (async () => {
     try {
+      asrService.dispose();
       appService?.close();
     } finally {
       cleanupInstanceFiles();

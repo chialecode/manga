@@ -372,6 +372,18 @@ interface CapturePositionEvent {
 
 本节新增筛选、保留与回顾契约属于 A-30，已实现（自检结果与限制见[执行状态](../delivery/status.md)，产品验收见 AT-57—59）。实现取舍：筛选使用 Silero VAD（见 [语音模块](../modules/voice.md)）；ASR 只返回整块文本时整块是一个“粗定位、待校准”片段；暂停不开新锚点，翻页、选区变化、跳转与资源/集切换开新锚点。
 
+### 9.5 应用内听写、词库扩展与听写记录
+
+应用内听写（`VOICE-10`—`VOICE-17`，A-130、A-131）面向 MANGA 内的可输入控件直接输入文字，与带来源锚点的长录音笔记（`CaptureSession`）是两条独立链路：听写不写 `capture_sessions` 或 `capture_position_events`，不生成位置锚点，单次最长 5 分钟，PCM 采样默认只在内存中流转并随本次会话结束释放。
+
+听写会话状态机为：
+
+`recording` → `trimming` → `recognizing` → `correcting` → `polishing` → `done` | `no_speech` | `failed` | `cancelled`
+
+（当所选本地离线模型尚未驻留推理子进程时，界面额外提示正在载入模型 `loadingModel: true`）。`trimming` 在本地用 Silero VAD 裁除首尾静音（两侧保留 300 ms 余量）并将超过 1 s 的句中停顿压缩为 400 ms 静音，整段无人声直接进入 `no_speech` 且零外部请求；`recognizing` 经统一的 `AsrEngine` 送往用户选定的唯一引擎（本地 `sherpa-onnx` 子进程、OpenAI 兼容 `/audio/transcriptions` 或 `/chat/completions` `input_audio`），识别结果若仅复述提示或热词则判为无效结果；`correcting` 基于全局与作品词库及多读音倒排索引执行确定性高把握替换并召回低把握候选词；`polishing` 按档位（`raw`、`light`、`formal`）决定是否调用文本模型润色及简繁统一，违背四道防过度纠错约束或超时/报错时退回 `correctedText` 并记录 `fallbackReason`。
+
+词库在 `dictionary_terms` 基础上拆出 `dictionary_aliases` 一对多读音与别名表（支持 `alias`、`heard`、`kana`、`romaji`、`english`），增加类别（`character`、`actor`、`work`、`term`、`other`）、停用标记与误改屏蔽列表 `blocked_json`，同时保留原 `heard` 列以维持资料包严格 schema 兼容。Bangumi 角色与人物详情缓存于可重建的 `bangumi_details` 表，提取的中文名、别名、假名与罗马字写入自动别名且不覆盖手写词条。用户插入后 60 秒内在同一输入处修改专名产生的候选写入 `dictionary_suggestions`（`pending` / `accepted` / `ignored`），经用户确认才进入正式词典。每次完成听写写入仅限本机保留 30 天的 `dictation_history`（仅当用户在设置开启“保留最近 24 小时的听写音频”时把 WAV 写入 `<应用数据根>\dictation-audio\` 并在 `audio_expires_at` 到期后自动清理）。`dictation_history`、`dictionary_suggestions` 与 `bangumi_details` 均对 Agent 不可见，且不进入可移植资料包与项目包；`dictation_history` 在升级与迁移备份中一并剔除。
+
 ## 10. 粗剪项目
 
 粗剪作为 ContentObject 的一个类型，payload 保存有序 ClipSegment：来源资源与修订、请求区间、排列顺序、备注和引用 ID。首版使用单个串行序列，不引入复杂多轨合成。
@@ -382,7 +394,7 @@ interface CapturePositionEvent {
 
 ## 11. SQLite 与文件存储
 
-正式存储适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 better-sqlite3 + Drizzle（产品已使用，当前库结构版本 15）。驱动/ORM 替换须保持本文对象身份、修订、事务事件、迁移与资料包协议，不能因更换库重建用户数据或直接采用其他产品的数据表。
+正式存储适配采用 [ADR-0007](../decisions/0007-technology-stack.md) 选定的 better-sqlite3 + Drizzle（产品已使用，当前库结构版本 16）。驱动/ORM 替换须保持本文对象身份、修订、事务事件、迁移与资料包协议，不能因更换库重建用户数据或直接采用其他产品的数据表。
 
 ### 11.1 建议逻辑表
 
@@ -393,6 +405,7 @@ interface CapturePositionEvent {
 | 内容 | content_object、object_revision、anchor、reference | 权威业务数据 |
 | 项目 | project、project_material | 权威业务数据 |
 | 采集 | capture_session、capture_position_event、transcript、derived_artifact | 原始记录与明确来源的派生结果 |
+| 语音词库与听写 | dictionary_terms、dictionary_aliases、dictionary_suggestions、dictation_history、bangumi_details | 个人与作品词库（权威业务数据）、待确认学词建议、仅存本机的 30 天听写记录与 Bangumi 详情缓存 |
 | 运行 | agent_session、agent_run、agent_proposal、job、job_attempt、operation、domain_event | 运行恢复与审计 |
 | 配置 | module_config、provider_connection、model_profile、task_binding | 不含明文凭据的配置 |
 | 附件 | attachment、attachment_reference | 文件身份与引用关系 |
@@ -489,6 +502,18 @@ interface CapturePositionEvent {
 
 迁移的用例（合成 v14 资料升级到 v15）：迁移前有 `manga.sqlite.premigrate-v14` 备份、迁移后 `recent_dismissals` 表与删除触发器及 `progress_furthest` 视图存在且既有数据不变、中断后再次启动完成、失败回滚到 v14、第二次启动不再改动、v16 的资料被拒绝打开。
 
+**库结构增量（版本 15 → 16，A-130、A-131）。** 一次迁移完成，做法同上（迁移前生成已剔除 `agent_requests` 与 `dictation_history` 的备份 `manga.sqlite.premigrate-v15`、单事务、失败回滚、中断后重做、较旧的版本拒绝打开 v17 及以上的资料）：
+
+| 分组 | 新增或改动 | 说明 |
+| --- | --- | --- |
+| 词条扩展 | `dictionary_terms` 增 `category TEXT NOT NULL DEFAULT 'other'`、`disabled INTEGER NOT NULL DEFAULT 0`、`blocked_json TEXT NOT NULL DEFAULT '[]'`；保留 `heard` 列以维持资料包严格 schema 向后兼容 | 迁移按已有 `source` 回填类别（`metadata:%:character:%` → `character`，`actor`/`person` → `actor`，`work` → `work`，`manual` → `term`，其余 `other`），并把非空 `heard` 同步写入 `dictionary_aliases(kind='heard')`，保留既有词条、来源与“手写优先”语义 |
+| 多读音与别名 | `dictionary_aliases(id PRIMARY KEY, term_id REFERENCES dictionary_terms(id) ON DELETE CASCADE, alias, kind, source, created_at)`；唯一索引 `dictionary_aliases_unique(term_id, alias, kind)` 与词条索引 | `kind` 支持 `alias`、`heard`、`kana`、`romaji`、`english`；随所属词条删除级联清除；资料包（`library-package`）在保留既有字段的基础上可选携带 `category`、`disabled`、`blocked` 与 `aliases` |
+| 从修改中学词 | `dictionary_suggestions(id PRIMARY KEY, scope, work_id REFERENCES works(id) ON DELETE CASCADE, term, heard, score, status, created_at, updated_at)`；唯一表达式索引 `(scope, IFNULL(work_id, ''), term, heard)` | 记录听写插入后 60 秒内用户编辑产生的专名建议（`pending`、`accepted`、`ignored`）；忽略后同一组不再提示；不进入资料包与项目包 |
+| 听写记录 | `dictation_history(id PRIMARY KEY, work_id REFERENCES works(id) ON DELETE SET NULL, engine_kind, engine_id, model_id, polish_mode, raw_text, corrected_text, final_text, fallback_reason, timings_json, replacements_json, audio_rel_path, audio_expires_at, created_at)` | 仅限本机保留最近 30 天记录（定期清理过期项与超过 24 小时的可选音频）；作品删除时 `work_id` 置空保留记录；迁移备份（`premigrate`）、更新前备份（`preupdate`）、资料包与项目包一律剔除 |
+| Bangumi 详情缓存 | `bangumi_details(kind, external_id, name, infobox_json, payload_json, fetched_at, PRIMARY KEY (kind, external_id))` | 缓存 Bangumi 角色与人物详情响应以提取别名、假名与罗马字，避免重复请求，不进入资料包与项目包 |
+
+迁移的用例（`tests/library/schema-v16-migration.test.ts`，合成 v15 资料含手写词条、带 `heard` 词条与自动词条）：迁移前有 `manga.sqlite.premigrate-v15` 备份、迁移后新增列与四张表及索引齐全、`category` 与 `dictionary_aliases` 回填准确且手写优先不变、中断后再次启动完成、失败回滚到 v15、第二次启动幂等、v17 资料被拒绝打开。
+
 创作对象的规范载荷初期可以保存在 content_object 的版本化 JSON 中，附件另存文件；文本块和检索关系建立派生投影。以后迁移为规范化子表时，保持公共对象和导出格式兼容。
 
 reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系变化在统一事务内提交。列表查询只读取摘要，不加载所有大载荷。
@@ -502,6 +527,8 @@ reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系�
 - `cache`：缩略图、可重建 OCR/解析缓存和临时预览。
 - `jobs`：尚未完成的导出临时文件与检查点。
 - `backups`：用户触发或策略生成的备份。
+- `models`（`<应用数据根>\models\`）：按需下载或本地导入的离线语音识别模型（`asr/<modelId>/`、已装登记 `installed.json` 与校验通过前隔离的下载暂存 `.staging/`），绝不打入安装包；用户可在“设置 › 语音转录”随时删除释放空间。
+- `dictation-audio`（`<应用数据根>\dictation-audio\`）：仅当用户显式开启“保留最近 24 小时的听写音频”时存放 16 kHz 单声道 WAV 供重新识别，超过 24 小时或删除对应听写记录时立即清理。
 
 这些是逻辑分区，不要求固定在同一物理目录。用户可配置资源（小说/漫画/视频）、工程（笔记/剪辑等）、数据库与配置、附件/录音、下载/暂存、缓存/索引、日志/崩溃报告、备份、导出与运行时下载资产的根位置。默认分两个根与一个下载位置（A-118）：应用自己的数据（`data`、`cache`、`logs`、`backups`、`runtime`，含 Electron 的 userData/sessionData 与崩溃转储）在 `%LOCALAPPDATA%\manga`（开发版 `manga-dev`）；用户的文件（`works`、`projects`、`attachments`、`resources`、`exports`）在系统登记的“文档”下的 `manga`（开发版 `manga-dev`）；下载在系统登记的“下载”下的 `manga`（开发版 `manga-dev`），这个目录在第一次真的把东西存到那里时才建立，启动不在“下载”里建任何目录；下载过程中的暂存在应用数据的 `cacheacquisition`。所有路径统一用小写的 `manga`，已有的大写 `MANGA` 目录在启动时自动改名为小写。启动指针在 `<应用数据根>\launcher\pointer.json`，记着根、通道、修订与分区覆盖。测试通道没有默认位置，必须给出独立的临时根。安装目录只放程序文件（按用户安装时默认 `%LOCALAPPDATA%\Programs\manga`，A-119）。
 
@@ -544,7 +571,7 @@ project.json                  kind=project 时的项目和材料集合
 
 ### 12.2 备份与恢复
 
-备份保存一致数据库快照、模块配置和被引用的用户附件。Agent 调用记录（`agent_requests`）只存本机，不进备份与资料包。外部媒体可以单独备份或保留位置描述，界面明确覆盖范围。凭据由系统凭据存储管理，恢复后按需重新绑定。
+备份保存一致数据库快照、模块配置和被引用的用户附件。Agent 调用记录（`agent_requests`）与本机听写记录（`dictation_history`）只存本机，在升级前备份（`premigrate`）与更新前备份（`preupdate`）中清除并执行 `VACUUM`，且不进资料包与项目包（学词建议 `dictionary_suggestions` 与 Bangumi 详情缓存 `bangumi_details` 同样不进资料包与项目包）。外部媒体可以单独备份或保留位置描述，界面明确覆盖范围。凭据由系统凭据存储管理，恢复后按需重新绑定。
 
 恢复在隔离暂存位置检查，成功后再切换；失败时保留现有工作数据。完整恢复与“把资料包导入当前库”是两种不同操作。
 

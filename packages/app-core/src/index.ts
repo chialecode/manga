@@ -74,3 +74,29 @@ export {
   type UpdateServiceOptions,
   type UpdateInstallerDownloader,
 } from "./update/service.ts";
+export {
+  DEFAULT_RECORDING_SETTINGS,
+  readRecordingSettings,
+  writeRecordingSettings,
+  type RecordingSettings,
+} from "./voice/settings.ts";
+export {
+  ASR_MODEL_CATALOG,
+  AsrModelService,
+  type AsrCatalogModel,
+  type AsrModelServiceOptions,
+} from "./voice/models/index.ts";
+export {
+  AsrEngine,
+  type AsrEngineOptions,
+  type ExternalAsrConnectionConfig,
+  type LocalAsrRuntimePort,
+  type PreAsrDenoiseHook,
+} from "./voice/engine/index.ts";
+export { PhoneticCorrector } from "./voice/correct/index.ts";
+export { DictationPolisher } from "./voice/polish/index.ts";
+export {
+  DictationHistoryService,
+  DictationService,
+  LearnFromEditsService,
+} from "./voice/dictation/index.ts";

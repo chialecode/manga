@@ -142,7 +142,7 @@ export function evaluateStageEvidence(dir, fingerprints, config) {
           errors.push(`bench.json: creative ${id} did not read back every piece of the download as the torrent lists it`);
         }
       }
-      if ((entry.kind === "electron-canvas" || entry.kind === "electron-reader" || entry.kind === "electron-workspace") && entry.detail?.ok !== true) errors.push(`bench.json: creative ${id} was not measured completely in the window`);
+      if ((entry.kind === "electron-canvas" || entry.kind === "electron-reader" || entry.kind === "electron-workspace" || entry.kind === "electron-dictation") && entry.detail?.ok !== true) errors.push(`bench.json: creative ${id} was not measured completely in the window`);
       const figure = wanted.stat === "max" ? Math.max(...values) : p95(values);
       if (bench.metrics?.[wanted.metric] !== figure) errors.push(`bench.json: ${wanted.metric} does not match its raw samples`);
     }

@@ -19,6 +19,17 @@ export const DEFAULT_ICON_SVG = path.join(repoRoot, "apps/desktop/assets/icon.sv
 export const DEFAULT_ICON_PNG = path.join(repoRoot, "apps/desktop/assets/icon.png");
 export const DEFAULT_ICON_ICO = path.join(repoRoot, "apps/desktop/assets/icon.ico");
 export const ICON_SIZES = [16, 24, 32, 48, 64, 128, 256];
+// The development channel's icon: the same mark on dark gray with an amber "DEV" badge, so MANGA Dev is told apart from MANGA at a glance.
+export const DEV_ICON_SVG = path.join(repoRoot, "apps/desktop/assets/icon-dev.svg");
+export const DEV_ICON_PNG = path.join(repoRoot, "apps/desktop/assets/icon-dev.png");
+export const DEV_ICON_ICO = path.join(repoRoot, "apps/desktop/assets/icon-dev.ico");
+
+/** The icon files of a channel: the executable, the installer, the uninstall entry, the shortcuts and the windows all show these. */
+export function channelIcons(channel) {
+  return channel === "development"
+    ? { svg: DEV_ICON_SVG, png: DEV_ICON_PNG, ico: DEV_ICON_ICO }
+    : { svg: DEFAULT_ICON_SVG, png: DEFAULT_ICON_PNG, ico: DEFAULT_ICON_ICO };
+}
 
 export const INSTALLER_META = {
   description: "二次元阅读观看、记录与辅助创作工作台",
@@ -242,7 +253,44 @@ export function inspectIco(icoBuffer) {
   return { valid: problems.length === 0, count, sizes, problems };
 }
 
-/** Generate `icon.png` (512×512) and `icon.ico` (16..256 px) from `icon.svg` using `sharp`. */
+/** The side, in pixels, of the master render every icon size is averaged down from. */
+const ICON_MASTER = 1024;
+
+/**
+ * Shrink a square RGBA master to `size`×`size` by averaging the area each pixel covers (alpha-weighted, so the
+ * transparent corners do not darken the edges). Every size is drawn the same way, so the strokes keep their weight.
+ */
+export function averageDown(rgba, master, size) {
+  const out = Buffer.alloc(size * size * 4);
+  const scale = master / size;
+  for (let y = 0; y < size; y++) {
+    const y0 = Math.floor(y * scale);
+    const y1 = Math.max(Math.floor((y + 1) * scale), y0 + 1);
+    for (let x = 0; x < size; x++) {
+      const x0 = Math.floor(x * scale);
+      const x1 = Math.max(Math.floor((x + 1) * scale), x0 + 1);
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let yy = y0; yy < y1; yy++) {
+        for (let xx = x0; xx < x1; xx++) {
+          const o = (yy * master + xx) * 4;
+          const alpha = rgba[o + 3];
+          r += rgba[o] * alpha; g += rgba[o + 1] * alpha; b += rgba[o + 2] * alpha; a += alpha; n++;
+        }
+      }
+      const o = (y * size + x) * 4;
+      if (a > 0) {
+        out[o] = Math.round(r / a); out[o + 1] = Math.round(g / a); out[o + 2] = Math.round(b / a);
+      }
+      out[o + 3] = Math.round(a / n);
+    }
+  }
+  return out;
+}
+
+/**
+ * Generate `icon.png` (512×512) and `icon.ico` (16..256 px) from `icon.svg`; pass the `DEV_ICON_*` paths for the
+ * development icon. `sharp` renders the SVG once at 1024×1024 and every size is averaged down from that render.
+ */
 export async function generateAppIcons({
   svgPath = DEFAULT_ICON_SVG,
   pngPath = DEFAULT_ICON_PNG,
@@ -251,12 +299,20 @@ export async function generateAppIcons({
 } = {}) {
   const { default: sharp } = await import("sharp");
   const svg = fs.readFileSync(svgPath);
-  const png512 = await sharp(svg).resize(512, 512).png({ compressionLevel: 9 }).toBuffer();
-  const entries = [];
-  for (const size of sizes) {
-    const png = await sharp(svg).resize(size, size).png({ compressionLevel: 9 }).toBuffer();
-    entries.push({ size, png });
+  const { data, info } = await sharp(svg, { density: 72 * 2 })
+    .resize(ICON_MASTER, ICON_MASTER, { fit: "fill" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  if (info.width !== ICON_MASTER || info.height !== ICON_MASTER || info.channels !== 4) {
+    throw new Error(`${path.basename(svgPath)} rendered as ${info.width}x${info.height}x${info.channels}, not ${ICON_MASTER}x${ICON_MASTER}x4`);
   }
+  const encode = (size) => sharp(averageDown(data, ICON_MASTER, size), { raw: { width: size, height: size, channels: 4 } })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+  const png512 = await encode(512);
+  const entries = [];
+  for (const size of sizes) entries.push({ size, png: await encode(size) });
   const ico = encodeIco(entries);
   if (pngPath) {
     fs.mkdirSync(path.dirname(pngPath), { recursive: true });
@@ -308,15 +364,155 @@ export function installerInclude(channel, { testIdentity = false } = {}) {
     `  \${AndIf} $R0 == ""`,
     `    StrCpy $INSTDIR "$LOCALAPPDATA\\Programs\\${dirName}"`,
     "  ${EndIf}",
+    "  !insertmacro MangaShortcutsInit",
     "!macroend",
     "",
+    ...shortcutsNsis(channel),
+    "",
     `; "Open with" (4.5): ProgIDs, OpenWithProgids values, Applications and Capabilities in HKCU; the extension keys' default values are never written.`,
-    ...openWithNsis(channel, { testIdentity }),
+    // The shortcuts' steps go first in electron-builder's two hooks, which the "Open with" lines define.
+    ...openWithNsis(channel, { testIdentity }).flatMap((line) => {
+      if (line === "!macro customInstall") return [line, "  !insertmacro MangaShortcutsInstall"];
+      if (line === "!macro customUnInstall") return [line, "  !insertmacro MangaShortcutsUninstall"];
+      return [line];
+    }),
   ].join("\r\n");
 }
 
+/**
+ * The Start menu and desktop shortcuts are the include's, not electron-builder's (`createStartMenuShortcut` and `createDesktopShortcut` are false,
+ * so electron-builder neither makes nor removes them):
+ * - an interactive installation shows a page with both boxes, checked on a first installation and otherwise as the shortcuts are now; a box
+ *   cleared removes that shortcut;
+ * - a silent installation (`/S`, the updater's `--updated /S` and `install-dev`) makes both on a first installation; over an installation it
+ *   keeps the shortcuts that are there and makes no new one, except that the development channel makes the desktop shortcut again every time,
+ *   so a new build is noticed;
+ * - the uninstaller removes both, except when it runs for an over-installation or update (`--updated`, which electron-builder always passes to
+ *   the old uninstaller).
+ * Whether the shortcuts existed is read in `customInit`, before the old version's uninstaller runs: uninstallers of earlier versions removed
+ * them during an over-installation, and those are put back. Variables and the page exist only in the installer build (`customPageAfterChangeDir`,
+ * `customInit` and `customInstall` are not compiled into the uninstaller).
+ */
+export function shortcutsNsis(channel) {
+  const startMenu = '"$SMPROGRAMS\\${SHORTCUT_NAME}.lnk"';
+  const desktop = '"$DESKTOP\\${SHORTCUT_NAME}.lnk"';
+  const make = (link) => [
+    `    CreateShortCut ${link} "$appExe" "" "$appExe" 0 "" "" "\${APP_DESCRIPTION}"`,
+    "    ClearErrors",
+    `    WinShell::SetLnkAUMI ${link} "\${APP_ID}"`,
+  ];
+  const remove = (link, indent = "    ") => [`${indent}WinShell::UninstShortcut ${link}`, `${indent}Delete ${link}`];
+  return [
+    ...(channel === "development" ? ["; The development channel makes the desktop shortcut again on every silent over-installation.", "!define MANGA_DESKTOP_ON_UPDATE", ""] : []),
+    "!macro customPageAfterChangeDir",
+    "  Var MangaFirstInstall",
+    "  Var MangaHadStartMenu",
+    "  Var MangaHadDesktop",
+    "  Var MangaWantStartMenu",
+    "  Var MangaWantDesktop",
+    "  Var MangaStartMenuBox",
+    "  Var MangaDesktopBox",
+    "  Page custom MangaShortcutsPage MangaShortcutsPageLeave",
+    "  Function MangaShortcutsPage",
+    "    ${if} ${isUpdated}",
+    "      Abort",
+    "    ${endIf}",
+    '    !insertmacro MUI_HEADER_TEXT "快捷方式" "选择要创建的快捷方式。"',
+    "    nsDialogs::Create 1018",
+    "    Pop $0",
+    '    ${NSD_CreateCheckbox} 0 0 100% 12u "创建开始菜单快捷方式"',
+    "    Pop $MangaStartMenuBox",
+    '    ${NSD_CreateCheckbox} 0 18u 100% 12u "创建桌面快捷方式"',
+    "    Pop $MangaDesktopBox",
+    '    ${if} $MangaWantStartMenu == "1"',
+    "      ${NSD_Check} $MangaStartMenuBox",
+    "    ${endIf}",
+    '    ${if} $MangaWantDesktop == "1"',
+    "      ${NSD_Check} $MangaDesktopBox",
+    "    ${endIf}",
+    "    nsDialogs::Show",
+    "  FunctionEnd",
+    "  Function MangaShortcutsPageLeave",
+    "    ${NSD_GetState} $MangaStartMenuBox $0",
+    '    StrCpy $MangaWantStartMenu "0"',
+    "    ${if} $0 == ${BST_CHECKED}",
+    '      StrCpy $MangaWantStartMenu "1"',
+    "    ${endIf}",
+    "    ${NSD_GetState} $MangaDesktopBox $0",
+    '    StrCpy $MangaWantDesktop "0"',
+    "    ${if} $0 == ${BST_CHECKED}",
+    '      StrCpy $MangaWantDesktop "1"',
+    "    ${endIf}",
+    "  FunctionEnd",
+    "!macroend",
+    "",
+    "; In .onInit: whether this app is installed and which shortcuts exist, before anything changes.",
+    "!macro MangaShortcutsInit",
+    '  StrCpy $MangaFirstInstall "1"',
+    '  ReadRegStr $R2 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation',
+    '  ${if} $R2 != ""',
+    '  ${andIf} ${FileExists} "$R2\\${APP_EXECUTABLE_FILENAME}"',
+    '    StrCpy $MangaFirstInstall "0"',
+    "  ${endIf}",
+    '  StrCpy $MangaHadStartMenu "0"',
+    `  \${if} \${FileExists} ${startMenu}`,
+    '    StrCpy $MangaHadStartMenu "1"',
+    "  ${endIf}",
+    '  StrCpy $MangaHadDesktop "0"',
+    `  \${if} \${FileExists} ${desktop}`,
+    '    StrCpy $MangaHadDesktop "1"',
+    "  ${endIf}",
+    "  ; The wizard's boxes: both on a first installation, otherwise as the shortcuts are.",
+    "  StrCpy $MangaWantStartMenu $MangaHadStartMenu",
+    "  StrCpy $MangaWantDesktop $MangaHadDesktop",
+    '  ${if} $MangaFirstInstall == "1"',
+    '    StrCpy $MangaWantStartMenu "1"',
+    '    StrCpy $MangaWantDesktop "1"',
+    "  ${endIf}",
+    "!macroend",
+    "",
+    "; In customInstall ($appExe is set): $R8 / $R9 say whether the Start menu / desktop shortcut should be there.",
+    "!macro MangaShortcutsInstall",
+    "  StrCpy $R8 $MangaWantStartMenu",
+    "  StrCpy $R9 $MangaWantDesktop",
+    "  ${if} ${Silent}",
+    "  ${orIf} ${isUpdated}",
+    "    ; No one to ask: keep what is there (put back what an earlier uninstaller removed), make both only on a first installation.",
+    "    StrCpy $R8 $MangaHadStartMenu",
+    "    StrCpy $R9 $MangaHadDesktop",
+    '    ${if} $MangaFirstInstall == "1"',
+    '      StrCpy $R8 "1"',
+    '      StrCpy $R9 "1"',
+    "    ${endIf}",
+    "    !ifdef MANGA_DESKTOP_ON_UPDATE",
+    '      StrCpy $R9 "1"',
+    "    !endif",
+    "  ${endIf}",
+    '  ${if} $R8 == "1"',
+    ...make(startMenu),
+    "  ${else}",
+    ...remove(startMenu),
+    "  ${endIf}",
+    '  ${if} $R9 == "1"',
+    ...make(desktop),
+    "  ${else}",
+    ...remove(desktop),
+    "  ${endIf}",
+    "  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'",
+    "!macroend",
+    "",
+    "; In customUnInstall: an uninstallation removes both; an over-installation or update (--updated) leaves them to the new version.",
+    "!macro MangaShortcutsUninstall",
+    "  ${ifNot} ${isUpdated}",
+    ...remove(startMenu),
+    ...remove(desktop),
+    "  ${endIf}",
+    "!macroend",
+  ];
+}
+
 /** The electron-builder configuration of one channel; `checkInstallerConfig` reads the same fields back. */
-export function installerConfig(channel, { output, include, version, testIdentity = false, icon = DEFAULT_ICON_ICO }) {
+export function installerConfig(channel, { output, include, version, testIdentity = false, icon = channelIcons(channel).ico }) {
   const meta = installMeta(channel, { testIdentity });
   return {
     appId: meta.appId,
@@ -344,8 +540,9 @@ export function installerConfig(channel, { output, include, version, testIdentit
       allowElevation: false,
       allowToChangeInstallationDirectory: true,
       deleteAppDataOnUninstall: false,
-      createDesktopShortcut: true,
-      createStartMenuShortcut: true,
+      // The include makes and removes both shortcuts (shortcutsNsis): electron-builder would make them on every installation.
+      createDesktopShortcut: false,
+      createStartMenuShortcut: false,
       runAfterFinish: true,
       language: INSTALLER_META.language,
       installerLanguages: [...INSTALLER_META.installerLanguages],
@@ -380,11 +577,21 @@ export function checkInstallerConfig(channel, config, includeText, { testIdentit
   if (config.extraMetadata?.homepage !== INSTALLER_META.homepage) problems.push("missing homepage");
   if (!config.win?.icon || !config.nsis?.installerIcon || !config.nsis?.uninstallerIcon || !config.nsis?.installerHeaderIcon) {
     problems.push("missing icon");
+  } else if (![config.win.icon, config.nsis.installerIcon, config.nsis.uninstallerIcon, config.nsis.installerHeaderIcon].every((icon) => icon === channelIcons(channel).ico)) {
+    problems.push("not the channel's icon");
   }
   if (config.nsis?.language !== INSTALLER_META.language || !Array.isArray(config.nsis?.installerLanguages) || !config.nsis.installerLanguages.includes("zh_CN")) {
     problems.push("not Simplified Chinese (zh_CN / 2052)");
   }
   if (config.nsis?.runAfterFinish !== true) problems.push("runAfterFinish disabled");
+  // The shortcuts follow the include's rules (shortcutsNsis), never electron-builder's, which would make both on every installation.
+  if (config.nsis?.createDesktopShortcut !== false || config.nsis?.createStartMenuShortcut !== false
+    || !shortcutsNsis(channel).every((line) => includeText.includes(line))
+    || !includeText.includes("  !insertmacro MangaShortcutsInit")
+    || !includeText.includes("  !insertmacro MangaShortcutsInstall")
+    || !includeText.includes("  !insertmacro MangaShortcutsUninstall")) {
+    problems.push("shortcuts not the include's");
+  }
   // "Open with" is the include's own registration (4.5), never electron-builder's file associations, which take over the extension's default.
   if (config.fileAssociations !== undefined || config.win?.fileAssociations !== undefined || config.nsis?.fileAssociations !== undefined) problems.push("fileAssociations is set");
   if (writesExtensionDefault(includeText)) problems.push("writes an extension's default value");
@@ -484,8 +691,25 @@ export async function buildInstaller({ appDir, channel, workDir, version, commit
   if (meta.executableName !== "manga" && fs.existsSync(path.join(staged, "manga.exe"))) {
     fs.renameSync(path.join(staged, "manga.exe"), targetExe);
   }
+  // The windows take their icon from resources/ (the package holds the release one), the executable and the installer from the channel's file.
+  const icons = channelIcons(channel);
+  fs.copyFileSync(icons.ico, path.join(resourcesDir, "icon.ico"));
+  fs.copyFileSync(icons.png, path.join(resourcesDir, "icon.png"));
+  // The app checks its resources against assets.manifest.json at every start (sizes; hashes in the package test), so the swapped icons get
+  // their own size and hash there; otherwise the installed development build would call itself incomplete.
+  const manifestPath = path.join(resourcesDir, "assets.manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    for (const asset of manifest.assets ?? []) {
+      if (asset.path !== "icon.ico" && asset.path !== "icon.png") continue;
+      const bytes = fs.readFileSync(path.join(resourcesDir, asset.path));
+      asset.bytes = bytes.length;
+      asset.sha256 = createHash("sha256").update(bytes).digest("hex");
+    }
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
   await applyExecutableMetadata(targetExe, {
-    iconPath: DEFAULT_ICON_ICO,
+    iconPath: icons.ico,
     productName: meta.productName,
     executableName: meta.executableName,
     version: effectiveVersion,

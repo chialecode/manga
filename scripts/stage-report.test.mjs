@@ -39,10 +39,10 @@ function creativeEntry(wanted) {
   const unverified = wanted.metric === "btUnverifiedPieces";
   // A figure that must be none (pieces left unchecked, whole-file reads made by an import) is none in the passing fixture.
   const none = unverified || targets[wanted.metric] === 0;
-  const entry = { kind: unverified ? "loopback-bt-download" : wanted.scale?.cards || wanted.scale?.nodes ? "electron-canvas" : wanted.scale?.comments || wanted.scale?.runs ? "electron-reader" : wanted.scale?.videos ? "service-video-import" : "service-semantic-search", scale: { ...wanted.scale }, raw: Array.from({ length: wanted.minSamples }, () => (none ? 0 : 1)) };
+  const entry = { kind: unverified ? "loopback-bt-download" : wanted.scale?.audioSeconds ? "electron-dictation" : wanted.scale?.terms ? "service-dictation-correction" : wanted.scale?.cards || wanted.scale?.nodes ? "electron-canvas" : wanted.scale?.comments || wanted.scale?.runs ? "electron-reader" : wanted.scale?.videos ? "service-video-import" : "service-semantic-search", scale: { ...wanted.scale }, raw: Array.from({ length: wanted.minSamples }, () => (none ? 0 : 1)) };
   if (wanted.engine) entry.engine = wanted.engine;
   if (unverified) entry.detail = { pieces: Math.ceil(wanted.scale.bytes / 262144), pieceLength: 262144, verifiedPieces: Math.ceil(wanted.scale.bytes / 262144), unverifiedPieces: 0, sha256Matches: true, stagingLeft: false, counts: { failed: 0, published: 1 } };
-  if (entry.kind === "electron-canvas" || entry.kind === "electron-reader") entry.detail = { ok: true };
+  if (entry.kind === "electron-canvas" || entry.kind === "electron-reader" || entry.kind === "electron-dictation") entry.detail = { ok: true };
   return entry;
 }
 
@@ -665,5 +665,26 @@ test("every test and smoke phase gate.json ties to optional samples is required 
       const definition = generator.split("\n").find((line) => line.includes(`define("${id}", {`));
       assert.ok(definition?.includes("optional: true"), `${id} is not an optional sample`);
     }
+  }
+});
+
+test("dictation window benchmark detail.ok and packaged speech assets are enforced by the gate report", () => {
+  {
+    const dir = passing();
+    const bench = read(dir, "bench.json");
+    bench.creative.dictationLocalReleaseToText.detail = { ok: false };
+    write(dir, "bench.json", bench);
+    const report = evaluate(dir);
+    assert.equal(report.engineeringReviewable, false);
+    assert.ok(report.errors.includes("bench.json: creative dictationLocalReleaseToText was not measured completely in the window"));
+  }
+  for (const asset of ["gtcrn-model", "gtcrn-license", "asr-host"]) {
+    const dir = passing();
+    const pack = read(dir, "package.json");
+    pack.assets[asset] = false;
+    write(dir, "package.json", pack);
+    const report = evaluate(dir);
+    assert.equal(report.engineeringReviewable, false);
+    assert.ok(report.errors.includes(`package.json: packaged asset ${asset} missing or not verified`));
   }
 });

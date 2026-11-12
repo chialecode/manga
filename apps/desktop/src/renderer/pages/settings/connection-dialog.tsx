@@ -227,6 +227,20 @@ export function ConnectionDialog(props: {
                 </select>
                 <span className="detail-muted">{t(`models.purposeHint.${form.purpose}` as MessageKey)}</span>
               </label>
+              {form.purpose === "transcription" && profile ? (
+                <label className="msettings-field">
+                  <span>{t("models.transcriptionInterface")}</span>
+                  <select
+                    data-testid="connection-transcription-interface"
+                    value={profile.transcriptionInterface}
+                    onChange={(event) => changeProfile({ ...profile, transcriptionInterface: event.target.value as ProfileForm["transcriptionInterface"] })}
+                  >
+                    <option value="audio_transcriptions">{t("models.transcriptionInterface.audio_transcriptions")}</option>
+                    <option value="chat_input_audio">{t("models.transcriptionInterface.chat_input_audio")}</option>
+                  </select>
+                  <span className="detail-muted">{t("models.transcriptionInterfaceHint")}</span>
+                </label>
+              ) : null}
               <label className="msettings-field">
                 <span>{t("settings.connectionRuntime")}</span>
                 <select data-testid="connection-runtime" value={form.runtime} onChange={(event) => change({ runtime: event.target.value })}>

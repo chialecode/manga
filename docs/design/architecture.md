@@ -148,7 +148,15 @@ Electron 的上下文隔离、渲染沙箱和 IPC 校验是宿主基础约束。
 - **`.vite/build/full-main.cjs`（`apps/desktop/src/main/index.ts`）：** 完整工作区宿主，装配 `MangaProductApp`、SQLite 存储、模型与 Agent、插件子进程及自动更新服务。
 - **`.vite/build/light-main.cjs`（`apps/desktop/src/main/light/main.ts`）+ `preload-light.cjs` + `light_window`：** 独立轻量宿主与渲染包。轻量主进程在调用 `app.requestSingleInstanceLock()` 前先把 `userData` 与 `sessionData` 设到 `<应用数据根>\light\runtime`，因此拥有独立于完整应用的单实例锁：完整应用已打开时轻量打开仍走轻量进程，连续打开多个文件复用同一个轻量进程并关闭最后一个窗口即退出。
 - **`@manga/app-core/light`（`packages/app-core/src/light/index.ts`）：** 供轻量主进程调用的媒体子入口，复用 `media/`（FFmpeg 定位与探测、媒体句柄与 `manga-media:` 范围响应、任务队列、ZIP 池与安全限制、字幕回退字体）、`video/`（播放决策与音字幕轨、同目录外挂字幕、关键帧索引、受预算约束的播放副本 `JsonPlayCopyStore`）、`comic/comicinfo.ts` 与自然排序，只暴露视频播放与漫画阅读所需的 10 条媒体命令（`LIGHT_COMMANDS`）。
-- **静态与打包双重边界守护：** `scripts/check-deps.mjs` 的 `checkLightClosure` 从 `bootstrap.ts`、`src/main/light/`、`src/preload/preload-light.ts`、`src/light/` 与 `packages/app-core/src/light/` 做传递导入闭包检查，打包烟测的 `light-boundary` 阶段再扫描 `app.asar` 内的 `main.cjs`、`light-main.cjs`、`preload-light.cjs` 与 `light_window` 产物，禁止出现 `better-sqlite3`、`drizzle-orm`、`@manga/storage-drizzle`、`MangaProductApp`、插件、Agent、`electron-updater`、资料库位置管理、弹幕、录音、笔记、创作工作区、语义检索或获取模块。
+- **静态与打包双重边界守护：** `scripts/check-deps.mjs` 的 `checkLightClosure` 从 `bootstrap.ts`、`src/main/light/`、`src/preload/preload-light.ts`、`src/light/` 与 `packages/app-core/src/light/` 做传递导入闭包检查，打包烟测的 `light-boundary` 阶段再扫描 `app.asar` 内的 `main.cjs`、`light-main.cjs`、`preload-light.cjs` 与 `light_window` 产物，禁止出现 `better-sqlite3`、`drizzle-orm`、`@manga/storage-drizzle`、`MangaProductApp`、插件、Agent、`electron-updater`、资料库位置管理、弹幕、录音、笔记、创作工作区、语义检索、`sherpa-onnx` 或获取模块。
+
+### 4.5 本地语音推理子进程边界（A-131）
+
+本地离线语音识别与 GTCRN 降噪由独立的 worker 构建产物承载，与主进程及轻量进程严格隔离：
+
+- **`resources/asr-host.cjs`（`apps/desktop/src/main/asr-host.ts`）：** 经 `bundleWorker` 单独打包并登记在 `bundled-assets.ts` 的 `REQUIRED_ASSETS`。完整应用主进程通过 `AsrService`（`apps/desktop/src/main/asr-service.ts`）按需调用 Electron `utilityProcess.fork`（`serviceName: "MANGA speech"`）拉起子进程，并以 `MessagePortMain` 传递类型化协议消息（`apps/desktop/src/main/asr-protocol.ts`）。
+- **原生模块解包与 V8 内存笼兼容：** `sherpa-onnx-node` 与 `sherpa-onnx-win-x64`（2.0.1，Apache-2.0）随包解包在 `app.asar.unpacked` 下，仅由 `asr-host.cjs` 加载；所有向 JavaScript 返回音频缓冲的原生接口（如 `OfflineSpeechDenoiser.run`）一律传入 `enableExternalBuffer: false`，防止触发 Electron V8 内存笼（Memory Cage）崩溃。随包小型降噪模型存于 `resources/gtcrn/gtcrn_simple.onnx`（MIT），大型 ASR 识别模型按需存放在 `<应用数据根>\models\asr\<modelId>\`，绝不打入安装包。
+- **故障边界、空闲释放与闭包守护：** `asr-host` 子进程不持有数据库连接、不访问凭据、不发起网络请求，内部按串行队列逐条处理识别与降噪请求；闲置超时（默认 10 分钟，可在 1—120 分钟配置）自动卸载模型并退出子进程释放内存；若原生层崩溃，主进程与窗口不受影响，下一次请求自动拉起新子进程（60 秒内连续崩溃 2 次则将该模型标为 `load_failed`，停止反复拉起）。`scripts/check-deps.mjs` 静态禁止 `packages/app-core`、主进程入口与轻量入口导入 `sherpa-onnx*` 或 `asr-host.ts`，打包烟测 `dictation-boundary` 再核验 `main.cjs`、`full-main.cjs` 与 `light-main.cjs` 均不含 `sherpa-onnx` 引用。
 
 ## 5. 数据流与事务
 

@@ -29,6 +29,7 @@ MANGA 取自 **Manga、Anime、Novel、Game、Agent**。它把阅读观看、随
 - **读小说与漫画**：TXT、EPUB、MOBI、PDF 与图片目录、CBZ；翻页或滚动、目录、查找与书签、双页与方向、以指针为中心缩放；框选区域可以直接引用到对话里或存为截图。
 - **看动漫**：原生播放加 FFmpeg 探测与重封装；ASS 特效字幕与按国标版式排的文本字幕、双语与次字幕；逐帧与关键帧操作；弹幕匹配、过滤与偏移。
 - **随手记录**：笔记、录音与转写，每条记录都能回到原作的页码或时间点；剧透保护按已读位置生效。
+- **应用内听写与离线语音**：在对话栏、笔记、文稿、白板、思维导图与搜索框按住右 `Alt` 说话（或双击锁定免提），自动裁剪静默、结合当前作品与 Bangumi 角色/声优词库做同音近音替换并可选轻度润色，支持一步恢复原文与从修改中学词；可按需下载本地离线语音模型（独立子进程运行，音频不出本机）或接入兼容的外部转录接口。
 - **资源库与元数据**：资源库位置后台扫描，按作品整理；Bangumi 元数据手动匹配、差异预览与字段锁定；文件移走后用户内容保留，再出现时自动重新关联。
 - **创作**：项目、白板、思维导图、文稿及其版本与建议，彼此可以互嵌；无转码粗剪（关键帧对齐、导出前说明实际切点）；可选的本地语义检索。
 - **内置 Agent**：自带模型密钥（BYOK），两套运行时可切换；按项目范围读取上下文；删除、重命名、导出、粗剪编辑这类操作只由 Agent 提出，在对话里经你确认后才执行。
@@ -48,7 +49,7 @@ pnpm dev
 ### 安装、双通道并存与自动更新
 
 - **按用户安装、双通道并存**：Windows 安装程序不需要管理员权限，默认装到 `%LOCALAPPDATA%\Programs\manga`（开发版为 `manga-dev`），安装时可以改目录；正式版（`MANGA`）与开发版（`MANGA Dev`）拥有各自的应用 ID、快捷方式、安装目录与数据目录，可以在同一台机器上同时安装、互不干扰；卸载只删程序与快捷方式，保留应用数据与个人文件。
-- **开发版本地自动更新**：本机安装了开发版（`MANGA Dev`）后，每次运行 `node scripts/stage.mjs package` 或 `node scripts/stage.mjs gate` 通过时，会自动执行 `stage install-dev`：如果开发版或其轻量窗口正在运行，先请它们保存工作区、草稿与播放位置并退出，静默安装新打出的开发版（版本号形如 `0.1.x-dev.<UTC 时间>`），再自动重新打开；正式版完全不受影响（设 `MANGA_DEV_AUTO_INSTALL=0` 可关闭）。
+- **开发版本地自动更新**：本机安装了开发版（`MANGA Dev`）后，每次需要你人工检查时（阶段交付、审查修复或按反馈修复后请你复查），Agent 自动执行 `node scripts/stage.mjs install-dev`，不用你自己装（只为自动验证的 `package`、`gate` 不更新本机开发版）：如果开发版或其轻量窗口正在运行，先请它们保存工作区、草稿与播放位置并退出，静默安装新打出的开发版（版本号形如 `0.1.x-dev.<UTC 时间>`），再自动重新打开；正式版完全不受影响（设 `MANGA_DEV_AUTO_INSTALL=0` 可关闭）。
 - **正式版每周发布、联网更新与失败退路**：GitHub Actions 每周一自动检查上次发布以来是否有新的 PR 合并，预检随包工具链接可用后运行检查、打包、安装与升级演练，通过后用独立的 Ed25519 私钥签名并发布 `v0.1.x` 到 GitHub Releases。已安装的正式版在后台按块图只下载变化的部分，经内置公钥校验通过后在顶部一行右侧提示“新版本已就绪 · 重启以更新”（也可以在下次退出应用时自动安装）；若更新后连续两次启动未完成，第三次启动会提供校验过哈希的“回到上一版”退路并保护资料库备份。可在“设置 › 更新”查看版本、手动检查、取消已跳过版本或关闭自动检查。
 
 ### 用 MANGA 打开文件
@@ -62,8 +63,9 @@ pnpm dev
 | --- | --- |
 | `pnpm dev` | 启动开发版桌面应用 |
 | `node scripts/verify.mjs` | 离线统一检查：文档与公开内容、工作流配置、依赖边界、类型检查、未使用代码、Vitest；开发者、pre-push hook 与 CI 共用 |
-| `node scripts/stage.mjs gate` | 阶段门禁：依次运行测试、打包烟测、安装包、性能基准与报告，跳过结果仍有效的步骤，通过后自动更新本机开发版 |
-| `node scripts/stage.mjs install-dev` | 单独把刚打出的开发版安装包更新到本机已装的开发版 |
+| `node scripts/quick-gate.mjs` | 日常的快速门禁（约 5 分钟内）：检查、与改动相关的测试、`--phases` 点名的打包烟测阶段 |
+| `node scripts/stage.mjs gate` | 整套阶段门禁（B 交付整个阶段时跑一次）：依次运行测试、打包烟测、安装包、性能基准与报告，跳过结果仍有效的步骤 |
+| `node scripts/stage.mjs install-dev` | 把刚打出的开发版安装包更新到本机已装的开发版；每次需要用户人工检查时由 Agent 执行 |
 | `node scripts/stage.mjs release` | 在门禁通过的 `main` 上生成正式版发布产物并完成升级演练 |
 
 打包输出在 `dist/desktop/packages`，构建资产与缓存都是生成物。环境要求与检查边界见[质量门禁](docs/dev-rules/quality-gates.md)。
@@ -83,7 +85,7 @@ pnpm dev
 
 ## 技术栈
 
-Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockview（标签页与分屏）、Tiptap / CodeMirror、SQLite（better-sqlite3 + Drizzle ORM，FTS5，可选 sqlite-vec）、Zod 4、PDF.js、FFmpeg（LGPL）+ JASSUB、Vitest。选型理由与使用边界见 [ADR-0007](docs/decisions/0007-technology-stack.md)，当前版本见[执行状态](docs/delivery/status.md)。
+Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockview（标签页与分屏）、Tiptap / CodeMirror、SQLite（better-sqlite3 + Drizzle ORM，FTS5，可选 sqlite-vec）、Zod 4、PDF.js、FFmpeg（LGPL）+ JASSUB、sherpa-onnx（独立子进程的本地离线语音识别与 GTCRN 增强）、Vitest。选型理由与使用边界见 [ADR-0007](docs/decisions/0007-technology-stack.md)，当前版本见[执行状态](docs/delivery/status.md)。
 
 ## 设计原则
 
@@ -118,4 +120,4 @@ Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockv
 
 安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要公开披露可利用细节、真实密钥或私人内容。
 
-项目采用 [Apache License 2.0](LICENSE)。随包的 FFmpeg（LGPL）、JASSUB、Silero VAD 等第三方组件按各自许可证附带声明，项目许可证不改变它们的义务。
+项目采用 [Apache License 2.0](LICENSE)。随包的 FFmpeg（LGPL）、JASSUB、Silero VAD、GTCRN 等第三方组件按各自许可证附带声明，项目许可证不改变它们的义务。

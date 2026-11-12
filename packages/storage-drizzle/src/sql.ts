@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 15;
+export const PRODUCT_SCHEMA_VERSION = 16;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -1450,4 +1450,84 @@ CREATE VIEW IF NOT EXISTS progress_furthest AS
   SELECT p.* FROM progress p WHERE p.rowid = (
     SELECT q.rowid FROM progress q WHERE q.resource_id = p.resource_id AND q.resource_revision_id = p.resource_revision_id
     ORDER BY (q.completion_state = 'completed') DESC, q.percent DESC, q.last_interaction_at DESC, q.context_id LIMIT 1);
+`;
+
+/**
+ * v16: voice dictation dictionary aliases, learn-from-edits suggestions, 30-day dictation history, and cached Bangumi character/person details.
+ * `dictation_history` stays out of backups, library packages, project packages, FTS, and Agent context.
+ */
+export const V16_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS dictionary_aliases (
+  id TEXT PRIMARY KEY,
+  term_id TEXT NOT NULL REFERENCES dictionary_terms(id) ON DELETE CASCADE,
+  alias TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'alias',
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dictionary_aliases_term_alias_kind
+  ON dictionary_aliases(term_id, alias, kind);
+CREATE INDEX IF NOT EXISTS idx_dictionary_aliases_term
+  ON dictionary_aliases(term_id);
+
+CREATE TABLE IF NOT EXISTS dictionary_suggestions (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  work_id TEXT REFERENCES works(id) ON DELETE CASCADE,
+  term TEXT NOT NULL,
+  heard TEXT NOT NULL,
+  score REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dictionary_suggestions_pair
+  ON dictionary_suggestions(scope, IFNULL(work_id, ''), term, heard);
+
+CREATE TABLE IF NOT EXISTS dictation_history (
+  id TEXT PRIMARY KEY,
+  work_id TEXT REFERENCES works(id) ON DELETE SET NULL,
+  engine_kind TEXT NOT NULL,
+  engine_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  polish_mode TEXT NOT NULL,
+  raw_text TEXT NOT NULL,
+  corrected_text TEXT NOT NULL,
+  final_text TEXT NOT NULL,
+  fallback_reason TEXT,
+  timings_json TEXT NOT NULL DEFAULT '{}',
+  replacements_json TEXT NOT NULL DEFAULT '[]',
+  audio_rel_path TEXT,
+  audio_expires_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dictation_history_created
+  ON dictation_history(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS bangumi_details (
+  kind TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  infobox_json TEXT,
+  payload_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (kind, external_id)
+);
+`;
+
+export const V16_BACKFILL_SQL = `
+UPDATE dictionary_terms
+SET category = CASE
+  WHEN source LIKE 'metadata:%:character:%' THEN 'character'
+  WHEN source LIKE 'metadata:%:actor:%' OR source LIKE 'metadata:%:person:%' THEN 'actor'
+  WHEN source LIKE 'metadata:%:work:%' THEN 'work'
+  WHEN source = 'manual' THEN 'term'
+  ELSE 'other'
+END
+WHERE category = 'other';
+
+INSERT OR IGNORE INTO dictionary_aliases (id, term_id, alias, kind, source, created_at)
+SELECT 'alias_mig_' || id, id, trim(heard), 'heard', source, created_at
+FROM dictionary_terms
+WHERE heard IS NOT NULL AND trim(heard) <> '';
 `;

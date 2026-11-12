@@ -6,7 +6,7 @@ import esbuild from "esbuild";
 import { danmakuDefine } from "./danmaku-define.ts";
 
 /** Native and runtime-resolved modules stay outside the bundles; the package copies them next to the app (see forge.config.ts). */
-const NATIVE = ["better-sqlite3", "sharp", "@napi-rs/canvas", "electron-updater"];
+const NATIVE = ["better-sqlite3", "sharp", "@napi-rs/canvas", "electron-updater", "sherpa-onnx-node"];
 const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
 
 /** A worker that runs on its own thread or process is one self-contained file, built here next to the main bundle. */
@@ -20,7 +20,7 @@ async function bundleWorker(entry: string, name: string): Promise<void> {
     platform: "node",
     format: "cjs",
     sourcemap: true,
-    external: [...NATIVE, "@napi-rs/canvas-*", "electron"],
+    external: [...NATIVE, "@napi-rs/canvas-*", "sherpa-onnx-*", "electron"],
   });
   if (!existsSync(outfile)) throw new Error(`${name} was not emitted`);
 }
@@ -38,7 +38,7 @@ export const mainBuild = {
       fileName: () => "full-main.cjs",
     },
     rollupOptions: {
-      external: ["electron", ...NATIVE, /^@napi-rs\/canvas/, ...nodeBuiltins],
+      external: ["electron", ...NATIVE, /^@napi-rs\/canvas/, /^sherpa-onnx/, ...nodeBuiltins],
       // The main process is one file: a module the entry and a lazily loaded part both use (the credentials among them) must not be split into a chunk of its own.
       output: { inlineDynamicImports: true },
     },
@@ -56,6 +56,8 @@ export default defineConfig({
         await bundleWorker("src/main/parse-worker.ts", "parse-worker.cjs");
         // The voice filter's worker thread; it loads the model and the WebAssembly runtime by path at run time.
         await bundleWorker("../../packages/app-core/src/voice/vad-worker.ts", "vad-worker.cjs");
+        // The local speech inference utilityProcess entry; it loads sherpa-onnx-node outside the main bundle.
+        await bundleWorker("src/main/asr-host.ts", "asr-host.cjs");
       },
     },
   ],

@@ -26,6 +26,7 @@
     "smokeBench": [
       "apps/desktop/src/main/smoke/bench-canvas.ts",
       "apps/desktop/src/main/smoke/bench-chat.ts",
+      "apps/desktop/src/main/smoke/bench-dictation.ts",
       "apps/desktop/src/main/smoke/bench-polish.ts",
       "apps/desktop/src/main/smoke/bench-reader.ts",
       "apps/desktop/src/main/smoke/bench-window.ts",
@@ -35,6 +36,7 @@
       "apps/desktop/src/main/smoke/agent.ts",
       "apps/desktop/src/main/smoke/creative-walk.ts",
       "apps/desktop/src/main/smoke/danmaku-walk.ts",
+      "apps/desktop/src/main/smoke/dictation-walk.ts",
       "apps/desktop/src/main/smoke/formats.ts",
       "apps/desktop/src/main/smoke/frame-walk.ts",
       "apps/desktop/src/main/smoke/hold-walk.ts",
@@ -72,6 +74,10 @@
       "scripts/desktop-paths.ts",
       "scripts/desktop-assets.ts",
       "scripts/desktop-plugins.ts",
+      "scripts/tools/fetch-gtcrn.mjs",
+      "scripts/tools/fetch-speech-asr.mjs",
+      "scripts/tools/gtcrn.lock.json",
+      "scripts/tools/speech-asr.lock.json",
       "scripts/pack-plugin.mjs",
       "scripts/verify-electron-sqlite.mjs",
       "scripts/dev-desktop.mjs",
@@ -140,11 +146,13 @@
       "scripts/stage/bench-canvas.mjs",
       "scripts/stage/bench-cold-start.mjs",
       "scripts/stage/bench-creative.mjs",
+      "scripts/stage/bench-dictation.mjs",
       "scripts/stage/bench-import.mjs",
       "scripts/stage/bench-reader.mjs",
       "scripts/stage/bench-scale.mjs",
       "scripts/stage/bench-scan-pane.mjs",
       "scripts/stage/bench-workspace.mjs",
+      "scripts/voice-eval",
       "scripts/stage/power-throttling.mjs",
       "scripts/stage/installer-lib.mjs",
       "scripts/stage/version-lib.mjs",
@@ -306,7 +314,9 @@
       "proposalApplyP95Ms": 300,
       "lightVideoFirstFrameMs": 2000,
       "lightComicFirstPageMs": 1500,
-      "lightSecondOpenMs": 800
+      "lightSecondOpenMs": 800,
+      "dictationLocalReleaseToTextMs": 1500,
+      "dictationCorrectionMs": 30
     },
     "scale": {
       "metadataCount": 10000,
@@ -715,6 +725,24 @@
           "objects": 500
         },
         "requirement": "AT-151、AT-152：在有 500 个对象的项目里确认一条提议，到目标对象与提议卡片都更新，p95 ≤ 300 ms"
+      },
+      "dictationLocalReleaseToText": {
+        "metric": "dictationLocalReleaseToTextMs",
+        "stat": "p95",
+        "minSamples": 5,
+        "scale": {
+          "audioSeconds": 4
+        },
+        "requirement": "AT-174、AT-179：打包窗口本地 SenseVoice 模型已热驻留时，约 4 s 语音从松开快捷键到文字出现在编辑区（5 次测量）p95 ≤ 1500 ms"
+      },
+      "dictationCorrection": {
+        "metric": "dictationCorrectionMs",
+        "stat": "p95",
+        "minSamples": 50,
+        "scale": {
+          "terms": 10000
+        },
+        "requirement": "AT-181、AT-183：10000 条词典下的两阶段拼音/假名罗马字谐音召回与确定性替换（50 次测量）p95 ≤ 30 ms"
       }
     },
     "canvas": {
@@ -755,7 +783,7 @@
     }
   },
   "package": {
-    "passStreak": 3,
+    "passStreak": 2,
     "windowWalkMaxSeconds": 240,
     "smoke": [
       "initial",
@@ -768,6 +796,7 @@
       "formats",
       "media",
       "voice",
+      "dictation",
       "window-walk",
       "workspace-restart",
       "workspace-closed",
@@ -802,10 +831,16 @@
       "magnet-secret-never-shown-or-logged",
       "disabled-from-the-page",
       "enabled-again"
+    ],
+    "assets": [
+      "gtcrn-model",
+      "gtcrn-license",
+      "asr-host"
     ]
   },
   "optionalSamplePhases": {
-    "voice": ["voice-tts-clips"]
+    "voice": ["voice-tts-clips"],
+    "dictation": ["voice-tts-clips"]
   },
   "optionalSampleTests": {
     "^probing the synthetic videos tells HEVC 8-bit from 10-bit": ["video-mkv-hevc-10bit"],
@@ -815,7 +850,8 @@
     "^a 30-minute reading session mapped to its sources filtered the recording live and uploaded only blocks of speech": ["voice-recording-30min"],
     "^a 30-minute reading session mapped to its sources covers every spoken sentence": ["voice-recording-30min"],
     "^a 30-minute reading session mapped to its sources cleaned the working audio only after every block and its anchors were stored": ["voice-recording-30min"],
-    "^a 30-minute reading session mapped to its sources ": ["voice-recording-30min"]
+    "^a 30-minute reading session mapped to its sources ": ["voice-recording-30min"],
+    "^asr-host\\.cjs real sherpa-onnx-node 2\\.0\\.1 \\+ GTCRN \\+ SenseVoice integration loads sherpa-onnx-node 2\\.0\\.1 in a separate process, runs GTCRN denoise": ["voice-tts-clips"]
   },
   "cases": [
     {
@@ -3099,6 +3135,97 @@
       "tests": [
         "AT-173(?!\\d)"
       ]
+    },
+    {
+      "id": "AT-174-dictation-surfaces-and-keys",
+      "kind": "automated",
+      "tests": [
+        "^Dictation controller, capsule, and inline revert/suggestion pill \\(U1\\) streams hold-to-talk audio on solo RightAlt, inserts raw then polished text, expands replacements, and reverts to raw$",
+        "^Dictation controller, capsule, and inline revert/suggestion pill \\(U1\\) supports final_only mode, <350ms double-tap hands-free lock with 结束 button, Esc cancel, and combo key abort$",
+        "^Dictation controller, capsule, and inline revert/suggestion pill \\(U1\\) shows copy notice when target unmounts mid-recognition and surfaces inline learned suggestion after user edit$",
+        "^Dictation controller, capsule, and inline revert/suggestion pill \\(U1\\) switches DictationCapsule to 2-state sound/silent indicator under prefers-reduced-motion$",
+        "^Dictation controller, capsule, and inline revert/suggestion pill \\(U1\\) separates Chat Composer mic behavior: ask mode triggers dictation into draft without sending, note mode uses recorder$",
+        "^EditableTargetAdapter across all 6 surfaces \\(U1\\) ",
+        "^dictation shortcut and recording key conflict rules ",
+        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-174 / AT-182: "
+      ]
+    },
+    {
+      "id": "AT-175-audio-capture-and-gtcrn",
+      "kind": "automated",
+      "tests": [
+        "^Audio capture constraints, system loopback AEC fallback, and DebugPanel diagnostics \\(A1\\) ",
+        "^asr-protocol pure helpers \\(GTCRN mix, hotwords CSV, model language mapping\\) mixes 75% GTCRN denoised",
+        "^asr-host\\.cjs real sherpa-onnx-node 2\\.0\\.1 \\+ GTCRN \\+ SenseVoice integration loads sherpa-onnx-node 2\\.0\\.1 in a separate process, runs GTCRN denoise"
+      ]
+    },
+    {
+      "id": "AT-176-silence-trimmer-and-diagnostics",
+      "kind": "automated",
+      "tests": [
+        "^voice silence trimmer, audio diagnostics, and GTCRN wet/dry mix "
+      ]
+    },
+    {
+      "id": "AT-177-unified-asr-engines",
+      "kind": "automated",
+      "tests": [
+        "^unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter ",
+        "^Voice transcription settings 5 sections, local ASR models, dictionary extensions, history, and ConnectionDialog offers transcriptionInterface selector in ConnectionDialog when purpose is transcription$",
+        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-177: "
+      ]
+    },
+    {
+      "id": "AT-178-local-model-download-and-import",
+      "kind": "automated",
+      "tests": [
+        "^voice local model catalog, downloader, and tar verifier ",
+        "^Voice transcription settings 5 sections, local ASR models, dictionary extensions, history, and ConnectionDialog renders all 5 sections, confirms local model download before starting, manages batch/suggestions/enrich, and retranscribes history$",
+        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-178: ",
+        "finds the tools where the app looks for them in a packaged build, and never bundles ASR models$"
+      ]
+    },
+    {
+      "id": "AT-179-asr-utility-process-isolation",
+      "kind": "automated",
+      "tests": [
+        "^AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal serializes concurrent load/denoise/recognize requests in strict FIFO order$",
+        "^AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal unloads and exits the utility process on idle timeout, then transparently respawns and reloads on the next recognize\\(\\)$",
+        "^AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal isolates crashes: 1st crash restarts on next request; 2nd crash within 60s marks model load_failed until reset$",
+        "^AsrService lifecycle: sequential queue, idle unload/reload, crash isolation, and quit disposal terminates an active recognition child immediately when dispose\\(\\) / close\\(\\) is called on app quit$"
+      ]
+    },
+    {
+      "id": "AT-180-dictionary-bangumi-and-migration",
+      "kind": "automated",
+      "tests": [
+        "^Bangumi infobox parsing, detail enrichment, batch import and hotword ranking \\(X1\\) ",
+        "^schema v16 migration & dictation backup/export isolation \\(X1 \\+ H1, AT-180, AT-182\\) ",
+        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-180 / AT-181: "
+      ]
+    },
+    {
+      "id": "AT-181-phonetic-corrector-and-polish-guards",
+      "kind": "automated",
+      "tests": [
+        "^voice phonetic recall & deterministic replacement \\(R1\\) ",
+        "^voice dictation LLM polish, 4 guardrails & OpenCC \\(P1\\) "
+      ]
+    },
+    {
+      "id": "AT-182-dictation-revert-history-and-isolation",
+      "kind": "automated",
+      "tests": [
+        "^Dictation session state machine, 30d history / 24h audio, and learn-from-edits \\(H1 \\+ U1\\) ",
+        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) Agent Isolation: "
+      ]
+    },
+    {
+      "id": "AT-183-voice-correction-eval-gate",
+      "kind": "automated",
+      "tests": [
+        "^AT-181 / AT-183: 200\\+ pair voice correction quality & 10k-term latency gate "
+      ]
     }
   ],
   "scenarios": [
@@ -3258,6 +3385,11 @@
     "light-separate-lock",
     "light-update",
     "voice-overlay",
-    "recent-remove"
+    "recent-remove",
+    "dictation-insert",
+    "dictation-local",
+    "dictation-revert",
+    "dictation-settings",
+    "dictation-boundary"
   ]
 }

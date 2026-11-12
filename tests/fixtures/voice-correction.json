@@ -1,0 +1,3728 @@
+{
+  "schema": 1,
+  "description": "250+ pair voice phonetic correction benchmark harvested from real local sherpa-onnx ASR outputs (sense-voice-funasr-nano-int8, qwen3-asr-0.6B-int8 without hotwords, funasr-nano-int8 without hotwords across clean/fan10db/speech10db) plus systematic Mandarin/Japanese-transliteration phonetic confusions and Group C homophone traps. 100% fictional ACG entities.",
+  "works": [
+    {
+      "id": "work-fogsea-clocktower",
+      "title": "雾海钟塔的星图师",
+      "mediaType": "anime"
+    },
+    {
+      "id": "work-tide-atelier",
+      "title": "潮汐工坊与玻璃鲸",
+      "mediaType": "anime"
+    },
+    {
+      "id": "work-cinder-rail",
+      "title": "灰烬铁道上的夜行灯",
+      "mediaType": "novel"
+    }
+  ],
+  "dictionary": [
+    {
+      "id": "dict-001",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "雾海钟塔的星图师",
+      "category": "work",
+      "source": "metadata:bangumi:work:900101",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "雾海钟塔",
+          "kind": "alias"
+        },
+        {
+          "alias": "きりうみしょうとうのせいずし",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kiriumi Shoutou no Seizushi",
+          "kind": "romaji"
+        },
+        {
+          "alias": "Starographer of Fogsea",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-002",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "星渚澪音",
+      "category": "character",
+      "source": "metadata:bangumi:character:910101",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "星渚 澪音",
+          "kind": "alias"
+        },
+        {
+          "alias": "ほしなぎ みおね",
+          "kind": "kana"
+        },
+        {
+          "alias": "Hoshinagi Mione",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": [
+        "新住户领音"
+      ]
+    },
+    {
+      "id": "dict-003",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "白羽澄夏",
+      "category": "character",
+      "source": "metadata:bangumi:character:910102",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "白羽 澄夏",
+          "kind": "alias"
+        },
+        {
+          "alias": "しらはね すみか",
+          "kind": "kana"
+        },
+        {
+          "alias": "Shirahane Sumika",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": [
+        "白雨初下"
+      ]
+    },
+    {
+      "id": "dict-004",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "镜原朔夜",
+      "category": "character",
+      "source": "metadata:bangumi:character:910103",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "鏡原 朔夜",
+          "kind": "alias"
+        },
+        {
+          "alias": "かがみはら さくや",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kagamihara Sakuya",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-005",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "风庭凛太郎",
+      "category": "character",
+      "source": "metadata:bangumi:character:910104",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "風庭 凛太郎",
+          "kind": "alias"
+        },
+        {
+          "alias": "かぜにわ りんたろう",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kazeniwa Rintarou",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-006",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "月坛祈织",
+      "category": "character",
+      "source": "metadata:bangumi:character:910105",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "月壇 祈織",
+          "kind": "alias"
+        },
+        {
+          "alias": "つきだん いおり",
+          "kind": "kana"
+        },
+        {
+          "alias": "Tsukidan Iori",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": [
+        "乐团旗帜"
+      ]
+    },
+    {
+      "id": "dict-007",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "翠川弦叶",
+      "category": "character",
+      "source": "metadata:bangumi:character:910106",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "翠川 弦葉",
+          "kind": "alias"
+        },
+        {
+          "alias": "みどりかわ げんよう",
+          "kind": "kana"
+        },
+        {
+          "alias": "Midorikawa Genyou",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-008",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "青羽纱奈",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920101",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "青羽 紗奈",
+          "kind": "alias"
+        },
+        {
+          "alias": "あおばね さな",
+          "kind": "kana"
+        },
+        {
+          "alias": "Aobane Sana",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-009",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "灯谷慎一",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920102",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "灯谷 慎一",
+          "kind": "alias"
+        },
+        {
+          "alias": "ひだに しんいち",
+          "kind": "kana"
+        },
+        {
+          "alias": "Hidani Shinichi",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-010",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "雪庭遥香",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920103",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "雪庭 遥香",
+          "kind": "alias"
+        },
+        {
+          "alias": "ゆきにわ はるか",
+          "kind": "kana"
+        },
+        {
+          "alias": "Yukiniwa Haruka",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-011",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "星轨罗盘",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "せいきらしんばん",
+          "kind": "kana"
+        },
+        {
+          "alias": "Seiki Rashinban",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-012",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "白银钟摆",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "はくぎんふりこ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Hakugin Furiko",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-013",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "ChronoWeave",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "时织核心",
+          "kind": "alias"
+        },
+        {
+          "alias": "クロノウィーブ",
+          "kind": "kana"
+        },
+        {
+          "alias": "ChronoWeave",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-014",
+      "scope": "work",
+      "workId": "work-fogsea-clocktower",
+      "term": "AetherLink",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "以太链环",
+          "kind": "alias"
+        },
+        {
+          "alias": "エーテルリンク",
+          "kind": "kana"
+        },
+        {
+          "alias": "AetherLink",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-015",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "潮汐工坊与玻璃鲸",
+      "category": "work",
+      "source": "metadata:bangumi:work:900102",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "潮汐工坊",
+          "kind": "alias"
+        },
+        {
+          "alias": "ちょうせきこうぼうとがらすくじら",
+          "kind": "kana"
+        },
+        {
+          "alias": "Chouseki Koubou to Garasu Kujira",
+          "kind": "romaji"
+        },
+        {
+          "alias": "Tide Atelier and the Glass Whale",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-016",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "汐庭梨沙",
+      "category": "character",
+      "source": "metadata:bangumi:character:910201",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "汐庭 梨沙",
+          "kind": "alias"
+        },
+        {
+          "alias": "しおにわ りさ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Shioniwa Risa",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-017",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "苍院雫月",
+      "category": "character",
+      "source": "metadata:bangumi:character:910202",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "蒼院 雫月",
+          "kind": "alias"
+        },
+        {
+          "alias": "そういん しずき",
+          "kind": "kana"
+        },
+        {
+          "alias": "Souin Shizuki",
+          "kind": "romaji"
+        },
+        {
+          "alias": "苍院霞月",
+          "kind": "heard"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-018",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "云阶栞里",
+      "category": "character",
+      "source": "metadata:bangumi:character:910203",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "雲階 栞里",
+          "kind": "alias"
+        },
+        {
+          "alias": "くもかい しおり",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kumokai Shiori",
+          "kind": "romaji"
+        },
+        {
+          "alias": "云阶千里",
+          "kind": "heard"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-019",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "霜坛泽人",
+      "category": "character",
+      "source": "metadata:bangumi:character:910204",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "霜壇 澤人",
+          "kind": "alias"
+        },
+        {
+          "alias": "しもだん たくと",
+          "kind": "kana"
+        },
+        {
+          "alias": "Shimodan Takuto",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-020",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "绯庭千寻",
+      "category": "character",
+      "source": "metadata:bangumi:character:910205",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "緋庭 千尋",
+          "kind": "alias"
+        },
+        {
+          "alias": "ひにわ ちひろ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Hiniwa Chihiro",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-021",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "琉璃宫司",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920201",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "琉璃宮 司",
+          "kind": "alias"
+        },
+        {
+          "alias": "るりみや つかさ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Rurimiya Tsukasa",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-022",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "银杏坂玲奈",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920202",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "銀杏坂 玲奈",
+          "kind": "alias"
+        },
+        {
+          "alias": "いちょうざか れいな",
+          "kind": "kana"
+        },
+        {
+          "alias": "Ichouzaka Reina",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-023",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "雾坛诚二",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920203",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "霧壇 誠二",
+          "kind": "alias"
+        },
+        {
+          "alias": "きりだん せいじ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kiridan Seiji",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-024",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "潮鸣结晶",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "しおなりけっしょう",
+          "kind": "kana"
+        },
+        {
+          "alias": "Shionari Kesshou",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-025",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "深海回廊",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "しんかいかいろう",
+          "kind": "kana"
+        },
+        {
+          "alias": "Shinkai Kairou",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-026",
+      "scope": "work",
+      "workId": "work-tide-atelier",
+      "term": "LuminCore",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "流光晶核",
+          "kind": "alias"
+        },
+        {
+          "alias": "ルミンコア",
+          "kind": "kana"
+        },
+        {
+          "alias": "LuminCore",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-027",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "灰烬铁道上的夜行灯",
+      "category": "work",
+      "source": "metadata:bangumi:work:900103",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "灰烬铁道",
+          "kind": "alias"
+        },
+        {
+          "alias": "かいじんてつどうのやこうとう",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kaijin Tetsudou no Yakoutou",
+          "kind": "romaji"
+        },
+        {
+          "alias": "Night Lantern on the Cinder Rail",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-028",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "烬原绯音",
+      "category": "character",
+      "source": "metadata:bangumi:character:910301",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "燼原 緋音",
+          "kind": "alias"
+        },
+        {
+          "alias": "じんばら ひね",
+          "kind": "kana"
+        },
+        {
+          "alias": "Jinbara Hine",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-029",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "铁庭苍真",
+      "category": "character",
+      "source": "metadata:bangumi:character:910302",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "鉄庭 蒼真",
+          "kind": "alias"
+        },
+        {
+          "alias": "てつにわ そうま",
+          "kind": "kana"
+        },
+        {
+          "alias": "Tetsuniwa Souma",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-030",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "夜坛诺亚",
+      "category": "character",
+      "source": "metadata:bangumi:character:910303",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "夜壇 ノア",
+          "kind": "alias"
+        },
+        {
+          "alias": "よだん のあ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Yodan Noa",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-031",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "岚桥澄人",
+      "category": "character",
+      "source": "metadata:bangumi:character:910304",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "嵐橋 澄人",
+          "kind": "alias"
+        },
+        {
+          "alias": "らんきょう すみと",
+          "kind": "kana"
+        },
+        {
+          "alias": "Rankyou Sumito",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-032",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "雪桥久远",
+      "category": "character",
+      "source": "metadata:bangumi:character:910305",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "雪橋 久遠",
+          "kind": "alias"
+        },
+        {
+          "alias": "ゆきばし くおん",
+          "kind": "kana"
+        },
+        {
+          "alias": "Yukibashi Kuon",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-033",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "星坛美咲",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920301",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "星壇 美咲",
+          "kind": "alias"
+        },
+        {
+          "alias": "ほしだん みさき",
+          "kind": "kana"
+        },
+        {
+          "alias": "Hoshidan Misaki",
+          "kind": "romaji"
+        },
+        {
+          "alias": "星坛美笑",
+          "kind": "heard"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-034",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "风阶隆之",
+      "category": "actor",
+      "source": "metadata:bangumi:actor:920302",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "風階 隆之",
+          "kind": "alias"
+        },
+        {
+          "alias": "かぜかい たかゆき",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kazekai Takayuki",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-035",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "灰烬蒸汽机",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "かいじんじょうきき",
+          "kind": "kana"
+        },
+        {
+          "alias": "Kaijin Joukiki",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-036",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "无明站台",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "むみょうほーむ",
+          "kind": "kana"
+        },
+        {
+          "alias": "Mumyou Hoomu",
+          "kind": "romaji"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-037",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "PrismGate",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "棱镜闸门",
+          "kind": "alias"
+        },
+        {
+          "alias": "プリズムゲート",
+          "kind": "kana"
+        },
+        {
+          "alias": "PrismGate",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-038",
+      "scope": "work",
+      "workId": "work-cinder-rail",
+      "term": "StarVane",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [
+        {
+          "alias": "星风标",
+          "kind": "alias"
+        },
+        {
+          "alias": "スターヴェイン",
+          "kind": "kana"
+        },
+        {
+          "alias": "StarVane",
+          "kind": "english"
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "id": "dict-039",
+      "scope": "global",
+      "workId": null,
+      "term": "幻律分镜表",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [],
+      "blocked": []
+    },
+    {
+      "id": "dict-040",
+      "scope": "global",
+      "workId": null,
+      "term": "绘卷时间轴",
+      "category": "term",
+      "source": "manual",
+      "disabled": false,
+      "aliases": [],
+      "blocked": []
+    }
+  ],
+  "pairs": [
+    {
+      "id": "P001",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A01",
+      "recognizedText": "第一话开头星主灵音在顶层点亮了观测台",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P002",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A02",
+      "recognizedText": "白雨城下把破损的地图交给了星主灵音",
+      "expectedText": "白羽澄夏把破损的地图交给了星渚澪音。",
+      "expectedEntities": [
+        "白羽澄夏",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P003",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A03",
+      "recognizedText": "靖源硕叶独自守在旧钟楼的齿轮室里",
+      "expectedText": "镜原朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedEntities": [
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P004",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A04",
+      "recognizedText": "风庭凛太郎在这一章揭开了地下机房的秘密",
+      "expectedText": "风庭凛太郎在这一章揭开了地下机房的秘密。",
+      "expectedEntities": [
+        "风庭凛太郎"
+      ]
+    },
+    {
+      "id": "P005",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A05",
+      "recognizedText": "月坛奇之和翠川弦夜在雨夜的廊桥上重逢",
+      "expectedText": "月坛祈织和翠川弦叶在雨夜的廊桥上重逢。",
+      "expectedEntities": [
+        "月坛祈织",
+        "翠川弦叶"
+      ]
+    },
+    {
+      "id": "P006",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A06",
+      "recognizedText": "清雨沙耐为星主灵音配出了清冷又克制的声线",
+      "expectedText": "青羽纱奈为星渚澪音配出了清冷又克制的声线。",
+      "expectedEntities": [
+        "青羽纱奈",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P007",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A07",
+      "recognizedText": "登古慎怡饰演的静袁硕叶在中章有一段独摆",
+      "expectedText": "灯谷慎一饰演的镜原朔夜在终章有一段独白。",
+      "expectedEntities": [
+        "灯谷慎一",
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P008",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A08",
+      "recognizedText": "雪婷瑶香在访谈里谈到了白雨城下的心境转折",
+      "expectedText": "雪庭遥香在访谈里谈到了白羽澄夏的心境转折。",
+      "expectedEntities": [
+        "雪庭遥香",
+        "白羽澄夏"
+      ]
+    },
+    {
+      "id": "P009",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A09",
+      "recognizedText": "雾海中塔的星徒师在第五话回收了开篇的伏笔",
+      "expectedText": "雾海钟塔的星图师在第五话回收了开篇的伏笔。",
+      "expectedEntities": [
+        "雾海钟塔的星图师"
+      ]
+    },
+    {
+      "id": "P010",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A10",
+      "recognizedText": "只要转动新轨罗盘白银钟摆就会停在零点",
+      "expectedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedEntities": [
+        "星轨罗盘",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P011",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A11",
+      "recognizedText": "风亭岭太郎用星轨罗盘校准了偏航的航线",
+      "expectedText": "风庭凛太郎用星轨罗盘校准了偏航的航线。",
+      "expectedEntities": [
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P012",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A12",
+      "recognizedText": "请记下ronanowe 在第七话第一次启动的时间点",
+      "expectedText": "请记下 ChronoWeave 在第七话第一次启动的时间点。",
+      "expectedEntities": [
+        "ChronoWeave"
+      ]
+    },
+    {
+      "id": "P013",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A13",
+      "recognizedText": "翠川咸页切断了zlink的备用功能通道",
+      "expectedText": "翠川弦叶切断了 AetherLink 的备用供能通道。",
+      "expectedEntities": [
+        "翠川弦叶",
+        "AetherLink"
+      ]
+    },
+    {
+      "id": "P014",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A14",
+      "recognizedText": "月坛其之把白银中摆的碎片收进了木霞",
+      "expectedText": "月坛祈织把白银钟摆的碎片收进了木匣。",
+      "expectedEntities": [
+        "月坛祈织",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P015",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A15",
+      "recognizedText": "潮汐工防与玻璃晶的色彩设计非常有透明感",
+      "expectedText": "潮汐工坊与玻璃鲸的色彩设计非常有透明感。",
+      "expectedEntities": [
+        "潮汐工坊与玻璃鲸"
+      ]
+    },
+    {
+      "id": "P016",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A16",
+      "recognizedText": "西亭梨莎每天清晨都会去海滴记录潮味",
+      "expectedText": "汐庭梨沙每天清晨都会去海堤记录潮位。",
+      "expectedEntities": [
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P017",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A17",
+      "recognizedText": "苍月哪月在旧灯塔下面找到了朝明结晶",
+      "expectedText": "苍院雫月在旧灯塔下面找到了潮鸣结晶。",
+      "expectedEntities": [
+        "苍院雫月",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P018",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A18",
+      "recognizedText": "云街刊里推开深海回廊的石门走入底层",
+      "expectedText": "云阶栞里推开深海回廊的石门走入底层。",
+      "expectedEntities": [
+        "云阶栞里",
+        "深海回廊"
+      ]
+    },
+    {
+      "id": "P019",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A19",
+      "recognizedText": "双坛责仁帮飞亭千寻修好了受损的风向一",
+      "expectedText": "霜坛泽人帮绯庭千寻修好了受损的风向仪。",
+      "expectedEntities": [
+        "霜坛泽人",
+        "绯庭千寻"
+      ]
+    },
+    {
+      "id": "P020",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A20",
+      "recognizedText": "琉璃公司在这部动画里一人分饰两个角色",
+      "expectedText": "琉璃宫司在这部动画里一人分饰两个角色。",
+      "expectedEntities": [
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P021",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A21",
+      "recognizedText": "银性板灵耐把西亭黎莎犹豫的语气演绎得很细腻",
+      "expectedText": "银杏坂玲奈把汐庭梨沙犹豫的语气演绎得很细腻。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P022",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A22",
+      "recognizedText": "误坛成二配音的双弹责仁在第六集终于登场",
+      "expectedText": "雾坛诚二配音的霜坛泽人在第六集终于登场。",
+      "expectedEntities": [
+        "雾坛诚二",
+        "霜坛泽人"
+      ]
+    },
+    {
+      "id": "P023",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A23",
+      "recognizedText": "飞霆千寻把潮明洁晶嵌进了玻璃船模的龙骨",
+      "expectedText": "绯庭千寻把潮鸣结晶嵌进了玻璃船模的龙骨。",
+      "expectedEntities": [
+        "绯庭千寻",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P024",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A24",
+      "recognizedText": "深海回廊尽头的 lumore 发出了微弱的蓝光",
+      "expectedText": "深海回廊尽头的 LuminCore 发出了微弱的蓝光。",
+      "expectedEntities": [
+        "深海回廊",
+        "LuminCore"
+      ]
+    },
+    {
+      "id": "P025",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A25",
+      "recognizedText": "苍月哪月与云街刊里约好在退朝之前返回攻房",
+      "expectedText": "苍院雫月与云阶栞里约好在退潮之前返回工坊。",
+      "expectedEntities": [
+        "苍院雫月",
+        "云阶栞里"
+      ]
+    },
+    {
+      "id": "P026",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A26",
+      "recognizedText": "这张幻率分镜表详细标注了西亭离莎奔跑的镜头",
+      "expectedText": "这张幻律分镜表详细标注了汐庭梨沙奔跑的镜头。",
+      "expectedEntities": [
+        "幻律分镜表",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P027",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A27",
+      "recognizedText": "灰进铁道上的夜行灯第二卷主要描写北方矿区",
+      "expectedText": "灰烬铁道上的夜行灯第二卷主要描写北方矿区。",
+      "expectedEntities": [
+        "灰烬铁道上的夜行灯"
+      ]
+    },
+    {
+      "id": "P028",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A28",
+      "recognizedText": "晋源非因提着煤油灯走出了无名站台",
+      "expectedText": "烬原绯音提着煤油灯走出了无明站台。",
+      "expectedEntities": [
+        "烬原绯音",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P029",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A29",
+      "recognizedText": "铁停舱真独自检修着停靠在侧线的灰进蒸汽机",
+      "expectedText": "铁庭苍真独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedEntities": [
+        "铁庭苍真",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P030",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A30",
+      "recognizedText": "叶谭诺亚在旧车厢里发现了一张手绘路线图",
+      "expectedText": "夜坛诺亚在旧车厢里发现了一张手绘路线图。",
+      "expectedEntities": [
+        "夜坛诺亚"
+      ]
+    },
+    {
+      "id": "P031",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A31",
+      "recognizedText": "蓝桥成人和雪桥久远在隧道分叉口交换了信物",
+      "expectedText": "岚桥澄人和雪桥久远在隧道分岔口交换了信物。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "雪桥久远"
+      ]
+    },
+    {
+      "id": "P032",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A32",
+      "recognizedText": "星坛美笑在广播剧里担刃进袁非音的声优",
+      "expectedText": "星坛美咲在广播剧里担任烬原绯音的声优。",
+      "expectedEntities": [
+        "星坛美咲",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P033",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A33",
+      "recognizedText": "风接龙之把铁停舱真低沉的嗓音表现得很有力量",
+      "expectedText": "风阶隆之把铁庭苍真低沉的嗓音表现得很有力量。",
+      "expectedEntities": [
+        "风阶隆之",
+        "铁庭苍真"
+      ]
+    },
+    {
+      "id": "P034",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A34",
+      "recognizedText": "列车穿过prgate之后周围的景色瞬间变成了白皱",
+      "expectedText": "列车穿过 PrismGate 之后周围的景色瞬间变成了白昼。",
+      "expectedEntities": [
+        "PrismGate"
+      ]
+    },
+    {
+      "id": "P035",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A35",
+      "recognizedText": "雪桥久远顺着star v 指向的方位找到了信号塔",
+      "expectedText": "雪桥久远顺着 StarVane 指向的方位找到了信号塔。",
+      "expectedEntities": [
+        "雪桥久远",
+        "StarVane"
+      ]
+    },
+    {
+      "id": "P036",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A36",
+      "recognizedText": "我们在汇卷时间轴上整理了无名站台的三次变签",
+      "expectedText": "我们在绘卷时间轴上整理了无明站台的三次变迁。",
+      "expectedEntities": [
+        "绘卷时间轴",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P037",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A37",
+      "recognizedText": "蓝桥成人将灰进蒸汽机的压力表调到了安全刻度",
+      "expectedText": "岚桥澄人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P038",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:A38",
+      "recognizedText": "净源硕叶与风亭凛太郎对新轨罗盘的归属产生了分歧",
+      "expectedText": "镜原朔夜与风庭凛太郎对星轨罗盘的归属产生了分歧。",
+      "expectedEntities": [
+        "镜原朔夜",
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P039",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:A39",
+      "recognizedText": "银性板灵耐与琉璃公司在第三话的对手戏非常精彩",
+      "expectedText": "银杏坂玲奈与琉璃宫司在第三话的对手戏非常精彩。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P040",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:A40",
+      "recognizedText": "叶谭诺亚和晋缘非因最终在终点站重新点亮了信号灯",
+      "expectedText": "夜坛诺亚和烬原绯音最终在终点站重新点亮了信号灯。",
+      "expectedEntities": [
+        "夜坛诺亚",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P041",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A01",
+      "recognizedText": "第一话开头，星主凌音在顶层点亮了观测台。",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P042",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A02",
+      "recognizedText": "白羽城下，把破损的地图交给了新主林阴。",
+      "expectedText": "白羽澄夏把破损的地图交给了星渚澪音。",
+      "expectedEntities": [
+        "白羽澄夏",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P043",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A03",
+      "recognizedText": "静园，硕业独自守在旧钟楼的齿轮室里。",
+      "expectedText": "镜原朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedEntities": [
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P044",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A04",
+      "recognizedText": "丰田铃太郎在这一章揭开了地下机房的秘密。",
+      "expectedText": "风庭凛太郎在这一章揭开了地下机房的秘密。",
+      "expectedEntities": [
+        "风庭凛太郎"
+      ]
+    },
+    {
+      "id": "P045",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A05",
+      "recognizedText": "月潭奇枝和翠川闲夜在雨夜的廊桥上重逢。",
+      "expectedText": "月坛祈织和翠川弦叶在雨夜的廊桥上重逢。",
+      "expectedEntities": [
+        "月坛祈织",
+        "翠川弦叶"
+      ]
+    },
+    {
+      "id": "P046",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A06",
+      "recognizedText": "青羽沙那位星主，林荫配出了清冷又克制的声线。",
+      "expectedText": "青羽纱奈为星渚澪音配出了清冷又克制的声线。",
+      "expectedEntities": [
+        "青羽纱奈",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P047",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A07",
+      "recognizedText": "邓古慎仪饰演的敬袁朔也在终章有一段独白。",
+      "expectedText": "灯谷慎一饰演的镜原朔夜在终章有一段独白。",
+      "expectedEntities": [
+        "灯谷慎一",
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P048",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A08",
+      "recognizedText": "雪庭、姚湘在访谈里谈到了白宇城下的心境转折。",
+      "expectedText": "雪庭遥香在访谈里谈到了白羽澄夏的心境转折。",
+      "expectedEntities": [
+        "雪庭遥香",
+        "白羽澄夏"
+      ]
+    },
+    {
+      "id": "P049",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A09",
+      "recognizedText": "《雾海中塔》的星图师在第五话回收了开篇的伏笔。",
+      "expectedText": "雾海钟塔的星图师在第五话回收了开篇的伏笔。",
+      "expectedEntities": [
+        "雾海钟塔的星图师"
+      ]
+    },
+    {
+      "id": "P050",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A10",
+      "recognizedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedEntities": [
+        "星轨罗盘",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P051",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A11",
+      "recognizedText": "风亭岭太郎用新轨罗盘校准了偏航的航线。",
+      "expectedText": "风庭凛太郎用星轨罗盘校准了偏航的航线。",
+      "expectedEntities": [
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P052",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A12",
+      "recognizedText": "请记下“Run Away”在第七话第一次启动的时间点。",
+      "expectedText": "请记下 ChronoWeave 在第七话第一次启动的时间点。",
+      "expectedEntities": [
+        "ChronoWeave"
+      ]
+    },
+    {
+      "id": "P053",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A13",
+      "recognizedText": "翠川弦叶切断了Etherlink的备用功能通道。",
+      "expectedText": "翠川弦叶切断了 AetherLink 的备用供能通道。",
+      "expectedEntities": [
+        "翠川弦叶",
+        "AetherLink"
+      ]
+    },
+    {
+      "id": "P054",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A14",
+      "recognizedText": "乐坛奇之把白银钟摆的碎片收进了木匣。",
+      "expectedText": "月坛祈织把白银钟摆的碎片收进了木匣。",
+      "expectedEntities": [
+        "月坛祈织",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P055",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A15",
+      "recognizedText": "潮汐工坊与玻璃精的色彩设计非常有透明感。",
+      "expectedText": "潮汐工坊与玻璃鲸的色彩设计非常有透明感。",
+      "expectedEntities": [
+        "潮汐工坊与玻璃鲸"
+      ]
+    },
+    {
+      "id": "P056",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A16",
+      "recognizedText": "西亭离沙每天清晨都会去海堤记录潮位。",
+      "expectedText": "汐庭梨沙每天清晨都会去海堤记录潮位。",
+      "expectedEntities": [
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P057",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A17",
+      "recognizedText": "仓院哪月在旧灯塔下面找到了朝明结晶？",
+      "expectedText": "苍院雫月在旧灯塔下面找到了潮鸣结晶。",
+      "expectedEntities": [
+        "苍院雫月",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P058",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A18",
+      "recognizedText": "云接刊里推开深海回廊的石门，走入底层。",
+      "expectedText": "云阶栞里推开深海回廊的石门走入底层。",
+      "expectedEntities": [
+        "云阶栞里",
+        "深海回廊"
+      ]
+    },
+    {
+      "id": "P059",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A19",
+      "recognizedText": "双谈责人帮飞艇千寻修好了受损的风向仪。",
+      "expectedText": "霜坛泽人帮绯庭千寻修好了受损的风向仪。",
+      "expectedEntities": [
+        "霜坛泽人",
+        "绯庭千寻"
+      ]
+    },
+    {
+      "id": "P060",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A20",
+      "recognizedText": "琉璃公司在这部动画里一人分饰两个角色。",
+      "expectedText": "琉璃宫司在这部动画里一人分饰两个角色。",
+      "expectedEntities": [
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P061",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A21",
+      "recognizedText": "银杏、板铃、奈巴、西亭、离沙，犹豫的语气演绎的很细腻。",
+      "expectedText": "银杏坂玲奈把汐庭梨沙犹豫的语气演绎得很细腻。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P062",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A22",
+      "recognizedText": "《雾潭成二》配音的双潭泽人，在第六集终于登场。",
+      "expectedText": "雾坛诚二配音的霜坛泽人在第六集终于登场。",
+      "expectedEntities": [
+        "雾坛诚二",
+        "霜坛泽人"
+      ]
+    },
+    {
+      "id": "P063",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A23",
+      "recognizedText": "飞艇千寻把朝明结晶嵌进了玻璃船模的龙骨。",
+      "expectedText": "绯庭千寻把潮鸣结晶嵌进了玻璃船模的龙骨。",
+      "expectedEntities": [
+        "绯庭千寻",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P064",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A24",
+      "recognizedText": "深海回廊尽头的龙门礁发出了微弱的蓝光。",
+      "expectedText": "深海回廊尽头的 LuminCore 发出了微弱的蓝光。",
+      "expectedEntities": [
+        "深海回廊",
+        "LuminCore"
+      ]
+    },
+    {
+      "id": "P065",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A25",
+      "recognizedText": "仓院哪月与云阶堪里约好，在退朝之前返回工房。",
+      "expectedText": "苍院雫月与云阶栞里约好在退潮之前返回工坊。",
+      "expectedEntities": [
+        "苍院雫月",
+        "云阶栞里"
+      ]
+    },
+    {
+      "id": "P066",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A26",
+      "recognizedText": "这张幻绿分镜表详细标注了西亭离沙奔跑的镜头。",
+      "expectedText": "这张幻律分镜表详细标注了汐庭梨沙奔跑的镜头。",
+      "expectedEntities": [
+        "幻律分镜表",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P067",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A27",
+      "recognizedText": "《灰烬铁道上的夜行灯》第二卷主要描写北方矿区。",
+      "expectedText": "灰烬铁道上的夜行灯第二卷主要描写北方矿区。",
+      "expectedEntities": [
+        "灰烬铁道上的夜行灯"
+      ]
+    },
+    {
+      "id": "P068",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A28",
+      "recognizedText": "晋元飞鹰提着煤油灯走出了无名站台。",
+      "expectedText": "烬原绯音提着煤油灯走出了无明站台。",
+      "expectedEntities": [
+        "烬原绯音",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P069",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A29",
+      "recognizedText": "铁停仓真独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedText": "铁庭苍真独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedEntities": [
+        "铁庭苍真",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P070",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A30",
+      "recognizedText": "叶檀诺亚在旧车厢里发现了一张手绘路线图。",
+      "expectedText": "夜坛诺亚在旧车厢里发现了一张手绘路线图。",
+      "expectedEntities": [
+        "夜坛诺亚"
+      ]
+    },
+    {
+      "id": "P071",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A31",
+      "recognizedText": "蓝桥城人和雪桥久远在隧道分岔口交换了信物。",
+      "expectedText": "岚桥澄人和雪桥久远在隧道分岔口交换了信物。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "雪桥久远"
+      ]
+    },
+    {
+      "id": "P072",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A32",
+      "recognizedText": "星弹美校在广播剧里担任尽袁非音的声优。",
+      "expectedText": "星坛美咲在广播剧里担任烬原绯音的声优。",
+      "expectedEntities": [
+        "星坛美咲",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P073",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A33",
+      "recognizedText": "风接龙之把铁亭仓真低沉的嗓音表现的很有力量。",
+      "expectedText": "风阶隆之把铁庭苍真低沉的嗓音表现得很有力量。",
+      "expectedEntities": [
+        "风阶隆之",
+        "铁庭苍真"
+      ]
+    },
+    {
+      "id": "P074",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A34",
+      "recognizedText": "列车穿过Prism Gate之后，周围的景色瞬间变成了白昼。",
+      "expectedText": "列车穿过 PrismGate 之后周围的景色瞬间变成了白昼。",
+      "expectedEntities": [
+        "PrismGate"
+      ]
+    },
+    {
+      "id": "P075",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A35",
+      "recognizedText": "雪橇久远顺着Starving指向的方位找到了信号塔。",
+      "expectedText": "雪桥久远顺着 StarVane 指向的方位找到了信号塔。",
+      "expectedEntities": [
+        "雪桥久远",
+        "StarVane"
+      ]
+    },
+    {
+      "id": "P076",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A36",
+      "recognizedText": "我们在会卷时间轴上整理了无名站台的三次变迁。",
+      "expectedText": "我们在绘卷时间轴上整理了无明站台的三次变迁。",
+      "expectedEntities": [
+        "绘卷时间轴",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P077",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A37",
+      "recognizedText": "蓝桥成人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedText": "岚桥澄人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P078",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@clean:A38",
+      "recognizedText": "静园朔叶与丰田麟太郎对新鬼罗盘的归属产生了分歧。",
+      "expectedText": "镜原朔夜与风庭凛太郎对星轨罗盘的归属产生了分歧。",
+      "expectedEntities": [
+        "镜原朔夜",
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P079",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@clean:A39",
+      "recognizedText": "银杏、板铃奈与琉璃公司在第三话的对手戏非常精彩。",
+      "expectedText": "银杏坂玲奈与琉璃宫司在第三话的对手戏非常精彩。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P080",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@clean:A40",
+      "recognizedText": "叶檀、诺亚和晋元飞音最终在终点站重新点亮了信号灯。",
+      "expectedText": "夜坛诺亚和烬原绯音最终在终点站重新点亮了信号灯。",
+      "expectedEntities": [
+        "夜坛诺亚",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P081",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A01",
+      "recognizedText": "第一话开头，星主林音在顶层点亮了观测台。",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P082",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A02",
+      "recognizedText": "白羽城下把破损的地图交给了星主灵音。",
+      "expectedText": "白羽澄夏把破损的地图交给了星渚澪音。",
+      "expectedEntities": [
+        "白羽澄夏",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P083",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A03",
+      "recognizedText": "静园朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedText": "镜原朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedEntities": [
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P084",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A04",
+      "recognizedText": "风亭凛太郎在这一章揭开了地下机房的秘密。",
+      "expectedText": "风庭凛太郎在这一章揭开了地下机房的秘密。",
+      "expectedEntities": [
+        "风庭凛太郎"
+      ]
+    },
+    {
+      "id": "P085",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A05",
+      "recognizedText": "月潭其之和翠川衔夜在雨夜的廊桥上重逢",
+      "expectedText": "月坛祈织和翠川弦叶在雨夜的廊桥上重逢。",
+      "expectedEntities": [
+        "月坛祈织",
+        "翠川弦叶"
+      ]
+    },
+    {
+      "id": "P086",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A06",
+      "recognizedText": "轻羽纱，耐味星主凌音配出了清冷又克制的声线。",
+      "expectedText": "青羽纱奈为星渚澪音配出了清冷又克制的声线。",
+      "expectedEntities": [
+        "青羽纱奈",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P087",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A07",
+      "recognizedText": "曾谷慎宜饰演的靖元朔业在中章有一段独白。",
+      "expectedText": "灯谷慎一饰演的镜原朔夜在终章有一段独白。",
+      "expectedEntities": [
+        "灯谷慎一",
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P088",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A08",
+      "recognizedText": "雪婷、姚湘在访谈里谈到了白宇城下的心境转折。",
+      "expectedText": "雪庭遥香在访谈里谈到了白羽澄夏的心境转折。",
+      "expectedEntities": [
+        "雪庭遥香",
+        "白羽澄夏"
+      ]
+    },
+    {
+      "id": "P089",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A09",
+      "recognizedText": "雾海中塔的星图师在第五话回收了开篇的伏笔。",
+      "expectedText": "雾海钟塔的星图师在第五话回收了开篇的伏笔。",
+      "expectedEntities": [
+        "雾海钟塔的星图师"
+      ]
+    },
+    {
+      "id": "P090",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A10",
+      "recognizedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedEntities": [
+        "星轨罗盘",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P091",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A11",
+      "recognizedText": "风亭里，太郎用星轨罗盘校准了偏航的航线。",
+      "expectedText": "风庭凛太郎用星轨罗盘校准了偏航的航线。",
+      "expectedEntities": [
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P092",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A12",
+      "recognizedText": "请记下BRUNO WEE在第七话第一次启动的时间点。",
+      "expectedText": "请记下 ChronoWeave 在第七话第一次启动的时间点。",
+      "expectedEntities": [
+        "ChronoWeave"
+      ]
+    },
+    {
+      "id": "P093",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A13",
+      "recognizedText": "翠川鞋业切断了LithaLink的备用功能通道。",
+      "expectedText": "翠川弦叶切断了 AetherLink 的备用供能通道。",
+      "expectedEntities": [
+        "翠川弦叶",
+        "AetherLink"
+      ]
+    },
+    {
+      "id": "P094",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A14",
+      "recognizedText": "乐坛奇之把白银钟摆的碎片收进了木匣。",
+      "expectedText": "月坛祈织把白银钟摆的碎片收进了木匣。",
+      "expectedEntities": [
+        "月坛祈织",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P095",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A15",
+      "recognizedText": "潮汐工坊与玻璃晶的色彩设计非常有透明感。",
+      "expectedText": "潮汐工坊与玻璃鲸的色彩设计非常有透明感。",
+      "expectedEntities": [
+        "潮汐工坊与玻璃鲸"
+      ]
+    },
+    {
+      "id": "P096",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A16",
+      "recognizedText": "西亭黎莎每天清晨都会去海堤记录潮位。",
+      "expectedText": "汐庭梨沙每天清晨都会去海堤记录潮位。",
+      "expectedEntities": [
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P097",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A17",
+      "recognizedText": "苍月马月在旧灯塔下面找到了朝明结晶。",
+      "expectedText": "苍院雫月在旧灯塔下面找到了潮鸣结晶。",
+      "expectedEntities": [
+        "苍院雫月",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P098",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A18",
+      "recognizedText": "云阶堪里推开深海回廊的石门，走入底层。",
+      "expectedText": "云阶栞里推开深海回廊的石门走入底层。",
+      "expectedEntities": [
+        "云阶栞里",
+        "深海回廊"
+      ]
+    },
+    {
+      "id": "P099",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A19",
+      "recognizedText": "双弹泽仁帮飞艇千寻修好了受损的风向仪。",
+      "expectedText": "霜坛泽人帮绯庭千寻修好了受损的风向仪。",
+      "expectedEntities": [
+        "霜坛泽人",
+        "绯庭千寻"
+      ]
+    },
+    {
+      "id": "P100",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A20",
+      "recognizedText": "琉璃公司在这部动画里，一人分饰两个角色。",
+      "expectedText": "琉璃宫司在这部动画里一人分饰两个角色。",
+      "expectedEntities": [
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P101",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A21",
+      "recognizedText": "银杏板铃奈把西亭黎莎犹豫的语气演绎得很细腻。",
+      "expectedText": "银杏坂玲奈把汐庭梨沙犹豫的语气演绎得很细腻。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P102",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A22",
+      "recognizedText": "不谈成二配音的双弹泽仁在第六集终于登场。",
+      "expectedText": "雾坛诚二配音的霜坛泽人在第六集终于登场。",
+      "expectedEntities": [
+        "雾坛诚二",
+        "霜坛泽人"
+      ]
+    },
+    {
+      "id": "P103",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A23",
+      "recognizedText": "飞艇千寻把潮凝结晶嵌进了玻璃船模的龙骨。",
+      "expectedText": "绯庭千寻把潮鸣结晶嵌进了玻璃船模的龙骨。",
+      "expectedEntities": [
+        "绯庭千寻",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P104",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A24",
+      "recognizedText": "深海回廊尽头的Lumencore发出了微弱的蓝光。",
+      "expectedText": "深海回廊尽头的 LuminCore 发出了微弱的蓝光。",
+      "expectedEntities": [
+        "深海回廊",
+        "LuminCore"
+      ]
+    },
+    {
+      "id": "P105",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A25",
+      "recognizedText": "仓院马月与云阶堪里约好在退朝之前返回攻防。",
+      "expectedText": "苍院雫月与云阶栞里约好在退潮之前返回工坊。",
+      "expectedEntities": [
+        "苍院雫月",
+        "云阶栞里"
+      ]
+    },
+    {
+      "id": "P106",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A26",
+      "recognizedText": "这张换绿分镜表详细标注了西亭黎莎奔跑的镜头。",
+      "expectedText": "这张幻律分镜表详细标注了汐庭梨沙奔跑的镜头。",
+      "expectedEntities": [
+        "幻律分镜表",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P107",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A27",
+      "recognizedText": "灰烬铁道上的夜行灯第二卷主要描写北方矿区。",
+      "expectedText": "灰烬铁道上的夜行灯第二卷主要描写北方矿区。",
+      "expectedEntities": [
+        "灰烬铁道上的夜行灯"
+      ]
+    },
+    {
+      "id": "P108",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A28",
+      "recognizedText": "晋元飞鹰提着煤油灯走出了无名站台。",
+      "expectedText": "烬原绯音提着煤油灯走出了无明站台。",
+      "expectedEntities": [
+        "烬原绯音",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P109",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A29",
+      "recognizedText": "铁停舱真独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedText": "铁庭苍真独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedEntities": [
+        "铁庭苍真",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P110",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A30",
+      "recognizedText": "叶檀诺亚在旧车厢里发现了一张手绘路线图。",
+      "expectedText": "夜坛诺亚在旧车厢里发现了一张手绘路线图。",
+      "expectedEntities": [
+        "夜坛诺亚"
+      ]
+    },
+    {
+      "id": "P111",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A31",
+      "recognizedText": "蓝桥成人和雪桥久远在隧道分叉口交换了信物。",
+      "expectedText": "岚桥澄人和雪桥久远在隧道分岔口交换了信物。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "雪桥久远"
+      ]
+    },
+    {
+      "id": "P112",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A32",
+      "recognizedText": "星潭美校在广播剧里担任进袁飞音的声优。",
+      "expectedText": "星坛美咲在广播剧里担任烬原绯音的声优。",
+      "expectedEntities": [
+        "星坛美咲",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P113",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A33",
+      "recognizedText": "风接龙之把铁停仓真低沉的嗓音表现得很有力量。",
+      "expectedText": "风阶隆之把铁庭苍真低沉的嗓音表现得很有力量。",
+      "expectedEntities": [
+        "风阶隆之",
+        "铁庭苍真"
+      ]
+    },
+    {
+      "id": "P114",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A34",
+      "recognizedText": "列车穿过prism gate之后，周围的景色瞬间变成了白昼。",
+      "expectedText": "列车穿过 PrismGate 之后周围的景色瞬间变成了白昼。",
+      "expectedEntities": [
+        "PrismGate"
+      ]
+    },
+    {
+      "id": "P115",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A35",
+      "recognizedText": "雪桥久远顺着STAR VANE指向的方位找到了信号塔。",
+      "expectedText": "雪桥久远顺着 StarVane 指向的方位找到了信号塔。",
+      "expectedEntities": [
+        "雪桥久远",
+        "StarVane"
+      ]
+    },
+    {
+      "id": "P116",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A36",
+      "recognizedText": "我们在会卷时间轴上整理了无名站台的三次变迁。",
+      "expectedText": "我们在绘卷时间轴上整理了无明站台的三次变迁。",
+      "expectedEntities": [
+        "绘卷时间轴",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P117",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A37",
+      "recognizedText": "蓝桥成人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedText": "岚桥澄人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P118",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@fan10db:A38",
+      "recognizedText": "净园朔夜与风亭凛太郎对星轨罗盘的归属产生了分歧。",
+      "expectedText": "镜原朔夜与风庭凛太郎对星轨罗盘的归属产生了分歧。",
+      "expectedEntities": [
+        "镜原朔夜",
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P119",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@fan10db:A39",
+      "recognizedText": "银杏、板林、奈雨琉璃公司在第三话的对手戏非常精彩。",
+      "expectedText": "银杏坂玲奈与琉璃宫司在第三话的对手戏非常精彩。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P120",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@fan10db:A40",
+      "recognizedText": "叶檀诺亚和晋元飞鹰最终在终点站重新点亮了信号灯。",
+      "expectedText": "夜坛诺亚和烬原绯音最终在终点站重新点亮了信号灯。",
+      "expectedEntities": [
+        "夜坛诺亚",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P121",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A01",
+      "recognizedText": "第一话开头星主灵音在顶层点亮了观测台",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P122",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A02",
+      "recognizedText": "白羽城下，把破损的地图交给了青竹灵音。",
+      "expectedText": "白羽澄夏把破损的地图交给了星渚澪音。",
+      "expectedEntities": [
+        "白羽澄夏",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P123",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:A03",
+      "recognizedText": "静园朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedText": "镜原朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedEntities": [
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P124",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A04",
+      "recognizedText": "风景鼎太郎在这一章揭开了地下机房的秘密",
+      "expectedText": "风庭凛太郎在这一章揭开了地下机房的秘密。",
+      "expectedEntities": [
+        "风庭凛太郎"
+      ]
+    },
+    {
+      "id": "P125",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A05",
+      "recognizedText": "月潭奇枝和翠川闲叶在雨夜的廊桥上重逢。",
+      "expectedText": "月坛祈织和翠川弦叶在雨夜的廊桥上重逢。",
+      "expectedEntities": [
+        "月坛祈织",
+        "翠川弦叶"
+      ]
+    },
+    {
+      "id": "P126",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:A06",
+      "recognizedText": "星羽纱奈味新主林燕配出了清冷又克制的声线。",
+      "expectedText": "青羽纱奈为星渚澪音配出了清冷又克制的声线。",
+      "expectedEntities": [
+        "青羽纱奈",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P127",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A07",
+      "recognizedText": "登古慎怡饰演的静袁硕叶在中章有一段独白",
+      "expectedText": "灯谷慎一饰演的镜原朔夜在终章有一段独白。",
+      "expectedEntities": [
+        "灯谷慎一",
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P128",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A08",
+      "recognizedText": "雪庭遥相关在访谈里谈到了白羽城下的心境转折。",
+      "expectedText": "雪庭遥香在访谈里谈到了白羽澄夏的心境转折。",
+      "expectedEntities": [
+        "雪庭遥香",
+        "白羽澄夏"
+      ]
+    },
+    {
+      "id": "P129",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:A09",
+      "recognizedText": "雾海中塔的星图石在第五话回收了开篇的伏笔。",
+      "expectedText": "雾海钟塔的星图师在第五话回收了开篇的伏笔。",
+      "expectedEntities": [
+        "雾海钟塔的星图师"
+      ]
+    },
+    {
+      "id": "P130",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A10",
+      "recognizedText": "只要转动新轨罗盘白银钟摆就会停在零点",
+      "expectedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedEntities": [
+        "星轨罗盘",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P131",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A11",
+      "recognizedText": "风平岭，太郎用轻轨罗盘校准了偏航的航线。",
+      "expectedText": "风庭凛太郎用星轨罗盘校准了偏航的航线。",
+      "expectedEntities": [
+        "风庭凛太郎",
+        "星轨罗盘"
+      ]
+    },
+    {
+      "id": "P132",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:A12",
+      "recognizedText": "请记下 guano win 在第七话第一次启动的时间点。",
+      "expectedText": "请记下 ChronoWeave 在第七话第一次启动的时间点。",
+      "expectedEntities": [
+        "ChronoWeave"
+      ]
+    },
+    {
+      "id": "P133",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A13",
+      "recognizedText": "翠川咸叶切断了link的备用功能通道",
+      "expectedText": "翠川弦叶切断了 AetherLink 的备用供能通道。",
+      "expectedEntities": [
+        "翠川弦叶",
+        "AetherLink"
+      ]
+    },
+    {
+      "id": "P134",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A14",
+      "recognizedText": "月潭奇枝把白银钟摆的碎片收进了木匣。",
+      "expectedText": "月坛祈织把白银钟摆的碎片收进了木匣。",
+      "expectedEntities": [
+        "月坛祈织",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P135",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:A15",
+      "recognizedText": "抄袭工坊与玻璃钢的色彩设计，非常有透明感。",
+      "expectedText": "潮汐工坊与玻璃鲸的色彩设计非常有透明感。",
+      "expectedEntities": [
+        "潮汐工坊与玻璃鲸"
+      ]
+    },
+    {
+      "id": "P136",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A16",
+      "recognizedText": "细婷泥莎每天清晨都会去海皮记录潮味",
+      "expectedText": "汐庭梨沙每天清晨都会去海堤记录潮位。",
+      "expectedEntities": [
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P137",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A17",
+      "recognizedText": "当月拿月，在旧灯塔下面找到了超明结晶。",
+      "expectedText": "苍院雫月在旧灯塔下面找到了潮鸣结晶。",
+      "expectedEntities": [
+        "苍院雫月",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P138",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:A18",
+      "recognizedText": "云接堪里，推开深海回廊的石门，走入底层。",
+      "expectedText": "云阶栞里推开深海回廊的石门走入底层。",
+      "expectedEntities": [
+        "云阶栞里",
+        "深海回廊"
+      ]
+    },
+    {
+      "id": "P139",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@speech10db:A19",
+      "recognizedText": "双台责人帮飞艇千寻修好了受损的方向仪",
+      "expectedText": "霜坛泽人帮绯庭千寻修好了受损的风向仪。",
+      "expectedEntities": [
+        "霜坛泽人",
+        "绯庭千寻"
+      ]
+    },
+    {
+      "id": "P140",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@speech10db:A20",
+      "recognizedText": "琉璃公司在这部动画里一人分饰两个角色。",
+      "expectedText": "琉璃宫司在这部动画里一人分饰两个角色。",
+      "expectedEntities": [
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P141",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:A21",
+      "recognizedText": "银杏、板栗，再把西亭黎莎犹豫的语气演绎得很细腻。",
+      "expectedText": "银杏坂玲奈把汐庭梨沙犹豫的语气演绎得很细腻。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P142",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B01",
+      "recognizedText": "文那个就是说第三话开头出场的角色是白雨城夏不对是星主灵音才对",
+      "expectedText": "嗯，那个，就是说第三话开头出场的角色是白羽澄夏，不对是星渚澪音才对。",
+      "expectedEntities": [
+        "白羽澄夏",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P143",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B02",
+      "recognizedText": "呃我想把这一页记一下拿着星轨罗盘的人是乐坛其之应该较静袁硕叶",
+      "expectedText": "呃，我想把这一页记一下，拿着星轨罗盘的人是月坛祈织，应该叫镜原朔夜。",
+      "expectedEntities": [
+        "星轨罗盘",
+        "月坛祈织",
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P144",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B03",
+      "recognizedText": "就是说那个青雨沙奈饿配的这一段哭戏真的很有感染力",
+      "expectedText": "就是说，那个青羽纱奈，呃，配的这一段哭戏真的很有感染力。",
+      "expectedEntities": [
+        "青羽纱奈"
+      ]
+    },
+    {
+      "id": "P145",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B05",
+      "recognizedText": "那个丰庭林太郎修理白银钟摆的片段文需要加一个重点收签",
+      "expectedText": "那个，风庭凛太郎修理白银钟摆的片段，嗯，需要加一个重点书签。",
+      "expectedEntities": [
+        "风庭凛太郎",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P146",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B06",
+      "recognizedText": "啊对了刚才那个道具不是叫 miss a link更正一下是叫 coronawe",
+      "expectedText": "啊对了，刚才那个道具不是叫 AetherLink，更正一下是叫 ChronoWeave。",
+      "expectedEntities": [
+        "AetherLink",
+        "ChronoWeave"
+      ]
+    },
+    {
+      "id": "P147",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B07",
+      "recognizedText": "文那个翠川贤叶的声优势登古肾衣说错了是雪婷瑶乡",
+      "expectedText": "嗯，那个，翠川弦叶的声优是灯谷慎一，说错了是雪庭遥香。",
+      "expectedEntities": [
+        "翠川弦叶",
+        "灯谷慎一",
+        "雪庭遥香"
+      ]
+    },
+    {
+      "id": "P148",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B08",
+      "recognizedText": "恶就是说西亭梨沙在海边捡到的石头应该叫朝明结晶",
+      "expectedText": "呃，就是说汐庭梨沙在海边捡到的石头，应该叫潮鸣结晶。",
+      "expectedEntities": [
+        "汐庭梨沙",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P149",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B09",
+      "recognizedText": "文那个这集片尾曲的画面是从走廊开始不对是从深海回廊开始推进",
+      "expectedText": "嗯，那个，这集片尾曲的画面是从走廊开始，不对是从深海回廊开始推进。",
+      "expectedEntities": [
+        "深海回廊"
+      ]
+    },
+    {
+      "id": "P150",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B10",
+      "recognizedText": "那个苍愿哪越和饿和云街刊里的初遇是在第一话第十分钟",
+      "expectedText": "那个，苍院雫月和，呃，和云阶栞里的初遇是在第一话第十分钟。",
+      "expectedEntities": [
+        "苍院雫月",
+        "云阶栞里"
+      ]
+    },
+    {
+      "id": "P151",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B11",
+      "recognizedText": "文这里说话的人是双谭责人不对不对是飞亭千寻",
+      "expectedText": "嗯，这里说话的人是霜坛泽人，不对不对，是绯庭千寻。",
+      "expectedEntities": [
+        "霜坛泽人",
+        "绯庭千寻"
+      ]
+    },
+    {
+      "id": "P152",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B13",
+      "recognizedText": "呃银杏版玲奈那个他在这一幕的语速明显放慢了很多",
+      "expectedText": "呃，银杏坂玲奈，那个，她在这一幕的语速明显放慢了很多。",
+      "expectedEntities": [
+        "银杏坂玲奈"
+      ]
+    },
+    {
+      "id": "P153",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B14",
+      "recognizedText": "文那个列车停靠的地方叫废弃车站应该叫无名站台",
+      "expectedText": "嗯，那个列车停靠的地方叫废弃车站，应该叫无明站台。",
+      "expectedEntities": [
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P154",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B15",
+      "recognizedText": "恶就是说驾驶灰进蒸汽机的人是兰桥城人不对是铁亭舱针",
+      "expectedText": "呃，就是说驾驶灰烬蒸汽机的人是岚桥澄人，不对是铁庭苍真。",
+      "expectedEntities": [
+        "灰烬蒸汽机",
+        "岚桥澄人",
+        "铁庭苍真"
+      ]
+    },
+    {
+      "id": "P155",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B16",
+      "recognizedText": "那个晋袁非音和叶谭诺亚文他们在第三章才正式同行",
+      "expectedText": "那个，烬原绯音和夜坛诺亚，嗯，他们在第三章才正式同行。",
+      "expectedEntities": [
+        "烬原绯音",
+        "夜坛诺亚"
+      ]
+    },
+    {
+      "id": "P156",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B18",
+      "recognizedText": "文那个雪桥久远留下的装置叫 prisongate说错了是star",
+      "expectedText": "嗯，那个雪桥久远留下的装置叫 PrismGate，说错了是 StarVane。",
+      "expectedEntities": [
+        "雪桥久远",
+        "PrismGate",
+        "StarVane"
+      ]
+    },
+    {
+      "id": "P157",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B19",
+      "recognizedText": "呃那个汇卷时间轴上面还缺两条支线事件回头补上去",
+      "expectedText": "呃，那个绘卷时间轴上面还缺两条支线事件，回头补上去。",
+      "expectedEntities": [
+        "绘卷时间轴"
+      ]
+    },
+    {
+      "id": "P158",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@fan10db:B20",
+      "recognizedText": "文就是说星谈美笑配的这句旁白需要记下精确到秒的时间戳",
+      "expectedText": "嗯，就是说星坛美咲配的这句旁白需要记下精确到秒的时间戳。",
+      "expectedEntities": [
+        "星坛美咲"
+      ]
+    },
+    {
+      "id": "P159",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:retroflex-alveolar",
+      "recognizedText": "第一话开头星祖零音在顶层点亮了观测台。",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P160",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:retroflex-alveolar",
+      "recognizedText": "白羽层下把破损的地图交给了星渚零音。",
+      "expectedText": "白羽澄夏把破损的地图交给了星渚澪音。",
+      "expectedEntities": [
+        "白羽澄夏",
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P161",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:retroflex-alveolar",
+      "recognizedText": "云阶栞里推开森海回廊的石门走入底层。",
+      "expectedText": "云阶栞里推开深海回廊的石门走入底层。",
+      "expectedEntities": [
+        "云阶栞里",
+        "深海回廊"
+      ]
+    },
+    {
+      "id": "P162",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:retroflex-alveolar",
+      "recognizedText": "绯庭千寻把曹明洁晶嵌进了玻璃船模的龙骨。",
+      "expectedText": "绯庭千寻把潮鸣结晶嵌进了玻璃船模的龙骨。",
+      "expectedEntities": [
+        "绯庭千寻",
+        "潮鸣结晶"
+      ]
+    },
+    {
+      "id": "P163",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:retroflex-alveolar",
+      "recognizedText": "岚桥层人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedText": "岚桥澄人将灰烬蒸汽机的压力表调到了安全刻度。",
+      "expectedEntities": [
+        "岚桥澄人",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P164",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:front-back-nasal",
+      "recognizedText": "只要转动新轨罗盘，白银钟摆就会停在零点。",
+      "expectedText": "只要转动星轨罗盘，白银钟摆就会停在零点。",
+      "expectedEntities": [
+        "星轨罗盘",
+        "白银钟摆"
+      ]
+    },
+    {
+      "id": "P165",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:front-back-nasal",
+      "recognizedText": "进原绯音提着煤油灯走出了无名站台。",
+      "expectedText": "烬原绯音提着煤油灯走出了无明站台。",
+      "expectedEntities": [
+        "烬原绯音",
+        "无明站台"
+      ]
+    },
+    {
+      "id": "P166",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:front-back-nasal",
+      "recognizedText": "迎杏坂林奈把汐庭梨沙犹豫的语气演绎得很细腻。",
+      "expectedText": "银杏坂玲奈把汐庭梨沙犹豫的语气演绎得很细腻。",
+      "expectedEntities": [
+        "银杏坂玲奈",
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P167",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:front-back-nasal",
+      "recognizedText": "铁亭苍珍独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedText": "铁庭苍真独自检修着停靠在侧线的灰烬蒸汽机。",
+      "expectedEntities": [
+        "铁庭苍真",
+        "灰烬蒸汽机"
+      ]
+    },
+    {
+      "id": "P168",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:front-back-nasal",
+      "recognizedText": "雾谈陈二配音的霜坛泽人在第六集终于登场。",
+      "expectedText": "雾坛诚二配音的霜坛泽人在第六集终于登场。",
+      "expectedEntities": [
+        "雾坛诚二",
+        "霜坛泽人"
+      ]
+    },
+    {
+      "id": "P169",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:nasal-lateral",
+      "recognizedText": "风庭宁太郎在这一章揭开了地下机房的秘密。",
+      "expectedText": "风庭凛太郎在这一章揭开了地下机房的秘密。",
+      "expectedEntities": [
+        "风庭凛太郎"
+      ]
+    },
+    {
+      "id": "P170",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:nasal-lateral",
+      "recognizedText": "汐庭尼沙每天清晨都会去海堤记录潮位。",
+      "expectedText": "汐庭梨沙每天清晨都会去海堤记录潮位。",
+      "expectedEntities": [
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P171",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:nasal-lateral",
+      "recognizedText": "夜坛洛亚在旧车厢里发现了一张手绘路线图。",
+      "expectedText": "夜坛诺亚在旧车厢里发现了一张手绘路线图。",
+      "expectedEntities": [
+        "夜坛诺亚"
+      ]
+    },
+    {
+      "id": "P172",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:nasal-lateral",
+      "recognizedText": "牛璃宫司在这部动画里一人分饰两个角色。",
+      "expectedText": "琉璃宫司在这部动画里一人分饰两个角色。",
+      "expectedEntities": [
+        "琉璃宫司"
+      ]
+    },
+    {
+      "id": "P173",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:japanese-transliteration",
+      "recognizedText": "苍院霞月与云阶千里约好在退潮之前返回工坊。",
+      "expectedText": "苍院雫月与云阶栞里约好在退潮之前返回工坊。",
+      "expectedEntities": [
+        "苍院雫月",
+        "云阶栞里"
+      ]
+    },
+    {
+      "id": "P174",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:japanese-transliteration",
+      "recognizedText": "静原硕夜独自守在旧钟楼的齿轮室里。",
+      "expectedText": "镜原朔夜独自守在旧钟楼的齿轮室里。",
+      "expectedEntities": [
+        "镜原朔夜"
+      ]
+    },
+    {
+      "id": "P175",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:japanese-transliteration",
+      "recognizedText": "月坛祈织和翠穿闲叶在雨夜的廊桥上重逢。",
+      "expectedText": "月坛祈织和翠川弦叶在雨夜的廊桥上重逢。",
+      "expectedEntities": [
+        "月坛祈织",
+        "翠川弦叶"
+      ]
+    },
+    {
+      "id": "P176",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:japanese-transliteration",
+      "recognizedText": "星坛美笑在广播剧里担任烬原绯音的声优。",
+      "expectedText": "星坛美咲在广播剧里担任烬原绯音的声优。",
+      "expectedEntities": [
+        "星坛美咲",
+        "烬原绯音"
+      ]
+    },
+    {
+      "id": "P177",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:romaji-kana-alias",
+      "recognizedText": "第一话开头 Hoshinagi Mione 在顶层点亮了观测台。",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P178",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:romaji-kana-alias",
+      "recognizedText": "第一话开头ほしなぎ みおね在顶层点亮了观测台。",
+      "expectedText": "第一话开头星渚澪音在顶层点亮了观测台。",
+      "expectedEntities": [
+        "星渚澪音"
+      ]
+    },
+    {
+      "id": "P179",
+      "kind": "entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:romaji-kana-alias",
+      "recognizedText": "Shioniwa Risa 每天清晨都会去海堤记录潮位。",
+      "expectedText": "汐庭梨沙每天清晨都会去海堤记录潮位。",
+      "expectedEntities": [
+        "汐庭梨沙"
+      ]
+    },
+    {
+      "id": "P180",
+      "kind": "entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:latin-case-spacing",
+      "recognizedText": "请记下 chrono weave 在第七话第一次启动的时间点。",
+      "expectedText": "请记下 ChronoWeave 在第七话第一次启动的时间点。",
+      "expectedEntities": [
+        "ChronoWeave"
+      ]
+    },
+    {
+      "id": "P181",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:latin-case-spacing",
+      "recognizedText": "列车穿过 prism gate 之后周围的景色瞬间变成了白昼。",
+      "expectedText": "列车穿过 PrismGate 之后周围的景色瞬间变成了白昼。",
+      "expectedEntities": [
+        "PrismGate"
+      ]
+    },
+    {
+      "id": "P182",
+      "kind": "entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:latin-case-spacing",
+      "recognizedText": "雪桥久远顺着 star vane 指向的方位找到了信号塔。",
+      "expectedText": "雪桥久远顺着 StarVane 指向的方位找到了信号塔。",
+      "expectedEntities": [
+        "雪桥久远",
+        "StarVane"
+      ]
+    },
+    {
+      "id": "P183",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C01",
+      "recognizedText": "今天先把行规逻辑梳理清楚再写进读书笔记里",
+      "expectedText": "今天先把行规逻辑梳理清楚再写进读书笔记里。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P184",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C02",
+      "recognizedText": "书架顶层的摆音盒摆在最显眼的角落",
+      "expectedText": "书架顶层的百音盒摆在最显眼的角落。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P185",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C03",
+      "recognizedText": "新住户领钥匙的时候顺便核对了水电读数",
+      "expectedText": "新住户领钥匙的时候顺便核对了水电读数。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P186",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C04",
+      "recognizedText": "白鹿初夏时庭院里的石板鹿显得格外安静",
+      "expectedText": "白露初下时庭院里的石板路显得格外安静。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P187",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C05",
+      "recognizedText": "傍晚进园散步的居民都带着折叠雨伞",
+      "expectedText": "傍晚进园散步的居民都带着折叠雨伞。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P188",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C06",
+      "recognizedText": "屋顶淋雨太久会让木质横梁慢慢受潮",
+      "expectedText": "屋顶淋雨太久会让木质横梁慢慢受潮。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P189",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C07",
+      "recognizedText": "乐团旗帜挂在李堂正中央的幕布旁边",
+      "expectedText": "乐团旗帜挂在礼堂正中央的幕布旁边。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P190",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "sense-voice-funasr-nano-int8@clean:C08",
+      "recognizedText": "山川咸夜的蝉名声比城市里清楚的多",
+      "expectedText": "山川闲夜的蝉鸣声比城市里清楚得多。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P191",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:C09",
+      "recognizedText": "这座超级工厂正在检修全自动包装产线",
+      "expectedText": "这座超级工厂正在检修全自动包装产线。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P192",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:C10",
+      "recognizedText": "上海画廊今年秋季展出了三十幅水彩风景",
+      "expectedText": "上海画廊今年秋季展出了三十幅水彩风景。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P193",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:C11",
+      "recognizedText": "车间照明洁净度必须符合实验室的安全规范",
+      "expectedText": "车间照明洁净度必须符合实验室的安全规范。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P194",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:C12",
+      "recognizedText": "西亭竹梨外面种满了刚发芽的千牛花",
+      "expectedText": "溪亭竹篱外面种满了刚发芽的牵牛花。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P195",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:C13",
+      "recognizedText": "草原夏夜的微风吹散了白天的闷热气息",
+      "expectedText": "草原夏夜的微风吹散了白天的闷热气息。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P196",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "sense-voice-funasr-nano-int8@clean:C14",
+      "recognizedText": "沿接浅绿色的遮阳棚周末总是做满读者",
+      "expectedText": "沿街浅绿色的遮阳棚周末总是坐满读者。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P197",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:C15",
+      "recognizedText": "灰尘通道尽头的储物间已经打扫干净了",
+      "expectedText": "灰尘通道尽头的储物间已经打扫干净了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P198",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:C16",
+      "recognizedText": "近郊飞鹰在山谷上方盘旋了好几圈才离开",
+      "expectedText": "近郊飞鹰在山谷上方盘旋了好几圈才离开。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P199",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:C17",
+      "recognizedText": "揽桥承重测试已经在昨天下午顺利完成",
+      "expectedText": "缆桥承重测试已经在昨天下午顺利完成。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P200",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:C18",
+      "recognizedText": "透明展台上面摆放着几件手工烧制的陶器",
+      "expectedText": "透明展台上面摆放着几件手工烧制的陶器。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P201",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:C19",
+      "recognizedText": "会场时间表已经贴在入口处的公告栏上了",
+      "expectedText": "会场时间表已经贴在入口处的公告栏上了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P202",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "sense-voice-funasr-nano-int8@clean:C20",
+      "recognizedText": "换率分析表里的第三列数据还需要复合一遍",
+      "expectedText": "换率分析表里的第三列数据还需要复核一遍。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P203",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C01",
+      "recognizedText": "今天先把行规逻辑梳理清楚，再写进读书笔记里。",
+      "expectedText": "今天先把行规逻辑梳理清楚再写进读书笔记里。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P204",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C02",
+      "recognizedText": "书架顶层的百音盒摆在最显眼的角落。",
+      "expectedText": "书架顶层的百音盒摆在最显眼的角落。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P205",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C03",
+      "recognizedText": "新住户领钥匙的时候，顺便核对了水电读数。",
+      "expectedText": "新住户领钥匙的时候顺便核对了水电读数。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P206",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C04",
+      "recognizedText": "白露初下时，庭院里的石板路显得格外安静。",
+      "expectedText": "白露初下时庭院里的石板路显得格外安静。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P207",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C05",
+      "recognizedText": "傍晚，近园散步的居民都带着折叠雨伞。",
+      "expectedText": "傍晚进园散步的居民都带着折叠雨伞。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P208",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C06",
+      "recognizedText": "屋顶淋雨太久，会让木质横梁慢慢受潮。",
+      "expectedText": "屋顶淋雨太久会让木质横梁慢慢受潮。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P209",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C07",
+      "recognizedText": "乐团旗帜挂在礼堂正中央的幕布旁边。",
+      "expectedText": "乐团旗帜挂在礼堂正中央的幕布旁边。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P210",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C08",
+      "recognizedText": "山川闲夜的蝉鸣声比城市里清楚得多。",
+      "expectedText": "山川闲夜的蝉鸣声比城市里清楚得多。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P211",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C09",
+      "recognizedText": "这座超级工厂正在检修全自动包装产线。",
+      "expectedText": "这座超级工厂正在检修全自动包装产线。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P212",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C10",
+      "recognizedText": "上海画廊今年秋季展出了三十幅水彩风景。",
+      "expectedText": "上海画廊今年秋季展出了三十幅水彩风景。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P213",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C11",
+      "recognizedText": "车间照明洁净度必须符合实验室的安全规范。",
+      "expectedText": "车间照明洁净度必须符合实验室的安全规范。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P214",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C12",
+      "recognizedText": "西亭竹篱外面种满了刚发芽的牵牛花。",
+      "expectedText": "溪亭竹篱外面种满了刚发芽的牵牛花。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P215",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C13",
+      "recognizedText": "草原夏夜的微风吹散了白天的闷热气息。",
+      "expectedText": "草原夏夜的微风吹散了白天的闷热气息。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P216",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C14",
+      "recognizedText": "沿街浅绿色的遮阳棚，周末总是坐满读者。",
+      "expectedText": "沿街浅绿色的遮阳棚周末总是坐满读者。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P217",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C15",
+      "recognizedText": "灰尘通道尽头的储物间已经打扫干净了。",
+      "expectedText": "灰尘通道尽头的储物间已经打扫干净了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P218",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C16",
+      "recognizedText": "近郊飞鹰在山谷上方盘旋了好几圈，才离开。",
+      "expectedText": "近郊飞鹰在山谷上方盘旋了好几圈才离开。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P219",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C17",
+      "recognizedText": "缆桥承重测试已经在昨天下午顺利完成。",
+      "expectedText": "缆桥承重测试已经在昨天下午顺利完成。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P220",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C18",
+      "recognizedText": "透明展台上面摆放着几件手工烧制的陶器。",
+      "expectedText": "透明展台上面摆放着几件手工烧制的陶器。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P221",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C19",
+      "recognizedText": "会场时间表已经贴在入口处的公告栏上了。",
+      "expectedText": "会场时间表已经贴在入口处的公告栏上了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P222",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "qwen3-asr-0.6B-int8@fan10db:C20",
+      "recognizedText": "换滤分析表里的第三列数据，还需要复核一遍。",
+      "expectedText": "换率分析表里的第三列数据还需要复核一遍。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P223",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C01",
+      "recognizedText": "今天先把行规逻辑梳理清楚，再写进读书笔记里。",
+      "expectedText": "今天先把行规逻辑梳理清楚再写进读书笔记里。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P224",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C02",
+      "recognizedText": "书架顶层的百印盒摆在最显眼的角落。",
+      "expectedText": "书架顶层的百音盒摆在最显眼的角落。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P225",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C03",
+      "recognizedText": "新住户领钥匙的时候，顺便核对了水电读数。",
+      "expectedText": "新住户领钥匙的时候顺便核对了水电读数。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P226",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C04",
+      "recognizedText": "白露初夏时，庭院里的石板路显得格外安静。",
+      "expectedText": "白露初下时庭院里的石板路显得格外安静。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P227",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C05",
+      "recognizedText": "傍晚，进园散步的居民都带着折叠雨伞。",
+      "expectedText": "傍晚进园散步的居民都带着折叠雨伞。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P228",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C06",
+      "recognizedText": "屋顶淋雨太久会让木质横梁慢慢受潮。",
+      "expectedText": "屋顶淋雨太久会让木质横梁慢慢受潮。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P229",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C07",
+      "recognizedText": "乐团旗帜挂在礼堂正中央的幕布旁边。",
+      "expectedText": "乐团旗帜挂在礼堂正中央的幕布旁边。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P230",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "funasr-nano-int8@speech10db:C08",
+      "recognizedText": "山川闲野的蝉鸣声比城市里清楚得多。",
+      "expectedText": "山川闲夜的蝉鸣声比城市里清楚得多。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P231",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:C09",
+      "recognizedText": "这座超级工厂正在检修全自动包装产线。",
+      "expectedText": "这座超级工厂正在检修全自动包装产线。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P232",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:C10",
+      "recognizedText": "上海画廊今年秋季展出了三十幅水彩风景。",
+      "expectedText": "上海画廊今年秋季展出了三十幅水彩风景。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P233",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:C11",
+      "recognizedText": "车间照明洁净度必须符合实验室的安全规范。",
+      "expectedText": "车间照明洁净度必须符合实验室的安全规范。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P234",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:C12",
+      "recognizedText": "西亭竹篱外面种满了刚发芽的牵牛花。",
+      "expectedText": "溪亭竹篱外面种满了刚发芽的牵牛花。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P235",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:C13",
+      "recognizedText": "草原夏夜的微风吹散了白天的闷热气息。",
+      "expectedText": "草原夏夜的微风吹散了白天的闷热气息。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P236",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "funasr-nano-int8@speech10db:C14",
+      "recognizedText": "沿街浅绿色的遮阳棚，周末总是做满读者。",
+      "expectedText": "沿街浅绿色的遮阳棚周末总是坐满读者。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P237",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@speech10db:C15",
+      "recognizedText": "灰尘冲到尽头的储物间已经打扫干净了。",
+      "expectedText": "灰尘通道尽头的储物间已经打扫干净了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P238",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@speech10db:C16",
+      "recognizedText": "近郊飞鹰在山谷上方盘旋了好几圈才离开。",
+      "expectedText": "近郊飞鹰在山谷上方盘旋了好几圈才离开。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P239",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@speech10db:C17",
+      "recognizedText": "缆桥承重测试已经在昨天下午顺利完成。",
+      "expectedText": "缆桥承重测试已经在昨天下午顺利完成。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P240",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@speech10db:C18",
+      "recognizedText": "透明展台上面摆放着几件手工烧制的陶器。",
+      "expectedText": "透明展台上面摆放着几件手工烧制的陶器。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P241",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@speech10db:C19",
+      "recognizedText": "会场时间表已经贴在入口处的公告栏上了。",
+      "expectedText": "会场时间表已经贴在入口处的公告栏上了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P242",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "funasr-nano-int8@speech10db:C20",
+      "recognizedText": "换率分析表里的第三列数据还需要复核一遍。",
+      "expectedText": "换率分析表里的第三列数据还需要复核一遍。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P243",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:blocked-term-guard",
+      "recognizedText": "新住户领音箱包裹的时候顺便签了快递单。",
+      "expectedText": "新住户领音箱包裹的时候顺便签了快递单。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P244",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:blocked-term-guard",
+      "recognizedText": "白雨初下的时候山路边的泥土还很松软。",
+      "expectedText": "白雨初下的时候山路边的泥土还很松软。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P245",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:blocked-term-guard",
+      "recognizedText": "乐团旗帜已经整齐地挂在礼堂正中央了。",
+      "expectedText": "乐团旗帜已经整齐地挂在礼堂正中央了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P246",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "缆桥承重标准已经写进施工安全手册了。",
+      "expectedText": "缆桥承重标准已经写进施工安全手册了。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P247",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "书柜上层的百音盒摆在台灯右边。",
+      "expectedText": "书柜上层的百音盒摆在台灯右边。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P248",
+      "kind": "non_entity",
+      "workId": "work-fogsea-clocktower",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "我们先把行规逻辑列成三点再开始讨论。",
+      "expectedText": "我们先把行规逻辑列成三点再开始讨论。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P249",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "上海画廊下周会举办青年油画联展。",
+      "expectedText": "上海画廊下周会举办青年油画联展。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P250",
+      "kind": "non_entity",
+      "workId": "work-tide-atelier",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "车间照明洁净度每天早晚都要登记一次。",
+      "expectedText": "车间照明洁净度每天早晚都要登记一次。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P251",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "会场时间表改到了明天上午九点半开始。",
+      "expectedText": "会场时间表改到了明天上午九点半开始。",
+      "expectedEntities": []
+    },
+    {
+      "id": "P252",
+      "kind": "non_entity",
+      "workId": "work-cinder-rail",
+      "source": "phonetic-confusion:non-entity-homophone-trap",
+      "recognizedText": "换率分析表里的最后两行已经修正完毕。",
+      "expectedText": "换率分析表里的最后两行已经修正完毕。",
+      "expectedEntities": []
+    }
+  ]
+}

@@ -31,6 +31,7 @@ export type AssetManifest = {
 export const REQUIRED_ASSETS = [
   "ffmpeg", "ffprobe", "ffmpeg-license",
   "vad-model", "vad-worker", "ort-runtime", "ort-common", "ort-wasm", "ort-wasm-loader",
+  "gtcrn-model", "gtcrn-license", "asr-host",
   "parse-worker", "pdfjs-main", "pdfjs-worker",
   "jassub-wasm", "jassub-wasm-modern", "jassub-worker", "subtitle-font", "subtitle-font-license",
   "app-icon-ico", "app-icon-png",

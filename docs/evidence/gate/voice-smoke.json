@@ -12,14 +12,14 @@
       "id": "recording-shown",
       "ok": true,
       "detail": {
-        "feedbackMs": 10
+        "feedbackMs": 12
       }
     },
     {
       "id": "microphone",
       "ok": true,
       "detail": {
-        "level": 0.43,
+        "level": 0.51,
         "clock1": "0:00",
         "clock2": "0:01"
       }
@@ -36,22 +36,33 @@
       "ok": true
     },
     {
+      "id": "audio-constraints",
+      "ok": true,
+      "detail": {
+        "echoCancellation": true,
+        "noiseSuppression": false,
+        "autoGainControl": true,
+        "channelCount": 1,
+        "sampleRate": 48000
+      }
+    },
+    {
       "id": "session",
       "ok": true,
       "detail": {
         "session": {
-          "id": "cap_09eee554-2f29-4ef6-84a2-783aa43147f5",
+          "id": "cap_f8585581-587f-482c-a80e-b0396f1107a1",
           "mode": "toggle",
           "retention": "keep",
           "stage": "done",
-          "audioState": "retained",
-          "playable": true,
+          "audioState": "staged",
+          "playable": false,
           "durationMs": 8900,
-          "createdAt": "2026-11-12T00:58:41.235Z",
-          "stoppedAt": "2026-11-12T00:58:50.202Z",
-          "workId": "work_ad00c0d5-a41c-44e8-978c-b0c98a4c6f3d",
+          "createdAt": "2026-11-13T19:35:31.894Z",
+          "stoppedAt": "2026-11-13T19:35:40.856Z",
+          "workId": "work_8b53e16a-4793-40d6-81af-58fec00cc908",
           "deviceLabel": "Fake Default Audio Input",
-          "resourceId": "res_2a21e8db-041a-47f4-9623-dda9da0b60c9",
+          "resourceId": "res_123db95b-f384-47e2-a18b-b8afa33cea88",
           "error": null,
           "segments": {
             "total": 1,
@@ -60,7 +71,7 @@
             "pending": 0,
             "noSpeech": 0
           },
-          "speechMs": 6208
+          "speechMs": 6240
         },
         "segments": 1
       }
@@ -86,12 +97,12 @@
           {
             "startMs": 0,
             "endMs": 6700,
-            "resourceId": "res_2a21e8db-041a-47f4-9623-dda9da0b60c9",
-            "resourceRevisionId": "rev_fb49f560-50df-4f93-95f4-9dd8f78c4a05",
+            "resourceId": "res_123db95b-f384-47e2-a18b-b8afa33cea88",
+            "resourceRevisionId": "rev_0140dda2-8d18-4bc4-b57d-c41ea2a067e2",
             "locator": {
               "kind": "text",
               "partId": "body",
-              "representationId": "rev_fb49f560-50df-4f93-95f4-9dd8f78c4a05",
+              "representationId": "rev_0140dda2-8d18-4bc4-b57d-c41ea2a067e2",
               "normalizationVersion": "text-nfc-lf-v1",
               "range": {
                 "start": 0,
@@ -118,7 +129,7 @@
           "visibleText": "0:01",
           "ariaLabel": "[redacted-device-summary]",
           "title": "[redacted-device-summary]",
-          "speakingColor": "#C1497C",
+          "speakingColor": "#C0487B",
           "stopLabel": "停止录音",
           "ariaLabelHasMic": true,
           "ariaLabelLength": 48
@@ -143,6 +154,17 @@
         "drag1Persisted": true,
         "immediateStopPersisted": true
       }
+    },
+    {
+      "id": "local-capture",
+      "ok": true,
+      "detail": {
+        "importedOk": true,
+        "stage": "done",
+        "segments": 1,
+        "sampleLength": 23,
+        "cloudUploadsDelta": 0
+      }
     }
   ],
   "observations": [
@@ -162,7 +184,7 @@
           "visibleText": "0:01",
           "ariaLabel": "[redacted-device-summary]",
           "title": "[redacted-device-summary]",
-          "speakingColor": "#C1497C",
+          "speakingColor": "#C0487B",
           "stopLabel": "停止录音",
           "ariaLabelHasMic": true,
           "ariaLabelLength": 48

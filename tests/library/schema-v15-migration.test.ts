@@ -69,13 +69,13 @@ function seedV14(dir: string): void {
 
 describe("schema v15 migration (recent_dismissals, cascade triggers, progress_furthest, A-129, AT-173)", () => {
   it("backs up v14, creates recent_dismissals, cascade triggers and progress_furthest, preserves existing data, and is idempotent", () => {
-    expect(PRODUCT_SCHEMA_VERSION).toBe(15);
+    expect(PRODUCT_SCHEMA_VERSION).toBe(16);
     const dir = tempDir("v15-migrate");
     seedV14(dir);
 
     const store = new DrizzleStore({ profileDir: dir });
-    expect(store.migration).toMatchObject({ from: 14, to: 15 });
-    expect(store.getMeta("schemaVersion")).toBe("15");
+    expect(store.migration).toMatchObject({ from: 14, to: 16 });
+    expect(store.getMeta("schemaVersion")).toBe("16");
     expect(fs.existsSync(path.join(dir, "manga.sqlite.premigrate-v14"))).toBe(true);
 
     const backup = new Database(path.join(dir, "manga.sqlite.premigrate-v14"), { readonly: true });
@@ -113,7 +113,7 @@ describe("schema v15 migration (recent_dismissals, cascade triggers, progress_fu
     // Opening a second time is a no-op migration.
     const again = new DrizzleStore({ profileDir: dir });
     expect(again.migration).toBeNull();
-    expect(again.getMeta("schemaVersion")).toBe("15");
+    expect(again.getMeta("schemaVersion")).toBe("16");
     again.close();
   });
 
@@ -132,8 +132,8 @@ describe("schema v15 migration (recent_dismissals, cascade triggers, progress_fu
     raw.close();
 
     const recovered = new DrizzleStore({ profileDir: dir });
-    expect(recovered.migration).toMatchObject({ from: 14, to: 15 });
-    expect(recovered.getMeta("schemaVersion")).toBe("15");
+    expect(recovered.migration).toMatchObject({ from: 14, to: 16 });
+    expect(recovered.getMeta("schemaVersion")).toBe("16");
     expect(recovered.sqlite.prepare("SELECT context_id AS contextId, percent FROM progress_furthest WHERE resource_id = 'res_comic'").get()).toEqual({ contextId: "", percent: 0.8 });
     expect(recovered.sqlite.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
     recovered.close();
@@ -146,7 +146,7 @@ describe("schema v15 migration (recent_dismissals, cascade triggers, progress_fu
     const blocker = new Database(path.join(dir, "manga.sqlite"));
     blocker.exec(`
       CREATE TRIGGER fail_v15_version BEFORE UPDATE ON schema_meta
-      WHEN NEW.key = 'schemaVersion' AND NEW.value = '15'
+      WHEN NEW.key = 'schemaVersion' AND NEW.value = '16'
       BEGIN
         SELECT RAISE(ABORT, 'disk write failure during v15 migration');
       END;
@@ -164,8 +164,8 @@ describe("schema v15 migration (recent_dismissals, cascade triggers, progress_fu
     check.close();
 
     const fixed = new DrizzleStore({ profileDir: dir });
-    expect(fixed.migration).toMatchObject({ from: 14, to: 15 });
-    expect(fixed.getMeta("schemaVersion")).toBe("15");
+    expect(fixed.migration).toMatchObject({ from: 14, to: 16 });
+    expect(fixed.getMeta("schemaVersion")).toBe("16");
     fixed.close();
   });
 
@@ -178,15 +178,15 @@ describe("schema v15 migration (recent_dismissals, cascade triggers, progress_fu
     for (const suffix of ["", "-wal", "-shm"]) fs.rmSync(path.join(dir, `manga.sqlite${suffix}`), { force: true });
     fs.copyFileSync(path.join(dir, "manga.sqlite.premigrate-v14"), path.join(dir, "manga.sqlite"));
     const remigrated = new DrizzleStore({ profileDir: dir });
-    expect(remigrated.migration).toMatchObject({ from: 14, to: 15 });
-    expect(remigrated.getMeta("schemaVersion")).toBe("15");
+    expect(remigrated.migration).toMatchObject({ from: 14, to: 16 });
+    expect(remigrated.getMeta("schemaVersion")).toBe("16");
     remigrated.close();
 
     // Fresh database opens directly at v15 with recent_dismissals and progress_furthest ready.
     const freshDir = tempDir("v15-fresh");
     const fresh = new DrizzleStore({ profileDir: freshDir });
     expect(fresh.migration).toBeNull();
-    expect(fresh.getMeta("schemaVersion")).toBe("15");
+    expect(fresh.getMeta("schemaVersion")).toBe("16");
     expect(fresh.sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recent_dismissals'").get()).toEqual({ name: "recent_dismissals" });
     expect(fresh.sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'view' AND name = 'progress_furthest'").get()).toEqual({ name: "progress_furthest" });
     fresh.close();

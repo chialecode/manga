@@ -182,7 +182,7 @@ export async function* streamTextPi(
   const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
   const stream = request.reasoningEffort
     ? models.streamSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
-    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) });
+    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}) });
   const args = new Map<number, { id: string; name: string; last: string }>();
   for await (const event of stream) {
     if (event.type === "text_delta") yield { type: "text-delta", text: event.delta };
@@ -237,7 +237,7 @@ export async function completeTextPi(
   const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
   const message = request.reasoningEffort
     ? await models.completeSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
-    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) });
+    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}) });
   if (message.stopReason === "aborted") {
     // Aborted by the caller is a cancel; aborted without the caller asking is the time running out.
     if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });

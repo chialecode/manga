@@ -9,6 +9,8 @@ import type { MenuItem } from "./components/menu.tsx";
 import { Toasts } from "./components/toast.tsx";
 import { TitleActions } from "./components/title-actions.tsx";
 import { DebugPanel, loadDebugView, saveDebugView, useNoticeLog, type DebugView } from "./pages/debug-panel.tsx";
+import { DictationCapsule } from "./voice/dictation-capsule.tsx";
+import { DictationPill } from "./voice/dictation-pill.tsx";
 import { attempt } from "./lib/api.ts";
 import { useKeyTable } from "./lib/key-table.tsx";
 import { quoteTags } from "./lib/quote-tags.ts";
@@ -464,6 +466,28 @@ export function Workbench(props: {
           </div>
         ) : null}
         {snapshot.search.open ? <SearchBox key={snapshot.search.n} initialQuery={snapshot.search.query} initialScope={snapshot.search.scope} onClose={() => shellStore.closeSearch()} /> : null}
+        {s.dictation ? (
+          <>
+            <DictationCapsule
+              t={t}
+              active={s.dictation.active}
+              stage={s.dictation.stage}
+              mode={s.dictation.mode}
+              elapsedMs={s.dictation.elapsedMs}
+              level={s.dictation.level}
+              anchor={s.dictation.anchor}
+              onStop={() => void s.dictation!.stop("user")}
+              onCancel={() => void s.dictation!.cancel()}
+            />
+            <DictationPill
+              t={t}
+              pill={s.dictation.pill}
+              onRevert={() => s.dictation!.revertLast()}
+              onDecideSuggestion={(id, action) => void s.dictation!.decideSuggestion(id, action)}
+              onDismiss={() => s.dictation!.dismissPill()}
+            />
+          </>
+        ) : null}
         {aboutOpen ? (
           <Modal testId="about-dialog" title={t("about.title")} closeLabel={t("common.close")} onClose={() => setAboutOpen(false)}>
             <p>{t("about.blurb")}</p>

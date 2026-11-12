@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MangaProductApp, TestVault, rawPublicKey, writeBuildInfo } from "@manga/app-core";
 import { inspectPublication } from "../../scripts/check-publication.mjs";
 import { validateWorkflows } from "../../scripts/check-workflows.mjs";
-import { checkLinksOnline, checkLockPins, isMonthEndAutobuild, lockLinks } from "../../scripts/tools/check-tool-links.mjs";
+import { LOCK_FILES, checkLinksOnline, checkLockPins, isMonthEndAutobuild, isPinnedReleaseAsset, lockLinks } from "../../scripts/tools/check-tool-links.mjs";
 import { runInstallDev } from "../../scripts/stage/install-dev.mjs";
 import { decideWeeklyRelease } from "../../scripts/stage/release-decide.mjs";
 import { publishVerifiedRelease, verifyReleasePublishArtifacts } from "../../scripts/stage/release-publish-verify.mjs";
@@ -525,7 +525,7 @@ describe("W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-tool-pins-"));
     try {
       fs.mkdirSync(path.join(root, "scripts", "tools"), { recursive: true });
-      for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "subtitle-font.lock.json"]) fs.copyFileSync(path.resolve("scripts/tools", name), path.join(root, "scripts", "tools", name));
+      for (const name of LOCK_FILES) fs.copyFileSync(path.resolve("scripts/tools", name), path.join(root, "scripts", "tools", name));
       const ffmpegFile = path.join(root, "scripts", "tools", "ffmpeg.lock.json");
       const ffmpeg = JSON.parse(fs.readFileSync(ffmpegFile, "utf8"));
       // Back to a daily build: verify fails.
@@ -534,12 +534,36 @@ describe("W9: GitHub Actions weekly release workflow, `decideWeeklyRelease`, and
       fs.writeFileSync(ffmpegFile, JSON.stringify(ffmpeg));
       // A branch name instead of a commit: verify fails.
       const fontFile = path.join(root, "scripts", "tools", "subtitle-font.lock.json");
-      fs.writeFileSync(fontFile, fs.readFileSync(fontFile, "utf8").replaceAll(/\/[0-9a-f]{40}\//g, "/main/"));
+      const fontOriginal = fs.readFileSync(fontFile, "utf8");
+      fs.writeFileSync(fontFile, fontOriginal.replaceAll(/\/[0-9a-f]{40}\//g, "/main/"));
       expect(checkLockPins(root).join("\n")).toContain("subtitle-font.lock.json");
+      fs.writeFileSync(fontFile, fontOriginal);
+
+      // Pinned GitHub release assets (GTCRN & ASR smoke archive): reject floating `latest` tag, missing/invalid sha256, or mismatched asset name.
+      expect(
+        isPinnedReleaseAsset("https://github.com/k2-fsa/sherpa-onnx/releases/download/latest/gtcrn_simple.onnx", {
+          asset: "gtcrn_simple.onnx",
+          bytes: 535638,
+          sha256: "e".repeat(64),
+        }),
+      ).toBe(false);
+      expect(
+        isPinnedReleaseAsset("https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx", {
+          asset: "gtcrn_simple.onnx",
+          bytes: 535638,
+          sha256: "short",
+        }),
+      ).toBe(false);
+      const asrLockFile = path.join(root, "scripts", "tools", "speech-asr.lock.json");
+      const asrLockOriginal = fs.readFileSync(asrLockFile, "utf8");
+      const asrLock = JSON.parse(asrLockOriginal);
+      fs.writeFileSync(asrLockFile, JSON.stringify({ ...asrLock, source: { ...asrLock.source, sha256: "0000" } }));
+      expect(checkLockPins(root).join("\n")).toContain("speech-asr.lock.json");
+      fs.writeFileSync(asrLockFile, asrLockOriginal);
 
       // Online: one address answers 404, the result names it.
       const links = lockLinks(root);
-      expect(links.length).toBe(5);
+      expect(links.length).toBe(8);
       const gone = links[0].url;
       const results = await checkLinksOnline(root, { fetchImpl: async (url) => ({ status: url === gone ? 404 : 200 }) as Response });
       expect(results.filter((entry) => !entry.ok).map((entry) => entry.tool)).toEqual(["ffmpeg.lock.json"]);

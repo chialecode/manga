@@ -30,6 +30,8 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 | 浏览器烟测 | playwright-core | Electron 宿主、原生 IME 与真实设备另测 |
 | AI runtime 与模型协议适配 | 自研适配器 + PI（@earendil-works/pi-ai） | BYOK；首版两种实现均须实际接入，可在设置切换；运行时身份独立于 API 协议/模型/连接，工具授权与 Agent 业务规则由 MANGA 宿主管理 |
 | 实时 ASR 传输 | ws | 需要 WebSocket 时接入；文件转录接口独立实现，不强制实时服务 |
+| 本地离线语音识别与增强 | sherpa-onnx-node + sherpa-onnx-win-x64 + GTCRN（随包） | 仅由 Electron utilityProcess 推理子进程加载，解包在 `app.asar` 之外；ASR 模型按需下载或导入，绝不打入安装包 |
+| 发音规整、音近召回与简繁转换 | pinyin-pro、wanakana、HaujetZhao/asr-hotword（TS 移植）、opencc-js | 个人与作品词典同音/近音确定性替换与候选召回、主进程惰性简繁转换 |
 | 图片处理 | sharp | 服务或 worker 侧缩略图与变换，验证大图预算和打包 |
 | 凭据保护 | Electron safeStorage（异步接口） | 主进程适配器；业务配置保存 credentialRef，凭据不进入资料包；所有读取经同一个异步函数，平台要求时把新密文写回 |
 
@@ -152,6 +154,25 @@ Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点�
 
 首个正式版、更新的退路与轻量打开阶段开始时与门禁前各按 A-35 执行一次 `pnpm outdated -r`（最小发行龄策略 `minimumReleaseAge: 20160` 分钟不绕过，零新增依赖），升级全部已满 14 天的同主版本稳定版：`electron` `45.0.0 → 45.1.0`、`dockview-react` `8.6.1 → 8.7.1`（同步锁定配套 `dockview` 与 `dockview-core` `8.7.1`；未满 14 天的 `8.9.0` 不采用）、`lucide-react` `1.61.0 → 1.63.0`、`@tanstack/react-virtual` `3.14.22 → 3.14.23`、`onnxruntime-web` `1.30.0 → 1.31.1`、`mdast-util-to-markdown` `2.2.0 → 2.2.1`；门禁前复跑确认除 `linkedom` 已登记例外（`0.18.13`）外零剩余满龄同主版本偏差。
 
+## 2026-11-13 依赖盘点与语音输入选型
+
+语音输入、本地语音引擎与二次元词典阶段开始时按 A-35 执行 `pnpm outdated -r`（基准时间 2026-11-13，最小发行龄 `minimumReleaseAge: 20160` 分钟不绕过、零豁免）：
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| @tanstack/react-virtual | 3.14.23 | 3.14.24 | 升级（2026-10-29 10:55 UTC 发行，已满 14 天；最新 3.14.28 未满龄） |
+| @tiptap/core、extension-document、extension-text、pm、react | 3.32.0 | 3.32.1 | 升级（2026-10-28 19:47 UTC 发行，已满 14 天；最新 3.33.0 未满龄） |
+| dockview-react | 8.7.1 | 8.8.0 | 升级（2026-10-28 21:10 UTC 发行，已满 14 天；最新 8.9.0 未满龄） |
+| lucide-react | 1.63.0 | 1.64.0 | 升级（2026-10-29 06:10 UTC 发行，已满 14 天；最新 1.66.0 未满龄） |
+| sherpa-onnx-node、sherpa-onnx-win-x64（新增，`apps/desktop`） | — | 2.0.1 | Apache-2.0，2026-10-26 发行（内置 ONNX Runtime 1.28.2，N-API 无 ABI 重编需求）；平台二进制置于 `optionalDependencies` 以兼容 Linux CI `--frozen-lockfile`，打包解包至 `app.asar.unpacked` 并仅由 `asr-host` 子进程加载（`scripts/check-deps.mjs` 守护 `main` 与 `light` 闭包零引用） |
+| pinyin-pro、wanakana、opencc-js（新增，`packages/app-core`） | — | 3.29.5、5.3.1、1.4.2 | 精确锁定（发行日期分别为 2026-10-10、2023-11-20、2026-08-22；`pinyin-pro` 与 `wanakana` 为 MIT，`opencc-js` 代码为 MIT、随附 OpenCC 词表为 Apache-2.0）；分别负责中文拼音规整、日文假名/罗马字归一与主进程简繁转换 |
+| HaujetZhao/asr-hotword（TS 移植，`packages/app-core/src/voice/correct/`） | — | `7e282137e780ac4096cac537bef360235d2efe43` | MIT（`Copyright (c) 2026 HaujetZhao`，源码文件头保留原许可与提交说明）：将发音规整、2-gram 增量倒排索引与音素编辑距离算法移植为纯 TypeScript，修正同音不同调的对称 `0.4` 声调代价并补入日文假名/罗马字对齐 |
+| 随包与门禁模型锁（`scripts/tools/*.lock.json`） | — | GTCRN `simple-16k-502ebfab64`、SenseVoice-FunASR-Nano `2025-12-17` | `gtcrn_simple.onnx`（MIT，约 523 KB）随包携带并登记第三方声明；`sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2` 仅拉取至本地 `dist/tools/asr/` 供离线门禁烟测，绝不打入安装包 |
+| linkedom | 0.18.13 | 保持 0.18.13 | 已登记例外不变：`0.18.14` 仍因 `@acemir/cssom` CommonJS `parse` 导出在主进程打包报 `MISSING_EXPORT`；`0.18.15`（2026-11-01 06:56 UTC 发行）尚未满 14 天，满龄后复试 |
+| @types/node、electron-builder、electron-updater 与其余候选 | 24.19.2、26.18.0、6.8.11 等 | 保持现精确版本 | `@types/node` 随 Electron 45 的 Node 24.22 留在 24.x；`electron-builder` 与 `electron-updater` 的 npm `latest` 标签仍为现版本（`26.18.1` / `6.8.12` 仅在 `v26` 分支标签）；`electron` `45.3.1`、`vite` `8.3.8`、`vitest` `5.1.0`、`knip` `6.45.1`、`@earendil-works/pi-ai` `1.5.2`、`pdfjs-dist` `6.5.438`、`jassub` `2.5.37`、`jsdom` `31.0.0` 等均于 2026-10-30 之后发行，未满 14 天 |
+
+本地模型镜像源核对结论（2026-11-13）：`packages/app-core/src/voice/models/catalog.ts` 当前仅将 `k2-fsa/sherpa-onnx` GitHub Releases（标签 `asr-models`，哈希以官方 `checksum.txt` 为准）列为下载来源，暂不列入 ModelScope（`csukuangfj/asr-models`）。当日核验发现 ModelScope 仓库对 `qwen3-asr-0.6B-int8` 与 `sense-voice-funasr-nano-int8` 返回 `404`，而 `funasr-nano-int8` 为约 750 MB 的旧版拆分权重包，其压缩包 SHA-256 与 GitHub Release `checksum.txt` 公布的约 841 MB 合并 `llm.int8.onnx` 构建不一致；按“仅在 SHA-256 完全一致时列为候选来源”的校验准则不予收录，无直连条件的用户可直接通过“从文件导入”校验导入已下载的同款压缩包或目录。
+
 ## 2026-09-20 接入与构建边界
 
 AI runtime 切换保存为设置，运行开始时固定所选实现；切换只影响后续运行，活动任务继续使用原实现或由用户取消，不静默转接、扩大授权或丢失会话/工具证据。旧配置缺 runtime 字段时兼容自研适配器。自研与 PI 均用相同受控提供者验证文本、工具、流式、取消与错误，安装 PI 依赖不构成接入完成。实现与复验由 `tests/agent` 守护。
@@ -179,9 +200,11 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 麦克风采集 | Chromium `getUserMedia`（按 deviceId 选择，启用回声消除与降噪约束）加 AudioWorklet 输出 16 kHz 单声道 PCM，分块追加写盘 | 以 MediaRecorder 为主路径：崩溃后封装不完整，且仍需解码才能筛人声 |
 | 人声筛选 | Silero VAD v6.2.3（MIT）的 ONNX 模型，在独立 worker 中用 onnxruntime-web 1.31.1 的 WASM 后端运行；模型约 2 MB，随包离线 | onnxruntime-node（原生插件，性能不足时备选）；@ricky0123/vad-web 面向浏览器实时流；WebRTC VAD 在音乐与噪声上误检更多 |
 | 录音保存与上传 | 保留模式用 FFmpeg（libopus）把 PCM 转为 Opus 存入附件；上传给 ASR 的块用 WAV（16 kHz 单声道） | — |
+| 本地离线语音识别与推理隔离（2026-11-13 查证） | sherpa-onnx-node 2.0.1 + sherpa-onnx-win-x64 2.0.1（Apache-2.0，内置 ONNX Runtime 1.28.2，N-API 预编译），在 Electron `utilityProcess`（`asr-host.cjs`）独立子进程中经 `MessagePort` 调用，返回音频缓冲一律传 `enableExternalBuffer: false` 以兼容 Electron V8 内存笼；空闲超时卸载退出、崩溃自动隔离。官方目录提供 `Qwen3-ASR-0.6B`（`qwen3Asr`，`stream.setOption("hotwords", csv)`）、`SenseVoice-FunASR-Nano`（`senseVoice`，轻量多语种）与 `Fun-ASR-Nano`（`funasrNano`，显式 `itn: 1` 与热词），全部由用户按需下载或本地导入 | `@huggingface/transformers` 4.1.0：Node 端拉入 `onnxruntime-node` 重原生依赖，对 SenseVoice / FunASR-Nano 与流级热词支持不如 sherpa-onnx 原生完备；`nodejs-whisper` 0.2.9：安装期编译 C++，停在 2024；`vosk` 0.3.39：停在 2022，与 Electron 45 ABI 不兼容 |
+| 语音增强、词典同音匹配与简繁转换（2026-11-13 查证） | 随包 GTCRN 16 kHz 模型 `gtcrn_simple.onnx`（MIT，约 523 KB，75% 增强 + 25% 原始干湿混合防过度削弱擦音）；同音近音召回与确定性替换移植自 `HaujetZhao/asr-hotword`（MIT，`Copyright (c) 2026 HaujetZhao`，提交 `7e282137e780ac4096cac537bef360235d2efe43`，位于 `packages/app-core/src/voice/correct/`：2-gram 增量倒排索引、音素编辑距离与对称 `0.4` 声调代价，扩展假名/罗马字对齐）；中文拼音用 `pinyin-pro` 3.29.5（MIT，零依赖），日文假名与罗马字用 `wanakana` 5.3.1（MIT，零依赖），输出简繁转换用 `opencc-js` 1.4.2（代码 MIT、词表 Apache-2.0，主进程惰性初始化并保护个人词典命中区间） | RNNoise WASM：无统一维护官方 npm 包且 sherpa-onnx 已内置 `OfflineSpeechDenoiser` GTCRN；`kuroshiro` 1.2.0：停在 2021 且依赖约 18 MB 形态学词典；把简繁转换交给云端 LLM：耗时且非确定性 |
 | 视觉与 OCR 路由 | 沿用 OpenAI 格式协议的图像输入（Responses `input_image`、Chat Completions `image_url`），不新增依赖 | tesseract.js 7.0.0：竖排日文漫画效果差，且本地 OCR 不是需求 |
-| 大列表 | TanStack Virtual 3.14.23 | — |
-| 标签页与分屏（2026-10-22 查证） | dockview-react 8.7.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
+| 大列表 | TanStack Virtual 3.14.24 | — |
+| 标签页与分屏（2026-10-22 查证） | dockview-react 8.8.0（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
 | 消息流贴底 | use-stick-to-bottom 1.1.6（MIT），与 @tanstack/react-virtual 的虚拟列表共用滚动容器（2026-11-04 试验） | 自写滚动判定；react-virtuoso（要把列表与贴底整体换掉，两条现有路线可用时不评估） |
 | 安装包（2026-11-04 查证） | electron-builder 26.18.0 的 NSIS 目标（MIT，开发依赖），`--prepackaged` 用 Forge 的产物，按用户安装到 `%LOCALAPPDATA%\Programs\manga`；图标由 SVG 源文件经 `sharp` 与 `resedit` 生成多尺寸 `.ico` 并写入可执行文件资源，安装界面设为简体中文（`2052` / `zh_CN`） | @electron-forge/maker-squirrel（固定装到 `%LocalAppData%\<应用名>`，不能选目录）；maker-wix（要另装 WiX）；maker-msix（`AppData` 被虚拟化） |

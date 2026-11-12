@@ -42,7 +42,7 @@ function mount(connections: Array<Record<string, unknown>>, handlers: { onSaveCo
 describe("the profile of a model in the form", () => {
   it("starts from the profile as stored, and a patch holds only what was changed", () => {
     const before = profileForm(found);
-    expect(before).toEqual({ contextWindow: "32768", maxOutput: "8192", inputTypes: ["text"], capabilities: ["tools"], reasoningEffort: "", fileMiB: "20", videoMiB: "5", videoSeconds: "60" });
+    expect(before).toEqual({ contextWindow: "32768", maxOutput: "8192", inputTypes: ["text"], capabilities: ["tools"], reasoningEffort: "", fileMiB: "20", videoMiB: "5", videoSeconds: "60", transcriptionInterface: "audio_transcriptions" });
     expect(profilePatch(before, before)).toEqual({});
     expect(profilePatch(before, { ...before, contextWindow: "65536" })).toEqual({ contextWindow: 65_536 });
     expect(profilePatch(before, { ...before, inputTypes: ["text", "image"], capabilities: ["tools", "reasoning"], reasoningEffort: "high" })).toEqual({ inputTypes: ["text", "image"], capabilities: ["tools", "reasoning"], reasoningEffort: "high" });

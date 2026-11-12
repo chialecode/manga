@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant, type UpdateBusyReason } from "@manga/contracts";
+import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type AsrEngineSelection, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant, type UpdateBusyReason } from "@manga/contracts";
 import { MangaRuntime } from "@manga/kernel";
 import { DrizzleStore, acquireHostLock, releaseHostLock } from "@manga/storage-drizzle";
 import type { ChatMessage } from "@manga/model-protocol";
@@ -35,7 +35,12 @@ import { ResourceExtras } from "./metadata/extras.ts";
 import { MetadataService } from "./metadata/service.ts";
 import { parseOrdinalName } from "./domain/ordinal.ts";
 import { CaptureService } from "./voice/capture.ts";
+import { DictationHistoryService, DictationService, LearnFromEditsService, type DictationRuntimeSettings } from "./voice/dictation/index.ts";
+import { AsrEngine, type LocalAsrRuntimePort, type PreAsrDenoiseHook } from "./voice/engine/index.ts";
+import { AsrModelService, type AsrModelServiceOptions } from "./voice/models/index.ts";
+import { DictationPolisher } from "./voice/polish/index.ts";
 import type { AsrPort, LlmPort } from "./voice/ports.ts";
+import { readRecordingSettings } from "./voice/settings.ts";
 import { VadWorkerClient, type VadEngine } from "./voice/vad-client.ts";
 import { OperationLog, LOGGED_COMMANDS, LOG_RETENTION_DAYS, LOG_RETENTION_ROWS, describeObject, type LogEntry } from "./ops/operation-log.ts";
 import { redactDeep } from "./ops/redact.ts";
@@ -71,7 +76,7 @@ import { BASE_FEATURES, MEDIA_FEATURES, CREATIVE_FEATURES, CORE_FEATURES, TOOL_D
 import { libraryModule } from "./commands/library.ts";
 import { scanHost } from "./commands/library-io.ts";
 import { comicModule, videoModule, danmakuCredentials, danmakuCredentialSource, danmakuModule, metadataToken, metadataModule } from "./commands/media.ts";
-import { asrPort, llmPort, embeddingPort, voiceModule } from "./commands/voice.ts";
+import { llmPort, embeddingPort, polishLlmClient, resolveExternalAsrConnection, resolveSyncExternalAsrConnection, voiceModule } from "./commands/voice.ts";
 import { notesModule } from "./commands/notes.ts";
 import { settingsModule, recoverJobs } from "./commands/settings.ts";
 import { inventoryModule } from "./commands/inventory.ts";
@@ -107,6 +112,21 @@ export type ProductAppOptions = LaunchRequest & {
   /** Transcription and text-model access for recordings; the default reads the configured connections. */
   asr?: AsrPort;
   llm?: LlmPort;
+  /** Isolated local speech runtime (`AsrService` in desktop main, or a stand-in in tests). */
+  localAsr?: LocalAsrRuntimePort & {
+    setIdleTimeoutMs?: (ms: number) => void;
+    resetModelStatus?: (modelId: string) => void;
+    unload?: () => Promise<unknown>;
+    dispose?: () => void;
+  };
+  /** Overrides for the local offline ASR model catalog, download allowlist and disk-space probe (tests). */
+  asrModels?: Partial<Omit<AsrModelServiceOptions, "appRoot" | "jobs">>;
+  /** Optional pre-ASR speech enhancement stand-in for unit/integration tests. */
+  asrDenoiseHook?: PreAsrDenoiseHook;
+  /** Maximum single-utterance dictation duration in ms (defaults to 5 minutes). */
+  dictationMaxDurationMs?: number;
+  /** Clock override for dictation history retention/pruning in tests. */
+  dictationNow?: () => Date;
   /** Where vectors for the semantic index come from; the default reads the embedding connections. */
   embedding?: EmbeddingPort;
   /** Switches for the semantic index in tests: no vector extension, and no wait before a failed batch is tried again. */
@@ -148,9 +168,17 @@ export class MangaProductApp {
   readonly covers: CoverService;
   readonly extras: ResourceExtras;
   readonly metadata: MetadataService;
+  readonly bangumiClient: BangumiClient;
   readonly danmaku: DanmakuService;
   readonly dandan: DandanClient;
+  readonly localAsr: ProductAppOptions["localAsr"];
+  readonly asrModels: AsrModelService;
+  readonly asrEngine: AsrEngine;
   readonly voice: CaptureService;
+  readonly dictationHistory: DictationHistoryService;
+  readonly dictationLearn: LearnFromEditsService;
+  readonly polisher: DictationPolisher;
+  readonly dictation: DictationService;
   readonly materials: AgentMaterials;
   readonly log: OperationLog;
   readonly quickTasks: QuickTaskService;
@@ -315,6 +343,7 @@ export class MangaProductApp {
       token: () => metadataToken(this, "bangumi"),
       ...options.bangumi,
     });
+    this.bangumiClient = bangumiClient;
     this.onlineProviders = [new BangumiProvider(bangumiClient, options.bangumi?.apiOrigin), ...(options.extraMetadataProviders ?? [])];
     this.metadata = new MetadataService({
       store: this.store, media: this.media, covers: this.covers, extras: this.extras,
@@ -335,16 +364,87 @@ export class MangaProductApp {
       suggestedQuery: (workId) => this.suggestedQuery(workId), now: options.danmaku?.now,
     });
     this.vadEngine = options.vad ?? new VadWorkerClient({ resourcesPath: options.resourcesPath });
+    this.localAsr = options.localAsr;
+    this.localAsr?.setIdleTimeoutMs?.(readRecordingSettings(this.store).localIdleMinutes * 60_000);
+    this.asrModels = new AsrModelService({
+      appRoot: this.layout.appRoot,
+      jobs: this.media.jobs,
+      fetchImpl: (options.netFetch ?? ((url, init) => fetch(url, init as RequestInit))) as typeof fetch,
+      unloadModel: async () => { await this.localAsr?.unload?.(); },
+      resetRuntimeModelStatus: (modelId) => { this.localAsr?.resetModelStatus?.(modelId); },
+      getRuntimeStatus: (modelId) => (this.localAsr ? this.localAsr.getModelStatus(modelId) : { status: "unloaded" }),
+      onProgress: (progress) => this.notify("asrModel.changed", progress as unknown as Record<string, unknown>),
+      ...options.asrModels,
+    });
+    this.asrEngine = new AsrEngine({
+      modelService: this.asrModels,
+      localRuntime: this.localAsr,
+      resolveConnection: (connectionId) => resolveExternalAsrConnection(this, connectionId),
+      fetchImpl: options.netFetch as typeof fetch | undefined,
+      denoiseHook: options.asrDenoiseHook,
+    });
+    const textPort = options.llm ?? llmPort(this);
     this.voice = new CaptureService({
       store: this.store, media: this.media, vad: this.vadEngine,
-      asr: options.asr ?? asrPort(this), llm: options.llm ?? llmPort(this),
+      asr: options.asr ?? this.asrEngine.createAsrPort({
+        getDefaultSelection: () => this.resolveCaptureEngine(),
+        resolveSyncConnection: (connectionId) => resolveSyncExternalAsrConnection(this, connectionId),
+        shouldDenoise: () => readRecordingSettings(this.store).gtcrnDenoise,
+      }),
+      llm: textPort,
       notify: (topic, payload) => this.notify(topic, payload),
       validateLocator: (revisionId, locator) => assertLocatorFits(this.store, revisionId, locator),
       retryBaseMs: options.voiceRetryBaseMs,
     });
+    this.dictationHistory = new DictationHistoryService({
+      store: this.store,
+      appRoot: this.layout.appRoot,
+      now: options.dictationNow,
+    });
+    this.dictationLearn = new LearnFromEditsService({
+      store: this.store,
+      dictionary: this.voice.dictionary,
+    });
+    this.polisher = new DictationPolisher({
+      llm: polishLlmClient(textPort),
+    });
+    this.dictation = new DictationService({
+      vad: this.vadEngine,
+      asrEngine: this.asrEngine,
+      corrector: this.voice.dictionary,
+      polisher: this.polisher,
+      history: this.dictationHistory,
+      notify: (topic, payload) => this.notify(topic, payload),
+      readSettings: () => {
+        const rec = readRecordingSettings(this.store);
+        return {
+          dictationEngine: this.resolveDictationEngine(),
+          polishMode: rec.polishMode,
+          polishPrompts: rec.polishPrompts,
+          polishConnectionId: rec.polishConnectionId,
+          chineseVariant: rec.chineseVariant,
+          gtcrnDenoise: rec.gtcrnDenoise,
+          retainAudio24h: rec.retainDictationAudio24h,
+          language: rec.language,
+        };
+      },
+      preflight: (settings) => this.preflightDictation(settings),
+      maxDurationMs: options.dictationMaxDurationMs,
+      ...(options.dictationNow ? { now: () => options.dictationNow!().getTime() } : {}),
+    });
     this.materials = new AgentMaterials({ store: this.store, grants: this.grants, comics: this.comics, videos: this.videos, voice: this.voice, spoilerGuard: () => readShell(this.store).spoilerGuard });
     this.media.jobs.onChange((job) => {
-      if (job.kind === "play-copy" || job.kind === "frame-index" || job.kind === "capture-filter" || job.kind === "capture-asr" || job.kind === "capture-organize") this.notify("job.changed", { jobId: job.id, kind: job.kind, key: job.key, state: job.state, progress: job.progress, error: job.error });
+      if (
+        job.kind === "play-copy" ||
+        job.kind === "frame-index" ||
+        job.kind === "capture-filter" ||
+        job.kind === "capture-asr" ||
+        job.kind === "capture-organize" ||
+        job.kind === "model-download" ||
+        job.kind === "dictionary-enrich"
+      ) {
+        this.notify("job.changed", { jobId: job.id, kind: job.kind, key: job.key, state: job.state, progress: job.progress, error: job.error });
+      }
     });
     // The old place a first start moved the profile from (计划 4.9): remembered so settings can offer to clean it, once the person agrees.
     if (this.layout.upgrade?.state === "migrated") {
@@ -489,7 +589,8 @@ export class MangaProductApp {
     const reasons: UpdateBusyReason[] = [];
     try {
       const rec = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM capture_sessions WHERE status = 'recording'").get() as { n: number } | undefined;
-      if ((rec?.n ?? 0) > 0) reasons.push("recording");
+      const dicActive = this.dictation.status();
+      if ((rec?.n ?? 0) > 0 || (dicActive !== null && dicActive.stage === "recording")) reasons.push("recording");
     } catch { /* ignore */ }
     try {
       const rc = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM rough_cut_exports WHERE state = 'running'").get() as { n: number } | undefined;
@@ -497,7 +598,8 @@ export class MangaProductApp {
     } catch { /* ignore */ }
     try {
       const acq = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM acquisition_jobs WHERE state IN ('metadata','downloading','verifying','publishing','importing')").get() as { n: number } | undefined;
-      if ((acq?.n ?? 0) > 0) reasons.push("download");
+      const modelDl = this.asrModels.list().some((item) => item.state === "downloading" || item.state === "verifying");
+      if ((acq?.n ?? 0) > 0 || modelDl) reasons.push("download");
     } catch { /* ignore */ }
     try {
       const run = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_runs WHERE status IN ('queued','running','waiting_input')").get() as { n: number } | undefined;
@@ -583,6 +685,10 @@ export class MangaProductApp {
     if (this.voice.activeId) {
       await wait(this.voice.stop({ sessionId: this.voice.activeId, reason: "deactivated" }));
     }
+    try { this.dictation.cancel(); } catch { /* ignore */ }
+    try { this.voice.dictionary.cancelAllEnrich(); } catch { /* ignore */ }
+    try { this.media.jobs.cancelWhere((job) => job.kind === "model-download" || job.kind === "dictionary-enrich"); } catch { /* ignore */ }
+    try { await this.localAsr?.unload?.(); } catch { /* ignore */ }
     try { this.scanAbort?.abort(); } catch { /* ignore */ }
     this.scan.cancel();
     try { this.exportAbort?.abort(); } catch { /* ignore */ }
@@ -614,7 +720,10 @@ export class MangaProductApp {
     this.pluginRuntime.killAll();
     this.interruptRuns("host closed while the run was in progress");
     this.parseWorker?.kill();
+    this.dictation.close();
+    this.voice.dictionary.cancelAllEnrich();
     this.voice.pipeline.abortAll();
+    this.localAsr?.dispose?.();
     this.media.dispose();
     this.vadEngine.dispose();
     this.store.close();
@@ -791,9 +900,95 @@ export class MangaProductApp {
    */
   async call(actor: Actor, untrusted: unknown, grantHandle: string, requestId?: string): Promise<CommandResult> {
     const result = await this.callInner(actor, untrusted, grantHandle, requestId);
+    if (!this.closed && result.status === "ok" && untrusted && typeof untrusted === "object" && (untrusted as { commandId?: unknown }).commandId === "settings.setRecording") {
+      try { this.localAsr?.setIdleTimeoutMs?.(readRecordingSettings(this.store).localIdleMinutes * 60_000); } catch { /* ignore */ }
+    }
     try { this.syncNoteEmbeds(untrusted, result); } catch { /* the embed relation is derived from the note and is read again by the next change */ }
     try { this.logCommand(actor, untrusted, grantHandle, requestId, result); } catch { /* the log must never turn a finished command into an error */ }
     return result;
+  }
+
+  /** Resolves the ASR engine for recording notes: user's explicit `captureEngine`, else the first configured transcription connection, else an installed local model. */
+  resolveCaptureEngine(): AsrEngineSelection | null {
+    const settings = readRecordingSettings(this.store);
+    if (settings.captureEngine) return settings.captureEngine;
+    const conn = this.store.sqlite
+      .prepare("SELECT id FROM provider_connections WHERE purpose = 'transcription' AND credential_ref IS NOT NULL ORDER BY created_at, rowid LIMIT 1")
+      .get() as { id: string } | undefined;
+    if (conn) return { kind: "connection", connectionId: conn.id };
+    if (this.localAsr) {
+      const models = this.asrModels.list();
+      const local = models.find((item) => item.state === "ready") ?? models.find((item) => item.state === "installed");
+      if (local) return { kind: "local", modelId: local.modelId };
+    }
+    return null;
+  }
+
+  /**
+   * Resolves the ASR engine for in-app dictation: user's explicit `dictationEngine`, else an installed local model (when runtime is present), else the first configured transcription connection.
+   * An installed local model that failed to load still wins over a connection, so its failure is reported instead of the audio silently leaving the machine (计划 4.4).
+   */
+  resolveDictationEngine(): AsrEngineSelection | null {
+    const settings = readRecordingSettings(this.store);
+    if (settings.dictationEngine) return settings.dictationEngine;
+    if (this.localAsr) {
+      const models = this.asrModels.list();
+      const local = (["ready", "loading", "installed", "load_failed"] as const).map((state) => models.find((item) => item.state === state)).find(Boolean);
+      if (local) return { kind: "local", modelId: local.modelId };
+    }
+    const conn = this.store.sqlite
+      .prepare("SELECT id FROM provider_connections WHERE purpose = 'transcription' AND credential_ref IS NOT NULL ORDER BY created_at, rowid LIMIT 1")
+      .get() as { id: string } | undefined;
+    if (conn) return { kind: "connection", connectionId: conn.id };
+    return null;
+  }
+
+  private preflightDictation(runtimeSettings: DictationRuntimeSettings): { loadingModel?: boolean } {
+    const selection = runtimeSettings.dictationEngine;
+    if (!selection) {
+      throw new MangaError(
+        "CAPABILITY_UNAVAILABLE",
+        "尚未配置语音识别引擎，请前往「设置 › 语音转录」下载本地模型或选择转录连接",
+        { retryable: false, details: { reason: "asr_unconfigured", setupHint: "settings.voice" } },
+      );
+    }
+    if (selection.kind === "local") {
+      if (!this.localAsr) {
+        throw new MangaError(
+          "CAPABILITY_UNAVAILABLE",
+          "本地语音识别运行环境未就绪，请前往「设置 › 语音转录」检查本地模型配置",
+          { retryable: false, details: { reason: "local_runtime_unavailable", modelId: selection.modelId, setupHint: "settings.voice" } },
+        );
+      }
+      const status = this.localAsr.getModelStatus(selection.modelId);
+      if (status.status === "load_failed") {
+        throw new MangaError(
+          "CAPABILITY_UNAVAILABLE",
+          status.reason ?? `本地语音模型「${selection.modelId}」载入失败，请前往「设置 › 语音转录」重新载入或重装模型`,
+          { retryable: false, details: { reason: "model_load_failed", engineKind: "local", modelId: selection.modelId, setupHint: "settings.voice" } },
+        );
+      }
+      this.asrModels.getRuntimeFiles(selection.modelId);
+      return { loadingModel: status.status === "unloaded" };
+    }
+    const row = this.store.sqlite
+      .prepare("SELECT id, label, credential_ref FROM provider_connections WHERE id = ? AND purpose = 'transcription'")
+      .get(selection.connectionId) as { id: string; label: string; credential_ref: string | null } | undefined;
+    if (!row) {
+      throw new MangaError(
+        "CAPABILITY_UNAVAILABLE",
+        "所选语音转录连接不存在或尚未配置，请前往「设置 › 语音转录」选择可用引擎",
+        { retryable: false, details: { reason: "connection_unconfigured", engineKind: "connection", connectionId: selection.connectionId, setupHint: "settings.voice" } },
+      );
+    }
+    if (!row.credential_ref) {
+      throw new MangaError(
+        "CREDENTIAL_UNAVAILABLE",
+        `语音转录连接「${row.label || row.id}」缺少访问密钥，请前往「设置 › 模型连接」重新配置`,
+        { retryable: false, details: { reason: "credential_unavailable", engineKind: "connection", connectionId: row.id, setupHint: "settings.connections" } },
+      );
+    }
+    return { loadingModel: false };
   }
 
   /** After a command that changed a note's blocks, the embeds the note holds are made to match them, so backlinks and states never lag the text. */

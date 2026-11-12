@@ -266,7 +266,7 @@ describe("Update review: actual electron-updater paths and recovery (AT-159, AT-
         runInstaller: () => { installerRuns += 1; return !(fail && failure === "installer"); },
       });
       expect((await app.update.check()).state).toBe("ready");
-      const backup = vi.spyOn(app.store.sqlite, "serialize");
+      const backup = vi.spyOn(app.store, "copyForBackup");
       if (failure === "backup") backup.mockImplementation(() => { throw new Error("backup failed"); });
       await expect(app.update.restartToUpdate()).rejects.toMatchObject({ code: "UPDATE_UNAVAILABLE" });
       expect(installerRuns).toBe(failure === "installer" ? 1 : 0);

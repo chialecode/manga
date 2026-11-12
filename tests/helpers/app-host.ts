@@ -167,7 +167,7 @@ export function installHost(options: HostOptions = {}) {
     channel,
     commit: "c79f49a",
     builtAt: "2026-11-08T08:00:00.000Z",
-    schemaVersion: 15,
+    schemaVersion: 16,
   };
   let updateSettings = { autoCheck: true, autoDownload: true };
   const context = contextHandlers(options);

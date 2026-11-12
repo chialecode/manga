@@ -7,6 +7,7 @@ import { currentStage, loadGate, packagedFingerprintKeys, repoRoot as root, runD
 import {
   TEST_CHANNEL_INSTALL,
   buildInstaller,
+  channelIcons,
   compareRealInstallations,
   readOpenWithState,
   removeTestInstallations,
@@ -92,6 +93,19 @@ const shortcuts = (channel) => [
 const roamingNames = () => fs.readdirSync(process.env.APPDATA ?? "").filter((name) => /^manga/i.test(name)).sort();
 const installDir = (channel) => path.join(places.programs, TEST_CHANNEL_INSTALL[channel].dirName);
 const exeOf = (channel) => path.join(installDir(channel), `${TEST_CHANNEL_INSTALL[channel].executableName}.exe`);
+// The installed copy shows its channel's icon (the development one has the "DEV" badge): resources/icon.ico, which the windows use, is the channel's
+// file, and the executable holds the channel's largest frame (resedit writes the frames' bytes as they are).
+function showsChannelIcon(channel) {
+  const ico = fs.readFileSync(channelIcons(channel).ico);
+  let largest = Buffer.alloc(0);
+  for (let i = 0; i < ico.readUInt16LE(4); i += 1) {
+    const size = ico.readUInt32LE(6 + 16 * i + 8);
+    const offset = ico.readUInt32LE(6 + 16 * i + 12);
+    if (size > largest.length) largest = ico.subarray(offset, offset + size);
+  }
+  const resourcesIcon = path.join(installDir(channel), "resources", "icon.ico");
+  return largest.length > 0 && fs.existsSync(resourcesIcon) && fs.readFileSync(resourcesIcon).equals(ico) && fs.readFileSync(exeOf(channel)).includes(largest);
+}
 const isolatedEnv = () => {
   const env = { ...process.env, LOCALAPPDATA: places.local, MANGA_DOCUMENTS_DIR: places.documents, MANGA_DOWNLOADS_DIR: places.downloads, MANGA_WINDOW_HIDDEN: "1" };
   for (const name of ["MANGA_PROFILE_ROOT", "MANGA_POINTER_FILE", "MANGA_CHANNEL", "NODE_ENV", "ELECTRON_RUN_AS_NODE"]) delete env[name];
@@ -136,14 +150,18 @@ try {
   const installers = {};
   const preparedInstallers = {};
   const keys = {};
-  for (const channel of ["release", "development"]) {
-    const made = await buildInstaller({
-      appDir,
-      channel,
-      workDir: path.join(places.work, channel),
-      version: versions[channel],
-      testIdentity: true,
-    });
+  // The four test-identity installers are independent (own work folder each), so electron-builder makes them at the same time: the two
+  // channels, the release upgrade (`0.1.2`) and the next development build of the packaged updater rehearsal.
+  const [releaseMade, developmentMade, upgradeInstaller, developmentNext] = await Promise.all([
+    buildInstaller({ appDir, channel: "release", workDir: path.join(places.work, "release"), version: versions.release, testIdentity: true }),
+    buildInstaller({ appDir, channel: "development", workDir: path.join(places.work, "development"), version: versions.development, testIdentity: true }),
+    buildInstaller({ appDir, channel: "release", workDir: path.join(places.work, "release-upgrade"), version: releaseVersionB, testIdentity: true }),
+    buildInstaller({
+      appDir, channel: "development", workDir: path.join(places.work, "development-upgrade"),
+      version: resolveBuildVersion("development", { tags: [], date: new Date(Date.parse(startedAt) + 60_000) }), testIdentity: true,
+    }),
+  ]);
+  for (const [channel, made] of [["release", releaseMade], ["development", developmentMade]]) {
     installers[channel] = made.installer;
     preparedInstallers[channel === "release" ? "releasePrevious" : "developmentPrevious"] = made;
     step(`${channel}: installer built and configured`, true, {
@@ -166,7 +184,9 @@ try {
         && entry.Publisher === "chialecode",
       { version: entry?.DisplayVersion ?? null, publisher: entry?.Publisher ?? null, seconds: Math.round(result.ms / 1000) },
     );
-    step(`${channel}: Start menu and desktop shortcuts`, shortcuts(channel).every((file) => fs.existsSync(file)));
+    // A silent first installation makes both shortcuts.
+    step(`${channel}: Start menu and desktop shortcuts after a silent first install`, shortcuts(channel).every((file) => fs.existsSync(file)));
+    step(`${channel}: the executable and the windows show the channel's icon`, showsChannelIcon(channel));
     // "Open with" (4.5, AT-166): every ProgID, OpenWithProgids value, Applications entry and Capabilities value is there with this folder's
     // executable, and no extension's own default value changed.
     const openWith = readOpenWithState(channel, { testIdentity: true, exePath: exeOf(channel) });
@@ -222,15 +242,9 @@ try {
   step("nothing written to the roaming profile", JSON.stringify(roamingNames()) === JSON.stringify(roamingBefore), { before: roamingBefore.length, after: roamingNames().length });
 
   // Upgrade rehearsal over a running copy (`0.1.1` -> `0.1.2`, 计划 4.6, 5.3 W7, AT-162):
-  // build a `0.1.2` test-identity release installer, install it over the running `0.1.1` copy without naming a folder,
+  // install the `0.1.2` test-identity release installer over the running `0.1.1` copy without naming a folder,
   // and verify the running copy closes, the folder and existing data are preserved, and the installed version is `0.1.2`.
-  const upgradeInstaller = await buildInstaller({
-    appDir,
-    channel: "release",
-    workDir: path.join(places.work, "release-upgrade"),
-    version: releaseVersionB,
-    testIdentity: true,
-  });
+  // The `0.1.2` installer was made with the others at the start.
   preparedInstallers.releaseNext = upgradeInstaller;
   const running = spawn(exeOf("release"), [], { env: isolatedEnv(), detached: false, windowsHide: true, stdio: "ignore" });
   const runtimeFile = path.join(places.local, TEST_CHANNEL_INSTALL.release.dirName, "runtime", "running-instance.json");
@@ -240,6 +254,8 @@ try {
   }
   await sleep(1000);
   const exited = new Promise((resolve) => running.once("exit", () => resolve(true)));
+  // The person removed the desktop shortcut and kept the Start menu one: a silent over-installation keeps that and makes no new shortcut.
+  fs.rmSync(shortcuts("release")[1], { force: true });
   const again = install(upgradeInstaller.installer, "release", false);
   const closed = await Promise.race([exited, sleep(15_000).then(() => false)]);
   if (!closed) running.kill();
@@ -257,6 +273,19 @@ try {
       && fs.existsSync(path.join(releaseAppRoot, "logs", "smoke-initial.json")),
     { previousVersion: releaseVersionA, upgradedVersion: upgradedBuild?.version ?? null, registryVersion: upgradedEntry?.DisplayVersion ?? null },
   );
+  {
+    const [startMenuLink, desktopLink] = shortcuts("release");
+    step("release: silent over-install kept the Start menu shortcut and did not make the removed desktop one again",
+      fs.existsSync(startMenuLink) && !fs.existsSync(desktopLink));
+  }
+  {
+    // Development: with both shortcuts removed, a silent over-installation makes the desktop one again (the sign of a new build) and no Start menu one.
+    for (const file of shortcuts("development")) fs.rmSync(file, { force: true });
+    const devAgain = install(installers.development, "development");
+    const [startMenuLink, desktopLink] = shortcuts("development");
+    step("development: silent over-install made the desktop shortcut again and no Start menu shortcut",
+      devAgain.status === 0 && fs.existsSync(desktopLink) && !fs.existsSync(startMenuLink));
+  }
   {
     const openWithAfterUpgrade = readOpenWithState("release", { testIdentity: true, exePath: exeOf("release") });
     const wrongAfterUpgrade = openWithAfterUpgrade.values.filter((value) => value.actual !== value.expected);
@@ -308,10 +337,7 @@ try {
     }
     step(`${channel}: data and files kept`, fs.existsSync(path.join(appRoot, "data", "manga.sqlite")) && fs.existsSync(path.join(places.documents, dirName)));
   }
-  preparedInstallers.developmentNext = await buildInstaller({
-    appDir, channel: "development", workDir: path.join(places.work, "development-upgrade"),
-    version: resolveBuildVersion("development", { tags: [], date: new Date(Date.parse(startedAt) + 60_000) }), testIdentity: true,
-  });
+  preparedInstallers.developmentNext = developmentNext;
   updateRehearsal = await runPackagedUpdateRehearsal({
     appDir, version: releaseVersionB, previousVersion: releaseVersionA,
     includeDevelopment: true, preparedInstallers,

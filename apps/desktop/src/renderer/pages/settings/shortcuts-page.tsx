@@ -9,7 +9,11 @@ type T = Translator["t"];
 type KeyBindings = ReturnType<typeof useKeyBindings>;
 
 const GROUPS: readonly KeyGroup[] = ["global", "video", "comic", "novel"];
-const nameOf = (t: T, id: string) => t(`keys.${id}` as MessageKey);
+const nameOf = (t: T, id: string) => (
+  id === "recording.holdKey" ? t("msettings.holdKey")
+    : id === "recording.toggleKey" ? t("msettings.toggleKey")
+      : t(`keys.${id}` as MessageKey)
+);
 
 /** Waits for the next key and hands its chord over; Esc gives up. While it waits, the key belongs to it and nothing else in the window reacts. */
 function useKeyCapture(waiting: boolean, onChord: (chord: string) => void, onCancel: () => void) {
@@ -30,7 +34,7 @@ function useKeyCapture(waiting: boolean, onChord: (chord: string) => void, onCan
   }, [waiting, onChord, onCancel]);
 }
 
-function ActionRow(props: { t: T; id: string; keys: KeyBindings; adding: string | null; setAdding: (id: string | null) => void; message: (text: string) => void }) {
+function ActionRow(props: { t: T; id: string; keys: KeyBindings; recording: { holdKey: string; toggleKey: string }; adding: string | null; setAdding: (id: string | null) => void; message: (text: string) => void }) {
   const { t, id, keys } = props;
   const entry = keyAction(id)!;
   const chords = keys.table[id] ?? [];
@@ -44,7 +48,7 @@ function ActionRow(props: { t: T; id: string; keys: KeyBindings; adding: string 
   const onChord = (chord: string) => {
     props.setAdding(null);
     if (chords.includes(chord)) return;
-    const other = conflictsWith(keys.table, id, chord)[0];
+    const other = conflictsWith(keys.table, id, chord, props.recording)[0];
     if (other) { props.message(t("shortcuts.conflict", { key: chordLabel(chord), action: nameOf(t, other) })); return; }
     void set([...chords, chord]);
   };
@@ -53,7 +57,7 @@ function ActionRow(props: { t: T; id: string; keys: KeyBindings; adding: string 
   const reset = () => {
     const withDefaults = { ...keys.table, [id]: [...entry.defaults] };
     for (const chord of entry.defaults) {
-      const other = conflictsWith(withDefaults, id, chord)[0];
+      const other = conflictsWith(withDefaults, id, chord, props.recording)[0];
       if (other) { props.message(t("shortcuts.resetConflict", { key: chordLabel(chord), action: nameOf(t, other) })); return; }
     }
     void set(null);
@@ -109,7 +113,7 @@ export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: { hol
           actions={position === 0 ? <button type="button" className="secondary-button" data-testid="keys-reset-all" disabled={changed === 0} onClick={() => { void keys.save(Object.fromEntries(Object.keys(keys.overrides).map((id) => [id, null]))).then((refused) => setMessage(refused ? t("shortcuts.refused", { reason: refused }) : "")); }}>{t("shortcuts.resetAll")}</button> : undefined}
         >
           {KEY_ACTIONS.filter((entry) => entry.group === group).map((entry) => (
-            <ActionRow key={entry.id} t={t} id={entry.id} keys={keys} adding={adding} setAdding={setAdding} message={setMessage} />
+            <ActionRow key={entry.id} t={t} id={entry.id} keys={keys} recording={props.recording} adding={adding} setAdding={setAdding} message={setMessage} />
           ))}
         </SettingsSection>
       ))}

@@ -49,6 +49,25 @@ function copyModules(buildPath: string, roots: string[]): void {
   for (const root of roots) visit(root, true);
 }
 
+/**
+ * Stages `sherpa-onnx-node` and its platform binary package (`sherpa-onnx-win-x64`) directly into
+ * `resources/app.asar.unpacked/node_modules/` outside `app.asar` (`AutoUnpackNativesPlugin` only unpacks
+ * `.node`/`.dll`, whereas `utilityProcess` executes `resources/asr-host.cjs` outside `app.asar` and needs
+ * both the JS wrapper files and native DLLs on the real filesystem).
+ */
+function stageUnpackedSpeechRuntime(resourcesDir: string): void {
+  const packages = ["sherpa-onnx-node", ...(process.platform === "win32" && process.arch === "x64" ? ["sherpa-onnx-win-x64"] : [])];
+  for (const pkg of packages) {
+    const from = path.join(repoRoot, "node_modules", pkg);
+    if (!existsSync(path.join(from, "package.json"))) {
+      throw new Error(`${pkg} is missing; run pnpm install`);
+    }
+    const to = path.join(resourcesDir, "app.asar.unpacked", "node_modules", pkg);
+    mkdirSync(path.dirname(to), { recursive: true });
+    cpSync(from, to, { recursive: true });
+  }
+}
+
 /** `MANGA_BUILD_CHANNEL=release` makes a release; anything else a development build. */
 export const buildChannel = (): "release" | "development" => (process.env.MANGA_BUILD_CHANNEL === "release" ? "release" : "development");
 
@@ -56,8 +75,8 @@ export default {
   outDir: desktopPackageDir,
   packagerConfig: {
     asar: {
-      // Native files, the worker bundles, and the whole canvas package and its platform build (PDF.js looks for them next to the unpacked PDF.js files).
-      unpack: "{**/{.**,**}/**/{*.node,*.dll,icudtl.dat,parse-worker.cjs,vad-worker.cjs},**/node_modules/@napi-rs/**}",
+      // Native files, the worker bundles, and the whole canvas and sherpa-onnx packages (utilityProcess loads sherpa-onnx-node + sherpa-onnx-win-x64 outside app.asar).
+      unpack: "{**/{.**,**}/**/{*.node,*.dll,icudtl.dat,parse-worker.cjs,vad-worker.cjs,asr-host.cjs},**/node_modules/@napi-rs/**,**/node_modules/sherpa-onnx-node/**,**/node_modules/sherpa-onnx-win-x64/**}",
     },
     name: "manga",
     executableName: "manga",
@@ -79,8 +98,11 @@ export default {
   hooks: {
     packageAfterCopy: async (_config: unknown, buildPath: string) => {
       copyRuntimeNative(buildPath);
+      if (process.platform === "win32" && process.arch === "x64" && !existsSync(path.join(repoRoot, "node_modules", "sherpa-onnx-win-x64", "sherpa-onnx.node"))) {
+        throw new Error("sherpa-onnx-win-x64 prebuild missing; run pnpm install");
+      }
       copyModules(buildPath, ["sharp", "@napi-rs/canvas", "sqlite-vec", "electron-updater"]);
-      for (const name of ["parse-worker.cjs", "vad-worker.cjs"]) {
+      for (const name of ["parse-worker.cjs", "vad-worker.cjs", "asr-host.cjs"]) {
         const worker = path.join(desktopRoot, ".vite/build", name);
         if (!existsSync(worker)) throw new Error(`${name} missing after Vite build`);
         const dest = path.join(buildPath, ".vite/build", name);
@@ -92,6 +114,7 @@ export default {
       // Everything a package carries besides its code goes next to the app archive with a manifest the app checks at start.
       for (const output of result.outputPaths) {
         const resources = path.join(output, "resources");
+        stageUnpackedSpeechRuntime(resources);
         stageBundledAssets(resources, { rendererDir: path.join(desktopRoot, ".vite/renderer/main_window"), buildDir: path.join(desktopRoot, ".vite/build") });
         // The plugins that come with the application are signed with the first party's key at this point; without the key the package is not made.
         await stageBundledPlugins(resources);

@@ -6,6 +6,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { history, redo, undo } from "@tiptap/pm/history";
 import { keymap } from "@tiptap/pm/keymap";
 import { contentOf, type Range } from "./draft-model.ts";
+import { registerTiptapEditor } from "../../../voice/editable-target.ts";
 
 const DraftBlock = Node.create({
   name: "draftBlock",
@@ -65,6 +66,7 @@ export function DraftEditor(props: { text: string; epoch: number; label: string;
     onUpdate: ({ editor: instance }) => change.current(textOf(instance.state.doc)),
     onSelectionUpdate: ({ editor: instance }) => selection.current(selectedRange(instance.state.doc, instance.state.selection)),
   });
+  useEffect(() => registerTiptapEditor(() => editor, { kind: "draft" }), [editor]);
   const shown = useRef(props.epoch);
   useEffect(() => {
     if (!editor || editor.isDestroyed || shown.current === props.epoch) return;

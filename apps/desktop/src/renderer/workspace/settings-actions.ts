@@ -63,7 +63,11 @@ export function useSettingsActions(s: Services, active: boolean) {
       purpose: fields.purpose,
       timeoutMs: Number(fields.timeoutMs) || 60_000,
       credentialHandle,
-      ...(Object.keys(patch).length > 0 && (fields.purpose === "text" || fields.purpose === "vision") ? { profile: patch } : {}),
+      ...(Object.keys(patch).length > 0 && (fields.purpose === "text" || fields.purpose === "vision")
+        ? { profile: patch }
+        : fields.purpose === "transcription" && patch.transcriptionInterface
+          ? { profile: { transcriptionInterface: patch.transcriptionInterface } }
+          : {}),
     });
     if (!saved.ok) return { ok: false, message: saved.error.message };
     s.setError(undefined);

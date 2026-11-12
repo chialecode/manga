@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  AsrEngineSelectionSchema,
+  CHINESE_VARIANTS,
+  DICTATION_INSERT_MODES,
+  POLISH_MODES,
+  PolishPromptsSchema,
+} from "./dictation.ts";
 import { SourceLocatorSchema } from "./location.ts";
 import { PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } from "./inputs-creative.ts";
 import { ContextIdSchema } from "./workspace-state.ts";
@@ -237,6 +244,21 @@ export const MediaCommandInputs = {
       x: z.number().int().min(-20000).max(20000).nullable().optional(),
       y: z.number().int().min(-20000).max(20000).nullable().optional(),
     }).strict().optional(),
+    echoCancellation: z.boolean().optional(),
+    systemLoopbackAec: z.boolean().optional(),
+    browserNoiseSuppression: z.boolean().optional(),
+    autoGainControl: z.boolean().optional(),
+    gtcrnDenoise: z.boolean().optional(),
+    dictationHoldKey: z.string().min(1).max(32).optional(),
+    dictationInsertMode: z.enum(DICTATION_INSERT_MODES).optional(),
+    polishMode: z.enum(POLISH_MODES).optional(),
+    polishPrompts: PolishPromptsSchema.optional(),
+    polishConnectionId: id.nullable().optional(),
+    chineseVariant: z.enum(CHINESE_VARIANTS).optional(),
+    dictationEngine: AsrEngineSelectionSchema.nullable().optional(),
+    captureEngine: AsrEngineSelectionSchema.nullable().optional(),
+    localIdleMinutes: z.number().int().min(1).max(120).optional(),
+    retainDictationAudio24h: z.boolean().optional(),
   }).strict(),
   "settings.getModules": z.object({}).strict(),
   "settings.setModule": z.object({ featureId: z.string().min(1).max(64), enabled: z.boolean() }).strict(),

@@ -26,12 +26,23 @@ export interface AsrPort {
   }): Promise<TranscriptionResult>;
 }
 
-export type LlmConnection = { id: string; /** The model the connection talks to, when the port knows it; kept with what it wrote. */ model?: string };
+export type LlmConnection = {
+  id: string;
+  /** The model the connection talks to, when the port knows it; kept with what it wrote. */
+  model?: string;
+  timeoutMs?: number;
+};
 
-/** Text-only model used to turn a transcript into a draft note. Audio is never sent through it. */
+/** Text-only model used to turn a transcript into a draft note or polish dictation text. Audio is never sent through it. */
 export interface LlmPort {
   resolve(connectionId?: string): LlmConnection | null;
-  complete(connection: LlmConnection, request: { system: string; user: string; signal: AbortSignal }): Promise<string>;
+  complete(connection: LlmConnection, request: {
+    system: string;
+    user: string;
+    temperature?: number;
+    timeoutMs?: number;
+    signal: AbortSignal;
+  }): Promise<string>;
 }
 
 export const NO_ASR: AsrPort = {

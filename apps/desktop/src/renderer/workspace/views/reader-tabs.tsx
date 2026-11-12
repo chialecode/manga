@@ -238,7 +238,7 @@ function VideoBody({ env }: { env: TabEnv }) {
         screenshots={s.screenshots}
         danmakuOn={s.facets.has("danmaku")}
         onDanmakuSettings={() => s.open.settings("danmaku")}
-        duck={s.recorder.duck}
+        duck={{ active: s.recorder.duck.active || Boolean(s.dictation?.active), mode: s.recorder.duck.mode }}
         tools={s.facets.has("roughcut") ? ({ currentMs, durationMs, interval }) => (
           <AddToRoughcut t={t} resourceId={doc.resourceId} revisionId={doc.revisionId} title={doc.title} durationMs={durationMs} currentMs={currentMs} interval={interval} onError={s.setError} onNotice={s.setNotice} />
         ) : undefined}

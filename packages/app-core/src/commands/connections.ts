@@ -1,6 +1,6 @@
 /** Model connections: listing, saving, probing and testing them. */
 import { MangaError, createId, type CommandEnvelope } from "@manga/contracts";
-import { completeText, streamText, transcribeAudio, normalizeBaseUrl, rejectCredentialUrl, syntheticWav, joinApiPath, type AiRuntimeId } from "@manga/model-protocol";
+import { completeText, streamText, transcribeAudio, transcribeChatAudio, normalizeBaseUrl, rejectCredentialUrl, syntheticWav, joinApiPath, type AiRuntimeId } from "@manga/model-protocol";
 import sharp from "sharp";
 import { applyProfile, effectiveProfile, forgetDetected, ModelProfileSchema, type ConnectionTestResult, type ModelProfile } from "@manga/contracts/models";
 import { failureOf, modelLimitsOf, parseLastTest } from "../model-probe.ts";
@@ -240,14 +240,24 @@ export async function testConnection(app: ConnectionsHost, envelope: CommandEnve
     return { ok: true, vectors: json.data.length };
   }
   if (input.capability === "transcription") {
-    const result = await transcribeAudio(row.base_url, apiKey, {
-      model: row.model_id,
-      fileName: "probe.wav",
-      bytes: syntheticWav(),
-      mimeType: "audio/wav",
-      signal,
-      timeoutMs,
-    });
+    const verified = JSON.parse(String(row.verified_capabilities_json || "[]")) as string[];
+    const profile = effectiveProfile(row.profile_json, verified);
+    const result = profile.transcriptionInterface === "chat_input_audio"
+      ? await transcribeChatAudio(row.base_url, apiKey, {
+        model: row.model_id,
+        bytes: syntheticWav(),
+        format: "wav",
+        signal,
+        timeoutMs,
+      })
+      : await transcribeAudio(row.base_url, apiKey, {
+        model: row.model_id,
+        fileName: "probe.wav",
+        bytes: syntheticWav(),
+        mimeType: "audio/wav",
+        signal,
+        timeoutMs,
+      });
     if (!result.text.trim()) throw new MangaError("MODEL_CAPABILITY_MISSING", "transcription probe returned empty text");
     markCapability(app, row.id, "transcription");
     return { ok: true, text: result.text };

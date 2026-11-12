@@ -459,7 +459,7 @@ export const zhCNMedia = {
   "msettings.retention": "录音保留",
   "msettings.retentionKeep": "保留音频，可回放",
   "msettings.retentionDiscard": "转写后清理音频",
-  "msettings.duck": "录音时的播放",
+  "msettings.duck": "录音与听写时视频的声音",
   "msettings.duckNone": "不处理",
   "msettings.duckLower": "降低音量",
   "msettings.duckPause": "暂停播放",

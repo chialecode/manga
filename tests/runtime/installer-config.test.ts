@@ -10,11 +10,16 @@ import {
   DEFAULT_ICON_ICO,
   DEFAULT_ICON_PNG,
   DEFAULT_ICON_SVG,
+  DEV_ICON_ICO,
+  DEV_ICON_PNG,
+  DEV_ICON_SVG,
   ICON_SIZES,
   INSTALLER_META,
   TEST_CHANNEL_INSTALL,
   appUpdateYaml,
+  averageDown,
   checkAppUpdateConfig,
+  channelIcons,
   checkInstallerConfig,
   compareRealInstallations,
   installMeta,
@@ -61,12 +66,12 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
         runAfterFinish: true,
         language: "2052",
         installerLanguages: ["zh_CN"],
-        installerIcon: DEFAULT_ICON_ICO,
-        uninstallerIcon: DEFAULT_ICON_ICO,
-        installerHeaderIcon: DEFAULT_ICON_ICO,
+        installerIcon: channelIcons(channel).ico,
+        uninstallerIcon: channelIcons(channel).ico,
+        installerHeaderIcon: channelIcons(channel).ico,
       });
       expect(config.win).toMatchObject({
-        icon: DEFAULT_ICON_ICO,
+        icon: channelIcons(channel).ico,
         signtoolOptions: {
           publisherName: ["chialecode"],
         },
@@ -86,6 +91,37 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
     expect(installerInclude("release")).toMatch(/InstallLocation[\s\S]*GetDParameter[\s\S]*\$\{If\} \$R1 == ""[\s\S]*\$\{AndIf\} \$R0 == ""/);
   });
 
+  it("makes the shortcuts itself: both optional in the wizard, both on a silent first install, only dev's desktop one again on a silent over-install", () => {
+    for (const channel of ["release", "development"] as const) {
+      const config = make(channel);
+      const include = installerInclude(channel);
+      expect(config.nsis).toMatchObject({ createDesktopShortcut: false, createStartMenuShortcut: false });
+      // Wizard: a page with both boxes, skipped on updates; they start checked on a first install, otherwise as the shortcuts are.
+      expect(include).toContain("创建开始菜单快捷方式");
+      expect(include).toContain("创建桌面快捷方式");
+      expect(include).toMatch(/Function MangaShortcutsPage\r\n {4}\$\{if\} \$\{isUpdated\}\r\n {6}Abort/);
+      expect(include).toMatch(/StrCpy \$MangaWantStartMenu \$MangaHadStartMenu\r\n {2}StrCpy \$MangaWantDesktop \$MangaHadDesktop\r\n {2}\$\{if\} \$MangaFirstInstall == "1"\r\n {4}StrCpy \$MangaWantStartMenu "1"\r\n {4}StrCpy \$MangaWantDesktop "1"/);
+      // Before anything changes: installed or not, and which shortcuts exist.
+      expect(include).toMatch(/!macro customInit[\s\S]*!insertmacro MangaShortcutsInit\r\n!macroend/);
+      expect(include).toMatch(/ReadRegStr \$R2 HKCU "\$\{INSTALL_REGISTRY_KEY\}" InstallLocation/);
+      // Silent or updated: keep what is there, both on a first install; only the development channel forces the desktop shortcut.
+      expect(include).toMatch(/\$\{if\} \$\{Silent\}\r\n {2}\$\{orIf\} \$\{isUpdated\}\r\n[^\r]*\r\n {4}StrCpy \$R8 \$MangaHadStartMenu\r\n {4}StrCpy \$R9 \$MangaHadDesktop\r\n {4}\$\{if\} \$MangaFirstInstall == "1"\r\n {6}StrCpy \$R8 "1"\r\n {6}StrCpy \$R9 "1"/);
+      expect(include).toMatch(/!ifdef MANGA_DESKTOP_ON_UPDATE\r\n {6}StrCpy \$R9 "1"\r\n {4}!endif/);
+      expect(include.includes("!define MANGA_DESKTOP_ON_UPDATE")).toBe(channel === "development");
+      expect(include).toMatch(/!macro customInstall\r\n {2}!insertmacro MangaShortcutsInstall/);
+      expect(include).toMatch(/!macro customUnInstall\r\n {2}!insertmacro MangaShortcutsUninstall/);
+      // Uninstall removes both, but not for an over-install or update (the old uninstaller always gets --updated).
+      expect(include).toMatch(/!macro MangaShortcutsUninstall\r\n {2}\$\{ifNot\} \$\{isUpdated\}\r\n {4}WinShell::UninstShortcut "\$SMPROGRAMS\\\$\{SHORTCUT_NAME\}\.lnk"[\s\S]*Delete "\$DESKTOP\\\$\{SHORTCUT_NAME\}\.lnk"\r\n {2}\$\{endIf\}/);
+      expect(checkInstallerConfig(channel, config, include)).toEqual([]);
+      expect(checkInstallerConfig(channel, { ...config, nsis: { ...config.nsis, createStartMenuShortcut: true } }, include)).toEqual(["shortcuts not the include's"]);
+      expect(checkInstallerConfig(channel, { ...config, nsis: { ...config.nsis, createDesktopShortcut: true } }, include)).toEqual(["shortcuts not the include's"]);
+      expect(checkInstallerConfig(channel, config, include.replace("  !insertmacro MangaShortcutsInstall", ""))).toEqual(["shortcuts not the include's"]);
+    }
+    // A release include does not make the development channel's desktop shortcut again.
+    const dev = make("development");
+    expect(checkInstallerConfig("development", dev, installerInclude("release"))).toContain("shortcuts not the include's");
+  });
+
   it("keeps the two channels apart in what Windows tells apart", () => {
     const release = CHANNEL_INSTALL.release;
     const development = CHANNEL_INSTALL.development;
@@ -99,9 +135,10 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, deleteAppDataOnUninstall: true } }, installerInclude("release"))).toEqual(["uninstall deletes data"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, oneClick: true, allowElevation: true } }, installerInclude("release"))).toEqual(["one-click", "asks for elevation"]);
     expect(checkInstallerConfig("release", config, installerInclude("development"))).toEqual(["default folder", "\"Open with\" registration missing or different"]);
-    expect(checkInstallerConfig("development", config, installerInclude("development"))).toEqual(["appId app.manga.desktop", "productName MANGA"]);
+    expect(checkInstallerConfig("development", config, installerInclude("development"))).toEqual(["appId app.manga.desktop", "productName MANGA", "not the channel's icon"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, language: "1033", installerLanguages: ["en_US"] } }, installerInclude("release"))).toEqual(["not Simplified Chinese (zh_CN / 2052)"]);
     expect(checkInstallerConfig("release", { ...config, win: { ...config.win, icon: "" } }, installerInclude("release"))).toEqual(["missing icon"]);
+    expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, installerIcon: DEV_ICON_ICO } }, installerInclude("release"))).toEqual(["not the channel's icon"]);
     expect(checkInstallerConfig("release", { ...config, extraMetadata: { ...config.extraMetadata, author: { name: "" } } }, installerInclude("release"))).toEqual(["missing author"]);
   });
 
@@ -158,7 +195,8 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
 
     const svgText = fs.readFileSync(DEFAULT_ICON_SVG, "utf8");
     expect(svgText).toContain("<svg");
-    expect(svgText).toContain("#AD3268");
+    expect(svgText).toContain("#3C4043");
+    expect(svgText).not.toContain("#F3A115");
 
     const pngBytes = fs.readFileSync(DEFAULT_ICON_PNG);
     expect(pngSize(pngBytes)).toEqual({ width: 512, height: 512 });
@@ -173,6 +211,27 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
     });
     const parsedByResedit = resedit.Data.IconFile.from(icoBytes);
     expect(parsedByResedit.icons).toHaveLength(ICON_SIZES.length);
+  });
+
+  it("gives the development channel its own icon: the mark on dark gray with an amber \"DEV\" badge, in the same sizes (AT-162)", () => {
+    expect(channelIcons("release")).toEqual({ svg: DEFAULT_ICON_SVG, png: DEFAULT_ICON_PNG, ico: DEFAULT_ICON_ICO });
+    expect(channelIcons("development")).toEqual({ svg: DEV_ICON_SVG, png: DEV_ICON_PNG, ico: DEV_ICON_ICO });
+    const svgText = fs.readFileSync(DEV_ICON_SVG, "utf8");
+    expect(svgText).toContain("#3C4043");
+    expect(svgText).toContain("#F3A115");
+    expect(pngSize(fs.readFileSync(DEV_ICON_PNG))).toEqual({ width: 512, height: 512 });
+    const icoBytes = fs.readFileSync(DEV_ICON_ICO);
+    expect(inspectIco(icoBytes)).toEqual({ valid: true, count: ICON_SIZES.length, sizes: ICON_SIZES, problems: [] });
+    expect(icoBytes.equals(fs.readFileSync(DEFAULT_ICON_ICO))).toBe(false);
+  });
+
+  it("draws every icon size by averaging one 1024 px render, so small sizes keep the strokes' weight", () => {
+    // A 4x4 master, left half opaque white, right half transparent: halving keeps the edge, quartering blends it by area.
+    const master = Buffer.alloc(4 * 4 * 4);
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 2; x++) master.set([255, 255, 255, 255], (y * 4 + x) * 4);
+    expect([...averageDown(master, 4, 2)]).toEqual([255, 255, 255, 255, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0]);
+    // Transparent pixels do not darken the colour, only lower the coverage.
+    expect([...averageDown(master, 4, 1)]).toEqual([255, 255, 255, 128]);
   });
 
   it("requires publisherName in app-update.yml so electron-updater calls verifyUpdateCodeSignature, and fails when publisherName is removed (AT-160, 计划 3.1)", async () => {

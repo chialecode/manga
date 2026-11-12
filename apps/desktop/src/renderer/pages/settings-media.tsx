@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { KEY_ACTIONS, recordingCodeToChord, type KeyTable } from "@manga/contracts/keys";
 import type { ReadingStylePatch, ShellPreference } from "@manga/contracts/reading";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
@@ -103,7 +104,7 @@ export function Modules(props: { t: T; onChanged: () => Promise<void> | void }) 
   );
 }
 
-export function Recording(props: { t: T; settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void>; onNotice: (message: string) => void }) {
+export function Recording(props: { t: T; settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void>; onNotice: (message: string) => void; keyTable?: KeyTable }) {
   const { t, settings } = props;
   const [devices, setDevices] = useState<Array<{ id: string; label: string }>>([]);
   const [clash, setClash] = useState(false);
@@ -114,6 +115,13 @@ export function Recording(props: { t: T; settings: RecordingSettings; save: (pat
   function pickKey(field: "holdKey" | "toggleKey", code: string) {
     const other = field === "holdKey" ? settings.toggleKey : settings.holdKey;
     if (code === other) { setClash(true); return; }
+    if (props.keyTable) {
+      const chord = recordingCodeToChord(code);
+      if (chord && KEY_ACTIONS.some((action) => (props.keyTable![action.id] ?? []).includes(chord))) {
+        setClash(true);
+        return;
+      }
+    }
     setClash(false);
     void props.save({ [field]: code });
   }

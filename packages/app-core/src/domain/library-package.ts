@@ -295,7 +295,18 @@ function* exportSteps(store: DrizzleStore, destDir: string, options: PackageExpo
     captureEvents: query("SELECT session_id, offset_ms, reason, resource_id, resource_revision_id, payload_json FROM capture_events ORDER BY id"),
     transcriptSegments: query("SELECT id, session_id, seq, chunk_key, start_ms, end_ms, text, revised_text, state, precision, calibrated, anchors_json, attempts, error_json, created_at, updated_at FROM transcript_segments"),
     captureDrafts: query("SELECT id, session_id, state, text, edited_text, note_object_id, error_json, created_at, updated_at FROM capture_drafts"),
-    dictionary: query("SELECT id, scope, work_id, term, heard, source, created_at, updated_at FROM dictionary_terms"),
+    dictionary: (() => {
+      const aliasesByTerm = new Map<string, Array<{ id: string; alias: string; kind: string; source: string; created_at: string }>>();
+      for (const a of store.sqlite.prepare("SELECT id, term_id, alias, kind, source, created_at FROM dictionary_aliases ORDER BY created_at, id").all() as Array<{ id: string; term_id: string; alias: string; kind: string; source: string; created_at: string }>) {
+        const list = aliasesByTerm.get(a.term_id) ?? [];
+        list.push({ id: a.id, alias: a.alias, kind: a.kind, source: a.source, created_at: a.created_at });
+        aliasesByTerm.set(a.term_id, list);
+      }
+      return (store.sqlite.prepare("SELECT id, scope, work_id, term, heard, source, category, disabled, blocked_json, created_at, updated_at FROM dictionary_terms").all() as Array<Record<string, unknown>>).map((row) => ({
+        ...row,
+        aliases: aliasesByTerm.get(String(row.id)) ?? [],
+      }));
+    })(),
     mediaProbes: query("SELECT resource_revision_id, probe_json, tool_version, created_at FROM media_probes"),
     noteScopes: query("SELECT object_id AS objectId, resource_id AS resourceId FROM text_fragments WHERE kind='note' AND object_id IS NOT NULL GROUP BY object_id, resource_id"),
     fileLocations: query("SELECT id, resource_revision_id, relative_path, fingerprint, available, hosted FROM file_locations"),
@@ -888,9 +899,65 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
           target, targetSession(row.session_id), row.state, row.text, row.edited_text, row.note_object_id ? (objectIds.get(row.note_object_id) ?? row.note_object_id) : null, row.error_json, row.created_at, row.updated_at);
       }
       // A term the dictionary already has (same scope, work and wording) is kept as it is; a package never overwrites the person's own wording.
-      const putTerm = (row: { id: string; scope: "global" | "work"; work_id: string; term: string; heard: string | null; source: string; created_at: string; updated_at: string }) => {
-        run("INSERT OR IGNORE INTO dictionary_terms(id, scope, work_id, term, heard, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
-          hasRow(store, "dictionary_terms", row.id) ? createId("trm") : row.id, row.scope, row.scope === "work" ? (workIds.get(row.work_id) ?? row.work_id) : "", row.term, row.heard, row.source, row.created_at, row.updated_at);
+      const inferCategory = (source: string): string => {
+        if (/^metadata:[^:]+:character:/.test(source)) return "character";
+        if (/^metadata:[^:]+:(?:actor|person):/.test(source)) return "actor";
+        if (/^metadata:[^:]+:work:/.test(source)) return "work";
+        if (source === "manual") return "term";
+        return "other";
+      };
+      const putTerm = (row: {
+        id: string;
+        scope: "global" | "work";
+        work_id: string;
+        term: string;
+        heard: string | null;
+        source: string;
+        created_at: string;
+        updated_at: string;
+        category?: string;
+        disabled?: boolean | number;
+        blocked?: string[];
+        blocked_json?: string;
+        aliases?: Array<{ id?: string; alias: string; kind: string; source?: string; created_at?: string }>;
+      }) => {
+        const targetTermId = hasRow(store, "dictionary_terms", row.id) ? createId("trm") : row.id;
+        const targetWorkId = row.scope === "work" ? (workIds.get(row.work_id) ?? row.work_id) : "";
+        const category = row.category ?? inferCategory(row.source);
+        const disabled = row.disabled ? 1 : 0;
+        const blockedJson = row.blocked_json ?? JSON.stringify(row.blocked ?? []);
+        const info = run(
+          "INSERT OR IGNORE INTO dictionary_terms(id, scope, work_id, term, heard, source, category, disabled, blocked_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          targetTermId,
+          row.scope,
+          targetWorkId,
+          row.term,
+          row.heard,
+          row.source,
+          category,
+          disabled,
+          blockedJson,
+          row.created_at,
+          row.updated_at,
+        );
+        if (info.changes === 0) return;
+        const aliases = row.aliases && row.aliases.length > 0
+          ? row.aliases
+          : (row.heard && row.heard.trim() ? [{ alias: row.heard.trim(), kind: "heard", source: row.source, created_at: row.created_at }] : []);
+        for (const a of aliases) {
+          const aliasText = a.alias.trim();
+          if (!aliasText) continue;
+          const aliasId = a.id && !hasRow(store, "dictionary_aliases", a.id) ? a.id : createId("als");
+          run(
+            "INSERT OR IGNORE INTO dictionary_aliases(id, term_id, alias, kind, source, created_at) VALUES (?,?,?,?,?,?)",
+            aliasId,
+            targetTermId,
+            aliasText,
+            a.kind,
+            a.source ?? row.source,
+            a.created_at ?? row.created_at,
+          );
+        }
       };
       for (const row of manifest.workTerms ?? []) {
         if (skippedWork.has(row.work_id)) continue;
