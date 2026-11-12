@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { evaluateStageEvidence } from "./stage/report.mjs";
 import { fingerprintKey, findUncommentedSmokeSleeps, hashTree, loadGate, p95, p99, stageFingerprints } from "./stage/lib.mjs";
-import { beginTestEvidence } from "./stage/test.mjs";
+import { beginTestEvidence, excusedBy } from "./stage/test.mjs";
 
 // Counterexamples for the stage gate: each mutation of an otherwise complete run must be rejected.
 const config = loadGate();
@@ -636,5 +636,32 @@ test("report enforces packaged light open smoke, bench light raw samples/p95/rec
     const report = evaluate(dir);
     assert.equal(report.engineeringReviewable, false, `installer step variant ${index}`);
     assert.ok(report.errors.some((error) => error.startsWith("installer.json:")), `installer step error ${index}`);
+  }
+});
+
+test("the release check excuses a test only when it is tied to optional samples this machine could not make", () => {
+  const gate = { optionalSampleTests: { "^needs the gpu sample": ["video-gpu"], "^needs two": ["video-gpu", "voice-long"] } };
+  const manifest = (statuses) => ({ samples: Object.entries(statuses).map(([id, status]) => ({ id, status })) });
+  const missing = manifest({ "video-gpu": "unavailable", "voice-long": "generated" });
+  assert.match(excusedBy(gate, true, missing)("^needs the gpu sample"), /video-gpu/);
+  // Stage evidence (no --ci) never excuses anything.
+  assert.equal(excusedBy(gate, false, missing)("^needs the gpu sample"), null);
+  // A sample that was made means the test should have run.
+  assert.equal(excusedBy(gate, true, manifest({ "video-gpu": "generated" }))("^needs the gpu sample"), null);
+  // Every sample it needs must be missing, and a test that is not listed is never excused.
+  assert.equal(excusedBy(gate, true, missing)("^needs two"), null);
+  assert.equal(excusedBy(gate, true, missing)("^some other test"), null);
+  assert.equal(excusedBy(gate, true, undefined)("^needs the gpu sample"), null);
+});
+
+test("every test gate.json ties to optional samples is a required test, and names samples the generator knows as optional", () => {
+  const patterns = new Set(config.cases.flatMap((entry) => entry.tests ?? []));
+  const generator = fs.readFileSync(new URL("./samples/generate-media-samples.mjs", import.meta.url), "utf8");
+  for (const [pattern, samples] of Object.entries(config.optionalSampleTests ?? {})) {
+    assert.ok(patterns.has(pattern), `${pattern} is not a required test`);
+    for (const id of samples) {
+      const definition = generator.split("\n").find((line) => line.includes(`define("${id}", {`));
+      assert.ok(definition?.includes("optional: true"), `${id} is not an optional sample`);
+    }
   }
 });

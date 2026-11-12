@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { currentStage, loadGate, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
 import { writeReport } from "./report.mjs";
+import { loadManifest } from "../samples/media-manifest.mjs";
 
 /** A new attempt supersedes the old result immediately, including when the test process exits before writing its report. */
 export function beginTestEvidence(evidence, fields) {
@@ -12,10 +13,25 @@ export function beginTestEvidence(evidence, fields) {
   fs.writeFileSync(path.join(evidence, "test-run.json"), `${JSON.stringify(started, null, 2)}\n`);
 }
 
+/**
+ * With `--ci` (the release workflow's check on a hosted runner), a required test that did not run is accepted only when gate.json
+ * `optionalSampleTests` ties it to optional samples the generator marked unavailable on this machine (a GPU encoder, Windows voices).
+ * Such a test stays `not-run` in the evidence, with the reason; anything else that did not run, and every failure, still fails.
+ * Without `--ci` every required test must pass, as stage evidence requires.
+ */
+export function excusedBy(config, ci, manifest = loadManifest()) {
+  const unavailable = new Set((manifest?.samples ?? []).filter((sample) => sample.status === "unavailable").map((sample) => sample.id));
+  return (pattern) => {
+    const samples = config.optionalSampleTests?.[pattern];
+    return ci && samples?.length && samples.every((id) => unavailable.has(id)) ? `optional samples not generated on this machine: ${samples.join(", ")}` : null;
+  };
+}
+
 /** node scripts/stage.mjs test: every Vitest case plus the script self-tests, matched to the required cases. */
-export function runStageTest({ withReport = false } = {}) {
+export function runStageTest({ withReport = false, ci = process.argv.includes("--ci") } = {}) {
   const stage = currentStage();
   const config = loadGate();
+  const excuse = excusedBy(config, ci);
   const root = repoRoot;
   const evidence = runDir();
   const fingerprints = stageFingerprints(root, config);
@@ -63,13 +79,16 @@ export function runStageTest({ withReport = false } = {}) {
     for (const pattern of def.tests ?? []) {
       const regex = new RegExp(pattern);
       const matched = executed.filter((entry) => regex.test(entry.name) && entry.status !== "not-run");
-      if (!matched.length) tests.push({ file: "tests", name: pattern, status: "not-run" });
+      const reason = matched.length ? null : excuse(pattern);
+      if (!matched.length) tests.push({ file: "tests", name: pattern, status: "not-run", ...(reason ? { excused: reason } : {}) });
       for (const entry of matched) tests.push({ file: entry.file, name: entry.name, status: entry.status });
     }
     const status = tests.some((entry) => entry.status !== "passed") ? (tests.some((entry) => entry.status === "failed") ? "failed" : "not-run") : "passed";
     return { caseId: def.id, kind: def.kind, status, tests };
   });
-  if (result.status === 0 && vitestReport.success && selfTestsPassed && cases.every((entry) => entry.status === "passed")) {
+  const accepted = (entry) => entry.status === "passed" || (entry.status === "not-run" && entry.tests.every((test) => test.status === "passed" || test.excused));
+  const allAccepted = cases.every(accepted);
+  if (result.status === 0 && vitestReport.success && selfTestsPassed && allAccepted) {
     fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 150 });
   }
   // A passed attempt leaves nothing; a failed attempt retains its synthetic profile and reporter for diagnosis.
@@ -84,7 +103,8 @@ export function runStageTest({ withReport = false } = {}) {
   };
   const testRun = {
     tempDirs,
-    status: result.status === 0 && vitestReport.success && selfTestsPassed && cases.every((entry) => entry.status === "passed") && tempDirs.left === 0 ? "passed" : "failed",
+    status: result.status === 0 && vitestReport.success && selfTestsPassed && allAccepted && tempDirs.left === 0 ? "passed" : "failed",
+    ...(cases.some((entry) => entry.status !== "passed") && allAccepted ? { excusedCases: cases.filter((entry) => entry.status !== "passed").map((entry) => entry.caseId) } : {}),
     at: new Date().toISOString(),
     stage,
     ...fingerprints,

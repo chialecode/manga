@@ -804,6 +804,16 @@
       "enabled-again"
     ]
   },
+  "optionalSampleTests": {
+    "^probing the synthetic videos tells HEVC 8-bit from 10-bit": ["video-mkv-hevc-10bit"],
+    "^play copies encodes HEVC 10-bit into a copy": ["video-mkv-hevc-10bit"],
+    "^play copies leaves nothing behind when a copy is cancelled, or when the module is turned off while it runs": ["video-mkv-hevc-10bit"],
+    "^Silero VAD worker on the synthetic recordings ": ["voice-recording-30min"],
+    "^a 30-minute reading session mapped to its sources filtered the recording live and uploaded only blocks of speech": ["voice-recording-30min"],
+    "^a 30-minute reading session mapped to its sources covers every spoken sentence": ["voice-recording-30min"],
+    "^a 30-minute reading session mapped to its sources cleaned the working audio only after every block and its anchors were stored": ["voice-recording-30min"],
+    "^a 30-minute reading session mapped to its sources ": ["voice-recording-30min"]
+  },
   "cases": [
     {
       "id": "location-owned-rollback",
