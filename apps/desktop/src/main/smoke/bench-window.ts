@@ -84,6 +84,7 @@ export type ScaleSpec = {
   epub: { resourceId: string; marker: string };
   noteId: string;
   parseFile: string;
+  scanFolder?: string;
   scale: { metadataCount: number; searchBlocks: number };
 };
 
@@ -141,14 +142,17 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   const present = (testId: string) => `${DRAWN}(${PICK}(${JSON.stringify(testId)}))`;
   /** A click on an entry of one view's sidebar: the view's icon is pressed and the sidebar shown first (the rail's own figure is measured elsewhere), and the clock covers the entry's click. */
   const entry = async (name: RailName, testId: string, until: string, timeoutMs = 15_000) => {
-    if (!(await railTo(view, name)) || !(await ensureSidebar(view))) return { ok: false, ms: -1, reason: `the sidebar of ${name} was not reachable` };
-    await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="sidebar"][data-view="${name}"]'))`, 3000);
+    const ready = await js<boolean>(view, `Boolean(${DRAWN}(document.querySelector('[data-testid="sidebar"][data-view="${name}"]')))`);
+    if (!ready) {
+      if (!(await railTo(view, name)) || !(await ensureSidebar(view))) return { ok: false, ms: -1, reason: `the sidebar of ${name} was not reachable` };
+      await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="sidebar"][data-view="${name}"]'))`, 3000);
+    }
     return timed(testId, until, timeoutMs);
   };
   /** The search box over the window, opened from the home's sidebar, closed again with Esc so the next sample starts from the window. */
   const searchBox = async () => {
     const sample = await entry("home", "sidebar-search", present("search-input"));
-    await pressKey(view, "Escape");
+    await pressKey(view, "Escape", 8);
     await waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, 3000);
     return sample;
   };
@@ -223,15 +227,19 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   await railTo(view, "home");
 
   // The home's one list, and the media views' grids, each from another view: the rail's figure above is all the views together.
+  const quickRail = async (name: RailName) => {
+    const switched = await timed(`nav-${name}`, sidebarListed(name), 15_000, 1);
+    if (!switched.ok) await railTo(view, name);
+  };
   const homeListMs: number[] = [];
   for (let round = 0; round < 12; round += 1) {
-    await railTo(view, "note");
+    await quickRail("note");
     keep("home list", await timed("nav-home", sidebarListed("home"), 15_000, 1), homeListMs);
   }
   const mediaGridMs: number[] = [];
   for (let round = 0; round < 4; round += 1) {
     for (const name of ["novel", "comic", "video"]) {
-      await railTo(view, "home");
+      await quickRail("home");
       keep(`media grid ${name}`, await timed(`nav-${name}`, sidebarListed(name), 15_000, 1), mediaGridMs);
     }
   }
@@ -240,12 +248,15 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   const scanLateFramePct: number[] = [];
   {
     const scanCall = caller(appService, grant);
-    const folder = fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-bench-scan-"));
+    const ownsFolder = !spec.scanFolder;
+    const folder = spec.scanFolder ?? fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-bench-scan-"));
     try {
-      for (let series = 0; series < 50; series += 1) {
-        const dir = path.join(folder, `基准系列${String(series).padStart(2, "0")}`);
-        fs.mkdirSync(dir);
-        for (let file = 1; file <= 10; file += 1) fs.writeFileSync(path.join(dir, `第${file}章.txt`), `第${file}章\n\n${"用于扫描基准的一段合成文字。".repeat(30)}\n`);
+      if (ownsFolder) {
+        for (let series = 0; series < 50; series += 1) {
+          const dir = path.join(folder, `基准系列${String(series).padStart(2, "0")}`);
+          fs.mkdirSync(dir);
+          for (let file = 1; file <= 10; file += 1) fs.writeFileSync(path.join(dir, `第${file}章.txt`), `第${file}章\n\n${"用于扫描基准的一段合成文字。".repeat(30)}\n`);
+        }
       }
       await railTo(view, "novel");
       await waitFrames(view, 2);
@@ -267,10 +278,11 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
       const paths = await scanCall("library.paths.list", {});
       const row = ((paths.value as { items?: Array<{ id: string; path?: string }> } | Array<{ id: string; path?: string }> | undefined));
       const rows = Array.isArray(row) ? row : row?.items ?? [];
-      const mine = rows.find((item) => item.path === folder);
+      const resolvedFolder = path.resolve(folder);
+      const mine = rows.find((item) => item.path === folder || item.path === resolvedFolder);
       if (mine) await scanCall("library.paths.remove", { pathId: mine.id });
     } finally {
-      fs.rmSync(folder, { recursive: true, force: true });
+      if (ownsFolder) fs.rmSync(folder, { recursive: true, force: true });
     }
     await railTo(view, "home");
   }
@@ -299,7 +311,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
         frame();
       })`) as { ok: boolean; ms: number; reason?: string };
       keep(`search ${query}`, sample, searchNamesMs);
-      await pressKey(view, "Escape");
+      await pressKey(view, "Escape", 8);
       await waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, 3000);
     }
   }
@@ -389,6 +401,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
       let round = 0;
       while (!state.stop && round < 200) {
         for (const [tab, view, until] of tabs) {
+          if (state.stop && round > 0) break;
           const ready = await sidebarOf(view);
           const at = epoch();
           const started = performance.now();
@@ -399,6 +412,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
             await frameUntil(() => !pick("search-box"), 5000);
           }
         }
+        if (state.stop && round > 0) break;
         await sidebarOf("note");
         click("sidebar-manage");
         await frameUntil(present("records-tab"), 15000);
@@ -434,7 +448,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   const backgroundParseMs = parseEnded - parseStarted;
   await view.webContents.executeJavaScript("window.__benchParse.stop = true");
   const sampled = await view.webContents.executeJavaScript(`new Promise((resolve) => {
-    const tick = () => (window.__benchParse.done ? resolve({ ui: window.__benchParse.ui, saves: window.__benchParse.saves }) : setTimeout(tick, 50));
+    const tick = () => (window.__benchParse.done ? resolve({ ui: window.__benchParse.ui, saves: window.__benchParse.saves }) : setTimeout(tick, 20));
     tick();
   })`) as { ui: Array<{ tab: string; ok: boolean; at: number; ms: number }>; saves: Array<{ ok: boolean; at: number; ms: number }> };
   const during = <T extends { at: number }>(rows: T[]) => rows.filter((row) => row.at >= parseStarted && row.at <= parseEnded);
@@ -487,7 +501,7 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
  *  - input: type into the box (React's commit of the controlled value) and read the layout
  * The list pages in 200 messages at a time; "older" is pressed until all are on screen. These are measurements, not limits.
  */
-export async function measurePaneBench(view: BrowserWindow, resourceId: string, notes: number): Promise<Record<string, unknown>> {
+export async function measurePaneBench(view: BrowserWindow, resourceId: string, notes: number, rounds = 3): Promise<Record<string, unknown>> {
   view.showInactive();
   const opened = await openFromShelf(view, "novel", resourceId);
   const bodyShown = opened && await waitForTestId(view, "reading-body", "data-present", null, 10_000);
@@ -497,13 +511,16 @@ export async function measurePaneBench(view: BrowserWindow, resourceId: string, 
   // Bring every page of the stream in.
   let pages = 0;
   for (let round = 0; round < 12; round += 1) {
-    if (!(await waitUntil(view, `document.querySelector('[data-testid="chat-older"]')`, 1500))) break;
+    const count = await js<number>(view, `Number(document.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? 0)`);
+    if (count >= notes) break;
+    if (!(await waitUntil(view, `Boolean(document.querySelector('[data-testid="chat-older"]:not([disabled])'))`, 1500))) break;
     await clickTestId(view, "chat-older");
     pages += 1;
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await waitUntil(view, `Number(document.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? 0) > ${count} || !document.querySelector('[data-testid="chat-older"]')`, 3000);
   }
   // The list is virtual (LOOP-07): only the rows near the viewport are in the page, so what is loaded is the list's own count.
   const loaded = await js<number>(view, `Number(document.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? 0)`);
+  const totalSteps = Math.max(1, rounds) * 60;
   const measured = await js<{ scrollMs: number[]; inputMs: number[]; domNodes: number; height: number; client: number }>(view, `new Promise((resolve) => {
     const log = document.querySelector('[data-testid="chat-log"]');
     const area = document.querySelector('[data-testid="agent-composer"]');
@@ -524,9 +541,10 @@ export async function measurePaneBench(view: BrowserWindow, resourceId: string, 
     const max = Math.max(1, scroller.scrollHeight - scroller.clientHeight);
     let step = 0;
     const next = () => {
-      if (step >= 60) { resolve({ scrollMs, inputMs, domNodes: log.querySelectorAll("*").length, height: scroller.scrollHeight, client: scroller.clientHeight }); return; }
+      if (step >= ${totalSteps}) { resolve({ scrollMs, inputMs, domNodes: log.querySelectorAll("*").length, height: scroller.scrollHeight, client: scroller.clientHeight }); return; }
+      const s = step % 60;
       const a = performance.now();
-      scroller.scrollTop = (step % 2 === 0 ? (step / 2 + 1) / 31 : 1 - (step + 1) / 62) * max;
+      scroller.scrollTop = (s % 2 === 0 ? (s / 2 + 1) / 31 : 1 - (s + 1) / 62) * max;
       void scroller.offsetHeight;
       scrollMs.push(performance.now() - a);
       const b = performance.now();
@@ -535,7 +553,7 @@ export async function measurePaneBench(view: BrowserWindow, resourceId: string, 
       void area.offsetHeight;
       inputMs.push(performance.now() - b);
       step += 1;
-      setTimeout(next, 20);
+      setTimeout(next, 2);
     };
     next();
   })`);

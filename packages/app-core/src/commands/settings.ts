@@ -139,6 +139,10 @@ export function settingsModule(app: SettingsHost): MangaModule {
         return app.update!.restartToUpdate(input);
       });
       app.runtime.registerCommand("manga.settings", "update.settings.get", () => app.update!.getSettings());
+      app.runtime.registerCommand("manga.settings", "update.unskip", () => {
+        app.assertWritable();
+        return app.update!.unskip();
+      });
       app.runtime.registerCommand("manga.settings", "update.settings.set", (envelope) => {
         app.assertWritable();
         return app.update!.setSettings(envelope.input as UpdateSettingsPatch);

@@ -47,8 +47,8 @@ export function resourceContent(store: DrizzleStore, resourceId: string, recordi
   const revision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(resourceId) as { id: string } | undefined;
   const location = revision ? resolveLocation(store, revision.id) ?? undefined : undefined;
   const root = location?.libraryPathId ? libraryRoots(store).find((item) => item.id === location.libraryPathId) : undefined;
-  // The latest position in any context, with the context it is from (A-96).
-  const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state AS completion, last_locator_json AS locator, context_id AS contextId FROM progress_latest WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revision.id) as { percent: number; completion: string; locator: string | null; contextId: string } | undefined : undefined;
+  // The furthest position in any context, with the context it is from (A-129).
+  const progress = revision ? store.sqlite.prepare("SELECT percent, completion_state AS completion, last_locator_json AS locator, context_id AS contextId FROM progress_furthest WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revision.id) as { percent: number; completion: string; locator: string | null; contextId: string } | undefined : undefined;
   const conversation = store.sqlite.prepare(`SELECT s.id AS sessionId, s.updated_at AS updatedAt, (SELECT COUNT(*) FROM agent_runs run WHERE run.session_id = s.id) AS runs
     FROM agent_sessions s WHERE s.kind = 'resource' AND s.target_id = ? ORDER BY s.updated_at DESC LIMIT 1`).get(resourceId) as { sessionId: string; updatedAt: string; runs: number } | undefined;
   return {

@@ -1,58 +1,58 @@
 {
   "status": "passed",
-  "stage": "m10",
+  "stage": "m11",
   "version": "0.1.1",
   "tag": "v0.1.1",
-  "commit": "c7196ca",
-  "targetSha": "c7196ca23d8d2a30adfbc9f6db82cca1b5896180",
-  "schemaVersion": 14,
-  "sourceFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
-  "smokeScriptFingerprint": "eff4362e368439d1b42cb82f7292ec29832fa7981037c1651a902d56322cdbce",
+  "commit": "ef0dc33",
+  "targetSha": "ef0dc331f7d2a73ba1a203a5b3499af896accb6c",
+  "schemaVersion": 15,
+  "sourceFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
+  "smokeScriptFingerprint": "84aea18197957e49a49e8e9c4e4f55cac9ace6e98a212af2b3b5d3f1c1cd4a55",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "2aa96e8d3c6acd9c2430e2bb0a16dd78985276addbae83c57edaeb96ac007e0f",
-  "smokeWalkScriptFingerprint": "34b69a618c3e980935dd9f9f15ff335886937b02c125dc46fa6a9bd9a0099a1c",
-  "lockFingerprint": "684f12604bfbfa51b81cd1e9118cbb06c8d10ff652a20dca2882d3ddff690b54",
-  "buildScriptFingerprint": "c3363dbf5677399a91a91ef12cc715031fd7f8f63125ba8c61fe5a74146a084b",
-  "gateScriptFingerprint": "f8820ccfb6ace39c1690c9c4ab22f1ba4b1ce5e5e14205e67d45224602d43289",
-  "testScriptFingerprint": "7ddec5774ad97e7d328fd606bc81a72e340e2d802989be7d3c85ee9442dfba85",
-  "packageScriptFingerprint": "db23a7d129d2a0a08016b02c08174849f96d2bbd1d42c5e88db9a93cb002b433",
-  "benchScriptFingerprint": "47ff0e110cfce575d582850913893e0dfe78d6fe6a55e5cb4f26fa16ff023691",
-  "installerScriptFingerprint": "7c06380da78f6f13a1c97e65c3c7241763ea6fffff1bedbd2b4a18e5140b8218",
-  "releaseScriptFingerprint": "f326eba612bd70fd5e50461e61fc0f7bb5d2ef9bd622582c210b331390c8bfa0",
-  "benchFingerprint": "866f6823daf6afdf1274738f5a99bf4a4a02ef73c249f71ddb9ae34187310750",
+  "smokeBenchScriptFingerprint": "1532610373b76fedac5903c47c3350ad4d0e209b853f60015d693de9206ba143",
+  "smokeWalkScriptFingerprint": "58fa4c5cdfe4d1187bb6c02cd57b242c1523d81c5ab046d8183439b9926053ce",
+  "lockFingerprint": "97e74474b5207dfe933e28f2977cfc9db778c3475cbbf65d56ba4e25bb52c2c3",
+  "buildScriptFingerprint": "3cb3dbe850da3702a24a419087d2f8a678b49f319ce5a68e5de61db21b86599b",
+  "gateScriptFingerprint": "342b275147cf13da9687ca2a88d32824c5b0a99f35bfaee6b4f22b31391a05fc",
+  "testScriptFingerprint": "0d93bca6a89864c7e04ec6b6bcc791fc00808f6046d1da4d57e3ba3d122771c8",
+  "packageScriptFingerprint": "9fe76d800c26f18029352ad7a3bd55b55f1dd3085a9754b92dbd3dd352187972",
+  "benchScriptFingerprint": "a143abb87f2ecf8de46dec88bda61bbd5b1da23dd0b9ddac625c26e896c4628f",
+  "installerScriptFingerprint": "ccf083e32fc67946d607c5ff9911f6b03ac7b75e515929527716e96cea7c11dd",
+  "releaseScriptFingerprint": "68a9a41eb30d145a9ee18864651ab0bf45dae245efb9fa9977e48a20693e9665",
+  "benchFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
   "benchMatchesSource": true,
-  "at": "2026-11-08T22:31:39.987Z",
+  "at": "2026-11-12T01:08:22.628Z",
   "ci": false,
   "files": [
     {
       "fileName": "manga-setup-0.1.1.exe",
-      "bytes": 212172879,
-      "sha256": "60cab91589722c9c1c88290d872ffb537bf26d7ab2320f04d0d54a4c7859a8d7"
+      "bytes": 212521924,
+      "sha256": "fbd4e5186d02f5bca5d2fe131f2d57503f2d7786a4bc1b0e021fe3c218a99d67"
     },
     {
       "fileName": "manga-setup-0.1.1.exe.blockmap",
-      "bytes": 223201,
-      "sha256": "858f28e1d032820b68b1034d0e3ed666851fc6bdd8afbd043cd53018b40ba049"
+      "bytes": 223566,
+      "sha256": "a5ca5554e6f2cafc766d680f62ebeddbc15276ab955eb31305256933fb4b127b"
     },
     {
       "fileName": "manga-setup-0.1.1.exe.sig",
       "bytes": 436,
-      "sha256": "1643e09a8d4e0b45d19e806a8d6ed90cfb26ad4a992b15614c0fd9963f5285c9"
+      "sha256": "137c8f7b98840abab67a900c8eb21fff56843efcc855d5b27818189a31b9534b"
     },
     {
       "fileName": "latest.yml",
-      "bytes": 2755,
-      "sha256": "308c01d16586ee87fd0987d55eaa7a3495bfbe0736601e0b8c1503d046661272"
+      "bytes": 2891,
+      "sha256": "4f43a5bb59c5cc30ef9e4854f39f20c94b7ccc4bc9751cf1556c5e6840a4584d"
     },
     {
       "fileName": "RELEASE-NOTES.md",
-      "bytes": 2332,
-      "sha256": "bc9f1b70f383355339f2c73601e4449d683435fff27c81387b6990de7633b43e"
+      "bytes": 2466,
+      "sha256": "e3c23e29b76ad7d069c2b20a0dee82b47012adc58baa4c41c22c97df2bc61cf0"
     },
     {
       "fileName": "SHA256SUMS",
       "bytes": 437,
-      "sha256": "507ca5e1d852cdd2f48d2cebb66a5bde16bfe97f2b4f40f8641255b429201609"
+      "sha256": "b349b36662e9d1f9d608aa37666a39a8827a0fa615f051710d417aa5e1ec7c0d"
     }
   ],
   "rehearsal": {
@@ -64,8 +64,8 @@
     },
     "previousVersion": "0.1.0",
     "upgradedVersion": "0.1.1",
-    "appAsarSha256": "6caeb41fb2b04b26a234f0ae1ff10a48e6f2720f6da270c01f1d785e5086ceda",
-    "previousAsarSha256": "6caeb41fb2b04b26a234f0ae1ff10a48e6f2720f6da270c01f1d785e5086ceda",
+    "appAsarSha256": "4ac7df77a4128415bd34946356497ffc7166aa9fa53f3cfa70f0c79c3aa8aa84",
+    "previousAsarSha256": "4ac7df77a4128415bd34946356497ffc7166aa9fa53f3cfa70f0c79c3aa8aa84",
     "verifiedInstallerExecuted": true,
     "dataIntact": true,
     "backupCreated": true,
@@ -78,8 +78,8 @@
         "previousVersion": "0.1.0",
         "version": "0.1.1",
         "downloader": "electron-updater",
-        "downloadBytes": 212172940,
-        "fullBytes": 212172940,
+        "downloadBytes": 212522140,
+        "fullBytes": 212522140,
         "usedDifferential": false,
         "oldProcessExited": true,
         "newProcessStarted": true,
@@ -90,15 +90,15 @@
         "workspaceRestored": true,
         "savedTabSelectedBeforeNavigation": true,
         "emptyLibraryOnboarding": true,
-        "readyMs": 21676
+        "readyMs": 22746
       },
       {
         "mode": "quit",
         "previousVersion": "0.1.0",
         "version": "0.1.1",
         "downloader": "electron-updater",
-        "downloadBytes": 466589,
-        "fullBytes": 212172940,
+        "downloadBytes": 474376,
+        "fullBytes": 212522140,
         "usedDifferential": true,
         "oldProcessExited": true,
         "newProcessStarted": true,
@@ -109,26 +109,26 @@
         "workspaceRestored": true,
         "savedTabSelectedBeforeNavigation": true,
         "emptyLibraryOnboarding": true,
-        "readyMs": 20809
+        "readyMs": 21481
       }
     ],
     "development": null,
     "records": {
       "downloadBytes": {
-        "fullBytes": 212172940,
-        "differentialBytes": 466589,
-        "savedRatio": 0.9978009024147942
+        "fullBytes": 212522140,
+        "differentialBytes": 474376,
+        "savedRatio": 0.9977678749141148
       },
-      "restartToReadyMs": 21676,
+      "restartToReadyMs": 22746,
       "installDevMs": null
     },
-    "seconds": 207.03
+    "seconds": 218.32
   },
   "previousRelease": {
     "kind": "first-release-current-source-seed"
   },
-  "totalMs": 267558,
+  "totalMs": 283067,
   "published": false,
   "releaseUrl": null,
-  "requiresAuthorization": "node scripts/stage/release-publish-verify.mjs --version 0.1.1 --dir dist/release/v0.1.1 --target c7196ca23d8d2a30adfbc9f6db82cca1b5896180 --publish"
+  "requiresAuthorization": "node scripts/stage/release-publish-verify.mjs --version 0.1.1 --dir dist/release/v0.1.1 --target ef0dc331f7d2a73ba1a203a5b3499af896accb6c --publish"
 }

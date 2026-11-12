@@ -13,27 +13,38 @@ function sources(dir: string): string[] {
 }
 
 describe("test hooks stay out of a normal start", () => {
-  const outside = sources(main).filter((file) => !file.startsWith(path.join(main, "smoke")));
-  const smokeImport = /\bfrom\s+["']\.{1,2}\/(?:\.\.\/)*(?:main\/)?smoke(?:\/[^"']*)?["']|\bimport\s+["'][^"']*\/smoke\//;
+  const lightSmoke = path.join(main, "light", "smoke.ts");
+  const outside = sources(main).filter((file) => !file.startsWith(path.join(main, "smoke")) && file !== lightSmoke);
+  const smokeImport = /\bfrom\s+["']\.{1,2}\/(?:\.\.\/)*(?:main\/)?(?:light\/)?smoke(?:\/[^"']*|\.ts)?["']|\bimport\s+["'][^"']*\/smoke(?:\/|\.ts["'])/;
 
   it("no module outside the smoke directory imports it statically", () => {
-    for (const file of outside) expect(fs.readFileSync(file, "utf8"), path.basename(file)).not.toMatch(smokeImport);
+    for (const file of outside) expect(fs.readFileSync(file, "utf8"), path.relative(main, file)).not.toMatch(smokeImport);
   });
 
-  it("the entry point loads it only with a dynamic import under the smoke flag", () => {
-    const text = fs.readFileSync(path.join(main, "index.ts"), "utf8");
-    const loads = [...text.matchAll(/import\(\s*["']\.\/smoke\/[^"']+["']\s*\)/g)];
-    expect(loads).toHaveLength(1);
-    const before = text.slice(0, loads[0]!.index);
-    expect(before.slice(before.lastIndexOf("if (")).startsWith("if (smoke)")).toBe(true);
-    expect(text).toMatch(/const smoke = process\.argv\.includes\("--manga-smoke"\)/);
+  it("the entry points load smoke only with a dynamic import under the smoke flag", () => {
+    for (const [entryFile, pattern] of [
+      [path.join(main, "index.ts"), /import\(\s*["']\.\/smoke\/[^"']+["']\s*\)/g],
+      [path.join(main, "light", "main.ts"), /import\(\s*["']\.\/smoke\.ts["']\s*\)/g],
+    ] as const) {
+      const text = fs.readFileSync(entryFile, "utf8");
+      const loads = [...text.matchAll(pattern)];
+      expect(loads, path.relative(main, entryFile)).toHaveLength(1);
+      const before = text.slice(0, loads[0]!.index);
+      expect(before.slice(before.lastIndexOf("if (")).startsWith("if (smoke)"), path.relative(main, entryFile)).toBe(true);
+      expect(text, path.relative(main, entryFile)).toMatch(/const smoke = process\.argv\.includes\("--manga-smoke"\)/);
+    }
   });
 
-  it("the smoke directory is not reachable from the other main-process modules at all", () => {
+  it("the smoke modules are not reachable from the other main-process modules at all", () => {
     for (const file of outside) {
       const text = fs.readFileSync(file, "utf8");
       const mentions = [...text.matchAll(/["'](\.{1,2}\/[^"']*smoke[^"']*)["']/g)].map((match) => match[1]);
-      expect(mentions, path.basename(file)).toEqual(file.endsWith(`${path.sep}index.ts`) ? ["./smoke/index.ts"] : []);
+      const expected = file === path.join(main, "index.ts")
+        ? ["./smoke/index.ts"]
+        : file === path.join(main, "light", "main.ts")
+          ? ["./smoke.ts"]
+          : [];
+      expect(mentions, path.relative(main, file)).toEqual(expected);
     }
   });
 
@@ -91,9 +102,11 @@ describe("test hooks stay out of a normal start", () => {
     expect(entry).toContain('app.commandLine.appendSwitch("mute-audio")');
     expect(entry).toContain("window.webContents.setAudioMuted(true)");
     expect(entry).toContain("skipTaskbar: hideWindow");
-    const smokeFiles = sources(path.join(main, "smoke"));
+    const lightEntry = fs.readFileSync(path.join(main, "light", "main.ts"), "utf8");
+    expect(lightEntry).toContain('app.commandLine.appendSwitch("mute-audio")');
+    const smokeFiles = [...sources(path.join(main, "smoke")), lightSmoke];
     for (const file of smokeFiles) {
-      expect(fs.readFileSync(file, "utf8"), path.basename(file)).not.toMatch(/\b(?:view|window)\.show\(\)/);
+      expect(fs.readFileSync(file, "utf8"), path.relative(main, file)).not.toMatch(/\b(?:view|window)\.show\(\)/);
     }
   });
 });

@@ -99,6 +99,21 @@ export function touchWorkMutation(resourceId: string, now: string): Mutation {
   };
 }
 
+/**
+ * When an item in "最近" was dismissed at `dismissedAt`, a fresh action on it in "最近" must get a timestamp strictly after `dismissedAt`, even if both
+ * happen within the same millisecond (A-129).
+ */
+export function recentActionTimestamp(store: DrizzleStore, resourceId: string, now: string): { dismissedAt: string | null; interactionAt: string } {
+  const work = store.sqlite.prepare("SELECT work_id AS workId FROM resources WHERE id = ?").get(resourceId) as { workId: string | null } | undefined;
+  const keys = [`resource:${resourceId}`, ...(work?.workId ? [`work:${work.workId}`] : [])];
+  const rows = store.sqlite.prepare(`SELECT dismissed_at AS at FROM recent_dismissals WHERE key IN (${keys.map(() => "?").join(",")})`).all(...keys) as Array<{ at: string }>;
+  const dismissedAt = rows.map((row) => row.at).sort().pop() ?? null;
+  if (!dismissedAt || now > dismissedAt) return { dismissedAt, interactionAt: now };
+  const parsed = Date.parse(dismissedAt);
+  const interactionAt = Number.isFinite(parsed) ? new Date(parsed + 1).toISOString() : `${dismissedAt}Z`;
+  return { dismissedAt, interactionAt };
+}
+
 export function progressMutations(store: DrizzleStore, input: ProgressWrite): { mutations: Mutation[]; consumed: ConsumedRange[]; snapshot: ProgressSnapshot } {
   const revision = store.sqlite.prepare("SELECT id FROM resource_revisions WHERE id = ? AND resource_id = ?").get(input.revisionId, input.resourceId);
   if (!revision) throw new MangaError("NOT_FOUND", "resource revision does not belong to this resource");
@@ -110,7 +125,11 @@ export function progressMutations(store: DrizzleStore, input: ProgressWrite): { 
   const locatorJson = JSON.stringify(input.locator);
   const mergedJson = JSON.stringify(merged);
   // A reader that comes back to the screen says the position it already has; that is not a newer position, so the context does not become the latest one for it.
+  // Exception (A-129): when the item is currently dismissed in "最近", reading it in "最近" is a fresh action that brings it back into "最近".
   const unchanged = existing !== undefined && existing.last_locator_json === locatorJson && existing.consumed_ranges_json === mergedJson && existing.completion_state === snapshot.completion;
+  const recentStamp = input.contextId === "" ? recentActionTimestamp(store, input.resourceId, now) : { dismissedAt: null, interactionAt: now };
+  const wakeDismissed = input.contextId === "" && recentStamp.dismissedAt !== null && (!existing || existing.last_interaction_at <= recentStamp.dismissedAt);
+  const interactionAt = unchanged && !wakeDismissed ? existing.last_interaction_at : recentStamp.interactionAt;
   return {
     consumed: merged,
     snapshot,
@@ -120,7 +139,7 @@ export function progressMutations(store: DrizzleStore, input: ProgressWrite): { 
           VALUES (?,?,?,?,?,?,?,?)
           ON CONFLICT(context_id, resource_id, resource_revision_id) DO UPDATE SET last_locator_json = excluded.last_locator_json, consumed_ranges_json = excluded.consumed_ranges_json,
             completion_state = excluded.completion_state, last_interaction_at = excluded.last_interaction_at, percent = excluded.percent`,
-        params: [input.contextId, input.resourceId, input.revisionId, locatorJson, mergedJson, snapshot.completion, unchanged ? existing.last_interaction_at : now, snapshot.percent],
+        params: [input.contextId, input.resourceId, input.revisionId, locatorJson, mergedJson, snapshot.completion, interactionAt, snapshot.percent],
       },
       touchWorkMutation(input.resourceId, now),
     ],

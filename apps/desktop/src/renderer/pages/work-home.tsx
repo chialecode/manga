@@ -7,7 +7,7 @@ import { Modal } from "../components/modal.tsx";
 import { asArray, attempt } from "../lib/api.ts";
 import { forgetCover, useCovers } from "../lib/covers.ts";
 import { useWorkDetail, type CoverSummary } from "../lib/use-work-detail.ts";
-import { SHELF_ORDER, percentOf, type Facets, type ProjectedField, type ShelfState, type WorkMediaKind, type WorkSummary } from "../lib/works.ts";
+import { SHELF_ORDER, formatContextPosition, percentOf, type Facets, type ProjectedField, type ShelfState, type WorkMediaKind, type WorkSummary } from "../lib/works.ts";
 import { ResourceContent } from "./resource-content.tsx";
 import { WorkFolderSection } from "./work-folder-section.tsx";
 import { CoverImage, progressLine, shelfLabel } from "./work-card.tsx";
@@ -70,6 +70,8 @@ export function WorkHome(props: {
   onChanged: () => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  /** Current workspace context (`null` for "最近"), so "继续" resumes that context's own resource when it has one (A-96, A-129). */
+  context?: string | null;
 }) {
   const { t, formatDate } = props;
   const metadataOn = props.facets.has("metadata");
@@ -147,10 +149,17 @@ export function WorkHome(props: {
 
   const external = (url: string) => { void window.manga.openExternal?.(url); };
   const kind = (detail?.mediaKind === "comic" || detail?.mediaKind === "video" ? detail.mediaKind : "novel") as WorkMediaKind;
-  // "继续" goes to a resource that can be opened: in a library path and there (A-113).
+  // "继续" goes to a resource that can be opened: the current context's own resource when it has one (A-96), else the last one opened, else the first (A-113).
   const openable = (row: { available?: boolean; outside?: boolean }) => row.available !== false && row.outside !== true;
-  const target = detail ? (detail.lastResource && detail.resources.find((row) => row.id === detail.lastResource!.id && openable(row)) ? detail.lastResource.id : detail.resources.find(openable)?.id ?? null) : null;
-  const percent = detail ? percentOf(detail.progress) : 0;
+  const ownContextResourceId = props.context !== undefined && detail?.contextPositions
+    ? detail.contextPositions.find((entry) => (entry.contextId ?? null) === (props.context ?? null) && detail.resources.some((row) => row.id === entry.resourceId && openable(row)))?.resourceId ?? null
+    : null;
+  const target = detail
+    ? (ownContextResourceId
+      ?? (detail.lastResource && detail.resources.find((row) => row.id === detail.lastResource!.id && openable(row)) ? detail.lastResource.id : detail.resources.find(openable)?.id ?? null))
+    : null;
+  const completed = detail ? (detail.progressCompleted === true || (detail.resourceCount > 0 && detail.finishedCount >= detail.resourceCount)) : false;
+  const percent = detail ? (completed ? 100 : percentOf(detail.progress)) : 0;
   const verb = kind === "video" ? t("work.watch") : t("work.read");
   const readLabel = detail && percent > 0 && detail.lastResource
     ? (kind === "video" ? t("work.continueWatch", { place: progressLine(t, detail) || `${percent}%` }) : t("work.continueRead", { place: progressLine(t, detail) || `${percent}%` }))
@@ -216,6 +225,19 @@ export function WorkHome(props: {
               </p>
               {rating ? <p className="detail-muted" data-testid="work-rating">{t("work.rating", { score: rating, provider: providerName(linked!.providerId), time: linked!.fetchedAt ? formatDate(linked!.fetchedAt) : "—" })}</p> : null}
               {formatValue(detail.fields.tags?.value ?? null) ? <p className="work-tags" data-testid="work-tags">{asArray<string>(detail.fields.tags?.value).slice(0, 12).map((tag) => <span key={tag} className="chip">{tag}</span>)}</p> : null}
+              {completed || percent > 0 ? (
+                <div className="work-progress-block" data-testid="work-progress-summary">
+                  <p className="work-progress-text">
+                    <span className="work-progress-label">{completed ? shelfLabel(t, "finished", kind) : t(kind === "video" ? "card.watched" : "card.read", { percent })}</span>
+                    {detail.progressContext ? <span className="work-origin" data-testid="work-progress-origin">{t("card.origin", { name: detail.progressContext.name })}</span> : null}
+                  </p>
+                  {detail.contextPositions && detail.contextPositions.length > 0 ? (
+                    <p className="detail-muted work-context-positions" data-testid="work-context-positions">
+                      {detail.contextPositions.map((entry) => formatContextPosition(t, entry, kind, detail.resources.length > 1)).join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="detail-actions work-actions">
                 <button type="button" className="primary-button" data-testid="work-read" disabled={!target} onClick={() => target && props.onOpenResource(target, kind)}><Play size={14} />{readLabel}</button>
                 <label className="detail-shelf">
@@ -338,8 +360,8 @@ export function WorkHome(props: {
                         {resource.outside ? <span className="chip chip-muted" data-testid={`detail-outside-${resource.id}`}>{t("work.outside")}</span> : null}
                       </span>
                       <span className="resource-progress">
-                        <progress value={percentOf(resource.progress.percent)} max={100} aria-label={t("detail.progress")} />
-                        <span>{percentOf(resource.progress.percent)}%</span>
+                        <progress value={resource.progress.completion === "completed" ? 100 : percentOf(resource.progress.percent)} max={100} aria-label={t("detail.progress")} />
+                        <span>{resource.progress.completion === "completed" ? shelfLabel(t, "finished", kind) : `${percentOf(resource.progress.percent)}%`}</span>
                       </span>
                       {resource.available
                         ? <button type="button" className="secondary-button" data-testid={`detail-open-${resource.id}`} onClick={() => props.onOpenResource(resource.id, kind)}><Play size={14} />{verb}</button>

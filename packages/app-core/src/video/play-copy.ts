@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { MangaError, createId } from "@manga/contracts";
 import type { VideoProbe } from "@manga/contracts";
-import type { DrizzleStore } from "@manga/storage-drizzle";
 import { FfmpegService } from "../media/ffmpeg.ts";
 import type { MediaServices } from "../media/services.ts";
+import type { PlayCopyRow, PlayCopyStore } from "./play-copy-store.ts";
 import type { PlaybackPlan, PlayCopyReason } from "./playback.ts";
 
 export const PLAY_COPY_BUDGET_BYTES = 20 * 1024 * 1024 * 1024;
@@ -28,10 +28,9 @@ export type PlayCopySummary = {
 export type TimestampCheck = { originalFrames: number; copyFrames: number; maxDriftMs: number; ok: boolean };
 
 type SourceRow = { revisionId: string; resourceId: string; probe: VideoProbe; path: string; available: boolean };
-type DbRow = {
-  id: string; resource_revision_id: string; reason: string; state: CopyState; audio_stream_index: number | null; file_name: string | null; bytes: number | null;
-  encoder: string | null; progress: number; timestamp_check_json: string | null; error_json: string | null; created_at: string; updated_at: string;
-};
+/** What a play copy needs of the media plumbing: its cache folder, FFmpeg, the job queue and the handle table. */
+export type PlayCopyMedia = Pick<MediaServices, "dir" | "ffmpeg" | "jobs" | "handles">;
+const byIdIn = (store: PlayCopyStore, id: string, revisionId: string): PlayCopyRow[] => [store.get(id)].filter((row): row is PlayCopyRow => row !== undefined && row.revisionId === revisionId);
 
 /** Frame-by-frame comparison of two presentation-time lists. Counts differing is a failure; otherwise the largest gap decides. */
 export function compareTimelines(original: number[], copy: number[]): TimestampCheck {
@@ -56,14 +55,14 @@ const ENCODERS: EncoderChoice[] = [
 export class PlayCopies {
   private encoder: Promise<EncoderChoice> | undefined;
 
-  private readonly store: DrizzleStore;
-  private readonly media: MediaServices;
+  private readonly store: PlayCopyStore;
+  private readonly media: PlayCopyMedia;
   private readonly source: (revisionId: string) => SourceRow;
   private readonly budgetBytes: number;
 
   constructor(
-    store: DrizzleStore,
-    media: MediaServices,
+    store: PlayCopyStore,
+    media: PlayCopyMedia,
     source: (revisionId: string) => SourceRow,
     budgetBytes = Number(process.env.MANGA_PLAYCOPY_BUDGET_BYTES) || PLAY_COPY_BUDGET_BYTES,
   ) {
@@ -77,37 +76,34 @@ export class PlayCopies {
     return this.media.dir("play-copies");
   }
 
-  private summary(row: DbRow): PlayCopySummary {
+  private summary(row: PlayCopyRow): PlayCopySummary {
     return {
-      id: row.id, revisionId: row.resource_revision_id, reason: row.reason, state: row.state, audioStreamIndex: row.audio_stream_index, progress: row.progress,
-      bytes: row.bytes, encoder: row.encoder, error: row.error_json ? JSON.parse(row.error_json) as { code: string; message: string } : null,
-      timestampCheck: row.timestamp_check_json ? JSON.parse(row.timestamp_check_json) as TimestampCheck : null, createdAt: row.created_at,
+      id: row.id, revisionId: row.revisionId, reason: row.reason, state: row.state, audioStreamIndex: row.audioStreamIndex, progress: row.progress,
+      bytes: row.bytes, encoder: row.encoder, error: row.error, timestampCheck: row.timestampCheck, createdAt: row.createdAt,
     };
   }
 
   list(revisionId: string): PlayCopySummary[] {
-    return (this.store.sqlite.prepare("SELECT * FROM play_copies WHERE resource_revision_id = ? ORDER BY created_at DESC, rowid DESC").all(revisionId) as DbRow[]).map((row) => this.summary(row));
+    return this.store.byRevision(revisionId).map((row) => this.summary(row));
   }
 
   find(revisionId: string, reason: string, audioStreamIndex: number | null): PlayCopySummary | null {
-    const rows = this.store.sqlite.prepare("SELECT * FROM play_copies WHERE resource_revision_id = ? AND reason = ? AND state IN ('queued','running','ready') ORDER BY created_at DESC, rowid DESC").all(revisionId, reason) as DbRow[];
-    const match = rows.find((row) => (row.audio_stream_index ?? null) === (audioStreamIndex ?? null));
+    const match = this.store.byRevision(revisionId).find((row) => row.reason === reason && (row.state === "queued" || row.state === "running" || row.state === "ready")
+      && (row.audioStreamIndex ?? null) === (audioStreamIndex ?? null));
     return match ? this.summary(match) : null;
   }
 
   /** A copy that can be played now. A row whose file vanished is removed, so the caller sees "not there" rather than a dead URL. */
   ready(revisionId: string, copyId?: string): { id: string; path: string; bytes: number } {
-    const rows = (copyId
-      ? this.store.sqlite.prepare("SELECT * FROM play_copies WHERE id = ? AND resource_revision_id = ?").all(copyId, revisionId)
-      : this.store.sqlite.prepare("SELECT * FROM play_copies WHERE resource_revision_id = ? AND state = 'ready' ORDER BY created_at DESC, rowid DESC").all(revisionId)) as DbRow[];
+    const rows = copyId ? byIdIn(this.store, copyId, revisionId) : this.store.byRevision(revisionId).filter((row) => row.state === "ready");
     for (const row of rows) {
-      if (row.state !== "ready" || !row.file_name) continue;
-      const file = path.join(this.dir(), row.file_name);
+      if (row.state !== "ready" || !row.fileName) continue;
+      const file = path.join(this.dir(), row.fileName);
       if (fs.existsSync(file)) {
-        this.store.sqlite.prepare("UPDATE play_copies SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), row.id);
+        this.store.update(row.id, { updatedAt: new Date().toISOString() });
         return { id: row.id, path: file, bytes: fs.statSync(file).size };
       }
-      this.store.sqlite.prepare("DELETE FROM play_copies WHERE id = ?").run(row.id);
+      this.store.delete(row.id);
     }
     throw new MangaError("NOT_FOUND", "no play copy is ready for this video");
   }
@@ -117,20 +113,29 @@ export class PlayCopies {
   }
 
   totalBytes(): number {
-    return (this.store.sqlite.prepare("SELECT COALESCE(SUM(bytes), 0) AS n FROM play_copies WHERE state = 'ready'").get() as { n: number }).n;
+    return this.store.all().filter((row) => row.state === "ready").reduce((sum, row) => sum + (row.bytes ?? 0), 0);
   }
 
   /** After a restart nothing is running: unfinished work is marked failed and its half-written files are removed. */
   recover(): number {
-    const stale = this.store.sqlite.prepare("SELECT * FROM play_copies WHERE state IN ('queued','running')").all() as DbRow[];
+    const stale = this.store.all().filter((row) => row.state === "queued" || row.state === "running");
     for (const row of stale) {
-      if (row.file_name) fs.rmSync(path.join(this.dir(), `${row.file_name}.part`), { force: true });
-      this.store.sqlite.prepare("UPDATE play_copies SET state = 'failed', error_json = ?, updated_at = ? WHERE id = ?").run(
-        JSON.stringify({ code: "INTERRUPTED", message: "the app closed before the copy was finished" }), new Date().toISOString(), row.id,
-      );
+      if (row.fileName) fs.rmSync(path.join(this.dir(), `${row.fileName}.part`), { force: true });
+      this.store.update(row.id, { state: "failed", error: { code: "INTERRUPTED", message: "the app closed before the copy was finished" }, updatedAt: new Date().toISOString() });
     }
     if (fs.existsSync(this.dir())) for (const name of fs.readdirSync(this.dir())) if (name.endsWith(".part")) fs.rmSync(path.join(this.dir(), name), { force: true });
     return stale.length;
+  }
+
+  /** Copy files that no row names (a light store that was lost or unreadable): removed, so the folder holds only what is counted. */
+  removeStrays(): number {
+    if (!fs.existsSync(this.dir())) return 0;
+    const named = new Set(this.store.all().flatMap((row) => (row.fileName ? [row.fileName] : [])));
+    let removed = 0;
+    for (const name of fs.readdirSync(this.dir())) {
+      if (name.endsWith(".mp4") && !named.has(name)) { fs.rmSync(path.join(this.dir(), name), { force: true }); removed += 1; }
+    }
+    return removed;
   }
 
   private async chooseEncoder(): Promise<EncoderChoice> {
@@ -160,11 +165,12 @@ export class PlayCopies {
   private evictFor(neededBytes: number, keepRevision: string): void {
     let total = this.totalBytes();
     if (total + neededBytes <= this.budgetBytes) return;
-    const candidates = this.store.sqlite.prepare("SELECT * FROM play_copies WHERE state = 'ready' AND resource_revision_id <> ? ORDER BY updated_at ASC").all(keepRevision) as DbRow[];
+    const candidates = this.store.all().filter((row) => row.state === "ready" && row.revisionId !== keepRevision).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
     for (const row of candidates) {
       if (total + neededBytes <= this.budgetBytes) break;
-      if (row.file_name) fs.rmSync(path.join(this.dir(), row.file_name), { force: true });
-      this.store.sqlite.prepare("DELETE FROM play_copies WHERE id = ?").run(row.id);
+      if (row.fileName) fs.rmSync(path.join(this.dir(), row.fileName), { force: true });
+      this.media.handles.revokeSubject(`play-copy:${row.id}`);
+      this.store.delete(row.id);
       total -= row.bytes ?? 0;
     }
     if (total + neededBytes > this.budgetBytes) throw new MangaError("QUOTA_EXCEEDED", "play copies would exceed the disk budget; remove some copies first");
@@ -186,35 +192,36 @@ export class PlayCopies {
     const id = createId("pcopy");
     const now = new Date().toISOString();
     const fileName = `${id}.mp4`;
-    this.store.sqlite.prepare("INSERT INTO play_copies(id, resource_revision_id, reason, state, audio_stream_index, file_name, bytes, encoder, tool_version, progress, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").run(
-      id, input.revisionId, reason, "queued", plan.audioStreamIndex, fileName, null, encoder?.name ?? "copy", `${source.probe.tool.name} ${source.probe.tool.version}`, 0, now, now,
-    );
+    this.store.insert({
+      id, revisionId: input.revisionId, reason, state: "queued", audioStreamIndex: plan.audioStreamIndex, fileName, bytes: null, encoder: encoder?.name ?? "copy",
+      toolVersion: `${source.probe.tool.name} ${source.probe.tool.version}`, progress: 0, timestampCheck: null, error: null, createdAt: now, updatedAt: now,
+    });
     const job = this.media.jobs.submit<void>({
       lane: "ffmpeg", kind: "play-copy", key: `play-copy:${id}`, owner: OWNER,
       run: async (context) => this.run(id, source, plan, encoder, context),
     });
     void job.promise.catch(() => undefined);
-    return this.summary(this.store.sqlite.prepare("SELECT * FROM play_copies WHERE id = ?").get(id) as DbRow);
+    return this.summary(this.store.get(id)!);
   }
 
   private async run(id: string, source: SourceRow, plan: PlaybackPlan, encoder: EncoderChoice | null, context: { signal: AbortSignal; progress(fraction: number): void }): Promise<void> {
     const out = path.join(this.dir(), `${id}.mp4`);
     const part = `${out}.part`;
-    const touch = this.store.sqlite.prepare("UPDATE play_copies SET state = ?, progress = ?, updated_at = ? WHERE id = ?");
+    const touch = (state: CopyState, progress: number, at: string) => this.store.update(id, { state, progress, updatedAt: at });
     const fail = (error: unknown) => {
       fs.rmSync(part, { force: true });
       fs.rmSync(out, { force: true });
       const cancelled = context.signal.aborted || (error instanceof MangaError && error.code === "CANCELLED");
       if (cancelled) {
         // A cancelled copy leaves nothing behind: no file, no row.
-        this.store.sqlite.prepare("DELETE FROM play_copies WHERE id = ?").run(id);
+        this.store.delete(id);
       } else {
         const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: error instanceof Error ? error.message : String(error) };
-        this.store.sqlite.prepare("UPDATE play_copies SET state = 'failed', error_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(known), new Date().toISOString(), id);
+        this.store.update(id, { state: "failed", error: known, updatedAt: new Date().toISOString() });
       }
     };
     try {
-      touch.run("running", 0, new Date().toISOString(), id);
+      touch("running", 0, new Date().toISOString());
       const copy = plan.copy!;
       const args = ["-v", "error", "-nostdin", "-y", "-progress", "pipe:1", "-i", source.path, "-map", `0:${plan.videoStreamIndex}`];
       if (plan.audioStreamIndex !== null && copy.audio !== "none") args.push("-map", `0:${plan.audioStreamIndex}`);
@@ -232,14 +239,14 @@ export class PlayCopies {
         onStdoutLine: FfmpegService.progressReader(source.probe.durationMs, (fraction) => {
           context.progress(fraction);
           const now = Date.now();
-          if (now - lastWrite > 1000) { lastWrite = now; touch.run("running", fraction, new Date(now).toISOString(), id); }
+          if (now - lastWrite > 1000) { lastWrite = now; touch("running", fraction, new Date(now).toISOString()); }
         }),
       });
       context.signal.throwIfAborted();
       if (!fs.existsSync(part) || fs.statSync(part).size === 0) throw new MangaError("UNSUPPORTED_FORMAT", "the copy came out empty");
       fs.renameSync(part, out);
       const check = await this.verify(source, out, context.signal);
-      this.store.sqlite.prepare("UPDATE play_copies SET state = 'ready', progress = 1, bytes = ?, timestamp_check_json = ?, updated_at = ? WHERE id = ?").run(fs.statSync(out).size, JSON.stringify(check), new Date().toISOString(), id);
+      this.store.update(id, { state: "ready", progress: 1, bytes: fs.statSync(out).size, timestampCheck: check, updatedAt: new Date().toISOString() });
     } catch (error) {
       fail(error);
       throw error;
@@ -257,26 +264,22 @@ export class PlayCopies {
   }
 
   cancel(revisionId: string, copyId?: string): number {
-    const rows = (copyId
-      ? this.store.sqlite.prepare("SELECT * FROM play_copies WHERE id = ? AND resource_revision_id = ? AND state IN ('queued','running')").all(copyId, revisionId)
-      : this.store.sqlite.prepare("SELECT * FROM play_copies WHERE resource_revision_id = ? AND state IN ('queued','running')").all(revisionId)) as DbRow[];
+    const rows = (copyId ? byIdIn(this.store, copyId, revisionId) : this.store.byRevision(revisionId)).filter((row) => row.state === "queued" || row.state === "running");
     let count = 0;
     for (const row of rows) if (this.media.jobs.cancelWhere((job) => job.key === `play-copy:${row.id}`) > 0) count += 1;
     return count;
   }
 
   remove(revisionId: string, copyId?: string): number {
-    const rows = (copyId
-      ? this.store.sqlite.prepare("SELECT * FROM play_copies WHERE id = ? AND resource_revision_id = ?").all(copyId, revisionId)
-      : this.store.sqlite.prepare("SELECT * FROM play_copies WHERE resource_revision_id = ?").all(revisionId)) as DbRow[];
+    const rows = copyId ? byIdIn(this.store, copyId, revisionId) : this.store.byRevision(revisionId);
     for (const row of rows) {
       if (row.state === "queued" || row.state === "running") this.media.jobs.cancelWhere((job) => job.key === `play-copy:${row.id}`);
       this.media.handles.revokeSubject(`play-copy:${row.id}`);
-      if (row.file_name) {
-        fs.rmSync(path.join(this.dir(), row.file_name), { force: true });
-        fs.rmSync(path.join(this.dir(), `${row.file_name}.part`), { force: true });
+      if (row.fileName) {
+        fs.rmSync(path.join(this.dir(), row.fileName), { force: true });
+        fs.rmSync(path.join(this.dir(), `${row.fileName}.part`), { force: true });
       }
-      this.store.sqlite.prepare("DELETE FROM play_copies WHERE id = ?").run(row.id);
+      this.store.delete(row.id);
     }
     return rows.length;
   }

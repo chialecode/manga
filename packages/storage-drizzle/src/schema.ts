@@ -1,4 +1,24 @@
-import { sqliteTable, text, integer, blob } from "drizzle-orm/sqlite-core";
+import { blob, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const commandRequests = sqliteTable("command_requests", {
+  idempotencyKey: text("idempotency_key").primaryKey(),
+  commandId: text("command_id").notNull(),
+  resultJson: text("result_json").notNull(),
+  committedAt: text("committed_at").notNull(),
+});
+
+export const events = sqliteTable("events", {
+  seq: integer("seq").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const works = sqliteTable("works", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  createdAt: text("created_at").notNull(),
+});
 
 export const resources = sqliteTable("resources", {
   id: text("id").primaryKey(),
@@ -7,22 +27,6 @@ export const resources = sqliteTable("resources", {
   title: text("title").notNull(),
   aliasesJson: text("aliases_json").notNull(),
   createdAt: text("created_at").notNull(),
-});
-
-export const contentObjects = sqliteTable("content_objects", {
-  id: text("id").primaryKey(),
-  type: text("type").notNull(),
-  ownerModuleId: text("owner_module_id").notNull(),
-  scopeJson: text("scope_json").notNull(),
-  schemaVersion: integer("schema_version").notNull(),
-  revision: integer("revision").notNull(),
-  title: text("title").notNull(),
-  payloadJson: text("payload_json").notNull(),
-  attachmentIdsJson: text("attachment_ids_json").notNull(),
-  previewJson: text("preview_json").notNull(),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
-  deletedAt: text("deleted_at"),
 });
 
 export const grants = sqliteTable("grants", {
@@ -48,4 +52,9 @@ export const credentials = sqliteTable("credentials", {
   ref: text("ref").primaryKey(),
   ciphertext: blob("ciphertext", { mode: "buffer" }).notNull(),
   createdAt: text("created_at").notNull(),
+});
+
+export const recentDismissals = sqliteTable("recent_dismissals", {
+  key: text("key").primaryKey(),
+  dismissedAt: text("dismissed_at").notNull(),
 });

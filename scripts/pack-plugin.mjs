@@ -1,4 +1,4 @@
-// Builds and signs the plugins under plugins/ into dist/plugins (or --out). The signing key is MANGA_PLUGIN_SIGNING_KEY or dist/keys/plugin-first-party.pem and is never printed.
+// Builds and signs the plugins under plugins/ into dist/plugins (or --out). The signing key is MANGA_PLUGIN_SIGNING_KEY or %APPDATA%\manga-release\plugin-signing.key and is never printed.
 import path from "node:path";
 import { packAllPlugins, packPlugin } from "./desktop-plugins.ts";
 

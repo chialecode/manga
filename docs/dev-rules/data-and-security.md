@@ -12,6 +12,7 @@
 - 备份须为一致快照并验证附件覆盖，不能只复制运行中 SQLite 的一个文件。恢复先在隔离位置验证；代码回退不等于数据可逆迁移。
 - Agent 任务冻结的图像与视频片段按内容哈希存一份（`agent_media`）；已结束的运行过了保留期去掉引用，快照保留来源与尺寸，没有引用的内容删除。清理与重试并发时，重试要么拿到完整的原字节、要么按过期处理。schema v13 的迁移把 v12 快照里内联的图像搬进这张表，迁移前后被引用图像的哈希相同。
 - Agent 提出的待审操作存入 `agent_proposals`（schema v14，迁移前备份 `manga.sqlite.premigrate-v13`，失败回滚、中断可续）。提议创建与工具回执一起保存；Agent 只收到编号、状态与摘要，反向引用等完整影响预览只交给所有者。确认以条件更新（`WHERE status = 'pending'`）原子转为 `applying`，经所有者命令以提议编号幂等执行；同步修改在所有者处理函数里重新核对对象与依赖修订，并把效果与 `operations` 成功回执一起提交。`command_requests` 只代表开始，不证明执行完成。项目包发布前保存仅限主进程的输出摘要，重启可核对成品大小与哈希后补回执；粗剪任务与提议关联一起登记，实际输出完成才是 `applied`，取消或中断为 `failed`。没有完成证据的操作回到 `pending`，不自动重跑。删除对话或项目时连同提议一并清除；提议进入完整备份，不进入可移植项目包（`.manga-project.zip`）。
+- “从最近移除”与跨上下文最远进度在 schema v15 建立（A-129，迁移前备份 `manga.sqlite.premigrate-v14`，失败回滚、中断可续、幂等、旧版拒绝 v15 数据库）：新增 `recent_dismissals` 表记录从“最近”视图隐去的作品与独立资源（作品与资源被删时由触发器清理），只影响“最近”列表展示，不删任何进度、笔记或材料；新增 `progress_furthest` 只读视图供资源库卡片、“按进度”排序与作品主页汇总各上下文最远进度，保留 `progress_latest` 供“最近打开”排序。
 - 默认移除条目、停用模块、卸载代码与删除源文件/用户数据分别处理。测试仅操作独立临时目录与合成夹具。
 
 对应 POC-01、POC-06、AT-04、AT-15、AT-17、AT-18、AT-48。当前没有真实数据库或已发布 migration，上述要求在建立相应实现时落实，不需要伪造历史迁移文件。
@@ -46,9 +47,27 @@
 
 ## 4. 应用更新与安装包安全（A-125）
 
-- **独立的更新签名密钥：** 正式版安装包使用独立于第一方插件密钥的 Ed25519 密钥对签名（私钥 `dist/keys/update-release.pem` 不入库且不进日志或证据，公钥 `dist/keys/update-release.pub` 内置在 `packages/app-core/src/update/signature.ts` 的 `RELEASE_UPDATE_PUBLIC_KEYS`）。两把密钥职责隔离，一把泄露不影响另一把。
+- **独立的更新签名密钥：** 正式版安装包使用独立于第一方插件密钥的 Ed25519 密钥对签名（私钥 `%APPDATA%\manga-release\update-signing.key` 不入库且不进日志或证据，公钥 `%APPDATA%\manga-release\update-signing.pub` 内置在 `packages/app-core/src/update/signature.ts` 的 `RELEASE_UPDATE_PUBLIC_KEYS`）。两把密钥职责隔离，一把泄露不影响另一把。
 - **绑定版本与文件名的分离签名（`.sig`）：** 发布时为 `manga-setup-<版本>.exe` 生成分离签名 `manga-setup-<版本>.exe.sig`。签名原文是 UTF-8 的 `manga.update.signature.v1`、`version <版本>`、`fileName <文件名>`、`sha512 <base64>` 四行，每行末尾都有换行。`.sig` 另有字节数、密钥编号与签名时间；字节数由文件、清单和签名记录交叉核对，不在签名原文中。版本和文件名的绑定防止合法旧包被重命名冒充新版本。
 - **`publisherName` 强制触发与纵深防御校验：** 在未做 Windows Authenticode 代码签名时，`electron-updater` 6.8.11 的 `NsisUpdater.verifySignature` 只有在 `resources/app-update.yml` 含有 `publisherName` 时才会调用自定义 `verifyUpdateCodeSignature`，否则直接返回 `null` 跳过校验。因此正式版打包时强制写入 `publisherName: ["chialecode"]`（由 `checkAppUpdateConfig` 与测试守护，去掉时测试必须失败），同时 `UpdateService` 在标记更新“已就绪”以及调用安装程序（`restartToUpdate` / `installOnQuit`）前独立执行二次 Ed25519 签名、`SHA-512`、版本号与文件名核对——任何路径都绝不执行未经 Ed25519 校验通过的安装包。
 - **拒绝路径与清理：** 签名不符、文件被篡改 1 字节、缺失 `.sig`、缺失 `publisherName`、清单版本号不高于当前版本（`allowDowngrade = false`）或更新源地址非 `https://`（仅本机回环测试显式开启时例外）一律拒绝，立即删除已下载的临时文件，保留当前版本，向用户展示中文原因（`UPDATE_VERIFY_FAILED`）并写入操作日志（`update.rejected`）。
 - **下载与执行之间的校验：** 正式版先检查 `app-update.yml` 的 `publisherName` 与固定的 `updaterCacheDirName: updater`，拒绝重复或冲突字段。真实下载走上游 `NsisUpdater`，所有请求与重定向都检查 HTTPS，并去掉上游的用户分组标识。已就绪更新绑定验签 receipt；保存完成后重新读取文件与 `.sig` 验签，安装辅助程序按 receipt 中的预期 SHA-512 在准备和执行前各核对一次。
 - **隐私与更新前备份：** 正式版检查更新只访问 GitHub Releases（遵循系统代理），请求头只带应用版本与平台（`MANGA/<version> (<platform>; <arch>)`），不携带任何用户标识或本地数据；开发版与 `pnpm dev` 不做联网更新检查。安装前等待界面保存回执、录音保存与不可取消写入，再用 SQLite 快照生成 `manga.sqlite.preupdate-v<旧版本>.sqlite`，包含已提交但仍在 WAL 中的数据，通过临时文件原子替换。保存、备份或辅助程序准备失败时保留当前应用、恢复交互和待更新元数据，允许重试。资料库 schema 的升级仍先生成 `manga.sqlite.premigrate-v<旧版本>` 备份。
+- **启动失败的退路与回退安全（A-127、LOOP-32）：** 正式版安装更新前将当前已验签的安装包与 `previous.json`（含版本号、`sha512Hex`、前后 schema 版本与备份路径）保存在 `<应用数据根>\cache\updater\previous\`，并写入 `last-installed.json`。打包正式版更新后的前三次启动由极薄入口 `launch-guard.ts` 跟踪启动完成情况（开发版与 `pnpm dev` 不进入该守卫；故障注入开关 `MANGA_TEST_FAIL_LAUNCH=1` 仅在 `testIdentity === true` 时生效）：连续两次启动未到达主窗口就绪时，第三次启动在加载完整主进程前弹出原生对话框，绝不静默自动回退。仅当上一版安装包存在且重新计算 `SHA-512` 与 `previous.json` 一致时才提供“回到 <上一版>”按钮，用户确认后与安装辅助脚本拉起安装包前均再次核对 `SHA-512`。若新版本已升级过资料库 schema，回退前先把当前 `manga.sqlite`（连同 `-wal`/`-shm`）改名为 `manga.sqlite.rolledback-<ISO 时间戳>` 保留现场，再经临时文件 `.restore.part` 原子恢复 `manga.sqlite.premigrate-v<旧 schema>`（不存在时回退到更新前 `preupdate` 备份），写入 `update-skip.json` 跳过该故障目标版本（可在“设置 › 更新”取消跳过）与 `rollback-record.json`（下次启动记入操作日志）。
+
+<a id="light-open-isolation"></a>
+## 5. 轻量打开的数据隔离与“打开方式”注册（A-128）
+
+- **严格限定在 `<应用数据根>\light\`：** 轻量打开进程（`--manga-light`）只读写对应通道的 `%LOCALAPPDATA%\manga\light`（开发版为 `manga-dev\light`），绝不打开或创建 `manga.sqlite`、资料库指针、`locations.ts`、用户“文档 / 下载”目录或漫游 `%APPDATA%`，且零联网请求（不检查更新、不调外部元数据或模型）：
+  - `runtime/`：Chromium 的 `userData` 与 `sessionData`（在 `requestSingleInstanceLock` 前设定，与完整应用的 `runtime/` 互不抢锁），以及进程握手文件 `light-instance.json`、`quit-request.json`、`quit-ack.json`；
+  - `positions.json`：最多 500 条 LRU 位置记录，键仅为归一化绝对路径、文件大小与修改时间的 `SHA-256` 十六进制摘要（文件夹为路径加 `\ndir` 的 `SHA-256`），值只有已知字段：视频为 `{ kind, positionMs, durationMs, finished, at }`，漫画为 `{ kind, page, pageIndex, pageCount, finished, at }`，其中 `page` 是页面 id（图片文件名或归档内条目名）的 `SHA-256`，**不含任何明文路径、文件名或页面名**（读到旧格式里的明文页面 id 时改写为摘要）；视频播到距结尾 5 秒内（或已播完）时下次从头开始；从资源管理器打开某张图片时从这一张开始，不套用该文件夹记住的页；
+  - `window.json`：记住上次轻量窗口的宽高与坐标；
+  - `cache/`：`play-copies/` 与 `index.json`（`JsonPlayCopyStore`，上限 2 GiB，超限按 LRU 清理未在使用中的播放副本）及会话临时目录 `work/<sessionId>/`；
+  - `logs/`（含 `crashes/`）：仅记错误分类与摘要，不记明文用户文件路径。
+- **更新与 `install-dev` 退出握手：** 完整应用执行 `UpdateService` 重启/退出更新，以及 `scripts/stage/install-dev.mjs` 更新开发版前，通过 `askLightToQuit` 向同通道 `light/runtime/quit-request.json` 写入退出请求并等待最多 10 秒：轻量进程保存当前播放/阅读位置、写出 `quit-ack.json` 后干净退出；若超时或被拒绝则中止本次更新并提示“请先关闭轻量播放窗口”，不强杀轻量进程。轻量进程自身不做自动更新检查与下载。
+- **按用户 `HKCU` 注册“打开方式”，不抢默认关联：** 安装程序只写 `HKCU`、不写 `HKLM`，且禁止使用 `electron-builder` 的 `fileAssociations`（由 `checkInstallerConfig` 与测试守护，防止覆写 `.<ext>` 默认值抢走用户原有默认播放器/看图软件）。共注册 21 个扩展名（13 个视频：`.avi .flv .m2ts .m4v .mkv .mov .mp4 .mpeg .mpg .ogv .ts .webm .wmv`；1 个漫画包：`.cbz`；7 个图片：`.avif .bmp .gif .jpeg .jpg .png .webp`；`.zip` 与文件夹只支持拖入、窗口内选择或命令行打开，不进系统“打开方式”）：
+  1. `HKCU\Software\Classes\<ProgID>`（正式版 `Manga.Video` / `Manga.Comic` / `Manga.Image`，开发版 `MangaDev.*`，测试身份 `MangaTest.*` / `MangaDevTest.*`）：友好类型名、`DefaultIcon` 与 `shell\open\command = "\"<exe>\" --manga-light \"%1\""`；
+  2. `HKCU\Software\Classes\.<ext>\OpenWithProgids`：写入名为 `<ProgID>` 的空字符串值（`REG_SZ`），不改 `.<ext>` 的 `(Default)` 默认值与 `UserChoice`；
+  3. `HKCU\Software\Classes\Applications\<exeName>`：`FriendlyAppName`、`DefaultIcon`、`SupportedTypes`（21 个扩展名）与 `shell\open\command`；
+  4. `HKCU\Software\MANGA\<通道键>\Capabilities` 与 `HKCU\Software\RegisteredApplications`：登记应用描述与 `FileAssociations`，供 Windows“设置 › 默认应用”按扩展名或按应用切换，并调用 `SHChangeNotify(SHCNE_ASSOCCHANGED, ...)` 刷新外壳缓存。
+- **卸载与通道隔离清理：** 卸载脚本只删除本通道自己的 `ProgID`、`OpenWithProgids` 值名、`Applications\<exeName>`、`Capabilities` 与 `RegisteredApplications` 值；父键（`.<ext>\OpenWithProgids`、`.<ext>`、`Software\MANGA`）通过 `MangaDeleteBareKey` 仅在无任何子键且无任何值时才删除，绝不清理其他通道或用户已有默认关联。`stage installer` 对真实 `HKCU` 相关键做前后快照比对，确保测试身份卸载后零残留。

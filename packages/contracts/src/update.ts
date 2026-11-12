@@ -56,6 +56,8 @@ export const UpdateStatusSchema = z.object({
   errorCode: ErrorCodeSchema.nullable(),
   settings: UpdateSettingsSchema,
   justUpdated: JustUpdatedInfoSchema.nullable(),
+  /** The version skipped after going back from it because it did not start (4.2); shown as “已跳过 0.1.y” with a way to cancel. */
+  skippedVersion: z.string().nullable(),
 }).strict();
 
 export type UpdateStatus = z.infer<typeof UpdateStatusSchema>;
@@ -82,4 +84,5 @@ export const UpdateCommandInputs = {
   }).strict(),
   "update.settings.get": z.object({}).strict(),
   "update.settings.set": UpdateSettingsPatchSchema,
+  "update.unskip": z.object({}).strict(),
 } as const;

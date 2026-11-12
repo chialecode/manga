@@ -17,6 +17,8 @@ import { fontFamilies } from "./font-names.ts";
 import { decidePlayback, listTracks, mediaTypeFor, type PlaybackCaps, type PlayCopyReason } from "./playback.ts";
 import { discoverSidecars, sampledFingerprint, type Sidecar } from "./sidecars.ts";
 import { PlayCopies } from "./play-copy.ts";
+import { answerFrame, type FrameAnswer, type FrameIndex } from "./frames.ts";
+import { SqlitePlayCopyStore } from "./play-copy-store.ts";
 
 export const VIDEO_PARSER_ID = "video-probe-v1";
 export const VIDEO_MODULE = "manga.video";
@@ -42,17 +44,7 @@ export type VideoImportResult = {
   warnings: string[];
 };
 
-export type FrameIndex = {
-  version: 1;
-  streamIndex: number;
-  /** Container start time; `ptsMs` is already relative to it, which is the player's timeline. */
-  startMs: number;
-  ptsMs: number[];
-  keyframesMs: number[];
-  variableFrameRate: boolean;
-};
-
-export type FrameAnswer = { frame: number; ptsMs: number; totalFrames: number; durationMs: number; variableFrameRate: boolean; previousMs: number | null; nextMs: number | null };
+export type { FrameAnswer, FrameIndex } from "./frames.ts";
 
 /** Where the frame table of a revision stands. Nothing builds it until a frame-by-frame operation asks. */
 export type FrameIndexState = "ready" | "building" | "absent";
@@ -82,7 +74,7 @@ export class VideoService {
   constructor(store: DrizzleStore, media: MediaServices) {
     this.store = store;
     this.media = media;
-    this.copies = new PlayCopies(store, media, (revisionId) => this.rowByRevision(revisionId));
+    this.copies = new PlayCopies(new SqlitePlayCopyStore(store.sqlite), media, (revisionId) => this.rowByRevision(revisionId));
   }
 
   // ------------------------------------------------------------------ import
@@ -407,27 +399,7 @@ export class VideoService {
       if (!this.readIndex(row.revisionId)) return { revisionId: row.revisionId, ready: false, state: this.frameIndexState(row.revisionId) };
     }
     const { revisionId: id, index, durationMs } = await this.index(resourceId, revisionId, signal);
-    const pts = index.ptsMs;
-    let frame: number;
-    if (query.frame !== undefined) {
-      if (query.frame >= pts.length) throw new MangaError("NOT_FOUND", `the video has ${pts.length} frames`);
-      frame = query.frame;
-    } else {
-      const time = query.timeMs ?? 0;
-      let low = 0;
-      let high = pts.length - 1;
-      // Last frame whose presentation time is not after `time` (a half-millisecond of slack absorbs rounding).
-      while (low < high) {
-        const mid = (low + high + 1) >> 1;
-        if (pts[mid]! <= time + 0.5) low = mid; else high = mid - 1;
-      }
-      frame = low;
-    }
-    frame = Math.max(0, Math.min(pts.length - 1, frame + (query.delta ?? 0)));
-    return {
-      revisionId: id, ready: true, frame, ptsMs: pts[frame]!, totalFrames: pts.length, durationMs, variableFrameRate: index.variableFrameRate,
-      previousMs: frame > 0 ? pts[frame - 1]! : null, nextMs: frame + 1 < pts.length ? pts[frame + 1]! : null,
-    };
+    return { revisionId: id, ready: true, ...answerFrame(index, durationMs, query) };
   }
 
   /**

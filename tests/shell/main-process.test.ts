@@ -1,7 +1,16 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { externalUrlAllowed, isAppPage, permissionAllowed } from "../../apps/desktop/src/main/permissions.ts";
-import { OVERLAY_MARGIN, overlayDocument, parseOverlayState, placeOverlay } from "../../apps/desktop/src/main/overlay-model.ts";
+import {
+  OVERLAY_HEIGHT,
+  OVERLAY_MARGIN,
+  OVERLAY_WIDTH,
+  micColorForLevel,
+  overlayDocument,
+  overlaySummary,
+  parseOverlayState,
+  placeOverlay,
+} from "../../apps/desktop/src/main/overlay-model.ts";
 import { WINDOW_ACTIONS, parseWindowAction, productWindow, windowControlsDrawn } from "../../apps/desktop/src/main/window-options.ts";
 
 // Built from parts: the publication check refuses literal drive paths in a public file.
@@ -88,38 +97,58 @@ describe("pages opened outside the app", () => {
   });
 });
 
-describe("the floating recording box", () => {
+describe("AT-172 the floating recording box", () => {
   const screens = [{ x: 0, y: 0, width: 1920, height: 1040 }, { x: 1920, y: 0, width: 1280, height: 720 }];
 
-  it("goes to the top right of the main screen when no place was saved", () => {
-    expect(placeOverlay({ width: 280, height: 84 }, screens)).toEqual({ x: 1920 - 280 - OVERLAY_MARGIN, y: OVERLAY_MARGIN, width: 280, height: 84 });
+  it("AT-172 goes to the top right of the main screen at fixed 116×36 when no place was saved", () => {
+    expect(placeOverlay({}, screens)).toEqual({
+      x: 1920 - OVERLAY_WIDTH - OVERLAY_MARGIN,
+      y: OVERLAY_MARGIN,
+      width: OVERLAY_WIDTH,
+      height: OVERLAY_HEIGHT,
+    });
   });
 
-  it("keeps a saved place that is still on a screen, including a second screen", () => {
-    expect(placeOverlay({ x: 400, y: 300, width: 280, height: 84 }, screens)).toEqual({ x: 400, y: 300, width: 280, height: 84 });
-    expect(placeOverlay({ x: 2500, y: 100, width: 280, height: 84 }, screens)).toEqual({ x: 2500, y: 100, width: 280, height: 84 });
+  it("AT-172 keeps a saved place that is still on a screen, including a second screen", () => {
+    expect(placeOverlay({ x: 400, y: 300 }, screens)).toEqual({ x: 400, y: 300, width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT });
+    expect(placeOverlay({ x: 2500, y: 100 }, screens)).toEqual({ x: 2500, y: 100, width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT });
   });
 
-  it("pulls a box that hangs off the edge of its screen back in", () => {
-    expect(placeOverlay({ x: 1850, y: 980, width: 280, height: 84 }, screens)).toEqual({ x: 1920 - 280, y: 1040 - 84, width: 280, height: 84 });
+  it("AT-172 converts legacy 280×84 top-right-aligned coordinates so a box at the right edge stays at the right edge", () => {
+    const legacyRightAligned = { x: 1920 - 280 - OVERLAY_MARGIN, y: OVERLAY_MARGIN, width: 280, height: 84 };
+    expect(placeOverlay(legacyRightAligned, screens)).toEqual({
+      x: 1920 - OVERLAY_WIDTH - OVERLAY_MARGIN,
+      y: OVERLAY_MARGIN,
+      width: OVERLAY_WIDTH,
+      height: OVERLAY_HEIGHT,
+    });
   });
 
-  it("returns to the main screen when its monitor is gone", () => {
+  it("AT-172 pulls a box that hangs off the edge of its screen back in", () => {
+    expect(placeOverlay({ x: 1850, y: 1020 }, screens)).toEqual({
+      x: 1920 - OVERLAY_WIDTH,
+      y: 1040 - OVERLAY_HEIGHT,
+      width: OVERLAY_WIDTH,
+      height: OVERLAY_HEIGHT,
+    });
+  });
+
+  it("AT-172 returns to the main screen top right when its monitor is gone", () => {
     const only = [screens[0]!];
-    expect(placeOverlay({ x: 2500, y: 100, width: 280, height: 84 }, only)).toEqual({ x: 1920 - 280 - OVERLAY_MARGIN, y: OVERLAY_MARGIN, width: 280, height: 84 });
-    expect(placeOverlay({ x: -5000, y: -5000, width: 280, height: 84 }, only).x).toBeGreaterThanOrEqual(0);
+    expect(placeOverlay({ x: 2500, y: 100 }, only)).toEqual({
+      x: 1920 - OVERLAY_WIDTH - OVERLAY_MARGIN,
+      y: OVERLAY_MARGIN,
+      width: OVERLAY_WIDTH,
+      height: OVERLAY_HEIGHT,
+    });
+    expect(placeOverlay({ x: -5000, y: -5000 }, only).x).toBeGreaterThanOrEqual(0);
   });
 
-  it("keeps the size within what can be read and clicked", () => {
-    expect(placeOverlay({ width: 10, height: 10 }, screens)).toMatchObject({ width: 160, height: 48 });
-    expect(placeOverlay({ width: 5000, height: 5000 }, screens)).toMatchObject({ width: 640, height: 320 });
-  });
-
-  const strings = { recording: "正在录音", stopping: "正在保存…", stop: "停止录音", keep: "保留录音", discard: "不保留录音", hold: "按住录音", toggle: "切换录音" };
-  const good = { phase: "recording", elapsedMs: 3500.7, level: 0.4, retention: "keep", mode: "hold", label: "麦克风", strings };
+  const strings = { recording: "正在录音", stopping: "正在保存…", stop: "停止录音", keep: "保留音频", discard: "转写后清理音频", hold: "按住录音", toggle: "单击切换", mic: "麦克风" };
+  const good = { phase: "recording" as const, elapsedMs: 83_500.7, level: 0.4, retention: "keep" as const, mode: "toggle" as const, label: "USB Mic", strings };
 
   it("accepts a well-formed state and clamps what can be out of range", () => {
-    expect(parseOverlayState(good)).toMatchObject({ phase: "recording", elapsedMs: 3500, level: 0.4, retention: "keep", mode: "hold" });
+    expect(parseOverlayState(good)).toMatchObject({ phase: "recording", elapsedMs: 83_500, level: 0.4, retention: "keep", mode: "toggle", label: "USB Mic" });
     expect(parseOverlayState({ ...good, level: 5 })!.level).toBe(1);
     expect(parseOverlayState({ ...good, level: -1 })!.level).toBe(0);
   });
@@ -131,17 +160,45 @@ describe("the floating recording box", () => {
     }
   });
 
-  it("shows text with textContent, has no network or storage, and has a stop button that the script wires", () => {
+  it("AT-172 computes silent gray, volume-graded brand colors, reduced-motion binary color, and accessible summary", () => {
+    expect(micColorForLevel(0, "recording", false)).toBe("#9CA3AF");
+    expect(micColorForLevel(0.015, "recording", false)).toBe("#9CA3AF");
+    const low = micColorForLevel(0.08, "recording", false);
+    const mid = micColorForLevel(0.36, "recording", false);
+    const loud = micColorForLevel(0.85, "recording", false);
+    expect(low).not.toBe("#9CA3AF");
+    expect(low).not.toBe(mid);
+    expect(mid).not.toBe(loud);
+    expect(loud).toBe("#84204D");
+    expect(micColorForLevel(0.6, "stopping", false)).toBe("#9CA3AF");
+    // Reduced motion switches strictly between silent gray and primary accent (#AD3268), with no intermediate shades.
+    expect(micColorForLevel(0, "recording", true)).toBe("#9CA3AF");
+    expect(micColorForLevel(0.08, "recording", true)).toBe("#AD3268");
+    expect(micColorForLevel(0.85, "recording", true)).toBe("#AD3268");
+    expect(overlaySummary(parseOverlayState(good)!)).toBe("正在录音 1:23，单击切换，保留音频，麦克风：USB Mic");
+  });
+
+  it("AT-172 renders only the clock in visible text, puts status/mode/retention/device in aria-label, freezes clock on stopping, and keeps preload minimal", () => {
     const html = overlayDocument();
     expect(html).toContain("Content-Security-Policy");
     expect(html).toContain("default-src 'none'");
     expect(html).not.toMatch(/innerHTML|document\.write|eval\(|fetch\(|XMLHttpRequest|localStorage/);
     expect(html).toContain("textContent");
+    expect(html).toContain('id="mic"');
+    expect(html).toContain('id="time"');
     expect(html).toContain('id="stop"');
+    expect(html).not.toContain('id="label"');
+    expect(html).not.toContain('id="meta"');
     expect(html).toContain("mangaOverlay");
-    // The page's script is valid JavaScript.
     const script = /<script>([\s\S]*)<\/script>/.exec(html)![1]!;
     expect(() => new Function(script)).not.toThrow();
+
+    // Preload security boundary: mangaOverlay still exposes ONLY onState and stop.
+    const preload = readFileSync(new URL("../../apps/desktop/src/preload/preload.ts", import.meta.url), "utf8");
+    const block = /exposeInMainWorld\("mangaOverlay",\s*\{([\s\S]*?)\}\);/.exec(preload)![1]!;
+    expect(block).toContain("onState:");
+    expect(block).toContain("stop:");
+    expect(block).not.toMatch(/move|bounds|setPosition|invoke/);
   });
 });
 

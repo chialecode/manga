@@ -3,7 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import { unzipSync } from "fflate";
 import type { BrowserWindow } from "electron";
-import { DrizzleStore } from "@manga/storage-drizzle";
+import { DrizzleStore, PRODUCT_SCHEMA_VERSION } from "@manga/storage-drizzle";
 import { MangaProductApp, TestVault } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
 import { DRAWN, clickTestId, closeTabs, pressChord, railTo, setField, sleep, waitFrames, waitUntil } from "./driver.ts";
@@ -652,22 +652,27 @@ export async function runProposalObservations(input: {
           { id: "call_res_1", name: "proposal.rename", arguments: JSON.stringify({ kind: "whiteboard", targetId: board2, title: "重启后确认的白板乙", reason: "待确认项" }) },
           { id: "call_res_2", name: "proposal.rename", arguments: JSON.stringify({ kind: "whiteboard", targetId: board3, title: "重启前已落库的白板丙", reason: "模拟已提交回执" }) },
           { id: "call_res_3", name: "proposal.rename", arguments: JSON.stringify({ kind: "mindmap", targetId: map2, title: "重启前未落库的导图乙", reason: "模拟未提交回执" }) },
+          { id: "call_res_4", name: "proposal.exportRoughcut", arguments: JSON.stringify({ cutId, fileName: "disabled-roughcut.mp4", reason: "模拟模块关闭恢复" }) },
         ];
-        nextReplyText = "已生成三条用于重启恢复核对的提议。";
-        await sendCommandRun("生成三条提议测试重启恢复");
+        nextReplyText = "已生成四条用于重启恢复核对的提议。";
+        await sendCommandRun("生成四条提议测试重启恢复");
         const listed = await ok<{ proposals: Array<{ id: string; kind: string; status: string; preview: { title: string } }> }>(call, "proposal.list", { sessionId });
         const pPending = listed.proposals.find((p) => p.status === "pending" && p.preview.title.includes("白板乙"));
         const pCommitted = listed.proposals.find((p) => p.status === "pending" && p.preview.title.includes("白板丙"));
         const pUncommitted = listed.proposals.find((p) => p.status === "pending" && p.preview.title.includes("导图乙"));
-        if (!pPending || !pCommitted || !pUncommitted) problems.push("restart test proposals were not created");
+        const pDisabledRoughcut = listed.proposals.find((p) => p.status === "pending" && p.kind === "exportRoughcut");
+        if (!pPending || !pCommitted || !pUncommitted || !pDisabledRoughcut) problems.push("restart test proposals were not created");
 
-        if (pPending && pCommitted && pUncommitted) {
-          // Simulate process termination while pCommitted and pUncommitted are in 'applying':
-          // pCommitted has its idempotent receipt in storage; pUncommitted does not.
+        if (pPending && pCommitted && pUncommitted && pDisabledRoughcut) {
+          // Simulate process termination while pCommitted, pUncommitted, and pDisabledRoughcut are in 'applying':
+          // pCommitted has its idempotent receipt in storage; pUncommitted does not; roughcut module is disabled before recovery (LOOP-33).
           await ok(call, "whiteboard.rename", { boardId: board3, title: "重启前已落库的白板丙" });
           appService.store.sqlite.prepare("INSERT OR IGNORE INTO operations(idempotency_key, command_id, result_json, committed_at) VALUES (?, 'whiteboard.rename', ?, ?)")
             .run(pCommitted.id, JSON.stringify({ status: "ok", value: { board: { id: board3, title: "重启前已落库的白板丙" } } }), new Date().toISOString());
-          appService.store.sqlite.prepare("UPDATE agent_proposals SET status = 'applying' WHERE id IN (?, ?)").run(pCommitted.id, pUncommitted.id);
+          await ok(call, "settings.setModule", { featureId: "roughcut", enabled: false });
+          appService.store.sqlite.prepare("UPDATE agent_proposals SET status = 'applying' WHERE id IN (?, ?, ?)").run(
+            pCommitted.id, pUncommitted.id, pDisabledRoughcut.id,
+          );
 
           // Run startup recovery and reload the window as after a restart.
           const recovery = appService.proposals.recover();
@@ -681,15 +686,52 @@ export async function runProposalObservations(input: {
           const committedStatus = appService.proposals.getCard(pCommitted.id).status;
           const uncommittedStatus = appService.proposals.getCard(pUncommitted.id).status;
           const pendingStatus = appService.proposals.getCard(pPending.id).status;
+          const disabledCard = appService.proposals.getCard(pDisabledRoughcut.id);
+          const disabledDomStatus = await js<string | null>(
+            view,
+            `${DOCK}?.querySelector('[data-testid="proposal-card-${pDisabledRoughcut.id}"]')?.getAttribute("data-status") ?? null`,
+          );
+          const disabledDomText = await js<string>(
+            view,
+            `${DOCK}?.querySelector('[data-testid="proposal-status-${pDisabledRoughcut.id}"]')?.textContent ?? ""`,
+          );
+
+          // Re-enabling roughcut must never execute the failed proposal.
+          await ok(call, "settings.setModule", { featureId: "roughcut", enabled: true });
+          await appService.roughcuts.exports.whenIdle();
+          const disabledAfterReenable = appService.proposals.getCard(pDisabledRoughcut.id).status;
+          const roughcutExports = (await ok<{ exports: Array<{ state: string; fileName: string | null }> }>(call, "roughcut.exports", { cutId })).exports;
+          const disabledNeverExported = !roughcutExports.some((exp) => exp.fileName === "disabled-roughcut.mp4");
 
           // Confirm pPending in the window after restart.
           await waitUntil(view, `${DOCK}?.querySelector('[data-testid="proposal-apply-${pPending.id}"]')`, 8000);
           await clickTestId(view, `proposal-apply-${pPending.id}`, 4000);
           const pendingApplied = await waitUntil(view, `${DOCK}?.querySelector('[data-testid="proposal-card-${pPending.id}"]')?.getAttribute("data-status") === "applied"`, 8000);
 
-          detail.restart = { recovery, committedStatus, uncommittedStatus, pendingStatus, pendingApplied };
+          detail.restart = {
+            recovery,
+            committedStatus,
+            uncommittedStatus,
+            pendingStatus,
+            disabledStatus: disabledCard.status,
+            disabledReason: disabledCard.result?.reason ?? null,
+            disabledDomStatus,
+            disabledDomText,
+            disabledAfterReenable,
+            disabledNeverExported,
+            pendingApplied,
+          };
           if (committedStatus !== "applied") problems.push(`applying proposal with receipt settled to ${committedStatus}, not applied`);
           if (uncommittedStatus !== "pending") problems.push(`applying proposal without receipt settled to ${uncommittedStatus}, not pending`);
+          if (disabledCard.status !== "failed" || disabledCard.result?.reason !== "模块已关闭") {
+            problems.push(`applying proposal for disabled module settled to ${disabledCard.status} (${String(disabledCard.result?.reason ?? "")}), expected failed ('模块已关闭')`);
+          }
+          if (disabledDomStatus !== "failed" || !disabledDomText.includes("模块已关闭")) {
+            problems.push(`proposal card DOM did not update to failed ('模块已关闭'): status=${disabledDomStatus}, text=${disabledDomText}`);
+          }
+          if (disabledAfterReenable !== "failed" || !disabledNeverExported) {
+            problems.push("re-enabling disabled module altered or executed the failed proposal");
+          }
           if (!pendingApplied) problems.push("pending proposal could not be confirmed after restart");
         }
       } catch (error) {
@@ -851,7 +893,7 @@ export async function runProposalObservations(input: {
         });
         await app2.start();
         const migration2 = app2.store.migration ?? null;
-        app2.store.sqlite.prepare("UPDATE schema_meta SET value = '15' WHERE key = 'schemaVersion'").run();
+        app2.store.sqlite.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(String(PRODUCT_SCHEMA_VERSION + 1));
         app2.close();
 
         // Newer version -> refused by older app.
@@ -873,7 +915,7 @@ export async function runProposalObservations(input: {
 
         detail.v14 = { migrateMs, backupExists, versionAfter1, migration1, proposalsTable, runKept, migration2, newerRefused };
         if (!backupExists) problems.push("manga.sqlite.premigrate-v13 backup was not created");
-        if (versionAfter1 !== "14" || migration1?.from !== 13 || migration1?.to !== 14) problems.push(`unexpected first migration state: ${JSON.stringify({ versionAfter1, migration1 })}`);
+        if (versionAfter1 !== String(PRODUCT_SCHEMA_VERSION) || migration1?.from !== 13 || migration1?.to !== PRODUCT_SCHEMA_VERSION) problems.push(`unexpected first migration state: ${JSON.stringify({ versionAfter1, migration1 })}`);
         if (!proposalsTable || !runKept) problems.push("agent_proposals table missing or existing rows corrupted");
         if (migration2 !== null) problems.push("second start migrated again");
         if (!newerRefused) problems.push("newer schema version was not refused");

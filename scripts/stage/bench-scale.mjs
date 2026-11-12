@@ -39,10 +39,12 @@ async function seedScaleProfile(dir) {
   const actor = { kind: "user", id: "bench-scale" };
   const grant = app.issueOwnerGrant(actor);
   await call(app, actor, grant, "settings.skipAi", {});
+  await call(app, actor, grant, "library.scan.setSchedule", { onStartup: false, intervalMinutes: 0 });
   // A file is read from a library path (A-80): the folder the books lie in is one, in the Profile the windows start on.
   const books = path.join(dir, "books");
   fs.mkdirSync(books, { recursive: true });
   await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
+  await app.scan.whenIdle();
   // Metadata rows are older than the large books so the resource list shows the books first.
   const old = new Date(Date.now() - 86_400_000).toISOString();
   const sqlite = app.store.sqlite;
@@ -53,9 +55,12 @@ async function seedScaleProfile(dir) {
     insertResource.run(`res_s${i}`, null, "novel", `规模条目 ${i}`, JSON.stringify([`s${i}`]), old);
     insertRevision.run(`rev_s${i}`, `res_s${i}`, `fps${i}`, "bench-parser", JSON.stringify({ normalized: `规模检索块 ${i} 日本語` }), old);
   }
+  const indexStmts = new Map();
   for (let i = 0; i < requiredScale.searchBlocks; i += 1) {
     for (const mutation of app.store.indexFragment({ id: `frag_s${i}`, resourceId: `res_s${i % requiredScale.metadataCount}`, resourceRevisionId: `rev_s${i % requiredScale.metadataCount}`, partId: "body", start: 0, end: 8, kind: "body", text: `规模检索块 ${i} 日本語 中文` })) {
-      sqlite.prepare(mutation.sql).run(...(mutation.params ?? []));
+      let stmt = indexStmts.get(mutation.sql);
+      if (!stmt) { stmt = sqlite.prepare(mutation.sql); indexStmts.set(mutation.sql, stmt); }
+      stmt.run(...(mutation.params ?? []));
     }
   }
   sqlite.exec("COMMIT");
@@ -91,6 +96,30 @@ async function seedScaleProfile(dir) {
   return { env, parseFile, sizes, spec: { txt: { resourceId: txt.resourceId, marker: TXT_MARKER }, epub: { resourceId: epub.resourceId, marker: EPUB_MARKER }, noteId: note.objectId, parseFile, scale: { ...requiredScale } } };
 }
 
+async function prepareScanFolders(dir, count = 3) {
+  const chapters = Array.from({ length: 10 }, (_, idx) => {
+    const file = idx + 1;
+    return [file, `第${file}章\n\n${"用于扫描基准的一段合成文字。".repeat(30)}\n`];
+  });
+  const folders = [];
+  const writes = [];
+  for (let i = 0; i < count; i += 1) {
+    const folder = path.join(dir, `scan-${i}`);
+    folders.push(folder);
+    for (let series = 0; series < 50; series += 1) {
+      const seriesDir = path.join(folder, `基准系列${String(series).padStart(2, "0")}`);
+      fs.mkdirSync(seriesDir, { recursive: true });
+      for (const [file, text] of chapters) {
+        writes.push([path.join(seriesDir, `第${file}章.txt`), text]);
+      }
+    }
+  }
+  for (let at = 0; at < writes.length; at += 150) {
+    await Promise.all(writes.slice(at, at + 150).map(([target, text]) => fs.promises.writeFile(target, text)));
+  }
+  return folders;
+}
+
 /**
  * Launch the real window three times on one seeded Profile. Every launch is a new process (cold start)
  * and parses a distinct 10 MiB book in the background while the window is being used.
@@ -98,7 +127,7 @@ async function seedScaleProfile(dir) {
 export async function runScaleWindowBench({ launch }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-scale-"));
   const seedStarted = Date.now();
-  const seeded = await seedScaleProfile(dir);
+  const [seeded, scanFolders] = await Promise.all([seedScaleProfile(dir), prepareScanFolders(dir, 3)]);
   const seedMs = Date.now() - seedStarted;
   const runs = [];
   for (let i = 0; i < 3; i += 1) {
@@ -108,7 +137,7 @@ export async function runScaleWindowBench({ launch }) {
     fs.writeFileSync(parseFile, background.subarray(0, background.length - (background.length % unit.length)));
     seeded.sizes.backgroundBytes = fs.statSync(parseFile).size;
     const specFile = path.join(dir, `spec-${i}.json`);
-    fs.writeFileSync(specFile, JSON.stringify({ ...seeded.spec, parseFile }));
+    fs.writeFileSync(specFile, JSON.stringify({ ...seeded.spec, parseFile, scanFolder: scanFolders[i] }));
     const env = {
       ...process.env,
       MANGA_CHANNEL: "test",
@@ -129,7 +158,7 @@ export async function runScaleWindowBench({ launch }) {
     fs.rmSync(file);
     runs.push(measured);
   }
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   const merge = (key) => runs.flatMap((run) => run[key] ?? []);
   return {
     ok: runs.every((run) => run.ok === true),

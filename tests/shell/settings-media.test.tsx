@@ -7,6 +7,7 @@ import { SettingsNav } from "../../apps/desktop/src/renderer/pages/settings/sett
 import { hiddenSettingsPages } from "../../apps/desktop/src/renderer/pages/settings/settings-view.tsx";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts";
 import { DEFAULT_RECORDING_SETTINGS, type RecordingSettings } from "../../apps/desktop/src/renderer/voice/use-recorder.ts";
+import { overlayDocument } from "../../apps/desktop/src/main/overlay-model.ts";
 
 const i18n = createTranslator("zh-CN");
 
@@ -190,14 +191,16 @@ describe("settings for media, recording and metadata", () => {
     expect(keyLabel("Digit5")).toBe("5");
   });
 
-  it("restores the floating box's place and size", async () => {
+  it("AT-172 restores the floating box's default position without size controls", async () => {
     installHost();
     const save = vi.fn(async () => undefined);
     const notices: string[] = [];
     renderSettings({ save, onNotice: (message) => notices.push(message) });
-    fireEvent.click(screen.getByTestId("msettings-overlay-reset"));
+    const resetBtn = screen.getByTestId("msettings-overlay-reset");
+    expect(resetBtn.textContent).toBe("恢复默认位置");
+    fireEvent.click(resetBtn);
     await waitFor(() => expect(notices).toHaveLength(1));
-    expect(save).toHaveBeenCalledWith({ overlay: { width: 280, height: 84 } });
+    expect(save).toHaveBeenCalledWith({ overlay: { x: null, y: null } });
   });
 
   it("changes the comic and video preferences", async () => {
@@ -282,5 +285,62 @@ describe("settings for media, recording and metadata", () => {
     fireEvent.click(screen.getByTestId("provider-token-clear-bangumi"));
     await waitFor(() => expect(host.of("metadata.setProvider")).toHaveLength(1));
     expect(host.of("metadata.setProvider")[0]!.input).toEqual({ providerId: "bangumi", enabled: true, clearCredential: true });
+  });
+
+  it("AT-172 drives the compact overlay DOM across silent, speaking, reduced-motion, and stopping states", () => {
+    const html = overlayDocument();
+    const bodyMatch = /<body>([\s\S]*?)<script>([\s\S]*?)<\/script><\/body>/.exec(html)!;
+    document.body.innerHTML = bodyMatch[1]!;
+    let onState: ((state: unknown) => void) | undefined;
+    const stop = vi.fn();
+    let reduceMotion = false;
+    const prevMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({ get matches() { return reduceMotion; } }),
+    });
+    (window as unknown as { mangaOverlay?: unknown }).mangaOverlay = {
+      onState: (listener: (state: unknown) => void) => { onState = listener; },
+      stop,
+    };
+    try {
+      new Function(bodyMatch[2]!)();
+      const strings = {
+        recording: "正在录音", stopping: "正在保存…", stop: "停止录音",
+        keep: "保留音频", discard: "转写后清理音频", hold: "按住录音", toggle: "单击切换", mic: "麦克风",
+      };
+      // Silent frame: visible text is ONLY m:ss, mic is gray, aria-label carries status/mode/retention/device.
+      onState!({ phase: "recording", elapsedMs: 83_000, level: 0.005, retention: "keep", mode: "toggle", label: "USB 麦克风", strings });
+      expect(document.body.textContent?.trim()).toBe("1:23");
+      expect(document.getElementById("mic")?.getAttribute("data-color")).toBe("#9CA3AF");
+      expect(document.getElementById("box")?.getAttribute("aria-label")).toBe("正在录音 1:23，单击切换，保留音频，麦克风：USB 麦克风");
+
+      // Speaking frame (normal motion): color deepens with volume.
+      onState!({ phase: "recording", elapsedMs: 84_000, level: 0.15, retention: "keep", mode: "toggle", label: "USB 麦克风", strings });
+      const softColor = document.getElementById("mic")?.getAttribute("data-color");
+      onState!({ phase: "recording", elapsedMs: 84_100, level: 0.75, retention: "keep", mode: "toggle", label: "USB 麦克风", strings });
+      const loudColor = document.getElementById("mic")?.getAttribute("data-color");
+      expect(softColor).not.toBe("#9CA3AF");
+      expect(loudColor).not.toBe(softColor);
+
+      // Reduced motion: binary switch between #9CA3AF and #AD3268.
+      reduceMotion = true;
+      onState!({ phase: "recording", elapsedMs: 85_000, level: 0.12, retention: "keep", mode: "toggle", label: "USB 麦克风", strings });
+      expect(document.getElementById("mic")?.getAttribute("data-color")).toBe("#AD3268");
+      onState!({ phase: "recording", elapsedMs: 85_100, level: 0.9, retention: "keep", mode: "toggle", label: "USB 麦克风", strings });
+      expect(document.getElementById("mic")?.getAttribute("data-color")).toBe("#AD3268");
+
+      // Stopping: clock freezes at 1:25 even if elapsedMs jumps, mic turns gray, stop button disables; before stopping, click works.
+      fireEvent.click(document.getElementById("stop")!);
+      expect(stop).toHaveBeenCalledTimes(1);
+      onState!({ phase: "stopping", elapsedMs: 92_000, level: 0.8, retention: "keep", mode: "toggle", label: "USB 麦克风", strings });
+      expect(document.body.textContent?.trim()).toBe("1:25");
+      expect(document.getElementById("mic")?.getAttribute("data-color")).toBe("#9CA3AF");
+      expect((document.getElementById("stop") as HTMLButtonElement).disabled).toBe(true);
+    } finally {
+      delete (window as unknown as { mangaOverlay?: unknown }).mangaOverlay;
+      Object.defineProperty(window, "matchMedia", { configurable: true, value: prevMatchMedia });
+      document.body.innerHTML = "";
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Clock, Folder, FolderKanban, FolderOpen, LayoutGrid, Library, List, MessageSquarePlus, Plus, Search, SquareStack } from "lucide-react";
 import {
   contextKey, isCoverView, itemTypeOfView, type ContextId, type ObjectListKind, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType, type SidebarSection,
@@ -186,6 +186,22 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
     s.setNotice(t("sidebar.removed", { name: item.contextName ?? "", title: item.title }));
   }
 
+  async function removeFromRecent(item: SidebarItem) {
+    const result = await attempt<{ key: string; dismissedAt: string; previousDismissedAt: string | null }>("workspace.dismissRecent", { key: item.key });
+    if (!result.ok) { s.setError(result.error.message); return; }
+    reload();
+    const { previousDismissedAt } = result.value;
+    s.setNotice(t("sidebar.removedFromRecent", { title: item.title }), {
+      label: t("menu.undo"),
+      onClick: () => {
+        void attempt("workspace.undismissRecent", { key: item.key, previousDismissedAt }).then((undone) => {
+          if (!undone.ok) { s.setError(undone.error.message); return; }
+          reload();
+        });
+      },
+    });
+  }
+
   async function remove() {
     if (!asking) return;
     setBusy(true);
@@ -239,6 +255,8 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
       items.push({ id: "delete", label: t("sidebar.menu.deleteObject"), danger: true, onSelect: () => setAsking(item) });
     } else if (item.materialId && item.contextId) {
       items.push({ id: "remove", label: t("sidebar.menu.removeFromProject"), separatorBefore: true, onSelect: () => void removeFromProject(item) });
+    } else if (item.contextId === null && (item.type === "novel" || item.type === "comic" || item.type === "video")) {
+      items.push({ id: "remove-recent", label: t("sidebar.menu.removeFromRecent"), separatorBefore: true, onSelect: () => void removeFromRecent(item) });
     }
     return items;
   }
@@ -276,6 +294,14 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
     onAuxClick: (event: ReactMouseEvent) => { if (event.button === 1) { event.preventDefault(); open(item, { background: true }); } },
     onMouseDown: (event: ReactMouseEvent) => { if (event.button === 1) event.preventDefault(); },
     onContextMenu: (event: ReactMouseEvent) => onMenu(event, { kind: "item", item }),
+    onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+      if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+        event.preventDefault();
+        setTip(null);
+        const rect = event.currentTarget.getBoundingClientRect();
+        setMenu({ x: Math.round(rect.left + Math.min(24, rect.width / 2)), y: Math.round(rect.bottom), target: { kind: "item", item } });
+      }
+    },
     onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => tipOn(item, event.currentTarget),
     onMouseLeave: tipOff,
     onFocus: tipOff,

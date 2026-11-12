@@ -150,6 +150,7 @@ const COUNTEREXAMPLES: Array<[string, Record<string, unknown>]> = [
   ["settings.setRecording", { boundaryMarginMs: 2001 }],
   ["settings.setRecording", { retention: "forever" }],
   ["settings.setRecording", { overlay: { width: 10 } }],
+  ["settings.setRecording", { overlay: { x: 25_000, y: 0 } }],
   ["settings.setMedia", { comic: { zoom: 5 } }],
   ["settings.setMedia", { comic: { direction: "up" } }],
   ["settings.setMedia", { video: { rate: 0.1 } }],

@@ -1,6 +1,6 @@
 /** Which commands the owner may call. Agents get the narrower lists below; both are fixed in the command snapshot test. */
 export const OWNER_COMMANDS = [
-  "workspace.get", "workspace.sessions", "workspace.contexts", "workspace.loadContext", "workspace.saveContext", "workspace.setLastContext", "workspace.sidebar", "workspace.items", "workspace.objects", "workspace.find", "session.open", "library.importText", "library.importEpub", "library.importDocument", "library.getResource", "library.read", "library.readOriginal", "library.readSlice", "library.contextSnapshot", "library.search", "library.find", "library.list",
+  "workspace.get", "workspace.sessions", "workspace.contexts", "workspace.loadContext", "workspace.saveContext", "workspace.setLastContext", "workspace.sidebar", "workspace.items", "workspace.objects", "workspace.find", "workspace.dismissRecent", "workspace.undismissRecent", "session.open", "library.importText", "library.importEpub", "library.importDocument", "library.getResource", "library.read", "library.readOriginal", "library.readSlice", "library.contextSnapshot", "library.search", "library.find", "library.list",
   "library.exportPackage", "library.cancelExport", "library.importPackage", "package.preview", "package.importResolved", "library.transcribeAudio", "library.indexExternal", "library.rebuildIndex", "library.repairSource", "progress.set", "progress.setPage", "progress.setTime", "progress.get",
   "works.list", "works.get", "works.deletePreview", "works.delete", "works.unassigned", "works.reidentify", "library.outside", "library.outsidePreview", "library.removeOutside", "works.setKind", "works.moveResource", "works.setOrdinal", "works.setShelf", "works.setOverride", "works.open",
   "notes.create", "notes.update", "notes.undo", "notes.get", "notes.list", "notes.history", "notes.restore", "notes.tags", "notes.split", "notes.merge", "notes.move", "notes.copy", "notes.replace", "notes.insert", "notes.remove", "notes.setType", "notes.rename", "notes.asset", "notes.openSource",
@@ -37,7 +37,7 @@ export const OWNER_COMMANDS = [
   "acquisition.list", "acquisition.get", "acquisition.add", "acquisition.select", "acquisition.pause", "acquisition.resume", "acquisition.cancel", "acquisition.remove", "acquisition.retryPublish", "acquisition.retryImport", "acquisition.restart", "acquisition.setSeeding",
   "research.search", "webpage.fetch", "webpage.list", "webpage.get", "webpage.delete", "excerpt.create", "excerpt.list", "excerpt.get", "excerpt.update", "excerpt.delete", "excerpt.follow",
   "proposal.apply", "proposal.reject", "proposal.list",
-  "update.status", "update.check", "update.restartToUpdate", "update.settings.get", "update.settings.set",
+  "update.status", "update.check", "update.restartToUpdate", "update.settings.get", "update.settings.set", "update.unskip",
 ];
 
 /** Commands that change the blocks of a note, after which the note's embeds are reconciled with them. */

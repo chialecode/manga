@@ -28,7 +28,6 @@
       "id": "overlay",
       "ok": true,
       "detail": {
-        "windows": 1,
         "visible": true
       }
     },
@@ -41,18 +40,18 @@
       "ok": true,
       "detail": {
         "session": {
-          "id": "cap_9cd75c4b-cd1f-4228-90a2-e8b41b05030e",
+          "id": "cap_09eee554-2f29-4ef6-84a2-783aa43147f5",
           "mode": "toggle",
           "retention": "keep",
           "stage": "done",
           "audioState": "retained",
           "playable": true,
-          "durationMs": 11200,
-          "createdAt": "2026-11-08T22:23:50.422Z",
-          "stoppedAt": "2026-11-08T22:24:01.675Z",
-          "workId": "work_b3752bf7-1993-4249-a092-9d7f12c15338",
+          "durationMs": 8900,
+          "createdAt": "2026-11-12T00:58:41.235Z",
+          "stoppedAt": "2026-11-12T00:58:50.202Z",
+          "workId": "work_ad00c0d5-a41c-44e8-978c-b0c98a4c6f3d",
           "deviceLabel": "Fake Default Audio Input",
-          "resourceId": "res_2c326308-7371-4273-9dfc-a886da314d4b",
+          "resourceId": "res_2a21e8db-041a-47f4-9623-dda9da0b60c9",
           "error": null,
           "segments": {
             "total": 1,
@@ -61,7 +60,7 @@
             "pending": 0,
             "noSpeech": 0
           },
-          "speechMs": 6240
+          "speechMs": 6208
         },
         "segments": 1
       }
@@ -87,12 +86,12 @@
           {
             "startMs": 0,
             "endMs": 6700,
-            "resourceId": "res_2c326308-7371-4273-9dfc-a886da314d4b",
-            "resourceRevisionId": "rev_74c6b4d6-d8ed-465f-8c83-992fd63eda08",
+            "resourceId": "res_2a21e8db-041a-47f4-9623-dda9da0b60c9",
+            "resourceRevisionId": "rev_fb49f560-50df-4f93-95f4-9dd8f78c4a05",
             "locator": {
               "kind": "text",
               "partId": "body",
-              "representationId": "rev_74c6b4d6-d8ed-465f-8c83-992fd63eda08",
+              "representationId": "rev_fb49f560-50df-4f93-95f4-9dd8f78c4a05",
               "normalizationVersion": "text-nfc-lf-v1",
               "range": {
                 "start": 0,
@@ -101,6 +100,92 @@
             }
           }
         ]
+      }
+    },
+    {
+      "id": "voice-overlay",
+      "ok": true,
+      "detail": {
+        "initialBounds": {
+          "x": 2428,
+          "y": 16,
+          "width": 116,
+          "height": 38
+        },
+        "overlayDom": {
+          "boxWidth": 116,
+          "boxHeight": 36,
+          "visibleText": "0:01",
+          "ariaLabel": "[redacted-device-summary]",
+          "title": "[redacted-device-summary]",
+          "speakingColor": "#C1497C",
+          "stopLabel": "停止录音",
+          "ariaLabelHasMic": true,
+          "ariaLabelLength": 48
+        },
+        "afterDrag1": {
+          "x": 2228,
+          "y": 136
+        },
+        "reopen1Pos": {
+          "x": 2228,
+          "y": 136
+        },
+        "afterDrag2": {
+          "x": 2108,
+          "y": 216
+        },
+        "reopen2Pos": {
+          "x": 2108,
+          "y": 216
+        },
+        "pillOk": true,
+        "drag1Persisted": true,
+        "immediateStopPersisted": true
+      }
+    }
+  ],
+  "observations": [
+    {
+      "name": "voice-overlay",
+      "status": "passed",
+      "detail": {
+        "initialBounds": {
+          "x": 2428,
+          "y": 16,
+          "width": 116,
+          "height": 38
+        },
+        "overlayDom": {
+          "boxWidth": 116,
+          "boxHeight": 36,
+          "visibleText": "0:01",
+          "ariaLabel": "[redacted-device-summary]",
+          "title": "[redacted-device-summary]",
+          "speakingColor": "#C1497C",
+          "stopLabel": "停止录音",
+          "ariaLabelHasMic": true,
+          "ariaLabelLength": 48
+        },
+        "afterDrag1": {
+          "x": 2228,
+          "y": 136
+        },
+        "reopen1Pos": {
+          "x": 2228,
+          "y": 136
+        },
+        "afterDrag2": {
+          "x": 2108,
+          "y": 216
+        },
+        "reopen2Pos": {
+          "x": 2108,
+          "y": 216
+        },
+        "pillOk": true,
+        "drag1Persisted": true,
+        "immediateStopPersisted": true
       }
     }
   ]

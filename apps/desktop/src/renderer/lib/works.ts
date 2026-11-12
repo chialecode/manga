@@ -1,6 +1,7 @@
-import type { ShelfState, WorkMediaKind, WorkResourceRow, WorkSummary } from "@manga/contracts/media";
+import type { ShelfState, WorkContextPosition, WorkMediaKind, WorkResourceRow, WorkSummary } from "@manga/contracts/media";
+import type { Translator } from "@manga/i18n";
 
-export type { ShelfState, WorkMediaKind, WorkResourceRow, WorkSummary };
+export type { ShelfState, WorkContextPosition, WorkMediaKind, WorkResourceRow, WorkSummary };
 
 export const SHELF_ORDER: ShelfState[] = ["reading", "wishlist", "finished", "on_hold"];
 export const MEDIA_KINDS: WorkMediaKind[] = ["novel", "comic", "video"];
@@ -29,6 +30,7 @@ export type WorkDetail = WorkSummary & {
   coverState: string;
   coverCount: number;
   resources: WorkResourceRow[];
+  contextPositions?: WorkContextPosition[];
   suggestedQuery?: string;
   linkedSource?: { providerId: string; externalId: string; namespace: string; fetchedAt: string | null; detached: boolean; sourceUrl: string | null; rating: { score?: number; total?: number } | null; episodeCount: number; relatedCount: number } | null;
 };
@@ -54,3 +56,35 @@ export function resourceLabel(row: { title: string; ordinalLabel?: string | null
 
 /** Percent with no more precision than a card can show. */
 export const percentOf = (fraction: number): number => Math.max(0, Math.min(100, Math.round(fraction * 100)));
+
+export function formatClockMs(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+/** "最近：第 3 话 12:30" or "项目 A：第 8 页": one context's position on a work's homepage (A-129). */
+export function formatContextPosition(
+  t: Translator["t"],
+  entry: WorkContextPosition,
+  mediaKind: string,
+  manyResources: boolean,
+): string {
+  const part = entry.ordinalLabel ?? (manyResources ? entry.resourceTitle : "");
+  const locator = entry.locator as { kind?: string; startMs?: number } | null;
+  let pos = "";
+  if (locator?.kind === "temporal" && typeof locator.startMs === "number") {
+    pos = formatClockMs(locator.startMs);
+  } else if (entry.pageNumber !== null) {
+    pos = t("work.contextPos.page", { page: entry.pageNumber });
+  } else if (entry.completion === "completed") {
+    pos = t(mediaKind === "video" ? "shelf.state.finished.video" : "shelf.state.finished");
+  } else {
+    pos = `${percentOf(entry.percent)}%`;
+  }
+  const position = [part, pos].filter(Boolean).join(" ");
+  return t("work.contextPos.entry", { context: entry.contextName, position });
+}

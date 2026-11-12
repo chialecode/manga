@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 14;
+export const PRODUCT_SCHEMA_VERSION = 15;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -1427,4 +1427,27 @@ CREATE TABLE IF NOT EXISTS agent_proposals (
   decided_at TEXT
 );
 CREATE INDEX IF NOT EXISTS agent_proposals_session_status ON agent_proposals(session_id, status, created_at);
+`;
+
+/**
+ * v15 (A-129, 计划 4.10): the things a person took out of "最近" (a work `work:<id>` or a resource of no work `resource:<id>`, the keys of the list),
+ * listed again once there is a newer action on them there; and the furthest position of each revision in any context, which the library shows.
+ * Progress, notes and every other piece of the person's content are not touched by a dismissal. A dismissal goes with its work or resource.
+ */
+export const V15_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS recent_dismissals (
+  key TEXT PRIMARY KEY,
+  dismissed_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS recent_dismissals_work_gone AFTER DELETE ON works BEGIN
+  DELETE FROM recent_dismissals WHERE key = 'work:' || OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS recent_dismissals_resource_gone AFTER DELETE ON resources BEGIN
+  DELETE FROM recent_dismissals WHERE key = 'resource:' || OLD.id;
+END;
+-- The furthest position of each revision in any context (A-129): finished anywhere counts as finished, then the largest share, then the newest.
+CREATE VIEW IF NOT EXISTS progress_furthest AS
+  SELECT p.* FROM progress p WHERE p.rowid = (
+    SELECT q.rowid FROM progress q WHERE q.resource_id = p.resource_id AND q.resource_revision_id = p.resource_revision_id
+    ORDER BY (q.completion_state = 'completed') DESC, q.percent DESC, q.last_interaction_at DESC, q.context_id LIMIT 1);
 `;

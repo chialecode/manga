@@ -96,6 +96,7 @@ export function attachNsisUpdater(options: NsisUpdaterAdapterOptions & {
   let fullDownload = false;
   let differential = false;
   let activeManifest: LatestManifest | undefined;
+  let openPartialSink: (() => fs.WriteStream) | undefined;
   const resumeDir = path.join(options.baseCachePath, "updater", "resume");
   type DownloadOptions = Parameters<ElectronHttpExecutor["download"]>[2];
   const download = executor.download;
@@ -105,7 +106,16 @@ export function attachNsisUpdater(options: NsisUpdaterAdapterOptions & {
     const partial = manifest ? path.join(resumeDir, `${manifest.fileName}.part`) : null;
     const metadata = partial ? `${partial}.json` : null;
     const expected = manifest ? { version: manifest.version, fileName: manifest.fileName, sha512: manifest.sha512, size: manifest.size } : null;
-    let fullStartBytes: number | undefined;
+    let partialStream: fs.WriteStream | undefined;
+    const closePartialStream = async () => {
+      const active = partialStream;
+      partialStream = undefined;
+      if (!active || active.closed) return;
+      await new Promise<void>((resolve) => {
+        active.once("close", () => resolve());
+        active.end();
+      });
+    };
     const forgetPartial = () => {
       for (const file of [partial, metadata]) if (file) { try { fs.rmSync(file, { force: true }); } catch { /* a subsequent check replaces it */ } }
     };
@@ -137,31 +147,37 @@ export function attachNsisUpdater(options: NsisUpdaterAdapterOptions & {
           if ((downloadOptions as DownloadOptions).cancellationToken.cancelled) throw error;
         }
       }
-      fullStartBytes = transfer?.bytes ?? 0;
+      if (manifest && partial) {
+        openPartialSink = () => {
+          partialStream?.destroy();
+          fs.mkdirSync(resumeDir, { recursive: true });
+          const sink = fs.createWriteStream(partial);
+          sink.on("error", () => undefined);
+          partialStream = sink;
+          return sink;
+        };
+      }
       const result = await download.call(this, url, destination, downloadOptions);
+      openPartialSink = undefined;
+      await closePartialStream();
       forgetPartial();
       return result;
     } catch (error) {
-      if (manifest && partial && metadata && fullStartBytes !== undefined) {
+      openPartialSink = undefined;
+      await closePartialStream();
+      if (manifest && partial && metadata) {
         try {
-          // Upstream rejects a digest/transport error before its output stream closes.
-          // Wait for the bytes we actually received to reach that file before copying it.
-          const received = (transfer?.bytes ?? fullStartBytes) - fullStartBytes;
-          const deadline = Date.now() + 2_000;
-          while (received > 0 && (!fs.existsSync(destination) || fs.statSync(destination).size < received) && Date.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-          const bytes = fs.statSync(destination).size;
+          // Upstream closes its own WriteStream immediately on digest/transport error, dropping
+          // queued chunks; teeing response chunks directly into partial preserves every received byte.
+          const bytes = fs.existsSync(partial) ? fs.statSync(partial).size : 0;
           if (bytes > 0 && bytes < manifest.size) {
-            fs.mkdirSync(resumeDir, { recursive: true });
-            fs.copyFileSync(destination, partial);
             fs.writeFileSync(metadata, JSON.stringify(expected));
           } else forgetPartial();
         } catch { forgetPartial(); }
       }
       throw error;
     }
-    finally { fullDownload = false; }
+    finally { openPartialSink = undefined; fullDownload = false; }
   };
   const createRequest = executor.createRequest;
   executor.createRequest = function (request, callback) {
@@ -183,7 +199,11 @@ export function attachNsisUpdater(options: NsisUpdaterAdapterOptions & {
     const handle = createRequest.call(this, request, (response) => {
       if (countBytes && transfer && [200, 206].includes(response.statusCode)) {
         const current = transfer;
-        response.on("data", (chunk: Uint8Array) => { current.bytes += chunk.byteLength; });
+        const sink = fullDownload && response.statusCode === 200 ? openPartialSink?.() : undefined;
+        response.on("data", (chunk: Uint8Array) => {
+          current.bytes += chunk.byteLength;
+          sink?.write(chunk);
+        });
       }
       callback(response);
     });

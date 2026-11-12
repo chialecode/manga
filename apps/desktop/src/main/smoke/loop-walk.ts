@@ -325,6 +325,156 @@ async function screens(view: BrowserWindow, evidenceDir: string | undefined, pro
   await leaveSettings(view);
 }
 
+/**
+ * `recent-remove` (计划 4.10, 第 7 节, AT-173): right-click "从最近移除" in "最近"'s comic list hides the item with an undoable toast,
+ * undo restores it, removing again and opening from the library brings it back at "最近"'s own position, the shelf card shows the
+ * furthest progress across contexts (and "已读" when completed in a project only), and the work homepage lists per-context positions.
+ */
+async function recentRemove(
+  appService: MangaProductApp,
+  call: Call,
+  view: BrowserWindow,
+  evidenceDir: string | undefined,
+  observe: (name: string, ok: boolean, detail: unknown) => boolean,
+): Promise<void> {
+  const problems: string[] = [];
+  const detail: Record<string, unknown> = {};
+  const pixelPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  try {
+    const root = fs.mkdtempSync(path.join(appService.layout.partitions.logs, "manga-package-recent-remove-"));
+    const makeComicDir = (folder: string, pages: number) => {
+      const dir = path.join(root, folder);
+      fs.mkdirSync(dir, { recursive: true });
+      for (let i = 1; i <= pages; i += 1) fs.writeFileSync(path.join(dir, `p${String(i).padStart(2, "0")}.png`), pixelPng);
+      return dir;
+    };
+    const dirA = makeComicDir("合成远进度漫画", 10);
+    const dirDone = makeComicDir("合成项目已读漫画", 4);
+    await value(call, "library.paths.add", { pathHandle: appService.registerPath("directory", root), mediaKind: "comic", autoScan: false });
+    const comicA = await value<{ workId: string; resourceId: string; revisionId: string }>(call, "library.importDocument", {
+      title: "合成远进度漫画",
+      kind: "comic",
+      pathHandle: appService.registerPath("directory", dirA),
+    });
+    const comicDone = await value<{ workId: string; resourceId: string; revisionId: string }>(call, "library.importDocument", {
+      title: "合成项目已读漫画",
+      kind: "comic",
+      pathHandle: appService.registerPath("directory", dirDone),
+    });
+    const projectA = (await value<{ id: string }>(call, "project.create", { name: "项目 A" })).id;
+    const pagesA = (await value<{ pages: Array<{ id: string }> }>(call, "comic.pages", { resourceId: comicA.resourceId, revisionId: comicA.revisionId })).pages;
+    const pagesDone = (await value<{ pages: Array<{ id: string }> }>(call, "comic.pages", { resourceId: comicDone.resourceId, revisionId: comicDone.revisionId })).pages;
+
+    // comicA: 80% (page 8/10) in "最近", then 10% (page 1/10, newer timestamp) in "项目 A".
+    await value(call, "progress.setPage", { contextId: null, resourceId: comicA.resourceId, resourceRevisionId: comicA.revisionId, pageId: pagesA[7]!.id, consumed: true });
+    await value(call, "progress.setPage", { contextId: projectA, resourceId: comicA.resourceId, resourceRevisionId: comicA.revisionId, pageId: pagesA[0]!.id, consumed: true });
+    appService.store.sqlite.prepare("UPDATE progress SET last_interaction_at = ? WHERE context_id = '' AND resource_id = ?").run("2026-10-01T00:00:00.000Z", comicA.resourceId);
+    appService.store.sqlite.prepare("UPDATE progress SET last_interaction_at = ? WHERE context_id = ? AND resource_id = ?").run("2026-10-02T00:00:00.000Z", projectA, comicA.resourceId);
+
+    // comicDone: completed ONLY in "项目 A".
+    await value(call, "progress.setPage", { contextId: projectA, resourceId: comicDone.resourceId, resourceRevisionId: comicDone.revisionId, pageId: pagesDone[3]!.id, consumed: true });
+
+    await leaveSettings(view);
+    await view.webContents.reload();
+    await toRail(view);
+    await ensureSidebar(view);
+    await railTo(view, "comic");
+    // Ensure we are in "最近" and its group is visible.
+    await clickTestId(view, "context-open-recent", 4000);
+    await waitUntil(view, `document.querySelector('[data-testid="context-recent"][data-current="true"]')`, 4000);
+    await closeTabs(view, "all");
+
+    const recentItemSel = `[data-testid="context-recent"] [data-testid="sidebar-item-resource-${comicA.resourceId}"]`;
+    const initiallyShown = await waitUntil(view, `${DRAWN}(document.querySelector(${JSON.stringify(recentItemSel)}))`, 6000);
+    if (!initiallyShown) problems.push("comicA did not appear in 最近 comic sidebar before removal");
+
+    const openContextMenuOnItem = () => js<boolean>(view, `(() => {
+      const el = document.querySelector(${JSON.stringify(recentItemSel)});
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: Math.round(r.left + 20), clientY: Math.round(r.top + 10) }));
+      return true;
+    })()`);
+
+    // 1. Right-click -> "从最近移除": disappears + undoable toast.
+    const menuOpened1 = await openContextMenuOnItem() && await waitUntil(view, `document.querySelector('[data-testid="sidebar-menu-remove-recent"]')`, 4000);
+    const clickedRemove1 = menuOpened1 && await clickTestId(view, "sidebar-menu-remove-recent", 4000);
+    const goneAfterRemove1 = clickedRemove1 && await waitUntil(view, `!document.querySelector(${JSON.stringify(recentItemSel)})`, 6000);
+    const toastShown = await waitUntil(view, `(document.querySelector('[data-testid="toast-notice"]')?.textContent ?? "").includes("已从最近移除《合成远进度漫画》") && Boolean(document.querySelector('[data-testid="toast-notice-action"]'))`, 4000);
+    const toastText = await js<string>(view, `document.querySelector('[data-testid="toast-notice"]')?.textContent ?? ""`);
+    if (!goneAfterRemove1) problems.push("comicA did not disappear from 最近 after right-click remove");
+    if (!toastShown) problems.push(`undoable removal toast did not appear (${toastText})`);
+
+    // 2. Click "撤销": item reappears in "最近".
+    const clickedUndo = toastShown && await clickTestId(view, "toast-notice-action", 4000);
+    const restoredAfterUndo = clickedUndo && await waitUntil(view, `${DRAWN}(document.querySelector(${JSON.stringify(recentItemSel)}))`, 6000);
+    if (!restoredAfterUndo) problems.push("comicA did not return to 最近 after clicking 撤销");
+
+    // 3. Remove again -> disappears.
+    const menuOpened2 = restoredAfterUndo && await openContextMenuOnItem() && await waitUntil(view, `document.querySelector('[data-testid="sidebar-menu-remove-recent"]')`, 4000);
+    const clickedRemove2 = menuOpened2 && await clickTestId(view, "sidebar-menu-remove-recent", 4000);
+    const goneAfterRemove2 = clickedRemove2 && await waitUntil(view, `!document.querySelector(${JSON.stringify(recentItemSel)})`, 6000);
+    if (!goneAfterRemove2) problems.push("comicA did not disappear on second removal");
+    if (await clickTestId(view, "toast-notice-close", 1500)) {
+      await waitUntil(view, `!document.querySelector('[data-testid="toast-notice"]')`, 2000);
+    }
+
+    // 4. Open comic shelf: card shows furthest progress (80%), and project-completed comic shows "已读" + "来自“项目 A”".
+    const shelfOpened = await viaSidebar(view, "comic", "sidebar-manage", 6000)
+      && await waitUntil(view, `${HOST}?.querySelector('[data-testid="shelf-comic"]')`, 6000)
+      && await waitUntil(view, `${HOST}?.querySelector('[data-testid="work-progress-${comicA.workId}"]')`, 6000);
+    const cardAText = await js<string>(view, `${HOST}?.querySelector('[data-testid="work-progress-${comicA.workId}"]')?.textContent ?? ""`);
+    const cardDoneText = await js<string>(view, `${HOST}?.querySelector('[data-testid="work-progress-${comicDone.workId}"]')?.textContent ?? ""`);
+    if (!shelfOpened || !cardAText.includes("已读 80%")) problems.push(`library card for comicA did not show furthest progress 80% (${cardAText})`);
+    if (!cardDoneText.includes("已读") || cardDoneText.includes("%") || !cardDoneText.includes("项目 A")) {
+      problems.push(`library card for project-completed comicDone did not show 已读 from 项目 A (${cardDoneText})`);
+    }
+
+    // 5. Open comicA's Work Homepage: shows 80% from "最近" + per-context positions, and capture screenshot without local paths.
+    const workOpened = await clickTestId(view, `open-${comicA.resourceId}`, 6000)
+      && await waitUntil(view, `${HOST}?.querySelector('[data-testid="work-context-positions"]')`, 6000);
+    await waitFrames(view, 2);
+    const workSummaryText = await js<string>(view, `${HOST}?.querySelector('[data-testid="work-progress-summary"]')?.textContent ?? ""`);
+    const contextPositionsText = await js<string>(view, `${HOST}?.querySelector('[data-testid="work-context-positions"]')?.textContent ?? ""`);
+    if (!workOpened || !workSummaryText.includes("已读 80%") || !workSummaryText.includes("来自“最近”")) {
+      problems.push(`work homepage summary did not show 80% from 最近 (${workSummaryText})`);
+    }
+    if (!contextPositionsText.includes("最近：第 8 页") || !contextPositionsText.includes("项目 A：第 1 页")) {
+      problems.push(`work homepage did not list per-context positions (${contextPositionsText})`);
+    }
+    await capturePage(view, evidenceDir, "ui-work-context-positions.png", "work-context-positions");
+
+    // 6. Click "继续阅读" on Work Homepage while in "最近": opens at "最近"'s own page 8 AND reappears in "最近" comic list.
+    const readerOpened = await clickTestId(view, "work-read", 6000)
+      && await waitUntil(view, `${HOST}?.querySelector('.comic-page[data-state="ready"]')`, 15_000);
+    await waitFrames(view, 2);
+    const readerPage = await js<number>(view, String.raw`Number((${HOST}?.querySelector('[data-testid="comic-position"]')?.textContent ?? "").match(/\d+/)?.[0] ?? 0)`);
+    await ensureSidebar(view);
+    await railTo(view, "comic");
+    const reappearedInRecent = await waitUntil(view, `${DRAWN}(document.querySelector(${JSON.stringify(recentItemSel)}))`, 6000);
+    if (!readerOpened || readerPage !== 8) problems.push(`reopening in 最近 did not resume at page 8 (got ${readerPage})`);
+    if (!reappearedInRecent) problems.push("comicA did not reappear in 最近 after reopening from the library");
+
+    Object.assign(detail, {
+      initiallyShown,
+      goneAfterRemove1,
+      toastText,
+      restoredAfterUndo,
+      goneAfterRemove2,
+      cardAText,
+      cardDoneText,
+      workSummaryText,
+      contextPositionsText,
+      readerPage,
+      reappearedInRecent,
+      screenshot: "ui-work-context-positions.png",
+    });
+  } catch (error) {
+    problems.push(`the walk stopped: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  observe("recent-remove", problems.length === 0, { ...detail, problems });
+}
+
 export async function runLoopSmoke(input: { appService: MangaProductApp; grant: string; view: BrowserWindow; evidenceDir: string | undefined; logsDir: string; samples: string | undefined }): Promise<FlowResult & { observations: LoopObservation[] }> {
   const { appService, grant, view, evidenceDir } = input;
   const call = caller(appService, grant);
@@ -356,6 +506,7 @@ export async function runLoopSmoke(input: { appService: MangaProductApp; grant: 
   const screenProblems: string[] = [];
   await screens(view, evidenceDir, screenProblems);
   if (screenProblems.length) observe("loop-screens", false, { problems: screenProblems });
+  await recentRemove(appService, call, view, evidenceDir, observe);
   const failed = observations.filter((row) => row.status !== "passed").map((row) => row.name);
   if (input.logsDir) fs.writeFileSync(path.join(input.logsDir, "loop-observations.json"), `${JSON.stringify(observations, null, 2)}\n`);
   return { ok: failed.length === 0, failed, observations };

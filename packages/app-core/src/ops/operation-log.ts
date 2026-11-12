@@ -84,7 +84,7 @@ export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "danmaku.choose": "danmaku", "danmaku.setCredentials": "danmaku", "danmaku.clearCache": "danmaku",
   "roughcut.create": "roughcut", "roughcut.rename": "roughcut", "roughcut.delete": "roughcut", "roughcut.export": "roughcut", "roughcut.cancel": "roughcut",
   "dictionary.add": "recording", "dictionary.update": "recording", "dictionary.remove": "recording", "dictionary.importMetadata": "recording",
-  "update.check": "settings", "update.restartToUpdate": "settings", "update.settings.set": "settings",
+  "update.check": "settings", "update.restartToUpdate": "settings", "update.settings.set": "settings", "update.unskip": "settings",
 };
 
 type Row = {

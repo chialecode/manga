@@ -23,31 +23,40 @@ import { median, readMemory } from "./bench-reader.ts";
  * - memory: the application's working set with the four columns, over the same with the one video in a single column
  */
 
-export type WorkspaceBenchSpec = { switchRounds: number; contextRounds: number; restoreRounds: number; readers: number; quadRuns: number; baselineRuns: number; playMs: number };
-export type WorkspaceMemorySpec = { runs: number };
+export type WorkspaceSeeds = { videoA: string; videoB: string; comic: string; novels: string[]; noteId: string; projects: string[]; draftId: string; longBook?: string };
+export type WorkspaceBenchSpec = { switchRounds: number; contextRounds: number; restoreRounds: number; readers: number; quadRuns: number; baselineRuns: number; playMs: number; seeds?: WorkspaceSeeds };
+export type WorkspaceMemorySpec = { runs: number; seeds?: WorkspaceSeeds };
 
 type Sample = { ok: boolean; ms: number; reason?: string };
-type Seeds = { videoA: string; videoB: string; comic: string; novels: string[]; noteId: string; projects: string[]; draftId: string };
+type Seeds = WorkspaceSeeds;
 
 const SAMPLES = { videoA: "video-mp4-h264-aac", videoB: "video-vfr", comic: "cbz-basic" } as const;
 const HOST = `document.querySelector('[data-testid="context-host"][data-active="true"]')`;
 const LARGE = { width: 1920, height: 1040 };
 
-/** The page's own clock: armed with a check, it starts at the next pointer press and stops at the first 4 ms poll where the check holds. */
+/** The page's own clock: armed with a check (and an optional second check on the same press), it starts at the next pointer press and stops at the first 4 ms poll where each check holds. */
 const PRELUDE = `(() => {
   if (window.__ws) return true;
-  const ws = (window.__ws = { until: null, started: 0, timeout: 0, result: null, timer: 0 });
+  const ws = (window.__ws = { until: null, until2: null, started: 0, timeout: 0, result: null, result2: null, timer: 0 });
   const step = () => {
-    if (!ws.until || ws.result) return;
-    let held = false;
-    try { held = Boolean(ws.until()); } catch { held = false; }
+    if ((!ws.until || ws.result) && (!ws.until2 || ws.result2)) return;
     const ms = performance.now() - ws.started;
-    if (held) { void document.body.offsetHeight; ws.result = { ok: true, ms }; ws.until = null; }
-    else if (ms > ws.timeout) { ws.result = { ok: false, ms, reason: "timeout" }; ws.until = null; }
-    else ws.timer = setTimeout(step, 4);
+    if (ws.until && !ws.result) {
+      let held = false;
+      try { held = Boolean(ws.until()); } catch { held = false; }
+      if (held) { void document.body.offsetHeight; ws.result = { ok: true, ms }; ws.until = null; }
+      else if (ms > ws.timeout) { ws.result = { ok: false, ms, reason: "timeout" }; ws.until = null; }
+    }
+    if (ws.until2 && !ws.result2) {
+      let held2 = false;
+      try { held2 = Boolean(ws.until2()); } catch { held2 = false; }
+      if (held2) { void document.body.offsetHeight; ws.result2 = { ok: true, ms }; ws.until2 = null; }
+      else if (ms > ws.timeout) { ws.result2 = { ok: false, ms, reason: "timeout" }; ws.until2 = null; }
+    }
+    if ((ws.until && !ws.result) || (ws.until2 && !ws.result2)) ws.timer = setTimeout(step, 4);
   };
-  document.addEventListener("pointerdown", () => { if (ws.until && ws.started === 0) { ws.started = performance.now(); step(); } }, true);
-  ws.arm = (until, timeout) => { clearTimeout(ws.timer); ws.until = until; ws.timeout = timeout; ws.started = 0; ws.result = null; };
+  document.addEventListener("pointerdown", () => { if ((ws.until || ws.until2) && ws.started === 0) { ws.started = performance.now(); step(); } }, true);
+  ws.arm = (until, timeout, until2 = null) => { clearTimeout(ws.timer); ws.until = until; ws.until2 = until2; ws.timeout = timeout; ws.started = 0; ws.result = null; ws.result2 = null; };
   return true;
 })()`;
 
@@ -100,6 +109,21 @@ async function timedPress(view: BrowserWindow, selector: string, until: string, 
   view.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
   if (!(await waitUntil(view, `window.__ws.result !== null`, timeoutMs + 3000))) return { ok: false, ms: -1, reason: "no answer" };
   return js<Sample>(view, `window.__ws.result`);
+}
+
+/** One real press timed simultaneously against two independent predicates in the page (e.g. view restore + media covers shown). */
+async function timedDualPress(view: BrowserWindow, selector: string, untilA: string, untilB: string, timeoutMs = 10_000): Promise<[Sample, Sample]> {
+  const point = await pointOf(view, selector);
+  if (!point) return [{ ok: false, ms: -1, reason: "nothing to press" }, { ok: false, ms: -1, reason: "nothing to press" }];
+  await js(view, `window.__ws.arm(() => (${untilA}), ${timeoutMs}, () => (${untilB}))`);
+  view.webContents.focus();
+  view.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
+  view.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  view.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  if (!(await waitUntil(view, `window.__ws.result !== null && window.__ws.result2 !== null`, timeoutMs + 3000))) {
+    return [{ ok: false, ms: -1, reason: "no answer" }, { ok: false, ms: -1, reason: "no answer" }];
+  }
+  return js<[Sample, Sample]>(view, `[window.__ws.result, window.__ws.result2]`);
 }
 
 /** A press that is not timed: the tab is brought to the front and its content waited for. */
@@ -301,10 +325,13 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   const failures: string[] = [];
   view.showInactive();
   view.setContentSize(LARGE.width, LARGE.height);
-  await call("settings.skipAi", {});
-  const seeds = await seed(appService, call, { novels: spec.readers });
-  if (!seeds) return { ok: false, failures: ["the synthetic resources could not be put in the library"] };
-  await view.webContents.reload();
+  let seeds = spec.seeds ?? null;
+  if (!seeds) {
+    await call("settings.skipAi", {});
+    seeds = await seed(appService, call, { novels: spec.readers });
+    if (!seeds) return { ok: false, failures: ["the synthetic resources could not be put in the library"] };
+    await view.webContents.reload();
+  }
   await toRail(view);
   await js(view, PRELUDE);
   await waitFrames(view, 2);
@@ -329,10 +356,13 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   const strip = await tabsOf(view);
   const tabMs: number[] = [];
   if (strip.length < 8) failures.push(`tab switch: only ${strip.length} tabs`);
+  let focusedId = strip.find((item) => item.focused)?.id ?? "";
   for (let round = 0; round < spec.switchRounds; round += 1) {
     for (const tab of strip) {
-      if ((await tabsOf(view)).find((item) => item.id === tab.id)?.focused) continue;
-      keep(`tab ${tab.kind}`, await timedPress(view, chipOf(tab.id), tabShown(tab.id)), tabMs, failures);
+      if (tab.id === focusedId) continue;
+      const sample = await timedPress(view, chipOf(tab.id), tabShown(tab.id));
+      if (sample.ok) focusedId = tab.id;
+      keep(`tab ${tab.kind}`, sample, tabMs, failures);
     }
   }
 
@@ -360,7 +390,6 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
     await view.webContents.reload();
     await toRail(view);
     await js(view, PRELUDE);
-    await waitUntil(view, `${HOST}`, 10_000);
     await waitUntil(view, `Boolean(${HOST}?.querySelector('[data-testid="tab-panel"][data-focused="true"] [data-testid="reading-body"]'))`, 10_000);
     const active = await js<string>(view, `${HOST}?.getAttribute("data-context") ?? ""`);
     for (const key of keys.filter((item) => item !== active)) keep(`restore ${key || "recent"}`, await timedPress(view, rowOf(rowFor(key)), contextShown(key), 20_000), restoreMs, failures);
@@ -379,7 +408,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   const around = (await tabsOf(view)).length * 2;
   for (let step = 0; step < around; step += 1) {
     const was = await front();
-    await pressChord(view, "Tab", ["control"]);
+    await pressChord(view, "Tab", ["control"], 12);
     const moved = await waitUntil(view, `(${HOST}?.querySelector('[data-testid="tab"][data-focused="true"]')?.getAttribute("data-tab") ?? "") !== ${JSON.stringify(was)}`, 4000);
     if (!moved || !(await waitUntil(view, tabShown(await front()), 10_000))) failures.push(`readers: step ${step + 1} did not bring a tab to the front`);
   }
@@ -427,7 +456,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
 
   // ---- the views, a drag and a book by the page ----
   note("views, a drag, a book by the page");
-  const polish = await measurePolish(view, call, seeds, { timedPress, prelude: PRELUDE, failures });
+  const polish = await measurePolish(view, call, seeds, { timedPress, timedDualPress, prelude: PRELUDE, failures });
 
   note("done");
   const samples = { tabMs, contextMs, restoreMs };
@@ -474,15 +503,18 @@ export async function measureWorkspaceMemory(appService: MangaProductApp, grant:
   const failures: string[] = [];
   view.showInactive();
   view.setContentSize(LARGE.width, LARGE.height);
-  await call("settings.skipAi", {});
-  const seeds = await seed(appService, call, { novels: 1 });
-  if (!seeds) return { ok: false, failures: ["the synthetic resources could not be put in the library"] };
-  await view.webContents.reload();
+  let seeds = spec.seeds ?? null;
+  if (!seeds) {
+    await call("settings.skipAi", {});
+    seeds = await seed(appService, call, { novels: 1 });
+    if (!seeds) return { ok: false, failures: ["the synthetic resources could not be put in the library"] };
+    await view.webContents.reload();
+  }
   await toRail(view);
   const raw: number[] = [];
   const rows: Array<Record<string, unknown>> = [];
   note("memory: seeded");
-  // The quad is laid out in the project's context (its draft page is one of the four), so the single column is measured there too.
+  // The quad is laid out in the project's context (its draft page is one of four), so the single column is measured there too.
   if (!(await enterProject(view, seeds))) return { ok: false, failures: ["the project's context could not be entered"] };
   for (let run = 0; run < spec.runs; run += 1) {
     await closeTabs(view, "all");

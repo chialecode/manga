@@ -6,6 +6,9 @@ import { build, createLogger, type InlineConfig, type LogOptions } from "vite";
 import { danmakuCredentialsFor, danmakuDefine } from "../../apps/desktop/danmaku-define.ts";
 import { mainBuild } from "../../apps/desktop/vite.main.config.ts";
 import rendererConfig from "../../apps/desktop/vite.renderer.config.ts";
+import { bootstrapBuild } from "../../apps/desktop/vite.bootstrap.config.ts";
+import { lightMainBuild } from "../../apps/desktop/vite.light.config.ts";
+import lightRendererConfig from "../../apps/desktop/vite.light-renderer.config.ts";
 
 const appRoot = path.resolve(process.cwd(), "apps/desktop");
 /** Not real: shaped like a real pair (ten and thirty-two characters) and made to be easy to search for. */
@@ -51,7 +54,7 @@ describe("the credentials a release is built with (AT-94)", () => {
 });
 
 describe("a build with credentials puts them in the main process and nowhere the screen can read (AT-94)", () => {
-  const out = { main: "", renderer: "", preload: "" };
+  const out = { main: "", renderer: "", preload: "", light: "", lightRenderer: "" };
   const log: string[] = [];
 
   beforeAll(async () => {
@@ -60,6 +63,8 @@ describe("a build with credentials puts them in the main process and nowhere the
     out.main = scratch("main");
     out.renderer = scratch("renderer");
     out.preload = scratch("preload");
+    out.light = scratch("light");
+    out.lightRenderer = scratch("light-renderer");
     const logger = createLogger("info", { allowClearScreen: false });
     const capture = (kind: "info" | "warn" | "error") => (message: string, options?: LogOptions) => { log.push(message); logger[kind](message, options); };
     const customLogger = { ...logger, info: capture("info"), warn: capture("warn"), error: capture("error"), warnOnce: capture("warn") };
@@ -72,12 +77,22 @@ describe("a build with credentials puts them in the main process and nowhere the
       ...common, root: appRoot,
       build: { lib: { entry: "src/preload/preload.ts", formats: ["cjs"], fileName: () => "preload.cjs" }, rollupOptions: { external: ["electron"] }, outDir: out.preload, emptyOutDir: true, sourcemap: true },
     });
+    // The bootstrap entry and light open (A-128), built with the same environment: none of them carries the credentials.
+    const define = danmakuDefine(process.env, scratch("none-light"));
+    await build({ ...common, ...bootstrapBuild, define, root: appRoot, build: { ...bootstrapBuild.build, outDir: out.light, emptyOutDir: true, sourcemap: true } });
+    await build({ ...common, ...lightMainBuild, define, root: appRoot, build: { ...lightMainBuild.build, outDir: out.light, emptyOutDir: false, sourcemap: true } });
+    await build({
+      ...common, root: appRoot,
+      build: { lib: { entry: "src/preload/preload-light.ts", formats: ["cjs"], fileName: () => "preload-light.cjs" }, rollupOptions: { external: ["electron"] }, outDir: out.light, emptyOutDir: false, sourcemap: true },
+    });
+    await build({ ...common, ...lightRendererConfig, root: path.join(appRoot, "src/light"), build: { ...lightRendererConfig.build, outDir: out.lightRenderer, emptyOutDir: true, sourcemap: true } });
   }, 300_000);
 
   it("finds them in the main bundle, as the positive control, and in no file of the screen or the preload bridge", () => {
-    expect(contains(out.main, FAKE.secret).map((file) => path.basename(file))).toContain("main.cjs");
-    expect(contains(out.main, FAKE.id).map((file) => path.basename(file))).toContain("main.cjs");
-    for (const dir of [out.renderer, out.preload]) {
+    expect(contains(out.main, FAKE.secret).map((file) => path.basename(file))).toContain("full-main.cjs");
+    expect(contains(out.main, FAKE.id).map((file) => path.basename(file))).toContain("full-main.cjs");
+    expect(filesIn(out.light).map((file) => path.basename(file))).toEqual(expect.arrayContaining(["main.cjs", "light-main.cjs", "preload-light.cjs"]));
+    for (const dir of [out.renderer, out.preload, out.light, out.lightRenderer]) {
       expect(filesIn(dir).length).toBeGreaterThan(0);
       expect(contains(dir, FAKE.secret), dir).toEqual([]);
       expect(contains(dir, FAKE.id), dir).toEqual([]);

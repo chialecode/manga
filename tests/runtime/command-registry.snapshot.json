@@ -2728,6 +2728,15 @@
       "noteContent": false
     },
     {
+      "commandId": "update.unskip",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "usage.query",
       "moduleId": "manga.settings",
       "owner": true,
@@ -3115,6 +3124,15 @@
       "noteContent": false
     },
     {
+      "commandId": "workspace.dismissRecent",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "workspace.find",
       "moduleId": "manga.library",
       "owner": true,
@@ -3188,6 +3206,15 @@
     },
     {
       "commandId": "workspace.sidebar",
+      "moduleId": "manga.library",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "workspace.undismissRecent",
       "moduleId": "manga.library",
       "owner": true,
       "agent": false,

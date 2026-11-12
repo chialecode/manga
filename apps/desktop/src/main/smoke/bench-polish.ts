@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { clickTestId, openFromShelf, railTo, revealNovelControls, sleep, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
+import { clickTestId, DRAWN, openFromShelf, PICK, railTo, revealNovelControls, sleep, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
 import { js, type caller } from "./common.ts";
 import { longChaptersEpub } from "./fixtures.ts";
 
@@ -13,6 +13,7 @@ import { longChaptersEpub } from "./fixtures.ts";
  */
 export type PolishTools = {
   timedPress: (view: BrowserWindow, selector: string, until: string, timeoutMs?: number) => Promise<{ ok: boolean; ms: number; reason?: string }>;
+  timedDualPress?: (view: BrowserWindow, selector: string, untilA: string, untilB: string, timeoutMs?: number) => Promise<[{ ok: boolean; ms: number; reason?: string }, { ok: boolean; ms: number; reason?: string }]>;
   prelude: string;
   failures: string[];
 };
@@ -76,8 +77,8 @@ async function drag(view: BrowserWindow, selector: string, dx: number, dy: numbe
   return true;
 }
 
-export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof caller>, seeds: { videoA: string; novels: string[] }, tools: PolishTools): Promise<PolishFigures> {
-  const { timedPress, prelude, failures } = tools;
+export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof caller>, seeds: { videoA: string; novels: string[]; longBook?: string }, tools: PolishTools): Promise<PolishFigures> {
+  const { timedPress, timedDualPress, prelude, failures } = tools;
   const figures: PolishFigures = { viewSwitchMs: [], viewRestoreMs: [], coversShownMs: [], coverImages: 0, coverCells: 0, novelCharacters: 0, dragLateFramePct: [], novelTurnMs: [], novelRefontMs: [], novelOpenMs: [] };
   const keep = (name: string, sample: { ok: boolean; ms: number; reason?: string }, into: number[]) => {
     if (sample.ok) into.push(sample.ms);
@@ -104,12 +105,22 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
     await js(view, prelude);
     await waitUntil(view, viewShown(front), 8000);
   };
+  let sharedCoverSamples = 0;
   for (let round = 0; round < POLISH.restoreRounds; round += 1) {
     const [from, to] = (round % 2 === 0 ? ["novel", "video"] : ["video", "novel"]) as ["novel" | "video", "novel" | "video"];
     await reload(from);
-    keep(`view after a load ${to}`, await timedPress(view, NAV(to), viewShown(to), 8000), figures.viewRestoreMs);
+    if (to === "video" && timedDualPress && sharedCoverSamples < POLISH.coverRounds) {
+      const [restored, covers] = await timedDualPress(view, NAV("video"), viewShown("video"), coversShown("video"), 8000);
+      keep(`view after a load ${to}`, restored, figures.viewRestoreMs);
+      keep("covers", covers, figures.coversShownMs);
+      sharedCoverSamples += 1;
+      figures.coverImages = await js<number>(view, `document.querySelectorAll('[data-testid="sidebar"] .sidebar-cover img').length`);
+      figures.coverCells = await js<number>(view, `document.querySelectorAll('[data-testid="sidebar"] .sidebar-cover').length`);
+    } else {
+      keep(`view after a load ${to}`, await timedPress(view, NAV(to), viewShown(to), 8000), figures.viewRestoreMs);
+    }
   }
-  for (let round = 0; round < POLISH.coverRounds; round += 1) {
+  for (let round = sharedCoverSamples; round < POLISH.coverRounds; round += 1) {
     await reload("novel");
     keep("covers", await timedPress(view, NAV("video"), coversShown("video"), 8000), figures.coversShownMs);
     figures.coverImages = await js<number>(view, `document.querySelectorAll('[data-testid="sidebar"] .sidebar-cover img').length`);
@@ -135,26 +146,44 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
   }
 
   // ---- a book of two chapters of 300 000 characters ----
-  const made = await call("library.importDocument", { title: "基准长章 EPUB", format: "epub", bytes: [...longChaptersEpub(2, LONG_CHAPTER_CHARACTERS)] }, "bench-polish-long");
-  if (made.status !== "ok") { failures.push(`long book: ${JSON.stringify(made.error)}`); return figures; }
-  const book = String((made.value as { resourceId: string }).resourceId);
-  await view.webContents.reload();
-  await waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 15_000);
-  await js(view, prelude);
+  let book = seeds.longBook ?? "";
+  if (!book) {
+    const made = await call("library.importDocument", { title: "基准长章 EPUB", format: "epub", bytes: [...longChaptersEpub(2, LONG_CHAPTER_CHARACTERS)] }, "bench-polish-long");
+    if (made.status !== "ok") { failures.push(`long book: ${JSON.stringify(made.error)}`); return figures; }
+    book = String((made.value as { resourceId: string }).resourceId);
+    await view.webContents.reload();
+    await waitUntil(view, `document.querySelector('[data-testid="nav-home"]')`, 15_000);
+    await js(view, prelude);
+  }
   if (!(await openFromShelf(view, "novel", book, 15_000)) || !(await waitForTestId(view, "reading-body", "data-present", null, 20_000))) { failures.push("long book: it did not open"); return figures; }
   figures.novelCharacters = LONG_CHAPTER_CHARACTERS;
   await waitUntil(view, `Number(document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-end") ?? 0) > 0`, 8000);
   view.setContentSize(1280, 820);
   await waitUntil(view, `window.innerWidth === 1280 && Number(document.querySelector('[data-testid="reading-body"]')?.getAttribute("data-page-end") ?? 0) > 0`, 8000);
 
+  const ensureNovelControls = async () => {
+    const ready = await js<boolean>(view, `(() => {
+      const root = document.querySelector('[data-testid="reading-page"]');
+      const foot = document.querySelector('[data-testid="reading-footer"]');
+      const next = ${PICK}("reading-page-next");
+      if (!root || !foot || !${DRAWN}(next)) return false;
+      const rb = root.getBoundingClientRect();
+      const fb = foot.getBoundingClientRect();
+      const tf = getComputedStyle(foot).transform;
+      return fb.bottom <= rb.bottom + 0.5 && (tf === "none" || tf === "matrix(1, 0, 0, 1, 0, 0)");
+    })()`);
+    if (!ready) await revealNovelControls(view);
+  };
+
+  await revealNovelControls(view);
   for (let turn = 0; turn < POLISH.turns; turn += 1) {
-    await revealNovelControls(view);
+    await ensureNovelControls();
     const page = await js<number>(view, `${pageNumbers}(${pageLabel})[0]`);
     keep("turn", await timedPress(view, `document.querySelector('[data-testid="reading-page-next"]')`, `${pageNumbers}(${pageLabel})[0] === ${page + 1}`, 4000), figures.novelTurnMs);
     await waitFrames(view, 1);
   }
 
-  await revealNovelControls(view);
+  await ensureNovelControls();
   await clickTestId(view, "reading-settings", 3000);
   await waitUntil(view, `document.querySelector('[data-testid="reading-settings-panel"]')`, 3000);
   await waitFrames(view, 1);
@@ -169,14 +198,14 @@ export async function measurePolish(view: BrowserWindow, call: ReturnType<typeof
     keep("larger letter", await timedPress(view, `document.querySelector('[data-testid="${button}"]')`, placed, 5000), figures.novelRefontMs);
     await waitFrames(view, 1);
   }
-  await revealNovelControls(view);
+  await ensureNovelControls();
   await clickTestId(view, "reading-settings", 3000);
   await waitUntil(view, `!document.querySelector('[data-testid="reading-settings-panel"]')`, 3000);
 
   const row = (title: string) => `[...document.querySelectorAll('[data-testid="reading-panel"] button')].find((el) => (el.textContent ?? "").includes(${JSON.stringify(title)}))`;
   for (let open = 0; open < POLISH.opens; open += 1) {
     // Choosing a chapter closes the contents, as it does for a person.
-    await revealNovelControls(view);
+    await ensureNovelControls();
     await clickTestId(view, "reading-panel-toc", 3000);
     await waitUntil(view, `document.querySelectorAll('[data-testid="reading-panel"] button').length >= 2`, 3000);
     const title = open % 2 === 0 ? "第2章" : "第1章";

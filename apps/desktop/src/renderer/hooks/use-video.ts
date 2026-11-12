@@ -120,7 +120,7 @@ export function useVideo(deps: VideoDeps) {
       attempt<{ audio: AudioTrackInfo[] }>("video.audioTracks", { resourceId, revisionId: value.revisionId }),
       attempt<{ video?: Partial<VideoSettings> }>("settings.getMedia"),
       attempt<{ locator: { kind?: string; startMs?: number } | null; completion?: string; elsewhere?: Elsewhere | null }>("progress.get", { contextId, resourceId, resourceRevisionId: value.revisionId }),
-      attempt<{ workId: string | null }>("works.open", { resourceId }),
+      attempt<{ workId: string | null }>("works.open", { resourceId, contextId }),
     ]);
     if (request !== viewRequest.current) return;
     workId.current = options.workId ?? (touched.ok ? touched.value.workId : null) ?? null;

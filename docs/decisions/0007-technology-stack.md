@@ -148,6 +148,10 @@ Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点�
 | linkedom | 0.18.13 | 保持 0.18.13 | 已登记例外不变（0.18.14 的 `@acemir/cssom` CommonJS 导出限制未变，上游尚无新发行） |
 | dockview-react、Electron、Vitest 与其余依赖 | 8.6.1、45.0.0、5.0.5 等 | 不变 | 2026-11-08 核对 npm registry `time`：高于当前锁定版本的候选（如 Electron 45.2.3、dockview-react 8.8.3、@earendil-works/pi-ai 1.5.0、@tanstack/react-virtual 3.14.26 等）发行均未满 14 天，保持当前精确版本 |
 
+## 2026-11-11 依赖盘点
+
+首个正式版、更新的退路与轻量打开阶段开始时与门禁前各按 A-35 执行一次 `pnpm outdated -r`（最小发行龄策略 `minimumReleaseAge: 20160` 分钟不绕过，零新增依赖），升级全部已满 14 天的同主版本稳定版：`electron` `45.0.0 → 45.1.0`、`dockview-react` `8.6.1 → 8.7.1`（同步锁定配套 `dockview` 与 `dockview-core` `8.7.1`；未满 14 天的 `8.9.0` 不采用）、`lucide-react` `1.61.0 → 1.63.0`、`@tanstack/react-virtual` `3.14.22 → 3.14.23`、`onnxruntime-web` `1.30.0 → 1.31.1`、`mdast-util-to-markdown` `2.2.0 → 2.2.1`；门禁前复跑确认除 `linkedom` 已登记例外（`0.18.13`）外零剩余满龄同主版本偏差。
+
 ## 2026-09-20 接入与构建边界
 
 AI runtime 切换保存为设置，运行开始时固定所选实现；切换只影响后续运行，活动任务继续使用原实现或由用户取消，不静默转接、扩大授权或丢失会话/工具证据。旧配置缺 runtime 字段时兼容自研适配器。自研与 PI 均用相同受控提供者验证文本、工具、流式、取消与错误，安装 PI 依赖不构成接入完成。实现与复验由 `tests/agent` 守护。
@@ -161,9 +165,9 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 
 | 能力 | 采用 | 未采用与理由 |
 | --- | --- | --- |
-| 桌面运行时 | Electron 45.0.0（Chromium 156，Node 24.22），2026-11-04 满 14 天后升级；下次盘点取满龄的最新 45.x | 停留 37：Electron 只维护最新三个稳定主版本，37 系已无安全补丁 |
+| 桌面运行时 | Electron 45.1.0（Chromium 156，Node 24.22），2026-11-11 满 14 天后升级；下次盘点取满龄的最新 45.x | 停留 37：Electron 只维护最新三个稳定主版本，37 系已无安全补丁 |
 | 视频播放 | Chromium `<video>`，经自定义 `manga-media:` 协议流式读取；`protocol.handle` + `net.fetch(file:)` 不处理 Range，所以自行返回 206/416。Windows 上 HEVC 走 D3D11 硬件解码，没有软件回退 | libmpv：在 Electron 中需要原生插件和实验性 `sharedTexture`，默认 GPL；播放副本已能覆盖无硬件 HEVC |
-| 探测、帧时间戳、字幕与字体提取、重封装、播放副本 | FFmpeg 8.1 LGPL 构建（BtbN `win64-lgpl-shared-8.1`），子进程调用。LGPL 变体含 HEVC 解码器、AAC 编码器、NVENC/AMF/QSV 硬件编码、SVT-AV1、libvpx、libopus、libass，没有 GPL 专属的 x264/x265；粗剪也用同一工具 | mediabunny 1.61.0（MPL-2.0）不读取 ASS 与字体附件，记为备选；`ffmpeg-static` 是 GPL 构建；openh264 默认不用（自编译二进制不在 Cisco 专利许可范围内，Q-17） |
+| 探测、帧时间戳、字幕与字体提取、重封装、播放副本 | FFmpeg 8.1 LGPL 构建（BtbN 维护的 `win64-lgpl-shared-8.1`；仓库已迁到 `FFmpeg-Builds/FFmpeg-Builds`，旧地址 301 跳转，2026-11-12 核对；锁文件钉月末构建），子进程调用。LGPL 变体含 HEVC 解码器、AAC 编码器、NVENC/AMF/QSV 硬件编码、SVT-AV1、libvpx、libopus、libass，没有 GPL 专属的 x264/x265；粗剪也用同一工具 | mediabunny 1.61.0（MPL-2.0）不读取 ASS 与字体附件，记为备选；`ffmpeg-static` 是 GPL 构建；openh264 默认不用（自编译二进制不在 Cisco 专利许可范围内，Q-17） |
 | 无硬件 HEVC 与不支持音轨 | 本地播放副本：视频优先用硬件 H.264 编码，没有则用 SVT-AV1 快速预设（Chromium 用 dav1d 软件解码）；音频转 AAC；保持原时间戳（VFR 不改帧率） | — |
 | ASS 渲染 | JASSUB 2.5.16（libass 编译为 WASM）；npm 许可声明含 MIT、ISC、LGPL-2.1+、FTL/GPL-2.0 等组件，随包附声明。JASSUB 没有指定默认字体时回退到只含西文字形的内置字体，样式字体缺失的中文会画成方块，所以随包放一个含中日文字形的开源字体作默认字体（Noto Sans CJK 简体中文子集，OFL-1.1，约 8 MiB，不含韩文）；它不可用时才用本机字体 | 不自写 ASS 排版；系统字体查询在开发机上没有加载成功，不能作为唯一依赖 |
 | 多音轨 | Chromium `audioTracks`（Blink 特性 `AudioVideoTracks`）；不可用时用 FFmpeg 把所选音轨重封装到缓存 | — |
@@ -173,22 +177,22 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 | 动画文件名解析 | anitomy（TS 移植）0.0.35（MIT），经适配层隔离，失败时退回自然排序 | anitomyscript（Emscripten 版，npm 停在 2022）；0.0.x 接口可能变化 |
 | 网络 | Electron `net.fetch`（Chromium 网络栈，跟随系统代理） | Node `fetch` 默认不读系统代理 |
 | 麦克风采集 | Chromium `getUserMedia`（按 deviceId 选择，启用回声消除与降噪约束）加 AudioWorklet 输出 16 kHz 单声道 PCM，分块追加写盘 | 以 MediaRecorder 为主路径：崩溃后封装不完整，且仍需解码才能筛人声 |
-| 人声筛选 | Silero VAD v6.2.3（MIT）的 ONNX 模型，在独立 worker 中用 onnxruntime-web 1.30.0 的 WASM 后端运行；模型约 2 MB，随包离线 | onnxruntime-node（原生插件，性能不足时备选）；@ricky0123/vad-web 面向浏览器实时流；WebRTC VAD 在音乐与噪声上误检更多 |
+| 人声筛选 | Silero VAD v6.2.3（MIT）的 ONNX 模型，在独立 worker 中用 onnxruntime-web 1.31.1 的 WASM 后端运行；模型约 2 MB，随包离线 | onnxruntime-node（原生插件，性能不足时备选）；@ricky0123/vad-web 面向浏览器实时流；WebRTC VAD 在音乐与噪声上误检更多 |
 | 录音保存与上传 | 保留模式用 FFmpeg（libopus）把 PCM 转为 Opus 存入附件；上传给 ASR 的块用 WAV（16 kHz 单声道） | — |
 | 视觉与 OCR 路由 | 沿用 OpenAI 格式协议的图像输入（Responses `input_image`、Chat Completions `image_url`），不新增依赖 | tesseract.js 7.0.0：竖排日文漫画效果差，且本地 OCR 不是需求 |
-| 大列表 | TanStack Virtual 3.14.22 | — |
-| 标签页与分屏（2026-10-22 查证） | dockview-react 8.6.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
+| 大列表 | TanStack Virtual 3.14.23 | — |
+| 标签页与分屏（2026-10-22 查证） | dockview-react 8.7.1（MIT，核心 `dockview-core` 零依赖，仓库 2026-10-21 仍有推送，周下载约 27 万，peer 支持 React 19），面板一律 `renderer: "always"`。试验在隔离页里用真实视频、漫画页与文稿在 Electron 44 / React 19 下六项全部满足：四种布局互相切换标签不丢；播放中的视频在栏间、栏边新栏和栏内移动后 `currentTime` 连续且无 `emptied` / `loadstart`（`always` 把内容放在覆盖层里只改位置，不搬 DOM）；布局可序列化恢复（未知的标签类型由应用自己保留，因为 `fromJSON` 遇到未知组件会抛错）；`--dv-*` 映射到 MANGA 的设计 token，深浅主题都对；方向键与 `Home` / `End` 内置，`Ctrl+Tab` 由应用处理；与 `<Activity>`、门户共存。体积：压缩后约 400 KB，样式约 160 KB。试验结果见[阶段报告](https://github.com/chialecode/manga/blob/b94b33a/docs/delivery/stage-report.md#dockview) | flexlayout-react 0.11.1（备选，生态较小）；react-resizable-panels 4.14.8（只有分隔，没有标签，作为不合格时的退路，未启用）；react-mosaic-component 7.2.1（没有标签组）；allotment 1.20.6（只有分隔视图） |
 | 聊天界面 | 参照 Vercel ai-elements（Apache-2.0）的 conversation、message、prompt-input 结构，为 MANGA 的消息类型重写，源码注明来源与许可；Markdown 继续用 react-markdown 与 remark-gfm | @assistant-ui/react 0.15.23：自带运行时与状态库，会与已有的会话、运行与快照模型形成两套状态 |
 | 消息流贴底 | use-stick-to-bottom 1.1.6（MIT），与 @tanstack/react-virtual 的虚拟列表共用滚动容器（2026-11-04 试验） | 自写滚动判定；react-virtuoso（要把列表与贴底整体换掉，两条现有路线可用时不评估） |
 | 安装包（2026-11-04 查证） | electron-builder 26.18.0 的 NSIS 目标（MIT，开发依赖），`--prepackaged` 用 Forge 的产物，按用户安装到 `%LOCALAPPDATA%\Programs\manga`；图标由 SVG 源文件经 `sharp` 与 `resedit` 生成多尺寸 `.ico` 并写入可执行文件资源，安装界面设为简体中文（`2052` / `zh_CN`） | @electron-forge/maker-squirrel（固定装到 `%LocalAppData%\<应用名>`，不能选目录）；maker-wix（要另装 WiX）；maker-msix（`AppData` 被虚拟化） |
 | 正式版应用内更新（2026-11-08 查证） | electron-updater 6.8.11（MIT，与 electron-builder 同源）配合仓内 `UpdateService`：支持 NSIS 安装包、GitHub Releases 与通用 HTTP 源、按 `.blockmap` 块图做 HTTP Range 差分下载、`autoInstallOnAppQuit`、拒绝降级（`allowDowngrade = false`） | Electron 自带 `autoUpdater`（Windows 上绑定 Squirrel.Windows，与已定的 NSIS 按用户安装冲突）；Velopack 1.3.39（自带安装器与更新器，会替换现有 NSIS 安装目录约定） |
-| 更新包防篡改校验（2026-11-08 查证） | Node 内置 `crypto` 的 Ed25519 分离签名（`.sig`）：独立于插件密钥的 `dist/keys/update-release.pem` 对安装包的 `SHA-512 + 版本号 + 文件名` 签名，公钥内置在 `packages/app-core/src/update/signature.ts`；正式版 `resources/app-update.yml` 写入 `publisherName: ["chialecode"]` 使 `NsisUpdater.verifySignature` 调用自定义 `verifyUpdateCodeSignature`，同时 `UpdateService` 在标记就绪与执行安装前做纵深防御二次校验（缺失 `publisherName`、缺失 `.sig`、篡改 1 字节、旧版签名冒充、降级、非 HTTPS 一律拒绝并删除下载文件） | Windows Authenticode 代码签名（Q-09 当前默认暂不签名：Azure Artifact Signing 个人开发者仅开放美加，Certum 收费，SignPath 要求知名度，Store 仅支持 MSIX）；只靠 `latest.yml` 的 SHA-512（无法防御更新源清单与安装包被同时替换） |
+| 更新包防篡改校验（2026-11-08 查证） | Node 内置 `crypto` 的 Ed25519 分离签名（`.sig`）：独立于插件密钥的 `%APPDATA%\manga-release\update-signing.key` 对安装包的 `SHA-512 + 版本号 + 文件名` 签名，公钥内置在 `packages/app-core/src/update/signature.ts`；正式版 `resources/app-update.yml` 写入 `publisherName: ["chialecode"]` 使 `NsisUpdater.verifySignature` 调用自定义 `verifyUpdateCodeSignature`，同时 `UpdateService` 在标记就绪与执行安装前做纵深防御二次校验（缺失 `publisherName`、缺失 `.sig`、篡改 1 字节、旧版签名冒充、降级、非 HTTPS 一律拒绝并删除下载文件） | Windows Authenticode 代码签名（Q-09 当前默认暂不签名：Azure Artifact Signing 个人开发者仅开放美加，Certum 收费，SignPath 要求知名度，Store 仅支持 MSIX）；只靠 `latest.yml` 的 SHA-512（无法防御更新源清单与安装包被同时替换） |
 | 发布到 GitHub Releases 与每周 CI 构建（2026-11-08 查证） | GitHub CLI `gh release`（MIT，本机与 GitHub 托管运行器自带）创建标签与 Release；CI 构建采用固定标签的 GitHub 托管运行器 `windows-2025`（不用随时迁移的 `windows-latest`），`build` 与 `publish` 两个 job 之间用官方 `actions/upload-artifact` v7.0.2 与 `actions/download-artifact` v8.0.2（均满 14 天，固定完整 SHA）传产物，使写权限只留在不装依赖、不碰私钥的 `publish` job | electron-builder 自带上传（需把写权限令牌交给构建进程）；第三方 release Action（扩大 Actions 允许列表与供应链面） |
 | 目录遍历与定时扫描 | Node 内置 `fs.promises.opendir`，在 `worker_threads` 中执行，写库仍由单写入宿主按小批次完成；定时用应用内计时器（关闭、30 分钟、1 小时、6 小时、每天）与启动后延迟扫描 | fdir 6.5.0：瓶颈不在遍历本身；croner 10.0.1：用不到 cron 表达式 |
 | 文件变更监听 | 不采用（用户要求的是按间隔扫描） | chokidar 5.0.0 与 @parcel/watcher 2.6.0：大目录树长期监听有句柄与网络盘问题，需要“即时发现新文件”时的候选 |
 | 播放器控件 | 保留原生 `video` 播放器，只改样式与控件布局 | media-chrome 4.19.3：换控件层要重接帧号跳转、JASSUB、A-B 与录音标记；Vidstack 的 React 包 0.6.15 停在 2024-04 |
 | 快捷任务模板 | 只替换白名单占位符的简单渲染 | mustache 4.2.0 停在 2021，条件与循环没有需求，还会让模板看起来能执行逻辑 |
-| 每个视图一份布局（2026-10-24 查证） | 沿用 dockview-react 8.6.1：每个上下文里每个视图一个 dockview 实例，只有当前视图的那个可见，其余挂着、用统一的隐藏层（`data-hidden-layer`）藏起；布局各自用 `toJSON` / `fromJSON` 存进工作区状态 version 2。阅读器与编辑器挂在按标签编号的宿主里，一个标签同时出现在主页与它的功能视图时是同一个实例，换视图不重建 | 一个实例切换视图时 `fromJSON` 换布局：`fromJSON` 先清掉全部面板再按新布局建，面板内容会卸下再挂上，播放中的视频要重新载入，不满足“切走切回 `currentTime` 连续”。这条是按 dockview 的行为判断，没有另做隔离试验；采用的路线由打包窗口观察 `view-main-linkage` 验证 |
+| 每个视图一份布局（2026-10-24 查证） | 沿用 dockview-react 8.7.1：每个上下文里每个视图一个 dockview 实例，只有当前视图的那个可见，其余挂着、用统一的隐藏层（`data-hidden-layer`）藏起；布局各自用 `toJSON` / `fromJSON` 存进工作区状态 version 2。阅读器与编辑器挂在按标签编号的宿主里，一个标签同时出现在主页与它的功能视图时是同一个实例，换视图不重建 | 一个实例切换视图时 `fromJSON` 换布局：`fromJSON` 先清掉全部面板再按新布局建，面板内容会卸下再挂上，播放中的视频要重新载入，不满足“切走切回 `currentTime` 连续”。这条是按 dockview 的行为判断，没有另做隔离试验；采用的路线由打包窗口观察 `view-main-linkage` 验证 |
 | 拖过最窄即收起（2026-10-24 查证） | 改在现有的分隔条（`shell.tsx` 的 `Divider`）里，借用 react-resizable-panels 4.14.8 的 `collapsible` 与 allotment 1.20.6 的 `snap` 语义：越过最窄宽度的一半才收起，宽度偏好保持拖动前的值；键盘照 WAI-ARIA APG 的 Window Splitter（Enter 收起与恢复） | 引入这两个库：外壳的侧栏与停靠栏是固定宽度的列，不是按比例分配的面板组，换库要重写外壳与它的观察 |
 | 图标栏拖动换位置（2026-10-24 查证） | 自写：十来个固定高度的图标，用与分隔条相同的指针捕获做纵向排序，按下后移动约 4 px 才开始拖动，Esc 或拖出图标栏取消；键盘用右键菜单的“上移 / 下移” | @dnd-kit/core 6.3.1 与 @dnd-kit/sortable 10.0.0：最后发行在 2024-12；@dnd-kit/react 0.5.1：未到 1.0、发行不满 14 天；@atlaskit/pragmatic-drag-and-drop 4.0.0：基于原生拖放，dockview 的标签拖动也用原生拖放，两者在主区上空会互相响应 |
 | 侧栏的引导线（2026-10-24 查证） | CSS 左边框画 1 px 竖线；侧栏只有“上下文 → 条目”两层、每组分页 | react-arborist 4.0.1、@headless-tree/react 1.8.0：不需要虚拟化的树、拖放与键盘树导航 |

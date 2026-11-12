@@ -69,6 +69,113 @@ export function installMeta(channel, { testIdentity = false } = {}) {
   return meta;
 }
 
+/**
+ * "Open with" (L5, 4.5, Q-39 item 2): the types MANGA offers to open with light open. The same lists as `@manga/app-core/light` (a test keeps them
+ * equal). `.zip` and folders are opened by dropping them on a light window or with "打开文件…", never registered.
+ */
+export const OPEN_WITH_TYPES = {
+  video: [".avi", ".flv", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".ogv", ".ts", ".webm", ".wmv"],
+  comic: [".cbz"],
+  image: [".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"],
+};
+const OPEN_WITH_LABELS = { video: "视频", comic: "漫画", image: "图片" };
+const OPEN_WITH_KIND = { video: "Video", comic: "Comic", image: "Image" };
+
+/** Names of one identity's registration: its ProgIDs, the key under Software\MANGA and the name in RegisteredApplications. */
+export function openWithIdentity(channel, { testIdentity = false } = {}) {
+  const meta = installMeta(channel, { testIdentity });
+  const prefix = testIdentity ? (channel === "release" ? "MANGA.Test" : "MANGA.DevTest") : channel === "release" ? "MANGA" : "MANGA.Dev";
+  const channelKey = testIdentity ? (channel === "release" ? "Test" : "DevTest") : channel === "release" ? "Release" : "Dev";
+  return {
+    progIds: Object.fromEntries(Object.keys(OPEN_WITH_TYPES).map((kind) => [kind, `${prefix}.${OPEN_WITH_KIND[kind]}`])),
+    exe: `${meta.executableName}.exe`,
+    friendlyName: meta.productName,
+    capabilities: `Software\\MANGA\\${channelKey}\\Capabilities`,
+    capabilitiesRoot: `Software\\MANGA\\${channelKey}`,
+    registeredName: meta.productName,
+  };
+}
+
+/** Every registry value the installation writes for "Open with" (HKCU), as [key, name, value]; the stage installer checks them one by one. */
+export function openWithValues(channel, { testIdentity = false, exePath = "$INSTDIR" } = {}) {
+  const id = openWithIdentity(channel, { testIdentity });
+  const exe = exePath === "$INSTDIR" ? `$INSTDIR\\${id.exe}` : exePath;
+  const command = `"${exe}" --manga-light "%1"`;
+  const values = [];
+  for (const [kind, types] of Object.entries(OPEN_WITH_TYPES)) {
+    const progId = id.progIds[kind];
+    values.push([`Software\\Classes\\${progId}`, "", `${id.friendlyName} ${OPEN_WITH_LABELS[kind]}`]);
+    values.push([`Software\\Classes\\${progId}\\DefaultIcon`, "", `${exe},0`]);
+    values.push([`Software\\Classes\\${progId}\\shell\\open\\command`, "", command]);
+    for (const ext of types) {
+      // Only a named value under OpenWithProgids: the extension key's own default value is never written (it is not MANGA's).
+      values.push([`Software\\Classes\\${ext}\\OpenWithProgids`, progId, ""]);
+      values.push([`Software\\Classes\\Applications\\${id.exe}\\SupportedTypes`, ext, ""]);
+      values.push([`${id.capabilities}\\FileAssociations`, ext, progId]);
+    }
+  }
+  values.push([`Software\\Classes\\Applications\\${id.exe}`, "FriendlyAppName", id.friendlyName]);
+  values.push([`Software\\Classes\\Applications\\${id.exe}\\shell\\open\\command`, "", command]);
+  values.push([id.capabilities, "ApplicationName", id.friendlyName]);
+  values.push([id.capabilities, "ApplicationDescription", "用 MANGA 轻量打开视频、CBZ 漫画与图片"]);
+  values.push(["Software\\RegisteredApplications", id.registeredName, id.capabilities]);
+  return values;
+}
+
+const nsisString = (value) => (value.includes("\"") ? `'${value}'` : `"${value}"`);
+
+/** The NSIS lines that write and remove the registration (customInstall / customUnInstall), with SHChangeNotify(SHCNE_ASSOCCHANGED) after each. */
+export function openWithNsis(channel, { testIdentity = false } = {}) {
+  const id = openWithIdentity(channel, { testIdentity });
+  const write = openWithValues(channel, { testIdentity }).map(([key, name, value]) => `  WriteRegStr HKCU "${key}" "${name}" ${nsisString(value)}`);
+  const remove = [
+    ...Object.values(id.progIds).map((progId) => `  DeleteRegKey HKCU "Software\\Classes\\${progId}"`),
+    ...Object.entries(OPEN_WITH_TYPES).flatMap(([kind, types]) => types.flatMap((ext) => [
+      `  DeleteRegValue HKCU "Software\\Classes\\${ext}\\OpenWithProgids" "${id.progIds[kind]}"`,
+      // The keys go only when nothing else is left in them (no value, no default, no subkey): another program's entries and the extension's own
+      // default value stay, and a key MANGA created alone does not linger.
+      `  !insertmacro MangaDeleteBareKey "Software\\Classes\\${ext}\\OpenWithProgids"`,
+      `  !insertmacro MangaDeleteBareKey "Software\\Classes\\${ext}"`,
+    ])),
+    `  DeleteRegKey HKCU "Software\\Classes\\Applications\\${id.exe}"`,
+    `  DeleteRegValue HKCU "Software\\RegisteredApplications" "${id.registeredName}"`,
+    `  DeleteRegKey HKCU "${id.capabilitiesRoot}"`,
+    `  DeleteRegKey /ifempty HKCU "Software\\MANGA"`,
+  ];
+  const notify = "  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'";
+  // A key is bare when it has no default value, no named value and no subkey; EnumRegValue cannot tell the default value from "none", so ReadRegStr asks.
+  const bare = [
+    "!macro MangaDeleteBareKey KEY",
+    "  ClearErrors",
+    '  ReadRegStr $R7 HKCU "${KEY}" ""',
+    "  ${If} ${Errors}",
+    '    EnumRegValue $R8 HKCU "${KEY}" 0',
+    '    EnumRegKey $R9 HKCU "${KEY}" 0',
+    '    ${If} $R8 == ""',
+    '    ${AndIf} $R9 == ""',
+    '      DeleteRegKey HKCU "${KEY}"',
+    "    ${EndIf}",
+    "  ${EndIf}",
+    "!macroend",
+    "",
+  ];
+  return [...bare, "!macro customInstall", ...write, notify, "!macroend", "", "!macro customUnInstall", ...remove, notify, "!macroend", ""];
+}
+
+/**
+ * Whether an NSIS text writes the default value of an extension key (`Software\Classes\.ext` or HKCR `.ext`, value name ""), which would take
+ * the file type away from the program the user chose.
+ */
+export function writesExtensionDefault(text) {
+  for (const line of String(text).split(/\r?\n/)) {
+    const match = /^\s*WriteReg\w+\s+(\w+)\s+"([^"]*)"\s+"([^"]*)"/i.exec(line);
+    if (!match) continue;
+    const key = match[2].replace(/^Software\\Classes\\/i, "");
+    if (/^\.[^\\]+$/.test(key) && match[3] === "") return true;
+  }
+  return false;
+}
+
 /** Encode an array of `{ size, png }` buffers into a multi-resolution Windows `.ico` file. */
 export function encodeIco(entries) {
   const header = Buffer.alloc(6);
@@ -203,6 +310,8 @@ export function installerInclude(channel, { testIdentity = false } = {}) {
     "  ${EndIf}",
     "!macroend",
     "",
+    `; "Open with" (4.5): ProgIDs, OpenWithProgids values, Applications and Capabilities in HKCU; the extension keys' default values are never written.`,
+    ...openWithNsis(channel, { testIdentity }),
   ].join("\r\n");
 }
 
@@ -276,6 +385,11 @@ export function checkInstallerConfig(channel, config, includeText, { testIdentit
     problems.push("not Simplified Chinese (zh_CN / 2052)");
   }
   if (config.nsis?.runAfterFinish !== true) problems.push("runAfterFinish disabled");
+  // "Open with" is the include's own registration (4.5), never electron-builder's file associations, which take over the extension's default.
+  if (config.fileAssociations !== undefined || config.win?.fileAssociations !== undefined || config.nsis?.fileAssociations !== undefined) problems.push("fileAssociations is set");
+  if (writesExtensionDefault(includeText)) problems.push("writes an extension's default value");
+  const wanted = openWithNsis(channel, { testIdentity }).filter((line) => line.trim().startsWith("WriteRegStr") || line.trim().startsWith("Delete"));
+  if (wanted.some((line) => !includeText.includes(line))) problems.push("\"Open with\" registration missing or different");
   if (appUpdateText !== undefined) {
     problems.push(...checkAppUpdateConfig(appUpdateText));
   }
@@ -377,7 +491,8 @@ export async function buildInstaller({ appDir, channel, workDir, version, commit
     version: effectiveVersion,
   });
   const include = path.join(workDir, `installer-${suffix}.nsh`);
-  fs.writeFileSync(include, installerInclude(channel, { testIdentity }));
+  // With a BOM: makensis reads an include without one in the ANSI code page, and the type names are Chinese.
+  fs.writeFileSync(include, `\uFEFF${installerInclude(channel, { testIdentity })}`);
   const output = path.join(workDir, `out-${suffix}`);
   const config = installerConfig(channel, { output, include, version: effectiveVersion, testIdentity });
   const problems = checkInstallerConfig(channel, config, fs.readFileSync(include, "utf8"), {
@@ -406,9 +521,58 @@ const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Unin
 
 function runPowershell(command) {
   if (process.platform !== "win32") return "";
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command], { encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`], { encoding: "utf8", windowsHide: true, timeout: 30_000 });
   if (result.status !== 0) throw new Error("unable to inspect Windows installation state");
   return typeof result.stdout === "string" ? result.stdout.trim() : "";
+}
+
+/**
+ * Read HKCU registry values: `queries` are `[key, name]` pairs (name "" is the default value), answered in order with the string or null; `keys`
+ * answers whether each key exists. The list goes in as JSON through the environment, so no key is ever spliced into the command.
+ */
+export function readRegistryValues(queries, keys = []) {
+  if (process.platform !== "win32") return { values: queries.map(() => null), keys: keys.map(() => false) };
+  const script = [
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    "$q = $env:MANGA_REG_QUERY | ConvertFrom-Json",
+    "$values = @(foreach ($pair in $q.values) { $k = Get-Item -LiteralPath ('HKCU:\\' + $pair[0]) -ErrorAction SilentlyContinue; if ($k) { $v = $k.GetValue($pair[1], $null, 'DoNotExpandEnvironmentNames'); if ($null -eq $v) { $null } else { [string]$v } } else { $null } })",
+    "$keys = @(foreach ($key in $q.keys) { Test-Path -LiteralPath ('HKCU:\\' + $key) })",
+    "[pscustomobject]@{ values = $values; keys = $keys } | ConvertTo-Json -Compress -Depth 3",
+  ].join("\n");
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 30_000,
+    env: { ...process.env, MANGA_REG_QUERY: JSON.stringify({ values: queries, keys }) },
+  });
+  if (result.status !== 0) throw new Error("unable to read the registry");
+  const parsed = JSON.parse(result.stdout.trim() || "{}");
+  const list = (value) => (value === null || value === undefined ? [] : Array.isArray(value) ? value : [value]);
+  const values = list(parsed.values);
+  const present = list(parsed.keys);
+  return { values: queries.map((_, index) => values[index] ?? null), keys: keys.map((_, index) => present[index] === true) };
+}
+
+/** Every extension MANGA registers, flattened. */
+export const OPEN_WITH_EXTENSIONS = Object.values(OPEN_WITH_TYPES).flat();
+
+/**
+ * The state of one identity's "Open with" registration, plus the default value of every registered extension (which MANGA must never change).
+ * `values` lists each expected value and what is there now; `keys` whether each of the identity's own keys exists; `extensionDefaults` a hash.
+ */
+export function readOpenWithState(channel, { testIdentity = false, exePath } = {}) {
+  const id = openWithIdentity(channel, { testIdentity });
+  const expected = openWithValues(channel, { testIdentity, exePath: exePath ?? "$INSTDIR" });
+  const ownKeys = [...Object.values(id.progIds).map((progId) => `Software\\Classes\\${progId}`), `Software\\Classes\\Applications\\${id.exe}`, id.capabilitiesRoot];
+  const defaults = OPEN_WITH_EXTENSIONS.map((ext) => [`Software\\Classes\\${ext}`, ""]);
+  const read = readRegistryValues([...expected.map(([key, name]) => [key, name]), ...defaults], ownKeys);
+  const now = read.values.slice(0, expected.length);
+  const extensionDefaults = read.values.slice(expected.length);
+  return {
+    values: expected.map(([key, name, value], index) => ({ key, name, expected: value, actual: now[index] })),
+    keys: Object.fromEntries(ownKeys.map((key, index) => [key, read.keys[index]])),
+    extensionDefaults: createHash("sha256").update(JSON.stringify(extensionDefaults)).digest("hex").slice(0, 16),
+  };
 }
 
 export function readRegistryInstallations() {
@@ -540,9 +704,21 @@ export function snapshotRealInstallations(options = {}) {
         appDataExists: fs.existsSync(appDataDir),
         sqliteExists: fs.existsSync(path.join(appDataDir, "data", "manga.sqlite")),
       },
+      registry: options.registry ? options.registry(channel) : openWithSnapshot(channel),
     };
   }
   return snapshot;
+}
+
+/** A real identity's "Open with" registration and the extensions' default values, hashed so no machine path is kept. */
+function openWithSnapshot(channel) {
+  if (process.platform !== "win32") return { valuesHash: null, keys: null, extensionDefaults: null };
+  const state = readOpenWithState(channel);
+  return {
+    valuesHash: createHash("sha256").update(JSON.stringify(state.values.map((value) => value.actual))).digest("hex").slice(0, 16),
+    keys: Object.values(state.keys).map((present) => (present ? 1 : 0)).join(""),
+    extensionDefaults: state.extensionDefaults,
+  };
 }
 
 /**
@@ -559,7 +735,7 @@ export function compareRealInstallations(before, after, options = {}) {
       if (JSON.stringify(prev) !== JSON.stringify(next)) changes.push(`${label}: snapshot missing`);
       continue;
     }
-    for (const section of ["uninstallEntry", "executable", "shortcuts", "dataDir"]) {
+    for (const section of ["uninstallEntry", "executable", "shortcuts", "dataDir", "registry"]) {
       const a = prev[section];
       const b = next[section];
       if (JSON.stringify(a) !== JSON.stringify(b)) {

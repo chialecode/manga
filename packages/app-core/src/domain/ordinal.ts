@@ -1,13 +1,6 @@
 import { parse as parseAnimeName } from "anitomy";
 import type { Ordinal, OrdinalType } from "@manga/contracts";
 
-const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
-
-/** Natural order: digit runs compare as numbers, so `2` sorts before `10`; names compare with locale rules. */
-export function naturalCompare(left: string, right: string): number {
-  return collator.compare(left, right);
-}
-
 const SPECIAL_TAGS = new Set(["sp", "ova", "oad", "ona", "special", "specials", "extra", "extras", "omake", "番外", "特典"]);
 
 export type ParsedName = {

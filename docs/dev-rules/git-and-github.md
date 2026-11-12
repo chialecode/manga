@@ -103,7 +103,7 @@ node scripts/verify.mjs
 
 - **触发与并发：** 每周一 `00:00 UTC`（北京时间 `08:00`，cron `0 0 * * 1`）定时运行，以及 `workflow_dispatch` 手动触发（输入 `dry_run`，默认 `true`：只构建与演练、不创建标签与 Release）；不响应 `push`、`pull_request` 或任何 fork 事件。`concurrency` 组为 `release` 且 `cancel-in-progress: false`，不中途取消正在进行的发布。
 - **四个阶段（按最小权限隔离）：**
-  1. `decide`（Ubuntu，`contents: read`，不安装依赖）：运行 `node scripts/stage/release-decide.mjs`，读取最高的 `v0.1.*` 标签与 `main` 在它之后的新提交（包括 Dependabot 等任何合并进 `main` 的 PR）。没有新合并时以“本周没有新的合并”成功结束，不启动后续 Windows 构建；没有任何 `v0.1.*` 标签时发布 `0.1.1`；有新合并时算出下一个 `0.1.x` 版本号并生成中文发布说明素材。
+  1. `decide`（Ubuntu，`contents: read`，不安装依赖）：运行 `node scripts/stage/release-decide.mjs`，读取最高的 `v0.1.*` 标签与 `main` 在它之后的新提交（包括 Dependabot 等任何合并进 `main` 的 PR）。没有新合并时以“本周没有新的合并”成功结束，不启动后续 Windows 构建；没有任何 `v0.1.*` 标签时发布 `0.1.1`；有新合并时算出下一个 `0.1.x` 版本号并生成中文发布说明素材，随后在同一轻量 Ubuntu 任务中运行 `node scripts/tools/check-tool-links.mjs` 对全部锁定随包工具下载地址发 HTTP `HEAD` 预检（跟随重定向），失效时在分配昂贵的 `windows-2025` 运行器之前即快速失败并明确指出失效锁文件（A-127）。离线静态检查 `check-tool-links.mjs --pins` 随 `verify.mjs` 守护 FFmpeg 使用月末保留标签而非会被上游清理的每日标签、其余工具固定 40 位完整提交 SHA。
   2. `check`（`windows-2025`，`contents: read`，**无任何 secret**）：按锁文件下载随包工具（FFmpeg、Silero VAD、字幕字体）、生成合成样本，依次运行 `node scripts/verify.mjs`、`node scripts/stage.mjs test`、`node scripts/stage.mjs package` 与 `node scripts/stage.mjs installer`（使用测试身份 `MANGA Test` / `MANGA Dev Test`）。共享运行器不跑性能基准，基准结论以本机最近一次门禁证据为准，并在 `release.json` 记录基准源码指纹与本次发布源码是否一致。任一步骤失败则停止，本周不发布。
   3. `build`（`windows-2025`，`contents: read`，绑定受保护环境 `environment: release`）：在同一提交上构建正式版安装包、生成块图 `.blockmap`、`latest.yml`、Ed25519 分离签名 `.sig`、`SHA256SUMS` 与中文 `RELEASE-NOTES.md`，并执行从上一版到当前版本的升级演练与 1 字节篡改拒绝演练（`node scripts/stage.mjs release --ci`）。环境的两个 secret（`MANGA_PLUGIN_SIGNING_KEY_PEM` 与 `MANGA_UPDATE_SIGNING_KEY_PEM`）分别只映射给打包插件和签名发布包的那一个步骤，写入运行器临时目录后交给脚本，步骤结束即在 `finally` 中删除，绝不打印或进入日志与 artifact。产物通过 `actions/upload-artifact` 上传（保留 7 天）。
   4. `publish`（Ubuntu，`contents: write`，**无 secret、不执行 `pnpm install`**，`if: inputs.dry_run != true`）：下载 artifact，运行 `node scripts/stage/release-publish-verify.mjs --publish` 用仓库内置公钥再次核对 `SHA256SUMS`、`latest.yml` 与 `.sig`，确认标签尚不存在后调用 `gh release create v0.1.x --target <SHA>` 发布正式版。
@@ -114,9 +114,9 @@ node scripts/verify.mjs
 
 - **本机一键发布命令：** `node scripts/stage.mjs release` 在 `main` 分支、工作区干净、与 `origin/main` 同步且当前源码指纹的 `stage gate` 通过时运行，复用门禁打包产物生成 `dist/release/v0.1.x/` 下的 `manga-setup-0.1.x.exe`、`.blockmap`、`latest.yml`、`.sig`、`SHA256SUMS`、`RELEASE-NOTES.md` 与脱敏的 `release.json`，并在临时目录用测试安装身份完成升级演练与篡改拒绝演练。
 - **发布授权边界：** 正式发布默认由 2.1 的每周 workflow 自动执行；本机运行 `node scripts/stage.mjs release` 默认只生成文件并完成演练，**不创建 Git 标签、不调用 `gh release create`**，并在输出与 `release.json` 的 `requiresAuthorization` 中写出需用户当次明确授权才执行的发布命令。只有在用户当次明确授权本机发布、显式传入 `MANGA_RELEASE_PUBLISH=1` 与 `--publish` 时才创建标签并上传 Release。
-- **Ed25519 更新签名密钥与轮换步骤：** 正式版更新使用独立于第一方插件密钥的 Ed25519 密钥对（私钥 `dist/keys/update-release.pem` 不入库并存入 GitHub `release` 环境 secret `MANGA_UPDATE_SIGNING_KEY_PEM`，公钥 `dist/keys/update-release.pub` 内置在 `packages/app-core/src/update/signature.ts` 的 `RELEASE_UPDATE_PUBLIC_KEYS`）。需要轮换更新密钥时，必须分两步过渡，避免已安装的旧版本无法校验过渡版本：
+- **Ed25519 更新签名密钥与轮换步骤：** 正式版更新使用独立于第一方插件密钥的 Ed25519 密钥对（私钥 `%APPDATA%\manga-release\update-signing.key` 不入库并存入 GitHub `release` 环境 secret `MANGA_UPDATE_SIGNING_KEY_PEM`，公钥 `%APPDATA%\manga-release\update-signing.pub` 内置在 `packages/app-core/src/update/signature.ts` 的 `RELEASE_UPDATE_PUBLIC_KEYS`）。需要轮换更新密钥时，必须分两步过渡，避免已安装的旧版本无法校验过渡版本：
   1. **发布过渡版本 `v0.1.N`：** 生成新密钥对，把新公钥追加到 `RELEASE_UPDATE_PUBLIC_KEYS`（同时保留旧公钥），用**旧私钥**为 `v0.1.N` 签名并发布，使已安装的旧版本能够验证并升级到同时信任新旧公钥的 `v0.1.N`；
-  2. **切换新私钥并移除旧公钥：** 更新本机 `dist/keys/update-release.pem` 与 GitHub `release` 环境 secret `MANGA_UPDATE_SIGNING_KEY_PEM` 为新私钥；待用户升级到 `v0.1.N` 后（或旧私钥因泄露需立即作废时），从 `RELEASE_UPDATE_PUBLIC_KEYS` 移除旧公钥并用新私钥签发后续版本。
+  2. **切换新私钥并移除旧公钥：** 更新本机 `%APPDATA%\manga-release\update-signing.key` 与 GitHub `release` 环境 secret `MANGA_UPDATE_SIGNING_KEY_PEM` 为新私钥；待用户升级到 `v0.1.N` 后（或旧私钥因泄露需立即作废时），从 `RELEASE_UPDATE_PUBLIC_KEYS` 移除旧公钥并用新私钥签发后续版本。
 
 
 ## 3. main Ruleset 与合并

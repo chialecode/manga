@@ -91,6 +91,7 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
 
   // FFmpeg: the LGPL build without ffplay, its licence text, and where the source and the build recipe are.
   const home = ffmpegHome(root, ffmpegLock.version);
+  const ffmpegCommit = /-g([0-9a-f]+)$/.exec(ffmpegLock.version)?.[1];
   const ffmpegFiles = readdirSync(path.join(home, "bin")).filter((name) => /\.(exe|dll)$/i.test(name) && !/^ffplay/i.test(name)).map((name) => `bin/${name}`);
   copyFiles(home, path.join(resourcesDir, "ffmpeg"), [...ffmpegFiles, "LICENSE.txt"]);
   writeFileSync(path.join(resourcesDir, "ffmpeg", "SOURCE.txt"), [
@@ -103,7 +104,7 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
     `Build:   ${ffmpegLock.source.url}`,
     `Recipe:  ${ffmpegLock.source.repository} (tag ${ffmpegLock.source.tag})`,
     `Archive sha256: ${ffmpegLock.source.zipSha256}`,
-    "Source:  https://git.ffmpeg.org/ffmpeg.git (the commit in the version string above, e.g. 330caae0c1 for n8.1.3-14-g330caae0c1)",
+    `Source:  https://git.ffmpeg.org/ffmpeg.git (the commit in the version string above${ffmpegCommit ? `: ${ffmpegCommit}` : ""})`,
     "",
   ].join("\n"));
   for (const name of ffmpegFiles) assets.push(record(resourcesDir, name.endsWith("ffmpeg.exe") ? "ffmpeg" : name.endsWith("ffprobe.exe") ? "ffprobe" : `ffmpeg-lib:${name}`, `ffmpeg/${name}`));

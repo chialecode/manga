@@ -167,7 +167,7 @@ export function installHost(options: HostOptions = {}) {
     channel,
     commit: "c79f49a",
     builtAt: "2026-11-08T08:00:00.000Z",
-    schemaVersion: 14,
+    schemaVersion: 15,
   };
   let updateSettings = { autoCheck: true, autoDownload: true };
   const context = contextHandlers(options);
@@ -201,6 +201,7 @@ export function installHost(options: HostOptions = {}) {
       errorCode: null,
       settings: updateSettings,
       justUpdated: null,
+      skippedVersion: null,
     }),
     "update.settings.get": () => updateSettings,
     "update.settings.set": (input) => {
@@ -226,6 +227,7 @@ export function installHost(options: HostOptions = {}) {
       errorCode: null,
       settings: updateSettings,
       justUpdated: null,
+      skippedVersion: null,
     }),
     "update.restartToUpdate": () => ({ status: "restarting", restarted: true, busyReasons: [], version: null }),
     "notes.list": () => [],

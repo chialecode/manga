@@ -3,7 +3,7 @@ import { ChannelSchema, type Channel } from "./paths.ts";
 
 export const VERSION_LINE = "0.1.0";
 export const BUILD_JSON_NAME = "build.json";
-export const BUILD_SCHEMA_VERSION = 14;
+export const BUILD_SCHEMA_VERSION = 15;
 
 export const BuildInfoSchema = z.object({
   version: z.string().min(1),

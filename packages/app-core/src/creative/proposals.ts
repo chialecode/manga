@@ -120,7 +120,8 @@ function parseJsonObject(raw: string | null): Record<string, unknown> | null {
 }
 
 /** Owner diagnostics can contain host paths or arbitrary provider text; the model only needs a concise failure category. */
-function decisionFailureReason(error: { code?: string } | undefined): string {
+function decisionFailureReason(error: { code?: string; details?: { reason?: string } } | undefined): string {
+  if (error?.details?.reason === "module-disabled") return "模块已关闭";
   const reasons: Record<string, string> = {
     CANCELLED: "用户取消了导出，需要时请重新提出",
     INTERRUPTED: "应用退出中断了操作，需要时请重新提出",
@@ -970,18 +971,59 @@ export class ProposalService {
     return { proposal: this.getCard(row.id) };
   }
 
+  private isModuleEnabled(row: ProposalRow): boolean {
+    const target = parseJsonObject(row.target_json) as ProposalTarget | null;
+    const mod = target?.kind ? MODULE_CHECKS[target.kind] : undefined;
+    try {
+      if (mod) this.d.requireModule(mod.commandId, mod.label);
+      this.d.requireModule(row.command_id, row.command_id);
+      return true;
+    } catch (error) {
+      if (error instanceof MangaError && error.code === "CAPABILITY_UNAVAILABLE") return false;
+      throw error;
+    }
+  }
+
+  private failDisabledModule(row: ProposalRow, now: string, kept: Record<string, unknown> = {}, exportId?: string): void {
+    const error = {
+      code: "CAPABILITY_UNAVAILABLE",
+      message: "模块已关闭",
+      retryable: false,
+      details: { reason: "module-disabled" },
+    };
+    this.sqlite.transaction(() => {
+      this.sqlite.prepare("DELETE FROM command_requests WHERE idempotency_key = ? AND command_id = ?").run(row.id, row.command_id);
+      this.sqlite.prepare("UPDATE agent_proposals SET status = 'failed', decided_at = COALESCE(decided_at, ?), result_json = ? WHERE id = ?")
+        .run(now, JSON.stringify({ ...kept, reason: "模块已关闭", error, recovered: true }), row.id);
+    })();
+    if (row.kind === "exportRoughcut") {
+      this.d.roughcuts.recover();
+      if (exportId) {
+        try {
+          const settled = this.d.roughcuts.exports.get(exportId);
+          this.sqlite.prepare("UPDATE agent_proposals SET result_json = ? WHERE id = ?")
+            .run(JSON.stringify({ ...kept, output: { export: settled }, reason: "模块已关闭", error, recovered: true }), row.id);
+        } catch { /* export row absent */ }
+      }
+    }
+    this.d.notify?.("proposal.changed", { sessionId: row.session_id, runId: row.run_id, projectId: row.project_id, proposalId: row.id, status: "failed" });
+  }
+
   /**
    * Startup recovery (`MangaProductApp.start`): any proposal left in `applying` checks whether the owner command committed an
    * `operations` receipt under the proposal id. A `command_requests` row alone only means the command was started, so it is not
-   * evidence that it finished. A completed receipt settles the proposal as `applied` without running a second time; anything else
-   * returns to `pending` so the user can decide again.
+   * evidence that it finished. A completed receipt settles the proposal as `applied` without running a second time; if the owning
+   * module is disabled on startup and the work did not finish before shutdown, the proposal settles to terminal `failed`
+   * ("模块已关闭", LOOP-33) so re-enabling the module later never executes it; anything else returns to `pending`.
    */
-  recover(): { applied: number; reverted: number } {
+  recover(): { applied: number; reverted: number; failed?: number } {
     const rows = this.sqlite.prepare("SELECT * FROM agent_proposals WHERE status = 'applying'").all() as ProposalRow[];
     let applied = 0;
     let reverted = 0;
+    let failed = 0;
     const now = new Date().toISOString();
     for (const row of rows) {
+      const moduleEnabled = this.isModuleEnabled(row);
       let op = this.d.store.loadIdempotent(row.id);
       let receipt = this.sqlite.prepare("SELECT command_id FROM operations WHERE idempotency_key = ?").get(row.id) as { command_id: string } | undefined;
       const existing = parseJsonObject(row.result_json) ?? {};
@@ -1009,8 +1051,16 @@ export class ProposalService {
         if (row.kind === "exportRoughcut") {
           const view = (op.value as { export?: RoughcutExportView } | undefined)?.export;
           if (view) {
+            let latest: RoughcutExportView | undefined;
+            try { latest = this.d.roughcuts.exports.get(view.id); } catch { latest = undefined; }
+            if (!moduleEnabled && latest?.state !== "done") {
+              const { _exportIntent: _privateIntent, ...kept } = existing;
+              this.failDisabledModule(row, now, kept, view.id);
+              failed += 1;
+              continue;
+            }
             this.sqlite.prepare("UPDATE agent_proposals SET result_json = ? WHERE id = ?").run(JSON.stringify({ output: op.value, recovered: true }), row.id);
-            this.onRoughcutExport(this.d.roughcuts.exports.get(view.id));
+            if (latest) this.onRoughcutExport(latest);
             applied += 1;
             continue;
           }
@@ -1019,6 +1069,10 @@ export class ProposalService {
         this.sqlite.prepare("UPDATE agent_proposals SET status = 'applied', decided_at = COALESCE(decided_at, ?), result_json = ? WHERE id = ?")
           .run(now, JSON.stringify({ ...kept, output: op.value ?? { recovered: true }, recovered: true }), row.id);
         applied += 1;
+      } else if (!moduleEnabled) {
+        const { _exportIntent: _privateIntent, ...kept } = existing;
+        this.failDisabledModule(row, now, kept);
+        failed += 1;
       } else {
         this.sqlite.transaction(() => {
           // A request without a committed effect may be confirmed after restart with a new host path handle.
@@ -1028,7 +1082,7 @@ export class ProposalService {
         reverted += 1;
       }
     }
-    return { applied, reverted };
+    return failed > 0 ? { applied, reverted, failed } : { applied, reverted };
   }
 
   /**

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
-import { MAX_CANVAS_PIXELS, openPdfDocument, type PdfPageProxy } from "./pdf-doc.ts";
+import type { PdfPageProxy } from "./pdf-doc.ts";
 import { regionFromPoints, regionStyle, type ComicPageInfo, type Region, type Size } from "./comic-model.ts";
 import type { PageSource } from "./use-page-sources.ts";
 
@@ -17,6 +17,8 @@ function PdfCanvas(props: { url: string; pageNumber: number; width: number; heig
     let page: PdfPageProxy | undefined;
     (async () => {
       try {
+        // PDF.js is loaded with the first PDF page, so a reader of images (and light open, which has no PDF) never carries it.
+        const { MAX_CANVAS_PIXELS, openPdfDocument } = await import("./pdf-doc.ts");
         const doc = await openPdfDocument(props.url);
         page = await doc.getPage(Math.min(Math.max(props.pageNumber, 1), doc.numPages));
         if (dead || !canvas.current) return;

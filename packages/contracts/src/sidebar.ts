@@ -18,6 +18,7 @@ export const RailViewSchema = z.enum(RAIL_VIEWS);
  */
 export const LIST_CHANGING_COMMANDS = [
   "project.addMaterial", "project.removeMaterial",
+  "workspace.dismissRecent", "workspace.undismissRecent",
   "notes.create", "notes.rename", "notes.delete", "notes.undelete",
   "whiteboard.create", "whiteboard.rename", "whiteboard.delete",
   "mindmap.create", "mindmap.rename", "mindmap.delete",

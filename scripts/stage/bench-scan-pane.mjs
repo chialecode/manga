@@ -40,24 +40,29 @@ async function openApp(dir, hostId) {
   const actor = { kind: "user", id: hostId };
   const grant = app.issueOwnerGrant(actor);
   await call(app, actor, grant, "settings.skipAi", {});
+  await call(app, actor, grant, "library.scan.setSchedule", { onStartup: false, intervalMinutes: 0 });
   return { app, actor, grant, env: { profileRoot: path.join(dir, "root"), documentsDir: path.join(dir, "documents"), pointerPath: path.join(dir, "launcher", "pointer.json") } };
 }
 
 /** Each file is different, so none is read as a copy of another; series folders become works of many chapters, loose files one work each. */
-function writeScanTree(root) {
+async function writeScanTree(root) {
   let files = 0;
+  const writes = [];
   const body = (label) => `${label}\n${"样本正文，用于资源库扫描的基准。".repeat(8)}\n${label} 完。\n`;
   for (let folder = 0; folder < SCAN_FILES.folders; folder += 1) {
     const dir = path.join(root, `系列 ${String(folder).padStart(3, "0")}`);
     fs.mkdirSync(dir, { recursive: true });
     for (let chapter = 1; chapter <= SCAN_FILES.perFolder; chapter += 1) {
-      fs.writeFileSync(path.join(dir, `第${String(chapter).padStart(3, "0")}章.txt`), body(`系列${folder}第${chapter}章`));
+      writes.push([path.join(dir, `第${String(chapter).padStart(3, "0")}章.txt`), body(`系列${folder}第${chapter}章`)]);
       files += 1;
     }
   }
   for (let index = 0; index < SCAN_FILES.loose; index += 1) {
-    fs.writeFileSync(path.join(root, `单本 ${String(index).padStart(4, "0")}.txt`), body(`单本${index}`));
+    writes.push([path.join(root, `单本 ${String(index).padStart(4, "0")}.txt`), body(`单本${index}`)]);
     files += 1;
+  }
+  for (let at = 0; at < writes.length; at += 150) {
+    await Promise.all(writes.slice(at, at + 150).map(([target, content]) => fs.promises.writeFile(target, content)));
   }
   return files;
 }
@@ -78,7 +83,7 @@ export async function measureScan(dir, { withCovers = false } = {}) {
   const { app, actor, grant } = await openApp(dir, "bench-scan");
   const tree = path.join(dir, "library");
   fs.mkdirSync(tree, { recursive: true });
-  const files = writeScanTree(tree);
+  const files = await writeScanTree(tree);
   const sampler = startLagSampler();
   const interaction = [];
   const kinds = { "works.list": 0, "library.scan.status": 0, "library.paths.list": 0 };
@@ -130,10 +135,20 @@ export async function measureScan(dir, { withCovers = false } = {}) {
 /** Cover pictures kept in the image table: the read itself, and the grid thumbnail's handle built cold and read again warm. */
 async function measureCovers(app, actor, grant) {
   const workIds = app.store.sqlite.prepare("SELECT id FROM works ORDER BY id LIMIT ?").all(COVERS).map((row) => row.id);
+  const rendered = new Array(workIds.length);
+  for (let at = 0; at < workIds.length; at += 25) {
+    const chunk = workIds.slice(at, at + 25);
+    const bytesChunk = await Promise.all(chunk.map((_, offset) => {
+      const index = at + offset;
+      return renderCover({ width: 600, height: 900, label: String(index + 1), variant: index % 7 });
+    }));
+    for (let offset = 0; offset < bytesChunk.length; offset += 1) {
+      rendered[at + offset] = Buffer.from(bytesChunk[offset]);
+    }
+  }
   const coverIds = [];
   for (const [index, workId] of workIds.entries()) {
-    const bytes = await renderCover({ width: 600, height: 900, label: String(index + 1), variant: index % 7 });
-    const added = await app.covers.add(workId, { bytes: Buffer.from(bytes), source: "user", select: "user" });
+    const added = await app.covers.add(workId, { bytes: rendered[index], source: "user", select: "user" });
     coverIds.push(added.cover.id);
   }
   const rows = app.store.sqlite.prepare(`SELECT id, image_hash AS hash, area FROM covers WHERE id IN (${coverIds.map(() => "?").join(",")})`).all(...coverIds);
@@ -160,13 +175,14 @@ async function measureCovers(app, actor, grant) {
   return { covers: coverIds.length, source: "images table", imageReadMs, handleColdMs: coldMs, handleWarmMs: warmMs };
 }
 
-/** A resource with 1000 notes bound to it, opened in the real window; the window run reads the pane's scroll and input latency. */
+/** A resource with 1000 notes bound to it, opened in the real window; one window run takes all three 60-step scroll/input rounds (180 samples) without redundant process cold starts. */
 async function measurePane(dir, launch) {
   const { app, actor, grant, env } = await openApp(dir, "bench-pane");
   // A file is read from a library path (A-80): the folder the book lies in is one.
   const books = path.join(dir, "pane-books");
   fs.mkdirSync(books, { recursive: true });
   await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
+  await app.scan.whenIdle();
   const book = path.join(books, "pane-book.txt");
   fs.writeFileSync(book, `${"右栏消息基准正文。".repeat(300)}末尾`);
   const imported = await call(app, actor, grant, "library.importDocument", { title: "右栏基准", pathHandle: app.registerPath("file", book), format: "txt" });
@@ -185,27 +201,22 @@ async function measurePane(dir, launch) {
   app.close();
   const specFile = path.join(dir, "pane-spec.json");
   fs.writeFileSync(specFile, JSON.stringify({ resourceId, notes: PANE_NOTES }));
-  const runs = [];
-  for (let run = 0; run < 3; run += 1) {
-    const launched = { ...process.env, MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: env.profileRoot, MANGA_DOCUMENTS_DIR: env.documentsDir, MANGA_POINTER_FILE: env.pointerPath, MANGA_SMOKE_PHASE: "bench-pane", MANGA_SMOKE_PANE_SPEC: specFile };
-    delete launched.ELECTRON_RUN_AS_NODE;
-    const child = launch(launched, dir);
-    const file = path.join(env.profileRoot, "logs", "bench-pane-window.json");
-    const measured = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : undefined;
-    if (!child || child.status !== 0 || !measured?.ok) return { ok: false, reason: `pane window run ${run} failed (exit ${child?.status})`, measured, stderr: child?.stderr?.slice(-1500) };
-    fs.rmSync(file);
-    runs.push(measured);
-  }
-  const merge = (key) => runs.flatMap((item) => item[key].map(round));
+  const launched = { ...process.env, MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: env.profileRoot, MANGA_DOCUMENTS_DIR: env.documentsDir, MANGA_POINTER_FILE: env.pointerPath, MANGA_SMOKE_PHASE: "bench-pane", MANGA_SMOKE_PANE_SPEC: specFile };
+  delete launched.ELECTRON_RUN_AS_NODE;
+  const child = launch(launched, dir);
+  const file = path.join(env.profileRoot, "logs", "bench-pane-window.json");
+  const measured = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : undefined;
+  if (!child || child.status !== 0 || !measured?.ok) return { ok: false, reason: `pane window run failed (exit ${child?.status})`, measured, stderr: child?.stderr?.slice(-1500) };
+  fs.rmSync(file);
   return {
     ok: true,
     kind: "electron-pane-1000",
     notes: PANE_NOTES,
-    loaded: runs.map((item) => item.loaded),
-    domNodes: runs.map((item) => item.domNodes),
-    scrollHeight: runs.map((item) => item.scrollHeight),
-    raw: { scrollMs: merge("scrollMs"), inputMs: merge("inputMs") },
-    waits: runs[0].waits,
+    loaded: [measured.loaded],
+    domNodes: [measured.domNodes],
+    scrollHeight: [measured.scrollHeight],
+    raw: { scrollMs: measured.scrollMs.map(round), inputMs: measured.inputMs.map(round) },
+    waits: measured.waits,
   };
 }
 
@@ -238,6 +249,6 @@ export async function runScanPaneBench({ launch }) {
     const pane = await measurePane(path.join(root, "pane"), launch);
     return { ok: scan.ok && pane.ok === true, scan, covers, pane };
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 }

@@ -1,4 +1,5 @@
 import type { BrowserWindow } from "electron";
+import type { MangaProductApp } from "@manga/app-core";
 import {
   DRAWN, clickTestId, closeTabs, ensureSidebar, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressChord, pressKey, railTo, showTab, sleep, tabsOf, trustedClick, viaSidebar,
   waitDrawn, waitForTestId, waitFrames, waitUntil,
@@ -29,6 +30,7 @@ export type Rect = { x: number; y: number; w: number; h: number; r: number; b: n
 
 export type WorkspaceEnv = {
   view: BrowserWindow;
+  appService: MangaProductApp;
   call: ReturnType<typeof caller>;
   observe: (name: string, ok: boolean, detail: unknown) => boolean;
   shot: (name: string) => Promise<void>;
@@ -882,6 +884,8 @@ async function walkSameFile(env: WorkspaceEnv, two: string, nameTwo: string): Pr
   if (!pages || pages.pages.length < 3) { observe("same-file-contexts", false, { problems: [`the comic has ${pages?.pages.length ?? 0} pages, three are needed`] }); return; }
   const revisionId = pages.revisionId;
   const projectName = String(((await call("project.get", { projectId })).value as { project?: { name?: string } } | undefined)?.project?.name ?? "");
+  // Clear prior `walkComicOverlays` completion on this synthetic comic so `walkSameFile` measures two partial positions cleanly.
+  env.appService.store.sqlite.prepare("DELETE FROM progress WHERE resource_id = ?").run(comicId);
   // A position in 最近 and another in the first project; the second project has none. The later one is the project's.
   await call("progress.setPage", { contextId: null, resourceId: comicId, resourceRevisionId: revisionId, pageId: pages.pages[1]!.id });
   await sleep(40); // real time: distinct millisecond timestamp for progress ordering

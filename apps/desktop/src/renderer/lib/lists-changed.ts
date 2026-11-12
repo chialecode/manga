@@ -17,7 +17,17 @@ export const LISTS_CHANGED_EVENT = "manga:lists-changed";
 export const LISTS_CHANGED_WAIT_MS = 250;
 
 function changes(commandId: string, input: unknown): boolean {
+  if (commandId === "workspace.dismissRecent" || commandId === "workspace.undismissRecent") {
+    lastRecent = null;
+    return true;
+  }
   if (CHANGING.has(commandId)) return true;
+  if (commandId === "works.open") {
+    const value = input as { contextId?: unknown } | null | undefined;
+    if (!value || value.contextId !== null) return false;
+    lastRecent = null;
+    return true;
+  }
   if (!PROGRESS.has(commandId)) return false;
   const value = input as { contextId?: unknown; resourceId?: unknown } | null | undefined;
   if (!value || value.contextId !== null) return false;

@@ -97,6 +97,27 @@ describe("Development installer recovery review (AT-158)", () => {
     }
   });
 
+  it("asks light open to leave first and installs nothing, asking nothing of the full app, when it does not (4.6)", async () => {
+    const fixture = devFixture();
+    const asked: string[] = [];
+    let quitRequests = 0;
+    const result = await runInstallDev({ ...fixture.options,
+      askLightToQuitFn: async (runtimeDir: string) => { asked.push(runtimeDir); return { ok: false, reason: "light-open-running", waitedMs: 10_000, pid: 880088 }; },
+      requestQuitFn: async () => { quitRequests += 1; },
+    });
+    expect(asked).toEqual([path.join(fixture.places.local, "manga-dev-test", "light", "runtime")]);
+    expect(result.status).toBe("aborted");
+    expect(result.reason).toContain("请先关闭轻量播放窗口");
+    expect(quitRequests).toBe(0);
+    expect(fixture.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
+
+    const next = devFixture();
+    let lightAsked = 0;
+    await runInstallDev({ ...next.options, askLightToQuitFn: async () => { lightAsked += 1; return { ok: true, running: true, waitedMs: 120 }; } });
+    expect(lightAsked).toBe(1);
+    expect(next.counts().installerCalls).toBe(1);
+  });
+
   it("refuses a live competing lock, the wrong process identity and missing installed build metadata (AT-158)", async () => {
     for (const problem of ["lock", "identity", "metadata"]) {
       const fixture = devFixture();

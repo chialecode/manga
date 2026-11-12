@@ -92,7 +92,8 @@ describe.skipIf(mediaPrerequisitesAbsent)("what a package carries", () => {
     expect(fs.readFileSync(path.join(ffmpeg, "LICENSE.txt"), "utf8")).toContain("LESSER GENERAL PUBLIC LICENSE");
     const source = fs.readFileSync(path.join(ffmpeg, "SOURCE.txt"), "utf8");
     expect(source).toContain("GNU Lesser General Public License");
-    expect(source).toContain("https://github.com/BtbN/FFmpeg-Builds");
+    expect(source).toContain("https://github.com/FFmpeg-Builds/FFmpeg-Builds");
+    expect(source).toMatch(/the commit in the version string above: [0-9a-f]{10}/);
     expect(source).toMatch(/sha256: [0-9a-f]{64}/);
     expect(source).toContain("replaced");
   });

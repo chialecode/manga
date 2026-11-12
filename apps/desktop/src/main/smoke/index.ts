@@ -10,7 +10,7 @@ import { actor, caller, capturePage, toRail } from "./common.ts";
 import { runAgentSmoke } from "./agent.ts";
 import { measurePaneBench, measureScaleWindowBench, measureWindowBench, type ScaleSpec } from "./bench-window.ts";
 import { measureCanvasBench, type CanvasSpec } from "./bench-canvas.ts";
-import { measureDanmakuBench, measureMemoryBench, type DanmakuBenchSpec, type MemoryBenchSpec } from "./bench-reader.ts";
+import { measureDanmakuBench, measureMemoryBench, measureOpenVideo, type DanmakuBenchSpec, type MemoryBenchSpec } from "./bench-reader.ts";
 import { measureWorkspaceBench, measureWorkspaceMemory, type WorkspaceBenchSpec, type WorkspaceMemorySpec } from "./bench-workspace.ts";
 import { runReadingLoopSmoke } from "./reading-loop.ts";
 import { runFormatsSmoke } from "./formats.ts";
@@ -139,6 +139,13 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       markerRestored = measured.ok === true;
       fs.mkdirSync(layout.partitions.logs, { recursive: true });
       fs.writeFileSync(path.join(layout.partitions.logs, `${phaseName}-window.json`), `${JSON.stringify(measured, null, 2)}
+`);
+    } else if (phaseName === "bench-open-video") {
+      const measured = await measureOpenVideo(appService, ownerGrant, window, String(process.env.MANGA_SMOKE_OPEN_VIDEO));
+      reportExtras.openVideoOk = measured.ok;
+      markerRestored = measured.ok === true;
+      fs.mkdirSync(layout.partitions.logs, { recursive: true });
+      fs.writeFileSync(path.join(layout.partitions.logs, "bench-open-video-window.json"), `${JSON.stringify(measured, null, 2)}
 `);
     } else if (phaseName === "bench-workspace" || phaseName === "bench-workspace-memory") {
       const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_WORKSPACE_SPEC), "utf8")) as WorkspaceBenchSpec & WorkspaceMemorySpec;

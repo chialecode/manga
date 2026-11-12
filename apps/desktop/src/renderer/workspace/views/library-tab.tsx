@@ -55,6 +55,7 @@ export function LibraryTab() {
         onChanged={s.bump}
         onError={(message) => s.setError(message)}
         onNotice={s.setNotice}
+        context={tab.contextId}
       />
     );
   }
