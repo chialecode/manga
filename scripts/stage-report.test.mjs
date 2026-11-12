@@ -654,11 +654,13 @@ test("the release check excuses a test only when it is tied to optional samples 
   assert.equal(excusedBy(gate, true, undefined)("^needs the gpu sample"), null);
 });
 
-test("every test gate.json ties to optional samples is a required test, and names samples the generator knows as optional", () => {
+test("every test and smoke phase gate.json ties to optional samples is required by the gate, and names samples the generator knows as optional", () => {
   const patterns = new Set(config.cases.flatMap((entry) => entry.tests ?? []));
   const generator = fs.readFileSync(new URL("./samples/generate-media-samples.mjs", import.meta.url), "utf8");
-  for (const [pattern, samples] of Object.entries(config.optionalSampleTests ?? {})) {
-    assert.ok(patterns.has(pattern), `${pattern} is not a required test`);
+  const tied = [...Object.entries(config.optionalSampleTests ?? {}), ...Object.entries(config.optionalSamplePhases ?? {})];
+  for (const phase of Object.keys(config.optionalSamplePhases ?? {})) assert.ok(config.package.smoke.includes(phase), `${phase} is not a smoke phase`);
+  for (const [pattern, samples] of tied) {
+    assert.ok(patterns.has(pattern) || config.package.smoke.includes(pattern), `${pattern} is not required by the gate`);
     for (const id of samples) {
       const definition = generator.split("\n").find((line) => line.includes(`define("${id}", {`));
       assert.ok(definition?.includes("optional: true"), `${id} is not an optional sample`);
