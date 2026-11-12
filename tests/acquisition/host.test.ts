@@ -315,7 +315,7 @@ describe("publishing across two real volumes", () => {
       expect(walk(target).sort()).toEqual(["下载/季卷/第1话 (2).txt", "下载/季卷/第1话.txt", "下载/季卷/第2话.txt"]);
       expect(fs.readFileSync(lib(target, "下载/季卷/第2话.txt"), "utf8")).toBe(FILES[1]!.text);
       expect(walk(target).some((name) => name.includes(".publish"))).toBe(false);
-    } finally { fs.rmSync(target, { recursive: true, force: true }); }
+    } finally { fs.rmSync(target, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); }
   });
 
   it.skipIf(!otherVolume)("does the same the other way round: staged on the other volume, library on the system's (not run on a machine with one volume)", async () => {
@@ -333,7 +333,7 @@ describe("publishing across two real volumes", () => {
       expect(walk(dir).sort()).toEqual(["下载/季卷/第1话.txt", "下载/季卷/第2话.txt"]);
       expect(walk(dir).some((name) => name.includes(".publish"))).toBe(false);
       ctx.app.close();
-    } finally { fs.rmSync(profile, { recursive: true, force: true }); }
+    } finally { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); }
   });
 });
 
