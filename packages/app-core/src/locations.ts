@@ -407,11 +407,15 @@ export function persistPointerAt(layout: LocationLayout, pointerPath: string): v
 export function isReparsePath(target: string): boolean {
   const resolved = path.resolve(target);
   if (!fs.existsSync(resolved)) return false;
-  if (fs.lstatSync(resolved).isSymbolicLink()) return true;
-  try {
-    return path.resolve(fs.realpathSync.native?.(resolved) ?? fs.realpathSync(resolved)) !== resolved;
-  } catch {
-    return true;
+  // A link or junction at any level redirects the path. Each level is checked itself: comparing the whole path with
+  // its real path would also flag 8.3 short names (as a CI runner's temporary folder is spelled) and a different letter case, which are the same folder.
+  for (let current = resolved; ; current = path.dirname(current)) {
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) return true;
+    } catch {
+      return true;
+    }
+    if (path.dirname(current) === current) return false;
   }
 }
 

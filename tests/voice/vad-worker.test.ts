@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { VadWorkerClient, locateVadAssets } from "../../packages/app-core/src/voice/vad-client.ts";
 import { VAD_FRAME_SAMPLES, segmentRecording } from "../../packages/app-core/src/voice/vad-segmenter.ts";
-import { requireSamples, samplePath } from "../helpers/samples.ts";
+import { isAvailable, requireSamples, samplePath } from "../helpers/samples.ts";
 import { mediaPrerequisitesAbsent } from "../helpers/prerequisites.ts";
 
 requireSamples(["voice-recording-30min", "voice-no-speech"]);
@@ -18,7 +18,8 @@ function pcmFromWav(wav: string, target: string): number {
   return bytes.length - 44;
 }
 
-describe.skipIf(mediaPrerequisitesAbsent)("Silero VAD worker on the synthetic recordings", () => {
+// The 30-minute recording needs the Windows zh-CN and en-US voices to make (an optional sample); without them this is reported as skipped.
+describe.skipIf(mediaPrerequisitesAbsent || !isAvailable("voice-recording-30min"))("Silero VAD worker on the synthetic recordings", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-vad-"));
   const client = new VadWorkerClient({ assets });
   const long = path.join(dir, "long.pcm");
