@@ -37,7 +37,10 @@ foreach ($line in [Console]::In.ReadToEnd().Split([Environment]::NewLine, [Strin
 
 function turnOff(pids: number[]): Promise<Map<number, boolean>> {
   return new Promise((resolve) => {
-    const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", SCRIPT], { windowsHide: true });
+    const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", SCRIPT], {
+      stdio: ["pipe", "pipe", "ignore"],
+      windowsHide: true,
+    });
     let out = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => { out += chunk; });
     child.on("error", () => resolve(new Map()));
@@ -68,7 +71,10 @@ export function benchPowerThrottlingOff(phase: string, logsDir: string): () => v
   };
   void round();
   const timer = setInterval(() => { void round(); }, 2000);
+  let stopped = false;
   return () => {
+    if (stopped) return;
+    stopped = true;
     clearInterval(timer);
     const values = [...handled.values()];
     try {

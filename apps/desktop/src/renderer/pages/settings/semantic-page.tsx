@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MessageKey, Translator } from "@manga/i18n";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import { attempt } from "../../lib/api.ts";
 import { SEMANTIC_SEGMENTATIONS, type SemanticSegmentation, type SemanticStatusView } from "../../lib/semantic-model.ts";
 import { Modal } from "../../components/modal.tsx";
@@ -24,44 +25,41 @@ export function SemanticPage(props: {
   const [status, setStatus] = useState<SemanticStatusView | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const alive = useRef(true);
-  const latest = useRef(0);
-  useEffect(() => () => { alive.current = false; }, []);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onError: props.onError, onNotice: props.onNotice, t });
+  callbacksRef.current = { onError: props.onError, onNotice: props.onNotice, t };
 
   const load = useCallback(async () => {
-    latest.current += 1;
-    const mine = latest.current;
+    const mine = guard.next();
     const result = await attempt<SemanticStatusView>("semantic.status", {});
-    if (!alive.current || mine !== latest.current) return;
-    if (!result.ok) { props.onError(result.error.message); return; }
+    if (!guard.isCurrent(mine)) return;
+    if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
     setStatus(result.value);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [guard]);
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     const off = window.manga.onNotice?.((notice) => {
       if (notice.topic !== "semantic.progress") return;
-      if (notice.payload.status === "active" && notice.payload.kind === "build") props.onNotice(t("semantic.notice.built"));
+      if (notice.payload.status === "active" && notice.payload.kind === "build") callbacksRef.current.onNotice(callbacksRef.current.t("semantic.notice.built"));
       void load();
     });
     return () => { off?.(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   async function run(commandId: string, input: Record<string, unknown> = {}, notice?: string) {
     if (busy) return false;
     setBusy(true);
     const result = await attempt(commandId, input);
-    if (!alive.current) return false;
+    if (!guard.isAlive()) return false;
     setBusy(false);
     if (!result.ok) {
       const reason = (result.error as { details?: { reason?: string } }).details?.reason;
-      props.onError(reason === "noConnection" ? t("semantic.error.noConnection") : result.error.message);
+      callbacksRef.current.onError(reason === "noConnection" ? t("semantic.error.noConnection") : result.error.message);
       await load();
       return false;
     }
-    if (notice) props.onNotice(notice);
+    if (notice) callbacksRef.current.onNotice(notice);
     await load();
     return true;
   }

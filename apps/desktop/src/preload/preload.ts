@@ -14,8 +14,6 @@ contextBridge.exposeInMainWorld("manga", {
   command: (payload: unknown) => ipcRenderer.invoke("manga:command", payload),
   state: () => ipcRenderer.invoke("manga:state"),
   chooseDirectory: () => ipcRenderer.invoke("manga:choose-directory"),
-  chooseFile: () => ipcRenderer.invoke("manga:choose-file"),
-  chooseBook: () => ipcRenderer.invoke("manga:choose-book"),
   chooseAudio: () => ipcRenderer.invoke("manga:choose-audio"),
   // A chosen file handed back as a path handle, so the renderer can repair a stale source.
   choosePath: () => ipcRenderer.invoke("manga:choose-path"),
@@ -45,6 +43,14 @@ contextBridge.exposeInMainWorld("manga", {
   quit: () => ipcRenderer.invoke("manga:quit"),
   // Only the metadata source's own pages open, in the system browser; the main process decides.
   openExternal: (url: string) => ipcRenderer.invoke("manga:open-external", url),
+  // Reading aloud: the PCM (24 kHz, 16-bit, mono) of a request comes back in pieces, then its end or failure.
+  speak: (id: string, request: { text: string; voice?: string; connectionId?: string; task?: "read-aloud" | "novel" | "test" }) => ipcRenderer.send("manga:speak", id, request),
+  stopSpeaking: (id: string) => ipcRenderer.send("manga:speak-stop", id),
+  onSpeech: (listener: (message: { id: string; kind: "chunk" | "end" | "error"; pcm?: Uint8Array; result?: unknown; error?: { code: string; message: string; retryable?: boolean; details?: Record<string, unknown> } }) => void) => {
+    const handler = (_event: unknown, message: { id: string; kind: "chunk" | "end" | "error" }) => listener(message);
+    ipcRenderer.on("manga:speech", handler);
+    return () => { ipcRenderer.removeListener("manga:speech", handler); };
+  },
   // The floating recording box: the app window publishes the recording state, the box can ask to stop.
   overlay: {
     publish: (state: unknown) => ipcRenderer.send("manga:overlay-publish", state),
@@ -59,7 +65,9 @@ contextBridge.exposeInMainWorld("manga", {
 // What the floating box's own page uses. The main process answers only the box's window.
 contextBridge.exposeInMainWorld("mangaOverlay", {
   onState: (listener: (state: unknown) => void) => {
-    ipcRenderer.on("manga:overlay-state", (_event, state) => listener(state));
+    const handler = (_event: unknown, state: unknown) => listener(state);
+    ipcRenderer.on("manga:overlay-state", handler);
+    return () => { ipcRenderer.off("manga:overlay-state", handler); };
   },
   stop: () => ipcRenderer.send("manga:overlay-stop-request"),
 });

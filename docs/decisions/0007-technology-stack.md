@@ -60,7 +60,7 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 
 ## 2026-10-04 依赖刷新结果
 
-Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，因此在这些功能开工前先升级运行时，再尝试其他主版本；每项升级后跑类型检查与受影响测试，最后跑完整回归与打包烟测。依赖盘点由 `scripts/inventory-deps.mjs` 生成。
+Electron 37 已停止维护，而媒介能力新增了网络与媒体解析，因此在这些功能开工前先升级运行时，再尝试其他主版本；每项升级后跑类型检查与受影响测试，最后跑完整回归与打包烟测。当时依赖盘点由 `scripts/inventory-deps.mjs` 生成（现已由 `scripts/deps.mjs` 替代）。
 
 | 项 | 刷新前 | 现在 | 备注 |
 | --- | --- | --- | --- |
@@ -153,6 +153,38 @@ Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点�
 ## 2026-11-11 依赖盘点
 
 首个正式版、更新的退路与轻量打开阶段开始时与门禁前各按 A-35 执行一次 `pnpm outdated -r`（最小发行龄策略 `minimumReleaseAge: 20160` 分钟不绕过，零新增依赖），升级全部已满 14 天的同主版本稳定版：`electron` `45.0.0 → 45.1.0`、`dockview-react` `8.6.1 → 8.7.1`（同步锁定配套 `dockview` 与 `dockview-core` `8.7.1`；未满 14 天的 `8.9.0` 不采用）、`lucide-react` `1.61.0 → 1.63.0`、`@tanstack/react-virtual` `3.14.22 → 3.14.23`、`onnxruntime-web` `1.30.0 → 1.31.1`、`mdast-util-to-markdown` `2.2.0 → 2.2.1`；门禁前复跑确认除 `linkedom` 已登记例外（`0.18.13`）外零剩余满龄同主版本偏差。
+
+## 2026-11-14 最小发行龄改为 7 天（A-132）
+
+此后的盘点按“满 7 天的最新稳定版”取：`pnpm-workspace.yaml` 写入 `minimumReleaseAge: 10080`（分钟，此前仓库内没有这项配置），Dependabot 冷却期同为 7 天。盘点命令改为 `node scripts/deps.mjs`（基于 `pnpm outdated -r` 与 npm 源的发行时间，分同主版本与主版本），漏洞检查为 `node scripts/deps.mjs --audit`，见[开发流程 2.6](../dev-rules/development-workflow.md#dependency-inventory)。以下各节记录的是当时 14 天的口径。
+
+## 2026-11-14 依赖盘点（DeepSeek 插件阶段）
+
+阶段开始时按 A-132 执行（没有开着的 Dependabot PR；`node scripts/deps.mjs` 列出 26 项满 7 天的更新，最小发行龄 `minimumReleaseAge: 10080` 不绕过、零豁免）。逐项的验证见阶段报告的依赖一节。
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| 同主版本 23 项：electron、vite、vitest、knip、playwright-core、pdfjs-dist、@earendil-works/pi-ai、Tiptap 五件、@vitejs/plugin-react、tailwindcss 与 @tailwindcss/vite、@tanstack/react-virtual、@xyflow/react、d3-hierarchy、dockview-react、jassub、lucide-react、mdast-util-to-markdown、linkedom | 见 `package.json` 的上一版本 | electron 45.2.3、vite 8.3.6、vitest 5.1.0、knip 6.44.1、playwright-core 1.65.0、pdfjs-dist 6.5.438、pi-ai 1.5.0、Tiptap 3.33.0、plugin-react 6.2.1、tailwindcss 4.3.5、react-virtual 3.14.26、@xyflow/react 12.12.1、d3-hierarchy 3.1.3、dockview-react 8.8.3、jassub 2.5.36、lucide-react 1.70.0、mdast-util-to-markdown 2.2.3、linkedom 0.18.15 | 升级，全量用例通过。pdfjs-dist 断言版本的两个常量随之更新。linkedom 0.18.15 的主进程打包不再报 `@acemir/cssom` 的 `MISSING_EXPORT`，此前的例外关闭。pi-ai 1.5.0 仍按地址识别 DeepSeek（`thinkingFormat: "deepseek"`、`requiresReasoningContentOnAssistantMessages`），MANGA 的用法见[Agent 协议](../design/agent-and-plugins.md) |
+| dockview、dockview-core（传递） | 8.9.0（锁文件里早于发行龄策略写入） | 8.8.3 | dockview-react 8.8.3 要求 `^8.8.3`，pnpm 解析到不满 7 天的 8.9.0，锁文件校验拒绝；`pnpm-workspace.yaml` 的 `overrides` 固定为 8.8.3。复查条件：8.9.0 满 7 天后去掉这两条覆盖 |
+| @napi-rs/canvas | 1.0.13 | 保持 1.0.13 | **回退。** 1.1.0 下 PDF 渲染的用例在 Vitest 进程里崩溃（退出码 3221225477），另有 `CanvasRenderingContext2D.fill` 不接受 `Path2D`。复查条件：下一个 1.x 发行 |
+| jsdom（主版本） | 30.1.3 | 保持 30.1.3 | **回退。** 31.0.0 下界面用例启动即报 `this.parser.tokenizer.flushCharacters is not a function`。复查条件：jsdom 31.x 的补丁发行 |
+| @types/node（主版本） | 24.19.2 | 26.6.6 | 升级。类型变严一处（`worker.on("error")` 的参数为 `unknown`），已改；类型检查与全量用例通过 |
+| 漏洞（`--audit`） | 17 条 | 0 条未处理 | `undici` 6 与 7 分别覆盖到 6.29.1、7.30.2，`ip-address` 覆盖到 10.7.6（都满 7 天）。三条登记为例外（`scripts/deps-exceptions.json`，复查 2027-02-14）：`ip`（没有修复版本；只在 bittorrent-tracker 的服务端解析里用，插件只用客户端）、`glob` 与 `minimatch`（只在打包工具链里处理仓库自己的文件，修复要新的主版本） |
+| 门禁前复跑（2026-11-15） | knip 6.44.1 | knip 6.44.2 | 升级（期间新满 7 天的补丁）；@napi-rs/canvas 1.1.0 与 jsdom 31.0.0 仍是上面回退的版本，没有新发行，保持 |
+
+## 2026-11-21 合并前依赖盘点与远端 PR 收敛
+
+合并前按 A-132 复跑 `node scripts/deps.mjs` 与 `node scripts/deps.mjs --audit`（严格遵守 `minimumReleaseAge: 10080` 7 天最小发行龄，不绕过、零豁免），并逐一核对远端 4 个 Dependabot PR（`#23`、`#25`、`#26`、`#27`）：
+
+| 项 | 前 | 后 | 结果 |
+| --- | --- | --- | --- |
+| GitHub Actions（PR `#23`） | `actions/setup-node` 7.0.0 | `actions/setup-node` 7.1.0（SHA `949feb2413d6458794dcd2491c4babbbce0c15c1`） | 并入 `.github/workflows/ci.yml` 与 `release.yml`，`scripts/check-workflows.mjs` 通过 |
+| `@types/node`（PR `#26`） | 26.6.6 | 保持 26.6.6 | 已在 2026-11-14 盘点并入本分支并修复 `vad-client.ts`，PR 合并后关闭 |
+| 同主版本 16 项满 7 天更新（并入 PR `#27` 满龄部分） | pi-ai 1.5.0、user-event 14.6.8、jassub 2.5.36、playwright-core 1.65.0、vite 8.3.6、Tiptap 五件 3.33.0、@vitejs/plugin-react 6.2.1、better-sqlite3 13.0.3、dockview-react 8.8.3、electron 45.2.3、knip 6.44.2、lucide-react 1.70.0 | pi-ai 1.5.2、user-event 14.6.10、jassub 2.5.37、playwright-core 1.65.1、vite 8.3.8、Tiptap 五件 3.34.0、@vitejs/plugin-react 6.3.0、better-sqlite3 13.1.1（根、`storage-drizzle`、`desktop` 同步）、dockview-react 8.9.0、electron 45.3.2、knip 6.45.1、lucide-react 1.72.0 | 升级通过。`pnpm-workspace.yaml` 中 `dockview`/`dockview-core` 的 `8.8.3` 临时覆盖已移除，pnpm 按 7 天发行龄自动解析为 `8.9.0` 并跳过未满龄的 `8.9.1`。PR `#27` 中未满 7 天的 4 项（`user-event 14.6.12`、`better-sqlite3 13.2.0`、`electron 45.3.3`、`lucide-react 1.73.0`）按最小发行龄策略不采用 |
+| `@napi-rs/canvas`（PR `#27` 含 1.1.1） | 1.0.13 | 1.1.1 | **复试通过，原例外关闭。** 1.1.1 已满 7 天（2026-11-12 发行），Windows 下 `tests/reading/`、`tests/comic/`、`tests/media/`（含 `pdf-combining-marks.test.ts`）全部通过，此前 1.1.0 的退出码 3221225477 崩溃与 `Path2D` 问题未复现 |
+| 移除无用开发依赖 | `@electron-forge/plugin-fuses` 8.0.1 | — | 全仓零引用，从 `apps/desktop/package.json` 与 `knip.json` 移除 |
+| `jsdom`（主版本，PR `#25`） | 30.1.3 | 保持 30.1.3 | **单独试用 31.0.1 后回退。** 命令 `pnpm exec vitest run tests/voice/record-ui.test.tsx` 在 `the hold button records while pressed and stops on release`（`tests/voice/record-ui.test.tsx:171`）报 `Expected: "idle", Received: "recording"`（按钮切入录音态卸载后，在 jsdom 31.0.1 的 `node.isConnected` 变更下对脱离文档节点派发的 `pointerUp` 不再冒泡至 `window`；其余 119 个测试文件均通过）。复查条件：下一阶段评估测试改由 `window` 派发释放事件或待上游兼容后复试，并关闭 PR `#25` 说明原因 |
+| 漏洞（`--audit`） | 3 条已登记例外 | 0 条未处理 | 3 条例外（`ip`、`glob`、`minimatch`，复查日期 `2027-02-14`）有效且无新增漏洞 |
 
 ## 2026-11-13 依赖盘点与语音输入选型
 

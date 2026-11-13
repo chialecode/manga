@@ -116,16 +116,17 @@ describe("AT-60 AT-61 AT-62 AT-111 shell", () => {
     expect(screen.getByTestId("shell-root").getAttribute("data-compact")).toBe("false");
   });
 
-  it("has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch", () => {
+  it("has no mode switch: the rail's top holds the sidebar switch alone, with no back, forward or menus, and the sidebar holds no switch (A-136)", () => {
     frame(1280, 840);
     const top = screen.getByTestId("shell-top");
-    const order = Array.from(top.querySelectorAll("[data-testid='shell-sidebar-toggle'], [data-testid='nav-back'], [data-testid='nav-forward'], [data-testid='menubar'], [data-testid^='mode-']")).map((node) => node.getAttribute("data-testid"));
-    expect(order).toEqual(["shell-sidebar-toggle", "nav-back", "nav-forward", "menubar"]);
+    const order = Array.from(top.querySelectorAll("button, [data-testid='menubar'], [data-testid^='mode-']")).map((node) => node.getAttribute("data-testid"));
+    expect(order).toEqual(["shell-sidebar-toggle"]);
+    for (const id of ["nav-back", "nav-forward", "menubar"]) expect(screen.queryByTestId(id), id).toBeNull();
     expect(screen.getByTestId("shell-sidebar").querySelector("[data-testid^='mode-'], [role='group'][aria-label='模式']")).toBeNull();
     expect(screen.queryByTestId("mode-switch")).toBeNull();
     expect(screen.queryByTestId("mode-menu")).toBeNull();
-    // The buttons are icons: no text in the switch and the history buttons.
-    for (const id of ["shell-sidebar-toggle", "nav-back", "nav-forward"]) expect((screen.getByTestId(id).textContent ?? "").trim(), id).toBe("");
+    // The switch is an icon: no text in it.
+    expect((screen.getByTestId("shell-sidebar-toggle").textContent ?? "").trim()).toBe("");
   });
 
   it("reflects the saved preference: a hidden sidebar stays hidden until its switch is pressed, and the switch is a plain button", () => {
@@ -203,13 +204,13 @@ describe("AT-60 AT-61 AT-62 AT-111 shell", () => {
     expect(screen.getByTestId("nav-home")).toBeTruthy();
   });
 
-  it("keeps the top row's own actions and a panel under the page, and the settings navigation is not the frame's", () => {
+  it("keeps the title bar's own actions and a panel under the page, and the settings navigation is not the frame's", () => {
     frame(1280, 840, {
       titleActions: <button type="button" data-testid="title-action-debug">调试</button>,
       bottom: <section data-testid="debug-slot">调试面板</section>,
     });
     expect(screen.getByTestId("shell-title-actions").contains(screen.getByTestId("title-action-debug"))).toBe(true);
-    expect(screen.getByTestId("shell-top").contains(screen.getByTestId("shell-title-actions"))).toBe(true);
+    expect(screen.getByTestId("title-end").firstElementChild).toBe(screen.getByTestId("shell-title-actions"));
     expect(screen.getByTestId("shell-main").contains(screen.getByTestId("debug-slot"))).toBe(true);
     expect(screen.getByTestId("shell-sidebar").querySelector("[data-testid='settings-nav']")).toBeNull();
   });

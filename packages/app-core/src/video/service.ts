@@ -9,13 +9,13 @@ import { layoutFromPayload } from "../domain/revision-layout.ts";
 import { relinkByFingerprint } from "../domain/relink.ts";
 import { assertOpenable, insertLocation, requireInLibrary, resolveLocation } from "../library-locations.ts";
 import { ordinalFromParsed, ordinalLabel, parseOrdinalName, sortKeyFor } from "../domain/ordinal.ts";
-import { decodeTextBuffer } from "../domain/text.ts";
+import { errorMessage, writeFileAtomic } from "../shared/utils.ts";
 import type { MediaServices } from "../media/services.ts";
 import { planDirectoryAsync } from "../comic/scan.ts";
 import { cueWindow, parseCues, type Cue } from "./cues.ts";
-import { fontFamilies } from "./font-names.ts";
+import { SUBTITLE_MEDIA_TYPES, awaitJobWithSignal, extractFontAttachments, extractSubtitleFile, primaryVideoStream, readFontFamilies } from "./extract-media.ts";
 import { decidePlayback, listTracks, mediaTypeFor, type PlaybackCaps, type PlayCopyReason } from "./playback.ts";
-import { discoverSidecars, sampledFingerprint, type Sidecar } from "./sidecars.ts";
+import { discoverSidecars, sampledFingerprint } from "./sidecars.ts";
 import { PlayCopies } from "./play-copy.ts";
 import { answerFrame, type FrameAnswer, type FrameIndex } from "./frames.ts";
 import { SqlitePlayCopyStore } from "./play-copy-store.ts";
@@ -51,8 +51,7 @@ export type FrameIndexState = "ready" | "building" | "absent";
 
 type Row = { revisionId: string; resourceId: string; title: string; probe: VideoProbe; path: string; available: boolean };
 
-const SUBTITLE_MEDIA_TYPES = { ass: "text/x-ssa; charset=utf-8", srt: "application/x-subrip; charset=utf-8", vtt: "text/vtt; charset=utf-8" } as const;
-const FONT_TYPES: Record<string, string> = { ".ttf": "font/ttf", ".otf": "font/otf", ".ttc": "font/collection", ".woff": "font/woff", ".woff2": "font/woff2" };
+const MAX_CLIP_BYTES = 128 * 1024 * 1024;
 
 function titleFromParsed(names: string[]): string | undefined {
   const counts = new Map<string, number>();
@@ -228,7 +227,7 @@ export class VideoService {
       } catch (error) {
         if (error instanceof MangaError && error.code === "CANCELLED") throw error;
         if (input.signal?.aborted) throw new MangaError("CANCELLED", "import was cancelled");
-        const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: error instanceof Error ? error.message : String(error) };
+        const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: errorMessage(error) };
         results.push({ relative: item.relative, error: known });
       }
       done += 1;
@@ -299,7 +298,7 @@ export class VideoService {
   // ------------------------------------------------------------------ frame index
 
   private indexFile(revisionId: string): string {
-    return path.join(this.media.dir("frame-index"), `${revisionId}.json`);
+    return path.join(this.media.cacheDir, "frame-index", `${revisionId}.json`);
   }
 
   private readIndex(revisionId: string): FrameIndex | null {
@@ -324,14 +323,19 @@ export class VideoService {
     while (this.memoryIndex.size > 4) this.memoryIndex.delete(this.memoryIndex.keys().next().value as string);
   }
 
-  /** Whether the frame table exists, is being built, or has not been asked for. Reading it never starts a build. */
-  /** A revision whose record was removed: its play copies, frame table and subtitle cache go from the disk, and a frame table still being built stops. */
+  /** A revision whose record was removed: its play copies, frame table, subtitle and font caches, handles and memory caches go, and a frame table still being built stops. */
   forgetRevision(revisionId: string): void {
     this.cancelFrameIndex(revisionId);
     this.copies.cancel(revisionId);
     this.copies.remove(revisionId);
+    this.memoryIndex.delete(revisionId);
+    for (const key of this.cueCache.keys()) {
+      if (key.startsWith(`${revisionId}:`)) this.cueCache.delete(key);
+    }
+    this.media.handles.revokeWhere((binding) => binding.revisionId === revisionId);
     fs.rmSync(this.indexFile(revisionId), { force: true });
-    fs.rmSync(this.subtitleDir(revisionId), { recursive: true, force: true });
+    fs.rmSync(path.join(this.media.cacheDir, "subtitles", revisionId), { recursive: true, force: true });
+    fs.rmSync(path.join(this.media.cacheDir, "fonts", revisionId), { recursive: true, force: true });
   }
 
   frameIndexState(revisionId: string): FrameIndexState {
@@ -358,15 +362,12 @@ export class VideoService {
     if (existing) return existing;
     const row = this.rowByRevision(revisionId);
     const file = this.requireFile(row);
-    const video = row.probe.streams.find((stream) => stream.type === "video" && stream.fps !== undefined) ?? row.probe.streams.find((stream) => stream.type === "video");
+    const video = primaryVideoStream(row.probe);
     if (!video) throw new MangaError("UNSUPPORTED_FORMAT", "the file has no video stream");
     const timeline = await this.media.ffmpeg.packetTimeline(file, video.index, row.probe.startMs, { signal });
     if (!timeline.ptsMs.length) throw new MangaError("UNSUPPORTED_FORMAT", "no frame times could be read from the file");
     const index: FrameIndex = { version: 1, streamIndex: video.index, startMs: row.probe.startMs, ptsMs: timeline.ptsMs, keyframesMs: timeline.keyframesMs, variableFrameRate: timeline.variableFrameRate };
-    const target = this.indexFile(revisionId);
-    const staging = `${target}.${process.pid}.tmp`;
-    fs.writeFileSync(staging, JSON.stringify(index));
-    fs.renameSync(staging, target);
+    writeFileAtomic(this.indexFile(revisionId), JSON.stringify(index));
     this.remember(revisionId, index);
     const probe: VideoProbe = { ...row.probe, keyframesMs: timeline.keyframesMs.slice(0, KEYFRAME_LIMIT), keyframesTruncated: timeline.keyframesMs.length > KEYFRAME_LIMIT, variableFrameRate: timeline.variableFrameRate };
     this.store.sqlite.prepare("UPDATE media_probes SET probe_json = ? WHERE resource_revision_id = ?").run(JSON.stringify(probe), revisionId);
@@ -380,13 +381,7 @@ export class VideoService {
     if (cached) return { revisionId: row.revisionId, index: cached, durationMs: row.probe.durationMs };
     if (!this.media.ffmpeg.available) throw new MangaError("CAPABILITY_UNAVAILABLE", "the media tool is not installed");
     const job = this.submitIndex(row.revisionId);
-    const onAbort = () => job.cancel();
-    signal?.addEventListener("abort", onAbort, { once: true });
-    try {
-      return { revisionId: row.revisionId, index: await job.promise, durationMs: row.probe.durationMs };
-    } finally {
-      signal?.removeEventListener("abort", onAbort);
-    }
+    return { revisionId: row.revisionId, index: await awaitJobWithSignal(job, signal), durationMs: row.probe.durationMs };
   }
 
   /**
@@ -448,12 +443,6 @@ export class VideoService {
     return this.media.dir("subtitles", revisionId);
   }
 
-  private sidecarOf(row: Row, id: string): Sidecar {
-    const found = discoverSidecars(this.requireFile(row)).find((item) => item.id === id);
-    if (!found) throw new MangaError("NOT_FOUND", "subtitle file is not next to the video any more");
-    return found;
-  }
-
   /**
    * Subtitle text in the form the player takes, UTF-8 whatever the source encoding was. ASS stays ASS (for JASSUB). A text track stays SRT or WebVTT as the
    * file is, and an embedded text track becomes SRT: the player's own subtitle layer reads cues and the `{\an8}` marks that say a caption sits at the top,
@@ -461,31 +450,8 @@ export class VideoService {
    */
   async subtitleFile(resourceId: string, revisionId: string, trackId: string, signal?: AbortSignal): Promise<{ path: string; format: "ass" | "srt" | "vtt"; language: string | null; title: string | null }> {
     const row = this.load(resourceId, revisionId);
-    const dir = this.subtitleDir(revisionId);
-    if (trackId.startsWith("x")) {
-      const sidecar = this.sidecarOf(row, trackId);
-      const target = path.join(dir, `${trackId}.${sidecar.format}`);
-      if (!fs.existsSync(target)) {
-        const text = decodeTextBuffer(new Uint8Array(fs.readFileSync(sidecar.absolutePath))).text.replace(/^\uFEFF/, "");
-        const staging = `${target}.${process.pid}.tmp`;
-        fs.writeFileSync(staging, text, "utf8");
-        fs.renameSync(staging, target);
-      }
-      return { path: target, format: sidecar.format, language: sidecar.language ?? null, title: sidecar.fileName };
-    }
-    const match = /^s(\d+)$/.exec(trackId);
-    const stream = match ? row.probe.streams.find((item) => item.type === "subtitle" && item.index === Number(match[1])) : undefined;
-    if (!stream) throw new MangaError("NOT_FOUND", "subtitle track does not exist");
-    if (!stream.textual) throw new MangaError("UNSUPPORTED_FORMAT", "image subtitles cannot be shown as text");
-    const format = stream.codec === "ass" || stream.codec === "ssa" ? "ass" : "srt";
-    const target = path.join(dir, `${trackId}.${format}`);
-    if (!fs.existsSync(target)) {
-      const text = await this.media.ffmpeg.subtitleText(this.requireFile(row), stream.index, format, { signal });
-      const staging = `${target}.${process.pid}.tmp`;
-      fs.writeFileSync(staging, text, "utf8");
-      fs.renameSync(staging, target);
-    }
-    return { path: target, format, language: stream.language ?? null, title: stream.title ?? null };
+    const file = this.requireFile(row);
+    return extractSubtitleFile(this.media.ffmpeg, file, row.probe, this.subtitleDir(revisionId), trackId, signal);
   }
 
   async subtitleHandle(resourceId: string, revisionId: string, trackId: string, sessionId?: string, signal?: AbortSignal) {
@@ -505,38 +471,17 @@ export class VideoService {
     const fallback = fallbackFont
       ? { family: fallbackFont.family, mediaType: fallbackFont.mediaType, url: this.media.handles.issue({ kind: "file", path: fallbackFont.path, mediaType: fallbackFont.mediaType }, { moduleId: VIDEO_MODULE, resourceId, revisionId, sessionId }, { ttlMs: HANDLE_TTL_MS }).url }
       : null;
-    const attachments = row.probe.streams.filter((stream) => stream.type === "attachment" && FONT_TYPES[path.extname(stream.fileName ?? "").toLowerCase()]);
-    if (!attachments.length) return { fonts: [] as Array<{ id: string; fileName: string; mediaType: string; url: string; families: string[] }>, fallback };
-    const dir = this.media.dir("fonts", revisionId);
-    const items = attachments.map((stream) => ({ stream, outName: `f${stream.index}${path.extname(stream.fileName!).toLowerCase()}` }));
-    const missing = items.filter((item) => !fs.existsSync(path.join(dir, item.outName)));
-    if (missing.length) await this.media.ffmpeg.dumpAttachments(this.requireFile(row), missing.map((item) => ({ streamIndex: item.stream.index, outName: item.outName })), dir, { signal });
+    const items = await extractFontAttachments(this.media.ffmpeg, this.requireFile(row), row.probe, this.media.dir("fonts", revisionId), signal);
     return {
-      fonts: items.map(({ stream, outName }) => {
-        const mediaType = FONT_TYPES[path.extname(outName)]!;
-        const issued = this.media.handles.issue({ kind: "file", path: path.join(dir, outName), mediaType }, { moduleId: VIDEO_MODULE, resourceId, revisionId, sessionId }, { ttlMs: HANDLE_TTL_MS });
-        return { id: `f${stream.index}`, fileName: stream.fileName!, mediaType, url: issued.url, families: this.familiesOf(path.join(dir, outName)) };
+      fonts: items.map(({ stream, file, mediaType }) => {
+        const issued = this.media.handles.issue({ kind: "file", path: file, mediaType }, { moduleId: VIDEO_MODULE, resourceId, revisionId, sessionId }, { ttlMs: HANDLE_TTL_MS });
+        return { id: `f${stream.index}`, fileName: stream.fileName!, mediaType, url: issued.url, families: readFontFamilies(this.familyCache, file, 200) };
       }),
       fallback,
     };
   }
 
   private readonly familyCache = new Map<string, string[]>();
-
-  /** The family names inside a font file, read once (a collection of CJK fonts is several megabytes). */
-  private familiesOf(file: string): string[] {
-    try {
-      const key = `${file}:${fs.statSync(file).size}`;
-      const known = this.familyCache.get(key);
-      if (known) return known;
-      const names = fontFamilies(fs.readFileSync(file));
-      this.familyCache.set(key, names);
-      while (this.familyCache.size > 200) this.familyCache.delete(this.familyCache.keys().next().value as string);
-      return names;
-    } catch {
-      return [];
-    }
-  }
 
   /** The text of the best subtitle track as cues, for search and Agent context. */
   async cues(resourceId: string, revisionId: string, trackId?: string, signal?: AbortSignal): Promise<{ trackId: string | null; cues: Cue[] }> {
@@ -563,29 +508,35 @@ export class VideoService {
     return { trackId, cues: cueWindow(cues, input.centerMs - before, input.centerMs + after, input.limitMs) };
   }
 
-  /** A frame of the video as JPEG at a time on the original timeline. */
+  /** A frame of the video as JPEG at a time on the original timeline (0-based player time; FFmpeg `-ss` without `-copyts` already offsets from container start_time). */
   async frameImage(resourceId: string, revisionId: string, timeMs: number, maxEdge: number, signal?: AbortSignal, background = false): Promise<Buffer> {
     const row = this.load(resourceId, revisionId);
     const file = this.requireFile(row);
-    return this.media.ffmpeg.frameJpeg(file, (timeMs + row.probe.startMs) / 1000, maxEdge, { signal, background });
+    return this.media.ffmpeg.frameJpeg(file, Math.max(0, timeMs) / 1000, maxEdge, { signal, background });
   }
 
   /**
-   * A stretch of the video as an MP4 clip, without re-encoding (计划 4.5): the first video and the first audio stream, no subtitles or data. The seek goes to
+   * A stretch of the video as an MP4 clip, without re-encoding (计划 4.5): the primary video and the first audio stream, no subtitles or data. The seek goes to
    * the keyframe at or before the start, so the clip may begin a little earlier; it lasts `durationMs` from there, so it never ends after the asked end.
    * A codec MP4 cannot hold fails here, and the caller sends frames instead.
    */
   async clipBytes(resourceId: string, revisionId: string, startMs: number, durationMs: number, signal?: AbortSignal): Promise<Buffer> {
+    if (!Number.isFinite(startMs) || !Number.isFinite(durationMs) || durationMs <= 0) {
+      throw new MangaError("VALIDATION_ERROR", "clip start and duration must be positive numbers");
+    }
     const row = this.load(resourceId, revisionId);
     const file = this.requireFile(row);
+    const video = primaryVideoStream(row.probe);
+    if (!video) throw new MangaError("UNSUPPORTED_FORMAT", "the file has no video stream");
+    const clampedStartMs = Math.max(0, startMs);
     const dir = path.join(this.media.cacheDir, "agent-clips");
     fs.mkdirSync(dir, { recursive: true });
     const out = path.join(dir, `${randomUUID()}.mp4`);
     const redactPaths = [file, path.dirname(file), out];
-    const hevc = row.probe.streams.find((stream) => stream.type === "video")?.codec === "hevc";
+    const hevc = video.codec === "hevc";
     const cut = (seconds: number) => this.media.ffmpeg.run("ffmpeg", [
-      "-v", "error", "-nostdin", "-y", "-ss", ((startMs + row.probe.startMs) / 1000).toFixed(3), "-i", file, "-t", seconds.toFixed(3),
-      "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn", "-map_chapters", "-1", "-map_metadata", "-1", "-c", "copy", ...(hevc ? ["-tag:v", "hvc1"] : []),
+      "-v", "error", "-nostdin", "-y", "-ss", (clampedStartMs / 1000).toFixed(3), "-i", file, "-t", seconds.toFixed(3),
+      "-map", `0:${video.index}`, "-map", "0:a:0?", "-sn", "-dn", "-map_chapters", "-1", "-map_metadata", "-1", "-c", "copy", ...(hevc ? ["-tag:v", "hvc1"] : []),
       "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-f", "mp4", out,
     ], { signal, timeoutMs: 120_000, redactPaths });
     try {
@@ -599,6 +550,8 @@ export class VideoService {
         if (shorter <= 0) throw new MangaError("UNSUPPORTED_FORMAT", "the clip is shorter than the stream's reorder delay");
         await cut(shorter);
       }
+      const stat = fs.statSync(out);
+      if (stat.size > MAX_CLIP_BYTES) throw new MangaError("QUOTA_EXCEEDED", "the extracted clip exceeds the size limit");
       return fs.readFileSync(out);
     } finally {
       fs.rmSync(out, { force: true });

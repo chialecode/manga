@@ -119,10 +119,10 @@ export function readPngText(png: Buffer): Record<string, string> {
   let at = 8;
   while (at + 12 <= png.length) {
     const length = png.readUInt32BE(at);
+    if (at + 12 + length > png.length) break;
     const type = png.toString("latin1", at + 4, at + 8);
     const body = png.subarray(at + 8, at + 8 + length);
     const crc = png.readUInt32BE(at + 8 + length);
-    if (at + 12 + length > png.length) break;
     if ((type === "iTXt" || type === "tEXt") && zlib.crc32(png.subarray(at + 4, at + 8 + length)) >>> 0 === crc) {
       const split = body.indexOf(0);
       if (split > 0) {

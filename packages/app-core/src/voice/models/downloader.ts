@@ -2,11 +2,13 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { MangaError, type LocalAsrModelSource, type LocalAsrModelState } from "@manga/contracts";
+import { errorMessage, writeFileAtomic } from "../../shared/utils.ts";
 import { ALLOWED_MODEL_DOWNLOAD_HOSTS, type AsrCatalogModel } from "./catalog.ts";
 import { extractAndVerifyModelArchive, sha256File } from "./tar-extract.ts";
 
 const MAX_REDIRECT_HOPS = 5;
 const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
+const DEFAULT_READ_TIMEOUT_MS = 60_000;
 
 export type StagingDownloadState = {
   bytes: number;
@@ -107,14 +109,10 @@ export function readStagingState(stagingDir: string, modelId: string): StagingDo
 }
 
 function writeStagingState(stagingDir: string, modelId: string, state: StagingDownloadState): void {
-  fs.mkdirSync(stagingDir, { recursive: true });
   const target = stagingStatePath(stagingDir, modelId);
-  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
   try {
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), "utf8");
-    fs.renameSync(tmp, target);
+    writeFileAtomic(target, JSON.stringify(state, null, 2));
   } catch (error) {
-    fs.rmSync(tmp, { force: true });
     if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOSPC") {
       throw new MangaError("DISK_FULL", "磁盘空间不足，无法写入下载断点状态", { cause: error });
     }
@@ -169,11 +167,11 @@ async function fetchWithValidatedRedirects(
 ): Promise<Response> {
   let currentUrl = validateModelDownloadUrl(initialUrl, options).toString();
   for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop += 1) {
-    const hopAbort = new AbortController();
-    const timer = setTimeout(() => hopAbort.abort(), options.connectTimeoutMs);
+    const connectAbort = new AbortController();
+    const timer = setTimeout(() => connectAbort.abort(), options.connectTimeoutMs);
     timer.unref?.();
-    const onParentAbort = () => hopAbort.abort();
-    options.signal.addEventListener("abort", onParentAbort, { once: true });
+    // Keep `options.signal` live on the response body after headers arrive so mid-stream pause/cancel aborts promptly.
+    const requestSignal = AbortSignal.any([options.signal, connectAbort.signal]);
 
     let response: Response;
     try {
@@ -181,22 +179,20 @@ async function fetchWithValidatedRedirects(
         method: "GET",
         headers,
         redirect: "manual",
-        signal: hopAbort.signal,
+        signal: requestSignal,
       });
     } catch (error) {
       clearTimeout(timer);
-      options.signal.removeEventListener("abort", onParentAbort);
       if (options.signal.aborted) {
         throw new MangaError("CANCELLED", "模型下载已取消");
       }
       throw new MangaError(
         "PROVIDER_UNAVAILABLE",
-        `无法连接模型下载源：${error instanceof Error ? error.message : String(error)}`,
+        `无法连接模型下载源：${errorMessage(error)}`,
         { retryable: true, cause: error },
       );
     } finally {
       clearTimeout(timer);
-      options.signal.removeEventListener("abort", onParentAbort);
     }
 
     if (isRedirectStatus(response.status)) {
@@ -234,10 +230,12 @@ export type ModelDownloaderOptions = {
   allowedHosts?: readonly string[];
   allowLoopbackHttp?: boolean;
   connectTimeoutMs?: number;
+  readTimeoutMs?: number;
   tarExe?: string;
   env?: NodeJS.ProcessEnv;
   maxUncompressedBytes?: number;
   getAvailableDiskBytes?: (dir: string) => number | Promise<number>;
+  onBeforeReplace?: (modelId: string) => Promise<void> | void;
 };
 
 export type DownloadModelInput = {
@@ -267,10 +265,12 @@ export class ModelDownloader {
   private readonly allowedHosts: readonly string[];
   private readonly allowLoopbackHttp: boolean;
   private readonly connectTimeoutMs: number;
+  private readonly readTimeoutMs: number;
   private readonly tarExe: string | undefined;
   private readonly env: NodeJS.ProcessEnv | undefined;
   private readonly maxUncompressedBytes: number | undefined;
   private readonly getAvailableDiskBytes: ((dir: string) => number | Promise<number>) | undefined;
+  private readonly onBeforeReplace: ((modelId: string) => Promise<void> | void) | undefined;
   private readonly active = new Map<string, ActiveControl>();
 
   constructor(options: ModelDownloaderOptions) {
@@ -280,10 +280,12 @@ export class ModelDownloader {
     this.allowedHosts = options.allowedHosts ?? ALLOWED_MODEL_DOWNLOAD_HOSTS;
     this.allowLoopbackHttp = options.allowLoopbackHttp ?? false;
     this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+    this.readTimeoutMs = options.readTimeoutMs ?? Math.max(this.connectTimeoutMs, DEFAULT_READ_TIMEOUT_MS);
     this.tarExe = options.tarExe;
     this.env = options.env;
     this.maxUncompressedBytes = options.maxUncompressedBytes;
     this.getAvailableDiskBytes = options.getAvailableDiskBytes;
+    this.onBeforeReplace = options.onBeforeReplace;
   }
 
   isActive(modelId: string): boolean {
@@ -398,7 +400,7 @@ export class ModelDownloader {
       try {
         const stats = fs.statfsSync(this.stagingDir);
         const freeBytes = Number(stats.bavail) * Number(stats.bsize);
-        if (Number.isFinite(freeBytes) && freeBytes > 0 && freeBytes < requiredBytes) {
+        if (Number.isFinite(freeBytes) && freeBytes >= 0 && freeBytes < requiredBytes) {
           throw new MangaError(
             "DISK_FULL",
             `磁盘可用空间不足（需要至少 ${Math.ceil(requiredBytes / (1024 * 1024))} MB），请清理空间后重试`,
@@ -588,10 +590,27 @@ export class ModelDownloader {
         tarExe: this.tarExe,
         env: this.env,
         signal: control.controller.signal,
+        onBeforeReplace: () => this.onBeforeReplace?.(model.modelId),
       });
       cleanModelStaging(this.stagingDir, model.modelId);
       return installedBytes;
     } catch (error) {
+      if (control.intent === "pause") {
+        // Preserve the completed `.part` file when paused during verification so resume finishes without re-downloading.
+        await this.persistPartialCheckpoint(partFile, model.modelId, resume.etag, source).catch(() => {});
+        const state = readStagingState(this.stagingDir, model.modelId);
+        const downloadedBytes = state?.bytes ?? model.archiveBytes;
+        input.onProgress?.({
+          modelId: model.modelId,
+          state: "paused",
+          downloadedBytes,
+          totalBytes: model.archiveBytes,
+          sourceId: source.id,
+        });
+        throw new MangaError("CANCELLED", "模型下载已暂停", {
+          details: { paused: true, modelId: model.modelId, downloadedBytes },
+        });
+      }
       cleanModelStaging(this.stagingDir, model.modelId);
       throw error;
     }
@@ -624,6 +643,30 @@ export class ModelDownloader {
 
     let fd: number | null = null;
     const reader = response.body.getReader();
+    const signal = control.controller.signal;
+    const onAbortRead = () => {
+      void reader.cancel().catch(() => {});
+    };
+    signal.addEventListener("abort", onAbortRead, { once: true });
+
+    const readChunkWithTimeout = async () => {
+      let readTimer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        return await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            readTimer = setTimeout(() => {
+              void reader.cancel().catch(() => {});
+              reject(new MangaError("PROVIDER_UNAVAILABLE", "模型下载读取数据超时", { retryable: true }));
+            }, this.readTimeoutMs);
+            readTimer.unref?.();
+          }),
+        ]);
+      } finally {
+        if (readTimer !== null) clearTimeout(readTimer);
+      }
+    };
+
     try {
       fd = fs.openSync(partFile, appendFromOffset > 0 ? "a" : "w");
       writeStagingState(this.stagingDir, model.modelId, {
@@ -634,10 +677,13 @@ export class ModelDownloader {
       });
 
       while (true) {
-        if (control.controller.signal.aborted) {
+        if (signal.aborted) {
           throw new MangaError("CANCELLED", control.intent === "pause" ? "模型下载已暂停" : "模型下载已取消");
         }
-        const { done, value } = await reader.read();
+        const { done, value } = await readChunkWithTimeout();
+        if (signal.aborted) {
+          throw new MangaError("CANCELLED", control.intent === "pause" ? "模型下载已暂停" : "模型下载已取消");
+        }
         if (done) break;
         if (!value || value.byteLength === 0) continue;
 
@@ -731,9 +777,11 @@ export class ModelDownloader {
       if (error instanceof MangaError) throw error;
       throw new MangaError(
         "PROVIDER_UNAVAILABLE",
-        `模型下载中断：${error instanceof Error ? error.message : String(error)}`,
+        `模型下载中断：${errorMessage(error)}`,
         { retryable: true, cause: error },
       );
+    } finally {
+      signal.removeEventListener("abort", onAbortRead);
     }
   }
 

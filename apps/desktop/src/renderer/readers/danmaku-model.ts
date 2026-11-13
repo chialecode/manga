@@ -51,17 +51,18 @@ export function visibleFilter(settings: Pick<DanmakuSettings, "scroll" | "top" |
  */
 export function prepareDanmaku(items: readonly DanmakuItem[], settings: DanmakuSettings, offsetMs: number, originMs = 0): Prepared[] {
   const show = visibleFilter(settings);
-  const kept = items.filter(show);
+  const kept = items.filter(show).sort((a, b) => a.at - b.at);
   const shift = (offsetMs + originMs) / 1000;
   if (!settings.merge) return kept.map((item) => ({ time: item.at / 1000 + shift, text: item.text, mode: ENGINE_MODE[item.mode], color: settings.color ? hex(item.color) : "#ffffff" }));
-  // Items arrive in time order. A group is the first of its text and the repeats within the window after it.
+  // Items are sorted in time order. A group is the first of its text and the repeats within the window after it.
   const open = new Map<string, { entry: Prepared; first: number; count: number; base: string }>();
   const out: Array<{ entry: Prepared; count: number; base: string }> = [];
   for (const item of kept) {
     const key = `${item.mode}\u0000${same(item.text)}`;
     const group = open.get(key);
     const seconds = item.at / 1000;
-    if (group && seconds - group.first <= MERGE_WINDOW_S) { group.count += 1; continue; }
+    const delta = group ? seconds - group.first : -1;
+    if (group && delta >= 0 && delta <= MERGE_WINDOW_S) { group.count += 1; continue; }
     const entry: Prepared = { time: seconds + shift, text: item.text, mode: ENGINE_MODE[item.mode], color: settings.color ? hex(item.color) : "#ffffff" };
     const created = { entry, first: seconds, count: 1, base: item.text };
     open.set(key, created);

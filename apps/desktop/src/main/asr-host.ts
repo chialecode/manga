@@ -101,7 +101,6 @@ function loadSherpa(): SherpaModule {
   let firstError: unknown;
   try {
     // Kept as a literal require so bundlers/analyzers see the external dependency while packaged builds resolve it from unpacked node_modules.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     loaded = require("sherpa-onnx-node") as SherpaModule;
   } catch (error) {
     firstError = error;
@@ -301,6 +300,7 @@ async function handleRecognize(params: {
     stream.setOption("language", normalizedLang);
   } else if (loadedKind === "senseVoice") {
     stream.setOption("use_itn", "1");
+    if (normalizedLang) stream.setOption("language", normalizedLang);
   }
 
   stream.acceptWaveform({ samples, sampleRate });
@@ -333,6 +333,22 @@ function ensureDenoiser(modelPath: string): SherpaOfflineSpeechDenoiser {
   return loadedDenoiser;
 }
 
+function resampleLinear(samples: Float32Array, targetLength: number): Float32Array {
+  if (targetLength <= 0) return new Float32Array(0);
+  if (samples.length === targetLength) return samples;
+  if (samples.length === 1) return new Float32Array(targetLength).fill(samples[0]!);
+  const out = new Float32Array(targetLength);
+  const scale = (samples.length - 1) / Math.max(1, targetLength - 1);
+  for (let i = 0; i < targetLength; i += 1) {
+    const pos = i * scale;
+    const lo = Math.floor(pos);
+    const hi = Math.min(samples.length - 1, lo + 1);
+    const frac = pos - lo;
+    out[i] = samples[lo]! * (1 - frac) + samples[hi]! * frac;
+  }
+  return out;
+}
+
 function handleDenoise(params: {
   samples: unknown;
   sampleRate?: number;
@@ -356,10 +372,14 @@ function handleDenoise(params: {
     sampleRate,
     enableExternalBuffer: false,
   });
-  const mixed = mixDenoisedSamples(rawSamples, denoised.samples, params.mixRatio ?? GTCRN_WET_MIX);
+  const outRate = denoised.sampleRate || sampleRate;
+  const alignedRaw = outRate !== sampleRate && denoised.samples.length > 0
+    ? resampleLinear(rawSamples, denoised.samples.length)
+    : rawSamples;
+  const mixed = mixDenoisedSamples(alignedRaw, denoised.samples, params.mixRatio ?? GTCRN_WET_MIX);
   return {
     samples: mixed,
-    sampleRate: denoised.sampleRate || sampleRate,
+    sampleRate: outRate,
     elapsedMs: Math.round((performance.now() - started) * 100) / 100,
   };
 }

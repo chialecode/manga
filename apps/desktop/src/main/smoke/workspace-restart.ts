@@ -3,7 +3,7 @@ import path from "node:path";
 import { app, ipcMain, type BrowserWindow } from "electron";
 import { clickTestId, closeTabs, openFromShelf, openLibrary, openProjectsPage, pointerClick, pressKey, railTo, showTab, sleep, tabsOf, waitDrawn, waitForTestId, waitFrames, waitUntil, type TabFact } from "./driver.ts";
 import { js, leaveSettings, toRail, type caller, type FlowResult } from "./common.ts";
-import { chooseMenu, hostFacts, waitContext } from "./workspace-walk.ts";
+import { chooseMenu, hostFacts, settledHost, waitContext } from "./workspace-walk.ts";
 import { hideRailIcon, railHidden, railOrder } from "./rail-walk.ts";
 import type { Observation } from "./window-walk.ts";
 
@@ -16,6 +16,27 @@ import type { Observation } from "./window-walk.ts";
  * a synthetic v11 library of the two-mode shell (tests/helpers/legacy-v11.ts), made before the application had ever seen it, and checks that the
  * conversations and the open resources are where plan 4.8 puts them.
  */
+
+
+/**
+ * The reader's tab brought to the front with a real click. A window that has just come back on a display with another scale factor maps injected input
+ * with the old one for a while (a click meant for 835 arrives at 669, written down in `bringForward` when it happened); then the tab is pressed in the
+ * page, which is what this check is about (the restored tab shows its content), and the miss is written down as such.
+ */
+async function bringReaderForward(view: BrowserWindow, detail: Record<string, unknown>): Promise<boolean> {
+  if (await showTab(view, { kind: "reader" })) return true;
+  const pressed = await js<boolean>(view, `(() => {
+    const host = document.querySelector('[data-testid="context-host"][data-active="true"]');
+    const chip = host && [...host.querySelectorAll('[data-testid="tab"][data-kind="reader"]')].find((item) => !item.closest("[data-hidden-layer]"));
+    if (!chip) return false;
+    const b = chip.getBoundingClientRect();
+    chip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, clientX: b.x + 10, clientY: b.y + b.height / 2 }));
+    return true;
+  })()`);
+  const front = pressed && await waitUntil(view, `document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-kind="reader"][data-focused="true"]')`, 3000);
+  detail.injectedClickMissed = { pressedInPage: pressed, front };
+  return Boolean(front);
+}
 
 export const RESTART_OBSERVATION = "workspace-restart";
 export const MIGRATED_OBSERVATION = "migrated-profile";
@@ -159,7 +180,26 @@ export async function runRestartSmoke(input: { view: BrowserWindow; call: Call; 
   const recent = before.contexts.find((shape) => shape.key === "");
   if (recent) {
     if (!(await clickTestId(view, "context-open-recent", 5000)) || !(await waitContext(view, ""))) problems.push("最近 could not be opened to show its reader");
-    else if (!(await showTab(view, { kind: "reader" }))) problems.push("the book's tab could not be brought forward");
+    // The events the page gets from the click and the tab in focus after it, written down in case the tab does not come forward.
+    else if (!(await js(view, `(() => {
+      window.__walkClicks = [];
+      const focused = () => document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab"][data-focused="true"]')?.getAttribute("data-kind") ?? "-";
+      for (const type of ["pointerdown", "mousedown", "pointerup", "click"]) document.addEventListener(type, (event) => window.__walkClicks.push(type + ":" + (event.target?.getAttribute?.("data-testid") ?? event.target?.className?.toString().slice(0, 30) ?? "?") + ":" + focused() + "@" + Math.round(event.clientX) + "," + Math.round(event.clientY)), true);
+      new MutationObserver(() => window.__walkClicks.push("focus:" + focused())).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-focused"] });
+      return true;
+    })()`)) || !(await settledHost(view)) || !(await bringReaderForward(view, detail))) {
+      problems.push("the book's tab could not be brought forward");
+      detail.bringForward = await js(view, `(() => {
+        const host = document.querySelector('[data-testid="context-host"][data-active="true"]');
+        const chips = [...(host?.querySelectorAll('[data-testid="tab"]') ?? [])].map((chip) => {
+          const b = chip.getBoundingClientRect();
+          const x = Math.round(b.left + Math.min(b.width / 2, 40)), y = Math.round(b.top + b.height / 2);
+          const at = document.elementFromPoint(x, y);
+          return { kind: chip.getAttribute("data-kind"), focused: chip.getAttribute("data-focused"), hidden: Boolean(chip.closest("[data-hidden-layer]")), x, y, at: at ? (at.getAttribute("data-testid") ?? at.tagName) : null, onChip: Boolean(at && chip.contains(at)) };
+        });
+        return { chips, events: window.__walkClicks.slice(0, 30), hasFocus: document.hasFocus(), inner: [window.innerWidth, window.innerHeight], dpr: window.devicePixelRatio, zoom: document.documentElement.style.zoom || getComputedStyle(document.documentElement).zoom };
+      })()`);
+    }
     else {
       const body = await waitForTestId(view, "reading-body", "data-present", null, 15_000);
       detail.readerBody = body;
@@ -234,6 +274,8 @@ export async function closeForReal(input: { view: BrowserWindow; call: Call; log
   await sleep(60); // real time: 60 ms window between layout change and window.close() inside debounce window
   // Not yet saved by the pause: otherwise this would not show that the close saves.
   const storedBeforeClose = (await persistedOf(call, key)).preset;
+  // The person here chose that the close button quits (A-136); with the default it would put the window into the tray instead.
+  await call("settings.setShell", { window: { closeToTray: false } });
   const contents = view.webContents;
   app.once("will-quit", (event) => event.preventDefault());
   const closing = await new Promise<{ answeredMs: number | null; closedMs: number | null }>((resolve) => {

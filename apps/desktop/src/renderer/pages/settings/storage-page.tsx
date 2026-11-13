@@ -1,9 +1,14 @@
-import type { Translator } from "@manga/i18n";
+import type { MessageKey, Translator } from "@manga/i18n";
 import type { PackageFlow, PackageStrategy } from "../../hooks/use-package.ts";
 import { InventoryPane } from "../inventory-pane.tsx";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
 
 type T = Translator["t"];
+
+const CONFLICT_KINDS = new Set(["work", "resource", "object", "anchor", "ref", "capture", "progress", "resource_revision", "bookmark", "project"]);
+const conflictKindLabel = (t: T, kind: string) => (
+  CONFLICT_KINDS.has(kind) ? t(`package.conflict.kind.${kind}` as MessageKey) : t("package.conflict.kind.other")
+);
 
 function PackagePreviewPanel(props: { t: T; pkg: PackageFlow }) {
   const { t, pkg } = props;
@@ -18,7 +23,7 @@ function PackagePreviewPanel(props: { t: T; pkg: PackageFlow }) {
         <ul className="package-conflicts" data-testid="package-conflicts">
           {preview.conflicts.map((conflict) => (
             <li key={`${conflict.kind}-${conflict.id}`}>
-              <span>{conflict.kind} · {conflict.label} · {conflict.reason}</span>
+              <span>{conflictKindLabel(t, conflict.kind)} · {conflict.label} · {t("package.conflict.reason.exists")}</span>
               <select
                 aria-label={`${conflict.label} · ${t("package.decisions")}`}
                 data-testid={`package-decision-${conflict.kind}-${conflict.id}`}

@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { chordLabel, chordOf } from "@manga/contracts/keys";
-import { moveRailView, railOrder, type RailView, type WorkspacePreset } from "@manga/contracts";
+import { chordOf } from "@manga/contracts/keys";
+import { moveRailView, railOrder, type RailView } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
 import type { ShellPreference } from "@manga/contracts/reading";
-import { MAIN_FLOOR, deriveShell } from "../../../../packages/app-core/src/domain/shell-layout.ts";
+import { MAIN_FLOOR } from "../../../../packages/app-core/src/domain/shell-layout.ts";
 import { Modal } from "./components/modal.tsx";
-import type { MenuItem } from "./components/menu.tsx";
 import { Toasts } from "./components/toast.tsx";
 import { TitleActions } from "./components/title-actions.tsx";
 import { DebugPanel, loadDebugView, saveDebugView, useNoticeLog, type DebugView } from "./pages/debug-panel.tsx";
 import { DictationCapsule } from "./voice/dictation-capsule.tsx";
 import { DictationPill } from "./voice/dictation-pill.tsx";
 import { attempt } from "./lib/api.ts";
+import { createPatchQueue, type PatchQueue } from "./lib/patch-queue.ts";
 import { useKeyTable } from "./lib/key-table.tsx";
 import { quoteTags } from "./lib/quote-tags.ts";
 import { readerContext, useReaderContext, type ReaderContext } from "./lib/reader-context.ts";
@@ -24,7 +24,7 @@ import { SettingsNav } from "./pages/settings/settings-nav.tsx";
 import { SettingsPane } from "./pages/settings/settings-pane.tsx";
 import { hiddenSettingsPages } from "./pages/settings/settings-view.tsx";
 import { SearchBox } from "./search-box.tsx";
-import { ShellFrame, type ShellLabels, type ShellRail, type SidebarContent, type TopMenu } from "./shell.tsx";
+import { ShellFrame, type ShellLabels, type ShellRail, type SidebarContent } from "./shell.tsx";
 import { useShellState } from "./shell-state.ts";
 import { useRail } from "./sidebar-data.ts";
 import { Sidebar, VIEW_LABEL } from "./sidebar.tsx";
@@ -42,34 +42,12 @@ export type Notice = { text: string; n: number; action?: { label: string; onClic
 
 type Side = "sidebar" | "dock";
 
-const PRESETS: readonly WorkspacePreset[] = ["single", "two", "three", "quad"];
 const COLUMN_ACTIONS = ["global.column1", "global.column2", "global.column3", "global.column4"] as const;
 
-/** The editable thing the person was in before a menu took the focus, for the edit menu to act on. */
-function useLastEditable() {
-  const last = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    const onFocus = (event: FocusEvent) => {
-      const el = event.target;
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable)) last.current = el;
-    };
-    document.addEventListener("focusin", onFocus);
-    return () => document.removeEventListener("focusin", onFocus);
-  }, []);
-  return useCallback((run: () => void) => {
-    // The menu closes and gives the focus back to its button first; the command goes to what had the focus before.
-    window.setTimeout(() => {
-      const el = last.current;
-      if (el && el.isConnected) el.focus();
-      run();
-    }, 0);
-  }, []);
-}
-
 /**
- * What is on screen (A-94): the frame with its top row and menus, the icon rail, the sidebar, the tabbed main area with the docks of the contexts kept
- * alive, and the dock that follows the tab in front. It reads the services every tab shares and the workspace controller; it holds no page state of
- * its own beyond the window's (full screen, the debug panel, the about box).
+ * What is on screen (A-94, A-136): the frame, the icon rail, the sidebar, the tabbed main area with the docks of the contexts kept alive, and the dock
+ * that follows the tab in front. It reads the services every tab shares and the workspace controller; it holds no page state of its own beyond the
+ * window's (full screen, the debug panel).
  */
 export function Workbench(props: {
   notice?: Notice;
@@ -80,21 +58,14 @@ export function Workbench(props: {
   shotsDialog: ReactNode;
 }) {
   const s = useServices();
-  const { t, i18n } = s;
+  const { t } = s;
   const controller = useWorkspace();
   const keyTable = useKeyTable();
   const focused = useWorkspaceValue((c) => c.focusedTab());
-  const canBack = useWorkspaceValue((c) => c.canBack());
-  const canForward = useWorkspaceValue((c) => c.canForward());
-  const preset = useWorkspaceValue((c) => c.preset());
   const columns = useWorkspaceValue((c) => c.columns());
-  const closedCount = useWorkspaceValue((c) => c.closedCount());
   const context = s.currentContext;
   const [viewport, setViewport] = useState({ width: window.innerWidth || 1280, height: window.innerHeight || 840 });
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [screenFull, setScreenFull] = useState(() => Boolean(document.fullscreenElement));
   const chrome = useRef<{ toggle: (side: Side) => void } | null>(null);
-  const runEdit = useLastEditable();
   const { state: shellStore, snapshot } = useShellState();
   const { rail, change: changeRail } = useRail();
   const settingsOn = snapshot.settings.on;
@@ -103,11 +74,6 @@ export function Workbench(props: {
     const onResize = () => setViewport({ width: window.innerWidth || 1280, height: window.innerHeight || 840 });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
-  useEffect(() => {
-    const onChange = () => setScreenFull(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
   // A recording that listens to a tab shows on that tab's title (A-95).
@@ -129,32 +95,52 @@ export function Workbench(props: {
   const exitWindowFullscreen = useCallback(() => setWindowFullscreen(false), []);
   useWindowFullscreenKeys({ enabled: readerFront, active: immersive, toggleKeys: keyTable["global.windowFullscreen"] ?? [], toggle: toggleWindowFullscreen, exit: exitWindowFullscreen });
   const windowFullscreenState = useMemo<WindowFullscreen>(() => ({ active: immersive, toggle: toggleWindowFullscreen, exit: exitWindowFullscreen }), [immersive, toggleWindowFullscreen, exitWindowFullscreen]);
-  const toggleScreenFullscreen = useCallback(() => {
-    try {
-      if (document.fullscreenElement) void document.exitFullscreen();
-      else void document.documentElement.requestFullscreen();
-    } catch { /* the window stays as it is */ }
-  }, []);
 
-  // ---- the sidebar and the dock: widths and visibility are shown at once, then saved ------------------------------------------------
+  // ---- the sidebar and the dock: widths and visibility are shown at once, then saved in order ----------------------------------------
   const [pref, setPref] = useState<ShellPreference>(s.shell);
-  const shellKey = JSON.stringify(s.shell);
-  useEffect(() => { setPref(s.shell); }, [shellKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const changeSide = useCallback((side: Side, patch: { visible?: boolean; width?: number }) => {
-    setPref((current) => ({ ...current, [side]: { ...current[side], ...patch } }));
-    void attempt("settings.setShell", { [side]: patch }).then(async (saved) => {
-      if (!saved.ok) s.setError(saved.error.message);
-      await s.refresh();
+  const sRef = useRef(s);
+  sRef.current = s;
+  const sideQueueRef = useRef<PatchQueue<ShellPreference, { side: Side; patch: { visible?: boolean; width?: number } }> | null>(null);
+  if (!sideQueueRef.current) {
+    sideQueueRef.current = createPatchQueue<ShellPreference, { side: Side; patch: { visible?: boolean; width?: number } }>({
+      initial: s.shell,
+      apply: (state, { side, patch }) => ({ ...state, [side]: { ...state[side], ...patch } }),
+      send: async ({ side, patch }) => {
+        const saved = await attempt("settings.setShell", { [side]: patch });
+        return saved.ok ? { ok: true } : { ok: false, error: saved.error.message };
+      },
+      onState: setPref,
+      onError: (message) => { if (message) sRef.current.setError(message); },
     });
-  }, [s]);
+  }
+  const shellRef = useRef(s.shell);
+  shellRef.current = s.shell;
+  const shellKey = JSON.stringify(s.shell);
+  useEffect(() => {
+    sideQueueRef.current?.hydrate(shellRef.current);
+  }, [shellKey]);
+  const changeSide = useCallback((side: Side, patch: { visible?: boolean; width?: number }) => {
+    const queue = sideQueueRef.current!;
+    void queue.enqueue({ side, patch }).then(() => {
+      if (!queue.hasPending()) void sRef.current.refresh();
+    });
+  }, []);
 
   // ---- the dock: the Agent, following the tab in front -------------------------------------------------------------------------------
   const reading = useReaderContext();
+  const readingResourceId = reading?.resourceId;
+  const readingRevisionId = reading?.revisionId;
+  const readingTitle = reading?.title;
+  const readingWorkId = reading?.workId ?? null;
   const surface = useMemo(
-    () => surfaceOfTab(focused, context, { reading: reading ? { resourceId: reading.resourceId, revisionId: reading.revisionId, title: reading.title, workId: reading.workId ?? null } : null }),
-    [focused, context, reading?.resourceId, reading?.revisionId, reading?.title, reading?.workId], // eslint-disable-line react-hooks/exhaustive-deps
+    () => surfaceOfTab(focused, context, { reading: readingResourceId && readingRevisionId ? { resourceId: readingResourceId, revisionId: readingRevisionId, title: readingTitle ?? "", workId: readingWorkId } : null }),
+    [focused, context, readingResourceId, readingRevisionId, readingTitle, readingWorkId],
   );
   const agent = useAgent(surface);
+  useEffect(() => {
+    tabMarks.set("__dock__", "running", agent.running);
+    return () => tabMarks.set("__dock__", "running", false);
+  }, [agent.running]);
   const hasDock = surface !== null;
   const shown = surface ?? contextSurface(context);
   const { composer } = useDraft(shown.draftKey);
@@ -228,88 +214,16 @@ export function Workbench(props: {
     // The back and forward buttons of a mouse.
     const onMouse = (event: MouseEvent) => {
       if (event.button !== 3 && event.button !== 4) return;
+      if (document.querySelector('[role="dialog"]')) return;
       event.preventDefault();
       if (shellStore.getSnapshot().settings.on) { if (event.button === 3) shellStore.back(); else shellStore.forward(); return; }
       if (event.button === 3) latest.current.controller.back(); else latest.current.controller.forward();
     };
     window.addEventListener("mouseup", onMouse);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("mouseup", onMouse); };
-  }, []);
+  }, [shellStore]);
 
-  // ---- the menus (UI-01) --------------------------------------------------------------------------------------------------------------------
-  const hint = (label: string, action: string): string => {
-    const first = keyTable[action]?.[0];
-    return first ? `${label}（${chordLabel(first)}）` : label;
-  };
   const mainFloor = Math.max(MAIN_FLOOR, (columns >= 4 ? 2 : columns) * MIN_COLUMN_WIDTH);
-  const chromeNow = deriveShell({ viewport, preference: settingsOn ? { ...pref, sidebar: { ...pref.sidebar, visible: true } } : pref, hasDock: hasDock && !settingsOn, overlay: null, mainFloor });
-  const toggleSide = (side: Side) => chrome.current?.toggle(side);
-  const edit = (command: string) => () => runEdit(() => { document.execCommand(command); });
-  const pasteText = () => runEdit(() => {
-    void (async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (text) document.execCommand("insertText", false, text);
-      } catch {
-        document.execCommand("paste");
-      }
-    })();
-  });
-  const item = (id: string, label: string, onSelect: () => void, extra: Partial<MenuItem> = {}): MenuItem => ({ id, label, onSelect, ...extra });
-  const menus: TopMenu[] = [
-    {
-      id: "file",
-      label: t("menu.file"),
-      items: [
-        item("new-project", hint(t("menu.newProject"), "global.newProject"), () => s.open.newProject(), { disabled: !s.facets.has("projects") }),
-        item("new-conversation", hint(t("menu.newConversation"), "global.newConversation"), () => { void s.open.newConversation(); }, { disabled: !s.facets.has("agent") }),
-        item("new-tab", hint(t("menu.newTab"), "global.newTab"), () => s.open.newTab()),
-        item("reopen-tab", hint(t("menu.reopenTab"), "global.reopenTab"), () => s.open.reopenTab(), { disabled: closedCount === 0 }),
-        item("close-tab", hint(t("menu.closeTab"), "global.closeTab"), () => s.open.closeTab(), { disabled: !focused || settingsOn }),
-        item("import-package", t("menu.importPackage"), () => { s.open.settings("storage"); void s.pkg.previewPackage(); }),
-        item("export-package", t("menu.exportPackage"), () => { s.open.settings("storage"); void s.pkg.exportPackage(); }),
-        item("scan", t("menu.scan"), () => { void s.scan.start().then((started) => { if (started) s.setNotice(t("menu.scanStarted")); else s.open.settings("library"); }); }),
-        item("quit", t("menu.quit"), () => { void window.manga.quit?.(); }),
-      ],
-    },
-    {
-      id: "edit",
-      label: t("menu.edit"),
-      items: [
-        item("undo", t("menu.undo"), edit("undo")),
-        item("redo", t("menu.redo"), edit("redo")),
-        item("cut", t("menu.cut"), edit("cut")),
-        item("copy", t("menu.copy"), edit("copy")),
-        item("paste", t("menu.paste"), pasteText),
-        item("select-all", t("menu.selectAll"), edit("selectAll")),
-        item("find", hint(t("menu.find"), "global.search"), () => s.open.search()),
-      ],
-    },
-    {
-      id: "view",
-      label: t("menu.view"),
-      items: [
-        ...PRESETS.map((name) => item(`layout-${name}`, t(`layout.${name}` as MessageKey), () => { shellStore.leaveSettings(); controller.setPreset(name); }, { checked: preset === name })),
-        item("sidebar", hint(t("menu.showSidebar"), "global.sidebar"), () => toggleSide("sidebar"), { checked: chromeNow.sidebar === "dock" }),
-        item("dock", hint(t("menu.showDock"), "global.dock"), () => toggleSide("dock"), { checked: chromeNow.dock === "dock", disabled: !hasDock || settingsOn }),
-        item("window-fullscreen", hint(t("menu.windowFullscreen"), "global.windowFullscreen"), toggleWindowFullscreen, { checked: immersive, disabled: !readerFront }),
-        item("screen-fullscreen", t("menu.screenFullscreen"), toggleScreenFullscreen, { checked: screenFull }),
-        item("debug", hint(t("debug.open"), "global.debug"), toggleDebug, { checked: debugView.open }),
-      ],
-    },
-    {
-      id: "help",
-      label: t("menu.help"),
-      items: [
-        item("shortcuts", t("menu.shortcuts"), () => s.open.keys()),
-        item("logs", t("menu.logs"), () => s.open.settings("logs")),
-        ...((s.update.status?.channel ?? s.host.buildInfo?.channel ?? s.host.layout.channel) === "release"
-          ? [item("check-update", t("menu.checkUpdate"), () => { s.open.settings("update"); void s.update.check(); })]
-          : []),
-        item("about", t("menu.about"), () => setAboutOpen(true)),
-      ],
-    },
-  ];
 
   // ---- the rail and the sidebar (A-99, A-101) ------------------------------------------------------------------------------------------
   // The person's order of the icons (A-108): the home first, then theirs; the ones of a module that is off are left out.
@@ -336,9 +250,11 @@ export function Workbench(props: {
     onPin: (view) => changeRail({ hidden: rail.hidden.filter((item) => item !== view) }),
   };
   const hiddenPages = useMemo(() => hiddenSettingsPages(s.facets), [s.facets]);
-  const sidebar: SidebarContent = (view, options) => (view === "settings"
-    ? <SettingsNav key="settings" t={t} page={snapshot.settings.page} hidden={hiddenPages} variant={options.variant} onPage={(page) => shellStore.goTo(page)} {...(options.onDone ? { onDone: options.onDone } : {})} />
-    : <Sidebar key={view} view={view} variant={options.variant} {...(options.onDone ? { onDone: options.onDone } : {})} />);
+  const settingsPage = snapshot.settings.page;
+  const sidebar = useCallback<SidebarContent>((view, options) => (view === "settings"
+    ? <SettingsNav key="settings" t={t} page={settingsPage} hidden={hiddenPages} variant={options.variant} onPage={(page) => shellStore.goTo(page)} {...(options.onDone ? { onDone: options.onDone } : {})} />
+    : <Sidebar key={view} view={view} variant={options.variant} {...(options.onDone ? { onDone: options.onDone } : {})} />),
+  [t, settingsPage, hiddenPages, shellStore]);
 
   const labels: ShellLabels = {
     exitImmersive: t("window.fullscreen.exit"),
@@ -347,9 +263,6 @@ export function Workbench(props: {
     showDock: t("shell.showDock"),
     hideDock: t("shell.hideDock"),
     stop: t("shell.stop"),
-    back: t("shell.back"),
-    forward: t("shell.forward"),
-    menubar: t("shell.menubar"),
     rail: t("shell.rail"),
     sidebar: t("shell.sidebar"),
     dock: t("shell.dock"),
@@ -359,27 +272,6 @@ export function Workbench(props: {
   };
 
   const live = reading as ReaderContext | null;
-  const effectiveChannel = s.update.status?.channel ?? s.host.buildInfo?.channel ?? s.host.layout.channel;
-  const channelLabel = effectiveChannel === "release" ? t("app.channel.release") : effectiveChannel === "test" ? t("app.channel.test") : t("app.channel.development");
-  const aboutVersion = s.update.status?.version ?? s.host.buildInfo?.version ?? s.host.appVersion ?? "-";
-  const aboutCommit = s.update.status?.commit ?? s.host.buildInfo?.commit ?? "-";
-  const aboutBuiltAtRaw = s.update.status?.builtAt ?? s.host.buildInfo?.builtAt ?? "";
-  const aboutBuiltAt = aboutBuiltAtRaw ? i18n.formatDate(aboutBuiltAtRaw) : "-";
-  const copyAboutSummary = async () => {
-    const summary = [
-      `MANGA ${aboutVersion}`,
-      `${t("about.channel")}: ${channelLabel}`,
-      `${t("about.commit")}: ${aboutCommit}`,
-      `${t("about.builtAt")}: ${aboutBuiltAtRaw || "-"}`,
-      `${t("about.license")}: Apache-2.0`,
-    ].join("\n");
-    try {
-      await navigator.clipboard?.writeText?.(summary);
-    } catch {
-      // ignore clipboard unavailability in headless environments
-    }
-    s.setNotice(t("about.copied"));
-  };
   const busyItemsLabel = (s.update.busyDialog ?? [])
     .map((reason) => t(`update.busy.item.${reason}` as MessageKey))
     .join("、");
@@ -416,16 +308,15 @@ export function Workbench(props: {
         onExitImmersive={exitWindowFullscreen}
         running={agent.running}
         labels={labels}
-        menus={menus}
         settings={settingsOn}
         rail={railProps}
-        history={settingsOn ? { canBack: true, canForward: snapshot.settings.index < snapshot.settings.trail.length - 1, onBack: () => shellStore.back(), onForward: () => shellStore.forward() } : { canBack, canForward, onBack: () => controller.back(), onForward: () => controller.forward() }}
         mainFloor={mainFloor}
         keys={{ sidebar: keyTable["global.sidebar"] ?? [], dock: keyTable["global.dock"] ?? [] }}
         controlRef={chrome}
         onHide={(side) => changeSide(side, { visible: false })}
         onShow={(side) => changeSide(side, { visible: true })}
         onResize={(side, width) => changeSide(side, { width })}
+        onPull={(side, width) => changeSide(side, { visible: true, width })}
         onStop={agent.stop}
         sidebar={sidebar}
         dock={agent.pane}
@@ -462,6 +353,8 @@ export function Workbench(props: {
         </div>
         {settingsOn ? (
           <div className="settings-area" data-testid="settings-area" data-page={snapshot.settings.page}>
+            {/* No tabs here: an empty strip keeps the main area's part of the title bar (A-136). */}
+            <div className="main-top-row shell-drag" aria-hidden="true" data-testid="settings-top" />
             <SettingsPane page={snapshot.settings.page} onPage={(page) => shellStore.goTo(page)} />
           </div>
         ) : null}
@@ -487,41 +380,6 @@ export function Workbench(props: {
               onDismiss={() => s.dictation!.dismissPill()}
             />
           </>
-        ) : null}
-        {aboutOpen ? (
-          <Modal testId="about-dialog" title={t("about.title")} closeLabel={t("common.close")} onClose={() => setAboutOpen(false)}>
-            <p>{t("about.blurb")}</p>
-            <dl className="about-facts">
-              <dt>{t("about.name")}</dt><dd data-testid="about-name">MANGA</dd>
-              <dt>{t("about.version")}</dt><dd data-testid="about-version">{aboutVersion}</dd>
-              <dt>{t("about.channel")}</dt><dd data-testid="about-channel">{channelLabel}</dd>
-              <dt>{t("about.commit")}</dt><dd data-testid="about-commit">{aboutCommit}</dd>
-              <dt>{t("about.builtAt")}</dt><dd data-testid="about-built-at">{aboutBuiltAt}</dd>
-              <dt>{t("about.license")}</dt><dd data-testid="about-license">Apache-2.0</dd>
-            </dl>
-            {effectiveChannel !== "release" ? (
-              <p className="detail-muted mt-2" data-testid="about-dev-hint">{t("about.devHint")}</p>
-            ) : null}
-            <div className="msettings-actions mt-3">
-              <button type="button" className="secondary-button" data-testid="about-copy" onClick={() => void copyAboutSummary()}>
-                {t("about.copy")}
-              </button>
-              {effectiveChannel === "release" ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  data-testid="about-check-update"
-                  onClick={() => {
-                    setAboutOpen(false);
-                    s.open.settings("update");
-                    void s.update.check();
-                  }}
-                >
-                  {t("about.checkUpdate")}
-                </button>
-              ) : null}
-            </div>
-          </Modal>
         ) : null}
         {s.update.busyDialog ? (
           <Modal testId="update-busy-dialog" title={t("update.busy.title")} closeLabel={t("common.close")} onClose={() => s.update.cancelBusyRestart()}>

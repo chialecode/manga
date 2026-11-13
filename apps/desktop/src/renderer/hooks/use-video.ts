@@ -92,15 +92,25 @@ export function useVideo(deps: VideoDeps) {
    * mounted again (the page was left and came back) must start from here, or it would start over and write that over the saved place.
    */
   const reached = useRef<{ resourceId: string; ms: number } | null>(null);
+  const settingsChain = useRef<Promise<unknown>>(Promise.resolve());
 
-  function flushSettings() {
+  function flushSettings(): Promise<unknown> {
     if (saveTimer.current !== null) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
     const patch = pending.current;
     pending.current = {};
-    if (!Object.keys(patch).length) return;
-    void attempt("settings.setMedia", { video: patch }).then((result) => { if (!result.ok) setError(result.error.message); });
+    if (!Object.keys(patch).length) return settingsChain.current;
+    settingsChain.current = settingsChain.current.then(async () => {
+      const result = await attempt("settings.setMedia", { video: patch });
+      if (!result.ok) setError(result.error.message);
+    });
+    return settingsChain.current;
   }
-  useEffect(() => () => flushSettings(), []);
+  const flushSettingsRef = useRef(flushSettings);
+  flushSettingsRef.current = flushSettings;
+  useEffect(() => {
+    const stop = window.manga?.onSaveNow?.(() => Promise.all([flushSettingsRef.current(), progressChain.current]));
+    return () => { stop?.(); void flushSettingsRef.current(); };
+  }, []);
 
   async function open(resourceId: string, options: OpenOptions = {}) {
     const request = ++viewRequest.current;
@@ -140,7 +150,7 @@ export function useVideo(deps: VideoDeps) {
       audio: tracks.ok ? asArray<AudioTrackInfo>(tracks.value.audio) : [],
       episodes,
     };
-    if (saved.ok && saved.value.video) setSettings({ ...DEFAULT_VIDEO_SETTINGS, ...saved.value.video });
+    if (saved.ok && saved.value.video) setSettings({ ...DEFAULT_VIDEO_SETTINGS, ...saved.value.video, ...pending.current });
     // A finished video starts again from its beginning; an unfinished one resumes where it was left.
     const locator = progress.ok ? progress.value.locator : null;
     const at = locator?.kind === "temporal" && typeof locator.startMs === "number" ? locator.startMs : 0;
@@ -178,7 +188,7 @@ export function useVideo(deps: VideoDeps) {
   }
 
   function close() {
-    flushSettings();
+    void flushSettings();
     viewRequest.current += 1;
     docRef.current = null;
     reached.current = null;
@@ -209,7 +219,7 @@ export function useVideo(deps: VideoDeps) {
     if (!current) return;
     const outcome = await relinkResource(current.resourceId);
     if (outcome.kind === "cancelled") return;
-    const shown = relinkNotice(i18n.t, outcome, () => void repair());
+    const shown = relinkNotice(i18n.t, outcome, () => void repair(), setError);
     if (shown.error) { setError(shown.error); return; }
     setNotice(shown.notice, shown.action);
     // A folder that is no library path yet: nothing was changed, and the notice offers adding it.

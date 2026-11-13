@@ -36,8 +36,10 @@ export function pageHolds(saved: { partId: string; start: number } | null, page:
 /** The left edge of one character, measured from the strip's left edge, or null when it has no box (hidden, or no layout engine). */
 function charX(node: Text, index: number, base: number): number | null {
   const range = node.ownerDocument.createRange();
+  const code = node.data.charCodeAt(index);
+  const step = code >= 0xd800 && code <= 0xdbff && index + 1 < node.length ? 2 : 1;
   range.setStart(node, index);
-  range.setEnd(node, Math.min(node.length, index + 1));
+  range.setEnd(node, Math.min(node.length, index + step));
   if (typeof range.getClientRects !== "function") return null;
   const rect = range.getClientRects()[0];
   if (!rect || (rect.width === 0 && rect.height === 0)) return null;
@@ -57,11 +59,17 @@ export function firstOffsetOnScreen(body: HTMLElement, frame: PageFrame, screen:
   for (const node of textNodes(body)) {
     const text = node.data;
     if (!text.length) continue;
-    const lastX = charX(node, whole(text, text.length - 1), base);
+    // Probe backwards past trailing collapsed whitespace or zero-width characters so the node is not skipped wholesale.
+    let lastIndex = whole(text, text.length - 1);
+    let lastX = charX(node, lastIndex, base);
+    while (lastX === null && lastIndex > 0) {
+      lastIndex = whole(text, lastIndex - 1);
+      lastX = charX(node, lastIndex, base);
+    }
     if (lastX === null || screenAt(lastX, frame) < screen) { before += codePoints(text); continue; }
     // The first character of this node on the screen or after it: the screens only grow along a node.
     let low = 0;
-    let high = text.length - 1;
+    let high = lastIndex;
     while (low < high) {
       const middle = whole(text, (low + high) >> 1);
       const x = charX(node, middle, base);

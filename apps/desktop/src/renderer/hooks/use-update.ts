@@ -47,6 +47,7 @@ export function useUpdate(options: {
   recordingActive: boolean;
   setError: (message?: string) => void;
 }): UpdateHandle {
+  const { enabled, recordingActive, setError } = options;
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -54,22 +55,22 @@ export function useUpdate(options: {
   const [busyDialog, setBusyDialog] = useState<UpdateBusyReason[] | null>(null);
 
   const reload = useCallback(async (): Promise<UpdateStatus | null> => {
-    if (!options.enabled) return null;
+    if (!enabled) return null;
     const res = await attempt<UpdateStatus>("update.status", {});
     if (res.ok && res.value && typeof res.value.version === "string") {
       setStatus(res.value);
       return res.value;
     }
     return null;
-  }, [options.enabled]);
+  }, [enabled]);
 
   useEffect(() => {
-    if (!options.enabled) return;
+    if (!enabled) return;
     void reload();
-  }, [options.enabled, reload]);
+  }, [enabled, reload]);
 
   useEffect(() => {
-    if (!options.enabled) return;
+    if (!enabled) return;
     const off = window.manga.onNotice?.((item) => {
       if (item.topic === "update.changed") {
         const next = item.payload as unknown as UpdateStatus;
@@ -81,14 +82,14 @@ export function useUpdate(options: {
       }
     });
     return () => { off?.(); };
-  }, [options.enabled, reload]);
+  }, [enabled, reload]);
 
   const check = useCallback(async (input: { download?: boolean } = {}): Promise<UpdateStatus | null> => {
     setChecking(true);
     try {
       const res = await attempt<UpdateStatus>("update.check", input);
       if (!res.ok) {
-        options.setError(res.error.message);
+        setError(res.error.message);
         return null;
       }
       if (res.value && typeof res.value.version === "string") {
@@ -99,37 +100,37 @@ export function useUpdate(options: {
     } finally {
       setChecking(false);
     }
-  }, [options, reload]);
+  }, [setError, reload]);
 
   const setSettings = useCallback(async (patch: UpdateSettingsPatch): Promise<void> => {
     const res = await attempt<UpdateSettings>("update.settings.set", patch);
     if (!res.ok) {
-      options.setError(res.error.message);
+      setError(res.error.message);
       return;
     }
     setStatus((current) => (current ? { ...current, settings: res.value } : current));
     await reload();
-  }, [options, reload]);
+  }, [setError, reload]);
 
   /** "取消跳过" (4.2): the version skipped after going back from it is offered again at the next check. */
   const unskip = useCallback(async (): Promise<void> => {
     const res = await attempt<UpdateStatus>("update.unskip", {});
     if (!res.ok) {
-      options.setError(res.error.message);
+      setError(res.error.message);
       return;
     }
     if (res.value && typeof res.value.version === "string") setStatus(res.value);
     else await reload();
-  }, [options, reload]);
+  }, [setError, reload]);
 
   const requestRestart = useCallback(async (extraBusyReasons: UpdateBusyReason[] = []): Promise<void> => {
-    const combined = [...new Set([...detectRendererBusy({ recordingActive: options.recordingActive }), ...extraBusyReasons])];
+    const combined = [...new Set([...detectRendererBusy({ recordingActive }), ...extraBusyReasons])];
     const res = await attempt<UpdateRestartResult>("update.restartToUpdate", {
       force: false,
       busyReasons: combined,
     });
     if (!res.ok) {
-      options.setError(res.error.message);
+      setError(res.error.message);
       await reload();
       return;
     }
@@ -138,7 +139,7 @@ export function useUpdate(options: {
       return;
     }
     setBusyDialog(null);
-  }, [options, reload]);
+  }, [recordingActive, setError, reload]);
 
   const confirmBusyRestart = useCallback(async (): Promise<void> => {
     const currentBusy = busyDialog ?? [];
@@ -148,10 +149,10 @@ export function useUpdate(options: {
       busyReasons: currentBusy,
     });
     if (!res.ok) {
-      options.setError(res.error.message);
+      setError(res.error.message);
       await reload();
     }
-  }, [busyDialog, options, reload]);
+  }, [busyDialog, setError, reload]);
 
   const cancelBusyRestart = useCallback(() => {
     setBusyDialog(null);

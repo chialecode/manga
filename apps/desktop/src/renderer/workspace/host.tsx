@@ -17,7 +17,7 @@ import { useServices } from "./services.tsx";
 import { TabIcon } from "./tab-icon.tsx";
 import { TabProvider, type TabInfo } from "./tab-context.tsx";
 import { TabView } from "./views/tab-view.tsx";
-import { hostOf, placeTabs, releaseHost, setParking, setSlot } from "./placement.ts";
+import { hostOf, placeTabs, registerHost, releaseContext, releaseHost, setParking, setSlot } from "./placement.ts";
 import { EmptyView } from "./empty-view.tsx";
 
 type PanelParams = { tabId: string; contextKey: string; view?: WorkspaceView };
@@ -253,9 +253,13 @@ function HeaderActions(props: IDockviewHeaderActionsProps) {
   const preset = useWorkspaceValue((c) => c.preset(key, view));
   const order = columnsOf(props.containerApi);
   const layoutHere = order[columns >= 4 ? 1 : Math.max(0, columns - 1)]?.id === props.group.id || (order.length === 0);
+  // The strips along the window's top edge are part of the title bar (A-136): their empty part takes hold of the window. In the four-way grid the
+  // lower two are not at the top.
+  const at = order.findIndex((group) => group.id === props.group.id);
+  const topRow = columns < 4 || at < 2;
   const Icon = PRESET_ICON[preset];
   return (
-    <div className="tab-actions" data-testid={onScreen ? "tab-actions" : undefined}>
+    <div className="tab-actions" data-top-right={layoutHere ? "true" : undefined} data-top-row={topRow ? "true" : undefined} data-testid={onScreen ? "tab-actions" : undefined}>
       <button type="button" className="tab-action" data-testid="tab-new" aria-label={s.t("tab.new")} title={s.t("tab.new")} onClick={() => { props.group.api.setActive(); s.open.newTab(); }}><Plus size={15} aria-hidden="true" /></button>
       {layoutHere ? (
         <Menu
@@ -389,15 +393,34 @@ function TabContents(props: { contextKey: string }) {
   const { contextKey: key } = props;
   const ids = useWorkspaceValue((c) => c.tabsOf(key).map((tab) => tab.id).join(SEP));
   const list = useMemo(() => (ids ? ids.split(SEP) : []), [ids]);
-  const kept = useRef(new Set<string>());
-  useEffect(() => {
-    // The node of a tab that was closed goes with it.
+  const nodes = useRef(new Map<string, HTMLDivElement>());
+  const nodeFor = (tabId: string): HTMLDivElement => {
+    let node = nodes.current.get(tabId);
+    if (!node) {
+      node = hostOf(key, tabId);
+      nodes.current.set(tabId, node);
+    }
+    return node;
+  };
+  useLayoutEffect(() => {
     const now = new Set(list);
-    for (const tabId of kept.current) if (!now.has(tabId)) releaseHost(key, tabId);
-    kept.current = now;
+    // Re-register active portal nodes before ContextHost places them (StrictMode simulated unmount removes them).
+    for (const tabId of list) {
+      const node = nodes.current.get(tabId);
+      if (node) registerHost(key, tabId, node);
+    }
+    // The node of a tab that was closed goes with it.
+    for (const tabId of [...nodes.current.keys()]) {
+      if (!now.has(tabId)) {
+        releaseHost(key, tabId);
+        nodes.current.delete(tabId);
+      }
+    }
   }, [key, list]);
-  useEffect(() => () => { for (const tabId of kept.current) releaseHost(key, tabId); }, [key]);
-  return <>{list.map((tabId) => createPortal(<TabContent contextKey={key} tabId={tabId} />, hostOf(key, tabId), tabId))}</>;
+  useLayoutEffect(() => () => {
+    for (const tabId of nodes.current.keys()) releaseHost(key, tabId);
+  }, [key]);
+  return <>{list.map((tabId) => createPortal(<TabContent contextKey={key} tabId={tabId} />, nodeFor(tabId), tabId))}</>;
 }
 
 /**
@@ -440,7 +463,10 @@ export function ContextHost(props: { contextKey: string }) {
   }, []);
   useLayoutEffect(() => {
     setParking(key, parking.current);
-    return () => setParking(key, null);
+    return () => {
+      setParking(key, null);
+      releaseContext(key);
+    };
   }, [key]);
   // After every change of the workspace the content of each tab is where the view on screen wants it.
   useLayoutEffect(() => { placeTabs(key, view, controller.tabsOf(key).map((tab) => tab.id)); }, [key, controller, version, views, view]);

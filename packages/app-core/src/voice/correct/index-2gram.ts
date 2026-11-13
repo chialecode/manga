@@ -295,6 +295,7 @@ export class Phoneme2GramIndex {
     const anchors = this.slotAnchors;
     const touched = this.touchedSlots;
     let touchedLen = 0;
+    let overflow: Map<number, number[]> | null = null;
 
     const queryKeys = extractIndexKeys(inputPhonemes, "query");
     for (let q = 0; q < queryKeys.length; q += 1) {
@@ -315,17 +316,36 @@ export class Phoneme2GramIndex {
           touched[touchedLen++] = slotId;
         } else {
           const c = counts[slotId]!;
-          if (c < MAX_INLINE_ANCHORS) {
-            let near = false;
-            for (let a = 0; a < c; a += 1) {
-              if (Math.abs(anchors[base + a]! - approxStart) < 5) {
-                near = true;
-                break;
+          let near = false;
+          for (let a = 0; a < c; a += 1) {
+            if (Math.abs(anchors[base + a]! - approxStart) < 5) {
+              near = true;
+              break;
+            }
+          }
+          if (!near && c >= MAX_INLINE_ANCHORS) {
+            const extra = overflow?.get(slotId);
+            if (extra) {
+              for (let e = 0; e < extra.length; e += 1) {
+                if (Math.abs(extra[e]! - approxStart) < 5) {
+                  near = true;
+                  break;
+                }
               }
             }
-            if (!near) {
+          }
+          if (!near) {
+            if (c < MAX_INLINE_ANCHORS) {
               anchors[base + c] = approxStart;
               counts[slotId] = c + 1;
+            } else {
+              if (!overflow) overflow = new Map();
+              let extra = overflow.get(slotId);
+              if (!extra) {
+                extra = [];
+                overflow.set(slotId, extra);
+              }
+              extra.push(approxStart);
             }
           }
         }
@@ -343,6 +363,11 @@ export class Phoneme2GramIndex {
         slotId * MAX_INLINE_ANCHORS,
         counts[slotId]!,
       );
+      const extra = overflow?.get(slotId);
+      if (extra && extra.length > 0) {
+        const extraBuf = Int32Array.from(extra);
+        visitor(meta.termId, meta.variantIdx, extraBuf, 0, extraBuf.length);
+      }
     }
   }
 
@@ -357,11 +382,14 @@ export class Phoneme2GramIndex {
         byVariant = new Map<number, number[]>();
         hits.set(termId, byVariant);
       }
-      const list: number[] = [];
+      let list = byVariant.get(variantIdx);
+      if (!list) {
+        list = [];
+        byVariant.set(variantIdx, list);
+      }
       for (let i = 0; i < count; i += 1) {
         list.push(buf[offset + i]!);
       }
-      byVariant.set(variantIdx, list);
     });
     return hits;
   }

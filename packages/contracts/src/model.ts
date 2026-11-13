@@ -13,7 +13,8 @@ export const ModelCapabilitySchema = z.enum([
 ]);
 export type ModelCapability = z.infer<typeof ModelCapabilitySchema>;
 
-export const ModelPurposeSchema = z.enum(["text", "transcription", "embedding", "vision"]);
+/** What a connection is for. `speech` (reading text aloud) and `search` (web search) come only from a provider plugin's services (计划 4.2). */
+export const ModelPurposeSchema = z.enum(["text", "transcription", "embedding", "vision", "speech", "search"]);
 export type ModelPurpose = z.infer<typeof ModelPurposeSchema>;
 
 export const AiRuntimeSchema = z.enum(["native", "pi"]);
@@ -33,25 +34,3 @@ export const ProviderConnectionSchema = z.object({
 }).strict();
 
 export type ProviderConnection = z.infer<typeof ProviderConnectionSchema>;
-
-export const ModelProfileSchema = z.object({
-  id: z.string().min(1),
-  connectionId: z.string().min(1),
-  modelId: z.string().min(1),
-  capabilities: z.array(ModelCapabilitySchema),
-  contextLimit: z.number().int().positive().optional(),
-}).strict();
-
-export type ModelProfile = z.infer<typeof ModelProfileSchema>;
-
-export const ConnectionUpsertInputSchema = z.object({
-  id: z.string().min(1).optional(),
-  label: z.string().min(1),
-  protocol: TextProtocolSchema,
-  runtime: AiRuntimeSchema.optional(),
-  baseUrl: z.string().min(1),
-  modelId: z.string().min(1),
-  timeoutMs: z.number().int().positive().max(300_000).optional(),
-  purpose: ModelPurposeSchema,
-  credentialHandle: z.string().min(1).optional(),
-}).strict();

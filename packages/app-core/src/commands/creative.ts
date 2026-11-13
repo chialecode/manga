@@ -7,9 +7,10 @@ import { importProjectPackage, previewProjectPackage, writeProjectPackage } from
 import { writeExportFile } from "../creative/export-file.ts";
 import { readShell } from "../reading-service.ts";
 import type { MangaProductApp, CreativeReg } from "../product-app.ts";
+import { webSearch } from "../providers/web-search.ts";
 
 /** What these commands use of the application. */
-export type CreativeHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "closed" | "drafts" | "embeds" | "grantOf" | "grants" | "mindmaps" | "pluginRuntime" | "plugins" | "projects" | "proposals" | "requireModule" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runtime" | "semantic" | "store" | "uiFacets" | "whiteboards">;
+export type CreativeHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "closed" | "drafts" | "embeds" | "grantOf" | "grants" | "mindmaps" | "pluginRuntime" | "plugins" | "projects" | "proposals" | "providers" | "requireModule" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runtime" | "semantic" | "store" | "uiFacets" | "vault" | "whiteboards">;
 
 export function projectsModule(app: CreativeHost): MangaModule {
   const moduleId = "manga.projects";
@@ -113,6 +114,10 @@ export function creativeAccess(app: CreativeHost, envelope: CommandEnvelope, com
   if (grant.access === "owner" && envelope.actor.kind === "agent") throw new MangaError("FORBIDDEN", "an agent cannot execute an owner command");
   if (grant.access === "owner" && envelope.actor.kind !== "agent") return null;
   if (commandId === "semantic.search" && grant.actor.kind === "agent" && grant.allowedCommands.includes("semantic.search")) {
+    return (value) => app.agentAccess.fit(value);
+  }
+  // "联网搜索" (计划 4.5): any conversation's agent, when the person allowed it for this task; the result goes to the model only, cut to a size it can be given.
+  if (commandId === "web.search" && grant.actor.kind === "agent" && grant.allowedCommands.includes("web.search")) {
     return (value) => app.agentAccess.fit(value);
   }
   const rule = grant.actor.kind === "agent" ? app.agentAccess.rule(commandId) : undefined;
@@ -364,6 +369,12 @@ export function researchModule(app: CreativeHost): MangaModule {
     register: (reg, input) => {
       reg("research.search", (envelope) => app.research.search(input(envelope)), { write: false });
       reg("webpage.fetch", (envelope, signal) => app.research.fetch(input<{ url: string }>(envelope).url, signal));
+      // A web search through the provider's search service (计划 4.5): for the panel, and for the Agent when the task allows it; nothing is saved.
+      reg("web.search", (envelope, signal) => {
+        const value = input<{ query: string; count?: number; connectionId?: string }>(envelope);
+        const runId = envelope.actor.kind === "agent" && envelope.actor.id.startsWith("agent:") ? envelope.actor.id.slice("agent:".length) : undefined;
+        return webSearch(app, { ...value, ...(runId ? { runId, task: "agent" } : { task: "research" }) }, signal);
+      }, { write: false });
       reg("webpage.list", (envelope) => app.research.pages(input<{ limit?: number }>(envelope).limit), { write: false });
       reg("webpage.get", (envelope) => app.research.getPage(input<{ pageId: string }>(envelope).pageId), { write: false });
       reg("webpage.delete", (envelope) => app.research.deletePage(input<{ pageId: string }>(envelope).pageId));
@@ -378,7 +389,7 @@ export function researchModule(app: CreativeHost): MangaModule {
 }
 
 export function exportMindmap(app: CreativeHost, input: { mapId: string; format: "png" | "svg" | "markdown" | "opml"; pathHandle: string; data?: string }): { fileName: string; bytes: number; format: string } {
-  const dir = app.resolvePath(input.pathHandle);
+  const dir = app.resolvePathFor(input.pathHandle, ["directory", "export"]);
   const title = app.mindmaps.get(input.mapId).map.title;
   let payload: Buffer | string;
   let extension: string;

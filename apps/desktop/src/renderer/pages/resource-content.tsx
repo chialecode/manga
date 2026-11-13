@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, FolderPlus, FolderSearch, MessageSquare } from "lucide-react";
 import type { Translator } from "@manga/i18n";
+import { useAsyncGuard } from "../hooks/use-async-guard.ts";
 import { attempt, messageOf } from "../lib/api.ts";
 import { addLibraryFolder, relinkNotice, relinkResource, type LibraryKind } from "../lib/relink.ts";
 import { percentOf } from "../lib/works.ts";
@@ -40,35 +41,53 @@ export function ResourceContent(props: {
   const [failure, setFailure] = useState<string | null>(null);
   /** A file was picked outside every library path: nothing changed, and the folder it is in can be added. */
   const [pendingFolder, setPendingFolder] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<Content>("library.resourceContent", { resourceId: props.resourceId });
+    if (!guard.isCurrent(token)) return;
     if (result.ok) { setContent(result.value); setFailure(null); } else setFailure(messageOf(result.error));
-  }, [props.resourceId]);
-  useEffect(() => { setContent(null); void load(); }, [load]);
+  }, [props.resourceId, guard]);
+  useEffect(() => { setContent(null); setPendingFolder(null); void load(); }, [load]);
 
   async function relocate() {
-    const outcome = await relinkResource(props.resourceId);
-    if (outcome.kind === "cancelled") return;
-    if (outcome.kind === "outside") { setPendingFolder(outcome.folder); return; }
-    const shown = relinkNotice(t, outcome, () => void load());
-    if (shown.error) { props.onError(shown.error); return; }
-    setPendingFolder(null);
-    props.onNotice(shown.notice ?? "");
-    if (outcome.kind === "done") await load();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const outcome = await relinkResource(props.resourceId);
+      if (!guard.isAlive()) return;
+      if (outcome.kind === "cancelled") return;
+      if (outcome.kind === "outside") { setPendingFolder(outcome.folder); return; }
+      const shown = relinkNotice(t, outcome, () => void load());
+      if (shown.error) { props.onError(shown.error); return; }
+      setPendingFolder(null);
+      props.onNotice(shown.notice ?? "");
+      if (outcome.kind === "done") await load();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
 
   /** The folder the file was in becomes a library path; the scan that follows finds the same file and the resource is open again. */
   async function addFolder(picked?: string) {
+    if (busy) return;
     const folder = picked ?? content?.resource.folderToAdd;
-    if (!folder) return;
-    const added = await addLibraryFolder(folder, (content!.resource.kind === "comic" || content!.resource.kind === "video" ? content!.resource.kind : "novel") as LibraryKind);
-    if (added.kind === "failed") { props.onError(added.message); return; }
-    if (added.kind === "added") { setPendingFolder(null); props.onNotice(t("content.folderAdded")); await load(); }
+    if (!folder || !content) return;
+    setBusy(true);
+    try {
+      const added = await addLibraryFolder(folder, (content.resource.kind === "comic" || content.resource.kind === "video" ? content.resource.kind : "novel") as LibraryKind);
+      if (!guard.isAlive()) return;
+      if (added.kind === "failed") { props.onError(added.message); return; }
+      if (added.kind === "added") { setPendingFolder(null); props.onNotice(t("content.folderAdded")); await load(); }
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
 
   const resource = content?.resource;
-  const label = resource ? `${resource.ordinalLabel ? `${resource.ordinalLabel} · ` : ""}${resource.title}` : "";
+  const label = resource ? `${resource.ordinalLabel ? `${resource.ordinalLabel} · ` : ""}${resource.title || t("work.resource.unnamed")}` : "";
   const empty = content && !content.notes.length && !content.bookmarks.length && !content.recordings.length && !content.conversation;
   return (
     <section className="detail-section resource-content" data-testid="resource-content" data-available={resource ? String(resource.available) : undefined}>
@@ -85,14 +104,14 @@ export function ResourceContent(props: {
               <p className="detail-muted" data-testid="resource-content-hint">{resource.outside ? t("content.outsideHint") : t("content.unavailableHint")}</p>
               {resource.path ? <p className="detail-muted resource-path" data-testid="resource-content-path">{t("content.lastPath", { path: resource.path })}</p> : null}
               <div className="detail-actions">
-                {resource.outside && resource.folderToAdd ? <button type="button" className="primary-button" data-testid="resource-content-add-folder" onClick={() => void addFolder()}><FolderPlus size={14} />{t("content.addFolder")}</button> : null}
-                <button type="button" className={resource.outside && resource.folderToAdd ? "secondary-button" : "primary-button"} data-testid="resource-content-relocate" onClick={() => void relocate()}><FolderSearch size={14} />{t("content.relocate")}</button>
+                {resource.outside && resource.folderToAdd ? <button type="button" className="primary-button" data-testid="resource-content-add-folder" disabled={busy} onClick={() => void addFolder()}><FolderPlus size={14} />{t("content.addFolder")}</button> : null}
+                <button type="button" className={resource.outside && resource.folderToAdd ? "secondary-button" : "primary-button"} data-testid="resource-content-relocate" disabled={busy} onClick={() => void relocate()}><FolderSearch size={14} />{t("content.relocate")}</button>
               </div>
               <p className="detail-muted">{t("content.relocateHint")}</p>
               {pendingFolder ? (
                 <p className="detail-muted" role="status" data-testid="resource-content-outside-picked">
                   {t("reading.relinkOutside", { folder: pendingFolder })}{" "}
-                  <button type="button" className="link-button" data-testid="resource-content-add-picked-folder" onClick={() => void addFolder(pendingFolder)}>{t("reading.relinkAddFolder")}</button>
+                  <button type="button" className="link-button" data-testid="resource-content-add-picked-folder" disabled={busy} onClick={() => void addFolder(pendingFolder)}>{t("reading.relinkAddFolder")}</button>
                 </p>
               ) : null}
             </>
@@ -102,7 +121,7 @@ export function ResourceContent(props: {
           <h3>{t("detail.notes")}</h3>
           {content.notes.length === 0 ? <p className="detail-muted">{t("detail.notesNone")}</p> : (
             <ul className="detail-list" data-testid="resource-content-notes">
-              {content.notes.map((note) => <li key={note.objectId}><button type="button" className="link-button" data-testid={`resource-note-${note.objectId}`} onClick={() => props.onOpenNote(note.objectId)}>{note.title || note.preview || note.objectId}</button></li>)}
+              {content.notes.map((note) => <li key={note.objectId}><button type="button" className="link-button" data-testid={`resource-note-${note.objectId}`} onClick={() => props.onOpenNote(note.objectId)}>{note.title || note.preview || t("records.untitled")}</button></li>)}
             </ul>
           )}
 

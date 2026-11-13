@@ -185,7 +185,7 @@ describe.each(["native", "pi"] as const)("the test of a connection under the %s 
       { mode: "forbidden", category: "auth", status: 403 },
       { mode: "rate-limited", category: "rate_limit", status: 429 },
       { mode: "model-missing", category: "model", status: 404 },
-      { mode: "server-error", category: "other", status: 503 },
+      { mode: "server-error", category: "busy", status: 503 },
       { mode: "protocol-mismatch", category: "protocol" },
       { mode: "wrong-shape", category: "protocol" },
       { mode: "timeout", category: "timeout", timeoutMs: 700 },

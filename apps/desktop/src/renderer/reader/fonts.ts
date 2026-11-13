@@ -1,7 +1,14 @@
 import { useCallback, useState } from "react";
 import { FONT_PRESETS } from "@manga/contracts/reading";
+import type { MessageKey } from "@manga/i18n";
 
 export type FontPreset = (typeof FONT_PRESETS)[number];
+
+export const FONT_PRESET_LABEL: Record<FontPreset, MessageKey> = {
+  sans: "reading.fontSans",
+  serif: "reading.fontSerif",
+  mono: "reading.fontMono",
+};
 
 const PRESET_STACK: Record<FontPreset, string> = {
   sans: '"Microsoft YaHei", system-ui, sans-serif',

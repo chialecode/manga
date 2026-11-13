@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { ASR_MODEL_CATALOG, type AsrCatalogModel, type MangaProductApp } from "@manga/app-core";
@@ -31,7 +32,7 @@ import { caller, capturePage, ensureDock, js, leaveSettings, openSettingsPage, t
 import type { Observation } from "./window-walk.ts";
 
 /**
- * Packaged-window smoke for M12 voice dictation (`AT-174`, `AT-178`, `AT-179`, `AT-180`, `AT-182`).
+ * Packaged-window smoke for voice dictation (`AT-174`, `AT-178`, `AT-179`, `AT-180`, `AT-182`).
  * Uses `view.showInactive()` only, never moves the OS cursor or steals focus, and keeps all network
  * traffic strictly on `127.0.0.1` loopback stand-ins.
  */
@@ -945,9 +946,14 @@ export async function runDictationSmoke(input: {
       }
 
       const pageText = await js<string>(view, `document.querySelector('[data-testid="settings-page-recording"]')?.innerText ?? ""`);
+      const currentUser = (() => {
+        try { return os.userInfo().username.trim(); } catch { return ""; }
+      })();
+      const leakedUser = currentUser.length >= 3
+        && new RegExp(`\\b${currentUser.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(pageText);
       const zeroPathOrUserLeak = !/[A-Za-z]:[\\/]/.test(pageText)
         && !/\/Users\//i.test(pageText)
-        && !/\bheat\b/i.test(pageText);
+        && !leakedUser;
 
       await leaveSettings(view);
 

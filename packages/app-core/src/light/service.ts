@@ -4,7 +4,6 @@ import path from "node:path";
 import { MangaError } from "@manga/contracts";
 import type { ComicManifest, VideoProbe } from "@manga/contracts";
 import { comparePaths, naturalCompare } from "../domain/natural-sort.ts";
-import { decodeTextBuffer } from "../domain/text.ts";
 import { parseComicInfo } from "../comic/comicinfo.ts";
 import { FfmpegService, locateFfmpeg, type FfmpegTools } from "../media/ffmpeg.ts";
 import { MediaHandleTable } from "../media/handles.ts";
@@ -12,7 +11,8 @@ import { JobQueue } from "../media/job-queue.ts";
 import { BROWSER_IMAGE_TYPES, VIDEO_EXTENSIONS, isIgnoredName, isImageName, mediaTypeForName } from "../media/kinds.ts";
 import { locateSubtitleFont, type SubtitleFont } from "../media/subtitle-font.ts";
 import { ZipPool } from "../media/zip-pool.ts";
-import { fontFamilies } from "../video/font-names.ts";
+import { errorMessage } from "../shared/utils.ts";
+import { SUBTITLE_MEDIA_TYPES, awaitJobWithSignal, extractFontAttachments, extractSubtitleFile, primaryVideoStream, readFontFamilies } from "../video/extract-media.ts";
 import { answerFrame, type FrameIndex } from "../video/frames.ts";
 import { PlayCopies } from "../video/play-copy.ts";
 import { JsonPlayCopyStore } from "../video/play-copy-store.ts";
@@ -68,10 +68,10 @@ export function lightFileKey(file: string, stat?: fs.Stats): string {
 
 type LightPage = { id: string; index: number; name: string; width: number; height: number; spread: boolean; ok: boolean; error?: string; mediaType: string; ref: { kind: "file"; path: string } | { kind: "zip"; entry: string; size: number } };
 
-type VideoSession = { id: string; kind: "video"; path: string; key: string; size: number; mtimeMs: number; name: string; probe: VideoProbe };
+type VideoSession = { id: string; kind: "video"; path: string; key: string; size: number; mtimeMs: number; name: string; probe: VideoProbe; abort: AbortController };
 type ComicSession = {
   id: string; kind: "comic"; path: string; key: string; size: number; mtimeMs: number; name: string; source: "cbz" | "dir";
-  pages: LightPage[]; startIndex: number; direction: "ltr" | "rtl" | null; info: ComicManifest["info"] | null; warnings: string[];
+  pages: LightPage[]; pageById: Map<string, LightPage>; startIndex: number; direction: "ltr" | "rtl" | null; info: ComicManifest["info"] | null; warnings: string[]; abort: AbortController;
 };
 type Session = VideoSession | ComicSession;
 
@@ -89,9 +89,20 @@ export type LightMediaOptions = {
   copyBudgetBytes?: number;
 };
 
-const SUBTITLE_MEDIA_TYPES = { ass: "text/x-ssa; charset=utf-8", srt: "application/x-subrip; charset=utf-8", vtt: "text/vtt; charset=utf-8" } as const;
-const FONT_TYPES: Record<string, string> = { ".ttf": "font/ttf", ".otf": "font/otf", ".ttc": "font/collection", ".woff": "font/woff", ".woff2": "font/woff2" };
 const UNSHOWN = "轻量打开不显示这种图片格式";
+
+function combineSignals(sessionSignal: AbortSignal, requestSignal?: AbortSignal): AbortSignal {
+  return requestSignal ? AbortSignal.any([sessionSignal, requestSignal]) : sessionSignal;
+}
+
+function tryRemoveDir(dir: string): void {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "EBUSY" && code !== "EPERM") throw error;
+  }
+}
 
 async function inBatches<T>(items: T[], limit: number, run: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
@@ -179,7 +190,7 @@ export class LightMediaService {
     if (!base.streams.some((stream) => stream.type === "video")) throw new MangaError("UNSUPPORTED_FORMAT", "the file has no video stream");
     const sidecars = discoverSidecars(file).map(({ id, fileName, format, language }) => ({ id, fileName, format, ...(language ? { language } : {}) }));
     const probe: VideoProbe = { ...base, keyframesMs: [], keyframesTruncated: true, variableFrameRate: false, externalSubtitles: sidecars };
-    const session: VideoSession = { id: `ls_${randomUUID()}`, kind: "video", path: file, key: lightFileKey(file, stat), size: stat.size, mtimeMs: stat.mtimeMs, name: path.basename(file), probe };
+    const session: VideoSession = { id: `ls_${randomUUID()}`, kind: "video", path: file, key: lightFileKey(file, stat), size: stat.size, mtimeMs: stat.mtimeMs, name: path.basename(file), probe, abort: new AbortController() };
     this.sessions.set(session.id, session);
     return {
       sessionId: session.id, kind: "video", name: session.name, key: session.key, resourceId: session.id, revisionId: session.key, durationMs: probe.durationMs,
@@ -193,12 +204,20 @@ export class LightMediaService {
     let pages: LightPage[];
     let direction: ComicSession["direction"] = null;
     let info: ComicSession["info"] = null;
+    let marks: Array<{ image: number; doublePage?: boolean }> = [];
     const warnings: string[] = [];
     if (kind === "comic-archive") {
       const index = await this.zips.index(folder, signal);
       const unsafe = index.entries.filter((entry) => entry.unsafe);
       if (unsafe.length) warnings.push(`${unsafe.length} archive entries with unsafe names were skipped`);
-      const images = index.entries.filter((entry) => !entry.directory && !entry.unsafe && isImageName(entry.name) && !isIgnoredName(entry.name));
+      // Deduplicate by entry name (keeping the last entry to match ZipIndex.byName).
+      const uniqueImages = new Map<string, typeof index.entries[number]>();
+      for (const entry of index.entries) {
+        if (!entry.directory && !entry.unsafe && isImageName(entry.name) && !isIgnoredName(entry.name)) {
+          uniqueImages.set(entry.name, entry);
+        }
+      }
+      const images = [...uniqueImages.values()];
       if (images.some((entry) => entry.encrypted)) throw new MangaError("UNSUPPORTED_FORMAT", "the archive is encrypted and cannot be read");
       images.sort((a, b) => comparePaths(a.name, b.name));
       pages = images.map((entry, at) => ({
@@ -211,9 +230,9 @@ export class LightMediaService {
           const parsed = parseComicInfo(await this.zips.read(folder, infoEntry.name, { maxBytes: 1024 * 1024, signal }));
           if (!parsed) throw new Error("no ComicInfo");
           direction = parsed.direction ?? null;
-          const { pages: marks, direction: _direction, language: _language, genre: _genre, ...rest } = parsed;
+          const { pages: parsedMarks, direction: _direction, language: _language, genre: _genre, ...rest } = parsed;
           info = Object.keys(rest).length ? rest : null;
-          for (const mark of marks) if (pages[mark.image] && mark.doublePage !== undefined) pages[mark.image]!.spread = mark.doublePage;
+          marks = parsedMarks;
         } catch { /* a broken ComicInfo.xml is ignored, as in the library */ }
       }
     } else {
@@ -225,10 +244,12 @@ export class LightMediaService {
     if (pages.length > MAX_PAGES) throw new MangaError("UNSUPPORTED_FORMAT", `the source has ${pages.length} pages, more than the ${MAX_PAGES} allowed`);
     for (const page of pages) if (!BROWSER_IMAGE_TYPES.has(page.mediaType)) { page.ok = false; page.error = UNSHOWN; }
     await this.measure(folder, pages, signal);
+    // Apply explicit ComicInfo DoublePage marks after measuring so DoublePage="false" overrides the aspect-ratio heuristic.
+    for (const mark of marks) if (pages[mark.image] && mark.doublePage !== undefined) pages[mark.image]!.spread = mark.doublePage;
     const startIndex = kind === "comic-image" ? Math.max(0, pages.findIndex((page) => page.id === path.basename(file))) : 0;
     const session: ComicSession = {
       id: `ls_${randomUUID()}`, kind: "comic", path: folder, key: lightFileKey(folder, stat), size: kind === "comic-archive" ? stat.size : 0, mtimeMs: kind === "comic-archive" ? stat.mtimeMs : 0,
-      name: path.basename(folder), source: kind === "comic-archive" ? "cbz" : "dir", pages, startIndex, direction, info, warnings,
+      name: path.basename(folder), source: kind === "comic-archive" ? "cbz" : "dir", pages, pageById: new Map(pages.map((page) => [page.id, page])), startIndex, direction, info, warnings, abort: new AbortController(),
     };
     // A folder's own time changes when a page is added; a page added later is not a different comic, so a folder is keyed by its path alone.
     if (kind !== "comic-archive") session.key = createHash("sha256").update(`${path.resolve(folder).toLowerCase()}\ndir`).digest("hex");
@@ -250,12 +271,15 @@ export class LightMediaService {
           const { stream } = await this.zips.openStream(container, page.ref.entry, signal);
           const chunks: Buffer[] = [];
           let total = 0;
-          for await (const chunk of stream) {
-            chunks.push(chunk as Buffer);
-            total += (chunk as Buffer).length;
-            if (total >= IMAGE_HEADER_BYTES) break;
+          try {
+            for await (const chunk of stream) {
+              chunks.push(chunk as Buffer);
+              total += (chunk as Buffer).length;
+              if (total >= IMAGE_HEADER_BYTES) break;
+            }
+          } finally {
+            stream.destroy();
           }
-          stream.destroy();
           head = Buffer.concat(chunks, total);
         }
         if (head.length === 0) { page.ok = false; page.error = "page file is empty"; return; }
@@ -264,7 +288,7 @@ export class LightMediaService {
       } catch (error) {
         if (signal?.aborted) throw new MangaError("CANCELLED", "opening was cancelled");
         page.ok = false;
-        page.error = (error instanceof Error ? error.message : String(error)).slice(0, 200);
+        page.error = errorMessage(error).slice(0, 200);
       }
     });
   }
@@ -273,13 +297,14 @@ export class LightMediaService {
   close(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
+    session.abort.abort();
     this.sessions.delete(sessionId);
     this.handles.closeSession(sessionId);
     if (session.kind === "video" && ![...this.sessions.values()].some((item) => item.key === session.key)) {
       this.jobs.cancelWhere((job) => job.key === `frame-index:${session.key}`);
       this.frameIndexes.delete(session.key);
     }
-    fs.rmSync(path.join(this.cacheDir, "work", sessionId), { recursive: true, force: true });
+    tryRemoveDir(path.join(this.cacheDir, "work", sessionId));
   }
 
   /** The file a session opened, for the window's own uses (the title, "Show in Explorer", the siblings); never sent to the page. */
@@ -353,9 +378,10 @@ export class LightMediaService {
       }
       case "video.playCopy": {
         const action = body.action;
+        const copyId = typeof body.copyId === "string" ? body.copyId : undefined;
         if (action === "status") return { revisionId: session.key, copies: this.copies.list(session.key), budgetBytes: this.copies.budget(), usedBytes: this.copies.totalBytes() };
-        if (action === "cancel") return { cancelled: this.copies.cancel(session.key) };
-        if (action === "remove") return { removed: this.copies.remove(session.key) };
+        if (action === "cancel") return { cancelled: this.copies.cancel(session.key, copyId) };
+        if (action === "remove") return { removed: this.copies.remove(session.key, copyId) };
         if (action !== "create") throw new MangaError("VALIDATION_ERROR", "unknown play copy action");
         if (!this.unchanged(session)) throw new MangaError("NOT_FOUND", "the video file is not available");
         const caps = { hardwareHevc: body.hardwareHevc === true };
@@ -398,27 +424,19 @@ export class LightMediaService {
 
   private async subtitleFile(session: VideoSession, trackId: string, signal?: AbortSignal): Promise<{ path: string; format: "ass" | "srt" | "vtt"; language: string | null; title: string | null }> {
     if (!this.unchanged(session)) throw new MangaError("NOT_FOUND", "the video file is not available");
+    const combined = combineSignals(session.abort.signal, signal);
     const dir = this.dir("work", session.id, "subtitles");
-    if (trackId.startsWith("x")) {
-      const sidecar = discoverSidecars(session.path).find((item) => item.id === trackId);
-      if (!sidecar) throw new MangaError("NOT_FOUND", "subtitle file is not next to the video any more");
-      const target = path.join(dir, `${trackId}.${sidecar.format}`);
-      if (!fs.existsSync(target)) fs.writeFileSync(target, decodeTextBuffer(new Uint8Array(fs.readFileSync(sidecar.absolutePath))).text.replace(/^\uFEFF/, ""), "utf8");
-      return { path: target, format: sidecar.format, language: sidecar.language ?? null, title: sidecar.fileName };
+    try {
+      const result = await extractSubtitleFile(this.ffmpeg, session.path, session.probe, dir, trackId, combined);
+      if (!this.sessions.has(session.id)) {
+        tryRemoveDir(path.join(this.cacheDir, "work", session.id));
+        throw new MangaError("CANCELLED", "session was closed");
+      }
+      return result;
+    } catch (error) {
+      if (!this.sessions.has(session.id)) tryRemoveDir(path.join(this.cacheDir, "work", session.id));
+      throw error;
     }
-    const match = /^s(\d+)$/.exec(trackId);
-    const stream = match ? session.probe.streams.find((item) => item.type === "subtitle" && item.index === Number(match[1])) : undefined;
-    if (!stream) throw new MangaError("NOT_FOUND", "subtitle track does not exist");
-    if (!stream.textual) throw new MangaError("UNSUPPORTED_FORMAT", "image subtitles cannot be shown as text");
-    const format = stream.codec === "ass" || stream.codec === "ssa" ? "ass" : "srt";
-    const target = path.join(dir, `${trackId}.${format}`);
-    if (!fs.existsSync(target)) {
-      const text = await this.ffmpeg.subtitleText(session.path, stream.index, format, { signal });
-      const staging = `${target}.${process.pid}.tmp`;
-      fs.writeFileSync(staging, text, "utf8");
-      fs.renameSync(staging, target);
-    }
-    return { path: target, format, language: stream.language ?? null, title: stream.title ?? null };
   }
 
   private async fonts(session: VideoSession, signal?: AbortSignal) {
@@ -426,34 +444,24 @@ export class LightMediaService {
     const fallback = this.subtitleFont
       ? { family: this.subtitleFont.family, mediaType: this.subtitleFont.mediaType, url: this.handles.issue({ kind: "file", path: this.subtitleFont.path, mediaType: this.subtitleFont.mediaType }, binding, { ttlMs: HANDLE_TTL_MS }).url }
       : null;
-    const attachments = session.probe.streams.filter((stream) => stream.type === "attachment" && FONT_TYPES[path.extname(stream.fileName ?? "").toLowerCase()]);
-    if (!attachments.length) return { fonts: [] as Array<{ id: string; fileName: string; mediaType: string; url: string; families: string[] }>, fallback };
-    const dir = this.dir("work", session.id, "fonts");
-    const items = attachments.map((stream) => ({ stream, outName: `f${stream.index}${path.extname(stream.fileName!).toLowerCase()}` }));
-    const missing = items.filter((item) => !fs.existsSync(path.join(dir, item.outName)));
-    if (missing.length) await this.ffmpeg.dumpAttachments(session.path, missing.map((item) => ({ streamIndex: item.stream.index, outName: item.outName })), dir, { signal });
-    return {
-      fonts: items.map(({ stream, outName }) => {
-        const file = path.join(dir, outName);
-        const mediaType = FONT_TYPES[path.extname(outName)]!;
-        const issued = this.handles.issue({ kind: "file", path: file, mediaType }, binding, { ttlMs: HANDLE_TTL_MS });
-        return { id: `f${stream.index}`, fileName: stream.fileName!, mediaType, url: issued.url, families: this.familiesOf(file) };
-      }),
-      fallback,
-    };
-  }
-
-  private familiesOf(file: string): string[] {
+    const combined = combineSignals(session.abort.signal, signal);
+    const dir = path.join(this.cacheDir, "work", session.id, "fonts");
     try {
-      const key = `${file}:${fs.statSync(file).size}`;
-      const known = this.familyCache.get(key);
-      if (known) return known;
-      const names = fontFamilies(fs.readFileSync(file));
-      this.familyCache.set(key, names);
-      while (this.familyCache.size > 50) this.familyCache.delete(this.familyCache.keys().next().value as string);
-      return names;
-    } catch {
-      return [];
+      const items = await extractFontAttachments(this.ffmpeg, session.path, session.probe, dir, combined);
+      if (!this.sessions.has(session.id)) {
+        tryRemoveDir(path.join(this.cacheDir, "work", session.id));
+        throw new MangaError("CANCELLED", "session was closed");
+      }
+      return {
+        fonts: items.map(({ stream, file, mediaType }) => {
+          const issued = this.handles.issue({ kind: "file", path: file, mediaType }, binding, { ttlMs: HANDLE_TTL_MS });
+          return { id: `f${stream.index}`, fileName: stream.fileName!, mediaType, url: issued.url, families: readFontFamilies(this.familyCache, file, 50) };
+        }),
+        fallback,
+      };
+    } catch (error) {
+      if (!this.sessions.has(session.id)) tryRemoveDir(path.join(this.cacheDir, "work", session.id));
+      throw error;
     }
   }
 
@@ -471,16 +479,15 @@ export class LightMediaService {
       const job = this.jobs.submit<FrameIndex>({
         lane: "frame-index", kind: "frame-index", key: `frame-index:${session.key}`, owner: LIGHT_MODULE,
         run: async (context) => {
-          const video = session.probe.streams.find((stream) => stream.type === "video" && stream.fps !== undefined) ?? session.probe.streams.find((stream) => stream.type === "video");
+          const video = primaryVideoStream(session.probe);
           if (!video) throw new MangaError("UNSUPPORTED_FORMAT", "the file has no video stream");
           const timeline = await this.ffmpeg.packetTimeline(session.path, video.index, session.probe.startMs, { signal: context.signal });
           if (!timeline.ptsMs.length) throw new MangaError("UNSUPPORTED_FORMAT", "no frame times could be read from the file");
           return { version: 1, streamIndex: video.index, startMs: session.probe.startMs, ptsMs: timeline.ptsMs, keyframesMs: timeline.keyframesMs, variableFrameRate: timeline.variableFrameRate };
         },
       });
-      const onAbort = () => job.cancel();
-      signal?.addEventListener("abort", onAbort, { once: true });
-      try { index = await job.promise; } finally { signal?.removeEventListener("abort", onAbort); }
+      index = await awaitJobWithSignal(job, combineSignals(session.abort.signal, signal));
+      if (!this.sessions.has(session.id)) throw new MangaError("CANCELLED", "session was closed");
       this.frameIndexes.set(session.key, index);
       while (this.frameIndexes.size > 4) this.frameIndexes.delete(this.frameIndexes.keys().next().value as string);
     }
@@ -499,7 +506,7 @@ export class LightMediaService {
   private pageHandles(session: ComicSession, pageIds: string[]) {
     const intact = session.source === "dir" || this.unchanged(session);
     return pageIds.map((pageId) => {
-      const page = session.pages.find((item) => item.id === pageId);
+      const page = session.pageById.get(pageId);
       if (!page) return { pageId, available: false as const, reason: "page is not in this revision" };
       if (!intact) return { pageId, available: false as const, reason: "original is not available" };
       if (!page.ok) return { pageId, available: false as const, reason: page.error ?? "page could not be read" };

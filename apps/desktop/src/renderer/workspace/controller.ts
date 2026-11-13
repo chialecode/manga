@@ -53,12 +53,15 @@ type Ctx = {
   key: string;
   contextId: ContextId;
   loaded: boolean;
+  /** A transient load failure kept this context from reading its persisted state; never overwrite persisted data until loaded cleanly. */
+  loadFailed: boolean;
   /** The project this context belongs to does not exist. */
   missing: boolean;
   loading: Promise<void> | null;
   tabs: WorkspaceTab[];
   closed: WorkspaceTab[];
   docks: Map<WorkspaceView, Dock>;
+  dirty: boolean;
   saveTimer: ReturnType<typeof setTimeout> | null;
   saving: Promise<unknown>;
   /** Saves of this context that have been sent and not answered; a save with none before it is sent at once, so it reaches the host that was there. */
@@ -80,8 +83,8 @@ const emptyDock = (view: WorkspaceView, saved?: Partial<WorkspaceViewLayout>): D
 });
 
 const emptyCtx = (contextId: ContextId): Ctx => ({
-  key: contextKey(contextId), contextId, loaded: false, missing: false, loading: null, tabs: [], closed: [], docks: new Map([["home", emptyDock("home")]]),
-  saveTimer: null, saving: Promise.resolve(), inflight: 0, launches: new Map(), extra: {},
+  key: contextKey(contextId), contextId, loaded: false, loadFailed: false, missing: false, loading: null, tabs: [], closed: [], docks: new Map([["home", emptyDock("home")]]),
+  dirty: false, saveTimer: null, saving: Promise.resolve(), inflight: 0, launches: new Map(), extra: {},
 });
 
 /** Whether a tab is in a view: the home holds every tab, a feature view the tabs of its kind (计划 4.1). */
@@ -108,6 +111,7 @@ export class WorkspaceController {
   private readonly restored = new WeakSet<DockviewApi>();
   private hidden: string[] = [];
   private launchCounter = 0;
+  private activateSeq = 0;
   /** The settings are on screen (A-101): the tabs stay as they are but are told they are out of sight, and none is let go. */
   private suspendedNow = false;
   /** What was asked to open before the first context was on screen (a click while the window is still coming up); it opens once there is one. */
@@ -139,6 +143,17 @@ export class WorkspaceController {
   }
   private current(): Ctx | null {
     return this.contexts.get(this.active) ?? null;
+  }
+  private findTabContext(tabId: string): { ctx: Ctx; tab: WorkspaceTab } | null {
+    const active = this.current();
+    const activeTab = active?.tabs.find((item) => item.id === tabId);
+    if (active && activeTab) return { ctx: active, tab: activeTab };
+    for (const ctx of this.contexts.values()) {
+      if (ctx === active) continue;
+      const tab = ctx.tabs.find((item) => item.id === tabId);
+      if (tab) return { ctx, tab };
+    }
+    return null;
   }
   /** The arrangement of a view of a context, made (empty) the first time it is asked for. */
   private dockOf(ctx: Ctx, view: WorkspaceView = this.viewNow): Dock {
@@ -196,9 +211,14 @@ export class WorkspaceController {
    * exists) cannot be made the context: nothing changes and the answer is false.
    */
   async activate(contextId: ContextId): Promise<boolean> {
+    const seq = ++this.activateSeq;
     const ctx = this.ctx(contextId);
     if (!ctx.loaded) await this.load(ctx);
+    // Superseded by a newer activate(): do not mutate active context and do not report the project as missing.
+    if (seq !== this.activateSeq) return true;
     if (ctx.missing) { this.contexts.delete(ctx.key); return false; }
+    // Transient load failure was already reported via onError; leave active context untouched without triggering "context gone".
+    if (ctx.loadFailed) return true;
     this.active = ctx.key;
     this.dockOf(ctx).visited = true;
     this.mountedOrder = [ctx.key, ...this.mountedOrder.filter((key) => key !== ctx.key)];
@@ -206,7 +226,7 @@ export class WorkspaceController {
     for (const key of this.mountedOrder.slice(MOUNTED_CONTEXTS)) {
       const left = this.contexts.get(key);
       if (left) {
-        void this.flush(left);
+        void this.flush(left, { onlyDirty: true });
         for (const dock of left.docks.values()) dock.visited = false;
       }
       this.release(key);
@@ -225,14 +245,29 @@ export class WorkspaceController {
   private load(ctx: Ctx): Promise<void> {
     if (ctx.loading) return ctx.loading;
     ctx.loading = (async () => {
-      const result = await this.env.call("workspace.loadContext", { contextId: ctx.contextId });
-      if (!result.ok && ctx.contextId !== null && /does not exist|NOT_FOUND/i.test(result.error.message)) {
-        ctx.missing = true;
-        ctx.loaded = true;
+      ctx.loadFailed = false;
+      let result: { ok: true; value: Record<string, unknown> } | { ok: false; error: { message: string } };
+      try {
+        result = await this.env.call("workspace.loadContext", { contextId: ctx.contextId });
+      } catch (error) {
+        ctx.loadFailed = true;
         ctx.loading = null;
+        this.env.onError?.(error instanceof Error ? error.message : String(error));
         return;
       }
-      const state = result.ok ? ((result.value.state as WorkspaceState | undefined) ?? EMPTY_WORKSPACE_STATE) : EMPTY_WORKSPACE_STATE;
+      if (!result.ok) {
+        if (ctx.contextId !== null && /does not exist|NOT_FOUND/i.test(result.error.message)) {
+          ctx.missing = true;
+          ctx.loaded = true;
+          ctx.loading = null;
+          return;
+        }
+        ctx.loadFailed = true;
+        ctx.loading = null;
+        this.env.onError?.(result.error.message);
+        return;
+      }
+      const state = (result.value.state as WorkspaceState | undefined) ?? EMPTY_WORKSPACE_STATE;
       const { version: _version, preset, layout, tabs, focusedTab, closed, views, ...extra } = { ...EMPTY_WORKSPACE_STATE, ...state };
       ctx.tabs = Array.isArray(tabs) ? [...tabs] : [];
       ctx.closed = Array.isArray(closed) ? [...closed] : [];
@@ -246,7 +281,7 @@ export class WorkspaceController {
       ctx.extra = extra;
       // Only a context that was never saved gets the seeded tabs (the service answers an empty state with `updatedAt: null` then); one saved with
       // every tab closed stays empty (LOOP-24).
-      const neverSaved = !result.ok || result.value.state == null || result.value.updatedAt == null;
+      const neverSaved = result.value.state == null || result.value.updatedAt == null;
       if (ctx.tabs.length === 0 && neverSaved) {
         ctx.tabs = (this.env.seed?.(ctx.contextId) ?? []).map((request) => makeTab({ kind: request.kind, target: request.target ?? {}, title: request.title ?? this.env.titleFor({ kind: request.kind, target: request.target ?? {} }) }));
         ctx.docks.get("home")!.focusedTab = ctx.tabs[0]?.id ?? null;
@@ -274,6 +309,7 @@ export class WorkspaceController {
   /** The tabs of a view of a context, in the order they were opened. */
   tabsIn(view: WorkspaceView = this.viewNow, key = this.active): WorkspaceTab[] { return this.tabsOf(key).filter((tab) => inView(tab, view)); }
   tab(key: string, tabId: string): WorkspaceTab | undefined { return this.contexts.get(key)?.tabs.find((item) => item.id === tabId); }
+  tabById(tabId: string): WorkspaceTab | undefined { return this.findTabContext(tabId)?.tab; }
   /** The tab in front of the view on screen. */
   focusedTabId(key = this.active): string | null { return this.contexts.get(key)?.docks.get(this.viewNow)?.focusedTab ?? null; }
   focusedTab(key = this.active): WorkspaceTab | undefined {
@@ -345,6 +381,7 @@ export class WorkspaceController {
     this.sync(ctx, dock);
     const watch = [
       api.onDidActivePanelChange((event) => { if (!dock.syncing) this.setFocused(ctx, dock, event.panel?.id ?? null); }),
+      ...(typeof api.onDidActiveGroupChange === "function" ? [api.onDidActiveGroupChange(() => this.sync(ctx, dock))] : []),
       api.onDidRemovePanel((panel) => this.panelRemoved(ctx, dock, panel)),
       api.onDidAddGroup(() => this.sync(ctx, dock)),
       api.onDidRemoveGroup(() => this.sync(ctx, dock)),
@@ -524,13 +561,12 @@ export class WorkspaceController {
   }
 
   closeTab(tabId: string): void {
-    const ctx = this.current();
-    if (!ctx) return;
+    const found = this.findTabContext(tabId);
+    if (!found) return;
+    const { ctx, tab } = found;
     const dock = this.dockOf(ctx);
     const panel = dock.api?.getPanel(tabId);
     if (panel) { panel.api.close(); return; }
-    const tab = ctx.tabs.find((item) => item.id === tabId);
-    if (!tab) return;
     // Without a dock on the page the place is the tab's order among the view's tabs, in its one column.
     const at = dock.places.get(tabId) ?? { column: 0, index: Math.max(0, ctx.tabs.filter((item) => inView(item, dock.view)).findIndex((item) => item.id === tabId)) };
     this.dropTab(ctx, tab, inView(tab, dock.view) ? { view: dock.view, ...at } : null, null);
@@ -628,10 +664,9 @@ export class WorkspaceController {
   back(tabId = this.focusedTabId() ?? ""): boolean { return this.stepHistory(tabId, -1); }
   forward(tabId = this.focusedTabId() ?? ""): boolean { return this.stepHistory(tabId, 1); }
   private stepHistory(tabId: string, delta: -1 | 1): boolean {
-    const ctx = this.current();
-    const tab = ctx?.tabs.find((item) => item.id === tabId);
-    const next = tab ? stepTab(tab, delta) : null;
-    if (!ctx || !next) return false;
+    const found = this.findTabContext(tabId);
+    const next = found ? stepTab(found.tab, delta) : null;
+    if (!found || !next) return false;
     this.replace(tabId, () => next);
     return true;
   }
@@ -640,15 +675,15 @@ export class WorkspaceController {
   retitle(tabId: string, title: string): void { this.replace(tabId, (tab) => retitleTab(tab, title)); }
   /** Facts about what the tab shows that were not known when it opened (a reader's work); no new place is made. */
   retarget(tabId: string, patch: Target): void {
-    const tab = this.current()?.tabs.find((item) => item.id === tabId);
-    if (!tab || Object.entries(patch).every(([name, value]) => tab.target[name] === value)) return;
+    const found = this.findTabContext(tabId);
+    if (!found || Object.entries(patch).every(([name, value]) => found.tab.target[name] === value)) return;
     this.replace(tabId, (item) => retargetTab(item, patch));
   }
   /** Where the tab is in what it shows (position, zoom, scroll, filters), kept with the layout. */
   setView(tabId: string, patch: Record<string, unknown>): void {
-    const ctx = this.current();
-    const tab = ctx?.tabs.find((item) => item.id === tabId);
-    if (!ctx || !tab) return;
+    const found = this.findTabContext(tabId);
+    if (!found) return;
+    const { ctx, tab } = found;
     const same = Object.entries(patch).every(([name, value]) => JSON.stringify(tab.view[name]) === JSON.stringify(value));
     if (same) return;
     ctx.tabs = ctx.tabs.map((item) => (item.id === tabId ? { ...item, view: { ...item.view, ...patch } } : item));
@@ -656,9 +691,9 @@ export class WorkspaceController {
   }
 
   private replace(tabId: string, change: (tab: WorkspaceTab) => WorkspaceTab): void {
-    const ctx = this.current();
-    const tab = ctx?.tabs.find((item) => item.id === tabId);
-    if (!ctx || !tab) return;
+    const found = this.findTabContext(tabId);
+    if (!found) return;
+    const { ctx, tab } = found;
     const next = change(tab);
     if (next === tab) return;
     ctx.tabs = ctx.tabs.map((item) => (item.id === tabId ? next : item));
@@ -688,7 +723,7 @@ export class WorkspaceController {
 
   /** Asks a tab's content to do something once more (jump to a place); the request is not saved. */
   launch(tabId: string, request: Record<string, unknown>): void {
-    const ctx = this.current();
+    const ctx = this.findTabContext(tabId)?.ctx ?? this.current();
     if (!ctx) return;
     ctx.launches.set(tabId, { ...request, n: ++this.launchCounter });
     this.emit();
@@ -753,32 +788,51 @@ export class WorkspaceController {
   }
 
   private schedule(ctx: Ctx): void {
-    if (!ctx.loaded) return;
+    if (!ctx.loaded || ctx.loadFailed) return;
+    ctx.dirty = true;
     if (ctx.saveTimer) clearTimeout(ctx.saveTimer);
     ctx.saveTimer = setTimeout(() => { ctx.saveTimer = null; void this.flush(ctx); }, SAVE_DELAY_MS);
   }
 
   /** Saves now what has changed since the last save; saves of one context go one after the other. */
-  flush(ctx?: Ctx | null): Promise<unknown> {
+  flush(ctx?: Ctx | null, options?: { onlyDirty?: boolean }): Promise<unknown> {
     const targets = ctx ? [ctx] : [...this.contexts.values()];
     return Promise.all(targets.map((item) => {
-      if (!item.loaded) return Promise.resolve();
+      if (!item.loaded || item.loadFailed) return Promise.resolve();
+      if (options?.onlyDirty && !item.dirty && item.saveTimer === null) return item.inflight > 0 ? item.saving : Promise.resolve();
       if (item.saveTimer) { clearTimeout(item.saveTimer); item.saveTimer = null; }
+      item.dirty = false;
       const state = this.serialize(item);
-      const send = () => this.env.call("workspace.saveContext", { contextId: item.contextId, state });
-      const sent = item.inflight > 0 ? item.saving.then(send) : send();
+      const send = () => {
+        try {
+          return Promise.resolve(this.env.call("workspace.saveContext", { contextId: item.contextId, state }));
+        } catch (error) {
+          return Promise.reject(error);
+        }
+      };
+      const sent = item.inflight > 0 ? item.saving.then(send, send) : send();
       item.inflight += 1;
-      item.saving = sent.then((result) => {
-        item.inflight -= 1;
-        if (result && !result.ok) this.env.onError?.(result.error.message);
-      });
+      item.saving = sent.then(
+        (result) => {
+          item.inflight = Math.max(0, item.inflight - 1);
+          if (result && !result.ok) {
+            item.dirty = true;
+            this.env.onError?.(result.error.message);
+          }
+        },
+        (error: unknown) => {
+          item.inflight = Math.max(0, item.inflight - 1);
+          item.dirty = true;
+          this.env.onError?.(error instanceof Error ? error.message : String(error));
+        },
+      );
       return item.saving;
     }));
   }
-  flushAll = (): Promise<unknown> => this.flush(null);
+  flushAll = (options?: { onlyDirty?: boolean }): Promise<unknown> => this.flush(null, options);
   /** Whether a save is planned or on its way (the window waits for these before it closes, 计划 4.8). */
   pendingSaves(): boolean {
-    return [...this.contexts.values()].some((ctx) => ctx.saveTimer !== null || ctx.inflight > 0);
+    return [...this.contexts.values()].some((ctx) => ctx.dirty || ctx.saveTimer !== null || ctx.inflight > 0);
   }
 
   dispose(): void {

@@ -141,7 +141,7 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     const buttons = [parts["window-minimize"]!, parts["window-maximize"]!, parts["window-close"]!];
     controlsDetail.geometry = { group, buttons: buttons.map((b) => [Math.round(b.w), Math.round(b.h)]) };
     if (!near(group.r, viewportW, 1) || !near(group.y, 0, 1)) controlsProblems.push("the buttons are not in the window's top right corner");
-    if (!near(group.h, 36, 2)) controlsProblems.push(`the buttons are ${Math.round(group.h)}px high, not as high as the top row`);
+    if (!near(group.h, 36, 2)) controlsProblems.push(`the buttons are ${Math.round(group.h)}px high, not as high as the title bar`);
     if (buttons.some((b) => !near(b.w, 46, 1) || !near(b.h, group.h, 1))) controlsProblems.push("a button is not 46 px wide and as high as the group");
     if (!(buttons[0]!.r <= buttons[1]!.x + 1 && buttons[1]!.r <= buttons[2]!.x + 1)) controlsProblems.push("the buttons are not in the order minimize, maximize, close");
     if (!near(buttons[2]!.r, viewportW, 1)) controlsProblems.push("the close button is not at the window's right edge");
@@ -151,16 +151,16 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
       const ids = ["window-minimize", "window-maximize", "window-close"];
       return {
         group: region(document.querySelector('[data-testid="window-controls"]')),
-        around: region(document.querySelector('[data-testid="shell-top"]')),
+        around: region(document.querySelector('[data-testid="window-controls"]')?.closest('[data-testid="dock-top"], [data-testid="main-top-end"]') ?? null),
         reach: ids.map((id) => { const el = document.querySelector('[data-testid="' + id + '"]'); if (!el) return false; const b = el.getBoundingClientRect(); const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return Boolean(hit && (hit === el || el.contains(hit))); }),
       };
     })()`);
     controlsDetail.regions = regions;
     if (regions.group.trim() !== "no-drag") controlsProblems.push(`the buttons' group is "${regions.group.trim()}", not no-drag`);
-    if (regions.around.trim() !== "drag") controlsProblems.push(`the top row around the buttons is "${regions.around.trim()}", not a drag area`);
+    if (regions.around.trim() !== "drag") controlsProblems.push(`the title bar around the buttons is "${regions.around.trim()}", not a drag area`);
     if (regions.reach.some((reached) => !reached)) controlsProblems.push("a pointer over a button does not reach it");
-    // The row's own buttons are not part of the drag area either.
-    const noDrag = await js<string[]>(view, `["shell-sidebar-toggle", "nav-back", "menu-file", "shell-dock-toggle"].filter((id) => { const el = document.querySelector('[data-testid="' + id + '"]'); return el && getComputedStyle(el).getPropertyValue("-webkit-app-region").trim() !== "no-drag"; })`);
+    // The title bar's own buttons are not part of the drag area either.
+    const noDrag = await js<string[]>(view, `["shell-sidebar-toggle", "shell-dock-toggle"].filter((id) => { const el = document.querySelector('[data-testid="' + id + '"]'); return el && getComputedStyle(el).getPropertyValue("-webkit-app-region").trim() !== "no-drag"; })`);
     if (noDrag.length) controlsProblems.push(`${noDrag.join(", ")} would drag the window instead of being pressed`);
     // Hover paints a button; the close button turns the danger color.
     const paint = async (testId: string) => js<string>(view, `getComputedStyle(document.querySelector('[data-testid="${testId}"]')).backgroundColor`);
@@ -228,7 +228,13 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   observe("frame-window-controls", controlsProblems.length === 0, { problems: controlsProblems, ...controlsDetail });
 
   // ---- 2. the regions: the frame color around the page, one-pixel dividers, nothing that casts a shadow --------------------------------------------------
-  const flat = await js<Record<string, any>>(view, `(() => {
+  type BoxStyle = { background: string; border: number[]; radius: number[]; shadow: string; padding: string[] };
+  type FlatMetrics = {
+    frame: string; sidebarColor: string; surface: string; headers: number;
+    top: BoxStyle | null; rail: BoxStyle | null; sidebar: BoxStyle | null; main: BoxStyle | null; dock: BoxStyle | null; root: BoxStyle | null;
+    dividerSidebar: Rect | null; dividerDock: Rect | null; gapSidebar: number | null; gapDock: number | null;
+  };
+  const flat = await js<FlatMetrics>(view, `(() => {
     const rect = ${RECT};
     const style = (id) => { const el = document.querySelector('[data-testid="' + id + '"]'); if (!el) return null; const s = getComputedStyle(el); return { background: s.backgroundColor, border: ["Top", "Right", "Bottom", "Left"].map((k) => parseFloat(s["border" + k + "Width"])), radius: ["TopLeft", "TopRight", "BottomLeft", "BottomRight"].map((k) => parseFloat(s["border" + k + "Radius"])), shadow: s.boxShadow, padding: [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft] }; };
     const hex = getComputedStyle(document.documentElement).getPropertyValue("--color-frame").trim();
@@ -238,13 +244,15 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
     const sidebarColor = rgbOf("--color-sidebar"), surface = rgbOf("--color-surface");
     const sidebar = rect("shell-sidebar"), main = rect("shell-main"), dock = rect("shell-dock");
     return {
-      frame, sidebarColor, surface, headers: document.querySelectorAll("header.shell-top").length, top: style("shell-top"), rail: style("shell-rail"), sidebar: style("shell-sidebar"), main: style("shell-main"), dock: style("shell-dock"), root: style("shell-root"),
+      frame, sidebarColor, surface, headers: document.querySelectorAll("header.shell-top").length, top: style("dock-top"), rail: style("shell-rail"), sidebar: style("shell-sidebar"), main: style("shell-main"), dock: style("shell-dock"), root: style("shell-root"),
       dividerSidebar: rect("shell-resize-sidebar"), dividerDock: rect("shell-resize-dock"), gapSidebar: sidebar && main ? main.x - sidebar.r : null, gapDock: dock && main ? dock.x - main.r : null,
     };
   })()`);
   const flatProblems: string[] = [];
-  if (flat.headers !== 1) flatProblems.push(`${flat.headers} header rows across the window, not one`);
-  for (const key of ["top", "rail", "sidebar"] as const) {
+  // No row across the window: the tops of the rail, the sidebar, the main area and the dock are the title bar (A-136).
+  if (flat.headers !== 0) flatProblems.push(`${flat.headers} header rows across the window, not none`);
+  if (!flat.top || flat.top.background !== flat.frame || flat.top.shadow !== "none") flatProblems.push(`the dock's top is ${flat.top ? flat.top.background : "missing"}, not the frame color ${flat.frame} without a shadow`);
+  for (const key of ["rail", "sidebar"] as const) {
     const s = flat[key];
     if (!s) { flatProblems.push(`${key} is missing`); continue; }
     // The sidebar has a color of its own, between the frame's and the page's (A-99); the rest of the frame is the frame's.
@@ -273,43 +281,33 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   observe("frame-flat-chrome", flatProblems.length === 0, { problems: flatProblems, flat });
   await shot("frame-wide");
 
-  // ---- 3. the tab's history: back, forward, their keys, and the About box ------------------------------------------------------------------------------
+  // ---- 3. the tab's history from its keys, no history buttons or menus in the title bar, and the version on Settings > Update (A-136) -------------------
   await library();
   const pageIs = (testId: string) => waitDrawn(view, testId, 5000);
   const history: Record<string, unknown> = {};
-  const navState = () => js<{ back: boolean; forward: boolean }>(view, `({ back: !document.querySelector('[data-testid="nav-back"]')?.disabled, forward: !document.querySelector('[data-testid="nav-forward"]')?.disabled })`);
-  history.atStart = await navState();
+  history.noButtons = await js<string[]>(view, `["nav-back", "nav-forward", "menubar", "menu-file", "menu-help", "about-dialog"].filter((id) => document.querySelector('[data-testid="' + id + '"]'))`);
   await clickTestId(view, "section-all-comic");
   history.comicShelf = await pageIs("shelf-comic");
-  history.atEnd = await navState();
-  await clickTestId(view, "nav-back");
-  history.afterBack = await pageIs("page-library") && !(await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="shelf-comic"]'))`));
-  history.afterBackState = await navState();
-  await clickTestId(view, "nav-forward");
-  history.afterForward = await pageIs("shelf-comic");
   await pressChord(view, "Left", ["alt"]);
   history.keyBack = await waitFor(`!${DRAWN}(document.querySelector('[data-testid="shelf-comic"]')) && ${DRAWN}(document.querySelector('[data-testid="page-library"]'))`, 4000);
   await pressChord(view, "Right", ["alt"]);
   history.keyForward = await pageIs("shelf-comic");
+  // Nothing ahead: forward again stays on the shelf.
+  await pressChord(view, "Right", ["alt"]);
+  await waitFrames(view, 2);
+  history.stays = await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="shelf-comic"]'))`);
   const historyProblems: string[] = [];
-  const atStart = history.atStart as { back: boolean; forward: boolean };
-  const atEnd = history.atEnd as { back: boolean; forward: boolean };
-  if (atStart.back || atStart.forward) historyProblems.push("a tab that has not been anywhere can go back or forward");
-  if (!history.comicShelf || !atEnd.back || atEnd.forward) historyProblems.push("back should be possible and forward not, at the newest page of the tab");
-  if (!history.afterBack) historyProblems.push("back did not return to the library's overview");
-  if (!(history.afterBackState as { forward: boolean }).forward) historyProblems.push("forward is not possible after going back");
-  if (!history.afterForward) historyProblems.push("forward did not return to the comic shelf");
+  if ((history.noButtons as string[]).length) historyProblems.push(`the title bar still has ${(history.noButtons as string[]).join(", ")}`);
+  if (!history.comicShelf) historyProblems.push("the comic shelf did not open");
   if (!history.keyBack || !history.keyForward) historyProblems.push(`Alt+← / Alt+→ do not walk the tab's history (${history.keyBack}, ${history.keyForward})`);
-  // The About box is reached from the help menu and says which version this is.
-  await clickTestId(view, "menu-help");
-  await waitFor(`document.querySelector('[role="menu"]')`, 2000);
-  await clickTestId(view, "menu-help-about");
-  const about = await waitFor(`document.querySelector('[data-testid="about-dialog"]')`, 3000);
-  const aboutVersion = about ? await js<string>(view, `document.querySelector('[data-testid="about-version"]')?.textContent ?? ""`) : "";
-  await clickTestId(view, "about-dialog-close");
-  await waitFor(`!document.querySelector('[data-testid="about-dialog"]')`, 3000);
-  if (!about || !aboutVersion || aboutVersion === "-") historyProblems.push("the About dialog does not show a version");
-  observe("frame-history-menu", historyProblems.length === 0, { problems: historyProblems, history, aboutVersion });
+  if (!history.stays) historyProblems.push("forward with nothing ahead left the page");
+  // What the About box said is on Settings > Update: which version this is, and the license.
+  const updateOpen = await openSettingsPage(view, "update");
+  const aboutVersion = updateOpen ? await js<string>(view, `document.querySelector('[data-testid="update-current-version"]')?.textContent ?? ""`) : "";
+  const license = updateOpen ? await js<string>(view, `document.querySelector('[data-testid="update-license"]')?.textContent ?? ""`) : "";
+  await leaveSettings(view);
+  if (!aboutVersion || aboutVersion === "-" || license !== "Apache-2.0") historyProblems.push(`Settings > Update does not show the version and license (${aboutVersion}, ${license})`);
+  observe("frame-history-menu", historyProblems.length === 0, { problems: historyProblems, history, aboutVersion, license });
 
   // ---- 4. dragging the dividers with the real mouse, remembered, put back on a double click -----------------------------------------------------------
   await library();
@@ -377,7 +375,13 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   await railTo(view, "conversation");
   await ensureSidebar(view);
   await waitDrawn(view, "sidebar-more-recent", 8000);
-  const railFacts = () => js<Record<string, any>>(view, `(() => {
+  type RailMetrics = {
+    settings: Rect | null; library: Rect | null; rail: Rect | null; heading: boolean; buttons: string[];
+    scroll: { scrollHeight: number; clientHeight: number; top: number } | null;
+    railScroll: { scrollHeight: number; clientHeight: number } | null;
+    viewportH: number; rows: number;
+  };
+  const railFacts = () => js<RailMetrics>(view, `(() => {
     const rect = ${RECT};
     const scroll = document.querySelector('[data-testid="shell-sidebar"] .sidebar-scroll');
     const rail = document.querySelector('[data-testid="shell-rail"]');
@@ -465,32 +469,36 @@ export async function runFrameWalk(env: FrameEnv): Promise<void> {
   await resize("wide");
   await library();
 
-  // ---- 7. every size: the top row's buttons and the rail's settings button are inside the window, and nothing scrolls sideways ---------------------------------
+  // ---- 7. every size: the title bar's buttons and the rail's settings button are inside the window, no tab runs under its end, nothing scrolls sideways ------
   for (const size of ["wide", "narrow", "short"] as const) {
     await resize(size);
     await openLibrary(view);
     await waitFrames(view);
-    const fit = await js<{ viewport: { w: number; h: number }; rects: Record<string, Rect | null>; docOverflow: number; barOverflow: number }>(view, `(() => {
+    const fit = await js<{ viewport: { w: number; h: number }; rects: Record<string, Rect | null>; docOverflow: number; barOverflow: number; under: string[] }>(view, `(() => {
       const rect = ${RECT};
       const out = {};
-      for (const id of ["shell-sidebar-toggle", "nav-back", "nav-forward", "menu-file", "menu-help", "shell-dock-toggle", "window-controls"]) out[id] = rect(id);
-      const bar = document.querySelector('[data-testid="shell-top"]');
-      return { viewport: { w: window.innerWidth, h: window.innerHeight }, rects: out, docOverflow: document.documentElement.scrollWidth - window.innerWidth, barOverflow: bar ? bar.scrollWidth - bar.clientWidth : 0 };
+      for (const id of ["shell-sidebar-toggle", "shell-dock-toggle", "title-end", "window-controls"]) out[id] = rect(id);
+      const bar = document.querySelector('[data-testid="title-end"]');
+      // A tab in the top row whose right edge is past the start of the title bar's end, while that end stands over the main area.
+      const end = document.querySelector('[data-testid="main-top-end"] [data-testid="title-end"]')?.getBoundingClientRect();
+      const under = end ? Array.from(document.querySelectorAll('[data-testid="context-host"][data-active="true"] [data-testid="tab"]')).filter((tab) => { const b = tab.getBoundingClientRect(); return b.width > 0 && b.top < end.bottom && b.right > end.left + 1; }).map((tab) => tab.textContent ?? "") : [];
+      return { viewport: { w: window.innerWidth, h: window.innerHeight }, rects: out, docOverflow: document.documentElement.scrollWidth - window.innerWidth, barOverflow: bar ? bar.scrollWidth - bar.clientWidth : 0, under };
     })()`);
     const fitProblems: string[] = [];
     const controls = fit.rects["window-controls"];
     for (const [id, r] of Object.entries(fit.rects)) {
-      // The menus are left out below 640 px and forward below 480; the dock's button is there while the dock has something to show.
-      if (!r || r.w <= 0) { if (id === "shell-sidebar-toggle" || id === "nav-back" || id === "window-controls") fitProblems.push(`${id} is missing`); continue; }
+      // The dock's button is there while the dock has something to show.
+      if (!r || r.w <= 0) { if (id !== "shell-dock-toggle") fitProblems.push(`${id} is missing`); continue; }
       if (r.x < -1 || r.r > fit.viewport.w + 1 || r.y < -1 || r.b > fit.viewport.h + 1) fitProblems.push(`${id} is outside the window`);
-      if (controls && id !== "window-controls" && r.r > controls.x + 1) fitProblems.push(`${id} runs into the window's own buttons`);
+      if (controls && id !== "window-controls" && id !== "title-end" && r.r > controls.x + 1) fitProblems.push(`${id} runs into the window's own buttons`);
     }
     if (fit.docOverflow > 1) fitProblems.push(`the window scrolls sideways by ${fit.docOverflow}px`);
-    if (fit.barOverflow > 1) fitProblems.push(`the top row overflows by ${fit.barOverflow}px`);
+    if (fit.barOverflow > 1) fitProblems.push(`the end of the title bar overflows by ${fit.barOverflow}px`);
+    if (fit.under.length) fitProblems.push(`tabs run under the end of the title bar: ${fit.under.join(", ")}`);
     // The rail is on screen at every size, and its settings button with it.
     const settings = (await rects(["nav-settings"]))["nav-settings"];
     if (!settings || settings.b > fit.viewport.h + 1) fitProblems.push("the settings button is not on screen");
-    observe(`frame-fits-${size}`, fitProblems.length === 0, { problems: fitProblems, viewport: fit.viewport, rects: fit.rects });
+    observe(`frame-fits-${size}`, fitProblems.length === 0, { problems: fitProblems, viewport: fit.viewport, rects: fit.rects, under: fit.under });
     await shot(`frame-fit-${size}`);
   }
   await resize("wide");

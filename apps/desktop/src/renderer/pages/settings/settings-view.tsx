@@ -17,7 +17,7 @@ import { LibraryPage } from "./library-page.tsx";
 import { LogsPage } from "./logs-page.tsx";
 import { AgentPage } from "./agent-page.tsx";
 import type { PlainTestResult, SaveConnectionResult } from "./connection-dialog.tsx";
-import { ModelsPage } from "./models-page.tsx";
+import { ModelsPage, type ProviderActions } from "./models-page.tsx";
 import { PluginsPage } from "./plugins-page.tsx";
 import { QuickTasksPage } from "./quick-tasks-page.tsx";
 import { SemanticPage } from "./semantic-page.tsx";
@@ -37,7 +37,7 @@ export function hiddenSettingsPages(facets: ReadonlySet<string>): Set<SettingsPa
   if (!facets.has("danmaku")) hidden.add("danmaku");
   if (!facets.has("semantic")) hidden.add("semantic");
   if (!facets.has("plugins")) hidden.add("plugins");
-  if (!facets.has("agent")) { hidden.add("models"); hidden.add("quick"); hidden.add("usage"); }
+  if (!facets.has("agent")) { hidden.add("models"); hidden.add("agent"); hidden.add("quick"); hidden.add("usage"); }
   return hidden;
 }
 
@@ -54,7 +54,7 @@ export type SettingsViewProps = {
   migration: MigrationPlan | null;
   shell: ShellPreference;
   onReading: (patch: ReadingStylePatch) => void;
-  recording: { settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void> };
+  recording: { settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<boolean> };
   comic: { settings: ComicSettings; change: (patch: Partial<ComicSettings>) => void };
   video: { settings: VideoSettings; change: (patch: Partial<VideoSettings>) => void };
   /** The reader keys: the table in use, the person's changes, and a way to save them. */
@@ -86,7 +86,7 @@ export type SettingsViewProps = {
     onTestConnection: (id: string, capability: string) => Promise<PlainTestResult>;
     onProbeConnection: (id: string) => Promise<void>;
     onSkip: () => void;
-  };
+  } & ProviderActions;
   storage: {
     onScan: () => void;
     onCancelScan: () => void;

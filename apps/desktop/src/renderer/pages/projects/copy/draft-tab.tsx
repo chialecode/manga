@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandError, asArray, attempt } from "../../../lib/api.ts";
+import { useAsyncGuard } from "../../../hooks/use-async-guard.ts";
 import type { ProjectTabContext } from "../project-page.tsx";
 import { DocWorkspace, type DocKind } from "../canvas/doc-workspace.tsx";
 import { DraftEditor } from "./draft-editor.tsx";
@@ -39,74 +40,90 @@ function DraftView({ ctx, draftId, onChanged }: { ctx: ProjectTabContext; draftI
   const setPanel = (next: "suggest" | "versions") => { panelRef.current = next; setPanelState(next); void load(false); };
   const [open, setOpen] = useState<string | null>(null);
   const [state, setState] = useState<"saved" | "saving" | "error" | "conflict">("saved");
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const [selection, setSelection] = useState<Range | null>(null);
   const text = useRef("");
   const version = useRef(0);
   const dirty = useRef(false);
+  const initialized = useRef(false);
   const inFlight = useRef<Promise<boolean> | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; window.clearTimeout(timer.current); }, []);
+  const loadGuard = useAsyncGuard();
+  const onErrorRef = useRef(ctx.onError);
+  onErrorRef.current = ctx.onError;
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
 
   const load = useCallback(async (resetText: boolean) => {
+    const token = loadGuard.next();
     const result = await attempt<Loaded>("draft.get", { draftId });
-    if (!alive.current) return;
-    if (!result.ok) { ctx.onError(result.error.message); return; }
+    if (!loadGuard.isCurrent(token)) return;
+    if (!result.ok) { onErrorRef.current(result.error.message); return; }
     const value = { draft: result.value.draft, versions: asArray<VersionItem>(result.value.versions), suggestions: asArray<SuggestionItem>(result.value.suggestions) };
     setLoaded(value);
-    if (resetText) {
+    if (resetText || (!initialized.current && !dirty.current)) {
+      initialized.current = true;
+      window.clearTimeout(timer.current);
       text.current = value.draft.text; version.current = value.draft.version; dirty.current = false;
       setEpoch((current) => current + 1);
       setState("saved");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId]);
+  }, [draftId, loadGuard]);
   useEffect(() => { void load(true); }, [load]);
 
   /** Writes the text that is on screen. Resolves false when it could not be saved, so a suggestion is never made from text the server does not have. */
   const flush = useCallback(async (): Promise<boolean> => {
     window.clearTimeout(timer.current);
-    if (inFlight.current) await inFlight.current;
-    if (!dirty.current) return state !== "conflict" && state !== "error";
+    while (inFlight.current) await inFlight.current;
+    if (!dirty.current) return stateRef.current !== "conflict" && stateRef.current !== "error";
     const attemptSave = (async () => {
       const sent = text.current;
-      setState("saving");
+      if (alive.current) setState("saving");
       const result = await attempt<{ draft: DraftDoc }>("draft.save", { draftId, expectedVersion: version.current, text: sent });
-      if (!alive.current) return result.ok;
       if (!result.ok) {
-        setState(result.error instanceof CommandError && result.error.code === "REVISION_CONFLICT" ? "conflict" : "error");
+        if (alive.current) setState(result.error instanceof CommandError && result.error.code === "REVISION_CONFLICT" ? "conflict" : "error");
         return false;
       }
+      // Keep version and dirty up to date even after unmount so a queued unmount flush cannot reuse a stale version.
       version.current = result.value.draft.version;
-      // More typing during the save leaves the page unsaved; the next flush takes it.
       dirty.current = text.current !== sent;
-      if (dirty.current) { timer.current = window.setTimeout(() => { void flush(); }, SAVE_DELAY_MS); setState("saving"); } else setState("saved");
+      if (!alive.current) return true;
+      if (dirty.current) { timer.current = window.setTimeout(() => { void flushRef.current(); }, SAVE_DELAY_MS); setState("saving"); } else setState("saved");
       setLoaded((current) => current ? { ...current, draft: { ...current.draft, version: result.value.draft.version, text: sent } } : current);
-      onChanged();
+      onChangedRef.current();
       // The list of versions follows the text while it is on show (the version being edited is the one marked current).
       if (panelRef.current === "versions") void load(false);
       return true;
     })();
     inFlight.current = attemptSave;
     try { return await attemptSave; } finally { if (inFlight.current === attemptSave) inFlight.current = null; }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId, state]);
+  }, [draftId, load]);
   const flushRef = useRef(flush);
   flushRef.current = flush;
   const stableFlush = useCallback(() => flushRef.current(), []);
 
-  useEffect(() => () => { if (dirty.current) void flushRef.current(); }, []);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      window.clearTimeout(timer.current);
+      alive.current = false;
+      if (dirty.current) void flushRef.current();
+    };
+  }, []);
 
   function typed(next: string) {
     text.current = next;
     dirty.current = true;
-    if (state !== "conflict") setState("saving");
+    if (stateRef.current !== "conflict") setState("saving");
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => { void flushRef.current(); }, SAVE_DELAY_MS);
   }
 
   /** The text was replaced on the server (a suggestion taken, a version restored): show it, and keep its version number for the next save. */
   function replaced(draft: DraftDoc) {
+    window.clearTimeout(timer.current);
     text.current = draft.text; version.current = draft.version; dirty.current = false;
     setEpoch((current) => current + 1);
     setState("saved");

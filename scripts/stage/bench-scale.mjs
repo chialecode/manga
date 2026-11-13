@@ -35,58 +35,64 @@ async function call(app, actor, grant, commandId, input) {
 async function seedScaleProfile(dir) {
   const env = { profileRoot: path.join(dir, "root"), documentsDir: path.join(dir, "documents"), pointerPath: path.join(dir, "launcher", "pointer.json") };
   const app = new MangaProductApp({ ...env, channel: "test", hostId: "bench-scale-seed", vault: new TestVault("bench-scale"), useParseWorker: true });
-  await app.start();
-  const actor = { kind: "user", id: "bench-scale" };
-  const grant = app.issueOwnerGrant(actor);
-  await call(app, actor, grant, "settings.skipAi", {});
-  await call(app, actor, grant, "library.scan.setSchedule", { onStartup: false, intervalMinutes: 0 });
-  // A file is read from a library path (A-80): the folder the books lie in is one, in the Profile the windows start on.
   const books = path.join(dir, "books");
-  fs.mkdirSync(books, { recursive: true });
-  await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
-  await app.scan.whenIdle();
-  // Metadata rows are older than the large books so the resource list shows the books first.
-  const old = new Date(Date.now() - 86_400_000).toISOString();
-  const sqlite = app.store.sqlite;
-  sqlite.exec("BEGIN");
-  const insertResource = sqlite.prepare("INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at) VALUES (?,?,?,?,?,?)");
-  const insertRevision = sqlite.prepare("INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at) VALUES (?,?,?,?,?,?)");
-  for (let i = 0; i < requiredScale.metadataCount; i += 1) {
-    insertResource.run(`res_s${i}`, null, "novel", `规模条目 ${i}`, JSON.stringify([`s${i}`]), old);
-    insertRevision.run(`rev_s${i}`, `res_s${i}`, `fps${i}`, "bench-parser", JSON.stringify({ normalized: `规模检索块 ${i} 日本語` }), old);
-  }
-  const indexStmts = new Map();
-  for (let i = 0; i < requiredScale.searchBlocks; i += 1) {
-    for (const mutation of app.store.indexFragment({ id: `frag_s${i}`, resourceId: `res_s${i % requiredScale.metadataCount}`, resourceRevisionId: `rev_s${i % requiredScale.metadataCount}`, partId: "body", start: 0, end: 8, kind: "body", text: `规模检索块 ${i} 日本語 中文` })) {
-      let stmt = indexStmts.get(mutation.sql);
-      if (!stmt) { stmt = sqlite.prepare(mutation.sql); indexStmts.set(mutation.sql, stmt); }
-      stmt.run(...(mutation.params ?? []));
-    }
-  }
-  sqlite.exec("COMMIT");
-
   const txtFile = path.join(books, "large.txt");
-  const filler = Buffer.alloc(10 * 1024 * 1024, "阅读正文。");
-  fs.writeFileSync(txtFile, Buffer.concat([filler.subarray(0, filler.length - (filler.length % Buffer.byteLength("阅读正文。"))), Buffer.from(TXT_MARKER)]));
-  const chapter = "章节正文。".repeat(700_000);
   const epubFile = path.join(books, "large.epub");
-  fs.writeFileSync(epubFile, epubBytes([chapter, chapter, `${chapter}${EPUB_MARKER}`]));
-  const txt = await call(app, actor, grant, "library.importDocument", { title: "规模十兆文本", pathHandle: app.registerPath("file", txtFile), format: "txt" });
-  const epub = await call(app, actor, grant, "library.importDocument", { title: "规模三十兆书", pathHandle: app.registerPath("file", epubFile), format: "epub" });
-  for (const [book, marker] of [[txt, TXT_MARKER], [epub, EPUB_MARKER]]) {
-    const read = await call(app, actor, grant, "library.read", { resourceId: book.resourceId });
-    const last = read.parts[read.parts.length - 1];
-    const range = { start: last.length - [...marker].length, end: last.length };
-    await call(app, actor, grant, "progress.set", {
-      contextId: null,
-      resourceId: book.resourceId,
-      resourceRevisionId: book.revisionId,
-      consumed: false,
-      locator: { kind: "text", partId: last.id, representationId: book.revisionId, normalizationVersion: NORMALIZATION_V1, range, quote: { exact: marker } },
-    });
+  let txt;
+  let epub;
+  let note;
+  try {
+    await app.start();
+    const actor = { kind: "user", id: "bench-scale" };
+    const grant = app.issueOwnerGrant(actor);
+    await call(app, actor, grant, "settings.skipAi", {});
+    await call(app, actor, grant, "library.scan.setSchedule", { onStartup: false, intervalMinutes: 0 });
+    // A file is read from a library path (A-80): the folder the books lie in is one, in the Profile the windows start on.
+    fs.mkdirSync(books, { recursive: true });
+    await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
+    await app.scan.whenIdle();
+    // Metadata rows are older than the large books so the resource list shows the books first.
+    const old = new Date(Date.now() - 86_400_000).toISOString();
+    const sqlite = app.store.sqlite;
+    sqlite.exec("BEGIN");
+    const insertResource = sqlite.prepare("INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at) VALUES (?,?,?,?,?,?)");
+    const insertRevision = sqlite.prepare("INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at) VALUES (?,?,?,?,?,?)");
+    for (let i = 0; i < requiredScale.metadataCount; i += 1) {
+      insertResource.run(`res_s${i}`, null, "novel", `规模条目 ${i}`, JSON.stringify([`s${i}`]), old);
+      insertRevision.run(`rev_s${i}`, `res_s${i}`, `fps${i}`, "bench-parser", JSON.stringify({ normalized: `规模检索块 ${i} 日本語` }), old);
+    }
+    const indexStmts = new Map();
+    for (let i = 0; i < requiredScale.searchBlocks; i += 1) {
+      for (const mutation of app.store.indexFragment({ id: `frag_s${i}`, resourceId: `res_s${i % requiredScale.metadataCount}`, resourceRevisionId: `rev_s${i % requiredScale.metadataCount}`, partId: "body", start: 0, end: 8, kind: "body", text: `规模检索块 ${i} 日本語 中文` })) {
+        let stmt = indexStmts.get(mutation.sql);
+        if (!stmt) { stmt = sqlite.prepare(mutation.sql); indexStmts.set(mutation.sql, stmt); }
+        stmt.run(...(mutation.params ?? []));
+      }
+    }
+    sqlite.exec("COMMIT");
+
+    const filler = Buffer.alloc(10 * 1024 * 1024, "阅读正文。");
+    fs.writeFileSync(txtFile, Buffer.concat([filler.subarray(0, filler.length - (filler.length % Buffer.byteLength("阅读正文。"))), Buffer.from(TXT_MARKER)]));
+    const chapter = "章节正文。".repeat(700_000);
+    fs.writeFileSync(epubFile, epubBytes([chapter, chapter, `${chapter}${EPUB_MARKER}`]));
+    txt = await call(app, actor, grant, "library.importDocument", { title: "规模十兆文本", pathHandle: app.registerPath("file", txtFile), format: "txt" });
+    epub = await call(app, actor, grant, "library.importDocument", { title: "规模三十兆书", pathHandle: app.registerPath("file", epubFile), format: "epub" });
+    for (const [book, marker] of [[txt, TXT_MARKER], [epub, EPUB_MARKER]]) {
+      const read = await call(app, actor, grant, "library.read", { resourceId: book.resourceId });
+      const last = read.parts[read.parts.length - 1];
+      const range = { start: last.length - [...marker].length, end: last.length };
+      await call(app, actor, grant, "progress.set", {
+        contextId: null,
+        resourceId: book.resourceId,
+        resourceRevisionId: book.revisionId,
+        consumed: false,
+        locator: { kind: "text", partId: last.id, representationId: book.revisionId, normalizationVersion: NORMALIZATION_V1, range, quote: { exact: marker } },
+      });
+    }
+    note = await call(app, actor, grant, "notes.create", { title: "规模笔记", text: "规模保存起点" });
+  } finally {
+    app.close();
   }
-  const note = await call(app, actor, grant, "notes.create", { title: "规模笔记", text: "规模保存起点" });
-  app.close();
   const parseFile = path.join(books, "background.txt");
   const sizes = {
     txtBytes: fs.statSync(txtFile).size,

@@ -17,13 +17,15 @@ import { QuickTaskService } from "../quick-tasks.ts";
 import type { MangaProductApp } from "../product-app.ts";
 import { INDEXABLE_PARTITIONS } from "../product-helpers.ts";
 import { listConnections, upsertConnection, testConnection, deleteConnection, setProfile, probeConnection } from "./connections.ts";
+import { addFromProvider, deleteAccount, discoverModels, listProviders, setAccountKey } from "./providers.ts";
 import { indexRootRecord } from "./inventory.ts";
 import type { UpdateBusyReason, UpdateSettingsPatch } from "@manga/contracts";
+import type { CoreCommandHost } from "./shared.ts";
 
 /** What these commands use of the application. */
-export type SettingsHost = Pick<MangaProductApp, "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "notify" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "trace" | "uiFacets" | "vault" | "workFolders"> & Partial<Pick<MangaProductApp, "appVersion" | "buildInfo" | "update">>;
+export type SettingsHost = CoreCommandHost & Partial<Pick<MangaProductApp, "appVersion" | "buildInfo" | "update">>;
 
-export function settingsModule(app: SettingsHost): MangaModule {
+export function settingsModule(app: SettingsHost & Pick<MangaProductApp, "plugins">): MangaModule {
   return defineModule({
     manifest: {
       moduleId: "manga.settings",
@@ -98,7 +100,7 @@ export function settingsModule(app: SettingsHost): MangaModule {
         return app.quickTasks.restore((envelope.input as { builtinKey?: string }).builtinKey);
       });
       app.runtime.registerCommand("manga.settings", "log.query", (envelope) => app.queryLog(envelope));
-      app.runtime.registerCommand("manga.settings", "usage.query", (envelope) => usageQuery(app.store, envelope.input as Parameters<typeof usageQuery>[1]));
+      app.runtime.registerCommand("manga.settings", "usage.query", (envelope) => usageQuery(app.store, envelope.input as Parameters<typeof usageQuery>[1], (ref) => (ref ? app.providers.get(ref)?.file.pricesCheckedAt ?? null : null)));
       app.runtime.registerCommand("manga.settings", "records.list", (envelope) => recordsList(app.store, envelope.input as Parameters<typeof recordsList>[1]));
       app.runtime.registerCommand("manga.settings", "debug.context", (envelope) => app.debugContext(envelope));
       app.runtime.registerCommand("manga.settings", "connections.list", () => listConnections(app));
@@ -107,10 +109,22 @@ export function settingsModule(app: SettingsHost): MangaModule {
       app.runtime.registerCommand("manga.settings", "connections.delete", (envelope) => deleteConnection(app, envelope));
       app.runtime.registerCommand("manga.settings", "connections.setProfile", (envelope) => setProfile(app, envelope));
       app.runtime.registerCommand("manga.settings", "connections.probe", (envelope, signal) => probeConnection(app, envelope, signal));
+      // Models from provider plugins (计划 4.2): in the settings, not the plugins module, so a connection's account stays manageable with the plugin off.
+      app.runtime.registerCommand("manga.settings", "providers.list", () => listProviders(app));
+      app.runtime.registerCommand("manga.settings", "providers.discover", (envelope, signal) => discoverModels(app, envelope, signal));
+      app.runtime.registerCommand("manga.settings", "providers.add", (envelope, signal) => addFromProvider(app, envelope, signal));
+      app.runtime.registerCommand("manga.settings", "providers.setKey", (envelope) => setAccountKey(app, envelope));
+      app.runtime.registerCommand("manga.settings", "providers.deleteAccount", (envelope) => deleteAccount(app, envelope));
       app.runtime.registerCommand("manga.settings", "settings.getAgent", () => readAgentSettings(app.store));
       app.runtime.registerCommand("manga.settings", "settings.setAgent", (envelope) => {
         app.assertWritable();
-        const saved = writeAgentSettings(app.store, envelope.input as Parameters<typeof writeAgentSettings>[1]);
+        const input = envelope.input as Parameters<typeof writeAgentSettings>[1];
+        // The model chosen on the conversation page is one of the text connections.
+        const chosen = input.chat?.connectionId;
+        if (chosen && !app.store.sqlite.prepare("SELECT 1 FROM provider_connections WHERE id = ? AND purpose = 'text'").get(chosen)) {
+          throw new MangaError("VALIDATION_ERROR", "the chosen model is not a text connection", { details: { field: "chat.connectionId" } });
+        }
+        const saved = writeAgentSettings(app.store, input);
         // A shorter time or a smaller size applies at once to what is already kept.
         app.trace.prune();
         return saved;
@@ -153,6 +167,7 @@ export function settingsModule(app: SettingsHost): MangaModule {
 }
 
 export async function settingsSnapshot(app: SettingsHost) {
+  const connections = listConnections(app);
   return {
     layout: app.publicLayout(),
     appVersion: app.appVersion,
@@ -162,10 +177,10 @@ export async function settingsSnapshot(app: SettingsHost) {
     aiSkipped: app.store.getMeta("aiSkipped") === "1",
     aiRuntime: currentRuntime(app),
     vaultAvailable: await app.vault.available(),
-    connections: listConnections(app),
+    connections,
     recoveryJobs: app.pendingRecoveryJobs(),
     restartRequired: app.sealed,
-    needsSetup: app.store.getMeta("aiSkipped") !== "1" && listConnections(app).length === 0,
+    needsSetup: app.store.getMeta("aiSkipped") !== "1" && connections.length === 0,
     shell: readShell(app.store),
     legacyLocation: legacyLocation(app),
   };
@@ -317,17 +332,48 @@ export function applyLocations(app: SettingsHost, envelope: CommandEnvelope) {
   for (const copy of payload.copies) {
     if (copy.indexedOnly) indexRootRecord(app, copy.source, "file");
   }
+  // Mark the job running and register `data` ownership rows BEFORE checkpointing so zero SQLite writes occur while `data` (containing manga.sqlite) is copied and verified.
+  app.store.sqlite.prepare("UPDATE recovery_jobs SET status = 'running', stage = 'copy', updated_at = ? WHERE id = ?").run(new Date().toISOString(), input.checkpointId);
+  const dataCopy = payload.copies.find((copy) => !copy.indexedOnly && copy.partition === "data");
+  const dataFiles = dataCopy ? listCopyFiles(dataCopy.source) : [];
+  if (dataCopy) {
+    for (const file of dataFiles) {
+      const relative = file.relativePath.replace(/^\.\//, "");
+      const targetFile = path.join(dataCopy.target, relative);
+      app.store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)").run(
+        input.checkpointId, dataCopy.partition, relative, targetFile, "copying", null,
+      );
+    }
+  }
   const checkpoint = app.store.sqlite.pragma("wal_checkpoint(TRUNCATE)") as Array<{ busy: number; log: number; checkpointed: number }>;
   if (checkpoint[0]?.busy || (checkpoint[0] && checkpoint[0].log !== checkpoint[0].checkpointed)) {
+    app.store.sqlite.prepare("UPDATE recovery_jobs SET status = 'planned', stage = 'planned', updated_at = ? WHERE id = ?").run(new Date().toISOString(), input.checkpointId);
     throw new MangaError("LOCATION_UNAVAILABLE", "database is busy; retry the migration", { retryable: true });
   }
-  app.store.sqlite.prepare("UPDATE recovery_jobs SET status = 'running', stage = 'copy', updated_at = ? WHERE id = ?").run(new Date().toISOString(), input.checkpointId);
   const verified: Array<{ partition: string; bytes: number; fingerprint: string }> = [];
   try {
     for (const copy of payload.copies) {
       if (copy.indexedOnly) continue;
       const dest = copy.target;
       fs.mkdirSync(dest, { recursive: true });
+      if (copy.partition === "data") {
+        // Copy and verify `data` with no interleaved SQLite writes so WAL auto-checkpointing cannot mutate manga.sqlite mid-copy.
+        const committed: Array<{ relative: string; hash: string }> = [];
+        for (const file of dataFiles) {
+          const relative = file.relativePath.replace(/^\.\//, "");
+          const targetFile = path.join(dest, relative);
+          committed.push({ relative, hash: copyOwnedFile(file.absolutePath, targetFile) });
+        }
+        const expected = fingerprintTree(copy.source);
+        const actual = fingerprintTree(dest);
+        if (actual.hash !== expected.hash) throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} does not match its source`, { details: { partition: copy.partition } });
+        for (const item of committed) {
+          app.store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?").run(item.hash, input.checkpointId, copy.partition, item.relative);
+        }
+        verified.push({ partition: copy.partition, bytes: actual.bytes, fingerprint: actual.hash });
+        app.store.maybeCrash("location-copy");
+        continue;
+      }
       const files = listCopyFiles(copy.source);
       for (const file of files) {
         const relative = file.relativePath.replace(/^\.\//, "");

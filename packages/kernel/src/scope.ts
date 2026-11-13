@@ -2,6 +2,7 @@ import type { ResourceHandle } from "@manga/contracts";
 
 export class ResourceScope {
   private readonly handles = new Map<string, ResourceHandle>();
+  private readonly releasing = new Map<string, Promise<void>>();
   private stopping = false;
   private stopPromise: Promise<void> | undefined;
   private readonly counts = new Map<ResourceHandle["kind"], number>();
@@ -21,10 +22,7 @@ export class ResourceScope {
     if (this.handles.has(handle.id)) throw new Error(`duplicate resource ${handle.id}`);
     this.handles.set(handle.id, handle);
     this.counts.set(handle.kind, (this.counts.get(handle.kind) ?? 0) + 1);
-    let releasePromise: Promise<void> | undefined;
-    return () => {
-      return releasePromise ??= this.release(handle.id);
-    };
+    return () => this.release(handle.id);
   }
 
   async stop(): Promise<void> {
@@ -34,12 +32,23 @@ export class ResourceScope {
     return this.stopPromise;
   }
 
-  private async release(id: string): Promise<void> {
+  private release(id: string): Promise<void> {
+    const inflight = this.releasing.get(id);
+    if (inflight) return inflight;
     const handle = this.handles.get(id);
-    if (!handle) return;
-    await handle.dispose();
-    this.handles.delete(id);
-    this.counts.set(handle.kind, Math.max(0, (this.counts.get(handle.kind) ?? 1) - 1));
+    if (!handle) return Promise.resolve();
+    const work = (async () => {
+      try {
+        await handle.dispose();
+        if (this.handles.delete(id)) {
+          this.counts.set(handle.kind, Math.max(0, (this.counts.get(handle.kind) ?? 1) - 1));
+        }
+      } finally {
+        this.releasing.delete(id);
+      }
+    })();
+    this.releasing.set(id, work);
+    return work;
   }
 
   private async releaseAll(): Promise<void> {

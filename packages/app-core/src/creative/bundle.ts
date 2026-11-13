@@ -80,6 +80,8 @@ export const BUNDLE_LIMITS = { rowsPerTable: 100_000, text: 8 * 1024 * 1024, sna
 const SNAPSHOT_TEXT = BUNDLE_LIMITS.snapshotText;
 const clip = (value: string, max: number = SNAPSHOT_TEXT) => (value.length > max ? `${value.slice(0, max)}…` : value);
 
+const SORT_KEY_PATTERN = /^[0-9a-z]{1,256}$/;
+
 const bad = (message: string, reason: string, extra: Record<string, unknown> = {}) => new MangaError("VALIDATION_ERROR", message, { details: { reason, ...extra } });
 
 // ---------------------------------------------------------------------------------------------------------- collecting
@@ -256,10 +258,51 @@ export function checkBundle(raw: unknown): ProjectBundle {
   const needs = (table: Exclude<BundleTable, "projects">, column: string, parent: Set<string>) => {
     for (const row of tables[table]) if (!parent.has(String(row[column]))) throw bad(`${table} points at a ${column} the package does not hold`, "schema", { table, column });
   };
-  const boards = ids("whiteboards"); const maps = ids("mindmaps"); const drafts = ids("drafts"); const pages = ids("excerpt_pages"); const cuts = ids("rough_cuts"); const nodes = ids("whiteboard_nodes");
+  const boards = ids("whiteboards"); const maps = ids("mindmaps"); const drafts = ids("drafts"); const pages = ids("excerpt_pages"); const cuts = ids("rough_cuts");
   needs("whiteboard_nodes", "board_id", boards); needs("whiteboard_edges", "board_id", boards); needs("mindmap_nodes", "map_id", maps);
   needs("draft_versions", "draft_id", drafts); needs("draft_suggestions", "draft_id", drafts); needs("excerpts", "page_id", pages); needs("rough_cut_clips", "cut_id", cuts);
-  for (const edge of tables.whiteboard_edges) if (!nodes.has(String(edge.source_id)) || !nodes.has(String(edge.target_id))) throw bad("a link joins a card the package does not hold", "schema", { table: "whiteboard_edges" });
+  const wbNodeMap = new Map(tables.whiteboard_nodes.map((row) => [String(row.id), { boardId: String(row.board_id), kind: String(row.kind), parentId: row.parent_id === null ? null : String(row.parent_id) }]));
+  for (const [id, node] of wbNodeMap) {
+    if (node.parentId === null) continue;
+    if (node.kind === "group") throw bad("a whiteboard group cannot be nested inside another group", "schema", { table: "whiteboard_nodes" });
+    const parent = wbNodeMap.get(node.parentId);
+    if (!parent || parent.boardId !== node.boardId || parent.kind !== "group" || node.parentId === id) {
+      throw bad("a whiteboard card points at a parent group the board does not hold", "schema", { table: "whiteboard_nodes" });
+    }
+  }
+  for (const edge of tables.whiteboard_edges) {
+    const src = wbNodeMap.get(String(edge.source_id));
+    const dst = wbNodeMap.get(String(edge.target_id));
+    if (!src || !dst || src.boardId !== String(edge.board_id) || dst.boardId !== String(edge.board_id)) {
+      throw bad("a link joins a card the board does not hold", "schema", { table: "whiteboard_edges" });
+    }
+  }
+  const mmNodeMap = new Map(tables.mindmap_nodes.map((row) => [String(row.id), { mapId: String(row.map_id), parentId: row.parent_id === null ? null : String(row.parent_id), sortKey: String(row.sort_key) }]));
+  const rootsPerMap = new Map<string, number>();
+  for (const [id, node] of mmNodeMap) {
+    if (!SORT_KEY_PATTERN.test(node.sortKey)) throw bad("a mindmap node has an invalid sort key", "schema", { table: "mindmap_nodes" });
+    if (node.parentId === null) {
+      rootsPerMap.set(node.mapId, (rootsPerMap.get(node.mapId) ?? 0) + 1);
+      continue;
+    }
+    const parent = mmNodeMap.get(node.parentId);
+    if (!parent || parent.mapId !== node.mapId) throw bad("a mindmap node points at a parent the map does not hold", "schema", { table: "mindmap_nodes" });
+    const visited = new Set<string>([id]);
+    let cursor: string | null = node.parentId;
+    while (cursor !== null) {
+      if (visited.has(cursor)) throw bad("mindmap nodes form a cycle", "schema", { table: "mindmap_nodes" });
+      visited.add(cursor);
+      const next = mmNodeMap.get(cursor);
+      if (!next || next.mapId !== node.mapId) throw bad("a mindmap node points at a parent the map does not hold", "schema", { table: "mindmap_nodes" });
+      cursor = next.parentId;
+    }
+  }
+  for (const count of rootsPerMap.values()) {
+    if (count > 1) throw bad("a mindmap holds more than one root node", "schema", { table: "mindmap_nodes" });
+  }
+  for (const clip of tables.rough_cut_clips) {
+    if (!SORT_KEY_PATTERN.test(String(clip.sort_key))) throw bad("a rough cut clip has an invalid sort key", "schema", { table: "rough_cut_clips" });
+  }
   for (const table of ["whiteboards", "mindmaps", "drafts", "excerpts", "rough_cuts", "project_materials", "project_terms"] as const) {
     for (const row of tables[table]) if (row.project_id !== null && row.project_id !== project.id) throw bad(`${table} holds a row of another project`, "schema", { table });
   }

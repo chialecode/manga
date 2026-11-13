@@ -70,7 +70,7 @@ describe("a task knows the context it runs in", () => {
 
     // The model's tool list has no context parameter on the command.
     const first = requests.find((body) => Array.isArray(body.tools) && body.stream)!;
-    const progressTool = (first.tools as Array<{ function: { name: string; parameters: { properties: Record<string, unknown>; required?: string[] } } }>).find((tool) => tool.function.name === "progress.get")!;
+    const progressTool = (first.tools as Array<{ function: { name: string; parameters: { properties: Record<string, unknown>; required?: string[] } } }>).find((tool) => tool.function.name === "progress_get")!;
     expect(Object.keys(progressTool.function.parameters.properties)).not.toContain("contextId");
     expect(progressTool.function.parameters.required ?? []).not.toContain("contextId");
     // What came back is the project position (page 7), not the position of 最近 the model asked for (page 2).

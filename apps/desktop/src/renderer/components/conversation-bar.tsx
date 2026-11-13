@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { History, MessageSquarePlus } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
+import { isImeEvent } from "../lib/ime.ts";
 
 type T = Translator["t"];
 export type HistoryItem = { sessionId: string; title: string; excerpt: string; runCount: number; updatedAt: string };
@@ -27,6 +28,8 @@ export function ConversationBar(props: {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<HistoryItem[] | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
   useEffect(() => {
     if (!open) return;
@@ -34,15 +37,14 @@ export function ConversationBar(props: {
     void attempt<{ items: HistoryItem[] }>("conversation.history", { contextId: props.contextId, limit: 50 }).then((result) => {
       if (!live) return;
       if (result.ok) setItems(asArray<HistoryItem>(result.value.items));
-      else props.onError(result.error.message);
+      else onErrorRef.current(result.error.message);
     });
     return () => { live = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, props.contextId, props.version]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); } };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !isImeEvent(event)) { event.stopPropagation(); setOpen(false); } };
     const onDown = (event: MouseEvent) => { if (root.current && event.target instanceof Node && !root.current.contains(event.target)) setOpen(false); };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousedown", onDown);

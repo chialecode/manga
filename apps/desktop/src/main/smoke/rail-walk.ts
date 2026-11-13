@@ -564,7 +564,8 @@ async function walkHoverCard(env: RailEnv, kit: Kit): Promise<void> {
   })()`);
   if (!came) problems.push("resting the pointer on the comic icon did not bring its card");
   if (came && railBox && cardBox && style) {
-    if (!near(cardBox.x, railBox.r) || !near(cardBox.y, railBox.y)) problems.push(`the card is at ${Math.round(cardBox.x)},${Math.round(cardBox.y)}, not against the rail's edge at ${Math.round(railBox.r)},${Math.round(railBox.y)}`);
+    // The card starts below the title bar, the rail's first 36 px (A-136).
+    if (!near(cardBox.x, railBox.r) || !near(cardBox.y, railBox.y + 36)) problems.push(`the card is at ${Math.round(cardBox.x)},${Math.round(cardBox.y)}, not against the rail's edge at ${Math.round(railBox.r)},${Math.round(railBox.y + 36)}`);
     if (!near(cardBox.w, savedFolded?.width ?? before?.width ?? 0, 3)) problems.push(`the card is ${Math.round(cardBox.w)} wide, not the sidebar's ${savedFolded?.width}`);
     if (!(parseFloat(style.border) > 0) || style.shadow === "none") problems.push(`the card has no edge or no shadow (${style.border}, ${style.shadow})`);
     if (style.background !== style.want) problems.push(`the card is ${style.background}, not the sidebar's color ${style.want}`);
@@ -893,38 +894,37 @@ async function walkSettings(env: RailEnv, kit: Kit): Promise<void> {
   if (!none || restored !== directory.pages) problems.push(`the filter: nothing found says so ${none}, ${restored} pages after clearing`);
   await shot("settings-view");
 
-  // Back has two stages: through the pages that were visited (and forward again), and then out of the settings.
+  // Back has two stages: through the pages that were visited (and forward again), and then out of the settings. Alt + ← and → walk them (A-136).
   const pageOf = () => kit.attr("settings-area", "data-page");
   const target = firstPage === "models" ? "reading" : "models";
   await clickTestId(view, `settings-nav-${target}`, 3000);
   await clickTestId(view, "settings-nav-logs", 3000);
   await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") === "logs"`, 3000);
   const steps: Array<string | null> = [await pageOf()];
-  await clickTestId(view, "nav-back", 2000);
+  await pressChord(view, "Left", ["alt"]);
   await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") === ${JSON.stringify(target)}`, 2000);
   steps.push(await pageOf());
-  const forwardOk = await js<boolean>(view, `!${kit.at("nav-forward")}?.disabled`);
-  await clickTestId(view, "nav-forward", 2000);
+  await pressChord(view, "Right", ["alt"]);
   await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") === "logs"`, 2000);
   steps.push(await pageOf());
   for (let n = 0; n < 2; n += 1) {
     const prevPage = await pageOf();
-    await clickTestId(view, "nav-back", 2000);
+    await pressChord(view, "Left", ["alt"]);
     await waitUntil(view, `${kit.at("settings-area")}?.getAttribute("data-page") !== ${JSON.stringify(prevPage)}`, 2000);
   }
   steps.push(await pageOf());
   const stillIn = await kit.drawn("settings-area");
-  await clickTestId(view, "nav-back", 2000);
+  await pressChord(view, "Left", ["alt"]);
   await waitFrames(view, 2);
   steps.push(await pageOf());
   const stillInAtFirst = await kit.drawn("settings-area");
   if (stillInAtFirst) {
-    await clickTestId(view, "nav-back", 2000);
+    await pressChord(view, "Left", ["alt"]);
     await waitUntil(view, `!${DRAWN}(${kit.at("settings-area")})`, 2000);
   }
   const outAfter = !(await kit.drawn("settings-area"));
-  detail.back = { steps, forwardOk, stillIn, stillInAtFirst, outAfter };
-  if (steps[0] !== "logs" || steps[1] !== target || steps[2] !== "logs" || steps[3] !== firstPage || !forwardOk || !stillIn || !outAfter) problems.push(`back and forward walked ${JSON.stringify(steps)} (first page ${firstPage}, forward offered ${forwardOk}, still inside at the first page ${stillIn}, out after ${outAfter})`);
+  detail.back = { steps, stillIn, stillInAtFirst, outAfter };
+  if (steps[0] !== "logs" || steps[1] !== target || steps[2] !== "logs" || steps[3] !== firstPage || !stillIn || !outAfter) problems.push(`back and forward walked ${JSON.stringify(steps)} (first page ${firstPage}, still inside at the first page ${stillIn}, out after ${outAfter})`);
   if (!outAfter) await leaveSettings(view);
 
   // Out: the workspace as it was; the player is the element that was left, was not loaded again, and is at the second it was at.

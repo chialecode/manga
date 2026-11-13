@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isImeEvent } from "../lib/ime.ts";
 
 /**
  * A position in a book (a page, a part) shown as text that turns into a field when it is clicked: Enter goes there, Esc or leaving the field
@@ -30,6 +31,7 @@ export function EditableNumber(props: {
     const value = Number(text.trim());
     if (!text.trim() || !Number.isFinite(value) || value < 1 || value > props.max) { setInvalid(true); return; }
     props.onGo(Math.floor(value));
+    field.current?.blur();
     setEditing(false);
     setInvalid(false);
   };
@@ -50,8 +52,9 @@ export function EditableNumber(props: {
           spellCheck={false}
           onChange={(event) => { setText(event.target.value); setInvalid(false); }}
           onKeyDown={(event) => {
+            if (isImeEvent(event)) return;
             if (event.key === "Enter") { event.preventDefault(); commit(); }
-            else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setEditing(false); }
+            else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); field.current?.blur(); setEditing(false); }
           }}
           onBlur={() => setEditing(false)}
         />

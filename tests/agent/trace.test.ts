@@ -94,7 +94,7 @@ describe.each(["native", "pi"] as const)("the trace of a task under the %s runti
 
   it("lists the model requests, the tool call and their order, with times and tokens", async () => {
     // The final answer is given by the provider's custom answer, which states the tokens the way a service does.
-    const t = await scenario({ runtime, script: [{ name: "library.find", arguments: '{"text":"x"}' }], respond: (body) => (JSON.stringify(body.messages).includes("library.find") ? { text: "找到了。" } : undefined) });
+    const t = await scenario({ runtime, script: [{ name: "library.find", arguments: '{"text":"x"}' }], respond: (body) => (JSON.stringify(body.messages).includes("library_find") ? { text: "找到了。" } : undefined) });
     const { runId, finished } = await t.send(task);
     expect(finished.value?.status, JSON.stringify(finished.value?.error)).toBe("succeeded");
     const entries = await t.list(runId);
@@ -118,14 +118,14 @@ describe.each(["native", "pi"] as const)("the trace of a task under the %s runti
     const t = await scenario({
       runtime,
       script: [{ name: "proposal.rename", arguments: JSON.stringify({ kind: "project", targetId: "PLACEHOLDER", title: "新名字" }) }],
-      respond: (body) => (JSON.stringify(body.messages).includes("proposal.rename") ? { text: "已提交重命名提议。" } : undefined),
+      respond: (body) => (JSON.stringify(body.messages).includes("proposal_rename") ? { text: "已提交重命名提议。" } : undefined),
     });
     const proj = ok<{ id: string }>(await run(t.ctx, "project.create", { name: "旧名字" }));
     const projSes = ok<{ id: string }>(await run(t.ctx, "session.open", { kind: "project", targetId: proj.id, contextId: proj.id }));
     // Replace script targetId with actual project id.
     const server2 = await startMockProvider({
       streamToolScript: [{ name: "proposal.rename", arguments: JSON.stringify({ kind: "project", targetId: proj.id, title: "新名字" }) }],
-      respond: ({ body }) => (JSON.stringify(body.messages).includes("proposal.rename") ? { text: "已提交重命名提议。" } : undefined),
+      respond: ({ body }) => (JSON.stringify(body.messages).includes("proposal_rename") ? { text: "已提交重命名提议。" } : undefined),
     });
     closers.push(server2.close);
     ok(await run(t.ctx, "connections.upsert", {
@@ -175,7 +175,7 @@ describe.each(["native", "pi"] as const)("the trace of a task under the %s runti
   });
 
   it("takes out the secret, the token-like text and the local path, from the request and the copy alike, but not the numbers named tokens", async () => {
-    const t = await scenario({ runtime, script: [{ name: "library.find", arguments: '{"text":"x"}' }], respond: (body) => (JSON.stringify(body.messages).includes("library.find") ? { text: `好的，你的密钥是 ${KEY}。` } : undefined) });
+    const t = await scenario({ runtime, script: [{ name: "library.find", arguments: '{"text":"x"}' }], respond: (body) => (JSON.stringify(body.messages).includes("library_find") ? { text: `好的，你的密钥是 ${KEY}。` } : undefined) });
     const { runId } = await t.send(task);
     const entries = await t.list(runId);
     const everything: string[] = [];

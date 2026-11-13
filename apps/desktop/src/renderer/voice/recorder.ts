@@ -1,5 +1,6 @@
 import type { SourceLocator } from "@manga/contracts/location";
 import type { CaptureEventReason, CaptureStopReason } from "@manga/contracts/media";
+import { encodePcmBase64 } from "./pcm-encoding.ts";
 
 /** The microphone as the recorder sees it: 16 kHz mono chunks, a level for each, and an end it must react to. */
 export type MicHandle = {
@@ -65,6 +66,7 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
  * offset of the moment they happened; and however a recording ends, what was captured is handed over (never discarded).
  */
 export class Recorder {
+  private readonly ports: RecorderPorts;
   private state: RecorderState = idleState();
   private readonly listeners = new Set<(state: RecorderState) => void>();
   private mic: MicHandle | null = null;
@@ -75,9 +77,12 @@ export class Recorder {
   private chain: Promise<void> = Promise.resolve();
   private failed = false;
   private stopRequest: CaptureStopReason | null = null;
+  private startPromise: Promise<boolean> | null = null;
   private pendingStop: Promise<RecorderState["lastStop"]> | null = null;
 
-  constructor(private readonly ports: RecorderPorts) {}
+  constructor(ports: RecorderPorts) {
+    this.ports = ports;
+  }
 
   getState = (): RecorderState => this.state;
 
@@ -94,8 +99,16 @@ export class Recorder {
   /** Where the audio clock stands now, for stamping an event. */
   offsetMs = (): number => Math.max(0, Math.round(this.ports.now() - this.origin));
 
-  async start(options: StartOptions): Promise<boolean> {
-    if (this.state.phase !== "idle") return false;
+  start(options: StartOptions): Promise<boolean> {
+    if (this.state.phase !== "idle") return Promise.resolve(false);
+    const run = this.startInternal(options).finally(() => {
+      if (this.startPromise === run) this.startPromise = null;
+    });
+    this.startPromise = run;
+    return run;
+  }
+
+  private async startInternal(options: StartOptions): Promise<boolean> {
     this.stopRequest = null;
     this.set({ ...idleState(), phase: "starting", mode: options.mode, issue: null, lastStop: null });
     let mic: MicHandle;
@@ -143,7 +156,11 @@ export class Recorder {
     mic.onEnded(() => { void this.stop("device_lost"); });
     this.set({ phase: "recording", sessionId, retention: started.retention, deviceLabel: mic.label, elapsedMs: 0, level: 0 });
     // A release that came while the session was being made ends it right away, with what little was captured.
-    if (this.stopRequest) void this.stop(this.stopRequest);
+    if (this.stopRequest) {
+      const reason = this.stopRequest;
+      this.stopRequest = null;
+      void this.stop(reason);
+    }
     return true;
   }
 
@@ -153,10 +170,7 @@ export class Recorder {
     this.samples += pcm.length;
     this.set({ elapsedMs: Math.round((this.samples * 1000) / SAMPLE_RATE), level: Math.min(1, Math.max(0, level)) });
     if (this.failed) return;
-    const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-    let binary = "";
-    for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-    const data = btoa(binary);
+    const data = encodePcmBase64(pcm);
     this.chain = this.chain.then(async () => {
       if (this.failed) return;
       try {
@@ -190,7 +204,9 @@ export class Recorder {
   stop(reason: CaptureStopReason = "user"): Promise<RecorderState["lastStop"]> {
     if (this.state.phase === "starting") {
       this.stopRequest = reason;
-      return Promise.resolve(null);
+      const inflight = this.startPromise;
+      if (!inflight) return Promise.resolve(null);
+      return inflight.then(() => this.pendingStop ?? this.state.lastStop);
     }
     if (this.state.phase !== "recording") return this.pendingStop ?? Promise.resolve(null);
     const sessionId = this.state.sessionId!;

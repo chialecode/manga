@@ -85,7 +85,7 @@ describe("a long conversation's list (AT-143)", () => {
     const view = render(<List items={many(200, 400)} hasMore onOlder={onOlder} reveal={reveal} onRevealed={onRevealed} />);
     layOut(log());
     // The list scrolls to the message the way a browser would.
-    log().scrollTo = ((options: ScrollToOptions) => { log().scrollTop = options.top ?? 0; fireEvent.scroll(log()); }) as typeof HTMLElement.prototype.scrollTo;
+    log().scrollTo = ((options: ScrollToOptions) => { log().scrollTop = options.top ?? 0; log().dispatchEvent(new Event("scroll")); }) as typeof HTMLElement.prototype.scrollTo;
     expect(onOlder).toHaveBeenCalledTimes(1);
     view.rerender(<List items={many(200, 400)} hasMore onOlder={onOlder} loadingOlder reveal={reveal} onRevealed={onRevealed} />);
     expect(onOlder).toHaveBeenCalledTimes(1);
@@ -207,11 +207,36 @@ describe("the stream of a session keeps the pages already loaded (LOOP-07)", () 
     expect(result.current.loadingOlder).toBe(false);
   });
 
-  it("does not show the previous session's messages under the next one", async () => {
-    host(10);
+  it("does not show the previous session's messages under the next one, and fetches the new session only once (US-32)", async () => {
+    const server = host(10);
     const { result, rerender } = renderHook(({ id }) => useSessionStream(id, { version: 0, running: false }), { initialProps: { id: "ses" as string | undefined } });
     await waitFor(() => expect(result.current.items).toHaveLength(10));
+    const before = server.calls.length;
     rerender({ id: "other" });
     expect(result.current.items).toHaveLength(0);
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(server.calls.slice(before).filter((call) => call.sessionId === "other")).toHaveLength(1);
+  });
+
+  it("opens Markdown links inside AgentBubble via window.manga.openExternal instead of navigating (US-09)", () => {
+    const openExternal = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("manga", { openExternal, command: vi.fn(), onNotice: () => () => undefined });
+    const reply: StreamItem = {
+      kind: "agent",
+      id: "ag-1",
+      at: at(1),
+      runId: "r1",
+      status: "completed",
+      text: "参考 [示例站点](https://example.com/docs)",
+      steps: [],
+      proposals: [],
+      error: null,
+    } as unknown as StreamItem;
+    render(<List items={[reply]} />);
+    const link = screen.getByRole("link", { name: "示例站点" });
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(openExternal).toHaveBeenCalledWith("https://example.com/docs");
   });
 });

@@ -37,6 +37,7 @@
 
 .video-controls { position: relative; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; padding: 6px 16px 8px; background: var(--color-player-bar); color: var(--color-player-ink); border-top: 1px solid var(--color-player-line); transition: opacity 160ms ease; }
 .video-shell[data-idle] .video-controls { opacity: 0; pointer-events: none; }
+.video-shell[data-idle] .video-controls * { pointer-events: none !important; }
 .video-shell[data-idle] .video-stage { cursor: none; }
 /* In full screen (the screen's or the window's) the picture fills the shell and keeps its size; the controls float over it as glass, so showing or hiding
    them never moves the picture. Only the dialogue of the subtitles is lifted above the bar (the player passes the bar's height to the subtitle layer). */

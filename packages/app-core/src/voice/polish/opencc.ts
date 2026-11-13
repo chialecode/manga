@@ -40,13 +40,32 @@ export function convertChineseVariant(
 ): string {
   if (!text || variant === "none") return text;
 
-  const uniqueTerms = Array.from(
-    new Set(protectedTerms.map((t) => t.trim()).filter((t) => t.length > 0)),
-  ).sort((a, b) => b.length - a.length);
-
-  if (uniqueTerms.length === 0) {
+  if (protectedTerms.length === 0) {
     return getConverter(variant)(text);
   }
+
+  // Pre-filter candidates against 1-char / 2-char substrings of `text` so 5k-10k dictionaries stay O(text + hits).
+  const chars = new Set<string>();
+  const bigrams = new Set<string>();
+  for (let i = 0; i < text.length; i += 1) {
+    chars.add(text[i]!);
+    if (i + 1 < text.length) bigrams.add(text.slice(i, i + 2));
+  }
+
+  const candidateSet = new Set<string>();
+  for (let i = 0; i < protectedTerms.length; i += 1) {
+    const t = protectedTerms[i]!.trim();
+    if (!t || t.length > text.length) continue;
+    if (t.length === 1 ? chars.has(t) : bigrams.has(t.slice(0, 2))) {
+      candidateSet.add(t);
+    }
+  }
+
+  if (candidateSet.size === 0) {
+    return getConverter(variant)(text);
+  }
+
+  const uniqueTerms = Array.from(candidateSet).sort((a, b) => b.length - a.length);
 
   // Find non-overlapping exact occurrences of canonical dictionary terms (longest first)
   const spans: Array<{ start: number; end: number; term: string }> = [];
@@ -83,23 +102,20 @@ export function convertChineseVariant(
 
   spans.sort((a, b) => a.start - b.start);
 
-  // Mask protected spans using Private Use Area sentinels untouched by OpenCC
-  let masked = "";
+  // Convert unprotected slices directly without PUA sentinels (avoids U+F8FF overflow and O(S*N) replace copies).
+  const convert = getConverter(variant);
+  let out = "";
   let cursor = 0;
   for (let i = 0; i < spans.length; i += 1) {
     const sp = spans[i]!;
-    masked += text.slice(cursor, sp.start);
-    masked += `\uE0FF${String.fromCharCode(0xe100 + i)}\uE0FE`;
+    if (sp.start > cursor) {
+      out += convert(text.slice(cursor, sp.start));
+    }
+    out += sp.term;
     cursor = sp.end;
   }
-  masked += text.slice(cursor);
-
-  const converted = getConverter(variant)(masked);
-
-  let restored = converted;
-  for (let i = 0; i < spans.length; i += 1) {
-    const token = `\uE0FF${String.fromCharCode(0xe100 + i)}\uE0FE`;
-    restored = restored.replace(token, () => spans[i]!.term);
+  if (cursor < text.length) {
+    out += convert(text.slice(cursor));
   }
-  return restored;
+  return out;
 }

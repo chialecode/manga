@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import type { DraftSuggestionKind } from "@manga/contracts/copy";
 import { asArray, attempt, type CommandError } from "../../../lib/api.ts";
+import { useAsyncGuard } from "../../../hooks/use-async-guard.ts";
 import { DiffText } from "./diff-text.tsx";
 import { QUOTABLE_KINDS, SUGGEST_KINDS, type DraftDoc, type Range, type SuggestionDetail, type SuggestionItem } from "./draft-model.ts";
 
@@ -26,19 +27,20 @@ export function SuggestForm(props: { t: T; projectId: string; draftId: string; s
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [objects, setObjects] = useState<Candidate[]>([]);
   const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   useEffect(() => {
-    let live = true;
+    const token = guard.next();
     void attempt<{ objects: Candidate[] }>("project.objects", { projectId: props.projectId }).then((result) => {
-      if (live && result.ok) setObjects(asArray<Candidate>(result.value.objects).filter((item) => QUOTABLE_KINDS.has(item.kind) && item.state === "ok" && !(item.kind === "draft" && item.id === props.draftId)));
+      if (guard.isCurrent(token) && result.ok) setObjects(asArray<Candidate>(result.value.objects).filter((item) => QUOTABLE_KINDS.has(item.kind) && item.state === "ok" && !(item.kind === "draft" && item.id === props.draftId)));
     });
-    return () => { live = false; };
-  }, [props.projectId, props.draftId]);
+  }, [props.projectId, props.draftId, guard]);
 
   const partOnly = kind === "polish" || kind === "translate" || kind === "terms";
   const quotes = useMemo(() => objects.map((item) => ({ ...item, key: `${item.kind}:${item.id}` })), [objects]);
 
   async function go() {
+    if (busy) return;
     setBusy(true);
     try {
       // What is on screen is what the suggestion is made from, so it is saved first.
@@ -52,11 +54,12 @@ export function SuggestForm(props: { t: T; projectId: string; draftId: string; s
         ...(sources.length ? { sources } : {}),
         ...(partOnly && useSelection && props.selection ? { range: props.selection } : {}),
       });
+      if (!guard.isAlive()) return;
       if (!result.ok) { props.onError(suggestError(t, result.error)); return; }
       setInstruction("");
       props.onStarted(result.value.suggestion);
     } finally {
-      setBusy(false);
+      if (guard.isAlive()) setBusy(false);
     }
   }
 
@@ -139,34 +142,76 @@ export function SuggestionView(props: {
   const { t } = props;
   const [detail, setDetail] = useState<SuggestionDetail | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
   useEffect(() => {
-    let live = true;
+    const token = guard.next();
     void attempt<{ suggestion: SuggestionDetail }>("draft.suggestion", { suggestionId: props.id }).then((result) => {
-      if (!live) return;
-      if (result.ok) setDetail(result.value.suggestion); else props.onError(result.error.message);
+      if (!guard.isCurrent(token)) return;
+      if (result.ok) setDetail(result.value.suggestion); else onErrorRef.current(result.error.message);
     });
-    return () => { live = false; };
-  }, [props.id, props.stamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [props.id, props.stamp, guard]);
 
   async function act(commandId: string, input: Record<string, unknown>, after?: (value: Record<string, unknown>) => void) {
-    const result = await attempt<Record<string, unknown>>(commandId, { suggestionId: props.id, ...input });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    after?.(result.value);
-    await props.onChanged();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await attempt<Record<string, unknown>>(commandId, { suggestionId: props.id, ...input });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      after?.(result.value);
+      await props.onChanged();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
   /** The same suggestion made again from what the sources say now; it opens when it is under way. */
   async function redo() {
-    if (!(await props.flush())) return;
-    const result = await attempt<{ suggestion: SuggestionItem }>("draft.suggest", { draftId: props.draft.id, kind: detail?.kind, redoOf: props.id });
-    if (!result.ok) { props.onError(suggestError(t, result.error)); return; }
-    await props.onChanged();
-    props.onOpen(result.value.suggestion.id);
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (!(await props.flush())) return;
+      const result = await attempt<{ suggestion: SuggestionItem }>("draft.suggest", { draftId: props.draft.id, kind: detail?.kind, redoOf: props.id });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(suggestError(t, result.error)); return; }
+      await props.onChanged();
+      if (guard.isAlive()) props.onOpen(result.value.suggestion.id);
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
   async function adopt(force: boolean) {
-    // The draft on the server must be what is on screen before a suggestion is laid over it.
-    if (!(await props.flush())) return;
-    await act("draft.adopt", force ? { force: true } : {}, (value) => props.onDraft(value.draft as DraftDoc));
+    if (busy) return;
+    setBusy(true);
+    try {
+      // The draft on the server must be what is on screen before a suggestion is laid over it.
+      if (!(await props.flush())) return;
+      const result = await attempt<Record<string, unknown>>("draft.adopt", { suggestionId: props.id, ...(force ? { force: true } : {}) });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      props.onDraft(result.value.draft as DraftDoc);
+      await props.onChanged();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
+  }
+  async function undoAdopt() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // Flush pending edits first so undoing an adopted suggestion cannot lose or collide with unsaved text.
+      if (!(await props.flush())) return;
+      const result = await attempt<Record<string, unknown>>("draft.undoAdopt", { suggestionId: props.id });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      props.onDraft(result.value.draft as DraftDoc);
+      await props.onChanged();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
 
   if (!detail) return <div className="draft-detail" aria-busy="true" />;
@@ -179,7 +224,7 @@ export function SuggestionView(props: {
         {detail.by === "agent" ? <span data-testid="suggestion-by-agent">{t("draft.s.byAgent")}</span> : detail.model ? t("draft.s.model", { model: detail.model }) : null}{detail.range ? ` · ${t("draft.s.range")}` : ""}{detail.instruction ? ` · ${detail.instruction}` : ""}
       </p>
       {detail.status === "failed" ? <p role="alert" data-testid="suggestion-error">{t("draft.s.failed", { message: detail.error?.message ?? "" })}</p> : null}
-      {detail.status === "running" ? <button type="button" data-testid="suggestion-cancel" onClick={() => void act("draft.cancelSuggestion", {})}>{t("draft.cancel")}</button> : null}
+      {detail.status === "running" ? <button type="button" data-testid="suggestion-cancel" disabled={busy} onClick={() => void act("draft.cancelSuggestion", {})}>{t("draft.cancel")}</button> : null}
 
       {detail.stale ? (
         <section className="draft-stale" role="status" data-testid="suggestion-stale">
@@ -187,8 +232,8 @@ export function SuggestionView(props: {
           <p>{t("draft.s.staleHint")}</p>
           <div className="draft-actions">
             <button type="button" data-testid="stale-compare" aria-pressed={comparing} onClick={() => setComparing((value) => !value)}>{t("draft.s.compare")}</button>
-            <button type="button" data-testid="stale-keep" onClick={() => void act("draft.keepSuggestion", {})}>{t("draft.s.keep")}</button>
-            <button type="button" data-testid="stale-redo" onClick={() => void redo()}>{t("draft.s.redo")}</button>
+            <button type="button" data-testid="stale-keep" disabled={busy} onClick={() => void act("draft.keepSuggestion", {})}>{t("draft.s.keep")}</button>
+            <button type="button" data-testid="stale-redo" disabled={busy} onClick={() => void redo()}>{t("draft.s.redo")}</button>
           </div>
         </section>
       ) : null}
@@ -232,9 +277,9 @@ export function SuggestionView(props: {
 
       {open && detail.baseChanged ? <p className="draft-warn-text" role="status" data-testid="suggestion-base-changed">{t("draft.s.baseChangedHint")}</p> : null}
       <div className="draft-actions">
-        {open ? <button type="button" className="primary-button" data-testid="suggestion-adopt" onClick={() => void adopt(detail.baseChanged)}>{detail.baseChanged ? t("draft.s.adoptForce") : t("draft.s.adopt")}</button> : null}
-        {detail.status === "adopted" ? <button type="button" data-testid="suggestion-undo" onClick={() => void act("draft.undoAdopt", {}, (value) => props.onDraft(value.draft as DraftDoc))}>{t("draft.s.undo")}</button> : null}
-        {detail.status === "pending" || detail.status === "failed" || detail.status === "cancelled" ? <button type="button" data-testid="suggestion-discard" onClick={() => void act("draft.discardSuggestion", {}, () => props.onBack())}>{t("draft.s.discard")}</button> : null}
+        {open ? <button type="button" className="primary-button" data-testid="suggestion-adopt" disabled={busy} onClick={() => void adopt(detail.baseChanged)}>{detail.baseChanged ? t("draft.s.adoptForce") : t("draft.s.adopt")}</button> : null}
+        {detail.status === "adopted" ? <button type="button" data-testid="suggestion-undo" disabled={busy} onClick={() => void undoAdopt()}>{t("draft.s.undo")}</button> : null}
+        {detail.status === "pending" || detail.status === "failed" || detail.status === "cancelled" ? <button type="button" data-testid="suggestion-discard" disabled={busy} onClick={() => void act("draft.discardSuggestion", {}, () => props.onBack())}>{t("draft.s.discard")}</button> : null}
       </div>
       {detail.status === "adopted" ? <p className="detail-muted" data-testid="suggestion-adopted">{t("draft.s.adopted", { version: detail.adoptedVersion ?? props.draft.version })}</p> : null}
     </div>

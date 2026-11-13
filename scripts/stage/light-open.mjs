@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { repoRoot } from "./lib.mjs";
+import { isProcessAlive, killProcessTreeBestEffort } from "./win-process.mjs";
 
 /**
  * Light open in the packaged build (READ-05, A-128, 第 7 节): the windows (`light-video`, `light-video-copy`, `light-comic`, `light-multi`), what
@@ -12,23 +13,32 @@ import { repoRoot } from "./lib.mjs";
  */
 const require = createRequire(import.meta.url);
 
-function spawnApp(appPath, args, env, timeoutMs = 180_000) {
-  return new Promise((resolve) => {
-    const clean = { ...env };
-    for (const name of Object.keys(clean)) if (name.toUpperCase() === "ELECTRON_RUN_AS_NODE") delete clean[name];
-    const startedAt = Date.now();
-    const child = spawn(path.join(appPath, "manga.exe"), args, { env: { ...clean, MANGA_SMOKE_SPAWNED_AT: String(startedAt) }, windowsHide: true });
-    let stderr = "";
-    child.stderr?.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
-    const timer = setTimeout(() => child.kill(), timeoutMs);
+function spawnTrackedApp(appPath, args, env, timeoutMs = 180_000) {
+  const clean = { ...env };
+  for (const name of Object.keys(clean)) if (name.toUpperCase() === "ELECTRON_RUN_AS_NODE") delete clean[name];
+  const startedAt = Date.now();
+  const child = spawn(path.join(appPath, "manga.exe"), args, {
+    env: { ...clean, MANGA_SMOKE_SPAWNED_AT: String(startedAt) },
+    stdio: ["ignore", "ignore", "pipe"],
+    windowsHide: true,
+  });
+  let stderr = "";
+  child.stderr?.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
+  const promise = new Promise((resolve) => {
+    const timer = setTimeout(() => killProcessTreeBestEffort(child), timeoutMs);
     child.on("close", (status) => { clearTimeout(timer); resolve({ status, ms: Date.now() - startedAt, pid: child.pid, stderr: stderr.slice(-2000) }); });
     child.on("error", () => { clearTimeout(timer); resolve({ status: null, ms: Date.now() - startedAt, pid: child.pid, stderr }); });
   });
+  return { child, promise, kill: () => killProcessTreeBestEffort(child) };
+}
+
+function spawnApp(appPath, args, env, timeoutMs = 180_000) {
+  return spawnTrackedApp(appPath, args, env, timeoutMs).promise;
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; } };
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === "EPERM"; } };
+const alive = isProcessAlive;
 const filesUnder = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).map(String).filter((name) => { try { return fs.statSync(path.join(dir, name)).isFile(); } catch { return false; } }) : []);
 
 /** A machine of its own: the application data root, Documents, Downloads and the launcher pointer all in one temporary folder. */
@@ -111,6 +121,7 @@ export async function observeLightOpen({ appPath, samplesRoot, evidenceDir }) {
   const { home, env, lightRoot } = lightHome();
   const samples = lightSamples(samplesRoot, path.join(home, "files"));
   const shots = evidenceDir ? { MANGA_SMOKE_EVIDENCE_DIR: evidenceDir } : {};
+  let full = null;
   try {
     // ---- light-video: first frame, play, pause, keys, rate, audio track, subtitles, next episode; and where it was left, next time ----
     const video = await runPhase(appPath, env, "light-video", samples.first, { ...shots, MANGA_SMOKE_NEXT: "1" });
@@ -146,7 +157,7 @@ export async function observeLightOpen({ appPath, samplesRoot, evidenceDir }) {
       && !text.includes("第") && !named.some((part) => text.includes(part));
     rows.push({ name: "light-writes-only-its-folder", status: outside.length === 0 && keysOnly ? "passed" : "failed", detail: { outside, positions: Object.keys(remembered?.positions ?? {}).length, keysOnly } });
     // ---- light-multi: one light process with three windows, while the full application runs and keeps its own lock ----
-    const full = spawn(path.join(appPath, "manga.exe"), [], { env: { ...env, MANGA_WINDOW_HIDDEN: "1" }, windowsHide: true });
+    full = spawn(path.join(appPath, "manga.exe"), [], { env: { ...env, MANGA_WINDOW_HIDDEN: "1" }, stdio: "ignore", windowsHide: true });
     const fullReady = await until(() => readJson(path.join(env.MANGA_PROFILE_ROOT, "runtime", "running-instance.json"))?.state === "ready", 90_000);
     const holder = runPhase(appPath, env, "light-multi", samples.first, { MANGA_SMOKE_WINDOWS: "3" });
     const instance = await until(() => readJson(path.join(lightRoot, "runtime", "light-instance.json")), 30_000);
@@ -167,11 +178,16 @@ export async function observeLightOpen({ appPath, samplesRoot, evidenceDir }) {
       status: fullReady && alive(full.pid) && multi.report?.pid !== full.pid && fs.existsSync(path.join(lightRoot, "runtime")) ? "passed" : "failed",
       detail: { lightUserData: "root/light/runtime", fullUserData: "root/runtime" },
     });
-    full.kill();
+    killProcessTreeBestEffort(full);
     await until(() => !alive(full.pid), 15_000);
+    full = null;
   } catch (error) {
     rows.push({ name: "light-open-error", status: "failed", detail: error instanceof Error ? error.message : String(error) });
   } finally {
+    if (full) {
+      killProcessTreeBestEffort(full);
+      await until(() => !alive(full.pid), 15_000);
+    }
     await sleep(500);
     fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
@@ -317,6 +333,7 @@ export async function benchLightOpen({ appPath, samplesRoot, runs = 5, fullApp =
   fs.copyFileSync(path.join(samplesRoot, "comic", "cbz-basic.cbz"), book);
   const failures = [];
   const result = { videoFirstFrameMs: [], comicFirstPageMs: [], secondOpenMs: [], workingSetMiB: [], firstEverMs: null, fullAppFirstFrameMs: null, fullAppListedMs: null };
+  let holding = null;
   try {
     const warm = await runPhase(appPath, env, "light-bench", video, {}, 120_000);
     result.firstEverMs = warm.report?.timings?.firstFrameMs ?? null;
@@ -332,7 +349,7 @@ export async function benchLightOpen({ appPath, samplesRoot, runs = 5, fullApp =
     }
     // A running light open (holding the first video) gets five more opens, each from a process of its own, as a double-click starts one.
     const report = path.join(home, "reports", `second-${Date.now()}.json`);
-    const holding = spawnApp(appPath, ["--manga-light", video, "--manga-smoke"], { ...env, MANGA_SMOKE_PHASE: "light-hold", MANGA_SMOKE_REPORT: report, MANGA_SMOKE_SECOND_OPENS: String(runs) }, 300_000);
+    holding = spawnTrackedApp(appPath, ["--manga-light", video, "--manga-smoke"], { ...env, MANGA_SMOKE_PHASE: "light-hold", MANGA_SMOKE_REPORT: report, MANGA_SMOKE_SECOND_OPENS: String(runs) }, 300_000);
     const ready = await until(() => readJson(report)?.waiting === true, 60_000);
     if (!ready) failures.push("the running light open did not come up");
     for (let n = 0; ready && n < runs; n += 1) {
@@ -343,8 +360,10 @@ export async function benchLightOpen({ appPath, samplesRoot, runs = 5, fullApp =
     }
     const held = readJson(report);
     result.secondOpenMs = held?.secondOpenMs ?? [];
-    if (held?.pid && alive(held.pid)) { try { process.kill(held.pid); } catch { /* gone */ } }
-    await holding;
+    if (held?.pid && alive(held.pid)) killProcessTreeBestEffort(held.pid);
+    holding.kill();
+    await holding.promise;
+    holding = null;
     if (fullApp) {
       // The full application's comparison: a profile of its own, the same video in a folder it has not seen.
       const outside = path.join(home, "outside");
@@ -363,6 +382,10 @@ export async function benchLightOpen({ appPath, samplesRoot, runs = 5, fullApp =
       }
     }
   } finally {
+    if (holding) {
+      holding.kill();
+      await holding.promise;
+    }
     await sleep(200);
     fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }

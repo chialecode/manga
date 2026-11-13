@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, Trash2 } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
+import { useAsyncGuard, useDebouncedSearch } from "../../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../../lib/api.ts";
 import { Modal } from "../../components/modal.tsx";
 import { Pager } from "./rows.tsx";
@@ -57,7 +58,7 @@ export function ConversationRecords(props: {
 }) {
   const { t } = props;
   const [filter, setFilter] = useState<Filter>({ project: "", kind: "", time: "", q: "" });
-  const [text, setText] = useState("");
+  const search = useDebouncedSearch("", 250);
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<ConversationRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -66,35 +67,39 @@ export function ConversationRecords(props: {
   const [asking, setAsking] = useState<{ scope: "ids"; ids: string[]; count: number } | { scope: "all"; count: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [contexts, setContexts] = useState<Array<{ value: string; name: string }>>([]);
-  const latest = useRef(0);
+  const listGuard = useAsyncGuard();
+  const contextsGuard = useAsyncGuard();
+  const callbacksRef = useRef({ onError: props.onError, onNotice: props.onNotice, t });
+  callbacksRef.current = { onError: props.onError, onNotice: props.onNotice, t };
 
   // The contexts to filter by: "最近" and the projects, archived ones included (their conversations are still there).
   useEffect(() => {
-    let live = true;
+    const token = contextsGuard.next();
     void attempt<{ contexts: Array<{ contextId: string | null; name: string }> }>("workspace.contexts", { includeArchived: true }).then((result) => {
-      if (live && result.ok) setContexts(asArray<{ contextId: string | null; name: string }>(result.value.contexts).map((item) => ({ value: item.contextId ?? "recent", name: item.contextId === null ? t("sidebar.recent") : item.name })));
+      if (contextsGuard.isCurrent(token) && result.ok) {
+        setContexts(asArray<{ contextId: string | null; name: string }>(result.value.contexts).map((item) => ({
+          value: item.contextId ?? "recent",
+          name: item.contextId === null ? callbacksRef.current.t("sidebar.recent") : item.name,
+        })));
+      }
     });
-    return () => { live = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [contextsGuard]);
 
   const load = useCallback(async () => {
-    const request = ++latest.current;
+    const request = listGuard.next();
     const result = await attempt<{ items: ConversationRecord[]; total: number }>("conversation.list", { ...wireFilter(filter), limit: PAGE, offset });
-    if (request !== latest.current) return;
-    if (!result.ok) { setStatus("error"); props.onError(result.error.message); return; }
+    if (!listGuard.isCurrent(request)) return;
+    if (!result.ok) { setStatus("error"); callbacksRef.current.onError(result.error.message); return; }
     setItems(asArray<ConversationRecord>(result.value.items));
     setTotal(Number(result.value.total ?? 0));
     setStatus("ready");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, offset]);
+  }, [filter, offset, listGuard]);
   useEffect(() => { void load(); }, [load]);
 
-  // Typing waits a moment so each keystroke is not a query.
   useEffect(() => {
-    const timer = window.setTimeout(() => { setFilter((current) => (current.q === text.trim() ? current : { ...current, q: text.trim() })); setOffset(0); }, 250);
-    return () => window.clearTimeout(timer);
-  }, [text]);
+    setFilter((current) => (current.q === search.query ? current : { ...current, q: search.query }));
+    setOffset(0);
+  }, [search.query]);
 
   // A conversation deleted from anywhere else (the history list) leaves this list as well.
   useEffect(() => window.manga.onNotice?.((notice) => { if (notice.topic === "conversation.deleted") void load(); }), [load]);
@@ -145,7 +150,7 @@ export function ConversationRecords(props: {
           <option value="month">{t("records.conv.time.month")}</option>
           <option value="older">{t("records.conv.time.older")}</option>
         </select>
-        <input type="search" aria-label={t("records.conv.search")} placeholder={t("records.conv.search")} data-testid="conv-search" value={text} onChange={(event) => setText(event.target.value)} />
+        <input type="search" aria-label={t("records.conv.search")} placeholder={t("records.conv.search")} data-testid="conv-search" {...search.inputProps} />
       </div>
 
       <div className="records-bulk" data-testid="conv-bulk">

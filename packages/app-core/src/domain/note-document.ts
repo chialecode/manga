@@ -13,8 +13,6 @@ export type NoteOp =
   | { type: "remove"; blockId: string }
   | { type: "replace"; blocks: NoteBlock[]; title?: string };
 
-const BLOCK_TYPES = new Set(["paragraph", "heading", "list", "quote", "code", "plaintext"]);
-
 function normalizeType(type: string): string {
   // Unknown types from a future editor build are preserved rather than rewritten.
   return type;
@@ -145,8 +143,4 @@ export function uniqueBlockIds(ids: Array<string | null>, nextId: () => string):
     seen.add(id);
     return id;
   });
-}
-
-export function isKnownBlockType(type: string): boolean {
-  return BLOCK_TYPES.has(type);
 }

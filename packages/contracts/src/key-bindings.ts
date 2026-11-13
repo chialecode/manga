@@ -142,8 +142,8 @@ export function chordLabel(chord: string): string {
   return parts.join(" + ");
 }
 
-export type RecordingKeyPair = { holdKey?: string; toggleKey?: string };
-export const DEFAULT_RECORDING_KEYS: Required<RecordingKeyPair> = { holdKey: "F9", toggleKey: "F8" };
+export type RecordingKeyPair = { holdKey?: string; toggleKey?: string; dictationHoldKey?: string };
+export const DEFAULT_RECORDING_KEYS: { holdKey: string; toggleKey: string } = { holdKey: "F9", toggleKey: "F8" };
 
 const CODE_TO_CHORD: Record<string, string> = {
   AltRight: "RightAlt",
@@ -170,16 +170,23 @@ export function recordingCodeToChord(code: string | null | undefined): string | 
 }
 
 function recordingEntries(recording?: RecordingKeyPair): Array<{ id: string; chord: string }> {
-  const pair = recording ?? DEFAULT_RECORDING_KEYS;
+  const pair: RecordingKeyPair = recording ?? DEFAULT_RECORDING_KEYS;
   const out: Array<{ id: string; chord: string }> = [];
   const hold = recordingCodeToChord(pair.holdKey);
   if (hold) out.push({ id: "recording.holdKey", chord: hold });
   const toggle = recordingCodeToChord(pair.toggleKey);
   if (toggle) out.push({ id: "recording.toggleKey", chord: toggle });
+  if (pair.dictationHoldKey) {
+    const dictation = recordingCodeToChord(pair.dictationHoldKey);
+    if (dictation) out.push({ id: "recording.dictationHoldKey", chord: dictation });
+  }
   return out;
 }
 
-export const KeyOverridesSchema = z.record(z.string().regex(/^[a-z]+\.[A-Za-z]+$/).max(48), z.array(z.string().max(40)).max(MAX_CHORDS));
+/** Valid shortcut action id (`group.actionName`, including numbered actions such as `global.column1`). */
+export const KeyActionIdSchema = z.string().regex(/^[a-z]+\.[A-Za-z0-9]+$/).max(48);
+
+export const KeyOverridesSchema = z.record(KeyActionIdSchema, z.array(z.string().max(40)).max(MAX_CHORDS));
 /** What is saved: only the actions the person changed. An empty list is an action with no key. */
 export type KeyOverrides = z.infer<typeof KeyOverridesSchema>;
 /** Every action mapped to its active chords (`resolveKeys` output). */
@@ -197,28 +204,46 @@ export function resolveKeys(overrides: KeyOverrides | null | undefined): Record<
 
 export type KeyConflict = { chord: string; actions: string[] };
 
+const sameDictationAction = (a: string, b: string): boolean =>
+  (a === "global.dictationHold" && b === "recording.dictationHoldKey")
+  || (a === "recording.dictationHoldKey" && b === "global.dictationHold");
+
 /**
  * Two actions answer to one key when they are in the same group, or one of them is a global one: only one reader is in front at a time,
- * so a video key and a comic key may be the same. Recording's hold (`F9`) and toggle (`F8`) keys are window-wide too.
+ * so a video key and a comic key may be the same. Recording's hold (`F9`), toggle (`F8`), and dictation hold keys are window-wide too.
  */
 export function findConflicts(resolved: Record<string, readonly string[]>, recording?: RecordingKeyPair): KeyConflict[] {
   const found: KeyConflict[] = [];
   const seen = new Set<string>();
   const rec = recordingEntries(recording);
+  const record = (chord: string, sharing: string[]) => {
+    if (sharing.length < 2) return;
+    const key = `${chord}|${[...sharing].sort().join(",")}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push({ chord, actions: sharing });
+  };
   for (const entry of KEY_ACTIONS) {
     for (const chord of resolved[entry.id] ?? []) {
       const sharing = [
         ...KEY_ACTIONS
           .filter((other) => (other.group === entry.group || other.group === "global" || entry.group === "global") && (resolved[other.id] ?? []).includes(chord))
           .map((other) => other.id),
-        ...rec.filter((item) => item.chord === chord).map((item) => item.id),
+        ...rec.filter((item) => item.chord === chord && !sameDictationAction(entry.id, item.id)).map((item) => item.id),
       ];
-      if (sharing.length < 2) continue;
-      const key = `${chord}|${[...sharing].sort().join(",")}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      found.push({ chord, actions: sharing });
+      record(chord, sharing);
     }
+  }
+  // Also catch conflicts purely among recording keys (e.g., holdKey === toggleKey or dictationHoldKey === holdKey)
+  // or between an explicitly provided dictationHoldKey and any non-dictation action.
+  for (const item of rec) {
+    const sharing = [
+      ...KEY_ACTIONS
+        .filter((other) => !sameDictationAction(other.id, item.id) && (resolved[other.id] ?? []).includes(item.chord))
+        .map((other) => other.id),
+      ...rec.filter((other) => other.chord === item.chord).map((other) => other.id),
+    ];
+    record(item.chord, sharing);
   }
   return found;
 }
@@ -226,12 +251,16 @@ export function findConflicts(resolved: Record<string, readonly string[]>, recor
 /** The other actions that already use `chord` where `actionId` would use it. */
 export function conflictsWith(resolved: Record<string, readonly string[]>, actionId: string, chord: string, recording?: RecordingKeyPair): string[] {
   const entry = keyAction(actionId);
-  if (!entry) return [];
+  const isRecordingAction = actionId === "recording.holdKey" || actionId === "recording.toggleKey" || actionId === "recording.dictationHoldKey";
+  if (!entry && !isRecordingAction) return [];
+  const group = entry?.group ?? "global";
   return [
     ...KEY_ACTIONS
-      .filter((other) => other.id !== actionId && (other.group === entry.group || other.group === "global" || entry.group === "global") && (resolved[other.id] ?? []).includes(chord))
+      .filter((other) => other.id !== actionId && !sameDictationAction(other.id, actionId) && (other.group === group || other.group === "global" || group === "global") && (resolved[other.id] ?? []).includes(chord))
       .map((other) => other.id),
-    ...recordingEntries(recording).filter((item) => item.chord === chord).map((item) => item.id),
+    ...recordingEntries(recording)
+      .filter((item) => item.id !== actionId && !sameDictationAction(actionId, item.id) && item.chord === chord)
+      .map((item) => item.id),
   ];
 }
 

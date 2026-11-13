@@ -96,6 +96,8 @@ export function DebugPanel(props: {
   }, [sessionId, resourceId, workId, page]);
   useEffect(() => { if (view.open) void load(); }, [view.open, load, props.version]);
   const audio = useSyncExternalStore(subscribeMicDiagnostics, getMicDiagnostics, () => null);
+  const drag = useRef<{ y: number; height: number } | null>(null);
+  if (!view.open) return null;
 
   const document = redactForDebug({ generatedAt: report?.generatedAt ?? new Date().toISOString(), page, current: { ...props.live, ...(audio ? { audio } : {}), scope: report?.scope, model: report?.model, tools: report?.tools, budget: report?.budget }, lastRun: report?.lastRun ?? null, events: props.events.slice(-30) });
 
@@ -104,9 +106,7 @@ export function DebugPanel(props: {
     try { await navigator.clipboard.writeText(text); props.onNotice(t("debug.copied")); } catch { props.onNotice(t("debug.copyFailed")); }
   }
 
-  const drag = useRef<{ y: number; height: number } | null>(null);
   const resize = (height: number) => props.onView({ ...view, height: Math.min(DEBUG_MAX, Math.max(DEBUG_MIN, Math.round(height))) });
-  if (!view.open) return null;
   const last = report?.lastRun as (Record<string, unknown> & { materials?: unknown[]; notes?: unknown[]; history?: Record<string, unknown>; contextText?: string | null; question?: string }) | null | undefined;
 
   return (
@@ -125,6 +125,8 @@ export function DebugPanel(props: {
         onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); drag.current = { y: event.clientY, height: view.height }; }}
         onPointerMove={(event) => { if (drag.current) resize(drag.current.height + (drag.current.y - event.clientY)); }}
         onPointerUp={() => { drag.current = null; }}
+        onPointerCancel={() => { drag.current = null; }}
+        onLostPointerCapture={() => { drag.current = null; }}
         onKeyDown={(event) => {
           if (event.key === "ArrowUp") { event.preventDefault(); resize(view.height + 24); }
           if (event.key === "ArrowDown") { event.preventDefault(); resize(view.height - 24); }

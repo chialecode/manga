@@ -100,11 +100,6 @@ const font = () => {
   return cached;
 };
 
-/** Whether the font program has an outline for the code point. */
-export function embeddedFontHas(char: string): boolean {
-  return font().glyphFor(char.codePointAt(0)!) !== undefined;
-}
-
 /** The advance, in 1/1000 em, the font gives a character, as the PDF's own `/W` array would record it. */
 export function embeddedAdvance(char: string): number {
   const gid = font().glyphFor(char.codePointAt(0)!);

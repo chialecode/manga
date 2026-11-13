@@ -1,178 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import Document from "@tiptap/extension-document";
 import Text from "@tiptap/extension-text";
-import { Node, mergeAttributes } from "@tiptap/core";
-import { Plugin } from "@tiptap/pm/state";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
-import { defaultKeymap } from "@codemirror/commands";
 import { type NoteBlock, type NoteDocument, NOTE_BLOCK_TYPES } from "@manga/contracts/reading";
-import { uniqueBlockIds } from "../../../../packages/app-core/src/domain/note-document.ts";
 import { EmbedHostContext, MangaEmbed } from "./embed/embed-node.tsx";
 import { EmbedPicker } from "./embed/embed-picker.tsx";
 import { MangaScreenshot, ScreenshotHostContext, ScreenshotPicker, type ScreenshotHost } from "./embed/screenshot-node.tsx";
 import type { EmbedAttr, EmbedHost, EmbedItem } from "./embed/embed-types.ts";
-import { registerCodeMirrorView, registerTiptapEditor } from "./voice/editable-target.ts";
+import { isImeEvent } from "./lib/ime.ts";
+import { MangaBlock, MangaDoc, blocksFromEditor, caretLocation, contentFrom, localStorageDrafts, type DraftStore } from "./note-schema.ts";
+import { SourceEditor } from "./note-source-editor.tsx";
+import { registerTiptapEditor } from "./voice/editable-target.ts";
+
+export { blocksFromEditor, caretLocation, contentFrom, localStorageDrafts, type DraftStore };
 
 /** How long consecutive keystrokes collapse into one undo step. */
 const COALESCE_MS = 700;
-
-const MangaDoc = Document.extend({
-  content: "(mangaBlock|mangaEmbed|mangaScreenshot)+",
-  addProseMirrorPlugins() {
-    return [new Plugin({
-      appendTransaction(transactions, _old, state) {
-        if (!transactions.some((transaction) => transaction.docChanged)) return null;
-        const seen = new Set<string>();
-        const tr = state.tr;
-        state.doc.forEach((node, pos) => {
-          const original = node.attrs.blockId as string;
-          const duplicate = !original || seen.has(original);
-          const blockId = duplicate ? `b_${crypto.randomUUID()}` : original;
-          seen.add(blockId);
-          if (duplicate) tr.setNodeMarkup(pos, undefined, { ...node.attrs, blockId, anchorId: null });
-        });
-        return tr.docChanged ? tr : null;
-      },
-    })];
-  },
-});
-
-const MangaBlock = Node.create({
-  name: "mangaBlock",
-  group: "block",
-  content: "text*",
-  defining: true,
-  addAttributes() {
-    return {
-      blockId: { default: "b1" },
-      blockType: { default: "paragraph" },
-      level: { default: null },
-      ordered: { default: null },
-      anchorId: { default: null },
-      // Payload written by a newer editor build; kept verbatim instead of being dropped on the round trip.
-      noteAttrs: { default: null },
-    };
-  },
-  parseHTML: () => [{ tag: "div[data-block-id]" }],
-  renderHTML: ({ HTMLAttributes }) => ["div", mergeAttributes(HTMLAttributes, {
-    "data-block-id": HTMLAttributes.blockId,
-    "data-block-type": HTMLAttributes.blockType,
-    // Heading level and list style are visible in the editor, not just stored attributes.
-    "data-level": HTMLAttributes.level ?? undefined,
-    "data-ordered": HTMLAttributes.ordered ? "true" : undefined,
-    "data-testid": `block-${HTMLAttributes.blockId}`,
-  }), 0],
-  addKeyboardShortcuts() {
-    return { Enter: () => this.editor.view.composing ? false : this.editor.commands.splitBlock() };
-  },
-});
-
-/** An embed block carries what it points at in `attrs.embed`; a block of type `embed` without it is an ordinary (empty) block. */
-const embedOf = (block: NoteBlock): EmbedAttr | null => block.type === "embed" && block.attrs && typeof block.attrs.embed === "object" && block.attrs.embed ? block.attrs.embed as EmbedAttr : null;
-
-/** A screenshot block carries the id of the screenshot in `attrs.screenshotId`; the picture stays in the folder of its work. */
-const screenshotOf = (block: NoteBlock): string | null => block.type === "screenshot" && block.attrs && typeof block.attrs.screenshotId === "string" && block.attrs.screenshotId ? block.attrs.screenshotId : null;
-
-export function contentFrom(blocks: NoteBlock[]) {
-  return {
-    type: "doc",
-    content: blocks.map((block) => screenshotOf(block) ? {
-      type: "mangaScreenshot",
-      attrs: { blockId: block.id, anchorId: block.anchorId ?? null, screenshotId: screenshotOf(block) },
-    } : embedOf(block) ? {
-      type: "mangaEmbed",
-      attrs: { blockId: block.id, anchorId: block.anchorId ?? null, embed: embedOf(block) },
-    } : {
-      type: "mangaBlock",
-      attrs: { blockId: block.id, blockType: block.type, level: block.level, ordered: block.ordered, anchorId: block.anchorId, noteAttrs: block.attrs ?? null },
-      content: block.text ? [{ type: "text", text: block.text }] : [],
-    }),
-  };
-}
-
-export function blocksFromEditor(editor: NonNullable<ReturnType<typeof useEditor>>): NoteBlock[] {
-  const raw: NoteBlock[] = [];
-  editor.state.doc.forEach((node) => {
-    if (node.type.name === "mangaScreenshot") {
-      raw.push({ id: String(node.attrs.blockId ?? ""), type: "screenshot", text: "", ...(node.attrs.anchorId != null ? { anchorId: node.attrs.anchorId } : {}), attrs: { screenshotId: String(node.attrs.screenshotId ?? "") } });
-      return;
-    }
-    if (node.type.name === "mangaEmbed") {
-      raw.push({ id: String(node.attrs.blockId ?? ""), type: "embed", text: "", ...(node.attrs.anchorId != null ? { anchorId: node.attrs.anchorId } : {}), attrs: { embed: node.attrs.embed as EmbedAttr } });
-      return;
-    }
-    if (node.type.name !== "mangaBlock") return;
-    raw.push({
-      id: String(node.attrs.blockId ?? ""),
-      type: String(node.attrs.blockType ?? "paragraph"),
-      text: node.textContent,
-      ...(node.attrs.level != null ? { level: node.attrs.level } : {}),
-      ...(node.attrs.ordered != null ? { ordered: node.attrs.ordered } : {}),
-      ...(node.attrs.anchorId != null ? { anchorId: node.attrs.anchorId } : {}),
-      ...(node.attrs.noteAttrs ? { attrs: node.attrs.noteAttrs as Record<string, unknown> } : {}),
-    });
-  });
-  const ids = uniqueBlockIds(raw.map((block) => block.id), () => `b_${crypto.randomUUID().slice(0, 8)}`);
-  return raw.map((block, index) => ({ ...block, id: ids[index] ?? block.id }));
-}
-
-/** Where the caret currently sits, as a block id plus a code-point offset inside it. */
-export function caretLocation(editor: NonNullable<ReturnType<typeof useEditor>>): { blockId: string; offset: number; index: number } | null {
-  const { from } = editor.state.selection;
-  let found: { blockId: string; offset: number; index: number } | null = null;
-  let index = 0;
-  editor.state.doc.forEach((node, pos) => {
-    const start = pos + 1;
-    const end = start + node.content.size;
-    if (from >= start && from <= end && !found) {
-      found = { blockId: String(node.attrs.blockId ?? ""), offset: codePoints(editor.state.doc.textBetween(start, from, "\n", "\n")), index };
-    }
-    index += 1;
-  });
-  return found;
-}
-
-function codePoints(text: string): number {
-  return [...text].length;
-}
-
-/** The unsaved draft is kept per note so leaving the page or closing the window cannot lose it. */
-function draftKey(objectId: string): string {
-  return `manga.note.draft.${objectId}`;
-}
-
-export type DraftStore = {
-  read(objectId: string): { blocks: NoteBlock[]; title?: string; tags?: string[]; savedAt: string } | null;
-  write(objectId: string, draft: { blocks: NoteBlock[]; title?: string; tags?: string[] }): void;
-  clear(objectId: string): void;
-};
-
-export const localStorageDrafts: DraftStore = {
-  read(objectId) {
-    try {
-      const raw = window.localStorage.getItem(draftKey(objectId));
-      return raw ? JSON.parse(raw) as { blocks: NoteBlock[]; savedAt: string } : null;
-    } catch {
-      return null;
-    }
-  },
-  write(objectId, draft) {
-    try {
-      window.localStorage.setItem(draftKey(objectId), JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
-    } catch {
-      // A full or unavailable store must not break editing; the in-memory state stays authoritative.
-    }
-  },
-  clear(objectId) {
-    try {
-      window.localStorage.removeItem(draftKey(objectId));
-    } catch {
-      // ignore
-    }
-  },
-};
 
 type HistoryEntry = { blocks: NoteBlock[]; coalesceKey?: string; at: number };
 
@@ -235,6 +77,7 @@ export function NoteEditor(props: {
   onDraftRestored?: (blocks: NoteBlock[]) => void;
 }) {
   const drafts = props.drafts ?? localStorageDrafts;
+  const rootRef = useRef<HTMLElement>(null);
   const [blocks, setBlocks] = useState(props.document.blocks);
   // The open document already matches its stored revision, so the editor starts at "已保存" instead of
   // claiming there is unsaved work the moment a note is recorded or reopened.
@@ -256,9 +99,12 @@ export function NoteEditor(props: {
   const history = useRef<{ past: HistoryEntry[]; future: NoteBlock[][] }>({ past: [], future: [] });
   const breakNextHistory = useRef(false);
   const dirty = useRef(false);
-  const inFlight = useRef(false);
+  const inFlightPromise = useRef<Promise<void> | null>(null);
   const save = useRef(props.onSave);
   save.current = props.onSave;
+  const metaRef = useRef({ drafts, title: props.title, tags: props.tags });
+  metaRef.current = { drafts, title: props.title, tags: props.tags };
+  const recordRef = useRef<(next: NoteBlock[], coalesceKey?: string, options?: { mirror?: boolean }) => void>(() => undefined);
   const initialised = useRef(false);
   useEffect(() => { revision.current = props.revision; }, [props.revision]);
 
@@ -284,7 +130,7 @@ export function NoteEditor(props: {
       const next = blocksFromEditor(instance);
       const caret = caretLocation(instance);
       // The change came from Tiptap, so it must not be written back into it.
-      record(next, caret ? `text:${caret.blockId}` : "text:doc", { mirror: false });
+      recordRef.current(next, caret ? `text:${caret.blockId}` : "text:doc", { mirror: false });
     },
   });
 
@@ -293,42 +139,51 @@ export function NoteEditor(props: {
     onBeforeStep: () => { breakNextHistory.current = true; },
   }), [editor]);
 
+  const flush = useCallback(async () => {
+    window.clearTimeout(timer.current);
+    if (inFlightPromise.current) {
+      await inFlightPromise.current;
+      if (composing.current || !dirty.current) return;
+    }
+    if (composing.current || !dirty.current) return;
+    const run = (async () => {
+      while (dirty.current && !composing.current) {
+        dirty.current = false;
+        setState("saving");
+        try {
+          const savedRevision = await save.current(pending.current, revision.current);
+          if (savedRevision !== undefined) revision.current = savedRevision;
+          setConflict(false);
+          if (!dirty.current) {
+            metaRef.current.drafts.clear(draftOwner.current);
+            setState("saved");
+          }
+        } catch (error) {
+          dirty.current = true;
+          setConflict(String((error as Error)?.message ?? "").includes("revision"));
+          // The draft stays in storage so a failed save is never presented as saved.
+          metaRef.current.drafts.write(draftOwner.current, { blocks: pending.current, title: metaRef.current.title, tags: metaRef.current.tags });
+          setState("error");
+          break;
+        }
+      }
+    })();
+    inFlightPromise.current = run;
+    try {
+      await run;
+    } finally {
+      if (inFlightPromise.current === run) inFlightPromise.current = null;
+    }
+  }, []);
+
   const schedule = useCallback((next: NoteBlock[]) => {
     pending.current = next;
     dirty.current = true;
-    drafts.write(draftOwner.current, { blocks: next, title: props.title, tags: props.tags });
+    metaRef.current.drafts.write(draftOwner.current, { blocks: next, title: metaRef.current.title, tags: metaRef.current.tags });
     setState(composing.current ? "idle" : "saving");
     window.clearTimeout(timer.current);
     if (!composing.current) timer.current = window.setTimeout(() => { void flush(); }, 400);
-  }, [drafts, props.tags, props.title]);
-
-  const flush = useCallback(async () => {
-    if (inFlight.current || composing.current || !dirty.current) return;
-    inFlight.current = true;
-    dirty.current = false;
-    setState("saving");
-    try {
-      const savedRevision = await save.current(pending.current, revision.current);
-      if (savedRevision !== undefined) revision.current = savedRevision;
-      inFlight.current = false;
-      setConflict(false);
-      if (dirty.current) {
-        // This receipt only commits the older buffer. Keep the later draft durable even if
-        // composition prevents the next save, or the window exits before its receipt arrives.
-        if (!composing.current) void flush();
-      } else {
-        drafts.clear(draftOwner.current);
-        setState("saved");
-      }
-    } catch (error) {
-      inFlight.current = false;
-      dirty.current = true;
-      setConflict(String((error as Error)?.message ?? "").includes("revision"));
-      // The draft stays in storage so a failed save is never presented as saved.
-      drafts.write(draftOwner.current, { blocks: pending.current, title: props.title, tags: props.tags });
-      setState("error");
-    }
-  }, [drafts, props.tags, props.title]);
+  }, [flush]);
 
   useEffect(() => {
     const dom = editor?.view.dom;
@@ -345,7 +200,7 @@ export function NoteEditor(props: {
           if (dirty.current) schedule(next);
           return;
         }
-        record(next, "text:ime", { mirror: false });
+        recordRef.current(next, "text:ime", { mirror: false });
       });
     };
     dom.addEventListener("compositionstart", start);
@@ -358,24 +213,23 @@ export function NoteEditor(props: {
     };
   }, [editor, flush, schedule]);
 
-  // Closing the window or leaving the page flushes synchronously enough to keep the draft and try a save.
+  // Closing the window or leaving the page flushes synchronously enough to keep the draft and await any in-flight/dirty save.
   useEffect(() => {
     const saveNow = async () => {
-      if (dirty.current) drafts.write(draftOwner.current, { blocks: pending.current, title: props.title, tags: props.tags });
+      if (dirty.current) metaRef.current.drafts.write(draftOwner.current, { blocks: pending.current, title: metaRef.current.title, tags: metaRef.current.tags });
       await flush();
     };
-    const onHide = () => {
-      void saveNow();
-    };
-    window.addEventListener("beforeunload", onHide);
-    document.addEventListener("visibilitychange", onHide);
+    const onUnload = () => { void saveNow(); };
+    const onVisibility = () => { if (document.visibilityState === "hidden") void saveNow(); };
+    window.addEventListener("beforeunload", onUnload);
+    document.addEventListener("visibilitychange", onVisibility);
     const stopSaveNow = typeof window !== "undefined" ? window.manga?.onSaveNow?.(saveNow) : undefined;
     return () => {
       stopSaveNow?.();
-      window.removeEventListener("beforeunload", onHide);
-      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("beforeunload", onUnload);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [drafts, flush, props.tags, props.title]);
+  }, [flush]);
 
   /** Push the in-memory blocks into Tiptap, so a source edit and the rich view never diverge. */
   function applyToEditor(next: NoteBlock[]) {
@@ -385,11 +239,9 @@ export function NoteEditor(props: {
     const caretBlock = editor ? caretLocation(editor)?.blockId : undefined;
     editor.commands.setContent(contentFrom(next), { emitUpdate: false });
     if (caretBlock) {
-      let index = 0;
       let target: number | null = null;
       editor.state.doc.forEach((node, pos) => {
         if (String(node.attrs.blockId ?? "") === caretBlock && target === null) target = pos + 1;
-        index += 1;
       });
       if (target !== null) editor.commands.setTextSelection(Math.min(target, editor.state.doc.content.size));
     }
@@ -419,6 +271,7 @@ export function NoteEditor(props: {
     if (options.mirror !== false) applyToEditor(next);
     schedule(next);
   }
+  recordRef.current = record;
 
   function undo() {
     const entry = history.current.past.pop();
@@ -446,7 +299,8 @@ export function NoteEditor(props: {
   // Returning from a source jump lands on the block the note was opened from.
   useEffect(() => {
     if (!props.focusBlockId) return;
-    const target = document.querySelector(`[data-testid='block-${props.focusBlockId}']`);
+    const esc = typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(props.focusBlockId) : props.focusBlockId.replace(/["\\]/g, "\\$&");
+    const target = rootRef.current?.querySelector(`[data-testid="block-${esc}"]`);
     target?.scrollIntoView({ block: "center" });
   }, [props.focusBlockId, props.objectId]);
 
@@ -615,12 +469,14 @@ export function NoteEditor(props: {
 
   return (
     <section
+      ref={rootRef}
       data-testid="note-editor"
       data-save-state={state}
       data-conflict={conflict ? "true" : "false"}
       // One shared undo stack for both views, so the same shortcut works wherever the caret is.
       onKeyDown={(event) => {
-        if (!(event.ctrlKey || event.metaKey) || composing.current) return;
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || isImeEvent(event, composing.current)) return;
+        if (document.querySelector('[role="dialog"]')) return;
         const pressed = event.key.toLowerCase();
         if (pressed === "z" && !event.shiftKey) { event.preventDefault(); undo(); }
         else if (pressed === "y" || (pressed === "z" && event.shiftKey)) { event.preventDefault(); redo(); }
@@ -713,49 +569,4 @@ export function NoteEditor(props: {
       ) : null}
     </section>
   );
-}
-
-function SourceEditor(props: { blockId: string; text: string; onBeforeStep?: () => void; onChange: (text: string) => void; onComposition: (active: boolean) => void }) {
-  const host = useRef<HTMLDivElement>(null);
-  const onChange = useRef(props.onChange);
-  const onComposition = useRef(props.onComposition);
-  const onBeforeStep = useRef(props.onBeforeStep);
-  onChange.current = props.onChange;
-  onComposition.current = props.onComposition;
-  onBeforeStep.current = props.onBeforeStep;
-  const view = useRef<EditorView | null>(null);
-  useEffect(() => {
-    if (!host.current) return;
-    let bridge: ReturnType<typeof registerCodeMirrorView> | null = null;
-    const created = new EditorView({
-      state: EditorState.create({
-        doc: props.text,
-        // Undo stays on the shared document history, so CodeMirror gets no history of its own.
-        extensions: [
-          keymap.of([...defaultKeymap]),
-          EditorView.updateListener.of((update) => {
-            bridge?.onUpdate(update);
-            if (update.docChanged) onChange.current(update.state.doc.toString());
-          }),
-          EditorView.domEventHandlers({
-            compositionstart: () => { onComposition.current(true); return false; },
-            compositionend: () => { onComposition.current(false); return false; },
-          }),
-        ],
-      }),
-      parent: host.current,
-    });
-    bridge = registerCodeMirrorView(created, { onBeforeStep: () => onBeforeStep.current?.() });
-    view.current = created;
-    return () => { bridge?.unregister(); created.destroy(); view.current = null; };
-    // The view is rebuilt per block so an external change never writes into another block's buffer.
-  }, [props.blockId]);
-  useEffect(() => {
-    const instance = view.current;
-    if (!instance) return;
-    if (instance.state.doc.toString() !== props.text) {
-      instance.dispatch({ changes: { from: 0, to: instance.state.doc.length, insert: props.text } });
-    }
-  }, [props.text]);
-  return <div ref={host} data-testid="note-source" data-block-id={props.blockId} className="mt-2 border border-[var(--color-border)] rounded" />;
 }

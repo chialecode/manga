@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MangaError } from "@manga/contracts";
 
 export type ParseClient = {
   pid(): number | undefined;
@@ -62,14 +63,17 @@ export function startParseWorker(explicitPath?: string): ParseClient {
     windowsHide: true,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
   });
-  const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; cleanup: () => void }>();
+  let exited = false;
   const fail = (reason: string) => {
+    exited = true;
     for (const item of pending.values()) {
-      clearTimeout(item.timer);
+      item.cleanup();
       item.reject(new Error(reason));
     }
     pending.clear();
   };
+  child.stdin.on("error", () => undefined);
   child.on("exit", () => fail("parse worker exited"));
   child.stderr.resume();
   const rl = createInterface({ input: child.stdout });
@@ -78,9 +82,13 @@ export function startParseWorker(explicitPath?: string): ParseClient {
       const message = JSON.parse(line) as { id?: string; status?: string; value?: unknown; error?: { message: string; code?: string } };
       if (!message.id || !pending.has(message.id)) return;
       const item = pending.get(message.id)!;
-      clearTimeout(item.timer);
       pending.delete(message.id);
+      item.cleanup();
       if (message.status === "error") {
+        if (message.error?.code === "CANCELLED") {
+          item.reject(new MangaError("CANCELLED", message.error.message || "parse cancelled", { retryable: true }));
+          return;
+        }
         const failure = new Error(message.error?.message ?? "parse failed") as Error & { code?: string };
         failure.code = message.error?.code;
         item.reject(failure);
@@ -95,19 +103,42 @@ export function startParseWorker(explicitPath?: string): ParseClient {
     parse: (request) => {
       const id = `parse-${seq++}`;
       return new Promise((resolve, reject) => {
-        if (request.signal?.aborted) return reject(new Error("parse cancelled"));
+        if (request.signal?.aborted) return reject(new MangaError("CANCELLED", "parse cancelled", { retryable: true }));
+        if (exited || child.killed || !child.stdin.writable) return reject(new Error("parse worker exited"));
+        let onAbort: (() => void) | undefined;
+        const cleanup = () => {
+          clearTimeout(timer);
+          if (onAbort) request.signal?.removeEventListener("abort", onAbort);
+        };
         const timer = setTimeout(() => {
-          pending.delete(id);
+          if (!pending.delete(id)) return;
+          cleanup();
           reject(new Error("parse worker timeout"));
         }, request.filePath || request.kind === "document" ? 120_000 : 20_000);
-        pending.set(id, { resolve, reject, timer });
-        const onAbort = () => {
-          if (child.stdin.writable) child.stdin.write(`${JSON.stringify({ type: "cancel", id })}\n`);
+        onAbort = () => {
+          if (pending.delete(id)) {
+            cleanup();
+            reject(new MangaError("CANCELLED", "parse cancelled", { retryable: true }));
+          }
+          if (!exited && !child.killed && child.stdin.writable) {
+            try { child.stdin.write(`${JSON.stringify({ type: "cancel", id })}\n`); } catch { /* worker already closed */ }
+          }
         };
+        pending.set(id, { resolve, reject, cleanup });
         request.signal?.addEventListener("abort", onAbort, { once: true });
-        child.stdin.write(`${JSON.stringify({ type: "parse", id, kind: request.kind ?? "text", bytes: request.bytes, filePath: request.filePath, format: request.format, encoding: request.encoding, delayMs: request.delayMs })}\n`);
+        try {
+          child.stdin.write(`${JSON.stringify({ type: "parse", id, kind: request.kind ?? "text", bytes: request.bytes, filePath: request.filePath, format: request.format, encoding: request.encoding, delayMs: request.delayMs })}\n`);
+        } catch {
+          if (pending.delete(id)) {
+            cleanup();
+            reject(new Error("parse worker exited"));
+          }
+        }
       });
     },
-    kill: () => child.kill(),
+    kill: () => {
+      exited = true;
+      child.kill();
+    },
   };
 }

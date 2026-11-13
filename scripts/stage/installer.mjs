@@ -16,6 +16,7 @@ import {
 import { readBuildInfoIfPresent, resolveBuildVersion } from "./version-lib.mjs";
 import { runPackagedUpdateRehearsal } from "./update-rehearsal.mjs";
 import { rehearseRollback } from "./rollback-rehearsal.mjs";
+import { readUninstallRegistryEntries } from "./win-process.mjs";
 
 /**
  * A real installation, upgrade rehearsal (`0.1.1` -> `0.1.2`), and removal of both channels on this machine using isolated test installation identities
@@ -63,22 +64,9 @@ function powershell(command) {
   if (result.status !== 0) throw new Error("could not inspect the test installation state");
   return (result.stdout ?? "").trim();
 }
-const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 /** The uninstall entries of the two test-identity products (`MANGA Test` and `MANGA Dev Test`) in the current user's registry. */
 function uninstallEntries() {
-  const text = powershell(
-    `Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and ($p.DisplayName -eq 'MANGA Test' -or $p.DisplayName -eq 'MANGA Dev Test')) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; Publisher = [string]$p.Publisher; DisplayIcon = [string]$p.DisplayIcon; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress`,
-  );
-  if (!text) return [];
-  const parsed = JSON.parse(text);
-  return (Array.isArray(parsed) ? parsed : [parsed]).map((entry) => {
-    const command = String(entry.UninstallString ?? "").replace(/^"([^"]+)".*$/, "$1");
-    return {
-      ...entry,
-      command,
-      InstallLocation: entry.InstallLocation ? String(entry.InstallLocation) : path.dirname(command),
-    };
-  });
+  return readUninstallRegistryEntries({ filterNames: ["MANGA Test", "MANGA Dev Test"], throwOnError: true, timeoutMs: 20_000 });
 }
 /** Remove any leftover test-identity (`MANGA Test`, `MANGA Dev Test`) registry entries and shortcuts from an interrupted run. Never touches real installations. */
 async function removeTestLeftovers() {

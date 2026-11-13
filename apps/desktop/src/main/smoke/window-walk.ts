@@ -3,6 +3,7 @@ import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
+import { activeWindowTray } from "../tray.ts";
 import { productWindow } from "../window-options.ts";
 import { clickTestId, closeTabs, openFromShelf, openShelf, revealNovelControls, setField, setSelect, sleep, waitDrawn, waitForTestId, waitFrames, waitText, waitUntil } from "./driver.ts";
 import { READER_CONTROL_OBSERVATIONS, walkComicControls, walkNovelControls, walkPlayerControls } from "./reader-controls-walk.ts";
@@ -11,7 +12,7 @@ import { DANMAKU_OBSERVATIONS, walkDanmaku } from "./danmaku-walk.ts";
 import { HOLD_OBSERVATIONS, walkHoldKeys } from "./hold-walk.ts";
 import { OVERLAY_OBSERVATIONS, walkComicOverlays, walkNovelOverlays, walkPlayerOverlays } from "./overlay-walk.ts";
 import { RETENTION_OBSERVATIONS, screenshotWalk, walkSettingsRoundTrip } from "./retention-walk.ts";
-import { capturePage, caller, clickFirst, ensureDock, js, openSettingsPage, toRail, type FlowResult } from "./common.ts";
+import { capturePage, caller, clickFirst, ensureDock, js, makeObserver, openSettingsPage, requireSamplePath, toRail, type FlowResult, type SmokeObservation } from "./common.ts";
 import { FRAME_OBSERVATIONS, runFrameWalk } from "./frame-walk.ts";
 import { MANAGEMENT_OBSERVATIONS, runManagementWalk } from "./management-walk.ts";
 import { RAIL_OBSERVATIONS, runRailWalk } from "./rail-walk.ts";
@@ -29,7 +30,7 @@ import { prepareRestart } from "./workspace-restart.ts";
  * at three window sizes (AT-68), and the floating capsule is checked not to cover any of them. The tabs, the split and the contexts are walked after them. Each observation is named; the package stage requires every one of them to pass.
  */
 
-export type Observation = { name: string; status: "passed" | "failed"; detail: unknown };
+export type Observation = SmokeObservation;
 
 /** wide: the product window; narrow: the narrowest tall viewport; short: a wide window with little height. */
 export const WINDOW_SIZES = { wide: [productWindow.width, productWindow.height], narrow: [360, 780], short: [1100, 460] } as const;
@@ -44,6 +45,7 @@ export const REQUIRED_OBSERVATIONS = [
   "right-pane-note",
   "settings-pages-reachable",
   "capsule-clear-of-controls",
+  "window-minimize-tray",
   ...(Object.keys(WINDOW_SIZES) as SizeName[]).flatMap((size) => [...FITS.map((fit) => `comic-layout-${size}-${fit}`), `player-controls-${size}`, `novel-controls-${size}`, `readers-fill-main-${size}`]),
   ...READER_CONTROL_OBSERVATIONS,
   ...DANMAKU_OBSERVATIONS,
@@ -68,21 +70,11 @@ const inside = (inner: Rect, outer: { w: number; h: number }, slack = 1) => inne
 export async function runWindowWalkSmoke(input: { appService: MangaProductApp; grant: string; view: BrowserWindow; evidenceDir: string | undefined; logsDir: string }): Promise<FlowResult & { observations: Observation[] }> {
   const { appService, grant, view, evidenceDir, logsDir } = input;
   const call = caller(appService, grant);
-  const observations: Observation[] = [];
-  const observe = (name: string, ok: boolean, detail: unknown) => {
-    observations.push({ name, status: ok ? "passed" : "failed", detail });
-    console.error(`window-walk ${name}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, 700)}`);
-    return ok;
-  };
+  const { observations, observe } = makeObserver("window-walk");
   const root = process.env.MANGA_SMOKE_SAMPLES;
   const manifestFile = root ? path.join(root, "manifest.json") : "";
   if (!root || !fs.existsSync(manifestFile)) return { ok: false, notRun: true, reason: "MANGA_SMOKE_SAMPLES does not point at the generated samples", observations };
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { samples: Array<{ id: string; path: string; status: string }> };
-  const samplePath = (id: string) => {
-    const entry = manifest.samples.find((item) => item.id === id);
-    if (!entry || entry.status !== "generated") throw new Error(`sample ${id} is not available`);
-    return path.join(root, entry.path);
-  };
+  const samplePath = (id: string) => requireSamplePath(root, id);
   // A hidden window presents no frames, so transitions (the reader controls sliding away) never run in it; the person's keyboard is left alone.
   view.showInactive();
   const shot = (name: string, mark?: string) => capturePage(view, evidenceDir, `ui-walk-${name}.png`, mark);
@@ -175,21 +167,24 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   fs.copyFileSync(samplePath("cbz-basic"), path.join(folders.comic, "合成漫画.cbz"));
   fs.copyFileSync(samplePath("video-mp4-h264-aac"), path.join(folders.video, "合成动画.mp4"));
   // The page notes whether a scan's progress was ever on screen (the title bar's indicator or the library page's own block).
-  await js(view, `window.__smokeScanSeen = { indicator: false, block: false }; setInterval(() => {
+  await js(view, `window.__smokeScanSeen = { indicator: false, block: false }; window.__smokeScanTimer = setInterval(() => {
     if (document.querySelector('[data-testid="scan-indicator"]')) window.__smokeScanSeen.indicator = true;
     if (document.querySelector('[data-testid="scan-progress"]')) window.__smokeScanSeen.block = true;
   }, 25); true`);
   const added: string[] = [];
   const startedAt = Date.now();
-  for (const kind of ["novel", "comic", "video"] as const) {
-    testHooks.pick = () => folders[kind];
-    const chosen = await setSelect(view, "library-path-new-kind", kind);
-    const clicked = chosen && await clickTestId(view, "library-path-add");
-    const row = clicked && await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-text-"]')].some((el) => (el.textContent || "").endsWith(${JSON.stringify(path.basename(folders[kind]))}))`, 8000);
-    if (row) added.push(kind);
-    await waitFrames(view);
+  try {
+    for (const kind of ["novel", "comic", "video"] as const) {
+      testHooks.pick = () => folders[kind];
+      const chosen = await setSelect(view, "library-path-new-kind", kind);
+      const clicked = chosen && await clickTestId(view, "library-path-add");
+      const row = clicked && await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-text-"]')].some((el) => (el.textContent || "").endsWith(${JSON.stringify(path.basename(folders[kind]))}))`, 8000);
+      if (row) added.push(kind);
+      await waitFrames(view);
+    }
+  } finally {
+    testHooks.pick = undefined;
   }
-  testHooks.pick = undefined;
   // Five works are expected: two single files and one folder of two chapters (novel), one comic archive, one video.
   let total = 0;
   for (let attempt = 0; attempt < 2400 && total < 5; attempt += 1) {
@@ -199,7 +194,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
   }
   const scanMs = Date.now() - startedAt;
   const settledScan = await waitUntil(view, `!document.querySelector('[data-testid="scan-cancel"]') && document.querySelectorAll('[data-testid^="library-path-text-"]').length === 3`, 60_000);
-  const seen = await js<{ indicator: boolean; block: boolean }>(view, `window.__smokeScanSeen`);
+  const seen = await js<{ indicator: boolean; block: boolean }>(view, `(() => { clearInterval(window.__smokeScanTimer); delete window.__smokeScanTimer; return window.__smokeScanSeen; })()`);
   const works = ((await call("works.list", { limit: 50 })).value as { items?: Array<{ id: string; title: string; mediaKind: string; lastResource?: { id: string } | null }> } | undefined)?.items ?? [];
   const byKind = (kind: string) => works.filter((work) => work.mediaKind === kind);
   const grouped = byKind("novel").length === 3 && byKind("comic").length === 1 && byKind("video").length === 1;
@@ -471,6 +466,69 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
 
   // ---- 7. the window frame (AT-81, AT-82, AT-105): the window's buttons, regions, history, dividers, rail, scrollbars, window full screen ------------------------
   await runFrameWalk({ view, call, observe, shot, resize, comicId, projectId });
+
+  if (process.platform === "win32") {
+    const tray = activeWindowTray();
+    const trayProblems: string[] = [];
+    const beforeActive = tray?.isActive() ?? false;
+    if (!tray) {
+      trayProblems.push("the main window did not attach a tray controller");
+      observe("window-minimize-tray", false, { problems: trayProblems });
+    } else {
+      // A-136: the icon is there all along; minimizing is the taskbar's and leaves it as it is; the close button hides the window into the tray, and the
+      // icon brings it back (a smoke window comes back without taking the focus).
+      if (!beforeActive) trayProblems.push("the tray icon was not there before minimizing");
+      view.minimize();
+      for (let i = 0; i < 30 && !view.isMinimized(); i += 1) await waitFrames(view, 1);
+      const snap = tray.snapshot();
+      const minimized = view.isMinimized();
+      if (!minimized) trayProblems.push("the window did not enter the minimized state");
+      if (!snap.active) trayProblems.push("the tray icon went away when the window was minimized");
+      if (!snap.iconPath || !fs.existsSync(snap.iconPath) || !snap.iconPath.endsWith(".ico")) {
+        trayProblems.push(`the tray icon did not resolve to an .ico file (${String(snap.iconPath)})`);
+      }
+      if (snap.tooltip !== "MANGA" && snap.tooltip !== "MANGA Dev") {
+        trayProblems.push(`unexpected tray tooltip (${snap.tooltip})`);
+      }
+      if (snap.menuLabels[0] !== "显示主窗口" || snap.menuLabels[1] !== "退出 MANGA") {
+        trayProblems.push(`unexpected tray menu labels (${JSON.stringify(snap.menuLabels)})`);
+      }
+      const restoredByTray = tray.restore();
+      for (let i = 0; i < 30 && view.isMinimized(); i += 1) await waitFrames(view, 1);
+      if (view.isFocused()) view.blur();
+      await waitFrames(view);
+      if (!restoredByTray || view.isMinimized()) trayProblems.push("restoring from the tray did not restore the window");
+      if (!tray.isActive()) trayProblems.push("restoring from the tray removed the tray icon");
+      // The close button, with the default choice: the window goes into the tray and is not closed; the icon brings it back.
+      const closeChoice = ((await call("settings.getShell", {})).value as { window?: { closeToTray?: boolean } }).window?.closeToTray ?? null;
+      if (closeChoice !== true) trayProblems.push(`the close button does not go to the tray by default (${String(closeChoice)})`);
+      view.close();
+      for (let i = 0; i < 120 && !view.isDestroyed() && view.isVisible(); i += 1) await waitFrames(view, 1);
+      const closedToTray = !view.isDestroyed() && !view.isVisible() && tray.isActive();
+      if (!closedToTray) trayProblems.push("the close button did not hide the window into the tray");
+      if (!view.isDestroyed()) {
+        tray.restore();
+        for (let i = 0; i < 30 && !view.isVisible(); i += 1) await waitFrames(view, 1);
+        if (view.isFocused()) view.blur();
+        await waitFrames(view);
+      }
+      const backFromTray = !view.isDestroyed() && view.isVisible();
+      if (!backFromTray) trayProblems.push("the tray icon did not bring the closed window back");
+      await resize("wide");
+      observe("window-minimize-tray", trayProblems.length === 0, {
+        beforeActive,
+        minimized,
+        closedToTray,
+        backFromTray,
+        snapshot: snap,
+        afterMinimized: view.isMinimized(),
+        afterActive: tray.isActive(),
+        problems: trayProblems,
+      });
+    }
+  } else {
+    observe("window-minimize-tray", true, { skipped: process.platform });
+  }
 
   // ---- 8. the workspace (AT-110 — AT-118): tabs, the split, the contexts, the same file in three of them, the dock that follows the tab in front ------------------
   await runWorkspaceWalk({

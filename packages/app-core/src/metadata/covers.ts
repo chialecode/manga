@@ -4,6 +4,7 @@ import path from "node:path";
 import { MangaError, createId, type CommandEnvelope, type CoverSource, type CoverState } from "@manga/contracts";
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { makeThumbnail } from "../media/thumbnails.ts";
+import { writeFileAtomic } from "../shared/utils.ts";
 import { ImageStore } from "./images.ts";
 import type { MediaServices } from "../media/services.ts";
 
@@ -97,12 +98,7 @@ export class CoverService {
       if (area === "cache") {
         fileName = `cover-${hash.slice(0, 40)}.${EXT_FOR_TYPE[summary.mediaType] ?? "img"}`;
         const target = this.fileOf({ area, file_name: fileName });
-        if (!fs.existsSync(target)) {
-          fs.mkdirSync(path.dirname(target), { recursive: true });
-          const staging = `${target}.${process.pid}.tmp`;
-          fs.writeFileSync(staging, input.bytes);
-          fs.renameSync(staging, target);
-        }
+        if (!fs.existsSync(target)) writeFileAtomic(target, input.bytes);
       } else {
         mutations.push(this.images.insertSql(summary, input.bytes, { fetchedAt: new Date().toISOString() }));
       }
@@ -111,10 +107,25 @@ export class CoverService {
         content_hash: hash, media_type: summary.mediaType, width: summary.width, height: summary.height, bytes: summary.bytes, area, file_name: fileName,
         image_hash: area === "images" ? hash : null, created_at: new Date().toISOString(),
       };
+    } else if (row.area === "cache") {
+      if (area === "images") {
+        // Promote a volatile cache cover to the authoritative images table and upgrade source metadata if higher-ranked.
+        mutations.push(this.images.insertSql(summary, input.bytes, { fetchedAt: new Date().toISOString() }));
+        const nextSource = SOURCE_RANK[input.source] > SOURCE_RANK[row.source] ? input.source : row.source;
+        const nextProvider = input.providerId ?? row.provider_id;
+        const nextExternal = input.externalId ?? row.external_id;
+        mutations.push({
+          sql: "UPDATE covers SET area = 'images', file_name = '', image_hash = ?, source = ?, provider_id = ?, external_id = ? WHERE id = ?",
+          params: [hash, nextSource, nextProvider, nextExternal, row.id],
+        });
+        row = { ...row, area: "images", file_name: "", image_hash: hash, source: nextSource, provider_id: nextProvider, external_id: nextExternal };
+      } else if (!fs.existsSync(this.fileOf(row))) {
+        writeFileAtomic(this.fileOf(row), input.bytes);
+      }
     }
     const current = work.cover_id ? (this.store.sqlite.prepare("SELECT source FROM covers WHERE id = ?").get(work.cover_id) as { source: CoverSource } | undefined) : undefined;
     const wantsUser = input.select === "user";
-    const better = work.cover_state === "auto" && (!current || SOURCE_RANK[input.source] > SOURCE_RANK[current.source]);
+    const better = work.cover_state === "auto" && (!current || (input.source === "file" ? SOURCE_RANK[input.source] > SOURCE_RANK[current.source] : SOURCE_RANK[input.source] >= SOURCE_RANK[current.source]));
     // Locked covers never move: not even for an explicit pick (the user unlocks first).
     // `never` keeps the picture as one of the work's covers without moving the cover (the user kept the current one in the preview).
     const selected = work.cover_state !== "locked" && input.select !== "never" && (wantsUser || better);
@@ -180,7 +191,10 @@ export class CoverService {
         const key = this.media.thumbs.keyFor("cover", row.content_hash, SIZES[size]);
         const made = await this.media.thumbs.ensure(key, () => makeThumbnail(this.bytesOf(row), { maxEdge: SIZES[size], format: "webp", signal }), signal);
         const issued = this.media.handles.issue({ kind: "file", path: made.path, mediaType: made.mediaType }, { moduleId: COVER_MODULE, subject: `cover:${coverId}` }, { ttlMs: COVER_TTL_MS });
-        out.push({ coverId, available: true, url: issued.url, mediaType: made.mediaType, width: made.width ?? 0, height: made.height ?? 0 });
+        const scale = row.width && row.height ? Math.min(1, SIZES[size] / Math.max(row.width, row.height)) : 1;
+        const width = made.width ?? (row.width ? Math.max(1, Math.round(row.width * scale)) : 0);
+        const height = made.height ?? (row.height ? Math.max(1, Math.round(row.height * scale)) : 0);
+        out.push({ coverId, available: true, url: issued.url, mediaType: made.mediaType, width, height });
       } catch (error) {
         if (signal?.aborted) throw new MangaError("CANCELLED", "cover request was cancelled");
         out.push({ coverId, available: false, reason: error instanceof MangaError ? error.message : "the cover could not be read" });
@@ -220,11 +234,37 @@ export class CoverService {
     let removed = 0;
     for (const row of rows) {
       if (fs.existsSync(this.fileOf(row))) continue;
-      this.store.sqlite.prepare("UPDATE works SET cover_id = NULL WHERE id = ? AND cover_id = ?").run(workId, row.id);
+      this.store.sqlite.prepare("UPDATE works SET cover_id = NULL, cover_state = CASE WHEN cover_state = 'locked' THEN 'auto' ELSE cover_state END WHERE id = ? AND cover_id = ?").run(workId, row.id);
       this.store.sqlite.prepare("DELETE FROM covers WHERE id = ?").run(row.id);
       removed += 1;
     }
     return removed;
+  }
+
+  /** Revoke cover handles and remove unshared cache cover files for works being deleted (works both before and after DB deletion). */
+  forgetWorkCovers(workIds: readonly string[]): void {
+    if (!workIds.length) return;
+    const marks = workIds.map(() => "?").join(",");
+    const rows = this.store.sqlite.prepare(`SELECT id, area, file_name FROM covers WHERE work_id IN (${marks})`).all(...workIds) as Array<Pick<CoverRow, "id" | "area" | "file_name">>;
+    if (rows.length) {
+      for (const row of rows) {
+        this.media.handles.revokeSubject(`cover:${row.id}`);
+        if (row.area !== "cache" || !row.file_name) continue;
+        const shared = this.store.sqlite.prepare(`SELECT 1 FROM covers WHERE area = 'cache' AND file_name = ? AND work_id NOT IN (${marks}) LIMIT 1`).get(row.file_name, ...workIds);
+        if (!shared) fs.rmSync(this.fileOf(row), { force: true });
+      }
+      return;
+    }
+    // Post-commit path: the cover rows were already removed from SQLite, so revoke handles and delete cache files no longer referenced by any work.
+    const existingIds = new Set((this.store.sqlite.prepare("SELECT id FROM covers").all() as Array<{ id: string }>).map((row) => row.id));
+    this.media.handles.revokeWhere((binding) => Boolean(binding.subject?.startsWith("cover:") && !existingIds.has(binding.subject.slice(6))));
+    const cacheDir = path.join(this.media.cacheDir, "covers");
+    if (!fs.existsSync(cacheDir)) return;
+    const referencedFiles = new Set((this.store.sqlite.prepare("SELECT file_name FROM covers WHERE area = 'cache' AND file_name <> ''").all() as Array<{ file_name: string }>).map((row) => row.file_name));
+    for (const name of fs.readdirSync(cacheDir)) {
+      if (name.endsWith(".tmp") || referencedFiles.has(name)) continue;
+      fs.rmSync(path.join(cacheDir, name), { force: true });
+    }
   }
 
   /** Total bytes the covers use, per area, for the inventory. */

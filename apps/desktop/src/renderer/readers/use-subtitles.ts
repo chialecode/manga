@@ -19,7 +19,9 @@ type AssRenderer = Renderer & AssSurface;
 async function textOf(target: Target, trackId: string): Promise<{ text: string; format: SubtitleHandle["format"] }> {
   const handle = await attempt<SubtitleHandle>("video.subtitleHandle", { resourceId: target.resourceId, revisionId: target.revisionId, trackId });
   if (!handle.ok) throw handle.error;
-  return { text: await (await fetch(handle.value.url)).text(), format: handle.value.format };
+  const response = await fetch(handle.value.url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return { text: await response.text(), format: handle.value.format };
 }
 
 /**
@@ -43,9 +45,13 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
   const ass = useRef<AssRenderer | null>(null);
   const preferred = useRef(preferredId);
   preferred.current = preferredId;
-  const targetKey = target ? `${target.resourceId}:${target.revisionId}` : "";
+  const resourceId = target?.resourceId ?? "";
+  const revisionId = target?.revisionId ?? "";
+  const targetKey = target ? `${resourceId}:${revisionId}` : "";
   // Only the parts of the style that change an ASS drawing restart it; the text layer restyles itself.
   const assKey = style.assStyle === "standard" ? `standard:${style.sizePct}:${style.font}` : "keep";
+  const styleRef = useRef(style);
+  styleRef.current = style;
 
   // ---- which tracks the file has ----
   // Shown again after the page was in the background, the list and the choice made there stay; only a cut-off request is made again.
@@ -60,9 +66,9 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
     setMessage("");
     setCues([]);
     setSecondaryCues([]);
-    if (!target) return;
+    if (!resourceId || !revisionId) return;
     let stale = false;
-    void attempt<{ subtitles: SubtitleTrack[] }>("video.subtitles", { resourceId: target.resourceId, revisionId: target.revisionId }).then((result) => {
+    void attempt<{ subtitles: SubtitleTrack[] }>("video.subtitles", { resourceId, revisionId }).then((result) => {
       if (stale || !result.ok) return;
       listedFor.current = targetKey;
       const list = result.value.subtitles ?? [];
@@ -70,26 +76,34 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
       setSelectedId(pickSubtitleTrack(list, preferred.current)?.id ?? null);
     });
     return () => { stale = true; };
-  }, [targetKey]);
+  }, [targetKey, resourceId, revisionId]);
 
   // ---- drawing the chosen one ----
   useEffect(() => {
     setCues([]);
     setFacts(NO_FACTS);
-    if (!target || !video || !ready || !selectedId) { setStatus("none"); return; }
+    if (!resourceId || !revisionId || !video || !ready || !selectedId) { setStatus("none"); return; }
     const track = tracks.find((item) => item.id === selectedId);
     const renderer = track ? subtitleRenderer(track) : null;
     if (!track || !renderer) { setStatus("none"); return; }
     let stale = false;
     let drawn: AssRenderer | null = null;
+    const disposeDrawn = () => {
+      if (!drawn) return;
+      const toClose = drawn;
+      drawn = null;
+      if (ass.current === toClose) ass.current = null;
+      void Promise.resolve(toClose.destroy()).catch(() => undefined);
+    };
     setStatus("loading");
     setMessage("");
     void (async () => {
       try {
-        const { text, format } = await textOf(target, track.id);
+        const currentTarget = { resourceId, revisionId };
+        const { text, format } = await textOf(currentTarget, track.id);
         if (stale) return;
         if (format === "ass") {
-          const fonts = await attempt<{ fonts: Array<{ url: string; families?: string[] }>; fallback?: FallbackFont | null }>("video.fonts", { resourceId: target.resourceId, revisionId: target.revisionId });
+          const fonts = await attempt<{ fonts: Array<{ url: string; families?: string[] }>; fallback?: FallbackFont | null }>("video.fonts", currentTarget);
           const installed = await installedFamilies();
           if (stale) return;
           // The default font has the glyphs of Chinese and Japanese, so a style whose font is nowhere is drawn with letters instead of boxes.
@@ -105,9 +119,10 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
             import("jassub/dist/wasm/jassub-worker-modern.wasm?url"),
           ]);
           if (stale) return;
+          const activeStyle = styleRef.current;
           const instance = new JASSUB({
             video,
-            subContent: style.assStyle === "standard" ? overrideAssStyles(text, { fontName: SUBTITLE_FONT_NAMES[style.font], sizePct: style.sizePct }) : text,
+            subContent: activeStyle.assStyle === "standard" ? overrideAssStyles(text, { fontName: SUBTITLE_FONT_NAMES[activeStyle.font], sizePct: activeStyle.sizePct }) : text,
             workerUrl: worker.default,
             wasmUrl: wasm.default,
             modernWasmUrl: modernWasm.default,
@@ -119,10 +134,11 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
           });
           drawn = instance;
           await instance.ready;
-          if (!stale) ass.current = instance;
+          if (stale) { disposeDrawn(); return; }
+          ass.current = instance;
           // The renderer draws when the video shows a frame. A track chosen on a paused picture, or opened before the first frame, would
           // show nothing until the next frame, so the frame that is on screen is drawn once now.
-          if (!stale && video.videoWidth > 0) {
+          if (video.videoWidth > 0) {
             void instance.manualRender({ mediaTime: video.currentTime, width: video.videoWidth, height: video.videoHeight, expectedDisplayTime: performance.now() }, true).catch(() => undefined);
           }
         } else {
@@ -131,6 +147,7 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
         }
         if (!stale) setStatus("ready");
       } catch (error) {
+        disposeDrawn();
         if (stale) return;
         setStatus("failed");
         setMessage(messageOf(error));
@@ -138,29 +155,25 @@ export function useSubtitles(input: { target: Target | null; video: HTMLVideoEle
     })();
     return () => {
       stale = true;
-      if (drawn) {
-        if (ass.current === drawn) ass.current = null;
-        void Promise.resolve(drawn.destroy()).catch(() => undefined);
-      }
+      disposeDrawn();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.resourceId, target?.revisionId, video, ready, selectedId, tracks, sourceKey, originMs, assKey]);
+  }, [resourceId, revisionId, video, ready, selectedId, tracks, sourceKey, originMs, assKey]);
 
   // ---- the secondary subtitle: a text track, drawn under the main one ----
   useEffect(() => {
     setSecondaryCues([]);
-    if (!target || !ready || !secondaryId || secondaryId === selectedId) return;
+    if (!resourceId || !revisionId || !ready || !secondaryId || secondaryId === selectedId) return;
     const track = tracks.find((item) => item.id === secondaryId);
     if (!track || subtitleRenderer(track) !== "text") return;
     let stale = false;
     void (async () => {
       try {
-        const { text } = await textOf(target, track.id);
+        const { text } = await textOf({ resourceId, revisionId }, track.id);
         if (!stale) setSecondaryCues(parseSubtitleCues(text));
       } catch { /* the main subtitle and the video go on without it */ }
     })();
     return () => { stale = true; };
-  }, [target?.resourceId, target?.revisionId, ready, secondaryId, selectedId, tracks]);
+  }, [resourceId, revisionId, ready, secondaryId, selectedId, tracks]);
 
   /** What the ASS renderer has drawn for the frame on screen, at `size` (the file's own); null when no ASS track is being drawn. */
   const assPicture = useCallback((size: { w: number; h: number }) => (ass.current ? snapshotAss(ass.current, size) : Promise.resolve(null)), []);

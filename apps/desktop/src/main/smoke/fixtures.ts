@@ -1,18 +1,13 @@
 import zlib from "node:zlib";
 import type { MangaProductApp } from "@manga/app-core";
-import type { caller } from "./common.ts";
+import { callOk as value, type SmokeCall as Call } from "./common.ts";
 
 /**
  * Synthetic material that both a window walk and the bench make: kept apart from the walks so the bench depends on this file only, and a change to a
  * walk leaves the bench result current (scripts/stage/gate.json, fingerprint groups smoke, smokeBench, smokeWalk).
  */
 
-export type Call = ReturnType<typeof caller>;
-export const value = async <T>(call: Call, commandId: string, input: Record<string, unknown>): Promise<T> => {
-  const result = await call(commandId, input);
-  if (result.status !== "ok") throw new Error(`${commandId}: ${JSON.stringify(result.error ?? null).slice(0, 300)}`);
-  return result.value as T;
-};
+export { value, type Call };
 
 /** A conversation of `total` messages on a book: notes spread through it and the rest questions and answers of every length (synthetic, LOOP-07). */
 export async function seedLongSession(appService: MangaProductApp, call: Call, total: number): Promise<{ resourceId: string; sessionId: string; noteIds: string[]; runIds: string[] }> {

@@ -38,7 +38,7 @@ export const REQUIRED_ASSETS = [
 ] as const;
 
 /** The plugin packages a packaged application carries; a development build offers the ones built into `dist/plugins`. */
-export const PACKAGED_PLUGIN_ASSETS = ["plugin:manga.acquisition-bt"] as const;
+export const PACKAGED_PLUGIN_ASSETS = ["plugin:manga.acquisition-bt", "plugin:manga.provider-deepseek"] as const;
 
 export function sha256File(file: string): string {
   const hash = createHash("sha256");

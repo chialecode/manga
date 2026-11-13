@@ -30,11 +30,26 @@ export function hostOf(key: string, tabId: string): HTMLDivElement {
   return node;
 }
 
+/** Re-registers an existing portal host node (e.g. after a React StrictMode effect remount) and places it if detached. */
+export function registerHost(key: string, tabId: string, node: HTMLDivElement): void {
+  const id = tabKey(key, tabId);
+  hosts.set(id, node);
+  const view = placedFor.get(key);
+  const slot = view ? slots.get(slotKey(key, view, tabId)) : undefined;
+  const into = slot ?? parkings.get(key);
+  if (into && !node.isConnected) move(node, into);
+}
+
 /** The tab is closed: its node leaves the page. */
 export function releaseHost(key: string, tabId: string): void {
   const id = tabKey(key, tabId);
   hosts.get(id)?.remove();
   hosts.delete(id);
+}
+
+/** A context host left the page: drop its remembered view placement. */
+export function releaseContext(key: string): void {
+  placedFor.delete(key);
 }
 
 type Movable = HTMLElement & { moveBefore?: (node: Node, child: Node | null) => void };

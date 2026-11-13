@@ -82,7 +82,7 @@ export function capabilitiesForLocalModel(kind: AsrCatalogModelKind, hotwords?: 
 }
 
 export function capabilitiesForExternalInterface(
-  transcriptionInterface: "audio_transcriptions" | "chat_input_audio",
+  transcriptionInterface: "audio_transcriptions" | "chat_input_audio" | "deepseek_asr",
   options: {
     promptChars?: number;
     maxUploadBytes?: number;
@@ -91,6 +91,18 @@ export function capabilitiesForExternalInterface(
     supportsTimestamps?: boolean;
   } = {},
 ): AsrCapabilities {
+  if (transcriptionInterface === "deepseek_asr") {
+    // DeepSeek's recognition takes the file and nothing else: no hot words, prompt, language or context (计划 4.6). A dictation piece stays under 110 s.
+    return {
+      hotwords: 0,
+      promptChars: 0,
+      context: false,
+      language: false,
+      timestamps: false,
+      maxUploadBytes: options.maxUploadBytes ?? 8 * 1024 * 1024,
+      maxSeconds: options.maxSeconds ?? 110,
+    };
+  }
   if (transcriptionInterface === "chat_input_audio") {
     return {
       hotwords: 0,
@@ -251,23 +263,6 @@ export function isHintEcho(transcript: string, hintTerms: readonly string[]): bo
   }
   if (indexedTerms.length === 0) return false;
 
-  if (hadContextHeader) {
-    // Any transcript starting with `"可能出现的专有名词："` followed predominantly by hint terms is a system-prompt echo.
-    const byLenHeader = [...indexedTerms].sort((a, b) => b.key.length - a.key.length);
-    let pos = 0;
-    let covered = 0;
-    while (pos < normalizedText.length) {
-      const hit = byLenHeader.find((item) => normalizedText.startsWith(item.key, pos));
-      if (hit) {
-        covered += hit.key.length;
-        pos += hit.key.length;
-      } else {
-        pos += 1;
-      }
-    }
-    if (covered / normalizedText.length >= 0.5) return true;
-  }
-
   // Match longest terms first so compound names ("魔王城") are matched before prefixes ("魔王").
   const byLength = [...indexedTerms].sort((a, b) => b.key.length - a.key.length);
   let position = 0;
@@ -286,6 +281,8 @@ export function isHintEcho(transcript: string, hintTerms: readonly string[]): bo
   }
 
   const coverage = matchedChars / normalizedText.length;
+  // Any transcript starting with `"可能出现的专有名词："` followed predominantly by hint terms is a system-prompt echo.
+  if (hadContextHeader && coverage >= 0.5) return true;
   if (coverage < 0.8) return false;
 
   const counts = new Map<number, number>();

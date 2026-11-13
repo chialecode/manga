@@ -1,4 +1,4 @@
-export const PRODUCT_SCHEMA_VERSION = 16;
+export const PRODUCT_SCHEMA_VERSION = 17;
 export const LEGACY_SCHEMA_VERSION = 1;
 
 export const BASE_SCHEMA_SQL = `
@@ -1530,4 +1530,41 @@ INSERT OR IGNORE INTO dictionary_aliases (id, term_id, alias, kind, source, crea
 SELECT 'alias_mig_' || id, id, trim(heard), 'heard', source, created_at
 FROM dictionary_terms
 WHERE heard IS NOT NULL AND trim(heard) <> '';
+`;
+
+/**
+ * v17 (计划 4.2, 4.9): provider accounts. A connection added from a provider plugin keeps its account and the model's id in the provider's catalogue;
+ * the key is the account's, and every connection of the account refers to the same credential, so changing it once changes it for all. A connection
+ * added by hand has neither. The adapter of every older connection is the OpenAI-compatible one it always was. The use of the provider's services
+ * (seconds recognised, characters spoken, searches) is recorded per call, without the text.
+ */
+export const V17_SCHEMA_SQL = `
+UPDATE provider_connections SET adapter_id = 'openai-http' WHERE adapter_id IS NULL OR adapter_id = '';
+`;
+
+/** The same on every start. */
+export const V17_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS provider_accounts (
+  id TEXT PRIMARY KEY,
+  provider_ref TEXT NOT NULL,
+  label TEXT NOT NULL,
+  credential_ref TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS provider_connections_account ON provider_connections(account_id);
+CREATE TABLE IF NOT EXISTS service_usage (
+  id TEXT PRIMARY KEY,
+  connection_id TEXT,
+  model_id TEXT,
+  service TEXT NOT NULL,
+  task TEXT NOT NULL,
+  unit TEXT NOT NULL,
+  quantity REAL NOT NULL,
+  cost_usd REAL,
+  status TEXT NOT NULL,
+  error_code TEXT,
+  run_id TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS service_usage_created ON service_usage(created_at);
 `;

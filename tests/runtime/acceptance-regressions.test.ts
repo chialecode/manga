@@ -35,10 +35,11 @@ describe("protocol, inventory and location regressions", () => {
       const url = `http://127.0.0.1:${address.port}/v1`;
       if (stream) { for await (const _event of streamText("openai-responses", url, "synthetic", request)) { /* drain */ } }
       else await completeText("openai-responses", url, "synthetic", request);
-      expect(payload.tools[0]).toEqual({ type: "function", ...request.tools[0] });
+      // The command id goes without its dot: services refuse dots in function names.
+      expect(payload.tools[0]).toEqual({ type: "function", ...request.tools[0], name: "library_find" });
       expect(payload.input).toEqual([
         { role: "user", content: "find" },
-        { type: "function_call", call_id: "call_1", name: "library.find", arguments: '{"text":"x"}' },
+        { type: "function_call", call_id: "call_1", name: "library_find", arguments: '{"text":"x"}' },
         { type: "function_call_output", call_id: "call_1", output: '{"items":[]}' },
       ]);
     } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
@@ -48,6 +49,10 @@ describe("protocol, inventory and location regressions", () => {
     for (const status of [400, 404, 500]) {
       expect(JSON.stringify(mapHttpError(status, "private user text and reflected authorization").toJSON())).not.toContain("private user");
     }
+    // A refusal's own reason is kept so the person sees why, without anything key- or token-shaped in it.
+    const refused = mapHttpError(400, JSON.stringify({ error: { message: "Invalid key sk-abcdef0123456789 in header Bearer sk-zzzzzzzzzzzz for 0123456789abcdef0123456789abcdef01 (request_id: r1)" } })).toJSON();
+    expect(refused.message).toBe("provider HTTP 400: Invalid key <key> in header Bearer <key> for <token>");
+    expect(JSON.stringify(refused)).not.toMatch(/sk-|0123456789abcdef|request_id/);
   });
 
   it("filters inventory before returning it to an empty Agent grant", async () => {

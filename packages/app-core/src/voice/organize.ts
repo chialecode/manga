@@ -50,9 +50,15 @@ const view = (row: DraftRow): DraftView => ({
 export class Organizer {
   private readonly host: CaptureService;
   private readonly running = new Map<string, Promise<DraftView>>();
+  private readonly controllers = new Set<AbortController>();
 
   constructor(host: CaptureService) {
     this.host = host;
+  }
+
+  abortAll(): void {
+    for (const controller of this.controllers) controller.abort();
+    this.controllers.clear();
   }
 
   private draft(id: string): DraftRow {
@@ -87,6 +93,7 @@ export class Organizer {
     this.host.db.prepare("INSERT INTO capture_drafts(id, session_id, state, text, created_at, updated_at) VALUES (?,?,?,?,?,?)").run(id, sessionId, "organizing", "", now, now);
     this.host.deps.notify("capture.draft", { sessionId, draftId: id, state: "organizing" });
     const controller = new AbortController();
+    this.controllers.add(controller);
     const job = this.host.deps.media.jobs.submit({
       lane: "net", kind: "capture-organize", key: `capture:${sessionId}:organize`, owner: "manga.voice",
       run: async ({ signal }) => {
@@ -109,7 +116,10 @@ export class Organizer {
         return view(this.draft(id));
       },
     });
-    const run = job.promise.finally(() => this.running.delete(sessionId));
+    const run = job.promise.finally(() => {
+      this.controllers.delete(controller);
+      this.running.delete(sessionId);
+    });
     this.running.set(sessionId, run);
     return run;
   }

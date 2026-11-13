@@ -41,10 +41,16 @@ const MAX_TERMS = 2000;
 export class ProjectService {
   private readonly store: DrizzleStore;
   private readonly featureOn: (featureId: string) => boolean;
+  private beforeDeleteHook?: (projectId: string) => void;
 
   constructor(store: DrizzleStore, featureOn: (featureId: string) => boolean = () => true) {
     this.store = store;
     this.featureOn = featureOn;
+  }
+
+  /** Registers an optional hook invoked before a project's rows are deleted (e.g. to abort in-flight draft LLM runs). */
+  setBeforeDeleteHook(hook: ((projectId: string) => void) | undefined): void {
+    this.beforeDeleteHook = hook;
   }
 
   private row(projectId: string): ProjectRow {
@@ -77,9 +83,42 @@ export class ProjectService {
     };
   }
 
+  private groupCounts(table: string, projectIds: string[]): Map<string, number> {
+    const marks = projectIds.map(() => "?").join(",");
+    const rows = this.store.sqlite.prepare(`SELECT project_id AS id, COUNT(*) AS n FROM ${table} WHERE project_id IN (${marks}) GROUP BY project_id`).all(...projectIds) as Array<{ id: string; n: number }>;
+    return new Map(rows.map((row) => [row.id, row.n]));
+  }
+
+  private summaries(rows: ProjectRow[]): ProjectSummary[] {
+    if (!rows.length) return [];
+    if (rows.length === 1) return [this.summary(rows[0]!)];
+    const ids = rows.map((row) => row.id);
+    const materials = this.groupCounts("project_materials", ids);
+    const terms = this.groupCounts("project_terms", ids);
+    const sessions = this.groupCounts("agent_sessions", ids);
+    const whiteboards = this.groupCounts("whiteboards", ids);
+    const mindmaps = this.groupCounts("mindmaps", ids);
+    const drafts = this.groupCounts("drafts", ids);
+    const excerpts = this.groupCounts("excerpts", ids);
+    const roughCuts = this.groupCounts("rough_cuts", ids);
+    return rows.map((row) => ({
+      id: row.id, name: row.name, goal: row.goal, status: row.status, modelConnectionId: row.model_connection_id, createdAt: row.created_at, updatedAt: row.updated_at,
+      counts: {
+        materials: materials.get(row.id) ?? 0,
+        terms: terms.get(row.id) ?? 0,
+        sessions: sessions.get(row.id) ?? 0,
+        whiteboards: whiteboards.get(row.id) ?? 0,
+        mindmaps: mindmaps.get(row.id) ?? 0,
+        drafts: drafts.get(row.id) ?? 0,
+        excerpts: excerpts.get(row.id) ?? 0,
+        roughCuts: roughCuts.get(row.id) ?? 0,
+      },
+    }));
+  }
+
   list(status: "active" | "archived" | "all" = "active"): { projects: ProjectSummary[] } {
     const rows = this.store.sqlite.prepare(`SELECT * FROM projects ${status === "all" ? "" : "WHERE status = ?"} ORDER BY updated_at DESC, id`).all(...(status === "all" ? [] : [status])) as ProjectRow[];
-    return { projects: rows.map((row) => this.summary(row)) };
+    return { projects: this.summaries(rows) };
   }
 
   /**
@@ -88,7 +127,7 @@ export class ProjectService {
    */
   overview(): ProjectOverview {
     const sql = this.store.sqlite;
-    const recent = (sql.prepare("SELECT * FROM projects WHERE status = 'active' ORDER BY updated_at DESC, id LIMIT ?").all(OVERVIEW_PROJECTS) as ProjectRow[]).map((row) => this.summary(row));
+    const recent = this.summaries(sql.prepare("SELECT * FROM projects WHERE status = 'active' ORDER BY updated_at DESC, id LIMIT ?").all(OVERVIEW_PROJECTS) as ProjectRow[]);
     const owned = (kind: OverviewObject["kind"], table: string) => `SELECT '${kind}' AS kind, o.id AS id, o.title AS title, o.project_id AS projectId, p.name AS projectName, o.updated_at AS updatedAt FROM ${table} o JOIN projects p ON p.id = o.project_id WHERE p.status = 'active'`;
     const objects = sql.prepare(`${[owned("whiteboard", "whiteboards"), owned("mindmap", "mindmaps"), owned("draft", "drafts"), owned("roughcut", "rough_cuts")].join(" UNION ALL ")} ORDER BY updatedAt DESC, id LIMIT ?`).all(OVERVIEW_ROWS) as OverviewObject[];
     const suggestions = sql.prepare(
@@ -139,6 +178,7 @@ export class ProjectService {
     if (sqlite.prepare("SELECT 1 FROM rough_cut_exports e JOIN rough_cuts c ON c.id = e.cut_id WHERE c.project_id = ? AND e.state IN ('planned','running') LIMIT 1").get(projectId)) {
       throw new MangaError("VALIDATION_ERROR", "a sequence of this project is being exported", { details: { reason: "busy" } });
     }
+    this.beforeDeleteHook?.(projectId);
     return sqlite.transaction(() => {
       const objects = { n: 0 };
       const boards = (sqlite.prepare("SELECT id FROM whiteboards WHERE project_id = ?").all(projectId) as Array<{ id: string }>).map((item) => item.id);
@@ -171,6 +211,7 @@ export class ProjectService {
       sqlite.prepare("DELETE FROM workspace_contexts WHERE context_id = ?").run(projectId);
       sqlite.prepare("DELETE FROM project_material_exclusions WHERE project_id = ?").run(projectId);
       sqlite.prepare("DELETE FROM schema_meta WHERE key = ?").run(`conversation.current.project.${projectId}`);
+      sqlite.prepare("DELETE FROM schema_meta WHERE key = ?").run(`project.pages.${projectId}`);
       sqlite.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
       return { projectId, removed: { materials, terms, objects: objects.n }, keptSessions: kept };
     })();
@@ -280,11 +321,15 @@ export class ProjectService {
 
   addTerm(input: { projectId: string; term: string; heard?: string; note?: string }): { id: string; term: string; heard: string | null; note: string | null } {
     this.row(input.projectId);
-    if (this.count("SELECT COUNT(*) AS n FROM project_terms WHERE project_id = ?", input.projectId) >= MAX_TERMS) throw new MangaError("VALIDATION_ERROR", "this project already has too many terms", { details: { reason: "limit" } });
-    const existing = this.store.sqlite.prepare("SELECT id FROM project_terms WHERE project_id = ? AND term = ?").get(input.projectId, input.term) as { id: string } | undefined;
+    const term = input.term.trim();
+    if (!term) throw new MangaError("VALIDATION_ERROR", "the term cannot be empty", { details: { reason: "empty" } });
+    const existing = this.store.sqlite.prepare("SELECT id FROM project_terms WHERE project_id = ? AND term = ?").get(input.projectId, term) as { id: string } | undefined;
+    if (!existing && this.count("SELECT COUNT(*) AS n FROM project_terms WHERE project_id = ?", input.projectId) >= MAX_TERMS) {
+      throw new MangaError("VALIDATION_ERROR", "this project already has too many terms", { details: { reason: "limit" } });
+    }
     const id = existing?.id ?? createId("ptm");
     if (existing) this.store.sqlite.prepare("UPDATE project_terms SET heard = ?, note = ? WHERE id = ?").run(input.heard?.trim() || null, input.note?.trim() || null, id);
-    else this.store.sqlite.prepare("INSERT INTO project_terms(id, project_id, term, heard, note, created_at) VALUES (?,?,?,?,?,?)").run(id, input.projectId, input.term, input.heard?.trim() || null, input.note?.trim() || null, new Date().toISOString());
+    else this.store.sqlite.prepare("INSERT INTO project_terms(id, project_id, term, heard, note, created_at) VALUES (?,?,?,?,?,?)").run(id, input.projectId, term, input.heard?.trim() || null, input.note?.trim() || null, new Date().toISOString());
     return this.terms(input.projectId).find((item) => item.id === id)!;
   }
 

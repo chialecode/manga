@@ -6,6 +6,8 @@ import {
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { checkOpenable, inLibrarySql } from "./library-locations.ts";
 import { displayTitle } from "./works-service.ts";
+import { availableResourceSql } from "./works-versions.ts";
+import { escapeLike as escapeLikeRaw } from "./shared/utils.ts";
 
 type Row = Record<string, unknown>;
 /** A place the sidebar lists things of: "最近" (key "") or one project. */
@@ -20,7 +22,7 @@ const OBJECT_TABLE: Record<ObjectListKind, string> = { whiteboard: "whiteboards"
 const TRANSFERRING = new Set(["metadata", "choosing", "downloading", "verifying", "publishing", "importing"]);
 const FINISHED = ["done", "failed"];
 
-const escapeLike = (text: string) => `%${text.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+const escapeLike = (text: string) => `%${escapeLikeRaw(text)}%`;
 /** The title the library shows for a work: the one the metadata chose, else the file's. */
 const workTitle = (title: unknown, projection: unknown): string => displayTitle({ title: String(title ?? ""), projection_json: String(projection ?? "{}") });
 
@@ -201,7 +203,7 @@ export class SidebarService {
          LEFT JOIN works w ON pm.kind = 'work' AND w.id = pm.target_id
          LEFT JOIN resources r ON pm.kind = 'resource' AND r.id = pm.target_id
          LEFT JOIN works rw ON rw.id = r.work_id
-         WHERE ((pm.kind = 'work' AND w.media_kind = ? AND EXISTS (SELECT 1 FROM resources wr WHERE wr.work_id = w.id AND ${inLibrarySql("wr")}))
+         WHERE ((pm.kind = 'work' AND w.media_kind = ? AND EXISTS (SELECT 1 FROM resources wr WHERE wr.work_id = w.id AND ${inLibrarySql("wr")} AND ${availableResourceSql("wr")}))
              OR (pm.kind = 'resource' AND COALESCE(rw.media_kind, r.kind) = ? AND ${inLibrarySql("r")}))
            ${one ? "AND pm.project_id = ?" : ""}`, type, type, ...(one ? [only] : []))) {
         const place = places.get(String(row.k));
@@ -261,10 +263,10 @@ export class SidebarService {
   }
 
   private downloads(cursor: string | undefined, limit: number): SidebarSection {
-    const rows = this.all<Row>(`SELECT id, name, source_ref AS sourceRef, state, updated_at AS updatedAt FROM acquisition_jobs WHERE state <> 'cancelled'
+    const rows = this.all<Row>(`SELECT id, name, state, updated_at AS updatedAt FROM acquisition_jobs WHERE state <> 'cancelled'
       ORDER BY (state IN (${FINISHED.map(() => "?").join(",")})) ASC, updated_at DESC, id`, ...FINISHED);
     const items = rows.map((row): SidebarItem => ({
-      key: `download:${row.id}`, type: "download", title: String(row.name || row.sourceRef || ""), detail: String(row.state), open: { kind: "download", id: String(row.id) },
+      key: `download:${row.id}`, type: "download", title: String(row.name || ""), detail: String(row.state), open: { kind: "download", id: String(row.id) },
       contextId: null, contextName: null, updatedAt: String(row.updatedAt), running: TRANSFERRING.has(String(row.state)), materialId: null, coverId: null, progress: null,
     }));
     const offset = cursor && /^\d{1,7}$/.test(cursor) ? Number(cursor) : 0;
@@ -405,7 +407,7 @@ export class SidebarService {
       if (!wants(type)) continue;
       const works = this.all<Row>(
         `SELECT id, title, projection_json AS projection, created_at AS createdAt, cover_id AS coverId FROM works w
-         WHERE media_kind = ? AND EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = w.id AND ${inLibrarySql("rr")})
+         WHERE media_kind = ? AND EXISTS (SELECT 1 FROM resources rr WHERE rr.work_id = w.id AND ${inLibrarySql("rr")} AND ${availableResourceSql("rr")})
            AND (title LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\' OR json_extract(projection_json, '$.title.value') LIKE ? ESCAPE '\\' OR json_extract(projection_json, '$.titleOriginal.value') LIKE ? ESCAPE '\\')
          ORDER BY COALESCE(last_opened_at, '') DESC, created_at DESC, id LIMIT ?`, type, like, like, like, like, limit);
       const items: FindItem[] = works.map((row) => ({ key: `work:${row.id}`, type, title: workTitle(row.title, row.projection), detail: null, open: { kind: "work", id: String(row.id), mediaKind: type }, contextName: null, updatedAt: String(row.createdAt), running: false, materialId: null, coverId: row.coverId ? String(row.coverId) : null, progress: null }));

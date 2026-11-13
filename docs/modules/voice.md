@@ -4,7 +4,7 @@
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.voice` / 语音记录与听写 / 开发者 |
 | 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）：包含带来源位置的长录音笔记（`capture.*`）与应用内低延迟听写、本地离线识别引擎及二次元词库（`dictation.*`、`asrModel.*`、`dictionary.*`，A-130、A-131）。ASR 契约测试已用合成 TTS 语音覆盖（≤ 10 次请求）；Bangumi 角色详情与多协议转录真实契约见[用户待办](../../USER-ACTIONS.md#act-21)（ACT-21，not-run）；设备、声学与输入法项见 H-11、H-102、H-104—H-111 |
-| 需求 / 设计依据 | VOICE-01—17、AT-06—08、AT-54、AT-57—59、AT-76、AT-172、AT-174—183；[领域模型第 9 节](../design/domain-model.md#9-语音采集与位置映射)、[交互设计第 7 节](../design/interaction-and-workflows.md#7-工作流-b口述感想与异步整理)、[架构设计](../design/architecture.md)、Q-05、Q-40 |
+| 需求 / 设计依据 | VOICE-01—19、AT-06—08、AT-54、AT-57—59、AT-76、AT-172、AT-174—183、AT-189—AT-191；[领域模型第 9 节](../design/domain-model.md#9-语音采集与位置映射)、[交互设计第 7 节](../design/interaction-and-workflows.md#7-工作流-b口述感想与异步整理)、[架构设计](../design/architecture.md)、Q-05、Q-40 |
 | 包与公开入口 | `packages/app-core/src/voice`（`models/`、`engine/`、`correct/`、`polish/`、`dictation/` 及录音会话）、`apps/desktop/src/main/asr-host.ts` / `asr-service.ts`、`apps/desktop/src/renderer/voice/`；命令 `capture.*`、`dictation.start/append/stop/cancel/status`、`dictation.history.list/delete/clear/retranscribe`、`asrModel.list/download/pause/cancel/import/delete`、`dictionary.list/removedWorks/add/update/remove/importBatch/importMetadata/cancelImportMetadata/prompt/observeEdit`、`dictionary.suggestions.list/decide`、`settings.getRecording/setRecording` |
 
 ## 1. 责任与依赖
@@ -15,6 +15,13 @@
 2. **应用内听写（`dictation.*`）：** 面向 MANGA 内六个可输入区域按住或免提说话、松手把文字插回原光标处；拥有听写会话、静音裁剪与长停顿压缩、个人/作品词库音近替换、受控文本模型润色与简繁转换、一步恢复原文、从修改中学词建议与 30 天本机听写记录。单次最长 5 分钟，不写 `capture_sessions`、不生成位置锚点，默认音频只在内存流转。
 
 Feature `voice`；Facet `service`/`ui`；硬依赖 `manga.library`。识别支持三类引擎：本地离线模型（`sherpa-onnx`）、OpenAI 兼容转录接口（`/audio/transcriptions`）与 OpenAI 兼容对话音频输入（`/chat/completions` 的 `input_audio`）；润色与笔记整理复用已配置的文本连接。所选引擎缺失、未安装或失败时直接向用户报告明确原因，**零跨引擎自动回退**，音频绝不发往用户未选定的其他连接。
+
+### DeepSeek 语音识别与朗读（VOICE-18、VOICE-19，A-133、A-134）
+
+- **DeepSeek 语音识别：** 由 DeepSeek 提供者插件加入的语音识别连接（接法 `deepseek-asr@1`，`transcriptionInterface: "deepseek_asr"`）是第四种外部引擎，出现在听写与录音笔记的引擎列表里。能力描述：不收热词、提示与语言；单次上传 ≤ 8 MiB、时长 ≤ 120 s，送 16 位 PCM WAV（multipart 只有 `file` 一个字段）。听写超过上限时按静默分段（每段 ≤ 110 s）识别再拼接，录音笔记沿用 ≤ 30 s 的块，位置映射不变；当前作品的词条只用于识别之后的替换与润色。429 与 503 各再试两次，其他失败说明原因、保留临时音频供重试，不换引擎。识别的秒数记入 `service_usage`。
+- **朗读（`app.speech`，`packages/app-core/src/providers/speech.ts`）：** 用途 `speech` 的连接（接法 `deepseek-tts@1`，声音 `stella`、`tide`）。文字按句切成每次 ≤ 10,000 个计费字（汉字计 2）的请求，流式取回 24 kHz 16 位 PCM，经 `manga:speak` / `manga:speech` 两个窄 IPC 事件以块交给渲染进程，由 AudioWorklet（`renderer/voice/speech-worklet.ts`）播放；音频只在内存里，最近 10 分钟、单条 8 MiB、合计 64 MiB 的结果在主进程缓存，不写盘。提前结束的流（缺结尾）报“朗读中断，可以重试”。渲染端的 `ReadAloudController`（`renderer/voice/read-aloud.ts`）保证同一时间只朗读一处，按段排队、上一段的音频取完就请求下一段（播放与下一段的合成重叠），支持暂停、继续、停止；开始听写或录音（`openMicrophone`）时先暂停朗读。合成的字数按任务（回答、小说、试听）记入 `service_usage`。
+- **小说朗读（`renderer/reader/use-read-novel.ts`）：** TXT、EPUB、MOBI 从当前位置按段朗读，当前段以主题变量高亮、翻页或滚动跟随，读完当前窗口时加载下一窗口或下一章继续；朗读按书保存，阅读器重新布局时不中断，书的阅读器全部关掉 1 秒后停止。朗读不改阅读进度，停止时询问是否把阅读位置移到朗读停下的段落。开始朗读时说明按字数计费并给出本章余下的估算字数，直到用户选“不再提示”（设置 `novelCostHint`）。
+- **设置：** “设置 › 语音转录”新增“朗读”一节：语音合成连接（没有时引导去“设置 › 模型”）、声音、试听；设置字段 `speechConnectionId`、`speechVoice`、`novelCostHint`。
 
 ### 管线与子系统
 
@@ -55,5 +62,5 @@ Feature `voice`；Facet `service`/`ui`；硬依赖 `manga.library`。识别支�
 
 ## 5. 验证与未决
 
-- **自动化验证：** `tests/voice/` 覆盖采集与位置映射、VAD 裁剪与长停顿压缩、回声过滤、统一 `AsrEngine` 三类接口与零跨引擎回退、模型下载白名单/`Range` 续传/`tar.exe` 两步防穿越与炸弹校验、`asr-host` 子进程隔离/崩溃恢复/闲置卸载、`PhoneticCorrector` 固定纠错集（`tests/fixtures/voice-correction.json` 252 条样本，专名召回率 ≥ 0.85、非专名误改率 ≤ 1%）、`DictationPolisher` 四道护栏与简繁保护、恢复原文与 60 秒学词闭环、听写记录备份/导出剔除及 Agent 零暴露；`tests/library/schema-v16-migration.test.ts` 覆盖 v15 → v16 迁移与回滚；离线评测管线 `scripts/voice-eval/`（80 句虚构二次元语料 × 3 声学变体）与基准 `scripts/stage/bench-dictation.mjs` 守护 `dictationLocalReleaseToTextMs`（极速模型松键到上屏 `p95 ≤ 1500 ms`）与 `dictationCorrectionMs`（1 万词条替换 `p95 ≤ 30 ms`）；打包烟测覆盖 `voice`、`dictation-insert`、`dictation-local`、`dictation-revert`、`dictation-settings` 与 `dictation-boundary`。
+- **自动化验证：** `tests/voice/deepseek-asr.test.ts`（请求格式、分段、重试与不换引擎）、`deepseek-speech.test.ts`（分次、提前结束、缓存、插件停用）、`read-aloud.test.ts`（互斥、预取、暂停停止、段间静默计时、小说分段与计费字数）；`tests/voice/` 其余用例覆盖采集与位置映射、VAD 裁剪与长停顿压缩、回声过滤、统一 `AsrEngine` 三类接口与零跨引擎回退、模型下载白名单/`Range` 续传/`tar.exe` 两步防穿越与炸弹校验、`asr-host` 子进程隔离/崩溃恢复/闲置卸载、`PhoneticCorrector` 固定纠错集（`tests/fixtures/voice-correction.json` 252 条样本，专名召回率 ≥ 0.85、非专名误改率 ≤ 1%）、`DictationPolisher` 四道护栏与简繁保护、恢复原文与 60 秒学词闭环、听写记录备份/导出剔除及 Agent 零暴露；`tests/library/schema-v16-migration.test.ts` 覆盖 v15 → v16 迁移与回滚；离线评测管线 `scripts/voice-eval/`（80 句虚构二次元语料 × 3 声学变体）与基准 `scripts/stage/bench-dictation.mjs` 守护 `dictationLocalReleaseToTextMs`（极速模型松键到上屏 `p95 ≤ 1500 ms`）与 `dictationCorrectionMs`（1 万词条替换 `p95 ≤ 30 ms`）；打包烟测覆盖 `voice`、`dictation-insert`、`dictation-local`、`dictation-revert`、`dictation-settings` 与 `dictation-boundary`。
 - **限制与人工检查：** 真实麦克风声学、扬声器外放与系统回环回声消除体感、物理键盘 `RightAlt` 与真实中日文输入法组合兼容、真实网络下载本地模型速度以及 Bangumi 关联作品实测由人工检查 H-11、H-102、H-104—H-111 覆盖；Bangumi 角色详情与外部双协议转录的有限真实契约由 ACT-21 控制（默认 `not-run`）。未决默认值见 Q-05、Q-40。

@@ -19,11 +19,26 @@ export function signingKey(): string {
 }
 
 type PluginSource = {
-  manifest: Record<string, unknown> & { id: string; version: string; entry: string | null };
-  bundle: { entry: string; out: string; alias?: Record<string, string>; external?: string[] };
+  manifest: Record<string, unknown> & { id: string; version: string; entry: string | null; homepage?: string };
+  /** Optional explicit upstream URL recorded in THIRD-PARTY-NOTICES for bundled libraries. */
+  source?: string;
+  /** A plugin that runs code: its entry, bundled with what it needs. */
+  bundle?: { entry: string; out: string; alias?: Record<string, string>; external?: string[] };
+  /** A declarative plugin (no entry, 计划 4.1): the files of its folder that go into the payload as they are. */
+  files?: string[];
 };
 
-type Licensed = { name: string; version: string; license: string; text: string };
+type Licensed = { name: string; version: string; license: string; source: string; text: string };
+
+function normalizeSourceUrl(raw: unknown): string {
+  const value = typeof raw === "string"
+    ? raw
+    : raw && typeof raw === "object" && typeof (raw as { url?: unknown }).url === "string"
+      ? (raw as { url: string }).url
+      : "";
+  const cleaned = value.trim().replace(/^git\+/, "").replace(/^git:\/\//, "https://").replace(/\.git$/, "");
+  return /^https?:\/\//i.test(cleaned) ? cleaned : "";
+}
 
 /** The packages whose files went into a bundle, each with its declared licence and the licence text it ships, so the notice travels with the code. */
 function licensesOf(inputs: string[], root: string): Licensed[] {
@@ -39,18 +54,38 @@ function licensesOf(inputs: string[], root: string): Licensed[] {
     const base = path.resolve(root, path1.slice(0, at + marker.length), name);
     const manifestFile = path.join(base, "package.json");
     if (!fs.existsSync(manifestFile)) continue;
-    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { version?: string; license?: string | { type?: string }; licenses?: Array<{ type?: string }> };
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { version?: string; license?: string | { type?: string }; licenses?: Array<{ type?: string }>; repository?: unknown; homepage?: unknown };
     const license = typeof manifest.license === "string" ? manifest.license : manifest.license?.type ?? manifest.licenses?.map((item) => item.type).join(" OR ") ?? "UNKNOWN";
+    const source = normalizeSourceUrl(manifest.repository) || normalizeSourceUrl(manifest.homepage);
     const file = fs.readdirSync(base).find((entry) => /^(licen[sc]e|copying)(\.[a-z]+)?$/i.test(entry));
-    seen.set(name, { name, version: manifest.version ?? "", license, text: file ? fs.readFileSync(path.join(base, file), "utf8").trim() : "" });
+    seen.set(name, { name, version: manifest.version ?? "", license, source, text: file ? fs.readFileSync(path.join(base, file), "utf8").trim() : "" });
   }
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function pluginNoticeSource(sourceDir: string, source: PluginSource, licenses: Licensed[]): string {
+  const explicit = normalizeSourceUrl(source.source) || normalizeSourceUrl(source.manifest.homepage);
+  if (explicit) return explicit;
+  const pkgFile = path.join(sourceDir, "package.json");
+  if (fs.existsSync(pkgFile)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8")) as { repository?: unknown; homepage?: unknown; dependencies?: Record<string, string> };
+      const own = normalizeSourceUrl(pkg.repository) || normalizeSourceUrl(pkg.homepage);
+      if (own) return own;
+      for (const depName of Object.keys(pkg.dependencies ?? {})) {
+        const match = licenses.find((item) => item.name === depName && item.source);
+        if (match) return match.source;
+      }
+    } catch { /* fall through to bundled metadata */ }
+  }
+  return licenses.find((item) => item.source)?.source ?? "";
 }
 
 /** A plugin's entry bundled with everything it needs into one file, and the manifest read from its `plugin.json`. */
 export async function bundlePlugin(sourceDir: string): Promise<{ manifest: PluginSource["manifest"]; out: string; code: string; licenses: Licensed[] }> {
   const source = JSON.parse(fs.readFileSync(path.join(sourceDir, "plugin.json"), "utf8")) as PluginSource;
   const { manifest, bundle } = source;
+  if (!bundle) throw new Error(`${manifest.id}: a plugin with code names its bundle`);
   const alias = Object.fromEntries(Object.entries(bundle.alias ?? {}).map(([from, to]) => [from, path.resolve(sourceDir, to)]));
   const result = await build({
     entryPoints: [path.resolve(sourceDir, bundle.entry)], bundle: true, write: false, platform: "node", format: "esm", target: "node24", minify: false, legalComments: "none",
@@ -69,20 +104,34 @@ export function noticesText(manifest: { id: string; name?: unknown; version: str
   return `${lines.join("\n")}\n`;
 }
 
-export type PackedPlugin = { file: string; id: string; version: string; bytes: number; name: string; notices: string; licenses: string[]; packages: number };
+export type PackedPlugin = { file: string; id: string; version: string; bytes: number; name: string; notices: string; licenses: string[]; packages: number; source: string };
 
 /** Builds one plugin from its source folder into a package signed with the given key (the first party's by default). */
 export async function packPlugin(sourceDir: string, options: { out?: string; privateKeyPem?: string } = {}): Promise<PackedPlugin> {
-  const { manifest, out: entry, code, licenses } = await bundlePlugin(sourceDir);
+  const source = JSON.parse(fs.readFileSync(path.join(sourceDir, "plugin.json"), "utf8")) as PluginSource;
+  let manifest: PluginSource["manifest"];
+  let files: Record<string, string>;
+  let licenses: Licensed[] = [];
+  if (source.bundle) {
+    const bundled = await bundlePlugin(sourceDir);
+    manifest = bundled.manifest;
+    licenses = bundled.licenses;
+    files = { [bundled.out]: bundled.code };
+  } else {
+    // A declarative plugin carries its listed files and no code; there is nothing bundled to give notice of.
+    manifest = source.manifest;
+    files = Object.fromEntries((source.files ?? []).map((name) => [name, fs.readFileSync(path.join(sourceDir, name), "utf8")]));
+  }
   const notices = noticesText(manifest, licenses);
+  if (licenses.length) files["NOTICES.txt"] = notices;
   const privateKeyPem = options.privateKeyPem ?? signingKey();
   createPrivateKey(privateKeyPem);
-  const bytes = buildPluginPackage({ manifest, files: { [entry]: code, "NOTICES.txt": notices }, privateKeyPem });
+  const bytes = buildPluginPackage({ manifest, files, privateKeyPem });
   const outDir = options.out ?? pluginBuildDir;
   fs.mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, `${manifest.id}-${manifest.version}.manga-plugin`);
   fs.writeFileSync(file, bytes);
-  return { file, id: manifest.id, version: manifest.version, bytes: bytes.length, name: String(manifest.name ?? manifest.id), notices, licenses: [...new Set(licenses.map((item) => item.license))].sort(), packages: licenses.length };
+  return { file, id: manifest.id, version: manifest.version, bytes: bytes.length, name: String(manifest.name ?? manifest.id), notices, licenses: [...new Set(licenses.map((item) => item.license))].sort(), packages: licenses.length, source: pluginNoticeSource(sourceDir, source, licenses) };
 }
 
 /** Every plugin under `plugins/`, built and signed. */
@@ -112,11 +161,15 @@ export async function stageBundledPlugins(resourcesDir: string, options: { priva
   manifest.assets = manifest.assets.filter((asset) => !asset.id.startsWith("plugin:"));
   manifest.notices = manifest.notices.filter((notice) => !notice.name.endsWith(LIBRARIES_SUFFIX));
   for (const item of built) {
+    const relative = `plugins/${path.basename(item.file)}`;
+    if (!item.packages) {
+      manifest.assets.push({ id: `plugin:${item.id}`, path: relative, bytes: fs.statSync(item.file).size, sha256: sha256File(item.file) });
+      continue;
+    }
     const noticeName = `${item.id}.NOTICES.txt`;
     fs.writeFileSync(path.join(dir, noticeName), item.notices);
-    const relative = `plugins/${path.basename(item.file)}`;
     manifest.assets.push({ id: `plugin:${item.id}`, path: relative, bytes: fs.statSync(item.file).size, sha256: sha256File(item.file) });
-    manifest.notices.push({ name: `${item.name}${LIBRARIES_SUFFIX}`, version: item.version, license: item.licenses.join(", "), source: "https://github.com/webtorrent/webtorrent", files: [`plugins/${noticeName}`] });
+    manifest.notices.push({ name: `${item.name}${LIBRARIES_SUFFIX}`, version: item.version, license: item.licenses.join(", "), source: item.source, files: [`plugins/${noticeName}`] });
   }
   fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;

@@ -1,15 +1,15 @@
-import { Activity, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, PanelLeft, PanelRight, Shrink, Square } from "lucide-react";
+import { Activity, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type MutableRefObject, type ReactNode } from "react";
+import { PanelLeft, PanelRight, Shrink, Square } from "lucide-react";
 import { chordOf } from "@manga/contracts/keys";
 import type { HideableRailView, RailView } from "@manga/contracts";
 import type { ShellPreference } from "@manga/contracts/reading";
 import { SIDE_WIDTH, TOP_ROW_HEIGHT, cardOf, clampSide, deriveShell, dragLimit, initialHover, reduceHover, viewOfCard, type HoverTarget } from "../../../../packages/app-core/src/domain/shell-layout.ts";
-import { Menu, type MenuItem } from "./components/menu.tsx";
 import { WindowControls, type WindowControlLabels } from "./components/window-controls.tsx";
 import { useWindowState } from "./hooks/use-window-state.ts";
 import { Rail, type RailEntry, type RailHow, type RailLabels } from "./rail.tsx";
+import { Divider, TitleEnd, type DividerDrag, type Side } from "./shell-chrome.tsx";
 
-export type TopMenu = { id: string; label: string; items: MenuItem[] };
+export type { DividerDrag };
 
 /** What the icon rail shows and does (A-99): the views, the ones taken out, the one the sidebar is on, and the settings at the bottom. */
 export type ShellRail = {
@@ -29,125 +29,11 @@ export type ShellRail = {
 /** What goes in the sidebar's place: a view of the rail, or the settings directory. */
 export type SidebarContent = (view: RailView | "settings", options: { variant: "dock" | "card"; onDone?: () => void }) => ReactNode;
 
-type Side = "sidebar" | "dock";
-
 const HOVER_MS = 180;
 /** Below this many pixels from the window's top the floating top stays out once the pointer has been over it (the top, its hot zone and the margin). */
 const REVEAL_KEEP = TOP_ROW_HEIGHT + 6;
 /** A pointer that leaves the page this near its top edge brings the floating top down. */
 const REVEAL_REACH = 24;
-
-/** What a drag of a divider shows while it goes on: the width under the pointer, or (past half the least width) the column folded away. */
-export type DividerDrag = { width: number; hidden: boolean };
-
-/**
- * The divider between a column and the main area (A-104, 计划 4.4). Dragged, it sets the width between the least and the most; dragged on past half the
- * least width it folds the column away while the pointer is there (a line in the accent says that letting go folds it), and letting go there hides the
- * column with its saved width as it was before the drag. With the sidebar folded away the same divider is the strip at the rail's right edge that pulls
- * it out (`pull`): past half the least width the sidebar comes, follows the pointer, and stays when let go. A cancelled pointer or a window that loses
- * the focus puts everything back. Keys (the APG window splitter): the arrows change the width and stop at the least; Enter folds the column away.
- */
-function Divider(props: {
-  side: Side;
-  width: number;
-  limit: number;
-  label: string;
-  /** The sidebar is folded away: the divider is the strip that pulls it out. */
-  pull?: boolean;
-  onDrag: (drag: DividerDrag | null) => void;
-  onCommit: (width: number) => void;
-  /** Let go past the threshold, or Enter: the column goes. */
-  onCollapse: () => void;
-  /** Pulled out past the threshold and let go: the column comes, this wide. */
-  onPull?: (width: number) => void;
-}) {
-  const start = useRef<{ x: number; width: number; pull: boolean; pointerId: number } | null>(null);
-  const [state, setState] = useState<DividerDrag | null>(null);
-  const bounds = SIDE_WIDTH[props.side];
-  const direction = props.side === "sidebar" ? 1 : -1;
-  const clampTo = (value: number) => Math.max(bounds.min, Math.min(props.limit, Math.round(value)));
-  const measure = (clientX: number): DividerDrag => {
-    const from = start.current!;
-    const raw = from.width + direction * (clientX - from.x);
-    return raw < bounds.min / 2 ? { width: from.pull ? bounds.min : clampTo(from.width), hidden: true } : { width: clampTo(raw), hidden: false };
-  };
-  const stop = useCallback(() => {
-    start.current = null;
-    setState(null);
-    props.onDrag(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.onDrag]);
-  // A window that loses the focus in the middle of a drag, or Esc, gets back what it had.
-  const dragging = state !== null;
-  useEffect(() => {
-    if (!dragging) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); stop(); } };
-    window.addEventListener("blur", stop);
-    window.addEventListener("keydown", onKey, true);
-    return () => { window.removeEventListener("blur", stop); window.removeEventListener("keydown", onKey, true); };
-  }, [dragging, stop]);
-
-  const move = (event: ReactPointerEvent) => {
-    if (!start.current || start.current.pointerId !== event.pointerId || !Number.isFinite(event.clientX)) return;
-    const next = measure(event.clientX);
-    setState(next);
-    props.onDrag(next);
-  };
-  const finish = (event: ReactPointerEvent, commit: boolean) => {
-    const from = start.current;
-    if (!from || from.pointerId !== event.pointerId) return;
-    if (!commit || !Number.isFinite(event.clientX)) { stop(); return; }
-    const next = measure(event.clientX);
-    stop();
-    if (from.pull) { if (!next.hidden) props.onPull?.(next.width); return; }
-    if (next.hidden) props.onCollapse(); else props.onCommit(next.width);
-  };
-  const onKey = (event: ReactKeyboardEvent) => {
-    if (props.pull) return;
-    const step = event.shiftKey ? 48 : 16;
-    const grow = props.side === "sidebar" ? "ArrowRight" : "ArrowLeft";
-    const shrink = props.side === "sidebar" ? "ArrowLeft" : "ArrowRight";
-    if (event.key === "Enter") { event.preventDefault(); props.onCollapse(); return; }
-    let next: number | null = null;
-    if (event.key === grow) next = props.width + step;
-    else if (event.key === shrink) next = props.width - step;
-    else if (event.key === "Home") next = bounds.min;
-    else if (event.key === "End") next = props.limit;
-    if (next === null) return;
-    event.preventDefault();
-    props.onCommit(clampTo(next));
-  };
-  const hidden = state ? state.hidden : Boolean(props.pull);
-  // A docked column dragged past the threshold is still this divider, with its line, until it is let go.
-  const strip = Boolean(props.pull) && !(start.current && !start.current.pull);
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={props.label}
-      aria-valuenow={hidden ? 0 : (state?.width ?? props.width)}
-      aria-valuemin={0}
-      aria-valuemax={props.limit}
-      tabIndex={props.pull ? -1 : 0}
-      className={`shell-divider shell-divider-${props.side}${strip ? " shell-pullout" : ""}`}
-      data-testid={strip ? "shell-pullout" : `shell-resize-${props.side}`}
-      data-collapsing={state && state.hidden && !start.current?.pull ? "true" : undefined}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        start.current = { x: event.clientX, width: props.pull ? 0 : props.width, pull: Boolean(props.pull), pointerId: event.pointerId };
-      }}
-      // Text selected across the page must not turn this press into a drag of the selection, which would cancel the pointer.
-      onDragStart={(event) => event.preventDefault()}
-      onPointerMove={move}
-      onPointerUp={(event) => finish(event, true)}
-      onPointerCancel={(event) => finish(event, false)}
-      onLostPointerCapture={(event) => { if (start.current?.pointerId === event.pointerId) stop(); }}
-      onDoubleClick={() => { if (!props.pull) props.onCommit(bounds.initial); }}
-      onKeyDown={onKey}
-    />
-  );
-}
 
 export type ShellLabels = {
   /** The floating top's button that ends window full screen. */
@@ -157,9 +43,6 @@ export type ShellLabels = {
   showDock: string;
   hideDock: string;
   stop: string;
-  back: string;
-  forward: string;
-  menubar: string;
   rail: string;
   sidebar: string;
   dock: string;
@@ -170,8 +53,10 @@ export type ShellLabels = {
 };
 
 /**
- * The window (UI-01, A-94, A-99): one row across the top (the sidebar's switch, back and forward for the tab in front, the menus, then the debugging switch,
- * the stop button, the dock's switch and the window's own buttons), and under it the icon rail, the sidebar, the tabbed main area and the dock. A sidebar
+ * The window (UI-01, A-99, A-136): the icon rail, the sidebar, the tabbed main area and the dock, each from the window's top edge down. There is no row
+ * across the window: the top of each column is its part of the title bar (the sidebar's switch over the rail, the sidebar's heading, the tab strip of the
+ * main area, the dock's own top), and the debugging switch, the stop button, the dock's switch and the window's own buttons sit at the right end of the
+ * dock's top, or of the main area's tab strip while the dock is not docked. The empty parts of those tops are where the window is taken hold of. A sidebar
  * that is folded away (by the person, or by a window too narrow for it) comes out of the rail as the card of a view when the pointer rests on an icon, and
  * the dock folds into an overlay in a narrow window. While the settings are on, the settings directory takes the sidebar's place and the dock is out of
  * the way; the main area and the dock stay mounted.
@@ -188,9 +73,7 @@ export function ShellFrame(props: {
   onExitImmersive: () => void;
   running: boolean;
   labels: ShellLabels;
-  menus: TopMenu[];
   rail: ShellRail;
-  history: { canBack: boolean; canForward: boolean; onBack: () => void; onForward: () => void };
   /** How wide the main area must be to keep its columns apart (the split's own minimum); the side columns fold into overlays before it is crossed. */
   mainFloor?: number;
   /** The keys that open and close the two columns; they do what the buttons do (a folded column opens as an overlay). */
@@ -201,18 +84,21 @@ export function ShellFrame(props: {
   onShow: (side: Side) => void;
   /** A column's new width, once the divider is let go or a key moved it. */
   onResize: (side: Side, width: number) => void;
+  /** Optional combined show+resize callback for pulling a hidden sidebar out in one atomic patch. */
+  onPull?: (side: Side, width: number) => void;
   onStop: () => void;
   sidebar: SidebarContent;
   dock: ReactNode;
   /** Buttons before the dock's switch: the debugging switch, recording state, scan progress. */
   titleActions?: ReactNode;
-  /** Shown at the bottom right of the main area while the dock is folded away. */
+  /** Shown in the tab-strip chrome of the main area while the dock is folded away, outside the active page. */
   capsule?: ReactNode;
   /** A panel under the main area (the context debug panel). */
   bottom?: ReactNode;
   children: ReactNode;
 }) {
   const [hover, setHover] = useState(initialHover);
+  const [focusTick, setFocusTick] = useState(0);
   const [dragging, setDragging] = useState<({ side: Side } & DividerDrag) | null>(null);
   const sidebarButton = useRef<HTMLButtonElement>(null);
   const dockButton = useRef<HTMLButtonElement>(null);
@@ -250,14 +136,27 @@ export function ShellFrame(props: {
   /** What the sidebar shows when it is docked or opened by its switch. */
   const ownView: RailView | "settings" = settingsOn ? "settings" : props.rail.current;
 
+  // Schedule a single timer only when a hover open or close transition is pending (no idle polling).
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    const nextAt = hover.openAt !== null && hover.closeAt !== null
+      ? Math.min(hover.openAt, hover.closeAt)
+      : (hover.openAt ?? hover.closeAt);
+    if (nextAt === null) return;
+    const delay = Math.max(0, nextAt - Date.now());
+    const timer = window.setTimeout(() => {
       // A card or an overlay with the focus in it stays. The focus in a docked column holds nothing back: a card can still come out of the rail.
       const holds = (panel: HTMLElement | null) => panel?.getAttribute("data-shell-state") === "overlay" && panel.contains(document.activeElement);
       if (holds(sidebarPanel.current) || holds(dockPanel.current)) return;
-      setHover((state) => reduceHover(state, { type: "tick", now: Date.now() }, HOVER_MS));
-    }, 40);
-    return () => window.clearInterval(timer);
+      // Clamp to nextAt so 1ms OS timer jitter or clock skew cannot leave the transition permanently stalled.
+      setHover((state) => reduceHover(state, { type: "tick", now: Math.max(Date.now(), nextAt) }, HOVER_MS));
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [hover.openAt, hover.closeAt, hover.pending, focusTick]);
+
+  const onOverlayBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setFocusTick((count) => count + 1);
+    }
   }, []);
 
   const buttonOf = (side: Side) => (side === "sidebar" ? sidebarButton : dockButton);
@@ -297,9 +196,9 @@ export function ShellFrame(props: {
     setHover((state) => reduceHover(state, view !== null ? { type: "leave", view, now: Date.now() } : { type: "leave", side: "dock", now: Date.now() }, HOVER_MS));
   }
 
-  function closeOverlay() {
+  const closeOverlay = useCallback(() => {
     setHover(initialHover());
-  }
+  }, []);
 
   function pin(side: Side) {
     // The settings directory stays while the settings are on: the switch has nothing to fold.
@@ -339,7 +238,7 @@ export function ShellFrame(props: {
   useEffect(() => {
     if (!hover.pinned || !wantFocus.current) return;
     wantFocus.current = false;
-    sidebarPanel.current?.focus();
+    panelOf(hover.pinned === "dock" ? "dock" : "sidebar").current?.focus();
   }, [hover.pinned, hover.overlay]);
 
   const pinRef = useRef(pin);
@@ -415,14 +314,14 @@ export function ShellFrame(props: {
 
   const cardTarget = viewOfCard(hover.overlay);
   const cardView: RailView | "settings" = cardTarget === "settings" ? (settingsOn ? "settings" : props.rail.current) : cardTarget !== null ? (cardTarget as RailView) : ownView;
+  const renderSidebar = props.sidebar;
   // The sidebar's content is made again only when what it shows changes: a drag of the divider changes its width, not its lists (计划 4.4).
   const sidebarBody = useMemo(() => (chrome.sidebar === "dock"
-    ? props.sidebar(ownView, { variant: "dock" })
+    ? renderSidebar(ownView, { variant: "dock" })
     : chrome.sidebar === "overlay"
-      ? props.sidebar(cardView, { variant: "card", onDone: closeOverlay })
+      ? renderSidebar(cardView, { variant: "card", onDone: closeOverlay })
       : null),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [chrome.sidebar, ownView, cardView, props.sidebar]);
+  [chrome.sidebar, ownView, cardView, renderSidebar, closeOverlay]);
   /** A column folded away from its divider (drag or Enter): the focus goes to the column's switch, where it comes back from (APG window splitter). */
   const collapse = (side: Side) => {
     props.onHide(side);
@@ -432,13 +331,27 @@ export function ShellFrame(props: {
   /** The sidebar can be pulled out from the rail's edge: it is folded away by the person, and the window has room to dock it. */
   const pullable = !immersive && !settingsOn && chrome.sidebar !== "dock" && !props.preference.sidebar.visible
     && deriveShell({ viewport: props.viewport, preference: { ...props.preference, sidebar: { ...props.preference.sidebar, visible: true } }, hasDock: dockActive, overlay: null, mainFloor: props.mainFloor }).sidebar === "dock";
-  const onDragOf = (side: Side) => (drag: DividerDrag | null) => setDragging(drag === null ? null : { side, ...drag });
+  const onDragSidebar = useCallback((drag: DividerDrag | null) => setDragging(drag === null ? null : { side: "sidebar", ...drag }), []);
+  const onDragDock = useCallback((drag: DividerDrag | null) => setDragging(drag === null ? null : { side: "dock", ...drag }), []);
 
   const stop = props.running ? (
     <button type="button" className="shell-no-drag shell-icon" aria-label={labels.stop} title={labels.stop} data-testid="shell-task-stop" onClick={props.onStop}><Square size={16} /></button>
   ) : null;
 
   const sidebarToggleLocked = settingsOn && chrome.sidebar === "dock";
+  // The right end of the title bar: on the dock's top while it is docked, else at the right end of the main area's tab strip (A-136). Drawn in one place only.
+  const endInDock = dockDocked;
+  const titleEnd = (
+    <TitleEnd measure={!immersive && !endInDock}>
+      {props.titleActions ? <div className="shell-no-drag flex items-center gap-2" data-testid="shell-title-actions">{props.titleActions}</div> : null}
+      {stop}
+      {immersive ? <button type="button" className="shell-no-drag shell-icon" aria-label={labels.exitImmersive} title={labels.exitImmersive} data-testid="immersive-exit" onClick={props.onExitImmersive}><Shrink size={17} /></button> : null}
+      {dockActive && !immersive ? (
+        <button ref={dockButton} type="button" className="shell-no-drag shell-icon" aria-label={dockOpen ? labels.hideDock : labels.showDock} title={dockOpen ? labels.hideDock : labels.showDock} aria-expanded={dockOpen} data-testid="shell-dock-toggle" onMouseEnter={() => enterSide("dock")} onMouseLeave={(event) => leave("dock", event)} onClick={() => pin("dock")}><PanelRight size={18} /></button>
+      ) : null}
+      {labels.window ? <WindowControls labels={labels.window} state={windowState} /> : null}
+    </TitleEnd>
+  );
 
   return (
     <div
@@ -448,38 +361,26 @@ export function ShellFrame(props: {
       data-immersive={immersive ? "true" : "false"}
       data-settings={settingsOn ? "true" : "false"}
       data-window-controls={windowState ? (windowState.controls ? "page" : "system") : "none"}
+      data-sidebar={sidebarDocked ? "dock" : "away"}
     >
       {/* The window is full of the page: its top edge is still where the window is taken hold of. The strip is a drag area and takes no pointer events, so the hot
           zone under it brings the top down; once down, the top is the drag area (its buttons are not) and the strip and the zone stand aside. */}
       {immersive && !revealed ? <div className="immersive-drag shell-drag" aria-hidden="true" data-testid="immersive-drag" /> : null}
       {immersive && !revealed ? <div className="immersive-hotzone shell-no-drag" data-testid="immersive-hotzone" onPointerEnter={() => setRevealed(true)} onMouseEnter={() => setRevealed(true)} /> : null}
-      <header className="shell-top shell-drag" data-testid="shell-top" data-immersive={immersive ? "true" : "false"} data-revealed={immersive && revealed ? "true" : "false"} onPointerEnter={immersive ? () => setRevealed(true) : undefined}>
-        <div className="top-left">
-          {immersive ? null : (
-            <button ref={sidebarButton} type="button" className="shell-no-drag shell-icon" aria-label={sidebarOpen ? labels.hideSidebar : labels.showSidebar} title={sidebarOpen ? labels.hideSidebar : labels.showSidebar} aria-expanded={sidebarOpen} aria-disabled={sidebarToggleLocked || undefined} data-testid="shell-sidebar-toggle" onMouseEnter={() => enterSide("sidebar")} onMouseLeave={(event) => leave(cardOf(ownView), event)} onClick={() => pin("sidebar")}><PanelLeft size={18} /></button>
-          )}
-          <button type="button" className="shell-no-drag shell-icon" aria-label={labels.back} title={labels.back} disabled={!props.history.canBack} data-testid="nav-back" onClick={props.history.onBack}><ChevronLeft size={18} /></button>
-          <button type="button" className="shell-no-drag shell-icon" aria-label={labels.forward} title={labels.forward} disabled={!props.history.canForward} data-testid="nav-forward" onClick={props.history.onForward}><ChevronRight size={18} /></button>
-          <nav className="menubar shell-no-drag" aria-label={labels.menubar} data-testid="menubar">
-            {props.menus.map((menu) => (
-              <Menu key={menu.id} label={menu.label} items={menu.items} testId={`menu-${menu.id}`} className="titlebar-menu" trigger={<span className="menubar-label">{menu.label}</span>} />
-            ))}
-          </nav>
-        </div>
-        <span className="top-fill" />
-        <div className="top-right">
-          {props.titleActions ? <div className="shell-no-drag flex items-center gap-2" data-testid="shell-title-actions">{props.titleActions}</div> : null}
-          {stop}
-          {immersive ? <button type="button" className="shell-no-drag shell-icon" aria-label={labels.exitImmersive} title={labels.exitImmersive} data-testid="immersive-exit" onClick={props.onExitImmersive}><Shrink size={17} /></button> : null}
-          {dockActive && !immersive ? (
-            <button ref={dockButton} type="button" className="shell-no-drag shell-icon" aria-label={dockOpen ? labels.hideDock : labels.showDock} title={dockOpen ? labels.hideDock : labels.showDock} aria-expanded={dockOpen} data-testid="shell-dock-toggle" onMouseEnter={() => enterSide("dock")} onMouseLeave={(event) => leave("dock", event)} onClick={() => pin("dock")}><PanelRight size={18} /></button>
-          ) : null}
-          {labels.window ? <WindowControls labels={labels.window} state={windowState} /> : null}
-        </div>
-      </header>
+      {/* Window full screen: the floating top is the one row across the window, with the way out and the window's buttons. */}
+      {immersive ? (
+        <header className="shell-top shell-drag" data-testid="shell-top" data-immersive="true" data-revealed={revealed ? "true" : "false"} onPointerEnter={() => setRevealed(true)}>
+          <span className="top-fill" />
+          {titleEnd}
+        </header>
+      ) : null}
       <div className={`shell-body flex-1 min-h-0 flex relative ${chrome.compact ? "shell-compact" : ""}`}>
         {immersive ? null : (
           <nav className="shell-rail" aria-label={labels.rail} data-testid="shell-rail" style={{ width: chrome.railWidth }}>
+            {/* The rail's part of the title bar: the sidebar's switch. */}
+            <div className="rail-top shell-drag" data-testid="shell-top">
+              <button ref={sidebarButton} type="button" className="shell-no-drag shell-icon" aria-label={sidebarOpen ? labels.hideSidebar : labels.showSidebar} title={sidebarOpen ? labels.hideSidebar : labels.showSidebar} aria-expanded={sidebarOpen} aria-disabled={sidebarToggleLocked || undefined} data-testid="shell-sidebar-toggle" onMouseEnter={() => enterSide("sidebar")} onMouseLeave={(event) => leave(cardOf(ownView), event)} onClick={() => pin("sidebar")}><PanelLeft size={18} /></button>
+            </div>
             <Rail
               height={props.viewport.height}
               entries={props.rail.entries}
@@ -505,9 +406,10 @@ export function ShellFrame(props: {
             data-view={chrome.sidebar === "overlay" ? cardView : ownView}
             aria-label={labels.sidebar}
             className={`shell-sidebar ${chrome.sidebar === "overlay" ? "shell-card absolute z-20" : "shrink-0"}`}
-            style={{ width: chrome.sidebarWidth, ...(chrome.sidebar === "overlay" ? { top: 0, left: chrome.railWidth } : {}) }}
+            style={{ width: chrome.sidebarWidth, ...(chrome.sidebar === "overlay" ? { top: TOP_ROW_HEIGHT, left: chrome.railWidth } : {}) }}
             onMouseEnter={chrome.sidebar === "overlay" ? () => enterPanel(hover.overlay) : undefined}
             onMouseLeave={chrome.sidebar === "overlay" ? (event) => leave(hover.overlay ?? cardOf(ownView), event) : undefined}
+            onBlur={chrome.sidebar === "overlay" ? onOverlayBlur : undefined}
           >
             {sidebarBody}
           </aside>
@@ -520,18 +422,24 @@ export function ShellFrame(props: {
             limit={sidebarLimit}
             label={labels.resizeSidebar}
             pull={!sidebarDocked}
-            onDrag={onDragOf("sidebar")}
+            onDrag={onDragSidebar}
             onCommit={(width) => commitWidth("sidebar", width)}
             onCollapse={() => collapse("sidebar")}
-            onPull={(width) => { props.onShow("sidebar"); commitWidth("sidebar", width); setHover(initialHover()); }}
+            onPull={(width) => {
+              const clamped = clampSide("sidebar", width);
+              if (props.onPull) props.onPull("sidebar", clamped);
+              else { props.onShow("sidebar"); props.onResize("sidebar", clamped); }
+              setHover(initialHover());
+            }}
           />
         ) : null}
         <main data-testid="shell-main" data-measure={chrome.measurePx} className="shell-main flex-1 min-w-0 min-h-0 relative">
           {props.children}
           {props.bottom}
           {dockActive && !dockOpen && !immersive ? props.capsule : null}
+          {!immersive && !endInDock ? <div className="main-top-end shell-drag" data-testid="main-top-end">{titleEnd}</div> : null}
         </main>
-        {dockDocked || dragging?.side === "dock" ? <Divider side="dock" width={chrome.dockWidth} limit={dockLimit} label={labels.resizeDock} onDrag={onDragOf("dock")} onCommit={(width) => commitWidth("dock", width)} onCollapse={() => collapse("dock")} /> : null}
+        {dockDocked || dragging?.side === "dock" ? <Divider side="dock" width={chrome.dockWidth} limit={dockLimit} label={labels.resizeDock} onDrag={onDragDock} onCommit={(width) => commitWidth("dock", width)} onCollapse={() => collapse("dock")} /> : null}
         {props.hasDock || immersive ? (
           <Activity mode={dockOpen ? "visible" : "hidden"}>
             <aside
@@ -541,10 +449,12 @@ export function ShellFrame(props: {
               data-shell-state={chrome.dock}
               aria-label={labels.dock}
               className={`shell-dock ${chrome.dock === "overlay" ? "absolute bottom-0 right-0 z-20 shadow-md" : "shrink-0"}`}
-              style={{ width: chrome.dockWidth || SIDE_WIDTH.dock.initial, ...(chrome.dock === "overlay" ? { top: 0 } : {}) }}
+              style={{ width: chrome.dockWidth || SIDE_WIDTH.dock.initial, ...(chrome.dock === "overlay" ? { top: TOP_ROW_HEIGHT } : {}) }}
               onMouseEnter={() => enterSide("dock")}
               onMouseLeave={(event) => leave("dock", event)}
+              onBlur={chrome.dock === "overlay" ? onOverlayBlur : undefined}
             >
+              {endInDock ? <div className="dock-top shell-drag" data-testid="dock-top"><span className="top-fill" />{titleEnd}</div> : null}
               {chrome.dock === "overlay" ? <button type="button" className="m-2 text-sm border px-2 py-1 rounded" data-testid="shell-dock-hide" onClick={() => { setHover(initialHover()); dockButton.current?.focus(); }}>{labels.hideDock}</button> : null}
               <div className="shell-dock-body">{props.dock}</div>
             </aside>

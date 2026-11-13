@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
+import { writeFileAtomic } from "../shared/utils.ts";
 
 /** Where a file was left in light open, as the page reports it: a time for a video, a page for a comic. `finished` follows the full app's resume rule. */
 export type LightPosition =
@@ -66,6 +66,10 @@ export class LightPositions {
           if (!entry || (value as { pageId?: unknown }).pageId !== undefined) rewrite = true;
         }
         this.entries = new Map(kept.sort((a, b) => String(a[1].at).localeCompare(String(b[1].at))));
+        if (this.entries.size > this.limit) {
+          while (this.entries.size > this.limit) this.entries.delete(this.entries.keys().next().value as string);
+          rewrite = true;
+        }
       }
     } catch { /* missing or unreadable: nothing is remembered yet */ }
     if (rewrite) this.save();
@@ -102,10 +106,7 @@ export class LightPositions {
   }
 
   private save(): void {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const staging = `${this.file}.${process.pid}.tmp`;
-    fs.writeFileSync(staging, `${JSON.stringify({ version: 1, positions: Object.fromEntries(this.entries) })}\n`);
-    fs.renameSync(staging, this.file);
+    writeFileAtomic(this.file, `${JSON.stringify({ version: 1, positions: Object.fromEntries(this.entries) })}\n`);
   }
 }
 

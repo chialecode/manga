@@ -23,22 +23,23 @@ export function NoteTab() {
   });
   const notesRef = useRef(notes);
   notesRef.current = notes;
+  const envRef = useRef(env);
+  envRef.current = env;
   const openedFor = useRef<string | null>(null);
   useEffect(() => {
-    const launch = env.takeLaunch();
+    const launch = envRef.current.takeLaunch();
     const blockId = typeof launch?.blockId === "string" ? launch.blockId : undefined;
     if (openedFor.current === objectId && !blockId) return;
     openedFor.current = objectId;
     void notesRef.current.open(objectId, blockId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [objectId, env.launchN]);
 
   const doc = notes.doc;
+  const { controller, tabId } = env;
   useEffect(() => {
     if (!doc) return;
-    env.controller.retarget(env.tabId, { resourceId: doc.resourceId ?? "" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc?.objectId, doc?.resourceId]);
+    controller.retarget(tabId, { resourceId: doc.resourceId ?? "" });
+  }, [controller, tabId, doc]);
 
   return (
     <NotesPage

@@ -86,12 +86,12 @@ export function SubtitleLayer(props: {
   const dialogue: Array<{ key: string; text: string; size: "main" | "small" }> = [];
   const captions: Array<{ key: string; text: string }> = [];
   for (const [which, list] of [["m", showing.main], ["s", showing.second]] as const) {
-    for (const cue of list) {
-      const key = `${which}${cue.startMs}-${cue.endMs}`;
+    list.forEach((cue, cueIndex) => {
+      const key = `${which}:${cueIndex}:${cue.startMs}-${cue.endMs}`;
       if (cue.top) cue.lines.forEach((text, index) => captions.push({ key: `${key}:${index}`, text }));
       else if (which === "m") arrangeLines(cue.lines).forEach((line, index) => dialogue.push({ key: `${key}:${index}`, text: line.text, size: line.small ? "small" : "main" }));
       else cue.lines.forEach((text, index) => dialogue.push({ key: `${key}:${index}`, text, size: "small" }));
-    }
+    });
   }
 
   return (

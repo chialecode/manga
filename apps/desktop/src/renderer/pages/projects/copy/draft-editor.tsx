@@ -59,18 +59,55 @@ export function DraftEditor(props: { text: string; epoch: number; label: string;
   const selection = useRef(props.onSelection);
   change.current = props.onChange;
   selection.current = props.onSelection;
+  const composing = useRef(false);
+  const pendingComposition = useRef(false);
+  const lastEmitted = useRef(props.text);
+
+  const emitIfChanged = (next: string) => {
+    if (next === lastEmitted.current) return;
+    lastEmitted.current = next;
+    change.current(next);
+  };
+
   const editor = useEditor({
     extensions: [DraftDocument, DraftBlock, Text],
     content: contentOf(props.text),
     editorProps: { attributes: { "data-testid": "draft-surface", role: "textbox", "aria-multiline": "true", "aria-label": props.label, class: "draft-surface" } },
-    onUpdate: ({ editor: instance }) => change.current(textOf(instance.state.doc)),
+    onUpdate: ({ editor: instance }) => {
+      if (composing.current || instance.view.composing) {
+        pendingComposition.current = true;
+        return;
+      }
+      pendingComposition.current = false;
+      emitIfChanged(textOf(instance.state.doc));
+    },
     onSelectionUpdate: ({ editor: instance }) => selection.current(selectedRange(instance.state.doc, instance.state.selection)),
   });
   useEffect(() => registerTiptapEditor(() => editor, { kind: "draft" }), [editor]);
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const dom = editor.view.dom;
+    const onCompositionStart = () => { composing.current = true; };
+    const onCompositionEnd = () => {
+      composing.current = false;
+      if (!pendingComposition.current || editor.isDestroyed) return;
+      pendingComposition.current = false;
+      emitIfChanged(textOf(editor.state.doc));
+    };
+    dom.addEventListener("compositionstart", onCompositionStart);
+    dom.addEventListener("compositionend", onCompositionEnd);
+    return () => {
+      dom.removeEventListener("compositionstart", onCompositionStart);
+      dom.removeEventListener("compositionend", onCompositionEnd);
+    };
+  }, [editor]);
   const shown = useRef(props.epoch);
   useEffect(() => {
     if (!editor || editor.isDestroyed || shown.current === props.epoch) return;
     shown.current = props.epoch;
+    composing.current = false;
+    pendingComposition.current = false;
+    lastEmitted.current = props.text;
     editor.commands.setContent(contentOf(props.text), { emitUpdate: false });
     selection.current(null);
   }, [editor, props.epoch, props.text]);

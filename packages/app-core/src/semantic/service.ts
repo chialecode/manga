@@ -3,8 +3,10 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { MangaError, type SemanticKind } from "@manga/contracts";
+import { abortableSleep } from "@manga/model-protocol";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { rangeConsumed } from "../reading-service.ts";
+import { errorMessage } from "../shared/utils.ts";
 import { DEFAULT_SEGMENTATION, SEGMENTATIONS, chunkText, estimateChunks, isSegmentation, type SegmentationId } from "./chunk.ts";
 import type { EmbeddingConnection, EmbeddingPort } from "./ports.ts";
 
@@ -59,7 +61,38 @@ const PAGE = 200;
 const SNIPPET = 260;
 const MAX_K = 4096;
 const hashOf = (text: string) => createHash("sha1").update(text).digest("hex");
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+type ScoredCandidate = { id: number; score: number; kind: string; sourceId: string; start: number; end: number; hash: string };
+
+/** Binary min-heap keyed by `score`, keeping the top `k` largest scores in O(N log k). */
+function heapSiftUp(heap: ScoredCandidate[], idx: number): void {
+  let i = idx;
+  while (i > 0) {
+    const parent = (i - 1) >> 1;
+    if (heap[parent]!.score <= heap[i]!.score) break;
+    const tmp = heap[parent]!;
+    heap[parent] = heap[i]!;
+    heap[i] = tmp;
+    i = parent;
+  }
+}
+
+function heapSiftDown(heap: ScoredCandidate[], idx: number): void {
+  const n = heap.length;
+  let i = idx;
+  for (;;) {
+    let smallest = i;
+    const left = i * 2 + 1;
+    const right = left + 1;
+    if (left < n && heap[left]!.score < heap[smallest]!.score) smallest = left;
+    if (right < n && heap[right]!.score < heap[smallest]!.score) smallest = right;
+    if (smallest === i) break;
+    const tmp = heap[i]!;
+    heap[i] = heap[smallest]!;
+    heap[smallest] = tmp;
+    i = smallest;
+  }
+}
 
 function normalize(vector: number[]): Float32Array {
   const out = new Float32Array(vector.length);
@@ -82,11 +115,11 @@ export function loadVecExtension(db: { loadExtension(path: string): unknown }, w
     const found = getLoadablePath();
     for (const candidate of [found, found.replace(/app\.asar([\\/])/, "app.asar.unpacked$1")]) {
       if (!fs.existsSync(candidate)) { why?.(`not on disk: ${candidate.split(/[\\/]/).slice(-3).join("/")}`); continue; }
-      try { db.loadExtension(candidate); return true; } catch (error) { why?.(`not loaded: ${error instanceof Error ? error.message : String(error)}`); }
+      try { db.loadExtension(candidate); return true; } catch (error) { why?.(`not loaded: ${errorMessage(error)}`); }
     }
     return false;
   } catch (error) {
-    why?.(`not found: ${error instanceof Error ? error.message : String(error)}`);
+    why?.(`not found: ${errorMessage(error)}`);
     return false;
   }
 }
@@ -101,12 +134,20 @@ export class SemanticService {
   private readonly store: DrizzleStore;
   private readonly hooks: SemanticHooks;
   private vecLoaded: boolean | undefined;
-  private job: { versionId: number; kind: "build" | "update"; abort: AbortController; done: Promise<void> } | null = null;
+  private job: { versionId: number; kind: "build" | "update"; abort: AbortController; done: Promise<void>; progress?: { done: number; total: number } } | null = null;
+  private ops: Promise<void> = Promise.resolve();
   private closed = false;
 
   constructor(store: DrizzleStore, hooks: SemanticHooks) {
     this.store = store;
     this.hooks = hooks;
+  }
+
+  /** Serializes lifecycle mutations (`configure`, `rebuild`, `cancel`, `update`, `clear`) so concurrent calls never race. */
+  private serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.ops.then(fn, fn);
+    this.ops = next.then(() => undefined, () => undefined);
+    return next;
   }
 
   // ------------------------------------------------------------------ settings and state
@@ -179,6 +220,9 @@ export class SemanticService {
 
   private progressOf(versionId: number, kind: "build" | "update"): SemanticBuild {
     const row = this.version(versionId);
+    if (kind === "update" && this.job?.versionId === versionId && this.job.progress) {
+      return { id: row.id, model: row.model, segmentation: row.segmentation, status: "building", done: this.job.progress.done, total: this.job.progress.total, kind };
+    }
     return { id: row.id, model: row.model, segmentation: row.segmentation, status: kind === "update" ? "building" : row.status, done: row.done, total: row.total, kind };
   }
 
@@ -197,60 +241,73 @@ export class SemanticService {
 
   /** Saves the settings. Turning the index on, or changing what it is made with, starts building the version those settings need. */
   async configure(input: { enabled: boolean; connectionId?: string; segmentation?: SegmentationId }): Promise<SemanticStatus> {
-    const before = this.config();
-    const next: Config = {
-      enabled: input.enabled,
-      connectionId: input.connectionId ?? before.connectionId,
-      segmentation: input.segmentation ?? before.segmentation,
-    };
-    if (input.enabled && !this.connection(next)) throw new MangaError("MODEL_CAPABILITY_MISSING", "choose an embedding connection first", { details: { reason: "noConnection" } });
-    this.saveConfig(next);
-    if (!next.enabled) {
-      await this.cancel();
+    return this.serialize(async () => {
+      const before = this.config();
+      const next: Config = {
+        enabled: input.enabled,
+        connectionId: input.connectionId ?? before.connectionId,
+        segmentation: input.segmentation ?? before.segmentation,
+      };
+      if (input.enabled && !this.connection(next)) throw new MangaError("MODEL_CAPABILITY_MISSING", "choose an embedding connection first", { details: { reason: "noConnection" } });
+      this.saveConfig(next);
+      if (!next.enabled) {
+        await this.cancelLocked();
+        return this.status();
+      }
+      const connection = this.connection(next)!;
+      const active = this.versions("active")[0];
+      const building = this.versions("building")[0];
+      const fits = (row: VersionRow | undefined) => Boolean(row && row.connection_id === connection.id && row.model === connection.model && row.segmentation === next.segmentation);
+      if (!fits(active) && !fits(building)) await this.startBuild(next, connection);
+      else if (building && fits(building) && !this.job) this.resume(building.id);
       return this.status();
-    }
-    const connection = this.connection(next)!;
-    const active = this.versions("active")[0];
-    const building = this.versions("building")[0];
-    const fits = (row: VersionRow | undefined) => Boolean(row && row.connection_id === connection.id && row.model === connection.model && row.segmentation === next.segmentation);
-    if (!fits(active) && !fits(building)) await this.startBuild(next, connection);
-    else if (building && fits(building) && !this.job) this.resume(building.id);
-    return this.status();
+    });
   }
 
   /** Builds a new version from the settings as they are now. */
   async rebuild(): Promise<SemanticStatus> {
-    const config = this.config();
-    if (!config.enabled) throw new MangaError("VALIDATION_ERROR", "semantic search is off", { details: { reason: "off" } });
-    const connection = this.connection(config);
-    if (!connection) throw new MangaError("MODEL_CAPABILITY_MISSING", "choose an embedding connection first", { details: { reason: "noConnection" } });
-    await this.startBuild(config, connection);
-    return this.status();
+    return this.serialize(async () => {
+      const config = this.config();
+      if (!config.enabled) throw new MangaError("VALIDATION_ERROR", "semantic search is off", { details: { reason: "off" } });
+      const connection = this.connection(config);
+      if (!connection) throw new MangaError("MODEL_CAPABILITY_MISSING", "choose an embedding connection first", { details: { reason: "noConnection" } });
+      await this.startBuild(config, connection);
+      return this.status();
+    });
   }
 
-  async cancel(): Promise<SemanticStatus> {
+  private async cancelLocked(): Promise<void> {
     const job = this.job;
     if (job) { job.abort.abort(); await job.done.catch(() => undefined); }
     for (const row of this.versions("building")) this.drop(row.id);
-    return this.status();
+  }
+
+  async cancel(): Promise<SemanticStatus> {
+    return this.serialize(async () => {
+      await this.cancelLocked();
+      return this.status();
+    });
   }
 
   /** Adds the passages written since the index was made and drops the ones that are gone. */
   async update(): Promise<SemanticStatus> {
-    const active = this.versions("active")[0];
-    const config = this.config();
-    if (!active || !config.enabled) throw new MangaError("VALIDATION_ERROR", "there is no index to update", { details: { reason: "noIndex" } });
-    if (this.job) throw new MangaError("VALIDATION_ERROR", "an index is already being built", { details: { reason: "busy" } });
-    this.run(active.id, "update");
-    return this.status();
+    return this.serialize(async () => {
+      const active = this.versions("active")[0];
+      const config = this.config();
+      if (!active || !config.enabled) throw new MangaError("VALIDATION_ERROR", "there is no index to update", { details: { reason: "noIndex" } });
+      if (this.job) throw new MangaError("VALIDATION_ERROR", "an index is already being built", { details: { reason: "busy" } });
+      this.run(active.id, "update");
+      return this.status();
+    });
   }
 
   /** Deletes every version and its vectors; what they were made from is not touched. */
   async clear(): Promise<SemanticStatus> {
-    const job = this.job;
-    if (job) { job.abort.abort(); await job.done.catch(() => undefined); }
-    for (const row of this.versions()) this.drop(row.id);
-    return this.status();
+    return this.serialize(async () => {
+      await this.cancelLocked();
+      for (const row of this.versions()) this.drop(row.id);
+      return this.status();
+    });
   }
 
   /** Starts a new version, replacing a build that is under way. The version in use is left alone until the new one is complete. */
@@ -288,7 +345,11 @@ export class SemanticService {
 
   /** Waits for a build or update that is under way (for tests, and for a clean shutdown). */
   async settled(): Promise<void> {
-    while (this.job) await this.job.done.catch(() => undefined);
+    await this.ops;
+    while (this.job) {
+      await this.job.done.catch(() => undefined);
+      await this.ops;
+    }
   }
 
   close(): void {
@@ -300,8 +361,12 @@ export class SemanticService {
 
   private run(versionId: number, kind: "build" | "update"): void {
     const abort = new AbortController();
-    const done = this.work(versionId, kind, abort.signal).catch((error) => this.fail(versionId, kind, error)).finally(() => { if (this.job?.versionId === versionId) this.job = null; });
-    this.job = { versionId, kind, abort, done };
+    const progress = kind === "update" ? { done: 0, total: 0 } : undefined;
+    const job = { versionId, kind, abort, done: Promise.resolve(), ...(progress ? { progress } : {}) };
+    this.job = job;
+    job.done = this.work(versionId, kind, abort.signal, progress)
+      .catch((error) => this.fail(versionId, kind, error))
+      .finally(() => { if (this.job === job) this.job = null; });
   }
 
   private fail(versionId: number, kind: "build" | "update", error: unknown): void {
@@ -315,7 +380,7 @@ export class SemanticService {
       this.hooks.notify("semantic.progress", { versionId, status: "cancelled", kind });
       return;
     }
-    const detail = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNKNOWN", message: error instanceof Error ? error.message : String(error) };
+    const detail = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNKNOWN", message: errorMessage(error) };
     if (kind === "build") {
       // A build that failed leaves what it made for a look at the reason; the version in use is unaffected.
       this.store.sqlite.prepare("UPDATE index_versions SET status = 'failed', error_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(detail), new Date().toISOString(), versionId);
@@ -323,7 +388,7 @@ export class SemanticService {
     this.hooks.notify("semantic.progress", { versionId, status: "failed", kind, error: detail });
   }
 
-  private async work(versionId: number, kind: "build" | "update", signal: AbortSignal): Promise<void> {
+  private async work(versionId: number, kind: "build" | "update", signal: AbortSignal, updateProgress?: { done: number; total: number }): Promise<void> {
     let version = this.version(versionId);
     this.requireEngine(version);
     const port = this.hooks.embedding();
@@ -331,10 +396,15 @@ export class SemanticService {
     if (!connection || connection.id !== version.connection_id) throw new MangaError("MODEL_CAPABILITY_MISSING", "the embedding connection is gone", { details: { reason: "noConnection" } });
     if (connection.model !== version.model) throw new MangaError("MODEL_CAPABILITY_MISSING", "the connection's model changed; rebuild the index", { details: { reason: "modelChanged" } });
     const size = SEGMENTATIONS[version.segmentation as SegmentationId] ?? SEGMENTATIONS[DEFAULT_SEGMENTATION];
-    if (kind === "update") this.store.sqlite.prepare("UPDATE index_versions SET total = ?, done = 0, updated_at = ? WHERE id = ?").run(this.pendingCount(version), new Date().toISOString(), versionId);
+    if (kind === "update" && updateProgress) {
+      updateProgress.done = 0;
+      updateProgress.total = this.pendingCount(version);
+    }
     const progress = () => {
       version = this.version(versionId);
-      this.hooks.notify("semantic.progress", { versionId, status: kind === "update" ? "building" : version.status, kind, done: version.done, total: version.total });
+      const done = kind === "update" && updateProgress ? updateProgress.done : version.done;
+      const total = kind === "update" && updateProgress ? updateProgress.total : version.total;
+      this.hooks.notify("semantic.progress", { versionId, status: kind === "update" ? "building" : version.status, kind, done, total });
     };
     progress();
 
@@ -343,9 +413,16 @@ export class SemanticService {
       if (!batch.length) return;
       const items = batch;
       batch = [];
-      const vectors = await this.embedWithRetry(port, connection, items.map((item) => item.text), signal);
+      // Sub-batch provider calls at <= BATCH even if a single large source spans > BATCH chunks, while committing the whole source atomically.
+      const vectors: number[][] = [];
+      for (let at = 0; at < items.length; at += BATCH) {
+        const sub = items.slice(at, at + BATCH);
+        const subVectors = await this.embedWithRetry(port, connection, sub.map((item) => item.text), signal);
+        if (signal.aborted) throw new MangaError("CANCELLED", "cancelled");
+        if (subVectors.length !== sub.length) throw new MangaError("PROVIDER_UNAVAILABLE", "the model returned a different number of vectors than it was given", { details: { reason: "count" } });
+        vectors.push(...subVectors);
+      }
       if (signal.aborted) throw new MangaError("CANCELLED", "cancelled");
-      if (vectors.length !== items.length) throw new MangaError("PROVIDER_UNAVAILABLE", "the model returned a different number of vectors than it was given", { details: { reason: "count" } });
       const normalized = vectors.map(normalize);
       const dim = normalized[0]!.length;
       if (!dim || normalized.some((vector) => vector.length !== dim || vector.some((value) => !Number.isFinite(value)))) throw new MangaError("MODEL_CAPABILITY_MISSING", "the model returned vectors that cannot be used", { details: { reason: "vector" } });
@@ -372,7 +449,12 @@ export class SemanticService {
           const info = insert.run(versionId, item.source.kind, item.source.id, item.seq, item.source.hash, item.start, item.end, insertVec ? null : Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength));
           if (insertVec) insertVec.run(BigInt(info.lastInsertRowid), vector);
         });
-        this.store.sqlite.prepare("UPDATE index_versions SET done = done + ?, updated_at = ? WHERE id = ?").run(items.length, new Date().toISOString(), versionId);
+        if (kind === "build") {
+          this.store.sqlite.prepare("UPDATE index_versions SET done = done + ?, updated_at = ? WHERE id = ?").run(items.length, new Date().toISOString(), versionId);
+        } else {
+          this.store.sqlite.prepare("UPDATE index_versions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), versionId);
+          if (updateProgress) updateProgress.done += items.length;
+        }
       })();
       progress();
     };
@@ -387,7 +469,7 @@ export class SemanticService {
     }
     await flush();
     this.removeVanished(versionId);
-    if (signal.aborted) throw new MangaError("CANCELLED", "cancelled");
+    if (signal.aborted || this.job?.abort.signal !== signal) throw new MangaError("CANCELLED", "cancelled");
     this.store.sqlite.transaction(() => {
       const done = this.chunkCount(versionId);
       this.store.sqlite.prepare("UPDATE index_versions SET total = ?, done = ?, updated_at = ? WHERE id = ?").run(done, done, new Date().toISOString(), versionId);
@@ -398,13 +480,14 @@ export class SemanticService {
 
   private async embedWithRetry(port: EmbeddingPort, connection: EmbeddingConnection, inputs: string[], signal: AbortSignal): Promise<number[][]> {
     for (let attempt = 1; ; attempt += 1) {
+      if (signal.aborted) throw new MangaError("CANCELLED", "cancelled");
       try {
         return await port.embed(connection, { inputs, signal });
       } catch (error) {
         if (signal.aborted) throw new MangaError("CANCELLED", "cancelled");
         const retryable = error instanceof MangaError && error.retryable === true;
         if (!retryable || attempt >= 3) throw error;
-        await sleep((this.hooks.retryBaseMs ?? 500) * attempt);
+        await abortableSleep((this.hooks.retryBaseMs ?? 500) * attempt, signal);
       }
     }
   }
@@ -518,15 +601,16 @@ export class SemanticService {
     if (!connection || connection.id !== active.connection_id) return empty("unavailable", active);
     // The question is turned into a vector by the model the index was made with, and never by another one.
     if (connection.model !== active.model) return empty("needsRebuild", active);
-    const limit = input.limit ?? 10;
+    const total = this.chunkCount(active.id);
+    if (active.dim === null || total === 0) return empty("ok", active);
+    const limit = Math.max(1, Math.min(MAX_K, Math.floor(input.limit ?? 10)));
     const [raw] = await this.hooks.embedding().embed(connection, { inputs: [input.text], signal: signal ?? new AbortController().signal });
     if (!raw) return empty("unavailable", active);
     const query = normalize(raw);
-    if (active.dim !== null && query.length !== active.dim) return empty("needsRebuild", active);
+    if (query.length !== active.dim) return empty("needsRebuild", active);
     const scope = input.scope ?? (input.projectId ? this.hooks.projectScope(input.projectId) : null);
     const hits: SemanticHit[] = [];
     const seen = new Set<number>();
-    const total = this.chunkCount(active.id);
     for (let k = Math.min(MAX_K, Math.max(limit * 6, 48)); ; k = Math.min(MAX_K, k * 4)) {
       for (const candidate of this.nearest(active, query, k)) {
         if (seen.has(candidate.id)) continue;
@@ -541,7 +625,7 @@ export class SemanticService {
   }
 
   /** The closest pieces of a version, nearest first, with their cosine similarity. */
-  private nearest(version: VersionRow, query: Float32Array, k: number): Array<{ id: number; score: number; kind: string; sourceId: string; start: number; end: number; hash: string }> {
+  private nearest(version: VersionRow, query: Float32Array, k: number): ScoredCandidate[] {
     const sqlite = this.store.sqlite;
     if (version.engine === "vec0") {
       if (!this.vec()) throw new MangaError("MODEL_CAPABILITY_MISSING", "the vector extension could not be loaded; rebuild the index", { details: { reason: "extension" } });
@@ -549,21 +633,30 @@ export class SemanticService {
         FROM (SELECT rowid, distance FROM ${this.table(version.id)} WHERE embedding MATCH ? AND k = ?) v JOIN semantic_chunks c ON c.id = v.rowid ORDER BY v.distance`).all(query, k) as Array<{ id: number; distance: number; kind: string; sourceId: string; start: number; end: number; hash: string }>;
       return rows.map((row) => ({ id: row.id, score: 1 - (row.distance * row.distance) / 2, kind: row.kind, sourceId: row.sourceId, start: row.start, end: row.end, hash: row.hash }));
     }
-    const best: Array<{ id: number; score: number; kind: string; sourceId: string; start: number; end: number; hash: string }> = [];
-    let worst = -Infinity;
+    const heap: ScoredCandidate[] = [];
+    let scratch: Buffer | null = null;
     for (const row of sqlite.prepare("SELECT id, source_kind AS kind, source_id AS sourceId, start_cp AS start, end_cp AS end, source_hash AS hash, vector FROM semantic_chunks WHERE version_id = ?").iterate(version.id) as Iterable<{ id: number; kind: string; sourceId: string; start: number; end: number; hash: string; vector: Buffer }>) {
       const bytes = row.vector;
-      const copy = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      if (!bytes || bytes.byteLength !== query.byteLength) continue;
+      let vec: Float32Array;
+      if (bytes.byteOffset % 4 === 0) {
+        vec = new Float32Array(bytes.buffer, bytes.byteOffset, query.length);
+      } else {
+        if (!scratch || scratch.byteLength < bytes.byteLength) scratch = Buffer.allocUnsafe(bytes.byteLength);
+        bytes.copy(scratch, 0, 0, bytes.byteLength);
+        vec = new Float32Array(scratch.buffer, scratch.byteOffset, query.length);
+      }
       let score = 0;
-      for (let i = 0; i < copy.length; i += 1) score += copy[i]! * query[i]!;
-      if (best.length < k || score > worst) {
-        best.push({ id: row.id, score, kind: row.kind, sourceId: row.sourceId, start: row.start, end: row.end, hash: row.hash });
-        best.sort((a, b) => b.score - a.score);
-        if (best.length > k) best.pop();
-        worst = best[best.length - 1]!.score;
+      for (let i = 0; i < query.length; i += 1) score += vec[i]! * query[i]!;
+      if (heap.length < k) {
+        heap.push({ id: row.id, score, kind: row.kind, sourceId: row.sourceId, start: row.start, end: row.end, hash: row.hash });
+        heapSiftUp(heap, heap.length - 1);
+      } else if (score > heap[0]!.score) {
+        heap[0] = { id: row.id, score, kind: row.kind, sourceId: row.sourceId, start: row.start, end: row.end, hash: row.hash };
+        heapSiftDown(heap, 0);
       }
     }
-    return best;
+    return heap.sort((a, b) => b.score - a.score);
   }
 
   /**

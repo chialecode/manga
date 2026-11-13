@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import path from "node:path";
+import { writeFileAtomic } from "../shared/utils.ts";
 
 /** One play copy as the store keeps it. The full app keeps these in the `play_copies` table; light open keeps them in a JSON file. */
 export type PlayCopyRow = {
@@ -113,10 +113,7 @@ export class JsonPlayCopyStore implements PlayCopyStore {
   }
 
   private save(): void {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const staging = `${this.file}.${process.pid}.tmp`;
-    fs.writeFileSync(staging, `${JSON.stringify({ version: 1, copies: this.rows })}\n`);
-    fs.renameSync(staging, this.file);
+    writeFileAtomic(this.file, `${JSON.stringify({ version: 1, copies: this.rows })}\n`);
   }
 
   byRevision(revisionId: string): PlayCopyRow[] {

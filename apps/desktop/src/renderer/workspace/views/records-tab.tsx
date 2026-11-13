@@ -16,6 +16,7 @@ export function RecordsTab() {
     <div className="records-tab" data-testid="records-tab" data-type={scope === "conversation" ? "conversation" : "note"}>
       <div className="settings-view" data-testid="page-records">
         <RecordsPage
+          key={scope}
           t={s.t}
           formatDate={s.i18n.formatDate}
           scope={scope}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../../lib/api.ts";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import type { NoteSummary } from "../../lib/types.ts";
 import { WorkPicker } from "../../components/work-picker.tsx";
 import { ExportProjectPackage } from "./project-package.tsx";
@@ -41,18 +42,22 @@ export function MaterialsTab(props: {
   const [target, setTarget] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   useEffect(() => {
     setTarget(null);
-    let live = true;
-    if (kind === "note") void attempt<NoteSummary[]>("notes.list", { limit: 200 }).then((result) => { if (live && result.ok) setNotes(asArray<NoteSummary>(result.value)); });
-    if (kind === "recording") void attempt<{ sessions: Recording[] }>("capture.list", { limit: 100 }).then((result) => { if (live && result.ok) setRecordings(asArray<Recording>(result.value.sessions)); });
-    return () => { live = false; };
-  }, [kind]);
+    const token = guard.next();
+    if (kind === "note") void attempt<NoteSummary[]>("notes.list", { limit: 200 }).then((result) => { if (guard.isCurrent(token) && result.ok) setNotes(asArray<NoteSummary>(result.value)); });
+    if (kind === "recording") void attempt<{ sessions: Recording[] }>("capture.list", { limit: 100 }).then((result) => { if (guard.isCurrent(token) && result.ok) setRecordings(asArray<Recording>(result.value.sessions)); });
+  }, [kind, guard]);
 
   async function add() {
-    if (!target) return;
+    if (!target || busy) return;
+    setBusy(true);
     const result = await attempt("project.addMaterial", { projectId: props.projectId, kind, targetId: target });
+    if (!guard.isAlive()) return;
+    setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     props.onNotice(t("projects.materials.added"));
     setTarget(null);
@@ -60,7 +65,11 @@ export function MaterialsTab(props: {
   }
 
   async function remove(material: Material) {
+    if (busy) return;
+    setBusy(true);
     const result = await attempt("project.removeMaterial", { projectId: props.projectId, materialId: material.id });
+    if (!guard.isAlive()) return;
+    setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     props.onChanged();
   }
@@ -84,10 +93,10 @@ export function MaterialsTab(props: {
         {kind === "recording" ? (
           <select aria-label={t("projects.materials.pick")} data-testid="material-recording" value={target ?? ""} onChange={(event) => setTarget(event.target.value || null)}>
             <option value="">{t("projects.materials.pick")}</option>
-            {recordings.map((item) => <option key={item.id} value={item.id}>{item.title || item.createdAt || item.id}</option>)}
+            {recordings.map((item) => <option key={item.id} value={item.id}>{item.title || item.createdAt || t("projects.material.unnamed")}</option>)}
           </select>
         ) : null}
-        <button type="submit" className="primary-button" data-testid="material-add" disabled={!target}>{t("projects.materials.add")}</button>
+        <button type="submit" className="primary-button" data-testid="material-add" disabled={busy || !target}>{t("projects.materials.add")}</button>
       </form>
       {props.materials.length === 0 ? <p className="detail-muted" data-testid="materials-empty">{t("projects.materials.empty")}</p> : (
         <ul className="material-list" data-testid="material-list">
@@ -106,7 +115,7 @@ export function MaterialsTab(props: {
               ) : null}
               {material.state === "missing" ? <span className="chip chip-warn" data-testid={`material-state-${material.id}`}>{t("projects.materials.missing")}</span> : null}
               {material.state === "disabled" ? <span className="chip chip-warn" data-testid={`material-state-${material.id}`}>{t("projects.materials.disabled")}</span> : null}
-              <button type="button" className="icon-button" data-testid={`material-remove-${material.id}`} aria-label={t("projects.materials.remove")} title={t("projects.materials.remove")} onClick={() => void remove(material)}><Trash2 size={15} /></button>
+              <button type="button" className="icon-button" data-testid={`material-remove-${material.id}`} disabled={busy} aria-label={t("projects.materials.remove")} title={t("projects.materials.remove")} onClick={() => void remove(material)}><Trash2 size={15} /></button>
             </li>
           ))}
         </ul>
@@ -121,9 +130,15 @@ export function TermsTab(props: { t: T; projectId: string; terms: Term[]; onChan
   const [draft, setDraft] = useState({ term: "", heard: "", note: "" });
   const [editing, setEditing] = useState<{ id: string; term: string; heard: string; note: string } | null>(null);
   const [work, setWork] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   async function run(commandId: string, input: Record<string, unknown>): Promise<boolean> {
+    if (busy) return false;
+    setBusy(true);
     const result = await attempt(commandId, { projectId: props.projectId, ...input });
+    if (!guard.isAlive()) return false;
+    setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return false; }
     props.onChanged();
     return true;
@@ -140,8 +155,11 @@ export function TermsTab(props: { t: T; projectId: string; terms: Term[]; onChan
   }
 
   async function importTerms() {
-    if (!work) return;
+    if (!work || busy) return;
+    setBusy(true);
     const result = await attempt<{ added: number; skipped: number }>("project.importTerms", { projectId: props.projectId, workId: work });
+    if (!guard.isAlive()) return;
+    setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     props.onNotice(t("projects.terms.imported", result.value));
     props.onChanged();
@@ -154,11 +172,11 @@ export function TermsTab(props: { t: T; projectId: string; terms: Term[]; onChan
         <input data-testid="pterm-term" aria-label={t("projects.terms.term")} placeholder={t("projects.terms.term")} maxLength={128} value={draft.term} onChange={(event) => setDraft({ ...draft, term: event.target.value })} />
         <input data-testid="pterm-heard" aria-label={t("projects.terms.heard")} placeholder={t("projects.terms.heard")} maxLength={128} value={draft.heard} onChange={(event) => setDraft({ ...draft, heard: event.target.value })} />
         <input data-testid="pterm-note" aria-label={t("projects.terms.note")} placeholder={t("projects.terms.note")} maxLength={500} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} />
-        <button type="submit" className="primary-button" data-testid="pterm-add" disabled={!draft.term.trim()}>{t("projects.terms.add")}</button>
+        <button type="submit" className="primary-button" data-testid="pterm-add" disabled={busy || !draft.term.trim()}>{t("projects.terms.add")}</button>
       </form>
       <div className="dictionary-add">
         <WorkPicker t={t} value={work} onChange={setWork} label={t("projects.pickWork")} placeholder={t("projects.pickWork")} testId="pterm-work" />
-        <button type="button" className="secondary-button" data-testid="pterm-import" disabled={!work} onClick={() => void importTerms()}>{t("projects.terms.import")}</button>
+        <button type="button" className="secondary-button" data-testid="pterm-import" disabled={busy || !work} onClick={() => void importTerms()}>{t("projects.terms.import")}</button>
       </div>
       {props.terms.length === 0 ? <p className="detail-muted" data-testid="pterm-empty">{t("projects.terms.empty")}</p> : (
         <ul className="dictionary-list" data-testid="pterm-list">
@@ -169,8 +187,8 @@ export function TermsTab(props: { t: T; projectId: string; terms: Term[]; onChan
                   <input data-testid="pterm-edit-term" aria-label={t("projects.terms.term")} maxLength={128} value={editing.term} onChange={(event) => setEditing({ ...editing, term: event.target.value })} />
                   <input data-testid="pterm-edit-heard" aria-label={t("projects.terms.heard")} maxLength={128} value={editing.heard} onChange={(event) => setEditing({ ...editing, heard: event.target.value })} />
                   <input data-testid="pterm-edit-note" aria-label={t("projects.terms.note")} maxLength={500} value={editing.note} onChange={(event) => setEditing({ ...editing, note: event.target.value })} />
-                  <button type="submit" className="primary-button" data-testid="pterm-edit-save" disabled={!editing.term.trim()}>{t("voice.dictionary.save")}</button>
-                  <button type="button" className="secondary-button" onClick={() => setEditing(null)}>{t("voice.dictionary.cancel")}</button>
+                  <button type="submit" className="primary-button" data-testid="pterm-edit-save" disabled={busy || !editing.term.trim()}>{t("voice.dictionary.save")}</button>
+                  <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditing(null)}>{t("voice.dictionary.cancel")}</button>
                 </form>
               ) : (
                 <>
@@ -178,8 +196,8 @@ export function TermsTab(props: { t: T; projectId: string; terms: Term[]; onChan
                   {item.heard ? <span className="detail-muted"> ← {item.heard}</span> : null}
                   {item.note ? <span className="detail-muted"> · {item.note}</span> : null}
                   <span className="dictionary-actions">
-                    <button type="button" className="icon-button" aria-label={t("voice.dictionary.edit")} title={t("voice.dictionary.edit")} data-testid={`pterm-edit-${item.id}`} onClick={() => setEditing({ id: item.id, term: item.term, heard: item.heard ?? "", note: item.note ?? "" })}><Pencil size={15} /></button>
-                    <button type="button" className="icon-button" aria-label={t("projects.terms.remove")} title={t("projects.terms.remove")} data-testid={`pterm-remove-${item.id}`} onClick={() => void run("project.removeTerm", { termId: item.id })}><Trash2 size={15} /></button>
+                    <button type="button" className="icon-button" disabled={busy} aria-label={t("voice.dictionary.edit")} title={t("voice.dictionary.edit")} data-testid={`pterm-edit-${item.id}`} onClick={() => setEditing({ id: item.id, term: item.term, heard: item.heard ?? "", note: item.note ?? "" })}><Pencil size={15} /></button>
+                    <button type="button" className="icon-button" disabled={busy} aria-label={t("projects.terms.remove")} title={t("projects.terms.remove")} data-testid={`pterm-remove-${item.id}`} onClick={() => void run("project.removeTerm", { termId: item.id })}><Trash2 size={15} /></button>
                   </span>
                 </>
               )}
@@ -203,12 +221,18 @@ export function ProjectSettingsTab(props: {
   const { t, detail } = props;
   const [name, setName] = useState(detail.project.name);
   const [goal, setGoal] = useState(detail.project.goal);
+  const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
   useEffect(() => { setName(detail.project.name); setGoal(detail.project.goal); }, [detail.project.id, detail.project.name, detail.project.goal]);
   const texts = props.connections.filter((connection) => connection.purpose === "text");
   const dirty = name.trim() !== detail.project.name || goal !== detail.project.goal;
 
   async function patch(input: Record<string, unknown>) {
+    if (busy) return;
+    setBusy(true);
     const result = await attempt("project.update", { projectId: detail.project.id, ...input });
+    if (!guard.isAlive()) return;
+    setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     props.onChanged();
   }
@@ -217,10 +241,10 @@ export function ProjectSettingsTab(props: {
     <form className="project-settings" data-testid="project-settings" onSubmit={(event) => { event.preventDefault(); if (name.trim()) void patch({ name: name.trim(), goal }); }}>
       <label className="msettings-field"><span>{t("projects.name")}</span><input data-testid="psettings-name" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <label className="msettings-field msettings-field-stack"><span>{t("projects.goal")}</span><textarea data-testid="psettings-goal" rows={5} maxLength={2000} placeholder={t("projects.goalHint")} value={goal} onChange={(event) => setGoal(event.target.value)} /></label>
-      <div><button type="submit" className="primary-button" data-testid="psettings-save" disabled={!dirty || !name.trim()}>{t("common.save")}</button></div>
+      <div><button type="submit" className="primary-button" data-testid="psettings-save" disabled={busy || !dirty || !name.trim()}>{t("common.save")}</button></div>
       <label className="msettings-field">
         <span>{t("projects.model")}</span>
-        <select data-testid="psettings-model" value={detail.project.modelConnectionId ?? ""} onChange={(event) => void patch({ modelConnectionId: event.target.value || null })}>
+        <select data-testid="psettings-model" disabled={busy} value={detail.project.modelConnectionId ?? ""} onChange={(event) => void patch({ modelConnectionId: event.target.value || null })}>
           <option value="">{t("projects.model.default")}</option>
           {texts.map((connection) => <option key={connection.id} value={connection.id}>{connection.label}{connection.modelId ? ` · ${connection.modelId}` : ""}</option>)}
         </select>

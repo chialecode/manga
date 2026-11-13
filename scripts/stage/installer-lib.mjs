@@ -12,6 +12,7 @@ import {
   resolveBuildVersion,
   writeBuildInfo,
 } from "./version-lib.mjs";
+import { UNINSTALL_KEY, readUninstallRegistryEntries } from "./win-process.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -741,11 +742,14 @@ export async function buildInstallerBlockMap(installer, destination = `${install
   return buildBlockMap(installer, "gzip", destination);
 }
 
-const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
-
-function runPowershell(command) {
+function runPowershell(command, env) {
   if (process.platform !== "win32") return "";
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`], { encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 30_000,
+    ...(env ? { env } : {}),
+  });
   if (result.status !== 0) {
     const reason = result.error ? String(result.error.message) : `exit ${result.status ?? result.signal}`;
     const detail = typeof result.stderr === "string" ? result.stderr.trim().split(/\r?\n/)[0]?.slice(0, 200) : "";
@@ -805,25 +809,54 @@ export function readOpenWithState(channel, { testIdentity = false, exePath } = {
 
 // A user that never installed anything per-user (a fresh CI account) has no uninstall key at all; reading it is then an empty list, not an error.
 export function readRegistryInstallations() {
-  const text = runPowershell(
-    `if (Test-Path -LiteralPath '${UNINSTALL_KEY}') { Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; Publisher = [string]$p.Publisher; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress }`,
-  );
-  if (!text) return [];
-  try {
-    const parsed = JSON.parse(text);
-    return (Array.isArray(parsed) ? parsed : [parsed]).map((entry) => {
-      const command = String(entry.UninstallString ?? "").replace(/^"([^"]+)".*$/, "$1");
-      const installLocation = entry.InstallLocation ? String(entry.InstallLocation) : command ? path.dirname(command) : "";
-      return {
-        Key: String(entry.Key ?? ""),
-        DisplayName: String(entry.DisplayName ?? ""),
-        DisplayVersion: String(entry.DisplayVersion ?? ""),
-        Publisher: String(entry.Publisher ?? ""),
-        InstallLocation: installLocation,
-        UninstallString: String(entry.UninstallString ?? ""),
-      };
-    });
-  } catch { throw new Error("invalid Windows installation state"); }
+  return readUninstallRegistryEntries({ throwOnError: true, timeoutMs: 30_000 }).map(({ Key, DisplayName, DisplayVersion, Publisher, InstallLocation, UninstallString }) => ({
+    Key,
+    DisplayName,
+    DisplayVersion,
+    Publisher,
+    InstallLocation,
+    UninstallString,
+  }));
+}
+
+/** Remove only a reserved test identity's HKCU "Open with" keys/values (never touching real identities or extension defaults). */
+function removeTestOpenWithRegistry(channel) {
+  const id = openWithIdentity(channel, { testIdentity: true });
+  const payload = {
+    deleteKeys: [
+      ...Object.values(id.progIds).map((progId) => `Software\\Classes\\${progId}`),
+      `Software\\Classes\\Applications\\${id.exe}`,
+      id.capabilitiesRoot,
+    ],
+    openWithValues: Object.entries(OPEN_WITH_TYPES).flatMap(([kind, types]) => types.map((ext) => ({
+      extKey: `Software\\Classes\\${ext}`,
+      progId: id.progIds[kind],
+    }))),
+    registeredName: id.registeredName,
+  };
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$p = $env:MANGA_OPEN_WITH_CLEANUP | ConvertFrom-Json",
+    "Remove-Item Env:MANGA_OPEN_WITH_CLEANUP -ErrorAction SilentlyContinue",
+    "$hkcu = [Microsoft.Win32.Registry]::CurrentUser",
+    "foreach ($key in $p.deleteKeys) { $hkcu.DeleteSubKeyTree($key, $false) }",
+    "foreach ($item in $p.openWithValues) {",
+    "  $owpPath = $item.extKey + '\\OpenWithProgids'",
+    "  $owp = $hkcu.OpenSubKey($owpPath, $true)",
+    "  if ($null -ne $owp) {",
+    "    try { $owp.DeleteValue($item.progId, $false) } finally { $owp.Dispose() }",
+    "    $check = $hkcu.OpenSubKey($owpPath, $false)",
+    "    if ($null -ne $check) { $bare = ($null -eq $check.GetValue('')) -and ($check.ValueCount -eq 0) -and ($check.SubKeyCount -eq 0); $check.Dispose(); if ($bare) { $hkcu.DeleteSubKey($owpPath, $false) } }",
+    "  }",
+    "  $ext = $hkcu.OpenSubKey($item.extKey, $false)",
+    "  if ($null -ne $ext) { $bare = ($null -eq $ext.GetValue('')) -and ($ext.ValueCount -eq 0) -and ($ext.SubKeyCount -eq 0); $ext.Dispose(); if ($bare) { $hkcu.DeleteSubKey($item.extKey, $false) } }",
+    "}",
+    "$regApps = $hkcu.OpenSubKey('Software\\RegisteredApplications', $true)",
+    "if ($null -ne $regApps) { try { $regApps.DeleteValue($p.registeredName, $false) } finally { $regApps.Dispose() } }",
+    "$mangaRoot = $hkcu.OpenSubKey('Software\\MANGA', $false)",
+    "if ($null -ne $mangaRoot) { $bare = ($null -eq $mangaRoot.GetValue('')) -and ($mangaRoot.ValueCount -eq 0) -and ($mangaRoot.SubKeyCount -eq 0); $mangaRoot.Dispose(); if ($bare) { $hkcu.DeleteSubKey('Software\\MANGA', $false) } }",
+  ].join("\n");
+  runPowershell(script, { ...process.env, MANGA_OPEN_WITH_CLEANUP: JSON.stringify(payload) });
 }
 
 /** Remove only the two explicitly reserved test identities, including leftovers of interrupted checks. */
@@ -852,6 +885,8 @@ export async function removeTestInstallations(channels = ["release", "developmen
       // These checked literal registry paths stay within the named test entry; no filesystem paths are passed to another shell.
       runPowershell(`if (Test-Path -LiteralPath '${UNINSTALL_KEY}\\${entry.Key}') { Remove-Item -LiteralPath '${UNINSTALL_KEY}\\${entry.Key}' -Recurse -Force -ErrorAction Stop }\nif (Test-Path -LiteralPath 'HKCU:\\Software\\${entry.Key}') { Remove-Item -LiteralPath 'HKCU:\\Software\\${entry.Key}' -Recurse -Force -ErrorAction Stop }`);
     }
+    // Always remove any leftover test-identity "Open with" keys even if the uninstaller binary was already missing.
+    removeTestOpenWithRegistry(channel);
     const shortcuts = [
       path.join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu", "Programs", `${meta.shortcutName}.lnk`),
       path.join(defaultDesktopDir(), `${meta.shortcutName}.lnk`),

@@ -13,21 +13,27 @@ import {
  * It takes no focus (`focusable: false`), remembers only its `(x, y)` coordinates, flushes any pending position save on drag
  * end (`moved` / `mouseUp`) AND synchronously before closing, and exposes no capability beyond receiving state and asking to stop.
  */
+type OverlayDeps = {
+  preload: string;
+  readRect: () => Promise<SavedRect>;
+  saveRect: (pos: OverlayPos) => void;
+  onStopRequest: () => void;
+};
+
 export class RecordingOverlay {
+  private readonly deps: OverlayDeps;
   private win: BrowserWindow | undefined;
   private opening: Promise<void> | undefined;
+  private openGen = 0;
   private latest: ReturnType<typeof parseOverlayState> = null;
   private moveTimer: ReturnType<typeof setTimeout> | undefined;
   private lastPos: OverlayPos | undefined;
   private lastSaved: OverlayPos | undefined;
   private dirty = false;
 
-  constructor(private readonly deps: {
-    preload: string;
-    readRect: () => Promise<SavedRect>;
-    saveRect: (pos: OverlayPos) => void;
-    onStopRequest: () => void;
-  }) {}
+  constructor(deps: OverlayDeps) {
+    this.deps = deps;
+  }
 
   owns(contents: WebContents): boolean {
     return Boolean(this.win && !this.win.isDestroyed() && this.win.webContents === contents);
@@ -45,7 +51,7 @@ export class RecordingOverlay {
       return;
     }
     this.latest = state;
-    if (!this.win || this.win.isDestroyed()) {
+    while (this.latest && (!this.win || this.win.isDestroyed())) {
       this.opening ??= this.open().finally(() => { this.opening = undefined; });
       await this.opening;
     }
@@ -67,6 +73,7 @@ export class RecordingOverlay {
   }
 
   close(): void {
+    this.openGen += 1;
     this.latest = null;
     const win = this.win;
     if (win && !win.isDestroyed()) {
@@ -91,8 +98,11 @@ export class RecordingOverlay {
   }
 
   private async open(): Promise<void> {
+    const gen = ++this.openGen;
+    const saved = await this.deps.readRect();
+    if (gen !== this.openGen || !this.latest) return;
     const { areas, primary } = this.workAreas();
-    const rect = placeOverlay(await this.deps.readRect(), areas, primary);
+    const rect = placeOverlay(saved, areas, primary);
     this.lastPos = { x: rect.x, y: rect.y };
     this.lastSaved = { x: rect.x, y: rect.y };
     this.dirty = false;
@@ -130,12 +140,29 @@ export class RecordingOverlay {
     };
 
     let grab: { x: number; y: number; moved: boolean } | null = null;
+    const finishGrab = () => {
+      if (!grab) return;
+      const moved = grab.moved;
+      grab = null;
+      if (moved && !win.isDestroyed()) {
+        const bounds = win.getBounds();
+        const current = this.workAreas();
+        const clamped = placeOverlay({ x: bounds.x, y: bounds.y }, current.areas, current.primary);
+        if (clamped.x !== bounds.x || clamped.y !== bounds.y) win.setPosition(clamped.x, clamped.y);
+        notePosition(clamped.x, clamped.y);
+        this.flushSave();
+      }
+    };
     win.webContents.on("input-event", (_event, input) => {
       if (win.isDestroyed()) return;
-      const ev = input as { type?: string; button?: string; x?: number; y?: number };
+      const ev = input as { type?: string; button?: string; x?: number; y?: number; modifiers?: string[] };
       if (ev.type === "mouseDown" && ev.button === "left" && typeof ev.x === "number" && typeof ev.y === "number") {
         grab = ev.x < OVERLAY_STOP_HIT_X ? { x: ev.x, y: ev.y, moved: false } : null;
       } else if (ev.type === "mouseMove" && grab && typeof ev.x === "number" && typeof ev.y === "number") {
+        if (Array.isArray(ev.modifiers) && !ev.modifiers.includes("leftbuttondown")) {
+          finishGrab();
+          return;
+        }
         const dx = ev.x - grab.x;
         const dy = ev.y - grab.y;
         if (grab.moved || Math.hypot(dx, dy) >= 2) {
@@ -148,17 +175,8 @@ export class RecordingOverlay {
             notePosition(nextX, nextY);
           }
         }
-      } else if (ev.type === "mouseUp" && grab) {
-        const moved = grab.moved;
-        grab = null;
-        if (moved && !win.isDestroyed()) {
-          const bounds = win.getBounds();
-          const current = this.workAreas();
-          const clamped = placeOverlay({ x: bounds.x, y: bounds.y }, current.areas, current.primary);
-          if (clamped.x !== bounds.x || clamped.y !== bounds.y) win.setPosition(clamped.x, clamped.y);
-          notePosition(clamped.x, clamped.y);
-          this.flushSave();
-        }
+      } else if ((ev.type === "mouseUp" || ev.type === "mouseLeave") && grab) {
+        finishGrab();
       }
     });
 
@@ -182,7 +200,18 @@ export class RecordingOverlay {
       this.flushSave();
       if (this.win === win) this.win = undefined;
     });
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(overlayDocument())}`);
+    try {
+      await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(overlayDocument())}`);
+    } catch (error) {
+      if (this.win === win) this.win = undefined;
+      if (!win.isDestroyed()) win.destroy();
+      throw error;
+    }
+    if (gen !== this.openGen || !this.latest) {
+      if (this.win === win) this.win = undefined;
+      if (!win.isDestroyed()) win.close();
+      return;
+    }
     if (!win.isDestroyed()) win.showInactive();
   }
 }

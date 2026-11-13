@@ -3,15 +3,30 @@ import { blob, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core"
 export const commandRequests = sqliteTable("command_requests", {
   idempotencyKey: text("idempotency_key").primaryKey(),
   commandId: text("command_id").notNull(),
+  inputHash: text("input_hash").notNull(),
+  actorKind: text("actor_kind"),
+  actorId: text("actor_id"),
+  grantHandle: text("grant_handle"),
+  sessionId: text("session_id"),
+  runId: text("run_id"),
+  registryGeneration: integer("registry_generation"),
+  grantFingerprint: text("grant_fingerprint"),
+});
+
+export const operations = sqliteTable("operations", {
+  idempotencyKey: text("idempotency_key").primaryKey(),
+  commandId: text("command_id").notNull(),
   resultJson: text("result_json").notNull(),
   committedAt: text("committed_at").notNull(),
 });
 
-export const events = sqliteTable("events", {
+export const domainEvents = sqliteTable("domain_events", {
   seq: integer("seq").primaryKey({ autoIncrement: true }),
+  eventId: text("event_id").notNull(),
   type: text("type").notNull(),
   payloadJson: text("payload_json").notNull(),
   createdAt: text("created_at").notNull(),
+  publishedAt: text("published_at"),
 });
 
 export const works = sqliteTable("works", {

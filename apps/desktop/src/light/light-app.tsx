@@ -30,8 +30,13 @@ export function LightApp() {
 
   const refresh = useCallback(async () => {
     if (!host) return;
-    setState(await host.state());
-    setOpening(false);
+    try {
+      setState(await host.state());
+    } catch {
+      // ignore transient IPC error while window reloads or closes
+    } finally {
+      setOpening(false);
+    }
   }, [host]);
   useEffect(() => {
     if (!host) return;
@@ -41,15 +46,23 @@ export function LightApp() {
 
   const openFile = useCallback(async () => {
     if (!host) return;
-    const next = await host.openDialog();
-    setState(next);
+    try {
+      const next = await host.openDialog();
+      setState(next);
+    } catch (error) {
+      setState((current) => current ? { ...current, opened: null, error: { kind: "broken", detail: error instanceof Error ? error.message : String(error) } } : current);
+    }
   }, [host]);
 
   const sibling = useCallback(async (direction: 1 | -1) => {
     if (!host) return;
     setNotice("");
-    const result = await host.sibling(direction);
-    if (!result.moved) setNotice(direction > 0 ? t("light.noNext") : t("light.noPrevious"));
+    try {
+      const result = await host.sibling(direction);
+      if (!result.moved) setNotice(direction > 0 ? t("light.noNext") : t("light.noPrevious"));
+    } catch {
+      setNotice(direction > 0 ? t("light.noNext") : t("light.noPrevious"));
+    }
   }, [host, t]);
 
   // A file dropped anywhere on the window replaces what it shows.
@@ -63,7 +76,12 @@ export function LightApp() {
       const file = event.dataTransfer?.files[0];
       if (!file) return;
       setOpening(true);
-      void host.openDropped(file).then(setState).finally(() => setOpening(false));
+      void host.openDropped(file)
+        .then(setState)
+        .catch((error: unknown) => {
+          setState((current) => current ? { ...current, opened: null, error: { kind: "broken", detail: error instanceof Error ? error.message : String(error) } } : current);
+        })
+        .finally(() => setOpening(false));
     };
     window.addEventListener("dragover", over);
     window.addEventListener("dragleave", leave);
@@ -85,6 +103,29 @@ export function LightApp() {
     : "";
   const typeList = types ? t("light.emptyTypes", { video: types.video.map((ext) => ext.slice(1)).join(" "), image: types.image.map((ext) => ext.slice(1)).join(" ") }) : "";
   const aboutButton = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const openAbout = useCallback(() => {
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setAbout(true);
+  }, []);
+  const closeAbout = useCallback(() => {
+    setAbout(false);
+    const target = previousFocus.current;
+    previousFocus.current = null;
+    if (target && target.isConnected) target.focus();
+  }, []);
+  useEffect(() => {
+    if (!about) return;
+    aboutButton.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeAbout();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [about, closeAbout]);
   useWindowFullscreenKeys({ enabled: Boolean(opened), active: immersive, toggleKeys: DEFAULT_KEY_TABLE["global.windowFullscreen"] ?? [], toggle: windowFull.toggle, exit: windowFull.exit });
 
   return (
@@ -100,8 +141,8 @@ export function LightApp() {
             className="titlebar-menu"
             items={[
               { id: "open", label: t("light.openFile"), onSelect: () => void openFile() },
-              { id: "reveal", label: t("light.reveal"), disabled: !opened, onSelect: () => void host?.reveal() },
-              { id: "about", label: t("light.about"), onSelect: () => setAbout(true) },
+              { id: "reveal", label: t("light.reveal"), disabled: !opened, onSelect: () => void host?.reveal().catch(() => undefined) },
+              { id: "about", label: t("light.about"), onSelect: openAbout },
             ]}
             trigger={<MoreHorizontal size={16} />}
           />
@@ -123,9 +164,11 @@ export function LightApp() {
         )}
         {notice ? <p className="light-notice" role="status" data-testid="light-notice">{notice}</p> : null}
         {about ? (
-          <div className="light-about" role="dialog" aria-modal="true" aria-label={t("light.about")} data-testid="light-about">
-            <p>{t("light.aboutText", { version: state?.version ?? "" })}</p>
-            <button ref={aboutButton} type="button" className="secondary-button" autoFocus onClick={() => setAbout(false)}>{t("light.aboutClose")}</button>
+          <div className="light-about-backdrop" data-testid="light-about-backdrop" onClick={(event) => { if (event.target === event.currentTarget) closeAbout(); }}>
+            <div className="light-about" role="dialog" aria-modal="true" aria-label={t("light.about")} data-testid="light-about">
+              <p>{t("light.aboutText", { version: state?.version ?? "" })}</p>
+              <button ref={aboutButton} type="button" className="secondary-button" autoFocus onClick={closeAbout}>{t("light.aboutClose")}</button>
+            </div>
           </div>
         ) : null}
       </main>

@@ -414,6 +414,20 @@ describe("what the shell keeps of the rail", () => {
     expect((await run(ctx, "settings.setShell", { rail: { surprise: 1 } })).status).toBe("error");
   });
 
+  it("keeps what the window's close button does: into the tray at first, out of MANGA once chosen, and a record saved before it reads into the tray (A-136)", async () => {
+    const ctx = await boot();
+    expect(readShell(ctx.app.store).window).toEqual({ closeToTray: true });
+    ok(await run(ctx, "settings.setShell", { window: { closeToTray: false } }));
+    expect(readShell(ctx.app.store)).toMatchObject({ window: { closeToTray: false }, rail: { view: "home" } });
+    ok(await run(ctx, "settings.setShell", { rail: { view: "comic" } }));
+    expect(readShell(ctx.app.store).window).toEqual({ closeToTray: false });
+    expect((await run(ctx, "settings.setShell", { window: { closeToTray: "no" } })).status).toBe("error");
+    expect((await run(ctx, "settings.setShell", { window: { minimizeToTray: true } })).status).toBe("error");
+    const { window: _window, ...older } = DEFAULT_SHELL_PREFERENCE;
+    sql(ctx).prepare("UPDATE config SET value_json = ? WHERE key = 'shell.layout'").run(JSON.stringify(older));
+    expect(readShell(ctx.app.store).window).toEqual({ closeToTray: true });
+  });
+
   it("reads a version 2 record saved before the rail was kept, with the defaults, and writes it back whole", async () => {
     const ctx = await boot();
     const { rail: _rail, ...older } = DEFAULT_SHELL_PREFERENCE;

@@ -7,11 +7,13 @@ import {
   DEFAULT_CHAT_AUDIO_SYSTEM_PROMPT,
   transcribeAudio,
   transcribeChatAudio,
+  transcribeDeepSeek,
+  withRetries,
   type TranscriptionResult,
   type TranscriptionSegment,
 } from "@manga/model-protocol";
 import { PCM_SAMPLE_RATE, wavFromPcm } from "../audio-files.ts";
-import { MAX_CHUNK_MS, maxChunkMsForBytes } from "../chunks.ts";
+import { MAX_CHUNK_MS } from "../chunks.ts";
 import { PROMPT_ECHO } from "../transcribe.ts";
 import type { AsrConnection, AsrPort } from "../ports.ts";
 import {
@@ -99,6 +101,8 @@ export type ExternalAsrConnectionConfig = {
   maxSeconds?: number;
   supportsLanguage?: boolean;
   supportsTimestamps?: boolean;
+  /** Told the seconds a provider's recognition counted for each piece, for the usage record (计划 4.9). */
+  onServiceUse?: (use: { seconds: number }) => void;
 };
 
 export type PreAsrDenoiseHook = (
@@ -116,6 +120,8 @@ export type AsrEngineOptions = {
   denoiseHook?: PreAsrDenoiseHook;
   numThreads?: number;
   now?: () => number;
+  /** The first wait before a retry of a busy service (ms); tests make it short. */
+  retryBaseMs?: number;
 };
 
 export type AsrTranscribeRequest = {
@@ -213,6 +219,80 @@ function splitAudioIntoChunkRanges(
 function samplesToWavBuffer(samples: Float32Array): Buffer {
   return wavFromPcm(int16ToPcmBuffer(float32ToInt16(samples)));
 }
+
+const ASCII_ALNUM_END_RE = /[A-Za-z0-9]$/;
+const ASCII_ALNUM_START_RE = /^[A-Za-z0-9]/;
+const SENTENCE_END_RE = /[。！？.!?]\s*$/;
+
+/** Joins multi-chunk transcripts with a space only across Latin/digit boundaries so English words never glue together while CJK stays continuous. */
+function joinChunkTexts(texts: readonly string[]): string {
+  let out = "";
+  for (const part of texts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    if (!out) {
+      out = trimmed;
+    } else if (ASCII_ALNUM_END_RE.test(out) && ASCII_ALNUM_START_RE.test(trimmed)) {
+      out = `${out} ${trimmed}`;
+    } else {
+      out = `${out}${trimmed}`;
+    }
+  }
+  return out;
+}
+
+/** Converts sherpa-onnx token-level timestamps into sentence/pause-grouped `TranscriptionSegment[]` shifted by `offsetSec`. */
+function buildLocalSegments(
+  tokens: readonly string[],
+  timestamps: readonly number[],
+  chunkDurationSec: number,
+  offsetSec: number,
+): TranscriptionSegment[] {
+  if (tokens.length === 0 || timestamps.length !== tokens.length) return [];
+  const segments: TranscriptionSegment[] = [];
+  let buf = "";
+  let segStart = -1;
+  let lastTime = 0;
+
+  const flush = (endLocal: number) => {
+    const text = buf.trim();
+    if (text && segStart >= 0) {
+      const start = Math.max(0, Math.min(chunkDurationSec, segStart));
+      const end = Math.max(start, Math.min(chunkDurationSec, endLocal));
+      segments.push({ start: offsetSec + start, end: offsetSec + end, text });
+    }
+    buf = "";
+    segStart = -1;
+  };
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    const ts = Number(timestamps[i]);
+    if (!Number.isFinite(ts) || ts < 0) continue;
+    if (segStart >= 0 && ts - lastTime >= 0.6 && buf.trim()) {
+      flush(Math.min(ts, lastTime + 0.3));
+    }
+    if (segStart < 0) segStart = ts;
+    buf += token;
+    lastTime = Math.max(lastTime, ts);
+    if (SENTENCE_END_RE.test(token)) {
+      const nextTs = i + 1 < timestamps.length && Number.isFinite(timestamps[i + 1]) ? timestamps[i + 1]! : chunkDurationSec;
+      flush(Math.max(lastTime, Math.min(nextTs, chunkDurationSec)));
+    }
+  }
+  if (buf.trim() && segStart >= 0) {
+    flush(Math.max(lastTime, chunkDurationSec));
+  }
+  return segments;
+}
+
+type ChunkRange = { startSample: number; endSample: number; offsetSec: number };
+
+type ChunkRecognizeOutput = {
+  text: string;
+  language?: string;
+  segments?: TranscriptionSegment[];
+};
 
 function mapLocalAsrError(error: unknown, modelId: string): MangaError {
   if (error instanceof MangaError) {
@@ -319,6 +399,7 @@ export class AsrEngine {
     | ((connectionId: string) => Promise<ExternalAsrConnectionConfig | null> | ExternalAsrConnectionConfig | null)
     | undefined;
   private readonly fetchImpl: typeof fetch | undefined;
+  private readonly retryBaseMs: number;
   private readonly denoiseHook: PreAsrDenoiseHook | undefined;
   private readonly numThreads: number | undefined;
   private readonly now: () => number;
@@ -328,6 +409,7 @@ export class AsrEngine {
     this.localRuntime = options.localRuntime;
     this.resolveConnection = options.resolveConnection;
     this.fetchImpl = options.fetchImpl;
+    this.retryBaseMs = options.retryBaseMs ?? 800;
     this.denoiseHook = options.denoiseHook;
     this.numThreads = options.numThreads;
     this.now = options.now ?? (() => Date.now());
@@ -530,6 +612,75 @@ export class AsrEngine {
     );
   }
 
+  private async runChunkedRecognition(params: {
+    chunkRanges: readonly ChunkRange[];
+    appliedHint: BuiltAsrHint;
+    useInitialHint: boolean;
+    retryOnEcho: boolean;
+    signal?: AbortSignal;
+    recognizeChunk: (range: ChunkRange, idx: number, useHint: boolean) => Promise<ChunkRecognizeOutput>;
+  }): Promise<{
+    texts: string[];
+    segments: TranscriptionSegment[];
+    detectedLang?: string;
+    echoDetected: boolean;
+    recognizeMs: number;
+  }> {
+    const texts: string[] = [];
+    const collectedSegments: TranscriptionSegment[] = [];
+    let detectedLang: string | undefined;
+    let anyEchoDetected = false;
+    const recognizeStarted = this.now();
+
+    for (let idx = 0; idx < params.chunkRanges.length; idx += 1) {
+      if (params.signal?.aborted) {
+        throw new MangaError("CANCELLED", "语音识别已取消");
+      }
+      const range = params.chunkRanges[idx]!;
+      let out = await params.recognizeChunk(range, idx, params.useInitialHint);
+      let text = out.text.trim();
+
+      if (params.appliedHint.includedTerms.length > 0 && isHintEcho(text, params.appliedHint.includedTerms)) {
+        anyEchoDetected = true;
+        if (params.retryOnEcho) {
+          out = await params.recognizeChunk(range, idx, false);
+          text = out.text.trim();
+          if (isHintEcho(text, params.appliedHint.includedTerms)) {
+            text = "";
+          } else {
+            anyEchoDetected = false;
+          }
+        } else {
+          text = "";
+        }
+      }
+
+      if (out.language && !detectedLang) {
+        detectedLang = out.language;
+      }
+      if (text) {
+        texts.push(text);
+        if (out.segments && out.segments.length > 0) {
+          for (const seg of out.segments) {
+            collectedSegments.push({
+              start: seg.start + range.offsetSec,
+              end: seg.end + range.offsetSec,
+              text: seg.text,
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      texts,
+      segments: collectedSegments,
+      ...(detectedLang ? { detectedLang } : {}),
+      echoDetected: anyEchoDetected && texts.length === 0,
+      recognizeMs: Math.max(0, this.now() - recognizeStarted),
+    };
+  }
+
   private async transcribeWithLocalModel(
     modelId: string,
     request: AsrTranscribeRequest,
@@ -615,68 +766,48 @@ export class AsrEngine {
         ? [{ startSample: 0, endSample: workingSamples.length, offsetSec: 0 }]
         : splitAudioIntoChunkRanges(workingSamples, maxChunkMs);
 
-    const retryOnEcho = request.retryWithoutHintOnEcho ?? true;
-    const texts: string[] = [];
-    let detectedLang: string | undefined;
-    let anyEchoDetected = false;
-    const recognizeStarted = this.now();
-
-    for (const range of chunkRanges) {
-      if (request.signal?.aborted) {
-        throw new MangaError("CANCELLED", "语音识别已取消");
-      }
-      const chunkSamples = workingSamples.subarray(range.startSample, range.endSample);
-      const runOnce = async (useHint: boolean) => {
+    const chunked = await this.runChunkedRecognition({
+      chunkRanges,
+      appliedHint,
+      useInitialHint: appliedHint.kind === "hotwords",
+      retryOnEcho: request.retryWithoutHintOnEcho ?? true,
+      signal: request.signal,
+      recognizeChunk: async (range, _idx, useHint) => {
+        const chunkSamples = workingSamples.subarray(range.startSample, range.endSample);
         try {
-          return await this.localRuntime!.recognize(chunkSamples, {
+          const out = await this.localRuntime!.recognize(chunkSamples, {
             sampleRate: PCM_SAMPLE_RATE,
             ...(useHint && appliedHint.kind === "hotwords" ? { hotwords: appliedHint.hotwordsCsv } : {}),
             ...(capabilities.language && request.language ? { language: request.language } : {}),
           });
+          const localSegments =
+            request.timestamps && capabilities.timestamps
+              ? buildLocalSegments(out.tokens, out.timestamps, chunkSamples.length / PCM_SAMPLE_RATE, 0)
+              : [];
+          return {
+            text: out.text,
+            ...(out.lang ? { language: out.lang } : {}),
+            ...(localSegments.length > 0 ? { segments: localSegments } : {}),
+          };
         } catch (error) {
           throw mapLocalAsrError(error, model.modelId);
         }
-      };
+      },
+    });
 
-      let out = await runOnce(appliedHint.kind === "hotwords");
-      let text = out.text.trim();
-
-      if (appliedHint.includedTerms.length > 0 && isHintEcho(text, appliedHint.includedTerms)) {
-        anyEchoDetected = true;
-        if (retryOnEcho) {
-          out = await runOnce(false);
-          text = out.text.trim();
-          if (isHintEcho(text, appliedHint.includedTerms)) {
-            text = "";
-          } else {
-            anyEchoDetected = false;
-          }
-        } else {
-          text = "";
-        }
-      }
-
-      if (out.lang && !detectedLang) {
-        detectedLang = out.lang;
-      }
-      if (text) {
-        texts.push(text);
-      }
-    }
-
-    const recognizeMs = Math.max(0, this.now() - recognizeStarted);
     return {
-      text: texts.join(""),
-      ...(detectedLang ? { language: detectedLang } : {}),
+      text: joinChunkTexts(chunked.texts),
+      ...(chunked.segments.length > 0 ? { segments: chunked.segments } : {}),
+      ...(chunked.detectedLang ? { language: chunked.detectedLang } : {}),
       engineKind: "local",
       engineId: model.modelId,
       modelId: model.modelId,
       capabilities,
       appliedHint,
-      echoDetected: anyEchoDetected && texts.length === 0,
+      echoDetected: chunked.echoDetected,
       chunkCount: chunkRanges.length,
       ...(denoiseMs !== undefined ? { denoiseMs } : {}),
-      recognizeMs,
+      recognizeMs: chunked.recognizeMs,
       ...(loadingModel ? { loadingModel: true } : {}),
     };
   }
@@ -805,7 +936,8 @@ export class AsrEngine {
     const workingSamples = denoised.samples;
     const denoiseMs = denoised.denoiseMs;
 
-    const maxByBytes = capabilities.maxUploadBytes > 0 ? maxChunkMsForBytes(capabilities.maxUploadBytes) : MAX_CHUNK_MS;
+    // The upload limit caps a block by its size; the length is the interface's own (30 s for most, 110 s for DeepSeek, 计划 4.6).
+    const maxByBytes = capabilities.maxUploadBytes > 0 ? Math.max(1_000, Math.floor((capabilities.maxUploadBytes - 44) / 32_000) * 1000) : MAX_CHUNK_MS;
     const maxChunkMs = Math.min(Math.max(1_000, capabilities.maxSeconds * 1000), maxByBytes);
 
     const chunkRanges =
@@ -813,46 +945,58 @@ export class AsrEngine {
         ? [{ startSample: 0, endSample: workingSamples.length, offsetSec: 0 }]
         : splitAudioIntoChunkRanges(workingSamples, maxChunkMs);
 
-    const retryOnEcho = request.retryWithoutHintOnEcho ?? true;
-    const texts: string[] = [];
-    const collectedSegments: TranscriptionSegment[] = [];
-    let detectedLang: string | undefined;
-    let anyEchoDetected = false;
-    const recognizeStarted = this.now();
+    const hasHint = appliedHint.kind === "prompt" || appliedHint.kind === "context";
+    const chunked = await this.runChunkedRecognition({
+      chunkRanges,
+      appliedHint,
+      useInitialHint: hasHint,
+      retryOnEcho: request.retryWithoutHintOnEcho ?? true,
+      signal: request.signal,
+      recognizeChunk: async (range, idx, useHint): Promise<TranscriptionResult> => {
+        const chunkWav = encodedFilePassthrough
+          ? (request.audio as Uint8Array)
+          : samplesToWavBuffer(workingSamples.subarray(range.startSample, range.endSample));
+        const chatAudioFormat: "wav" | "mp3" =
+          encodedFilePassthrough && (request.mimeType === "audio/mpeg" || request.fileName?.toLowerCase().endsWith(".mp3"))
+            ? "mp3"
+            : "wav";
+        const chunkFileName = encodedFilePassthrough
+          ? (request.fileName ?? `chunk-${idx}.wav`)
+          : (chunkRanges.length === 1 && request.fileName?.toLowerCase().endsWith(".wav") ? request.fileName : `chunk-${idx}.wav`);
+        const chunkMimeType = encodedFilePassthrough ? (request.mimeType ?? "audio/wav") : "audio/wav";
 
-    for (let idx = 0; idx < chunkRanges.length; idx += 1) {
-      if (request.signal?.aborted) {
-        throw new MangaError("CANCELLED", "语音识别已取消");
-      }
-      const range = chunkRanges[idx]!;
-      const chunkWav = encodedFilePassthrough
-        ? (request.audio as Uint8Array)
-        : samplesToWavBuffer(workingSamples.subarray(range.startSample, range.endSample));
-      const chatAudioFormat: "wav" | "mp3" =
-        encodedFilePassthrough && (request.mimeType === "audio/mpeg" || request.fileName?.toLowerCase().endsWith(".mp3"))
-          ? "mp3"
-          : "wav";
-
-      if (capabilities.maxUploadBytes > 0 && chunkWav.byteLength > capabilities.maxUploadBytes) {
-        throw new MangaError(
-          "VALIDATION_ERROR",
-          `音频分块大小（${chunkWav.byteLength} 字节）超出连接「${conn.name ?? conn.id}」的上传上限（${capabilities.maxUploadBytes} 字节）`,
-          {
-            retryable: false,
-            details: {
-              reason: "upload_limit_exceeded",
-              engineKind: "connection",
-              connectionId: conn.id,
-              bytes: chunkWav.byteLength,
-              maxUploadBytes: capabilities.maxUploadBytes,
-              setupHint: "settings.connections",
+        if (capabilities.maxUploadBytes > 0 && chunkWav.byteLength > capabilities.maxUploadBytes) {
+          throw new MangaError(
+            "VALIDATION_ERROR",
+            `音频分块大小（${chunkWav.byteLength} 字节）超出连接「${conn.name ?? conn.id}」的上传上限（${capabilities.maxUploadBytes} 字节）`,
+            {
+              retryable: false,
+              details: {
+                reason: "upload_limit_exceeded",
+                engineKind: "connection",
+                connectionId: conn.id,
+                bytes: chunkWav.byteLength,
+                maxUploadBytes: capabilities.maxUploadBytes,
+                setupHint: "settings.connections",
+              },
             },
-          },
-        );
-      }
+          );
+        }
 
-      const sendOnce = async (useHint: boolean): Promise<TranscriptionResult> => {
         try {
+          if (conn.transcriptionInterface === "deepseek_asr") {
+            // Only the file goes: the service takes no hint, so none is sent; 429 and 503 are tried twice more, anything else is reported (计划 4.6).
+            const heard = await withRetries(() => transcribeDeepSeek(conn.baseUrl, conn.apiKey, {
+              bytes: chunkWav,
+              fileName: chunkFileName,
+              mimeType: chunkMimeType,
+              timeoutMs: conn.timeoutMs,
+              signal: request.signal,
+              ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}),
+            }), [429, 503], { signal: request.signal, baseMs: this.retryBaseMs });
+            conn.onServiceUse?.({ seconds: (heard.durationMs ?? 0) / 1000 });
+            return { text: heard.text, ...(heard.durationMs !== undefined ? { duration: heard.durationMs / 1000 } : {}) };
+          }
           if (conn.transcriptionInterface === "chat_input_audio") {
             return await transcribeChatAudio(
               conn.baseUrl,
@@ -878,9 +1022,9 @@ export class AsrEngine {
             conn.apiKey,
             {
               model: conn.model,
-              fileName: request.fileName ?? `chunk-${idx}.wav`,
+              fileName: chunkFileName,
               bytes: chunkWav,
-              mimeType: request.mimeType ?? "audio/wav",
+              mimeType: chunkMimeType,
               prompt: useHint && appliedHint.kind === "prompt" ? appliedHint.prompt : undefined,
               language: capabilities.language ? request.language : undefined,
               timestamps: capabilities.timestamps ? request.timestamps : false,
@@ -892,58 +1036,22 @@ export class AsrEngine {
         } catch (error) {
           throw mapExternalAsrError(error, conn);
         }
-      };
+      },
+    });
 
-      const hasHint = appliedHint.kind === "prompt" || appliedHint.kind === "context";
-      let out = await sendOnce(hasHint);
-      let text = out.text.trim();
-
-      if (appliedHint.includedTerms.length > 0 && isHintEcho(text, appliedHint.includedTerms)) {
-        anyEchoDetected = true;
-        if (retryOnEcho) {
-          out = await sendOnce(false);
-          text = out.text.trim();
-          if (isHintEcho(text, appliedHint.includedTerms)) {
-            text = "";
-          } else {
-            anyEchoDetected = false;
-          }
-        } else {
-          text = "";
-        }
-      }
-
-      if (out.language && !detectedLang) {
-        detectedLang = out.language;
-      }
-      if (text) {
-        texts.push(text);
-        if (out.segments && out.segments.length > 0) {
-          for (const seg of out.segments) {
-            collectedSegments.push({
-              start: seg.start + range.offsetSec,
-              end: seg.end + range.offsetSec,
-              text: seg.text,
-            });
-          }
-        }
-      }
-    }
-
-    const recognizeMs = Math.max(0, this.now() - recognizeStarted);
     return {
-      text: texts.join(conn.transcriptionInterface === "audio_transcriptions" ? " " : "").trim(),
-      ...(collectedSegments.length > 0 ? { segments: collectedSegments } : {}),
-      ...(detectedLang ? { language: detectedLang } : {}),
+      text: joinChunkTexts(chunked.texts),
+      ...(chunked.segments.length > 0 ? { segments: chunked.segments } : {}),
+      ...(chunked.detectedLang ? { language: chunked.detectedLang } : {}),
       engineKind: "connection",
       engineId: conn.id,
       modelId: conn.model,
       capabilities,
       appliedHint,
-      echoDetected: anyEchoDetected && texts.length === 0,
+      echoDetected: chunked.echoDetected,
       chunkCount: chunkRanges.length,
       ...(denoiseMs !== undefined ? { denoiseMs } : {}),
-      recognizeMs,
+      recognizeMs: chunked.recognizeMs,
     };
   }
 }

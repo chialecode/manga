@@ -154,9 +154,14 @@ node scripts/verify.mjs
 
 ## 5. Bot 与低频操作
 
-依赖更新策略由 [决定记录](../decisions/0002-local-first-github.md)维护。[dependabot.yml](../../.github/dependabot.yml)当前仅配置 GitHub 原生 Dependabot 的 Actions 依赖更新。A-36 已要求补充应用依赖更新与后续 bot 路线，路线如下表，npm/pnpm workspace、独立原型锁与其他有实际用途的检查先在本地准备；本次仍为计划，未启用新的远端自动化。
+依赖更新策略由 [决定记录](../decisions/0002-local-first-github.md)维护（A-36、A-132）。[dependabot.yml](../../.github/dependabot.yml)配置 GitHub 原生 Dependabot：
 
-每月把 Actions 更新合为一组、最多一个未关闭 PR、关闭自动 rebase，由维护者择时评审与合并；不启用自动合并。版本更新 PR 数量上限不约束安全更新，安全警报与自动安全修复是不同设置，不能声称“上限 1”覆盖所有安全 PR。本期自动安全修复 PR 保持关闭，安全告警按维护需要人工处理。
+- **npm（pnpm workspace）：** 每周；React、Tiptap 各成一组，其余同主版本更新合为一组，主版本单独 PR；最多 3 个未关闭 PR。
+- **Actions：** 每月合为一组，最多 1 个未关闭 PR；Action 固定完整 SHA，Dependabot 同步更新 SHA 与版本注释。
+- 两者都有 7 天冷却期（`cooldown.default-days: 7`，与 `minimumReleaseAge` 一致），关闭自动 rebase，不启用自动合并。
+- **版本更新 PR 平时只开不合**，在阶段开始时按[依赖盘点](development-workflow.md#dependency-inventory)集中处理，纯依赖更新不单独触发每周发布。
+
+Dependabot 告警与自动安全修复 PR 已打开（2026-11-14 用户授权，Agent 经 API 打开并核对）。安全修复 PR 不受冷却期与 PR 数量上限约束，不等阶段开始，有就尽快评审合并；它合并后照常计入每周发布。本地的漏洞检查是 `node scripts/deps.mjs --audit`，见[质量门禁](quality-gates.md)。
 
 自动 AI review、DCO、设计/模板检查等按 A-36 路线逐项核对当前远端状态和接入前提；不因参考配置存在就宣称本仓已安装或生效。接入前写清用途、权限、触发事件和最大消息量；stale、欢迎评论和自动标签目前无明确需求，不默认启用，不重复 GitHub 原生已有能力。
 

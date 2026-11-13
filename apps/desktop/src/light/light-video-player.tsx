@@ -51,7 +51,6 @@ export function LightVideoPlayer(props: { t: T; opened: VideoOpened; resume: unk
   const target = useMemo(() => ({ resourceId: opened.resourceId, revisionId: opened.revisionId }), [opened.resourceId, opened.revisionId]);
   const startMs = props.resume && typeof props.resume === "object" && "positionMs" in props.resume ? Number((props.resume as { positionMs: number }).positionMs) || 0 : 0;
   const [resumedShown, setResumedShown] = useState(startMs > 0);
-  useEffect(() => { if (!resumedShown) return; const timer = window.setTimeout(() => setResumedShown(false), 2500); return () => window.clearTimeout(timer); }, [resumedShown]);
 
   const [element, setElement] = useState<HTMLVideoElement | null>(null);
   const shell = useRef<HTMLDivElement>(null);
@@ -75,6 +74,11 @@ export function LightVideoPlayer(props: { t: T; opened: VideoOpened; resume: unk
     element, target, url, startMs, settings, volumeFactor: 1, durationHintMs: opened.durationMs, originMs,
     onProgress, onEnded: () => undefined, onMediaError: source.reportMediaError,
   });
+  useEffect(() => {
+    if (!resumedShown || !playback.ready) return;
+    const timer = window.setTimeout(() => setResumedShown(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [resumedShown, playback.ready]);
   durationRef.current = playback.durationMs > 0 ? playback.durationMs : opened.durationMs;
   // A file opened with MANGA plays at once, as a player chosen in "Open with" is expected to; one that was finished starts from the beginning.
   const started = useRef(false);

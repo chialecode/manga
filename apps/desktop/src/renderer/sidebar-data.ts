@@ -59,9 +59,24 @@ export function useSidebarData(view: RailView): SidebarData {
   const moreRef = useRef(more);
   moreRef.current = more;
   const latest = useRef(0);
+  const loadingSections = useRef(new Set<string>());
   const [again, setAgain] = useState(0);
   const open = useMemo(() => openKeysOf(rail, view, s.currentContext), [rail, view, s.currentContext]);
+  const openRef = useRef(open);
+  openRef.current = open;
   const wanted = open.join("\n");
+  const versionKey = `${s.conversationVersion}|${s.projectsVersion}|${s.shelfKey}|${s.listsVersion}`;
+  const seenVersion = useRef(versionKey);
+  const setErrorRef = useRef(s.setError);
+  setErrorRef.current = s.setError;
+
+  useEffect(() => {
+    if (seenVersion.current === versionKey) return;
+    seenVersion.current = versionKey;
+    for (const key of cache.keys()) {
+      if (key !== view) cache.delete(key);
+    }
+  }, [versionKey, view, cache]);
 
   useEffect(() => {
     const kept = cache.get(view) ?? null;
@@ -73,7 +88,7 @@ export function useSidebarData(view: RailView): SidebarData {
   useEffect(() => {
     const mine = ++latest.current;
     void (async () => {
-      const result = await attempt<SidebarView>("workspace.sidebar", { view, open: open.map((key) => contextFromKey(key)) });
+      const result = await attempt<SidebarView>("workspace.sidebar", { view, open: openRef.current.map((key) => contextFromKey(key)) });
       if (mine !== latest.current) return;
       if (!result.ok || !Array.isArray(result.value?.groups)) { setStatus("error"); return; }
       cache.set(view, result.value);
@@ -85,7 +100,9 @@ export function useSidebarData(view: RailView): SidebarData {
       const refreshed: Record<string, More> = {};
       await Promise.all(kept.map(async ([key, before]) => {
         const [, ctx = "", type = ""] = key.split("|");
-        const section = result.value.groups.find((group) => contextKey(group.contextId) === ctx)?.sections.find((item) => item.type === type);
+        const section = view === "downloads" && type === "download"
+          ? result.value.downloads
+          : result.value.groups.find((group) => contextKey(group.contextId) === ctx)?.sections.find((item) => item.type === type);
         if (!section || section.nextCursor === null) return;
         const size = Math.min(SIDEBAR_PAGE_MAX, Math.max(20, before.items.length));
         const page = await attempt<{ items: SidebarItem[]; nextCursor: string | null }>("workspace.items", {
@@ -95,18 +112,29 @@ export function useSidebarData(view: RailView): SidebarData {
       }));
       if (mine === latest.current) setMore((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${view}|`))), ...refreshed }));
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, wanted, s.conversationVersion, s.projectsVersion, s.shelfKey, s.listsVersion, again]);
+  }, [view, wanted, cache, s.conversationVersion, s.projectsVersion, s.shelfKey, s.listsVersion, again]);
 
   const loadMore = useCallback(async (contextId: ContextId, type: string, cursor: string | null) => {
     if (cursor === null) return;
     const key = sectionKey(view, contextId, type);
-    const page = await attempt<{ items: SidebarItem[]; nextCursor: string | null }>("workspace.items", {
-      view, contextId, ...kindOf(view, type), limit: 20, cursor,
-    });
-    if (!page.ok) { s.setError(page.error.message); return; }
-    setMore((current) => ({ ...current, [key]: { items: [...(current[key]?.items ?? []), ...page.value.items], next: page.value.nextCursor } }));
-  }, [view, s]);
+    if (loadingSections.current.has(key)) return;
+    loadingSections.current.add(key);
+    const mine = latest.current;
+    try {
+      const page = await attempt<{ items: SidebarItem[]; nextCursor: string | null }>("workspace.items", {
+        view, contextId, ...kindOf(view, type), limit: 20, cursor,
+      });
+      if (mine !== latest.current) return;
+      if (!page.ok) { setErrorRef.current(page.error.message); return; }
+      setMore((current) => {
+        const prev = current[key]?.items ?? [];
+        const known = new Set(prev.map((item) => item.key));
+        return { ...current, [key]: { items: [...prev, ...page.value.items.filter((item) => !known.has(item.key))], next: page.value.nextCursor } };
+      });
+    } finally {
+      loadingSections.current.delete(key);
+    }
+  }, [view]);
 
   const collapse = useCallback((contextId: ContextId, type: string) => {
     const key = sectionKey(view, contextId, type);

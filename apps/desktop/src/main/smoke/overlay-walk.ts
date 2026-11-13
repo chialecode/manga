@@ -40,9 +40,14 @@ const probe = (view: BrowserWindow, ids: readonly string[]): Promise<Probe[]> =>
 })()`);
 
 class Walk {
+  readonly view: BrowserWindow;
+  readonly shot?: (name: string) => Promise<void>;
   readonly problems: string[] = [];
   readonly rows: Row[] = [];
-  constructor(readonly view: BrowserWindow, readonly shot?: (name: string) => Promise<void>) {}
+  constructor(view: BrowserWindow, shot?: (name: string) => Promise<void>) {
+    this.view = view;
+    this.shot = shot;
+  }
 
   /** The elements must exist, be inside the window, and be reached at all five points. */
   async expectReached(state: State, step: string, ids: readonly string[]): Promise<void> {

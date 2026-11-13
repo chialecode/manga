@@ -104,7 +104,7 @@ function runWindow({ executable, args, env, cwd, timeout }) {
   });
 }
 
-export async function phase({ executable, args, name, spec, file, fake, template, specEnv = "MANGA_SMOKE_READER_SPEC" }) {
+export async function phase({ executable, args, name, spec, file, fake, template, specEnv = "MANGA_SMOKE_READER_SPEC", extraEnv = {} }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `manga-bench-${name}-`));
   const specFile = path.join(dir, "spec.json");
   fs.writeFileSync(specFile, JSON.stringify(spec));
@@ -123,6 +123,7 @@ export async function phase({ executable, args, name, spec, file, fake, template
     MANGA_SMOKE_SAMPLES: SAMPLES,
     MANGA_SMOKE_LAUNCHED_AT: String(Date.now()),
     ...(fake ? { MANGA_SMOKE_DANDAN_ORIGIN: fake.origin } : {}),
+    ...extraEnv,
   };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = await runWindow({ executable, args, env, cwd: dir, timeout: 420_000 });

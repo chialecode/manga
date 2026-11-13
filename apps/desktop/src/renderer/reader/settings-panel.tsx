@@ -2,7 +2,7 @@ import { useEffect, type ReactNode, type RefObject } from "react";
 import { Columns2, Minus, Plus, Square } from "lucide-react";
 import { FONT_PRESETS, READING_THEMES } from "@manga/contracts/reading";
 import type { Translator } from "@manga/i18n";
-import { THEME_BACKGROUND, THEME_FOREGROUND, isPreset, useInstalledFonts } from "./fonts.ts";
+import { FONT_PRESET_LABEL, THEME_BACKGROUND, THEME_FOREGROUND, isPreset, useInstalledFonts } from "./fonts.ts";
 
 type T = Translator["t"];
 
@@ -71,7 +71,7 @@ export function ReadingSettings(props: {
           onChange={(event) => props.onStyle({ fontFamily: event.target.value })}
         >
           <optgroup label={t("reader.fontPresets")}>
-            {FONT_PRESETS.map((preset) => <option key={preset} value={preset}>{t(`reading.font${preset[0]!.toUpperCase()}${preset.slice(1)}` as "reading.fontSans")}</option>)}
+            {FONT_PRESETS.map((preset) => <option key={preset} value={preset}>{t(FONT_PRESET_LABEL[preset])}</option>)}
           </optgroup>
           {!known ? <option value={family}>{family}</option> : null}
           {fonts.families.length ? (

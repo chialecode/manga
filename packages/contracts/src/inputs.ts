@@ -19,7 +19,7 @@ import { UpdateCommandInputs } from "./update.ts";
 import { OrdinalSchema } from "./media.ts";
 import { PACKAGE_ROW_KINDS } from "./library-package.ts";
 import { LOCATION_PARTITIONS } from "./paths.ts";
-import { NoteBlockSchema, NOTE_TAG_MAX, ReadingStylePatchSchema, ShellPanelSchema } from "./reading.ts";
+import { NoteBlockSchema, NOTE_TAG_MAX, ReadingStylePatchSchema, ShellPanelSchema, WindowPreferenceSchema } from "./reading.ts";
 import { RailPatchSchema } from "./sidebar.ts";
 import { ContextIdSchema } from "./workspace-state.ts";
 
@@ -196,6 +196,7 @@ export const CommandInputs = {
     dock: ShellPanelSchema.partial().optional(),
     /** What is named is replaced; a view named in `open` takes the list it is given. */
     rail: RailPatchSchema.optional(),
+    window: WindowPreferenceSchema.partial().optional(),
     reading: ReadingStylePatchSchema.optional(),
   }).strict(),
   "connections.list": z.object({}).strict(),
@@ -214,8 +215,10 @@ export const CommandInputs = {
   }).strict(),
   "connections.test": z.object({
     connectionId: id,
-    capability: z.enum(["text", "tools", "streaming", "transcription", "embedding", "vision"]),
+    capability: z.enum(["text", "tools", "streaming", "transcription", "embedding", "vision", "speech", "search"]),
   }).strict(),
+  /** Searches the web with the configured search service (计划 4.5); for the Agent only when the person ticked "联网搜索" for the task. */
+  "web.search": z.object({ query: z.string().min(1).max(2000), count: z.number().int().min(1).max(10).optional(), connectionId: id.optional() }).strict(),
   "connections.delete": z.object({ connectionId: id }).strict(),
   /** Brings an audio file into the folder of a work (A-79) and transcribes the copy; the original is left where it is. */
   "library.transcribeAudio": z.object({
@@ -246,8 +249,8 @@ export const CommandInputs = {
     captureSessionIds: z.array(id).max(3).optional(),
     /** Stills prepared with `material.region` / `material.frame`; at most four. */
     imageMaterialIds: z.array(id).max(4).optional(),
-    /** Opt-in commands enabled for this run only (`metadata.search`, `semantic.search`, `webpage.fetch`). */
-    allowCommands: z.array(z.enum(["metadata.search", "semantic.search", "webpage.fetch"])).max(3).optional(),
+    /** Opt-in commands enabled for this run only (`metadata.search`, `semantic.search`, `webpage.fetch`, `web.search`: "联网搜索", 计划 4.4). */
+    allowCommands: z.array(z.enum(["metadata.search", "semantic.search", "webpage.fetch", "web.search"])).max(4).optional(),
     /** Set when the message was made by a quick task: the chat shows the task as a tag and the debug panel names it. The task changes nothing about what the run may use. */
     quickTask: z.object({ id: id.nullable(), name: z.string().min(1).max(80) }).strict().optional(),
   }).strict(),

@@ -16,52 +16,33 @@ import { embedTexts } from "../semantic/http.ts";
 import type { EmbeddingPort } from "../semantic/ports.ts";
 import type { MangaProductApp } from "../product-app.ts";
 import { type ConnectionRow, mimeForAudio } from "../product-helpers.ts";
-import { secretFor } from "./connections.ts";
+import { openConnection, secretFor } from "./connections.ts";
+import { providerAbortReason, providerOf } from "../providers/access.ts";
+import { recordServiceUse } from "../providers/usage.ts";
+import { dialectOf } from "../providers/registry.ts";
+import { escapeLike } from "../shared/utils.ts";
 import { createDraftNote } from "./notes.ts";
+import type { CoreCommandHost } from "./shared.ts";
 
 /** What these commands use of the application. */
-export type VoiceHost = Pick<
+export type VoiceHost = CoreCommandHost & Pick<
   MangaProductApp,
   | "asrEngine"
   | "asrModels"
-  | "assertWritable"
   | "bangumiClient"
   | "closed"
-  | "covers"
-  | "debugContext"
   | "dictation"
   | "dictationHistory"
   | "dictationLearn"
-  | "grantOf"
   | "grants"
-  | "interruptRuns"
-  | "layout"
-  | "listModules"
   | "localAsr"
   | "media"
-  | "notify"
-  | "pendingRecoveryJobs"
   | "polisher"
   | "projects"
-  | "publicLayout"
-  | "queryLog"
-  | "quickTasks"
   | "resolveCaptureEngine"
   | "resolveDictationEngine"
-  | "resolvePath"
   | "resolvePathFor"
-  | "runtime"
-  | "scanAbort"
-  | "screenshots"
-  | "sealed"
-  | "secrets"
-  | "setModule"
-  | "store"
-  | "trace"
-  | "uiFacets"
-  | "vault"
   | "voice"
-  | "workFolders"
 >;
 
 export function resolveSyncExternalAsrConnection(
@@ -88,18 +69,22 @@ export function resolveSyncExternalAsrConnection(
 }
 
 export async function resolveExternalAsrConnection(
-  app: Pick<MangaProductApp, "store" | "vault" | "secrets">,
+  app: Pick<MangaProductApp, "store" | "vault" | "secrets" | "providers">,
   connectionId: string,
 ): Promise<ExternalAsrConnectionConfig | null> {
   const row = app.store.sqlite
     .prepare("SELECT * FROM provider_connections WHERE id = ? AND purpose = 'transcription'")
     .get(connectionId) as (ConnectionRow & { label?: string }) | undefined;
   if (!row) return null;
+  // A connection from a provider whose plugin is off makes no request (计划 4.1): the transcription fails with the reason, and no other service is tried.
+  await providerOf(app, row);
   const verified = JSON.parse(String(row.verified_capabilities_json || "[]")) as string[];
   const profile = effectiveProfile(row.profile_json, verified);
   const settings = readRecordingSettings(app.store);
   const apiKey = row.credential_ref ? ((await readCredential(app, row.credential_ref)) ?? "") : "";
   return {
+    // The seconds the provider counted, for the usage page (计划 4.8).
+    ...(row.account_id ? { onServiceUse: (use: { seconds: number }) => recordServiceUse(app, { connectionId: row.id, modelId: row.model_id, service: "transcription", task: "transcription", unit: "second", quantity: use.seconds, status: "ok" }) } : {}),
     id: row.id,
     name: row.label,
     baseUrl: row.base_url,
@@ -111,7 +96,7 @@ export async function resolveExternalAsrConnection(
   };
 }
 
-export function llmPort(app: Pick<MangaProductApp, "store" | "vault" | "secrets" | "assertWritable" | "covers" | "debugContext" | "grantOf" | "interruptRuns" | "layout" | "listModules" | "notify" | "pendingRecoveryJobs" | "publicLayout" | "queryLog" | "quickTasks" | "resolvePath" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "setModule" | "trace" | "uiFacets" | "workFolders">): LlmPort {
+export function llmPort(app: CoreCommandHost): LlmPort {
   return {
     resolve: (connectionId) => {
       const row = (connectionId
@@ -120,15 +105,27 @@ export function llmPort(app: Pick<MangaProductApp, "store" | "vault" | "secrets"
       return row?.credential_ref ? { id: row.id, model: row.model_id, timeoutMs: row.timeout_ms } : null;
     },
     complete: async (connection, request) => {
-      const { row, apiKey } = await secretFor(app, connection.id, ["text", "vision"]);
-      const answer = await completeText(row.protocol as "openai-responses" | "openai-chat-completions", row.base_url, apiKey, {
-        model: row.model_id,
-        messages: [{ role: "system", content: request.system }, { role: "user", content: request.user }],
-        temperature: request.temperature,
-        signal: request.signal,
-        timeoutMs: request.timeoutMs ?? row.timeout_ms,
-      }, (row.runtime === "pi" ? "pi" : "native") as AiRuntimeId);
-      return answer.text;
+      const opened = await openConnection(app, connection.id, ["text", "vision"], request.signal);
+      const { row, apiKey } = opened;
+      // The small background tasks (polishing, naming, summaries) do not think: for DeepSeek, thinking is switched off explicitly (计划 4.3, Q-41 第 5 项).
+      const dialect = dialectOf(effectiveProfile(row.profile_json), row.base_url);
+      try {
+        const answer = await completeText(row.protocol as "openai-responses" | "openai-chat-completions", row.base_url, apiKey, {
+          model: row.model_id,
+          messages: [{ role: "system", content: request.system }, { role: "user", content: request.user }],
+          temperature: request.temperature,
+          signal: opened.signal,
+          timeoutMs: request.timeoutMs ?? row.timeout_ms,
+          ...(dialect ? { dialect, maxTokensField: "max_tokens" as const } : {}),
+        }, (row.runtime === "pi" ? "pi" : "native") as AiRuntimeId);
+        return answer.text;
+      } catch (error) {
+        const abortedByProvider = providerAbortReason(opened.providerSignal);
+        if (abortedByProvider) throw abortedByProvider;
+        throw error;
+      } finally {
+        opened.release();
+      }
     },
   };
 }
@@ -159,8 +156,16 @@ export function embeddingPort(app: VoiceHost): EmbeddingPort {
     },
     list: () => rows().map((row) => ({ id: row.id, model: row.model_id, label: row.label })),
     embed: async (connection, request) => {
-      const { row, apiKey } = await secretFor(app, connection.id, "embedding");
-      return embedTexts(row.base_url, apiKey, { model: row.model_id, inputs: request.inputs, signal: request.signal, timeoutMs: row.timeout_ms });
+      const opened = await openConnection(app, connection.id, "embedding", request.signal);
+      try {
+        return await embedTexts(opened.row.base_url, opened.apiKey, { model: opened.row.model_id, inputs: request.inputs, signal: opened.signal ?? request.signal, timeoutMs: opened.row.timeout_ms });
+      } catch (error) {
+        const abortedByProvider = providerAbortReason(opened.providerSignal);
+        if (abortedByProvider) throw abortedByProvider;
+        throw error;
+      } finally {
+        opened.release();
+      }
     },
   };
 }
@@ -223,7 +228,7 @@ export function voiceModule(app: VoiceHost): MangaModule {
         const value = call(envelope, () => input<{ sessionId: string; reason?: "user"; durationMs?: number }>(envelope));
         const view = await app.voice.stop(value);
         // Per-chunk request records are of no use once the recording has ended.
-        app.store.sqlite.prepare("DELETE FROM command_requests WHERE command_id IN ('capture.append','capture.event') AND idempotency_key LIKE ? ESCAPE '\\'").run(`cap:${value.sessionId.replace(/[\\%_]/g, "\\$&")}:%`);
+        app.store.sqlite.prepare("DELETE FROM command_requests WHERE command_id IN ('capture.append','capture.event') AND idempotency_key LIKE ? ESCAPE '\\'").run(`cap:${escapeLike(value.sessionId)}:%`);
         return view;
       });
       reg("capture.status", (envelope) => call(envelope, () => app.voice.status(input<{ sessionId?: string }>(envelope).sessionId), { write: false }));
@@ -291,15 +296,15 @@ export function voiceModule(app: VoiceHost): MangaModule {
       reg("dictation.stop", async (envelope) => {
         const value = call(envelope, () => input<{ dictationId: string; reason?: DictationStopReason }>(envelope));
         const snap = await app.dictation.stop(value);
-        app.store.sqlite.prepare("DELETE FROM command_requests WHERE command_id = 'dictation.append' AND idempotency_key LIKE ? ESCAPE '\\'").run(`dic:${value.dictationId.replace(/[\\%_]/g, "\\$&")}:%`);
+        app.store.sqlite.prepare("DELETE FROM command_requests WHERE command_id = 'dictation.append' AND idempotency_key LIKE ? ESCAPE '\\'").run(`dic:${escapeLike(value.dictationId)}:%`);
         return snap;
       });
       reg("dictation.cancel", (envelope) => call(envelope, () => {
         const value = input<{ dictationId?: string }>(envelope);
         const activeId = value.dictationId ?? app.dictation.status()?.dictationId;
         const snap = app.dictation.cancel(value.dictationId);
-        if (activeId) {
-          app.store.sqlite.prepare("DELETE FROM command_requests WHERE command_id = 'dictation.append' AND idempotency_key LIKE ? ESCAPE '\\'").run(`dic:${activeId.replace(/[\\%_]/g, "\\$&")}:%`);
+        if (activeId && app.layout.writable && !app.sealed) {
+          app.store.sqlite.prepare("DELETE FROM command_requests WHERE command_id = 'dictation.append' AND idempotency_key LIKE ? ESCAPE '\\'").run(`dic:${escapeLike(activeId)}:%`);
         }
         return snap ?? { cancelled: false };
       }, { write: false }));
@@ -386,7 +391,7 @@ export function voiceModule(app: VoiceHost): MangaModule {
         return out;
       });
 
-      // The voice dictionary: terms for every recording and terms for one work (A-66, M12).
+      // The voice dictionary: terms for every recording and terms for one work (A-66, A-130).
       const dictionary = app.voice.dictionary;
       reg("dictionary.list", (envelope) => call(envelope, () => {
         const value = input<{ scope?: "global" | "work"; workId?: string }>(envelope);
@@ -491,6 +496,7 @@ export function voiceModule(app: VoiceHost): MangaModule {
 export type TranscribeFileHost = Pick<
   MangaProductApp,
   | "assertWritable"
+  | "providers"
   | "covers"
   | "debugContext"
   | "grantOf"
@@ -567,6 +573,10 @@ export async function transcribeAuthorizedFile(app: TranscribeFileHost, envelope
     }
   }
 
+  if (!app.asrEngine) {
+    throw new MangaError("CAPABILITY_UNAVAILABLE", "语音识别引擎尚未初始化");
+  }
+
   // The audio comes into the folder of the work first and is transcribed from there; the file the person picked is not touched (A-79).
   const copy = app.workFolders.put(input.workId, { kind: "audio-import", fileName: path.basename(original), sourcePath: original, copy: true });
   const mimeType = mimeForAudio(copy.path);
@@ -575,10 +585,6 @@ export async function transcribeAuthorizedFile(app: TranscribeFileHost, envelope
   if ((selection.kind === "local" || settings.gtcrnDenoise) && mimeType !== "audio/wav") {
     audioBytes = new Uint8Array(await decodeRetainedRange(app.media.ffmpeg, copy.path, 0, 3_600_000, signal));
     effectiveMime = "audio/pcm";
-  }
-
-  if (!app.asrEngine) {
-    throw new MangaError("CAPABILITY_UNAVAILABLE", "语音识别引擎尚未初始化");
   }
 
   const vocabularyTerms = app.voice.dictionary.ordered(input.workId).map((item) => item.term);

@@ -4,7 +4,10 @@ import "@xyflow/react/dist/style.css";
 import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, ArrowDownToLine, ArrowUpToLine, BoxSelect, Group, Hand, Grid3x3, Link2, Plus, Redo2, StickyNote, Trash2, Type, Undo2, Ungroup } from "lucide-react";
 import type { WhiteboardActionInput } from "@manga/contracts/canvas";
 import { attempt } from "../../../lib/api.ts";
+import { isImeEvent, isTypingTarget } from "../../../lib/ime.ts";
+import { useAsyncGuard } from "../../../hooks/use-async-guard.ts";
 import { DocWorkspace, type DocKind } from "./doc-workspace.tsx";
+import { useCanvasOpQueue } from "./use-canvas-op-queue.ts";
 import type { ProjectTabContext } from "../project-page.tsx";
 import { BoardContext, WHITEBOARD_NODE_TYPES, type BoardActions, type OpenTarget } from "./whiteboard-nodes.tsx";
 import { RefPicker, type PickedRef } from "./ref-picker.tsx";
@@ -16,11 +19,6 @@ import {
 type BoardSummary = { id: string; title: string; nodes: number; edges: number; updatedAt: string };
 type Action = WhiteboardActionInput;
 type EditResult = WbDelta & { created: string[] };
-
-const isTyping = (target: EventTarget | null): boolean => {
-  const element = target as HTMLElement | null;
-  return Boolean(element && (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable));
-};
 
 const BOARD_KIND: DocKind<BoardSummary> = {
   prefix: "whiteboard", item: "board", focusKind: "whiteboard",
@@ -54,7 +52,8 @@ function BoardView({ ctx, boardId, onChanged }: { ctx: ProjectTabContext; boardI
   const [editId, setEditId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const { enqueue } = useCanvasOpQueue();
+  const guard = useAsyncGuard();
   const nodesRef = useRef<FlowNode[]>([]);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const dragGroup = useRef<{ id: string; start: { x: number; y: number }; members: Map<string, { x: number; y: number }> } | null>(null);
@@ -70,41 +69,39 @@ function BoardView({ ctx, boardId, onChanged }: { ctx: ProjectTabContext; boardI
   }, [setNodes, setEdges]);
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<WbDoc>("whiteboard.get", { boardId });
+    if (!guard.isCurrent(token)) return;
     if (!result.ok) { onError.current(result.error.message); return; }
     setDoc(result.value);
     setNodes(flowNodesOf(result.value));
     setEdges(result.value.edges.map(toFlowEdge));
     setOps(result.value.ops);
-  }, [boardId, setNodes, setEdges]);
+  }, [boardId, setNodes, setEdges, guard]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => () => clearTimeout(viewportTimer.current), []);
 
   /** One edit at a time, in the order they were made, so a drag that ends right after a new card cannot overtake it. */
-  const commit = useCallback((actions: Action[], label?: string): Promise<EditResult | null> => {
-    const run = async (): Promise<EditResult | null> => {
+  const commit = useCallback((actions: Action[], label?: string): Promise<EditResult | null> => (
+    enqueue(async () => {
       const result = await attempt<EditResult>("whiteboard.edit", { boardId, actions, ...(label ? { label } : {}) });
+      if (!guard.isAlive()) return null;
       if (!result.ok) { onError.current(result.error.message); await load(); return null; }
       applyDelta(result.value);
       onChanged();
       return result.value;
-    };
-    const next = queue.current.then(run, run);
-    queue.current = next.catch(() => undefined);
-    return next;
-  }, [boardId, applyDelta, load, onChanged]);
+    })
+  ), [boardId, applyDelta, load, onChanged, enqueue, guard]);
 
   const step = useCallback(async (direction: "undo" | "redo") => {
-    const run = async () => {
+    await enqueue(async () => {
       const result = await attempt<WbDelta>(`whiteboard.${direction}`, { boardId });
+      if (!guard.isAlive()) return;
       if (!result.ok) { if (result.error.code !== "NOT_FOUND") onError.current(result.error.message); await load(); return; }
       applyDelta(result.value);
       onChanged();
-    };
-    const next = queue.current.then(run, run);
-    queue.current = next.catch(() => undefined);
-    await next;
-  }, [boardId, applyDelta, load, onChanged]);
+    });
+  }, [boardId, applyDelta, load, onChanged, enqueue, guard]);
 
   const centerPoint = useCallback(() => {
     const rect = wrapper.current?.getBoundingClientRect();
@@ -201,16 +198,6 @@ function BoardView({ ctx, boardId, onChanged }: { ctx: ProjectTabContext; boardI
     void addNode("card", { x: round(point.x - 120), y: round(point.y - 30) });
   }, [flow, addNode]);
 
-  const onKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (isTyping(event.target)) return;
-    const mod = event.ctrlKey || event.metaKey;
-    const key = event.key.toLowerCase();
-    if (mod && key === "z") { event.preventDefault(); void step(event.shiftKey ? "redo" : "undo"); }
-    else if (mod && key === "y") { event.preventDefault(); void step("redo"); }
-    else if (mod && key === "g") { event.preventDefault(); void groupSelected(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, selection]);
-
   // ---- the selection's toolbar ----
 
   const selectedNodes = useMemo(() => nodes.filter((node) => selection.nodes.includes(node.id)), [nodes, selection.nodes]);
@@ -222,6 +209,17 @@ function BoardView({ ctx, boardId, onChanged }: { ctx: ProjectTabContext; boardI
   function groupSelected() {
     if (pickable.length) void commit([{ type: "group", ids: pickable.map((node) => node.id) }]);
   }
+  const groupSelectedRef = useRef(groupSelected);
+  groupSelectedRef.current = groupSelected;
+
+  const onKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (isImeEvent(event) || isTypingTarget(event.target)) return;
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    if (mod && key === "z") { event.preventDefault(); void step(event.shiftKey ? "redo" : "undo"); }
+    else if (mod && key === "y") { event.preventDefault(); void step("redo"); }
+    else if (mod && key === "g") { event.preventDefault(); groupSelectedRef.current(); }
+  }, [step]);
   const arrange = (action: Action) => { void commit([action]); };
   const ids = selection.nodes;
   const opLabel = (label: string | null) => (label ? t(opLabelKey(label) as never) : "");
@@ -275,7 +273,7 @@ function BoardView({ ctx, boardId, onChanged }: { ctx: ProjectTabContext; boardI
               <span className="sr-only">{t("whiteboard.edgeLabel")}</span>
               <input data-testid="whiteboard-edge-label" key={singleEdge.id} defaultValue={typeof singleEdge.label === "string" ? singleEdge.label : ""} placeholder={t("whiteboard.edgeLabel")} maxLength={200}
                 onBlur={(event) => { if (event.target.value !== (typeof singleEdge.label === "string" ? singleEdge.label : "")) void commit([{ type: "updateEdge", id: singleEdge.id, label: event.target.value }]); }}
-                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
+                onKeyDown={(event) => { if (isImeEvent(event)) return; if (event.key === "Enter") event.currentTarget.blur(); }} />
             </label>
           ) : null}
           <span className="wb-status detail-muted" data-testid="whiteboard-status" aria-live="polite">{ids.length ? t("whiteboard.selected", { count: ids.length }) : t("whiteboard.counts", { nodes: nodes.length, edges: edges.length })}</span>

@@ -19,9 +19,12 @@ function PdfCanvas(props: { url: string; pageNumber: number; width: number; heig
       try {
         // PDF.js is loaded with the first PDF page, so a reader of images (and light open, which has no PDF) never carries it.
         const { MAX_CANVAS_PIXELS, openPdfDocument } = await import("./pdf-doc.ts");
+        if (dead) return;
         const doc = await openPdfDocument(props.url);
-        page = await doc.getPage(Math.min(Math.max(props.pageNumber, 1), doc.numPages));
-        if (dead || !canvas.current) return;
+        if (dead) return;
+        const loaded = await doc.getPage(Math.min(Math.max(props.pageNumber, 1), doc.numPages));
+        if (dead || !canvas.current) { loaded.cleanup(); return; }
+        page = loaded;
         const base = page.getViewport({ scale: 1 });
         const ratio = window.devicePixelRatio || 1;
         let scale = (props.width / base.width) * ratio;
@@ -129,6 +132,7 @@ export function ComicPageView(props: {
             finish(event);
           }}
           onPointerCancel={() => { start.current = null; setLive(null); }}
+          onLostPointerCapture={() => { start.current = null; setLive(null); }}
         />
       ) : null}
     </div>

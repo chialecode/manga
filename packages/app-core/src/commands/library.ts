@@ -23,9 +23,10 @@ import { contextSnapshot } from "./agent.ts";
 import { creativePackageHooks } from "./creative.ts";
 import { transcribeAuthorizedFile } from "./voice.ts";
 import { indexExternalRoot } from "./inventory.ts";
+import type { AgentCommandHost } from "./shared.ts";
 
 /** What these commands use of the application. */
-export type LibraryHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "builtinDanmakuCredentials" | "call" | "closed" | "comics" | "conversations" | "covers" | "danmaku" | "debugContext" | "drafts" | "embeds" | "exportAbort" | "extras" | "followFiles" | "grantOf" | "grants" | "interruptRuns" | "issueAgentGrant" | "layout" | "listModules" | "log" | "materials" | "media" | "metadata" | "mindmaps" | "notify" | "parseGeneration" | "parseWorker" | "parseWorkerPath" | "pendingRecoveryJobs" | "pluginRuntime" | "plugins" | "projects" | "proposals" | "publicLayout" | "queryLog" | "quickTasks" | "requireModule" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runAbort" | "runtime" | "scan" | "scanAbort" | "screenshotForTask" | "screenshotVisible" | "screenshots" | "sealed" | "search" | "secrets" | "semantic" | "sessionList" | "setModule" | "settleImportedRecordings" | "sidebar" | "store" | "suggestedQuery" | "trace" | "uiFacets" | "vault" | "videos" | "voice" | "wantParseWorker" | "whiteboards" | "workFolders" | "workspace" | "workspaces">;
+export type LibraryHost = AgentCommandHost & Pick<MangaProductApp, "acquisition" | "drafts" | "embeds" | "exportAbort" | "mindmaps" | "parseWorkerPath" | "pluginRuntime" | "plugins" | "research" | "roughcuts" | "scan" | "screenshotForTask" | "screenshotVisible" | "search" | "semantic" | "sessionList" | "settleImportedRecordings" | "sidebar" | "wantParseWorker" | "whiteboards" | "workspace" | "workspaces">;
 
 export function libraryModule(app: LibraryHost): MangaModule {
   return defineModule({
@@ -341,6 +342,7 @@ export function libraryModule(app: LibraryHost): MangaModule {
       });
       app.runtime.registerCommand("manga.library", "library.paths.add", async (envelope) => {
         ownerOnly(envelope);
+        app.assertWritable();
         const input = envelope.input as { pathHandle: string; mediaKind: "novel" | "comic" | "video"; autoScan?: boolean };
         const directory = app.resolvePathFor(input.pathHandle, ["directory", "import"]);
         const added = await app.scan.addPath({ path: directory, mediaKind: input.mediaKind, autoScan: input.autoScan });
@@ -350,6 +352,7 @@ export function libraryModule(app: LibraryHost): MangaModule {
       });
       app.runtime.registerCommand("manga.library", "library.paths.update", async (envelope) => {
         ownerOnly(envelope);
+        app.assertWritable();
         const input = envelope.input as { pathId: string; mediaKind?: "novel" | "comic" | "video"; autoScan?: boolean; pathHandle?: string };
         // Moving the path comes first: when the new folder does not hold the same files nothing else about the path changes either.
         if (input.pathHandle) {
@@ -363,6 +366,7 @@ export function libraryModule(app: LibraryHost): MangaModule {
       });
       app.runtime.registerCommand("manga.library", "library.paths.remove", async (envelope) => {
         ownerOnly(envelope);
+        app.assertWritable();
         const pathId = (envelope.input as { pathId: string }).pathId;
         // The resources whose file the path held: what was issued for them is withdrawn at once, and the windows showing them are told (A-86).
         const held = (app.store.sqlite.prepare(`SELECT DISTINCT v.resource_id AS id FROM file_locations fl JOIN resource_revisions v ON v.id = fl.resource_revision_id WHERE fl.library_path_id = ?`).all(pathId) as Array<{ id: string }>).map((row) => row.id);
@@ -485,6 +489,7 @@ export function libraryModule(app: LibraryHost): MangaModule {
       });
       app.runtime.registerCommand("manga.library", "library.scan.setSchedule", (envelope) => {
         ownerOnly(envelope);
+        app.assertWritable();
         return { schedule: app.scan.setSchedule(envelope.input as Parameters<ScanService["setSchedule"]>[0]) };
       });
     },

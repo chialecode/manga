@@ -16,6 +16,8 @@ export type ChatViewProps = ChatDeps & {
   dictation?: DictationHandle | null;
   noModel: boolean;
   onSettings: () => void;
+  /** The model, thinking and window the next message goes with (A-137); absent where there is nothing to pick. */
+  modelPicker?: ReactNode;
   onStop: () => void;
   onRetry: (runId: string) => void;
   /** Whether online search can be offered for the next task (the metadata module). */
@@ -24,6 +26,10 @@ export type ChatViewProps = ChatDeps & {
   semantic?: boolean;
   /** Whether webpage fetching can be offered for the next task (the research module is on and the conversation belongs to a project). */
   webpage?: boolean;
+  /** Whether "联网搜索" can be used for the next task (计划 4.4); when not, the item says why. */
+  webSearch?: boolean;
+  /** Whether finished answers can be read aloud (计划 4.7). */
+  readAloud?: boolean;
   resources: Array<{ id: string; title: string }>;
   /** The open resource whose recordings can be taken along, when the voice module is on. */
   recordingsOf?: string | null;
@@ -78,6 +84,7 @@ export function useChatView(props: ChatViewProps) {
     onQuick: (task) => { void chat.runQuick(task); },
     noModel: props.noModel,
     onSettings: props.onSettings,
+    modelPicker: props.modelPicker,
     running: props.running,
     onStop: props.onStop,
     onSend: () => { void chat.send(); },
@@ -87,10 +94,12 @@ export function useChatView(props: ChatViewProps) {
       online: props.online,
       semantic: Boolean(props.semantic),
       webpage: Boolean(props.webpage),
+      webSearch: props.webSearch,
       subtitle: context?.kind === "video",
       allowOnline: composer.allowOnline,
       allowSemantic: Boolean(composer.allowSemantic) && Boolean(props.semantic),
       allowWebpage: Boolean(composer.allowWebpage) && Boolean(props.webpage),
+      allowWebSearch: Boolean(composer.allowWebSearch) && Boolean(props.webSearch),
       subtitleAheadMin: composer.subtitleAheadMin,
       materials: composer.materials.length + composer.noteMaterials.length + composer.recordings.length,
     },
@@ -98,6 +107,7 @@ export function useChatView(props: ChatViewProps) {
     onToggleOnline: () => props.updateComposer((current) => ({ allowOnline: !current.allowOnline })),
     onToggleSemantic: () => props.updateComposer((current) => ({ allowSemantic: !current.allowSemantic })),
     onToggleWebpage: () => props.updateComposer((current) => ({ allowWebpage: !current.allowWebpage })),
+    onToggleWebSearch: () => props.updateComposer((current) => ({ allowWebSearch: !current.allowWebSearch })),
     onSubtitleAhead: (minutes) => props.patchComposer({ subtitleAheadMin: minutes }),
     onMaterials: () => setMaterials(true),
     mic,
@@ -130,6 +140,7 @@ export function useChatView(props: ChatViewProps) {
           onRetry: props.onRetry,
           onOpenTrace: setTraceRun,
           onProposalChanged: () => { void chat.stream.reload(); props.bump(); },
+          readAloud: props.readAloud ?? false,
         }}
       />
       {materials ? (

@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -23,6 +22,7 @@ import {
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import type { FetchLike } from "../metadata/bangumi.ts";
 import type { OperationLog } from "../ops/operation-log.ts";
+import { sha512File, writeFileAtomic } from "../shared/utils.ts";
 import {
   RELEASE_UPDATE_PUBLIC_KEYS,
   checkAppUpdateConfig,
@@ -46,27 +46,8 @@ export const UPDATE_ROLLBACK_RECORD = "rollback-record.json";
 const CACHED_INSTALLER_RECORD = "installer.json";
 const PREVIOUS_DIR = "previous";
 
-function sha512HexOfFile(file: string): string {
-  const hash = createHash("sha512");
-  const fd = fs.openSync(file, "r");
-  try {
-    const buffer = Buffer.alloc(1024 * 1024);
-    for (;;) {
-      const read = fs.readSync(fd, buffer, 0, buffer.length, null);
-      if (read === 0) break;
-      hash.update(buffer.subarray(0, read));
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
-  return hash.digest("hex");
-}
-
 function writeJsonAtomic(file: string, body: unknown): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const staging = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(staging, `${JSON.stringify(body, null, 2)}\n`);
-  fs.renameSync(staging, file);
+  writeFileAtomic(file, `${JSON.stringify(body, null, 2)}\n`);
 }
 
 export const DEFAULT_GITHUB_FEED_URL = "https://github.com/chialecode/manga/releases/latest/download";
@@ -296,7 +277,7 @@ export class UpdateService {
   private recordCachedInstaller(version: string, sha512Hex?: string): void {
     try {
       const file = path.join(this.cacheDir, "installer.exe");
-      writeJsonAtomic(path.join(this.cacheDir, CACHED_INSTALLER_RECORD), { version, sha512Hex: sha512Hex ?? sha512HexOfFile(file) });
+      writeJsonAtomic(path.join(this.cacheDir, CACHED_INSTALLER_RECORD), { version, sha512Hex: sha512Hex ?? sha512File(file, "hex") });
     } catch {
       // Without the record the next update simply offers no one-click way back.
     }
@@ -313,7 +294,7 @@ export class UpdateService {
       const cached = path.join(this.cacheDir, "installer.exe");
       const record = JSON.parse(fs.readFileSync(path.join(this.cacheDir, CACHED_INSTALLER_RECORD), "utf8")) as { version?: string; sha512Hex?: string };
       if (record.version !== this.buildInfo.version || typeof record.sha512Hex !== "string" || !fs.existsSync(cached)) return false;
-      const sha512Hex = sha512HexOfFile(cached);
+      const sha512Hex = sha512File(cached, "hex");
       if (sha512Hex !== record.sha512Hex.toLowerCase()) return false;
       fs.rmSync(previousDir, { recursive: true, force: true });
       fs.mkdirSync(previousDir, { recursive: true });
@@ -599,9 +580,13 @@ export class UpdateService {
       });
       if (![301, 302, 303, 307, 308].includes(response.status)) return response;
       const location = response.headers.get("location");
-      await response.body?.cancel();
+      void response.body?.cancel().catch(() => undefined);
       if (!location) throw new MangaError("UPDATE_VERIFY_FAILED", "更新源重定向无效，已保留当前版本");
-      url = new URL(location, url).href;
+      try {
+        url = new URL(location, url).href;
+      } catch {
+        throw new MangaError("UPDATE_VERIFY_FAILED", "更新源重定向无效，已保留当前版本");
+      }
     }
     throw new MangaError("UPDATE_VERIFY_FAILED", "更新源重定向次数过多，已保留当前版本");
   }
@@ -892,43 +877,71 @@ export class UpdateService {
           try {
             const oldBlockMap = await this.loadOldBlockMap(oldBlockMapPath, baseHref);
             const nbResp = await this.fetchSecure(newBlockMapUrl);
-            if (oldBlockMap && nbResp.ok) {
+            if (!oldBlockMap || !nbResp.ok) {
+              void nbResp.body?.cancel().catch(() => undefined);
+            } else {
               newBlockMapBytes = Buffer.from(await nbResp.arrayBuffer());
               const newBlockMap = parseBlockMapBytes(newBlockMapBytes);
               const plan = computeBlockMapPlan(oldBlockMap, newBlockMap);
               if (plan.totalBytes === manifest.size && plan.copyBytes > 0) {
-                const oldBytes = fs.readFileSync(oldInstallerPath);
-                const targetChunks: Buffer[] = [];
+                const oldFd = fs.openSync(oldInstallerPath, "r");
+                const outFd = fs.openSync(partPath, "w");
                 let fetchedBytes = 0;
-                for (const op of plan.operations) {
-                  if (op.kind === "copy") {
-                    if (op.end > oldBytes.length) throw new Error("old installer shorter than blockmap copy range");
-                    targetChunks.push(oldBytes.subarray(op.start, op.end));
-                  } else {
-                    const rangeResp = await this.fetchSecure(installerUrl, {
-                      headers: {
-                        Range: `bytes=${op.start}-${op.end - 1}`,
-                      },
-                    });
-                    if (!rangeResp.ok) throw new Error(`range request failed: ${rangeResp.status}`);
-                    const chunk = Buffer.from(await rangeResp.arrayBuffer());
-                    if (chunk.length !== op.end - op.start) {
-                      throw new Error(`range length mismatch: expected ${op.end - op.start}, got ${chunk.length}`);
+                try {
+                  const oldSize = fs.fstatSync(oldFd).size;
+                  const copyBuf = Buffer.allocUnsafe(1024 * 1024);
+                  let lastEmit = 0;
+                  for (const op of plan.operations) {
+                    if (op.kind === "copy") {
+                      if (op.end > oldSize) throw new Error("old installer shorter than blockmap copy range");
+                      let pos = op.start;
+                      while (pos < op.end) {
+                        const toRead = Math.min(copyBuf.length, op.end - pos);
+                        const n = fs.readSync(oldFd, copyBuf, 0, toRead, pos);
+                        if (n <= 0) throw new Error("unexpected EOF reading old installer");
+                        fs.writeSync(outFd, copyBuf, 0, n);
+                        pos += n;
+                      }
+                    } else {
+                      const rangeResp = await this.fetchSecure(installerUrl, {
+                        headers: {
+                          Range: `bytes=${op.start}-${op.end - 1}`,
+                        },
+                      });
+                      if (!rangeResp.ok) {
+                        void rangeResp.body?.cancel().catch(() => undefined);
+                        throw new Error(`range request failed: ${rangeResp.status}`);
+                      }
+                      const chunk = Buffer.from(await rangeResp.arrayBuffer());
+                      if (chunk.length !== op.end - op.start) {
+                        throw new Error(`range length mismatch: expected ${op.end - op.start}, got ${chunk.length}`);
+                      }
+                      fs.writeSync(outFd, chunk);
+                      fetchedBytes += chunk.length;
+                      this.downloadedBytes = fetchedBytes;
+                      const now = this.now();
+                      if (now - lastEmit >= 100) {
+                        lastEmit = now;
+                        this.emitStatus();
+                      }
                     }
-                    targetChunks.push(chunk);
-                    fetchedBytes += chunk.length;
-                    this.downloadedBytes = fetchedBytes;
-                    this.emitStatus();
                   }
+                } finally {
+                  fs.closeSync(outFd);
+                  fs.closeSync(oldFd);
                 }
-                const assembled = Buffer.concat(targetChunks);
-                fs.writeFileSync(finalPath, assembled);
+                fs.renameSync(partPath, finalPath);
                 this.downloadedBytes = fetchedBytes;
                 this.usedDifferential = true;
                 completedDifferentially = true;
+                this.emitStatus();
               }
             }
-          } catch {
+          } catch (diffErr) {
+            try { fs.rmSync(partPath, { force: true }); } catch { /* ignore */ }
+            if (this.disposed || (diffErr instanceof MangaError && diffErr.code === "UPDATE_VERIFY_FAILED")) {
+              throw diffErr;
+            }
             // Fall back to full / resumed download (计划 3.1, 4.3).
             completedDifferentially = false;
           }
@@ -1062,12 +1075,13 @@ export class UpdateService {
 
     const response = await this.fetchSecure(url, { headers });
     if (!response.ok) {
+      void response.body?.cancel().catch(() => undefined);
       throw new Error(`download HTTP ${response.status}`);
     }
 
     const isPartial = response.status === 206 && existingSize > 0;
     if (response.status === 206 && response.headers.get("content-range") !== `bytes ${existingSize}-${expectedSize - 1}/${expectedSize}`) {
-      await response.body?.cancel();
+      void response.body?.cancel().catch(() => undefined);
       throw new MangaError("UPDATE_VERIFY_FAILED", UPDATE_ERROR_MESSAGES.UPDATE_VERIFY_FAILED);
     }
     const baseBytes = isPartial ? existingSize : 0;
@@ -1077,19 +1091,33 @@ export class UpdateService {
       const flags = isPartial ? "a" : "w";
       const fd = fs.openSync(partPath, flags);
       let received = baseBytes;
+      let finished = false;
+      let lastEmitAt = 0;
+      let lastEmittedBytes = 0;
       try {
         for (;;) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            finished = true;
+            break;
+          }
           if (value && value.byteLength > 0) {
             fs.writeSync(fd, value);
             received += value.byteLength;
             if (received > expectedSize) throw new MangaError("UPDATE_VERIFY_FAILED", UPDATE_ERROR_MESSAGES.UPDATE_VERIFY_FAILED);
             this.downloadedBytes = received - baseBytes;
+            const now = this.now();
+            if (now - lastEmitAt >= 100 || this.downloadedBytes - lastEmittedBytes >= 256 * 1024) {
+              lastEmitAt = now;
+              lastEmittedBytes = this.downloadedBytes;
+              this.emitStatus();
+            }
           }
         }
       } finally {
         fs.closeSync(fd);
+        if (!finished) void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
       }
     } else {
       const buf = Buffer.from(await response.arrayBuffer());
@@ -1098,7 +1126,7 @@ export class UpdateService {
       } else {
         fs.writeFileSync(partPath, buf);
       }
-      this.downloadedBytes = baseBytes + buf.length;
+      this.downloadedBytes = buf.length;
     }
 
     const finalStat = fs.statSync(partPath);
@@ -1242,6 +1270,14 @@ export class UpdateService {
     if (this.state !== "ready" || !this.downloadedInstallerPath || !this.availableVersion) {
       throw new MangaError("VALIDATION_ERROR", "当前没有已就绪的更新包");
     }
+    if (this.installTriggered) {
+      return {
+        status: "restarting",
+        restarted: true,
+        busyReasons: [],
+        version: this.availableVersion,
+      };
+    }
 
     // Re-verify on disk before executing (计划第 9 节).
     const expectedFileName = this.pendingManifest?.fileName ?? path.basename(this.downloadedInstallerPath);
@@ -1304,6 +1340,11 @@ export class UpdateService {
 
     const previousPendingFrom = this.store.getMeta(META_PENDING_FROM) ?? "";
     const previousPendingNotes = this.store.getMeta(META_PENDING_NOTES) ?? "";
+    const cacheBackupDir = path.join(this.cacheDir, ".restore-tmp");
+    const cachedFiles = ["installer.exe", CACHED_INSTALLER_RECORD, "current.blockmap"] as const;
+    const savedCacheFiles = new Set<string>();
+    let cacheSwapped = false;
+    let createdPrevious = false;
     try {
       await this.onBeforeInstall?.(mode);
       this.lifecycle.signal.throwIfAborted();
@@ -1322,9 +1363,19 @@ export class UpdateService {
       }
 
       // The running version's installer becomes the way back before the new one takes its place in the cache.
-      this.keepPreviousInstaller({ version: receipt.version, schemaVersion: this.targetSchemaVersion, backup });
+      createdPrevious = this.keepPreviousInstaller({ version: receipt.version, schemaVersion: this.targetSchemaVersion, backup });
       try {
         fs.mkdirSync(this.cacheDir, { recursive: true });
+        fs.rmSync(cacheBackupDir, { recursive: true, force: true });
+        fs.mkdirSync(cacheBackupDir, { recursive: true });
+        for (const name of cachedFiles) {
+          const src = path.join(this.cacheDir, name);
+          if (fs.existsSync(src)) {
+            fs.renameSync(src, path.join(cacheBackupDir, name));
+            savedCacheFiles.add(name);
+          }
+        }
+        cacheSwapped = true;
         fs.copyFileSync(receipt.installerPath, path.join(this.cacheDir, "installer.exe"));
         this.recordCachedInstaller(receipt.version, Buffer.from(receipt.sha512, "base64").toString("hex"));
         const pendingBlockMap = path.join(this.pendingDir, "current.blockmap");
@@ -1341,8 +1392,27 @@ export class UpdateService {
 
       const ok = await this.runInstallerFn(receipt.installerPath, args, mode, finalVerification.receipt);
       if (!ok) throw new MangaError("UPDATE_UNAVAILABLE", "无法启动更新安装程序，已保留当前版本");
+      try { fs.rmSync(cacheBackupDir, { recursive: true, force: true }); } catch { /* ignore */ }
       return true;
     } catch (error) {
+      if (cacheSwapped) {
+        for (const name of cachedFiles) {
+          const dst = path.join(this.cacheDir, name);
+          const bak = path.join(cacheBackupDir, name);
+          try {
+            if (savedCacheFiles.has(name) && fs.existsSync(bak)) {
+              fs.rmSync(dst, { force: true });
+              fs.renameSync(bak, dst);
+            } else {
+              fs.rmSync(dst, { force: true });
+            }
+          } catch { /* best-effort rollback */ }
+        }
+      }
+      if (createdPrevious) {
+        try { fs.rmSync(path.join(this.cacheDir, PREVIOUS_DIR), { recursive: true, force: true }); } catch { /* ignore */ }
+      }
+      try { fs.rmSync(cacheBackupDir, { recursive: true, force: true }); } catch { /* ignore */ }
       this.installTriggered = false;
       if (this.disposed) return false;
       this.store.setMeta(META_PENDING_FROM, previousPendingFrom);

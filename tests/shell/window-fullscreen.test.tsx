@@ -95,7 +95,8 @@ describe("AT-89 window full screen: the reader fills the application window", ()
     fireEvent.click(screen.getByTestId("video-window-fullscreen"));
     expect(screen.queryByTestId("shell-sidebar-toggle")).toBeNull();
     expect(screen.queryByTestId("shell-dock-toggle")).toBeNull();
-    expect(screen.getByTestId("shell-top").contains(screen.getByTestId("menubar"))).toBe(true);
+    expect(screen.getByTestId("shell-top").contains(screen.getByTestId("immersive-exit"))).toBe(true);
+    expect(screen.queryByTestId("menubar")).toBeNull();
     // The tab bar is out of the way too: the reader is the only thing on the window.
     expect(readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8")).toMatch(/data-immersive="true"\] \.dv-tabs-and-actions-container \{ display: none; \}/);
     fireEvent.click(screen.getByTestId("immersive-exit"));
@@ -149,14 +150,13 @@ describe("AT-89 window full screen: the reader fills the application window", ()
     installHost();
     await openVideo();
     fireEvent.click(screen.getByTestId("video-window-fullscreen"));
-    // The top floats; one of its menus is open: Esc closes the menu and the window stays full.
-    fireEvent.click(screen.getByTestId("menu-view"));
+    // One of the player's menus is open: Esc closes the menu and the window stays full.
+    fireEvent.click(screen.getByTestId("video-rate"));
     expect(screen.getByRole("menu")).toBeTruthy();
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     expect(root().getAttribute("data-immersive")).toBe("true");
     // Settings is not a reader page: the window is ordinary there and stays ordinary on the way back to the reader tab.
-    fireEvent.click(screen.getByTestId("menu-help"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "日志与资料位置" }));
+    fireEvent.keyDown(window, { key: ",", ctrlKey: true });
     await waitFor(() => expect(screen.getByTestId("settings-nav")).toBeTruthy());
     expect(root().getAttribute("data-immersive")).toBe("false");
     await showTab("合成动画");
@@ -266,7 +266,7 @@ describe("AT-105 window full screen: the top edge of the window is still a place
     expect(screen.queryByTestId("immersive-hotzone")).toBeNull();
     const top = screen.getByTestId("shell-top");
     expect(top.classList.contains("shell-drag")).toBe(true);
-    for (const id of ["menubar", "immersive-exit"]) {
+    for (const id of ["immersive-exit"]) {
       const target = screen.getByTestId(id);
       expect(target.classList.contains("shell-no-drag") || target.closest(".shell-no-drag") !== null, id).toBe(true);
     }
@@ -296,7 +296,8 @@ describe("AT-105 window full screen: the top edge of the window is still a place
     expect(root().getAttribute("data-immersive")).toBe("false");
     expect(screen.queryByTestId("immersive-drag")).toBeNull();
     expect(screen.queryByTestId("immersive-hotzone")).toBeNull();
-    expect(screen.getByTestId("shell-top").getAttribute("data-revealed")).toBe("false");
+    // The floating top is gone; the top there is now is the rail's.
+    expect(screen.getByTestId("shell-top").getAttribute("data-revealed")).toBeNull();
     fireEvent.click(screen.getByTestId("video-window-fullscreen"));
     expect(screen.getByTestId("shell-top").getAttribute("data-revealed")).toBe("false");
     expect(screen.getByTestId("immersive-hotzone")).toBeTruthy();

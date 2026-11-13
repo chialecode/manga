@@ -64,6 +64,7 @@ function decodeName(raw: Buffer | string): string {
 }
 
 type Open = { zip: yauzl.ZipFile; index: ZipIndex; raw: Map<string, yauzl.Entry>; lastUsed: number };
+type Opening = { promise: Promise<Open>; controller: AbortController; waiters: number };
 
 function openZip(file: string): Promise<yauzl.ZipFile> {
   return new Promise((resolve, reject) => {
@@ -139,7 +140,7 @@ function readIndex(zip: yauzl.ZipFile, budget: ZipBudget, signal?: AbortSignal):
  */
 export class ZipPool {
   private readonly open = new Map<string, Open>();
-  private readonly opening = new Map<string, Promise<Open>>();
+  private readonly opening = new Map<string, Opening>();
   private closed = false;
 
   private readonly maxOpen: number;
@@ -150,33 +151,71 @@ export class ZipPool {
     this.budget = budget;
   }
 
+  private waitWithSignal<T>(pending: Opening, signal?: AbortSignal): Promise<T> {
+    if (signal?.aborted) return Promise.reject(new MangaError("CANCELLED", "archive read was cancelled"));
+    pending.waiters += 1;
+    let settled = false;
+    return new Promise<T>((resolve, reject) => {
+      const finish = () => {
+        if (settled) return false;
+        settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        return true;
+      };
+      const onAbort = () => {
+        if (!finish()) return;
+        pending.waiters -= 1;
+        if (pending.waiters <= 0) pending.controller.abort();
+        reject(new MangaError("CANCELLED", "archive read was cancelled"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      pending.promise.then(
+        (value) => { if (finish()) resolve(value as unknown as T); },
+        (error: unknown) => { if (finish()) reject(error); },
+      );
+    });
+  }
+
   private async acquire(file: string, signal?: AbortSignal): Promise<Open> {
     if (this.closed) throw new MangaError("CANCELLED", "archive pool is closed");
-    const stat = fs.statSync(file);
+    if (signal?.aborted) throw new MangaError("CANCELLED", "archive read was cancelled");
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(file);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code === "ENOENT" || code === "ENOTDIR") throw new MangaError("NOT_FOUND", "archive is not available");
+      throw new MangaError("UNSUPPORTED_FORMAT", `archive cannot be opened: ${code ?? "stat failed"}`);
+    }
     const known = this.open.get(file);
     if (known && known.index.size === stat.size && known.index.mtimeMs === stat.mtimeMs) {
       known.lastUsed = Date.now();
       return known;
     }
     if (known) this.drop(file);
-    const pending = this.opening.get(file);
-    if (pending) return pending;
-    const promise = (async () => {
+    const existing = this.opening.get(file);
+    if (existing) return this.waitWithSignal<Open>(existing, signal);
+    const controller = new AbortController();
+    const entry: Opening = { promise: Promise.resolve() as unknown as Promise<Open>, controller, waiters: 0 };
+    entry.promise = (async () => {
       const zip = await openZip(file);
       try {
-        const { entries, raw } = await readIndex(zip, this.budget, signal);
-        const index: ZipIndex = { path: file, size: stat.size, mtimeMs: stat.mtimeMs, entries, byName: new Map(entries.map((entry) => [entry.name, entry])) };
+        if (this.closed) throw new MangaError("CANCELLED", "archive pool is closed");
+        const { entries, raw } = await readIndex(zip, this.budget, controller.signal);
+        if (this.closed) throw new MangaError("CANCELLED", "archive pool is closed");
+        const index: ZipIndex = { path: file, size: stat.size, mtimeMs: stat.mtimeMs, entries, byName: new Map(entries.map((item) => [item.name, item])) };
         const record: Open = { zip, index, raw, lastUsed: Date.now() };
         this.open.set(file, record);
         this.trim();
         return record;
       } catch (error) {
-        zip.close();
+        try { zip.close(); } catch { /* already closed */ }
         throw error;
       }
-    })().finally(() => this.opening.delete(file));
-    this.opening.set(file, promise);
-    return promise;
+    })().finally(() => { if (this.opening.get(file) === entry) this.opening.delete(file); });
+    entry.promise.catch(() => undefined);
+    this.opening.set(file, entry);
+    return this.waitWithSignal<Open>(entry, signal);
   }
 
   private drop(file: string): void {
@@ -216,8 +255,15 @@ export class ZipPool {
       });
     });
     if (signal) {
-      if (signal.aborted) stream.destroy();
-      else signal.addEventListener("abort", () => stream.destroy(), { once: true });
+      if (signal.aborted) {
+        stream.destroy(new MangaError("CANCELLED", "archive read was cancelled"));
+        throw new MangaError("CANCELLED", "archive read was cancelled");
+      }
+      const onAbort = () => stream.destroy(new MangaError("CANCELLED", "archive read was cancelled"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      const cleanup = () => signal.removeEventListener("abort", onAbort);
+      stream.once("close", cleanup);
+      stream.once("end", cleanup);
     }
     return { stream, info };
   }
@@ -231,17 +277,25 @@ export class ZipPool {
     }
     const chunks: Buffer[] = [];
     let total = 0;
-    for await (const chunk of stream) {
-      const buffer = chunk as Buffer;
-      total += buffer.length;
-      if (total > limit) { stream.destroy(); throw new MangaError("UNSUPPORTED_FORMAT", "archive entry exceeds the read budget"); }
-      chunks.push(buffer);
+    try {
+      for await (const chunk of stream) {
+        const buffer = chunk as Buffer;
+        total += buffer.length;
+        if (total > limit) { stream.destroy(); throw new MangaError("UNSUPPORTED_FORMAT", "archive entry exceeds the read budget"); }
+        chunks.push(buffer);
+      }
+    } catch (error) {
+      if (options.signal?.aborted) throw new MangaError("CANCELLED", "archive read was cancelled");
+      if (error instanceof MangaError) throw error;
+      throw new MangaError("UNSUPPORTED_FORMAT", `archive entry cannot be read: ${error instanceof Error ? error.message : String(error)}`);
     }
+    if (options.signal?.aborted) throw new MangaError("CANCELLED", "archive read was cancelled");
     return Buffer.concat(chunks, total);
   }
 
   close(): void {
     this.closed = true;
+    for (const pending of this.opening.values()) pending.controller.abort();
     for (const file of [...this.open.keys()]) this.drop(file);
   }
 }

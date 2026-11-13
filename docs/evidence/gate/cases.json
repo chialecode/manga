@@ -1,17 +1,17 @@
 {
   "status": "passed",
-  "at": "2026-11-13T18:53:22.460Z",
-  "sourceFingerprint": "5e200d35cdf0098a4bcc45afa16dfd0a2c79948a7cbe43293a555f2cde4174c2",
-  "smokeScriptFingerprint": "b2c8e77be997469010ec989d106cb874f233023dcfec344114f7b4e51b4455dc",
+  "at": "2026-11-15T09:31:27.087Z",
+  "sourceFingerprint": "1468c2afba52b2f8a6e569d01afb9e1c516e8d7189ec65bcaeaa7a7ef24ed2ef",
+  "smokeScriptFingerprint": "879490f9b746b3a3d3b4827e028dd11c93805975dc8bdd1c4d5e6205faf033a2",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "c7277cf4a5547e093413e230654d58262c5cbe67302569e4ba1d469b884f892c",
-  "smokeWalkScriptFingerprint": "0ac6e678b9648c801af1f63afe1bf3a748c75a3526eed05908c2d38d8d7226bb",
-  "lockFingerprint": "f66f660c5687fac3a2e0305de6149de2a874d456b2c452a41204271501f8a951",
-  "buildScriptFingerprint": "8d89734043d4054648698ec4d01802964ff9a3f30a08114a4ed7362a59af5cda",
-  "gateScriptFingerprint": "b5b8efb0fa24dc6fbb91e3abab596c2964b11ac511ce8d5f0a9de73efc1febd4",
-  "testScriptFingerprint": "6c4bfbbfd2e16cc5a7680f6239b21cc21eeccffd99cda43bf51df861e2c85212",
-  "packageScriptFingerprint": "681cc0f80c931e687b1419b5a5ca82233cb05e5b2f2135ce2f4baa6f2ffd1ca6",
-  "benchScriptFingerprint": "61ced7ba4b65523a5727540ddb0b417d7f8ac367dfa99e64736b83e9960804ec",
+  "smokeBenchScriptFingerprint": "b9445a0df7293308b0cb9970e0825acbb169375f7a07a9bc39c41814b1217690",
+  "smokeWalkScriptFingerprint": "af435457fc0f21cd0e36553e979217aa08a1dcfb214edf918a364febadf8b54a",
+  "lockFingerprint": "a85080e7e45dcc90f64f147885fb5d5580b67d3c61499090c89e659bf0c9fb6c",
+  "buildScriptFingerprint": "70c356200a71e458f76937bd6d1768e7c69ad620eb20a97576af474183e15b69",
+  "gateScriptFingerprint": "f658816b3c60e3fb79d579de0197a506a333908939da96d1048783691e0f2126",
+  "testScriptFingerprint": "e105b21d221574cac0b5327a5748257cd59998a0f5c13c2a54400e19a5ce49c3",
+  "packageScriptFingerprint": "9ee3d84b61922fc6c8c89c4eb5c7240a01be7add00da30ffe9b4b17b4be52fc9",
+  "benchScriptFingerprint": "3ae24df1f577255ef3ca426dfa38bd49c9e3b033b4b93ac55de249e7b6222e89",
   "installerScriptFingerprint": "e71dac1ced8d95d9c7c00cc8eb5eea061836c9553a34650d7695b69e29f23a09",
   "releaseScriptFingerprint": "305a24bbbd8a8a61ccb9da3d626c5db276597fd63f64ad941bbeab1fed19ccab",
   "generator": "scripts/stage/test.mjs",
@@ -4599,12 +4599,17 @@
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "pages opened outside the app opens only the metadata source's own https subject pages",
+          "name": "pages opened outside the app opens the metadata source's own https subject pages",
           "status": "passed"
         },
         {
           "file": "tests/shell/main-process.test.ts",
-          "name": "pages opened outside the app refuses everything else: other hosts, other schemes, credentials, odd ports, other paths, non-strings",
+          "name": "pages opened outside the app opens the ordinary web pages the app links to: search results, cited sources, a provider's key page",
+          "status": "passed"
+        },
+        {
+          "file": "tests/shell/main-process.test.ts",
+          "name": "pages opened outside the app refuses everything else: other schemes, credentials, odd ports, addresses, this machine and private names, other metadata paths, non-strings",
           "status": "passed"
         },
         {
@@ -18343,11 +18348,6 @@
       "status": "passed",
       "tests": [
         {
-          "file": "tests/voice/voice-commands.test.ts",
-          "name": "recording commands AT-172 keeps recording settings with position-only overlay, migrates legacy 280×84 coordinates, rejects key clashes, and keeps media preferences",
-          "status": "passed"
-        },
-        {
           "file": "tests/shell/main-process.test.ts",
           "name": "AT-172 the floating recording box AT-172 goes to the top right of the main screen at fixed 116×36 when no place was saved",
           "status": "passed"
@@ -18400,6 +18400,11 @@
         {
           "file": "tests/shell/settings-media.test.tsx",
           "name": "settings for media, recording and metadata AT-172 drives the compact overlay DOM across silent, speaking, reduced-motion, and stopping states",
+          "status": "passed"
+        },
+        {
+          "file": "tests/voice/voice-commands.test.ts",
+          "name": "recording commands AT-172 keeps recording settings with position-only overlay, migrates legacy 280×84 coordinates, rejects key clashes, and keeps media preferences",
           "status": "passed"
         }
       ]
@@ -18553,7 +18558,7 @@
         },
         {
           "file": "tests/voice/dictation-integration.test.ts",
-          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-174 / AT-182: runs full dictation stream_replace lifecycle, 24h retranscribe, learn-from-edits loop, and excludes dictation_history from backups & exports",
+          "name": "voice dictation end-to-end integration AT-174 / AT-182: runs full dictation stream_replace lifecycle, 24h retranscribe, learn-from-edits loop, and excludes dictation_history from backups & exports",
           "status": "passed"
         }
       ]
@@ -18654,7 +18659,7 @@
         },
         {
           "file": "tests/voice/dictation-integration.test.ts",
-          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-177: routes audio_transcriptions, chat_input_audio, local ASR + GTCRN denoise across dictation, capture & transcribeAudio with zero cross-engine fallback",
+          "name": "voice dictation end-to-end integration AT-177: routes audio_transcriptions, chat_input_audio, local ASR + GTCRN denoise across dictation, capture & transcribeAudio with zero cross-engine fallback",
           "status": "passed"
         }
       ]
@@ -18701,7 +18706,7 @@
         },
         {
           "file": "tests/voice/dictation-integration.test.ts",
-          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-178: enforces download confirmation, supports pause + HTTP 206 Range resume, cleans staging on checksum mismatch, and unloads active model before delete",
+          "name": "voice dictation end-to-end integration AT-178: enforces download confirmation, supports pause + HTTP 206 Range resume, cleans staging on checksum mismatch, and unloads active model before delete",
           "status": "passed"
         },
         {
@@ -18780,7 +18785,7 @@
         },
         {
           "file": "tests/library/schema-v16-migration.test.ts",
-          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) rolls back on write error inside the migration transaction, matches fresh DB shape, and rejects v17 with API_INCOMPATIBLE",
+          "name": "schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182) rolls back on write error inside the migration transaction, matches fresh DB shape, and rejects v18 with API_INCOMPATIBLE",
           "status": "passed"
         },
         {
@@ -18790,7 +18795,7 @@
         },
         {
           "file": "tests/voice/dictation-integration.test.ts",
-          "name": "voice dictation end-to-end integration (M12 Wave 3A) AT-180 / AT-181: enforces Bangumi 60-request cap & infobox edge cases, syncs PhoneticCorrector incrementally, and enforces PolishService guardrails + OpenCC term protection",
+          "name": "voice dictation end-to-end integration AT-180 / AT-181: enforces Bangumi 60-request cap & infobox edge cases, syncs PhoneticCorrector incrementally, and enforces PolishService guardrails + OpenCC term protection",
           "status": "passed"
         }
       ]
@@ -18894,7 +18899,7 @@
         },
         {
           "file": "tests/voice/dictation-integration.test.ts",
-          "name": "voice dictation end-to-end integration (M12 Wave 3A) Agent Isolation: denies Agent grants on all dictation/asrModel/dictionary commands and leaks zero dictation_history or suggestions in search & context",
+          "name": "voice dictation end-to-end integration Agent Isolation: denies Agent grants on all dictation/asrModel/dictionary commands and leaks zero dictation_history or suggestions in search & context",
           "status": "passed"
         }
       ]

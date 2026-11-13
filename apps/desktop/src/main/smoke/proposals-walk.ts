@@ -7,7 +7,7 @@ import { DrizzleStore, PRODUCT_SCHEMA_VERSION } from "@manga/storage-drizzle";
 import { MangaProductApp, TestVault } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
 import { DRAWN, clickTestId, closeTabs, pressChord, railTo, setField, sleep, waitFrames, waitUntil } from "./driver.ts";
-import { capturePage, caller, ensureDock, js, toRail } from "./common.ts";
+import { callOk as ok, capturePage, caller, ensureDock, js, readSamplePath as sampleDir, toRail, type SmokeCall as Call } from "./common.ts";
 import { waitRun } from "./loop-media.ts";
 
 /**
@@ -21,26 +21,10 @@ import { waitRun } from "./loop-media.ts";
  * - `migrate-v14`: v13 profile backup and migration to v14, second start no-op, newer schema version refused.
  */
 
-type Call = ReturnType<typeof caller>;
 type Seen = { url: string; body: Record<string, unknown> };
 
 const DOCK = `document.querySelector('[data-testid="shell-dock"]')`;
 const HOST = `document.querySelector('[data-testid="context-host"][data-active="true"]')`;
-
-const ok = async <T>(call: Call, commandId: string, input: Record<string, unknown>): Promise<T> => {
-  const result = await call(commandId, input);
-  if (result.status !== "ok") throw new Error(`${commandId}: ${JSON.stringify(result.error ?? null).slice(0, 300)}`);
-  return result.value as T;
-};
-
-function sampleDir(root: string | undefined, id: string): string | null {
-  if (!root) return null;
-  const manifestFile = path.join(root, "manifest.json");
-  if (!fs.existsSync(manifestFile)) return null;
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { samples: Array<{ id: string; path: string; status: string }> };
-  const entry = manifest.samples.find((item) => item.id === id && item.status === "generated");
-  return entry ? path.join(root, entry.path) : null;
-}
 
 function embedVector(text: string): number[] {
   const dim = 768;
@@ -107,7 +91,10 @@ async function startLoopbackServices(handlers: {
   const port = (server.address() as { port: number }).port;
   return {
     url: `http://127.0.0.1:${port}`,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    close: () => new Promise((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    }),
   };
 }
 

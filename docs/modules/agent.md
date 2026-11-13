@@ -4,7 +4,7 @@
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.agent` / Agent / 开发者 |
 | 文档状态 / 实现状态 | 会话/运行循环、即时 runId、材料快照、持久消息/工具检查点、同 run 重试与双 runtime 已接线；停靠栏是聊天窗口、对话标签没有停靠栏、上下文调试面板、快捷任务模板与使用记录（A-47、A-48、A-52）已实现并自检（见[执行状态](../delivery/status.md)）；对话记录可以在设置里删除（A-89）、模型的添加与编辑在弹窗里（A-90）已实现并自检；技能与完整阅读上下文待实现；产品验收为 not-run |
-| 需求 / 设计依据 | AGENT-01—07、MODEL-01、MODEL-04、MODEL-05、AT-49/50、AT-95—AT-97 |
+| 需求 / 设计依据 | AGENT-01—07、MODEL-01、MODEL-04—MODEL-07、SEARCH-03、AT-49/50、AT-184—AT-188、AT-192、AT-193、AT-95—AT-97 |
 | 包与公开入口 | `packages/app-core`、`packages/model-protocol`；`agent.createSession`、`agent.send`、`agent.cancel`、`agent.retry`、`agent.getRun`；另有 `session.stream`、`debug.context`、`quickTasks.list/save/delete/reorder/restore`、`usage.query`（契约见 `packages/contracts/src/inputs-workspace.ts`） |
 
 ## 1. 责任与依赖
@@ -28,6 +28,16 @@ AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历�
 - **任务限制：** 步数与时长上限在“设置 › 智能体”（`agent-settings.ts`，默认 24 步、10 分钟）。
 - **调用追踪：** `agent-trace.ts` 的 `AgentTrace` 在两个运行时共用的提供者适配层记录每次模型请求、工具调用与压缩，写入 `agent_requests`：请求与响应脱敏后压缩保存，每部分最多 256 KiB（超出时存一个说明了截断的 JSON 对象，原大小保留），图片只记媒体类型、字节数、尺寸与短指纹；字段名像密钥的值整个抹去，连接的密钥原文、认证头、令牌形状的文字与本机路径不会出现。可以改为只记大小、时间与状态。命令 `agent.trace.list/get/export/stats/clear`（仅所有者，归设置模块），任务限制与追踪设置经 `settings.getAgent`/`settings.setAgent`；时间线在“设置 › 使用记录”与对话回复的“查看调用记录”。写记录失败不影响任务；进程中断时仍在运行的请求在下次启动标为错误。保留 30 天、最多 500 MB，在启动时、每次任务结束后和改设置时清理；只存本机，不进备份（迁移前的数据库副本也先去掉它）与资料包。
 
+### 提供者、账户与 DeepSeek 对话模型（PLUG-07、MODEL-06、MODEL-07，A-133、A-134）
+
+- **提供者注册表**（`packages/app-core/src/providers/registry.ts`）：启用且受信任的提供者插件的提供者文件；`providers.list` 列出可加入的提供者，`providers.discover` 用密钥按 `GET /models` 读取账户的模型列表（离线或失败时用文件里的目录），`providers.add` 一次加入勾选的模型与服务，`providers.setKey` 改账户的密钥，`providers.deleteAccount` 删除账户与它的连接。这些是所有者命令，不在 Agent 的命令表里。
+- **访问门**（`providers/access.ts`）：每次调用前确认插件仍启用且受信任、地址在声明的主机里，再从保险库取账户的密钥；不满足时以原因拒绝、不发请求；插件停用时进行中的请求被取消（`providerAbortReason`）。
+- **连接**：从提供者加入的连接记下账户与目录里的模型 id，地址与模型不能改成别的；新的用途 `speech`（语音合成）与 `search`（网页搜索）；新加入的连接只在该用途还没有选定时成为默认。
+- **思考**：DeepSeek 方言下两个运行时都显式发送 `thinking: {type}`，推理等级映射为 `low`/`high`/`max`（`deepseekEffort`），关掉思考时不发等级；思考中不发 `temperature` 等无效参数。带工具的一轮里，每个助手消息的 `reasoning_content` 在之后的每次请求里原样带回（缺少时服务返回 400），更早的轮次不带。思考内容随回答保存在 `agent_messages.payload_json`，对话里折叠为“思考过程”。标题等后台小任务关闭思考。
+- **联网搜索**：任务勾选 `web.search` 且所选模型的配置有 `web_search`、方言是 `deepseek` 时，请求在函数工具之外加 `{"type": "deepseek_web_search"}`，`web.search` 工具不再提供；推理等级为关闭时这次改为“低”并在回答上说明（`thinkingRaised`）。流式的 `server_tool_event` 显示为搜索进度，`annotations` 显示为来源列表，`server_tool_calls` 原样保存，下一轮（同一任务的下一步与同一会话的下一个任务）随这条回答带回。计费的搜索次数记入 `service_usage`。PI 运行时下只发起搜索（LOOP-47）。
+- **网页搜索工具**（SEARCH-03）：模型不用内置搜索、配置了网页搜索服务时，勾选“联网搜索”提供 `web.search`（`providers/web-search.ts`）；结果只返回给模型、不保存；命令层在没有勾选时拒绝。
+- **错误**：余额不足（402）、内容被拒（`content_filter`）、流式中途的 `error`、限流与过载分别给出中文原因；费用由提供者文件的价格估算，回答与使用记录标为“估算”并写价格的核对日期。
+
 ## 3. Agent 与界面
 
 来源正文中的指令不能授予权限。模型不能填写 actor、scopeHandle 或磁盘路径。
@@ -46,6 +56,6 @@ AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历�
 
 ## 5. 验证与未决
 
-AT-09/11/12/13/44/49/50 的子场景（`tests/agent/loop.test.ts`、`protocol-faults.test.ts`，`tests/runtime/grants-package-inventory.test.ts`、`location-ownership-idempotency.test.ts`）。真实 API 契约按独立用途读取忽略的本地配置，普通 CI 不联网。A-22 自研/PI 双 runtime 已接入 `completeText`/`streamText`，设置可切换，运行中冻结。不得因子场景通过宣称模块或产品验收完成。AT-64、AT-66、AT-67 与 AT-54/58/59 的结果见[执行状态](../delivery/status.md)；调试面板脱敏、快捷任务渲染与校验、使用记录写入分别有单元测试，打包烟测 `window-walk` 阶段走过聊天窗口、调试面板与快捷任务。
+DeepSeek：`tests/agent/deepseek-thinking.test.ts`（两个运行时的思考开关、等级映射、`reasoning_content` 回传与拒绝、内置搜索的请求与解析、错误分类）、`tests/agent/deepseek-agent.test.ts`（3 步工具循环、联网搜索与下一轮回传、后台任务关思考、插件停用时中止与零请求）、`tests/agent/models-providers.test.tsx`、`tests/research/web-search.test.ts`、`tests/research/usage-services.test.ts`；真实接口 `tests/real/deepseek-contract.test.ts`（只在有密钥文件时运行）。AT-09/11/12/13/44/49/50 的子场景（`tests/agent/loop.test.ts`、`protocol-faults.test.ts`，`tests/runtime/grants-package-inventory.test.ts`、`location-ownership-idempotency.test.ts`）。真实 API 契约按独立用途读取忽略的本地配置，普通 CI 不联网。A-22 自研/PI 双 runtime 已接入 `completeText`/`streamText`，设置可切换，运行中冻结。不得因子场景通过宣称模块或产品验收完成。AT-64、AT-66、AT-67 与 AT-54/58/59 的结果见[执行状态](../delivery/status.md)；调试面板脱敏、快捷任务渲染与校验、使用记录写入分别有单元测试，打包烟测 `window-walk` 阶段走过聊天窗口、调试面板与快捷任务。
 
 `getRun` 返回用户输入、消息检查点与 live text；App 刷新恢复当前 run；重试从已执行工具回执续作。

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { DanmakuItem, DanmakuSettings } from "@manga/contracts/danmaku";
-import { createEngine, type EngineFactory } from "./danmaku-engine.ts";
+import { createEngine, type DanmakuEngine, type EngineFactory } from "./danmaku-engine.ts";
 import { danmakuArea, danmakuMetrics, pictureRect, prepareDanmaku, type Box } from "./danmaku-model.ts";
 
 type Rect = Box;
@@ -64,34 +64,46 @@ export function DanmakuLayer(props: {
   }, [media]);
 
   // What the engine is built from: the comments the settings show, in the video element's clock. Opacity and the area do not need a rebuild.
-  const filterKey = JSON.stringify([settings.scroll, settings.top, settings.bottom, settings.color, settings.merge, settings.blockWords, settings.blockPatterns, settings.sourcesOff]);
+  const { scroll, top, bottom, color, merge, blockWords, blockPatterns, sourcesOff, followRate } = settings;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const filterKey = JSON.stringify([scroll, top, bottom, color, merge, blockWords, blockPatterns, sourcesOff]);
   const prepared = useMemo(
-    () => prepareDanmaku(props.items, settings, props.offsetMs, props.originMs),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.items, filterKey, props.offsetMs, props.originMs],
+    () => prepareDanmaku(props.items, { ...settingsRef.current, scroll, top, bottom, color, merge, blockWords, blockPatterns, sourcesOff }, props.offsetMs, props.originMs),
+    [props.items, scroll, top, bottom, color, merge, blockWords, blockPatterns, sourcesOff, filterKey, props.offsetMs, props.originMs],
   );
   const layer = danmakuArea(stage.width, stage.height, settings.area);
   // The letters by the picture's height; the speed by the layer's width, so the time to cross is the setting's.
   const { fontPx, speedPxPerS } = danmakuMetrics(layer.width, picture.height, settings);
   const pictureRef = useRef(picture);
   pictureRef.current = picture;
-  const { followRate } = settings;
+  const layerRef = useRef(layer);
+  layerRef.current = layer;
+  const engineRef = useRef<DanmakuEngine | null>(null);
+  const canDraw = picture.width >= MIN_SIDE && layer.width >= MIN_SIDE && layer.height >= MIN_SIDE;
 
   const { factory, captureRef } = props;
   useEffect(() => {
     const container = host.current;
     // Without the video's size there is no picture to size the letters by: nothing is drawn.
-    if (!container || !media || !visible || picture.width < MIN_SIDE || layer.width < MIN_SIDE || layer.height < MIN_SIDE) return;
+    if (!container || !media || !visible || !canDraw) return;
     const engine = (factory ?? createEngine)({ container, media, comments: prepared, fontPx, speedPxPerS, followRate });
+    engineRef.current = engine;
     if (captureRef) captureRef.current = () => {
       const canvas = engine.canvas();
-      return canvas ? { canvas, layer: { width: layer.width, height: layer.height }, picture: pictureRef.current } : null;
+      return canvas ? { canvas, layer: { width: layerRef.current.width, height: layerRef.current.height }, picture: pictureRef.current } : null;
     };
     return () => {
+      if (engineRef.current === engine) engineRef.current = null;
       if (captureRef) captureRef.current = null;
       engine.destroy();
     };
-  }, [media, visible, prepared, fontPx, speedPxPerS, followRate, picture.width, layer.width, layer.height, factory, captureRef]);
+  }, [media, visible, prepared, fontPx, speedPxPerS, followRate, canDraw, factory, captureRef]);
+
+  // Changing only the display area height resizes the existing canvas engine instead of clearing active comments.
+  useLayoutEffect(() => {
+    engineRef.current?.resize();
+  }, [layer.width, layer.height]);
 
   return (
     <div

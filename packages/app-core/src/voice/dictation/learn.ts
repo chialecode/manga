@@ -101,7 +101,7 @@ export function extractEditedTermSpan(
 
   // Reject whole-sentence rewrites on multi-clause sentences where almost no surrounding context stayed intact.
   const unchangedChars = prefix + suffix;
-  if (oldChars.length >= 10 && unchangedChars < Math.min(2, Math.floor(oldChars.length * 0.2))) {
+  if (oldChars.length >= 10 && unchangedChars < Math.max(2, Math.floor(oldChars.length * 0.2))) {
     return null;
   }
 

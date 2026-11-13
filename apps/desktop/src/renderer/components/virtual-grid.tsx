@@ -77,17 +77,22 @@ export function VirtualGrid<T>(props: {
     const node = scroller.current;
     const wanted = restore.current;
     if (!node || wanted === null) return;
-    if (node.scrollHeight - node.clientHeight >= wanted || (!props.hasMore && !props.loading && props.items.length > 0)) {
+    if (!props.hasMore && !props.loading) {
+      if (props.items.length > 0) node.scrollTop = wanted;
+      restore.current = null;
+    } else if (node.scrollHeight - node.clientHeight >= wanted) {
       node.scrollTop = wanted;
       restore.current = null;
-    } else if (props.hasMore && !props.loading) props.onLoadMore();
-  });
+    } else if (props.hasMore && !props.loading) {
+      props.onLoadMore();
+    }
+  }, [props.items.length, props.hasMore, props.loading, props.onLoadMore, rows]);
 
   useEffect(() => {
     if (pendingFocus.current === null) return;
     const target = scroller.current?.querySelector<HTMLElement>(`[data-index="${pendingFocus.current}"].work-open, [data-index="${pendingFocus.current}"][data-grid-item]`);
     if (target) { target.focus(); pendingFocus.current = null; }
-  });
+  }, [focusIndex, virtualRows.length]);
 
   function move(next: number) {
     const clamped = Math.max(0, Math.min(props.items.length - 1, next));

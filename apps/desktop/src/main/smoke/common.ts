@@ -3,17 +3,57 @@ import path from "node:path";
 import type { BrowserWindow, Event as ElectronEvent, WebContentsConsoleMessageEventParams } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
 import { createId } from "@manga/contracts";
-import { DRAWN, PICK, clickTestId, trustedClick, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
+import { DRAWN, PICK, clickTestId, pressChord, trustedClick, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
 
 /** What every smoke flow shares: who calls, how a command is issued, how the evidence is written. */
 
 export const actor = { kind: "user" as const, id: "desktop-user" };
 
 export type FlowResult = Record<string, unknown> & { ok: boolean };
+export type SmokeCall = ReturnType<typeof caller>;
+export type SmokeObservation = { name: string; status: "passed" | "failed"; detail: unknown };
 
 /** A command issued as the window's owner, with a fresh idempotency key unless one is given. */
 export function caller(appService: MangaProductApp, grant: string) {
   return (commandId: string, input: Record<string, unknown>, key = createId("smoke")) => appService.call(actor, { commandId, idempotencyKey: key, input }, grant);
+}
+
+/** Issue a smoke command and unwrap its value, throwing a concise diagnostic if it fails. */
+export async function callOk<T>(call: SmokeCall, commandId: string, input: Record<string, unknown>): Promise<T> {
+  const result = await call(commandId, input);
+  if (result.status !== "ok") throw new Error(`${commandId}: ${JSON.stringify(result.error ?? null).slice(0, 300)}`);
+  return result.value as T;
+}
+
+/** Resolve a generated synthetic sample from a samples root's `manifest.json`, or null when unavailable. */
+export function readSamplePath(root: string | undefined, id: string): string | null {
+  if (!root) return null;
+  const manifestFile = path.join(root, "manifest.json");
+  if (!fs.existsSync(manifestFile)) return null;
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { samples: Array<{ id: string; path: string; status: string }> };
+  const entry = manifest.samples.find((item) => item.id === id && item.status === "generated");
+  return entry ? path.join(root, entry.path) : null;
+}
+
+/** Resolve a required generated sample from `manifest.json`, throwing if absent. */
+export function requireSamplePath(root: string, id: string): string {
+  const found = readSamplePath(root, id);
+  if (!found) throw new Error(`sample ${id} is not available`);
+  return found;
+}
+
+/** Record named pass/fail smoke observations and mirror them to stderr. */
+export function makeObserver(prefix: string, maxDetailChars = 700): {
+  observations: SmokeObservation[];
+  observe: (name: string, ok: boolean, detail: unknown) => boolean;
+} {
+  const observations: SmokeObservation[] = [];
+  const observe = (name: string, ok: boolean, detail: unknown) => {
+    observations.push({ name, status: ok ? "passed" : "failed", detail });
+    console.error(`${prefix} ${name}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, maxDetailChars)}`);
+    return ok;
+  };
+  return { observations, observe };
 }
 
 /** Keep the renderer's actual error with the failing smoke step; Electron otherwise returns only "Script failed to execute". */
@@ -31,6 +71,21 @@ export async function js<T>(view: BrowserWindow, code: string): Promise<T> {
   } finally {
     view.webContents.off("console-message", onMessage);
   }
+}
+
+/** Poll a renderer expression until it is truthy; returns its value, or null on timeout. */
+export async function until<T>(view: BrowserWindow, expression: string, timeoutMs = 15_000): Promise<T | null> {
+  return js<T | null>(view, `new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      let value = null;
+      try { value = (${expression}); } catch { value = null; }
+      if (value) resolve(value);
+      else if (Date.now() - started > ${timeoutMs}) resolve(null);
+      else setTimeout(tick, 25);
+    };
+    tick();
+  })`);
 }
 
 /**
@@ -103,11 +158,11 @@ export async function openSettingsPage(view: BrowserWindow, page: string): Promi
   return waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="settings-page-${page}"]'))`, 6000);
 }
 
-/** Back to the workspace from the settings view, with the title bar's back arrow (it walks the pages visited, and the first page leaves); true once the settings view is gone. */
+/** Back to the workspace from the settings view, with Alt + ← (it walks the pages visited, and the first page leaves; A-136); true once the settings view is gone. */
 export async function leaveSettings(view: BrowserWindow): Promise<boolean> {
   for (let step = 0; step < 14; step += 1) {
     if (!(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="settings-area"]'))`))) return true;
-    await clickTestId(view, "nav-back", 1000);
+    await pressChord(view, "Left", ["alt"]);
     await waitFrames(view);
   }
   return waitUntil(view, `!document.querySelector('[data-testid="settings-area"]')`, 3000);

@@ -1,21 +1,21 @@
 {
   "status": "passed",
-  "stage": "m12",
-  "sourceFingerprint": "5e200d35cdf0098a4bcc45afa16dfd0a2c79948a7cbe43293a555f2cde4174c2",
-  "smokeScriptFingerprint": "b2c8e77be997469010ec989d106cb874f233023dcfec344114f7b4e51b4455dc",
+  "stage": "m13",
+  "sourceFingerprint": "1468c2afba52b2f8a6e569d01afb9e1c516e8d7189ec65bcaeaa7a7ef24ed2ef",
+  "smokeScriptFingerprint": "879490f9b746b3a3d3b4827e028dd11c93805975dc8bdd1c4d5e6205faf033a2",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "c7277cf4a5547e093413e230654d58262c5cbe67302569e4ba1d469b884f892c",
-  "smokeWalkScriptFingerprint": "35f236c7c11de47ca86e6c106e61e9bed48c281e54ad613ebbee15a5258575f4",
-  "lockFingerprint": "f66f660c5687fac3a2e0305de6149de2a874d456b2c452a41204271501f8a951",
-  "buildScriptFingerprint": "8d89734043d4054648698ec4d01802964ff9a3f30a08114a4ed7362a59af5cda",
-  "gateScriptFingerprint": "b5b8efb0fa24dc6fbb91e3abab596c2964b11ac511ce8d5f0a9de73efc1febd4",
-  "testScriptFingerprint": "6c4bfbbfd2e16cc5a7680f6239b21cc21eeccffd99cda43bf51df861e2c85212",
-  "packageScriptFingerprint": "681cc0f80c931e687b1419b5a5ca82233cb05e5b2f2135ce2f4baa6f2ffd1ca6",
-  "benchScriptFingerprint": "61ced7ba4b65523a5727540ddb0b417d7f8ac367dfa99e64736b83e9960804ec",
+  "smokeBenchScriptFingerprint": "b9445a0df7293308b0cb9970e0825acbb169375f7a07a9bc39c41814b1217690",
+  "smokeWalkScriptFingerprint": "af435457fc0f21cd0e36553e979217aa08a1dcfb214edf918a364febadf8b54a",
+  "lockFingerprint": "a85080e7e45dcc90f64f147885fb5d5580b67d3c61499090c89e659bf0c9fb6c",
+  "buildScriptFingerprint": "70c356200a71e458f76937bd6d1768e7c69ad620eb20a97576af474183e15b69",
+  "gateScriptFingerprint": "f658816b3c60e3fb79d579de0197a506a333908939da96d1048783691e0f2126",
+  "testScriptFingerprint": "e105b21d221574cac0b5327a5748257cd59998a0f5c13c2a54400e19a5ce49c3",
+  "packageScriptFingerprint": "9ee3d84b61922fc6c8c89c4eb5c7240a01be7add00da30ffe9b4b17b4be52fc9",
+  "benchScriptFingerprint": "3ae24df1f577255ef3ca426dfa38bd49c9e3b033b4b93ac55de249e7b6222e89",
   "installerScriptFingerprint": "e71dac1ced8d95d9c7c00cc8eb5eea061836c9553a34650d7695b69e29f23a09",
   "releaseScriptFingerprint": "305a24bbbd8a8a61ccb9da3d626c5db276597fd63f64ad941bbeab1fed19ccab",
   "productAcceptance": "not-run",
-  "at": "2026-11-13T19:41:37.927Z",
+  "at": "2026-11-15T10:04:20.074Z",
   "source": "packaged window walk, restart of its Profile, a real close of the window and the start after it, upgrade of a synthetic v11 library, creative walk and trace walk, phases window-walk, workspace-restart, workspace-closed, workspace-migrated, creative and trace (synthetic samples, fresh Profile each)",
   "windowSizes": {
     "wide": [
@@ -50,7 +50,7 @@
           "video"
         ],
         "total": 5,
-        "scanMs": 257,
+        "scanMs": 185,
         "settledScan": true,
         "grouped": true,
         "seen": {
@@ -1187,7 +1187,7 @@
             "paused": false
           },
           "released": {
-            "time": 0.648447,
+            "time": 0.620897,
             "paused": true,
             "rate": 1,
             "duration": 24
@@ -1314,7 +1314,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 0.278208
+            "time": 0.278115
           },
           "hidden": {
             "video": {
@@ -1336,7 +1336,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 3.157414
+            "time": 3.150806
           },
           "back": {
             "video": {
@@ -1358,7 +1358,7 @@
             "popovers": 0,
             "paused": false,
             "ended": false,
-            "time": 3.342032
+            "time": 3.336684
           }
         },
         "video-subtitles": {
@@ -1407,7 +1407,7 @@
           "judged": "page clock",
           "during": {
             "ok": true,
-            "enteredMs": 308,
+            "enteredMs": 313,
             "rate": 2,
             "holding": true
           },
@@ -1427,7 +1427,7 @@
           "keptOnBar": true
         },
         "tap": {
-          "from": 10,
+          "from": 10.01,
           "step": 5.07,
           "downIdle": true,
           "upIdle": false
@@ -1448,7 +1448,7 @@
           "firstHold": true,
           "secondHold": true,
           "firstBack": true,
-          "moved": 0.62,
+          "moved": 0.63,
           "paused": true
         },
         "rateButton": true,
@@ -1470,7 +1470,7 @@
         "timings": [
           {
             "step": "first hold",
-            "ms": 302
+            "ms": 306
           },
           {
             "step": "second hold",
@@ -1490,11 +1490,11 @@
           },
           {
             "step": "before the change of source",
-            "ms": 301
+            "ms": 313
           },
           {
             "step": "after the change of source",
-            "ms": 1
+            "ms": 0
           }
         ],
         "problems": []
@@ -1827,7 +1827,7 @@
             "h": 252.7291717529297
           }
         },
-        "searchMs": 28,
+        "searchMs": 27,
         "layer": {
           "layer": {
             "x": 308.66668701171875,
@@ -1963,7 +1963,7 @@
       "status": "passed",
       "detail": {
         "problems": [],
-        "bridge": 18
+        "bridge": 21
       }
     },
     {
@@ -2079,7 +2079,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 6,
+        "hideLateMs": 10,
         "problems": []
       }
     },
@@ -2116,7 +2116,7 @@
           "settings": false,
           "side": false
         },
-        "hideLateMs": 7,
+        "hideLateMs": 6,
         "problems": []
       }
     },
@@ -2716,7 +2716,7 @@
           "keyBack": true,
           "keyForward": true
         },
-        "aboutVersion": "0.1.2-dev.202611131924"
+        "aboutVersion": "0.1.2-dev.202611150931"
       }
     },
     {
@@ -3029,11 +3029,11 @@
         "controlsShown": {
           "rect": {
             "x": 1142,
-            "y": -0.21043770015239716,
+            "y": -0.2104645073413849,
             "w": 138,
             "h": 36,
             "r": 1280,
-            "b": 35.7895622998476
+            "b": 35.789535492658615
           },
           "closeReachable": true
         },
@@ -3301,8 +3301,8 @@
             "reader:合成长篇 第一章",
             "library:合成漫画"
           ],
-          "focusedBefore": "tmwfdp8v0bdi",
-          "focusedAfter": "tmwfdp8v0bdi",
+          "focusedBefore": "tmwhnybr4bm5",
+          "focusedAfter": "tmwhnybr4bm5",
           "context": ""
         },
         "stored": 4
@@ -3357,16 +3357,16 @@
       "detail": {
         "problems": [],
         "other-column": {
-          "before": 12,
-          "after": 12.151773,
+          "before": 12.000838,
+          "after": 12.154884,
           "column": 2,
           "paused": false,
           "loadstart": 0,
           "emptied": 0
         },
         "new-column": {
-          "before": 12.203652,
-          "after": 12.361283,
+          "before": 12.218656,
+          "after": 12.370239,
           "column": 3,
           "paused": false,
           "loadstart": 0,
@@ -3433,7 +3433,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmwfdp8v0bdi",
+            "within": "tmwhnybr4bm5",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3444,7 +3444,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmwfdp8v0bdi",
+            "within": "tmwhnybr4bm5",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3455,7 +3455,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmwfdp8v0bdi",
+            "within": "tmwhnybr4bm5",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3466,7 +3466,7 @@
             "code": "Space",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmwfdp8sq9ul",
+            "within": "tmwhnybp397y",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < e",
@@ -3477,7 +3477,7 @@
             "code": "Digit1",
             "ctrl": true,
             "at": "tab-panel",
-            "within": "tmwfdp8sq9ul",
+            "within": "tmwhnybp397y",
             "dialog": false,
             "prevented": true,
             "by": "event.preventDefault < l < e",
@@ -3488,7 +3488,7 @@
             "code": "KeyW",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmwfdp8sq9ul",
+            "within": "tmwhnybp397y",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3499,7 +3499,7 @@
             "code": "Escape",
             "ctrl": false,
             "at": "tab-panel",
-            "within": "tmwfdp8sq9ul",
+            "within": "tmwhnybp397y",
             "dialog": false,
             "prevented": true,
             "by": "",
@@ -3509,20 +3509,20 @@
         "mediaLog": [
           {
             "call": "pause",
-            "tab": "tmwfdp8v0bdi",
-            "at": 1414,
+            "tab": "tmwhnybr4bm5",
+            "at": 1316,
             "by": "HTMLMediaElement.<computed> < Object.toggle"
           },
           {
             "call": "play",
-            "tab": "tmwfdp8v0bdi",
-            "at": 1460,
+            "tab": "tmwhnybr4bm5",
+            "at": 1364,
             "by": "HTMLMediaElement.<computed> < anonymous"
           },
           {
             "call": "pause",
-            "tab": "tmwfdp8v0bdi",
-            "at": 1668,
+            "tab": "tmwhnybr4bm5",
+            "at": 1582,
             "by": "HTMLMediaElement.<computed> < Object.pause"
           }
         ]
@@ -3843,8 +3843,8 @@
         "views": {
           "home": {
             "groups": [
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded",
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:3",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded",
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:3",
               "recent:8"
             ],
             "entries": [
@@ -3858,8 +3858,8 @@
           },
           "conversation": {
             "rows": [
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:1",
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:1",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:1",
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:1",
               "recent:5"
             ],
             "flat": 0,
@@ -3870,8 +3870,8 @@
           },
           "novel": {
             "rows": [
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded",
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:0",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded",
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:0",
               "recent:2"
             ],
             "flat": 0,
@@ -3881,8 +3881,8 @@
           },
           "comic": {
             "rows": [
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded",
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:1",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded",
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:1",
               "recent:1"
             ],
             "flat": 0,
@@ -3892,8 +3892,8 @@
           },
           "video": {
             "rows": [
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded",
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:0",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded",
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:0",
               "recent:1"
             ],
             "flat": 0,
@@ -3907,8 +3907,8 @@
           },
           "note": {
             "rows": [
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded",
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:folded",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded",
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:folded",
               "recent:8"
             ],
             "flat": 0,
@@ -3923,8 +3923,8 @@
           },
           "whiteboard": {
             "rows": [
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:2",
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded"
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:2",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3934,8 +3934,8 @@
           },
           "mindmap": {
             "rows": [
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:0",
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded"
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:0",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3945,8 +3945,8 @@
           },
           "draft": {
             "rows": [
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:0",
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded"
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:0",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded"
             ],
             "flat": 0,
             "entries": [
@@ -3956,8 +3956,8 @@
           },
           "roughcut": {
             "rows": [
-              "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:0",
-              "prj_5ed805b4-b3b7-476b-a2d9-3829215db910:folded"
+              "prj_c227fe3a-972c-4069-a769-5bc656b5b960:0",
+              "prj_a75e2583-0ee3-4268-a452-29fa3da221fb:folded"
             ],
             "flat": 0,
             "entries": [
@@ -4093,7 +4093,7 @@
           "tabs": 2,
           "columns": 1,
           "dock": true,
-          "time": 0.36
+          "time": 0.38
         },
         "directory": {
           "pages": 18,
@@ -4117,7 +4117,7 @@
             "same": true,
             "emptied": 0,
             "loads": 0,
-            "time": 0.371341,
+            "time": 0.380923,
             "paused": true,
             "ready": 4
           }
@@ -4139,10 +4139,10 @@
           "same": true,
           "emptied": 0,
           "loads": 0,
-          "time": 0.37,
+          "time": 0.38,
           "paused": true,
           "ready": 4,
-          "before": 0.36
+          "before": 0.38
         }
       }
     },
@@ -4169,8 +4169,8 @@
           "boardOpen": true,
           "videoReady": true,
           "marked": [
-            "sidebar-item-resource-res_bfe99e4e-e009-4736-9ed8-09f4e483b656",
-            "sidebar-item-resource-res_bfe99e4e-e009-4736-9ed8-09f4e483b656"
+            "sidebar-item-resource-res_d53da052-6e03-4bb4-a3a9-06050bf49a3f",
+            "sidebar-item-resource-res_d53da052-6e03-4bb4-a3a9-06050bf49a3f"
           ]
         },
         "atBoard": {
@@ -4178,7 +4178,7 @@
           "focused": "whiteboard",
           "video": {
             "same": true,
-            "time": 0.273327,
+            "time": 0.274761,
             "paused": true,
             "loads": 0,
             "emptied": 0
@@ -4195,13 +4195,13 @@
           "main": "video",
           "video": {
             "same": true,
-            "time": 0.273327,
+            "time": 0.274761,
             "paused": true,
             "loads": 0,
             "emptied": 0
           },
           "dock": "合成动画",
-          "left": 0.273327,
+          "left": 0.274761,
           "episodeDock": "合成动画"
         },
         "home": {
@@ -4215,7 +4215,7 @@
           ]
         },
         "fromCard": {
-          "card": "wb-open-wbn_455ec338-4ad4-44b3-a76c-14a1366780cf",
+          "card": "wb-open-wbn_1f0b3d7d-01b2-42a3-946d-4739166802bb",
           "switched": true,
           "there": "video"
         },
@@ -4354,7 +4354,7 @@
         "save": {
           "before": "two",
           "answered": true,
-          "ms": 5,
+          "ms": 3,
           "after": "single"
         },
         "problems": []
@@ -4609,7 +4609,7 @@
         ],
         "guides": {
           "current": "recent:rgb(173, 50, 104)",
-          "other": "prj_dd52ef56-9df2-46f8-be48-8f8045e0a3e0:rgb(221, 225, 232)"
+          "other": "prj_c227fe3a-972c-4069-a769-5bc656b5b960:rgb(221, 225, 232)"
         },
         "narrow": {
           "width": 200,
@@ -4632,8 +4632,8 @@
           "novel/project/novel": "0=0"
         },
         "samples": {
-          "comic": "res_871d1067-b806-47e3-8c4d-f3507ba9f1b0",
-          "novel": "res_10d5af3f-2b18-424d-9d03-5367459f79dc"
+          "comic": "res_544c3d65-49ff-4b6f-abd6-d7632431fd9d",
+          "novel": "res_19feb827-acb0-4e68-9fb9-e1c5cb841a31"
         },
         "before": {
           "comicOpened": true,
@@ -4661,14 +4661,14 @@
           "placeholders": 2,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_bd5933fc-475f-42f6-98df-ba795d7d67f0",
-            "sidebar-item-resource-res_1e5c4707-4fb7-46ae-85bf-4f3e466c7035"
+            "sidebar-item-resource-res_3402158e-e5be-4b31-ab7c-0eaee3cfcecd",
+            "sidebar-item-resource-res_320865b1-deb5-4f37-a50c-58b094bd03a6"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_ad436fac-2ce0-400d-a050-e1d3453dde98",
-            "work:work_cdeca186-b867-466d-8773-cf1c13d56025"
+            "work:work_a5d8432a-2918-4766-9c03-c3dca39a682e",
+            "work:work_464e57f4-2091-41b6-8c61-bab83a972c6b"
           ]
         },
         "comic": {
@@ -4678,12 +4678,12 @@
           "placeholders": 1,
           "images": 0,
           "keys": [
-            "sidebar-item-resource-res_f3a53f5a-7583-4778-9003-4794af765c8a"
+            "sidebar-item-resource-res_6ee439ab-ef6f-4dbf-84ef-0fc21296f0d6"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "resource:res_f3a53f5a-7583-4778-9003-4794af765c8a"
+            "resource:res_6ee439ab-ef6f-4dbf-84ef-0fc21296f0d6"
           ]
         },
         "video": {
@@ -4693,12 +4693,12 @@
           "placeholders": 0,
           "images": 1,
           "keys": [
-            "sidebar-item-resource-res_bfe99e4e-e009-4736-9ed8-09f4e483b656"
+            "sidebar-item-resource-res_d53da052-6e03-4bb4-a3a9-06050bf49a3f"
           ],
           "rows": 0,
           "width": 260,
           "recent": [
-            "work:work_3d34a0ec-6c31-4bde-942d-4f06eb7d6f8d"
+            "work:work_4e751ddc-a3f8-499b-bab4-006d18c3578e"
           ]
         },
         "switch": {
@@ -4906,9 +4906,9 @@
       "name": "scan-incremental",
       "status": "passed",
       "detail": {
-        "progressAt": 1165,
-        "cardAt": 1170,
-        "cardAfterProgressMs": 5,
+        "progressAt": 1167,
+        "cardAt": 1174,
+        "cardAfterProgressMs": 7,
         "runningAtCard": true,
         "opened": {
           "read": true,
@@ -4917,8 +4917,8 @@
         "works": 20,
         "afterImport": {
           "calls": 2,
-          "first": 1165,
-          "finishedAt": 1494
+          "first": 1166,
+          "finishedAt": 1497
         },
         "cardsShown": 15,
         "problems": []
@@ -5217,7 +5217,7 @@
           "streamsMatch": true
         },
         "untouched": true,
-        "overheadMs": 10
+        "overheadMs": 8
       }
     },
     {
@@ -5681,7 +5681,7 @@
           "firstToken": true,
           "duration": true
         },
-        "copied": 56224,
+        "copied": 56222,
         "holdersChecked": 8,
         "leaks": [],
         "problems": []
@@ -5692,7 +5692,7 @@
       "status": "passed",
       "detail": {
         "first": {
-          "before": "对话 2026-11-14 03:38",
+          "before": "对话 2026-11-15 18:01",
           "tab": "帮我总结一下第一章的主要人物",
           "named": true,
           "stored": true
@@ -5743,7 +5743,7 @@
       "name": "chat-long-session",
       "status": "passed",
       "detail": {
-        "firstScreenMs": 218,
+        "firstScreenMs": 194,
         "firstScreen": {
           "drawn": true,
           "nodes": 9,
@@ -5782,7 +5782,7 @@
         "stream": {
           "live": true,
           "followed": true,
-          "followMs": 0,
+          "followMs": 4,
           "stuck": [
             true,
             true,
@@ -5811,16 +5811,16 @@
             1,
             1
           ],
-          "upAt": 49686,
+          "upAt": 49654,
           "held": [
-            49686,
-            49686,
-            49686,
-            49686,
-            49686,
-            49686,
-            49686,
-            49686
+            49654,
+            49654,
+            49654,
+            49654,
+            49654,
+            49654,
+            49654,
+            49654
           ],
           "stillRunning": true
         },
@@ -5967,8 +5967,8 @@
             "bytes": 5552,
             "origin": {
               "kind": "comic_region",
-              "resourceId": "res_7a590e5a-10e3-47c8-9fbd-ad8c9fa2d8ad",
-              "resourceRevisionId": "rev_7ecc2c31-bfe6-4f3f-9263-52e8814853f7",
+              "resourceId": "res_5e0f3a11-2ae5-49d1-b6a8-99aacea377c4",
+              "resourceRevisionId": "rev_0a304698-c99a-413e-bb06-a05054b456a8",
               "pageId": "002.png",
               "region": {
                 "x": 0,
@@ -5978,7 +5978,7 @@
               }
             },
             "extraction": "第 2 页的选定区域，从原页面裁剪",
-            "id": "img_cd994b4f4a134b19a443",
+            "id": "img_ded3c3dfa280460288c2",
             "hash": "e16c6a6b785ec666b58f330ee777f08c99a31ead5f1c01c074b6e7d719726ccf",
             "expired": true
           }
@@ -6127,12 +6127,12 @@
       "status": "passed",
       "detail": {
         "v14": {
-          "migrateMs": 85,
+          "migrateMs": 109.49,
           "backupExists": true,
-          "versionAfter1": "16",
+          "versionAfter1": "17",
           "migration1": {
             "from": 13,
-            "to": 16,
+            "to": 17,
             "coversImported": 0
           },
           "proposalsTable": true,
@@ -6232,7 +6232,7 @@
       "detail": {
         "importedOk": true,
         "firstRecognized": true,
-        "firstChars": 15,
+        "firstChars": 16,
         "killedChild": true,
         "exitObserved": true,
         "respawnStarted": true,
@@ -6293,6 +6293,307 @@
       }
     },
     {
+      "name": "deepseek-models",
+      "status": "passed",
+      "detail": {
+        "added": true,
+        "purposes": [
+          "search",
+          "speech",
+          "text",
+          "text",
+          "transcription"
+        ],
+        "flashWindow": 1048576,
+        "rekeyed": true
+      }
+    },
+    {
+      "name": "deepseek-chat",
+      "status": "passed",
+      "detail": {
+        "loop": {
+          "looped": true,
+          "answered": true,
+          "thinking": true,
+          "expanded": true
+        },
+        "search": {
+          "plus": true,
+          "ticked": true,
+          "searched": true,
+          "sources": true,
+          "tickCleared": true,
+          "followed": true
+        }
+      }
+    },
+    {
+      "name": "dictation-deepseek",
+      "status": "passed",
+      "detail": {
+        "micOn": true,
+        "dictated": true
+      }
+    },
+    {
+      "name": "read-aloud",
+      "status": "passed",
+      "detail": {
+        "answer": {
+          "answerId": true,
+          "reading": true,
+          "stoppedAnswer": true,
+          "events": [
+            {
+              "kind": "first-audio",
+              "ms": 49.80000001192093,
+              "owner": "answer:run_faeb9f7e-23d4-4678-a53f-2209d442c683:agent",
+              "at": 6472
+            },
+            {
+              "kind": "end",
+              "ms": 63.80000001192093,
+              "owner": "answer:run_faeb9f7e-23d4-4678-a53f-2209d442c683:agent",
+              "reason": "stopped",
+              "segment": 0,
+              "played": 0,
+              "pushed": 6720,
+              "at": 6486
+            }
+          ]
+        },
+        "novel": {
+          "openedBook": true,
+          "asked": true,
+          "started": true,
+          "moved": true,
+          "onPage": true,
+          "paused": true,
+          "stillPaused": true,
+          "afterDictation": [
+            "reading-read-resume",
+            "reading-body"
+          ],
+          "micAt": 7339,
+          "stopped": true,
+          "kept": true,
+          "hintOff": true,
+          "events": [
+            {
+              "kind": "first-audio",
+              "ms": 49.80000001192093,
+              "owner": "answer:run_faeb9f7e-23d4-4678-a53f-2209d442c683:agent",
+              "at": 6472
+            },
+            {
+              "kind": "end",
+              "ms": 63.80000001192093,
+              "owner": "answer:run_faeb9f7e-23d4-4678-a53f-2209d442c683:agent",
+              "reason": "stopped",
+              "segment": 0,
+              "played": 0,
+              "pushed": 6720,
+              "at": 6486
+            },
+            {
+              "kind": "first-audio",
+              "ms": 8.600000023841858,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6616
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6619
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6622
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6624
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6627
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6629
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6632
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6635
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6638
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6641
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6651
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6656
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6659
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6661
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6664
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6666
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6668
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6671
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6673
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6675
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6678
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6679
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6681
+            },
+            {
+              "kind": "gap",
+              "ms": 0,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "at": 6684
+            },
+            {
+              "kind": "end",
+              "ms": 3201.400000035763,
+              "owner": "novel:res_b50f791c-9171-45b7-9425-6cf239f9f2bb",
+              "reason": "stopped",
+              "segment": 1,
+              "played": 16640,
+              "pushed": 397440,
+              "at": 9809
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "web-search",
+      "status": "passed",
+      "detail": {
+        "project": "ok",
+        "panel": {
+          "onProjects": true,
+          "inProject": true,
+          "onResearch": true,
+          "panel": true,
+          "results": true
+        }
+      }
+    },
+    {
+      "name": "deepseek-plugin",
+      "status": "passed",
+      "detail": {
+        "offeredNotInstalled": true,
+        "dialogSaysDeclarative": true,
+        "installed": true,
+        "offeredOnModelsWithoutRestart": true,
+        "off": true,
+        "flagged": true,
+        "refused": true,
+        "onAgain": true,
+        "restored": true
+      }
+    },
+    {
+      "name": "deepseek-network",
+      "status": "passed",
+      "detail": {
+        "requests": 35,
+        "chats": 6,
+        "asr": 1,
+        "problems": []
+      }
+    },
+    {
       "name": "light-boundary",
       "status": "passed",
       "detail": {
@@ -6329,10 +6630,10 @@
           }
         ],
         "bytes": {
-          "bootstrap": 11828,
-          "lightMain": 271177,
-          "fullMain": 3975194,
-          "lightPage": 3602673
+          "bootstrap": 11781,
+          "lightMain": 275992,
+          "fullMain": 4225155,
+          "lightPage": 3751299
         },
         "problems": []
       }
@@ -6341,29 +6642,29 @@
       "name": "light-video-first-frame",
       "status": "passed",
       "detail": {
-        "ms": 534
+        "ms": 558
       }
     },
     {
       "name": "light-video-plays",
       "status": "passed",
       "detail": {
-        "before": 0.018241
+        "before": 0.027368
       }
     },
     {
       "name": "light-video-pause",
       "status": "passed",
       "detail": {
-        "pausedAt": 1.228982
+        "pausedAt": 1.240292
       }
     },
     {
       "name": "light-video-seek-key",
       "status": "passed",
       "detail": {
-        "from": 1.228982,
-        "to": 6.228982
+        "from": 1.240292,
+        "to": 6.240291
       }
     },
     {
@@ -6424,7 +6725,7 @@
       "name": "light-video-resume",
       "status": "passed",
       "detail": {
-        "at": 4.035776,
+        "at": 4.032618,
         "resumed": true
       }
     },
@@ -6463,7 +6764,7 @@
       "name": "light-comic-first-page",
       "status": "passed",
       "detail": {
-        "ms": 284
+        "ms": 275
       }
     },
     {
@@ -6549,7 +6850,7 @@
       "name": "light-image-first-page",
       "status": "passed",
       "detail": {
-        "ms": 288
+        "ms": 278
       }
     },
     {
@@ -6651,7 +6952,7 @@
       "detail": {
         "windows": 3,
         "want": 3,
-        "pid": 16132
+        "pid": 16076
       }
     },
     {
@@ -6667,11 +6968,11 @@
       "status": "passed",
       "detail": {
         "fullReady": true,
-        "lightPid": 16132,
-        "windowsPid": 16132,
+        "lightPid": 16076,
+        "windowsPid": 16076,
         "handedOverMs": [
-          114,
-          117
+          100,
+          99
         ],
         "fullStillRunning": true,
         "secondFullStatus": 0
@@ -6728,16 +7029,16 @@
       "status": "passed",
       "detail": {
         "phase": "migrate-v13",
-        "schemaVersion": "16",
+        "schemaVersion": "17",
         "migration": {
           "from": 12,
-          "to": 16,
+          "to": 17,
           "coversImported": 0,
           "agentMedia": {
             "runs": 300,
             "images": 340,
             "unique": 201,
-            "ms": 18
+            "ms": 17
           }
         },
         "agentMedia": 201,
@@ -6758,7 +7059,7 @@
       "status": "passed",
       "detail": {
         "phase": "migrate-v13-restart",
-        "schemaVersion": "16",
+        "schemaVersion": "17",
         "migration": null,
         "agentMedia": 201,
         "agentRunMedia": 340,
@@ -6775,7 +7076,7 @@
       "detail": {
         "exitStatus": 1,
         "refused": true,
-        "versionAfter": "17"
+        "versionAfter": "18"
       }
     },
     {
@@ -6810,7 +7111,7 @@
         "move": {
           "exitStatus": 0,
           "state": "migrated",
-          "files": 67,
+          "files": 66,
           "carried": [
             "works",
             "projects",
@@ -6826,7 +7127,7 @@
         },
         "older": {
           "exitStatus": 0,
-          "ms": 810,
+          "ms": 772,
           "data": true,
           "emulated": true
         },
@@ -6849,7 +7150,7 @@
           "name": "MANGA",
           "version": "0.1.1",
           "channel": "正式版",
-          "commit": "0abf1f3",
+          "commit": "9e9e3ee",
           "builtAt": "2026年11月8日 18:00",
           "license": "Apache-2.0",
           "devHint": false,
@@ -7160,7 +7461,7 @@
               "installed": false,
               "reason": "请先关闭轻量播放窗口 (light open did not leave within 10s; nothing was installed)",
               "lightStillOpen": true,
-              "waitedMs": 346
+              "waitedMs": 349
             }
           }
         ]

@@ -234,7 +234,7 @@ export function attachNsisUpdater(options: NsisUpdaterAdapterOptions & {
     if (fs.existsSync(resumeDir)) {
       const currentFiles = new Set([`${manifest.fileName}.part`, `${manifest.fileName}.part.json`]);
       for (const entry of fs.readdirSync(resumeDir, { withFileTypes: true })) {
-        if (entry.isFile() && /^manga-setup-0\.1\.\d+\.exe\.part(?:\.json)?$/.test(entry.name) && !currentFiles.has(entry.name)) {
+        if (entry.isFile() && /^manga-setup-\d+\.\d+\.\d+.*\.exe\.part(?:\.json)?$/.test(entry.name) && !currentFiles.has(entry.name)) {
           try { fs.rmSync(path.join(resumeDir, entry.name), { force: true }); } catch { /* retry pruning on the next check */ }
         }
       }

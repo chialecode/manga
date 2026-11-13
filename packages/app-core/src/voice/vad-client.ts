@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { MangaError } from "@manga/contracts";
+import { errorMessage, findWorkspaceRoot } from "../shared/utils.ts";
 
 /** What the capture pipeline needs from a voice-activity engine; the real one runs in a worker, tests may inject a stand-in. */
 export interface VadStream {
@@ -24,17 +25,6 @@ export interface VadEngine {
 export type VadAssets = { modelPath: string; ortEntry: string; wasmDir: string };
 
 const resolveFrom = (...parts: string[]) => path.join(...parts);
-
-function workspaceRoot(from: string): string | null {
-  let dir = path.resolve(from);
-  for (let depth = 0; depth < 12; depth += 1) {
-    if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-  return null;
-}
 
 function assetsAt(modelDir: string, ortDir: string): VadAssets | null {
   const modelPath = resolveFrom(modelDir, "silero_vad.onnx");
@@ -60,7 +50,7 @@ export function locateVadAssets(options: { env?: NodeJS.ProcessEnv; resourcesPat
       if (found) return found;
     }
   }
-  const root = workspaceRoot(options.cwd ?? process.cwd()) ?? workspaceRoot(path.dirname(fileURLToPath(import.meta.url)));
+  const root = findWorkspaceRoot(options.cwd ?? process.cwd()) ?? findWorkspaceRoot(import.meta.url);
   if (root) {
     const found = assetsAt(path.join(root, "dist", "tools", "silero-vad"), path.join(root, "node_modules", "onnxruntime-web", "dist"));
     if (found) return found;
@@ -127,15 +117,24 @@ export class VadWorkerClient implements VadEngine {
     });
     this.worker = worker;
     const ready = new Promise<Worker>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new MangaError("PROVIDER_UNAVAILABLE", "the voice filter did not start", { retryable: true })), 60_000);
+      const failInit = (error: MangaError) => {
+        if (generation !== this.generation) return;
+        clearTimeout(timer);
+        this.drop(error.message);
+        void worker.terminate();
+        reject(error);
+      };
+      const timer = setTimeout(() => {
+        failInit(new MangaError("PROVIDER_UNAVAILABLE", "the voice filter did not start", { retryable: true }));
+      }, 60_000);
+      timer.unref?.();
       worker.on("message", (message: { type: string; id?: number; probs?: Float32Array; message?: string; fraction?: number }) => {
         if (generation !== this.generation) return;
         if (message.type === "ready") {
           clearTimeout(timer);
           resolve(worker);
         } else if (message.type === "init-error") {
-          clearTimeout(timer);
-          reject(new MangaError("CAPABILITY_UNAVAILABLE", `the voice filter could not load: ${message.message ?? "unknown"}`));
+          failInit(new MangaError("CAPABILITY_UNAVAILABLE", `the voice filter could not load: ${message.message ?? "unknown"}`));
         } else if (message.type === "result" && message.id !== undefined) {
           const item = this.pending.get(message.id);
           this.pending.delete(message.id);
@@ -154,7 +153,7 @@ export class VadWorkerClient implements VadEngine {
         this.drop(reason);
         reject(new MangaError("PROVIDER_UNAVAILABLE", reason, { retryable: true }));
       };
-      worker.on("error", (error) => gone(`the voice filter stopped: ${error.message}`));
+      worker.on("error", (error: unknown) => gone(`the voice filter stopped: ${errorMessage(error)}`));
       worker.on("exit", () => gone("the voice filter exited"));
     });
     this.ready = ready;

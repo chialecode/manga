@@ -20,6 +20,8 @@ export const zhCNCreative = {
   "log.whiteboard.delete": "删除了白板",
   "log.conversation.new": "开启了新对话",
   "log.conversation.resume": "继续了历史对话",
+  "log.conversation.rename": "重命名了对话",
+  "log.conversation.move": "移动了对话",
   "log.conversation.delete": "删除了对话",
   "log.conversation.deleteAll": "删除了一批对话",
   "log.dictionary.add": "加入了词典词条",

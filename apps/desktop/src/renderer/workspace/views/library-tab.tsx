@@ -64,6 +64,7 @@ export function LibraryTab() {
   return (
     <div className="page-host" data-testid={`page-${kind ?? "library"}`}>
       <Shelf
+        key={kind ?? "all"}
         t={t}
         kind={kind}
         refreshKey={s.shelfKey}

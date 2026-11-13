@@ -41,6 +41,8 @@ export type HostOptions = {
   channel?: "release" | "development" | "test";
   appVersion?: string;
   buildInfo?: { version: string; channel: "release" | "development" | "test"; commit: string; builtAt: string; schemaVersion: number };
+  /** The window has a tray icon (Windows). */
+  tray?: boolean;
 };
 
 /**
@@ -167,7 +169,7 @@ export function installHost(options: HostOptions = {}) {
     channel,
     commit: "c79f49a",
     builtAt: "2026-11-08T08:00:00.000Z",
-    schemaVersion: 16,
+    schemaVersion: 17,
   };
   let updateSettings = { autoCheck: true, autoDownload: true };
   const context = contextHandlers(options);
@@ -276,7 +278,7 @@ export function installHost(options: HostOptions = {}) {
     ...options.overrides,
   };
   (window as unknown as { manga: unknown }).manga = {
-    async state() { return { layout: { channel, pointerPath: "pointer.json", partitions: { data: "d" }, writable: true, recovery: "none" }, writable: true, vaultAvailable: true, appVersion, buildInfo }; },
+    async state() { return { layout: { channel, pointerPath: "pointer.json", partitions: { data: "d" }, writable: true, recovery: "none" }, writable: true, vaultAvailable: true, appVersion, buildInfo, ...(options.tray ? { tray: true } : {}) }; },
     async command(payload: { commandId: string; input?: Record<string, unknown> }) {
       const input = payload.input ?? {};
       calls.push({ commandId: payload.commandId, input });

@@ -66,7 +66,7 @@ function walkFiles(dir: string): string[] {
   return out;
 }
 
-describe("voice dictation end-to-end integration (M12 Wave 3A)", () => {
+describe("voice dictation end-to-end integration", () => {
   const closeables: Array<() => Promise<void> | void> = [];
   const tempDirs: string[] = [];
 

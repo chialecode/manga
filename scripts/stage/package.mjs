@@ -9,14 +9,14 @@ import { seedV11 } from "../../tests/helpers/legacy-v11.ts";
 import { seedV12 } from "../../tests/helpers/legacy-v12.ts";
 import { startFakeBangumi } from "../../tests/helpers/fake-bangumi.ts";
 import { LEGACY_CREDENTIALS } from "../../tests/helpers/legacy-credentials.ts";
-import { startMockProvider } from "../../packages/model-protocol/src/index.ts";
+import { startMockDeepSeek, startMockProvider } from "../../packages/model-protocol/src/index.ts";
 import { frozenImageHashes } from "../../packages/storage-drizzle/src/migrate-agent-media.ts";
 import { PRODUCT_SCHEMA_VERSION } from "../../packages/storage-drizzle/src/sql.ts";
 import Database from "better-sqlite3";
 import sharp from "sharp";
 import * as resedit from "resedit";
 import { MangaProductApp, TestVault, pngSize } from "../../packages/app-core/src/index.ts";
-import { desktopPackageDir, latestDesktopPackage, pluginSigningKeyFile } from "../desktop-paths.ts";
+import { desktopPackageDir, devBuildRecord, latestDesktopPackage, pluginSigningKeyFile } from "../desktop-paths.ts";
 import { validateWorkflows } from "../check-workflows.mjs";
 import {
   CHANNEL_INSTALL,
@@ -43,6 +43,7 @@ import { runStageRelease } from "./release.mjs";
 import { rawPublicKey, writeBuildInfo } from "./version-lib.mjs";
 import { watchGateTemp } from "./temp-dirs.mjs";
 import { checkLightBoundary, observeLightUpdate, observeLightOpen } from "./light-open.mjs";
+import { readUninstallRegistryEntries } from "./win-process.mjs";
 import { currentStage, fingerprintKeysOf, loadGate, optionalSamplesMissing, packagedFingerprintKeys, readJson as readEvidence, repoRoot as root, runDir, stageFingerprints } from "./lib.mjs";
 import { loadManifest } from "../samples/media-manifest.mjs";
 
@@ -56,10 +57,13 @@ if (sqlite.status !== 0) process.exit(sqlite.status ?? 1);
 // Iterating on one walk: MANGA_PACKAGE_PHASES=window-walk,workspace-restart runs only those phases (in the order of the gate) and writes no evidence;
 // MANGA_PACKAGE_REUSE_BUILD=1 also skips building the package again when nothing under src changed. Neither is used for the gate's run.
 const onlyPhases = process.env.MANGA_PACKAGE_PHASES ? process.env.MANGA_PACKAGE_PHASES.split(",").map((name) => name.trim()).filter(Boolean) : null;
+// `stage install-dev` builds what it installs (MANGA_PACKAGE_BUILD_ONLY=1): the package (reused when its inputs are unchanged) and the development
+// installer, with no walks, no gate and no evidence; the gate's results are left as they are.
+const buildOnly = process.env.MANGA_PACKAGE_BUILD_ONLY === "1";
 // LOOP-27: the gate asks for consecutive full passes on the same inputs. A full run counts on from the result before it when that one passed on the
 // same inputs, and removes it first, so a run that fails leaves no result and the count starts again.
 let passStreak = 1;
-if (!onlyPhases) {
+if (!onlyPhases && !buildOnly) {
   const before = readEvidence(runDir(), "package.json");
   if (before?.status === "passed" && fingerprintKeysOf(config, "package.json").every((key) => before[key] === fingerprints[key])) passStreak = (before.passStreak ?? 1) + 1;
   for (const name of ["package.json", "scenarios.json"]) fs.rmSync(path.join(runDir(), name), { force: true });
@@ -141,6 +145,29 @@ if (!reuseBuild && (process.env.MANGA_PACKAGE_REUSE_BUILD !== "1" || !onlyPhases
 }
 const appPath = packagedApp();
 if (!appPath) throw new Error("electron-forge package output missing");
+if (buildOnly) {
+  const channel = JSON.parse(fs.readFileSync(path.join(appPath, "resources", "channel.json"), "utf8")).channel;
+  if (channel !== "development") throw new Error(`install-dev builds the development channel, not ${channel}`);
+  const appDigest = directoryDigest(appPath);
+  const installerDir = path.join(path.dirname(desktopPackageDir), "installer");
+  const stamped = Object.fromEntries(packagedFingerprintKeys(config).map((key) => [key, fingerprints[key]]));
+  // The installer made before from this same directory is used as it is.
+  const kept = (() => {
+    const record = readEvidence(path.dirname(devBuildRecord), path.basename(devBuildRecord));
+    const file = record?.installer ? path.resolve(root, record.installer.output) : null;
+    if (!record || record.appDigest !== appDigest || !file || !fs.existsSync(file) || sha256(fs.readFileSync(file)) !== record.installer.sha256) return null;
+    return record.installer;
+  })();
+  let installer = kept;
+  if (!installer) {
+    fs.rmSync(installerDir, { recursive: true, force: true });
+    const made = await buildInstaller({ appDir: appPath, channel, workDir: installerDir });
+    installer = { channel, version: made.version, output: path.relative(root, made.installer).replaceAll("\\", "/"), bytes: made.bytes, sha256: sha256(fs.readFileSync(made.installer)) };
+  }
+  fs.writeFileSync(devBuildRecord, `${JSON.stringify({ ...stamped, at: new Date().toISOString(), target: path.relative(root, appPath).replaceAll("\\", "/"), appDigest, installer }, null, 2)}\n`);
+  console.log(JSON.stringify({ check: "stage-package-build-only", reusedBuild: reuseBuild, reusedInstaller: Boolean(kept), version: installer.version, output: installer.output }));
+  process.exit(0);
+}
 // The digest of the directory as this run starts on it: the installer the run before made is reused only for this same directory (below).
 const appDigestAtStart = readEvidence(outDir, "build-stamp.json")?.appDigest ?? null;
 const evidence = runDir();
@@ -150,7 +177,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-"));
 const selectedPhases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
 // The window walk starts from an empty library (the app must open on the library paths), so it gets a Profile of its own; the creative walk and
 // the plugin walk make their own projects, library path and plugin, and do not share a Profile with the phases before them.
-const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13", "update", "dictation"]);
+const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "deepseek", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13", "update", "dictation"]);
 // The restart of the workspace is the next start of the Profile the window walk used (it left two contexts in a known shape); the upgrade check starts on a
 // synthetic v11 library made here, before the application has seen it.
 const SAME_PROFILE_AS = { "workspace-restart": "window-walk", "workspace-closed": "window-walk", "credentials-async-restart": "credentials-async", "migrate-v13-restart": "migrate-v13" };
@@ -241,6 +268,37 @@ async function startCredentialServices() {
     stop: async () => { await legacy.close(); await renewed.close(); await bangumi.stop(); },
   };
 }
+// The fake DeepSeek of the DeepSeek walk (计划第 7 节): it accepts only the walk's synthetic key; the tool loop takes three scripted steps.
+const SMOKE_DEEPSEEK_KEY = ["sk", "smoke", "deepseek", "walk"].join("-");
+function startWalkDeepSeek() {
+  return startMockDeepSeek({ key: SMOKE_DEEPSEEK_KEY, toolScript: [1, 2, 3].map(() => ({ name: "library.list", arguments: "{}" })), answer: "三步都查完了。", asrText: "合成的识别结果" });
+}
+// What the fake DeepSeek saw during the walk: nothing while the plugin was off; the thinking of each tool step sent back within the turn; the built-in
+// search offered under 联网搜索 and its calls sent back in the next round, the web.search tool never beside it and not offered without the tick; recognition
+// sent only the audio file; speech and the search service were asked.
+function deepseekTraffic(fake, marks) {
+  const problems = [];
+  const all = fake.requests;
+  const chats = all.filter((request) => request.path.endsWith("/chat/completions")).map((request) => ({ at: request.at, body: request.body ?? {} }));
+  // The names of the function tools; the built-in search is a tool type of its own (`deepseek_web_search`), not a name.
+  const toolNames = (body) => (body.tools ?? []).filter((tool) => tool.type === "function").map((tool) => tool.function?.name ?? "");
+  const native = (body) => (body.tools ?? []).some((tool) => tool.type === "deepseek_web_search");
+  if (!marks || marks.disabledFrom === null || marks.disabledTo === null) problems.push("the walk did not say when the plugin was off");
+  else if (all.some((request) => request.at >= marks.disabledFrom && request.at <= marks.disabledTo)) problems.push("a request reached the service while the plugin was off");
+  const looped = chats.find((chat) => (chat.body.messages ?? []).filter((message) => message.role === "assistant" && message.tool_calls?.length).length >= 3);
+  if (!looped) problems.push("no request carried the three tool steps");
+  else if ((looped.body.messages ?? []).some((message) => message.role === "assistant" && message.tool_calls?.length && typeof message.reasoning_content !== "string")) problems.push("a tool step went back without its thinking");
+  if (!chats.some((chat) => native(chat.body))) problems.push("the built-in search was never offered");
+  if (chats.some((chat) => native(chat.body) && toolNames(chat.body).some((name) => /web[._]search/.test(name)))) problems.push("the web.search tool was offered beside the built-in search");
+  if (chats.filter((chat) => !native(chat.body)).some((chat) => toolNames(chat.body).some((name) => /web[._]search/.test(name)))) problems.push("the web.search tool was offered without the tick");
+  if (!chats.some((chat) => (chat.body.messages ?? []).some((message) => message.role === "assistant" && Array.isArray(message.server_tool_calls)))) problems.push("the search's calls were not sent back in the next round");
+  const asr = all.filter((request) => request.path.endsWith("/v1/tools/asr"));
+  if (!asr.length) problems.push("recognition was never asked");
+  if (asr.some((request) => JSON.stringify(request.fields ?? []) !== JSON.stringify(["file"]))) problems.push("recognition was sent more than the audio file");
+  if (all.filter((request) => request.path.endsWith("/v1/tools/tts")).length < 2) problems.push("speech was asked fewer than twice");
+  if (!all.some((request) => request.path.endsWith("/v1/tools/search"))) problems.push("the search service was never asked");
+  return { status: problems.length === 0 ? "passed" : "failed", detail: { requests: all.length, chats: chats.length, asr: asr.length, problems } };
+}
 function credentialTraffic(services, phase) {
   const problems = [];
   const signed = services.dandan.requests;
@@ -292,14 +350,20 @@ async function smoke(phase) {
     fs.writeFileSync(path.join(home, "launcher", "pointer.json"), JSON.stringify({ profileRoot: path.join(home, "root"), channel: "test", revision: 1 }));
   }
   if (phase === "migrate-v13") v12Seeds[phase] = await seedMigration(home);
-  const credentialServices = phase.startsWith("credentials-async") ? await startCredentialServices() : null;
-  const bt = phase === "plugins" ? await prepareBt(home) : null;
-  // The window walk's danmaku step talks to a stand-in for the DanDanPlay service on the loopback address; it accepts only the credentials a smoke run uses.
-  const dandan = phase === "window-walk" ? await new FakeDandan().start() : credentialServices?.dandan ?? null;
-  if (phase === "window-walk") dandan.accepts = { appId: "smokeapp01", secret: "smoke-secret-for-the-local-fake-server" };
+  let credentialServices = null;
+  let bt = null;
+  let deepseek = null;
+  let dandan = null;
   let result;
   let traffic = null;
+  let deepseekSaw = null;
   try {
+    credentialServices = phase.startsWith("credentials-async") ? await startCredentialServices() : null;
+    bt = phase === "plugins" ? await prepareBt(home) : null;
+    deepseek = phase === "deepseek" ? await startWalkDeepSeek() : null;
+    // The window walk's danmaku step talks to a stand-in for the DanDanPlay service on the loopback address; it accepts only the credentials a smoke run uses.
+    dandan = phase === "window-walk" ? await new FakeDandan().start() : credentialServices?.dandan ?? null;
+    if (phase === "window-walk") dandan.accepts = { appId: "smokeapp01", secret: "smoke-secret-for-the-local-fake-server" };
     result = await spawnAsync(path.join(appPath, "manga.exe"), ["--manga-smoke"], {
       cwd: home,
       env: {
@@ -319,16 +383,19 @@ async function smoke(phase) {
         ...(bt?.env ?? {}),
         ...(dandan ? { MANGA_SMOKE_DANDAN_ORIGIN: dandan.origin } : {}),
         ...(credentialServices?.env ?? {}),
+        ...(deepseek ? { MANGA_SMOKE_PROVIDER_ORIGIN: deepseek.url } : {}),
         ...(phase.startsWith("migrate-v13") ? { MANGA_SMOKE_V12_SPEC: path.join(home, "v12-spec.json") } : {}),
       },
-      timeout: phase === "loop" ? 900_000 : phase === "update" ? 240_000 : phase === "dictation" ? 300_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
+      timeout: phase === "loop" ? 900_000 : phase === "update" ? 240_000 : phase === "dictation" || phase === "deepseek" ? 300_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
     });
   } finally {
-    await bt?.swarm.close();
+    deepseekSaw = deepseek ? deepseek.requests.slice() : null;
     if (dandan && phase === "window-walk") traffic = dandanTraffic(dandan);
     if (credentialServices) traffic = credentialTraffic(credentialServices, phase);
+    await bt?.swarm.close();
     await dandan?.stop();
     await credentialServices?.stop();
+    await deepseek?.close();
   }
   process.stdout.write(result.stdout || "");
   process.stderr.write(result.stderr || "");
@@ -343,7 +410,11 @@ async function smoke(phase) {
     if (traffic.status !== "passed") throw new Error(`smoke ${phase}: ${traffic.detail.problems.join("; ")}`);
   }
   if (phase === "migrate-v13" || phase === "migrate-v13-restart") report.migrationFiles = migrationFiles(v12Seeds["migrate-v13"]);
-  if (phase === "loop" || phase === "update" || phase === "dictation" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
+  if (phase === "deepseek" && deepseekSaw) {
+    report.deepseekNetwork = deepseekTraffic({ requests: deepseekSaw }, report.marks);
+    if (report.deepseekNetwork.status !== "passed") throw new Error(`smoke deepseek: ${report.deepseekNetwork.detail.problems.join("; ")}`);
+  }
+  if (phase === "loop" || phase === "update" || phase === "dictation" || phase === "deepseek" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
     if (report.notRun) throw new Error(`${phase} smoke did not run`);
     if (report.ok !== true) throw new Error(`${phase} smoke failed: ${(report.observations ?? []).filter((row) => row.status !== "passed").map((row) => row.name).join(", ")}`);
   }
@@ -863,8 +934,6 @@ async function observeInstallerInfo() {
   const detail = {};
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-installer-info-"));
   const realBefore = snapshotRealInstallations();
-  const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
-  const ps = (cmd) => (spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${cmd}`], { encoding: "utf8", windowsHide: true }).stdout ?? "").trim();
   const cleanupTestRelease = () => removeTestInstallations(["release"]);
   try {
     const svgExists = fs.existsSync(DEFAULT_ICON_SVG);
@@ -909,8 +978,7 @@ async function observeInstallerInfo() {
       testIdentity: true,
     });
     const instRes = spawnSync(builtInstaller.installer, ["/S", `/D=${installTargetDir}`], { windowsHide: true, timeout: 300_000 });
-    const regText = ps(`Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName -eq 'MANGA Test') { [pscustomobject]@{ DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; Publisher = [string]$p.Publisher; DisplayIcon = [string]$p.DisplayIcon } } } | ConvertTo-Json -Compress`);
-    const regEntry = regText ? (Array.isArray(JSON.parse(regText)) ? JSON.parse(regText)[0] : JSON.parse(regText)) : null;
+    const regEntry = readUninstallRegistryEntries({ filterNames: ["MANGA Test"] })[0] ?? null;
 
     const installedExe = path.join(installTargetDir, `${TEST_CHANNEL_INSTALL.release.executableName}.exe`);
     let exeIconsCount = 0;
@@ -1020,6 +1088,9 @@ const observations = [
   ...(smokeReports.loop?.observations ?? []),
   ...(smokeReports.voice?.observations ?? []),
   ...(smokeReports.dictation?.observations ?? []),
+  // The DeepSeek plugin stage (计划第 7 节): the walk, and what the fake service saw during it.
+  ...(smokeReports.deepseek?.observations ?? []),
+  ...(smokeReports.deepseek?.deepseekNetwork ? [{ name: "deepseek-network", status: smokeReports.deepseek.deepseekNetwork.status, detail: smokeReports.deepseek.deepseekNetwork.detail }] : []),
   ...(smokeReports.light?.observations ?? []),
   ...["credentials-async", "credentials-async-restart", "migrate-v13", "migrate-v13-restart", "migrate-v13-newer", "data-locations-fresh", "data-locations-upgrade", "update"].flatMap((name) => smokeReports[name]?.observations ?? []),
 ];

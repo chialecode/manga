@@ -348,7 +348,8 @@ describe("AT-85 agent creative tools: in a task of a project, through the model 
     expect(JSON.stringify(ok(await run(ctx, "whiteboard.get", { boardId: a.boardId })))).not.toContain("loop-card");
 
     // What the model was shown: the project's tools, none for deleting or exporting, and no parameter that names a project.
-    const names = (requests[0]?.tools ?? []).map((tool) => tool.function?.name);
+    // On the wire the command ids go without their dots (services refuse them); they are read back here.
+    const names = (requests[0]?.tools ?? []).map((tool) => tool.function?.name?.replace(/_/g, "."));
     expect(names).toEqual(expect.arrayContaining([...AGENT_PROJECT_COMMANDS, "notes.create", "library.find"]));
     for (const forbidden of ["project.delete", "whiteboard.delete", "mindmap.delete", "draft.delete", "roughcut.export", "project.exportPackage", "webpage.fetch", "semantic.search", "plugin.install", "acquisition.add", "whiteboard.undo"]) expect(names).not.toContain(forbidden);
     for (const tool of requests[0]!.tools ?? []) {
@@ -358,11 +359,11 @@ describe("AT-85 agent creative tools: in a task of a project, through the model 
         expect(parameters.required ?? [], tool.function!.name).not.toContain("projectId");
       }
     }
-    const suggest = requests[0]!.tools!.find((tool) => tool.function?.name === "draft.suggest")!.function!.parameters;
+    const suggest = requests[0]!.tools!.find((tool) => tool.function?.name === "draft_suggest")!.function!.parameters;
     expect(Object.keys(suggest.properties ?? {})).not.toEqual(expect.arrayContaining(["connectionId"]));
     expect(Object.keys(suggest.properties ?? {})).not.toContain("sources");
     expect(suggest.required).toEqual(expect.arrayContaining(["draftId", "kind", "text"]));
-    const addMaterial = requests[0]!.tools!.find((tool) => tool.function?.name === "project.addMaterial")!.function!.parameters;
+    const addMaterial = requests[0]!.tools!.find((tool) => tool.function?.name === "project_addMaterial")!.function!.parameters;
     expect(Object.keys(addMaterial.properties ?? {})).not.toContain("origin");
   });
 
@@ -376,7 +377,8 @@ describe("AT-85 agent creative tools: in a task of a project, through the model 
     const shared = ok<{ sessionId: string }>(await run(ctx, "conversation.new", { contextId: null }));
     const sent = ok<{ runId: string }>(await run(ctx, "agent.send", { sessionId: shared.sessionId, text: "你好" }));
     await waitForRun(ctx.app, ctx.actor, ctx.grant.handle, sent.runId, 20_000);
-    const names = (requests[0]?.tools ?? []).map((tool) => tool.function?.name);
+    // On the wire the command ids go without their dots (services refuse them).
+    const names = (requests[0]?.tools ?? []).map((tool) => tool.function?.name?.replace(/_/g, "."));
     expect(names).toContain("notes.create");
     for (const commandId of AGENT_PROJECT_COMMANDS) expect(names, commandId).not.toContain(commandId);
   });

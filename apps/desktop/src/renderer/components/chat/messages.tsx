@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { measureElement as measureRow, observeElementRect, useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
-import { ArrowDown, MessageSquareQuote, Mic, Pause, Pencil, Play, RotateCcw, ScrollText, Sparkles, Trash2 } from "lucide-react";
-import type { MessageKey, Translator } from "@manga/i18n";
-import type { ProposalCard, RoughcutExportView, RoughcutProblem } from "@manga/contracts";
-import { attempt, messageOf } from "../../lib/api.ts";
-import { Modal } from "../modal.tsx";
-import { noteSourceLabel, voiceSourceLabel } from "../../lib/chat-model.ts";
-import { formatClock } from "../../readers/video-model.ts";
-import type { StreamAgent, StreamItem, StreamNote, StreamUser, StreamVoice } from "../../hooks/use-session-stream.ts";
-import { problemText, stepText } from "../../pages/projects/roughcut/roughcut-model.ts";
+import { ArrowDown } from "lucide-react";
+import type { Translator } from "@manga/i18n";
+import type { StreamItem } from "../../hooks/use-session-stream.ts";
+import { Bubble, type BubbleActions } from "./bubbles.tsx";
 
 /*
  * The structure of this list (a log region that sticks to the bottom while an answer streams, a scroll-down button, bubbles by
@@ -23,19 +16,7 @@ import { problemText, stepText } from "../../pages/projects/roughcut/roughcut-mo
 
 type T = Translator["t"];
 
-export type BubbleActions = {
-  onJumpNote: (note: StreamNote) => void;
-  onJumpVoice: (voice: StreamVoice, source?: StreamVoice["sources"][number]) => void;
-  onEditNote: (note: StreamNote, text: string) => Promise<boolean>;
-  onDeleteNote: (note: StreamNote) => Promise<void>;
-  onQuoteNote: (note: StreamNote) => void;
-  onOpenRecording: (voice: StreamVoice) => void;
-  onRetry: (runId: string) => void;
-  /** Open the trace of the task that made a reply (what it sent, what came back, in order). */
-  onOpenTrace?: (runId: string) => void;
-  /** Called after a proposal is applied or rejected so the stream and workspace refresh. */
-  onProposalChanged?: () => void;
-};
+export type { BubbleActions };
 
 function ScrollButton(props: { label: string }) {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
@@ -126,6 +107,8 @@ type Anchor = { id: string; offset: number; neighbours: string[] };
 
 function VirtualRows(props: ListProps) {
   const { items } = props;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const { scrollRef, isAtBottom, stopScroll, state } = useStickToBottomContext();
   const rows = useRef<HTMLDivElement>(null);
   // Whether the last scroll left the list at its very bottom: a row measured after its estimate, or a reply growing, keeps it there.
@@ -145,6 +128,8 @@ function VirtualRows(props: ListProps) {
     getItemKey: (index) => items[index]?.id ?? index,
     overscan: OVERSCAN,
     scrollMargin: margin,
+    // React 19 warns if flushSync runs synchronously during a lifecycle/effect scroll (e.g. scrollToIndex inside useEffect).
+    useFlushSync: false,
     initialRect: { width: 0, height: UNLAID_HEIGHT },
     // A hidden pane (or one not laid out yet) has no height and its rows none either: assume a few screens instead of none or all.
     observeElementRect: (instance, cb) => observeElementRect(instance, (rect) => cb(rect.height > 0 ? rect : { width: rect.width, height: UNLAID_HEIGHT })),
@@ -155,6 +140,7 @@ function VirtualRows(props: ListProps) {
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance: Virtualizer<HTMLElement, Element>) => !atBottom.current && item.start < (instance.scrollOffset ?? 0);
 
   // The rows start below the "older messages" button and the padding; the virtualizer counts from the top of the scroll container.
+  const isEmpty = items.length === 0;
   useLayoutEffect(() => {
     const node = scrollRef.current;
     const box = rows.current;
@@ -164,7 +150,7 @@ function VirtualRows(props: ListProps) {
     if (outer.height === 0) return;
     const next = Math.round(box.getBoundingClientRect().top - outer.top + node.scrollTop);
     if (next !== margin) setMargin(next);
-  });
+  }, [scrollRef, props.hasMore, isEmpty, margin]);
 
   // The message at the top of the viewport, and the ones after it in case it is deleted before the next refresh.
   const anchor = useRef<Anchor | null>(null);
@@ -174,8 +160,8 @@ function VirtualRows(props: ListProps) {
     const top = node.scrollTop;
     const row = virtualizer.getVirtualItemForOffset(top);
     if (!row) { anchor.current = null; return; }
-    anchor.current = { id: String(row.key), offset: top - row.start, neighbours: items.slice(row.index + 1, row.index + 8).map((item) => item.id) };
-  }, [scrollRef, virtualizer, items]);
+    anchor.current = { id: String(row.key), offset: top - row.start, neighbours: itemsRef.current.slice(row.index + 1, row.index + 8).map((item) => item.id) };
+  }, [scrollRef, virtualizer]);
 
   // A page loaded above, or a refresh, leaves the message at the top of the viewport where it was; at the bottom the list stays at the bottom.
   const shown = useRef(items);
@@ -213,7 +199,7 @@ function VirtualRows(props: ListProps) {
       if (bottom - node.scrollTop > 1) node.scrollTop = bottom;
     }
     leftAt.current = { top: node.scrollTop, height: node.scrollHeight };
-  });
+  }, [items, props.memoryKey, margin, scrollRef, state]);
 
   // Near the top the next older page is read on its own; the button stays for the keyboard.
   const older = useRef({ hasMore: props.hasMore, loading: props.loadingOlder, onOlder: props.onOlder });
@@ -269,396 +255,5 @@ function VirtualRows(props: ListProps) {
         );
       })}
     </div>
-  );
-}
-
-function Bubble(props: { t: T; item: StreamItem; actions: BubbleActions; formatDate: (value: string) => string }) {
-  const { item } = props;
-  if (item.kind === "note") return <NoteBubble t={props.t} item={item} actions={props.actions} formatDate={props.formatDate} />;
-  if (item.kind === "voice") return <VoiceBubble t={props.t} item={item} actions={props.actions} formatDate={props.formatDate} />;
-  if (item.kind === "user") return <UserBubble t={props.t} item={item} />;
-  return <AgentBubble t={props.t} item={item} actions={props.actions} formatDate={props.formatDate} />;
-}
-
-function NoteBubble(props: { t: T; item: StreamNote; actions: BubbleActions; formatDate: (value: string) => string }) {
-  const { t, item, actions } = props;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(item.text);
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [composing, setComposing] = useState(false);
-  const source = noteSourceLabel(t, item);
-  const jumpable = item.locator !== null && item.resourceId !== null;
-
-  async function save() {
-    if (busy) return;
-    setBusy(true);
-    const saved = await actions.onEditNote(item, draft);
-    setBusy(false);
-    if (saved) setEditing(false);
-  }
-
-  return (
-    <article className="bubble bubble-note" data-testid={`bubble-note-${item.id}`} data-kind="note">
-      <header className="bubble-head">
-        <span className="bubble-kind"><Pencil size={12} />{t("chat.kind.note")}</span>
-        {jumpable
-          ? <button type="button" className="bubble-source" data-testid={`bubble-source-${item.id}`} title={t("chat.source.jump")} onClick={() => actions.onJumpNote(item)}>{source}</button>
-          : <span className="bubble-source" data-testid={`bubble-source-${item.id}`}>{source}</span>}
-        <time className="bubble-time" dateTime={item.at}>{props.formatDate(item.at)}</time>
-      </header>
-      {item.quote ? <blockquote className="bubble-quote" data-testid={`bubble-quote-${item.id}`}>{item.quote}</blockquote> : null}
-      {editing ? (
-        <div className="bubble-edit">
-          <textarea
-            data-testid={`bubble-edit-${item.id}`}
-            value={draft}
-            rows={3}
-            autoFocus
-            onChange={(event) => setDraft(event.target.value)}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={() => setComposing(false)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && !composing) { event.stopPropagation(); setEditing(false); setDraft(item.text); }
-              if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !composing) { event.preventDefault(); void save(); }
-            }}
-          />
-          <div className="bubble-actions">
-            <button type="button" className="primary-button" data-testid={`bubble-save-${item.id}`} disabled={busy} onClick={() => void save()}>{t("chat.save")}</button>
-            <button type="button" className="secondary-button" onClick={() => { setEditing(false); setDraft(item.text); }}>{t("chat.cancel")}</button>
-          </div>
-        </div>
-      ) : item.text ? <p className="bubble-text" data-testid={`bubble-text-${item.id}`}>{item.text}</p> : null}
-      {!editing ? (
-        confirming ? (
-          <div className="bubble-actions" role="alertdialog" aria-label={t("chat.note.deleteAsk")} data-testid={`bubble-confirm-${item.id}`}>
-            <span>{t("chat.note.deleteAsk")}</span>
-            <button type="button" className="danger-button" data-testid={`bubble-delete-confirm-${item.id}`} onClick={() => { setConfirming(false); void actions.onDeleteNote(item); }}>{t("chat.note.delete")}</button>
-            <button type="button" className="secondary-button" onClick={() => setConfirming(false)}>{t("chat.cancel")}</button>
-          </div>
-        ) : (
-          <div className="bubble-actions bubble-tools">
-            <button type="button" className="icon-button" data-testid={`bubble-edit-open-${item.id}`} aria-label={t("chat.note.edit")} title={t("chat.note.edit")} onClick={() => { setDraft(item.text); setEditing(true); }}><Pencil size={14} /></button>
-            <button type="button" className="icon-button" data-testid={`bubble-quote-ask-${item.id}`} aria-label={t("chat.note.quote")} title={t("chat.note.quote")} onClick={() => actions.onQuoteNote(item)}><MessageSquareQuote size={14} /></button>
-            <button type="button" className="icon-button" data-testid={`bubble-delete-${item.id}`} aria-label={t("chat.note.delete")} title={t("chat.note.delete")} onClick={() => setConfirming(true)}><Trash2 size={14} /></button>
-          </div>
-        )
-      ) : null}
-    </article>
-  );
-}
-
-const LIVE_STAGES = new Set(["recording", "recorded", "filtering", "awaiting_asr", "transcribing", "pending"]);
-
-function VoiceBubble(props: { t: T; item: StreamVoice; actions: BubbleActions; formatDate: (value: string) => string }) {
-  const { t, item, actions } = props;
-  const audio = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const stage = t(`review.stage.${item.stage}` as MessageKey);
-  useEffect(() => () => audio.current?.pause(), []);
-
-  async function toggle() {
-    const element = audio.current;
-    if (!element) return;
-    if (playing) { element.pause(); return; }
-    if (!element.src) {
-      const handle = await attempt<{ url: string }>("capture.audioHandle", { sessionId: item.id });
-      if (!handle.ok) return;
-      element.src = handle.value.url;
-    }
-    try { await element.play(); } catch { setPlaying(false); }
-  }
-
-  return (
-    <article className="bubble bubble-voice" data-testid={`bubble-voice-${item.id}`} data-stage={item.stage} data-kind="voice">
-      <header className="bubble-head">
-        <span className="bubble-kind"><Mic size={12} />{t("chat.kind.voice")}</span>
-        <span className="chip" data-testid={`bubble-voice-stage-${item.id}`} data-live={LIVE_STAGES.has(item.stage) ? "true" : "false"}>{stage}</span>
-        <span className="bubble-time">{formatClock(item.durationMs)}</span>
-        <time className="bubble-time" dateTime={item.at}>{props.formatDate(item.at)}</time>
-      </header>
-      {item.text ? <p className="bubble-text" data-testid={`bubble-voice-text-${item.id}`}>{item.text}</p> : item.stage === "done" || item.stage === "no_speech" || item.stage === "failed" ? <p className="bubble-text detail-muted">{stage}</p> : null}
-      {item.sources.length ? (
-        <ul className="bubble-sources" data-testid={`bubble-voice-sources-${item.id}`}>
-          {item.sources.slice(0, 6).map((source, index) => (
-            <li key={`${source.startMs}:${index}`}>
-              <button type="button" className="bubble-source" disabled={!source.locator} onClick={() => actions.onJumpVoice(item, source)}>{voiceSourceLabel(t, source)}</button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="bubble-actions">
-        {item.playable ? (
-          <button type="button" className="secondary-button" data-testid={`bubble-voice-play-${item.id}`} onClick={() => void toggle()}>{playing ? <Pause size={13} /> : <Play size={13} />}{playing ? t("chat.voice.pause") : t("chat.voice.play")}</button>
-        ) : null}
-        <button type="button" className="link-button" data-testid={`bubble-voice-open-${item.id}`} onClick={() => actions.onOpenRecording(item)}>{t("chat.voice.review")}</button>
-      </div>
-      <audio ref={audio} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
-    </article>
-  );
-}
-
-function UserBubble(props: { t: T; item: StreamUser }) {
-  const { t, item } = props;
-  const [open, setOpen] = useState(false);
-  return (
-    <article className="bubble bubble-user" data-testid={`bubble-user-${item.id}`} data-kind="user">
-      {item.quickTask ? (
-        <header className="bubble-head">
-          <span className="chip chip-accent" data-testid={`bubble-quick-${item.id}`}><Sparkles size={11} />{t("chat.quick.tag")} · {item.quickTask.name}</span>
-          <button type="button" className="link-button" aria-expanded={open} data-testid={`bubble-quick-toggle-${item.id}`} onClick={() => setOpen((value) => !value)}>{open ? t("chat.quick.hide") : t("chat.quick.show")}</button>
-        </header>
-      ) : null}
-      {!item.quickTask || open ? <p className="bubble-text">{item.text}</p> : null}
-    </article>
-  );
-}
-
-function shortTime(iso: string | null, formatDate: (v: string) => string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return formatDate(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-async function executeProposalApply(proposal: ProposalCard) {
-  let pathHandle: string | undefined;
-  if (proposal.kind === "exportProject") {
-    const picked = await window.manga.pick?.({ mode: "directory" });
-    if (!picked) return null;
-    pathHandle = picked.pathHandle;
-  }
-  return attempt("proposal.apply", { proposalId: proposal.id, ...(pathHandle ? { pathHandle } : {}) });
-}
-
-function ProposalCardItem(props: { t: T; proposal: ProposalCard; formatDate: (v: string) => string; onChanged?: () => void; disabled?: boolean }) {
-  const { t, proposal, formatDate } = props;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { preview } = proposal;
-  const status = busy && proposal.status === "pending" ? "applying" : proposal.status;
-
-  async function apply() {
-    if (busy || props.disabled || proposal.status !== "pending") return;
-    setBusy(true);
-    setError(null);
-    try {
-      const ran = await executeProposalApply(proposal);
-      if (ran && !ran.ok) setError(ran.error.message);
-      if (ran !== null) props.onChanged?.();
-    } catch (cause) {
-      setError(messageOf(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function reject() {
-    if (busy || props.disabled || proposal.status !== "pending") return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await attempt("proposal.reject", { proposalId: proposal.id });
-      if (!result.ok) setError(result.error.message);
-      props.onChanged?.();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const exportView = (proposal.result?.output as { export?: RoughcutExportView } | undefined)?.export;
-  async function cancelExport() {
-    if (!exportView || busy) return;
-    setBusy(true);
-    const result = await attempt("roughcut.cancel", { exportId: exportView.id });
-    if (!result.ok) setError(result.error.message);
-    props.onChanged?.();
-    setBusy(false);
-  }
-
-  const problems = (preview.meta?.problems ?? []) as RoughcutProblem[];
-  const titles = (preview.meta?.clipTitles ?? {}) as Record<string, string>;
-  const warnings = [...preview.warnings, ...problems.map((problem) => problemText(t, problem, (clipId) => titles[clipId ?? ""] ?? ""))];
-
-  const time = shortTime(proposal.decidedAt, formatDate);
-  const staleReason = String(proposal.result?.reason ?? t("proposal.staleDefault"));
-  const failReason = String((proposal.result?.error as { message?: string } | undefined)?.message ?? proposal.result?.reason ?? t("proposal.failedDefault"));
-
-  return (
-    <section className="proposal-card" data-testid={`proposal-card-${proposal.id}`} data-status={status} data-kind={proposal.kind} aria-label={preview.title}>
-      <header className="proposal-head">
-        <strong className="proposal-title" data-testid={`proposal-title-${proposal.id}`}>{preview.title}</strong>
-      </header>
-      <p className="proposal-summary" data-testid={`proposal-summary-${proposal.id}`}>{preview.summary}</p>
-      {proposal.reason ? <p className="proposal-reason detail-muted" data-testid={`proposal-reason-${proposal.id}`}>{t("proposal.reason", { reason: proposal.reason })}</p> : null}
-      {preview.lines.length > 0 ? (
-        <ul className="proposal-lines" data-testid={`proposal-lines-${proposal.id}`}>
-          {preview.lines.map((line, idx) => <li key={idx}>{line}</li>)}
-        </ul>
-      ) : null}
-      {warnings.length > 0 ? (
-        <ul className="proposal-warnings" data-testid={`proposal-warnings-${proposal.id}`}>
-          {warnings.map((warning, idx) => <li key={idx}>{warning}</li>)}
-        </ul>
-      ) : null}
-      <div className="proposal-actions">
-        {status === "pending" ? (
-          <>
-            <button
-              type="button"
-              className={preview.irreversible ? "danger-button" : "primary-button"}
-              data-testid={`proposal-apply-${proposal.id}`}
-              disabled={busy || props.disabled}
-              onClick={() => void apply()}
-            >
-              {t("proposal.apply")}
-            </button>
-            {preview.irreversible ? <span className="proposal-irreversible" data-testid={`proposal-irreversible-${proposal.id}`}>{t("proposal.irreversible")}</span> : null}
-            <button
-              type="button"
-              className="secondary-button"
-              data-testid={`proposal-reject-${proposal.id}`}
-              disabled={busy || props.disabled}
-              onClick={() => void reject()}
-            >
-              {t("proposal.reject")}
-            </button>
-          </>
-        ) : status === "applying" ? (
-          <>
-            <span className="proposal-status" role="status" data-testid={`proposal-status-${proposal.id}`} data-status="applying">{exportView ? stepText(t, exportView) : t("proposal.applying")}</span>
-            {exportView ? <button type="button" className="secondary-button" data-testid={`proposal-cancel-${proposal.id}`} disabled={busy || props.disabled} onClick={() => void cancelExport()}>{t("roughcut.export.cancel")}</button> : null}
-          </>
-        ) : status === "applied" ? (
-          <span className="proposal-status proposal-status-applied" role="status" data-testid={`proposal-status-${proposal.id}`} data-status="applied">
-            {time ? t("proposal.status.appliedAt", { time }) : t("proposal.status.applied")}
-          </span>
-        ) : status === "rejected" ? (
-          <span className="proposal-status proposal-status-rejected" role="status" data-testid={`proposal-status-${proposal.id}`} data-status="rejected">
-            {time ? t("proposal.status.rejectedAt", { time }) : t("proposal.status.rejected")}
-          </span>
-        ) : status === "stale" ? (
-          <span className="proposal-status proposal-status-stale" role="status" data-testid={`proposal-status-${proposal.id}`} data-status="stale">
-            {t("proposal.status.stale", { reason: staleReason })}
-          </span>
-        ) : (
-          <span className="proposal-status proposal-status-failed" role="status" data-testid={`proposal-status-${proposal.id}`} data-status="failed">
-            {t("proposal.status.failed", { reason: failReason })}
-          </span>
-        )}
-      </div>
-      {error ? <p role="alert" data-testid={`proposal-error-${proposal.id}`}>{error}</p> : null}
-    </section>
-  );
-}
-
-function ProposalGroup(props: { t: T; runId: string; proposals: ProposalCard[]; formatDate: (v: string) => string; onChanged?: () => void }) {
-  const { t, runId, proposals, formatDate } = props;
-  const [confirmItems, setConfirmItems] = useState<ProposalCard[] | null>(null);
-  const [batchBusy, setBatchBusy] = useState(false);
-  const [batchErrors, setBatchErrors] = useState<string[]>([]);
-  const pending = proposals.filter((item) => item.status === "pending");
-  const anyIrreversible = (confirmItems ?? []).some((item) => item.preview.irreversible);
-
-  async function applyAll() {
-    if (batchBusy) return;
-    const confirmed = confirmItems ?? [];
-    setConfirmItems(null);
-    setBatchBusy(true);
-    setBatchErrors([]);
-    try {
-      for (const item of confirmed) {
-        try {
-          const result = await executeProposalApply(item);
-          if (result && !result.ok) setBatchErrors((errors) => [...errors, `${item.preview.title}：${result.error.message}`]);
-        } catch (cause) {
-          setBatchErrors((errors) => [...errors, `${item.preview.title}：${messageOf(cause)}`]);
-        }
-      }
-      props.onChanged?.();
-    } finally {
-      setBatchBusy(false);
-    }
-  }
-
-  async function rejectAll() {
-    if (batchBusy) return;
-    setBatchBusy(true);
-    setBatchErrors([]);
-    try {
-      for (const item of pending) {
-        const result = await attempt("proposal.reject", { proposalId: item.id });
-        if (!result.ok) setBatchErrors((errors) => [...errors, `${item.preview.title}：${result.error.message}`]);
-      }
-      props.onChanged?.();
-    } finally {
-      setBatchBusy(false);
-    }
-  }
-
-  return (
-    <div className="proposal-group" data-testid={`proposal-group-${runId}`}>
-      {pending.length >= 2 ? (
-        <div className="proposal-batch" data-testid={`proposal-batch-${runId}`}>
-          <button type="button" className="primary-button" data-testid={`proposal-batch-apply-${runId}`} disabled={batchBusy} onClick={() => { setBatchErrors([]); setConfirmItems(pending); }}>
-            {t("proposal.batch.apply", { count: pending.length })}
-          </button>
-          <button type="button" className="secondary-button" data-testid={`proposal-batch-reject-${runId}`} disabled={batchBusy} onClick={() => void rejectAll()}>
-            {t("proposal.batch.reject")}
-          </button>
-        </div>
-      ) : null}
-      {proposals.map((proposal) => (
-        <ProposalCardItem key={proposal.id} t={t} proposal={proposal} formatDate={formatDate} onChanged={props.onChanged} disabled={batchBusy} />
-      ))}
-      {batchErrors.length ? <ul role="alert" data-testid={`proposal-batch-errors-${runId}`}>{batchErrors.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
-      {confirmItems ? (
-        <Modal
-          testId="proposal-batch-modal"
-          title={t("proposal.batch.title")}
-          closeLabel={t("proposal.batch.cancel")}
-          onClose={() => setConfirmItems(null)}
-          footer={
-            <>
-              <button type="button" className="secondary-button" data-testid="proposal-batch-cancel" onClick={() => setConfirmItems(null)}>{t("proposal.batch.cancel")}</button>
-              <button type="button" className={anyIrreversible ? "danger-button" : "primary-button"} data-testid="proposal-batch-confirm" disabled={batchBusy} onClick={() => void applyAll()}>
-                {t("proposal.batch.confirm")}
-              </button>
-            </>
-          }
-        >
-          <p>{t("proposal.batch.lead", { count: confirmItems.length })}</p>
-          <ul className="proposal-batch-list" data-testid="proposal-batch-list">
-            {confirmItems.map((item) => (
-              <li key={item.id}>
-                <strong>{item.preview.title}</strong> — <span>{item.preview.summary}</span>
-                {item.preview.irreversible ? <span className="proposal-irreversible">（{t("proposal.irreversible")}）</span> : null}
-              </li>
-            ))}
-          </ul>
-        </Modal>
-      ) : null}
-    </div>
-  );
-}
-
-function AgentBubble(props: { t: T; item: StreamAgent; actions: BubbleActions; formatDate: (value: string) => string }) {
-  const { t, item } = props;
-  const live = item.status === "running" || item.status === "queued" || item.status === "waiting_input";
-  const trace = props.actions.onOpenTrace;
-  const proposals = item.proposals ?? [];
-  return (
-    <article className="bubble bubble-agent" data-testid={`bubble-agent-${item.id}`} data-status={item.status} data-kind="agent">
-      <header className="bubble-head"><span className="bubble-kind"><Sparkles size={12} />MANGA Agent</span></header>
-      {item.text ? <div className="bubble-text bubble-markdown"><Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown></div> : live ? <p className="bubble-text detail-muted" role="status">{t("chat.agent.working")}</p> : null}
-      {proposals.length > 0 ? <ProposalGroup t={t} runId={item.runId} proposals={proposals} formatDate={props.formatDate} onChanged={props.actions.onProposalChanged} /> : null}
-      {item.error ? <p className="bubble-error" role="alert" data-testid={`bubble-error-${item.id}`}>{item.error.code === "MODEL_CAPABILITY_MISSING" ? t("rp.missingVision", { reason: item.error.message }) : item.error.message}</p> : null}
-      {item.status === "failed" || item.status === "interrupted" || (trace && !live) ? (
-        <div className="bubble-actions">
-          {item.status === "failed" || item.status === "interrupted" ? <button type="button" className="secondary-button" data-testid={`bubble-retry-${item.id}`} onClick={() => props.actions.onRetry(item.runId)}><RotateCcw size={13} />{t("agent.retry")}</button> : null}
-          {trace && !live ? <button type="button" className="link-button" data-testid={`bubble-trace-${item.id}`} onClick={() => trace(item.runId)}><ScrollText size={13} />{t("trace.open")}</button> : null}
-        </div>
-      ) : null}
-    </article>
   );
 }

@@ -214,9 +214,9 @@ describe("the layouts of the views (version 2)", () => {
 });
 
 describe("the shell preference", () => {
-  it("is version 2: a sidebar and a dock, the context to come back to, and no mode", () => {
+  it("is version 2: a sidebar and a dock, the context to come back to, what the close button does, and no mode", () => {
     expect(ShellPreferenceSchema.parse(DEFAULT_SHELL_PREFERENCE)).toEqual(DEFAULT_SHELL_PREFERENCE);
-    expect(Object.keys(DEFAULT_SHELL_PREFERENCE).sort()).toEqual(["dock", "lastContext", "rail", "reading", "sidebar", "spoilerGuard", "version"]);
+    expect(Object.keys(DEFAULT_SHELL_PREFERENCE).sort()).toEqual(["dock", "lastContext", "rail", "reading", "sidebar", "spoilerGuard", "version", "window"]);
     expect(ShellPreferenceSchema.safeParse({ ...DEFAULT_SHELL_PREFERENCE, mode: "creator" }).success).toBe(false);
     expect(ShellPreferenceSchema.safeParse({ ...DEFAULT_SHELL_PREFERENCE, version: 1 }).success).toBe(false);
   });

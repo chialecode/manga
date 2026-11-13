@@ -36,6 +36,7 @@ export type HandleIssue = { handle: string; url: string };
 export const MEDIA_SCHEME = "manga-media";
 export const MEDIA_HOST = "media";
 const MAX_HANDLES = 8192;
+const MAX_CLOSED_SESSIONS = 4096;
 
 export function mediaUrl(handle: string): string {
   return `${MEDIA_SCHEME}://${MEDIA_HOST}/${handle}`;
@@ -127,7 +128,13 @@ export class MediaHandleTable {
   }
 
   closeSession(sessionId: string): number {
+    this.closedSessions.delete(sessionId);
     this.closedSessions.add(sessionId);
+    while (this.closedSessions.size > MAX_CLOSED_SESSIONS) {
+      const oldest = this.closedSessions.values().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.closedSessions.delete(oldest);
+    }
     return this.revokeWhere((binding) => binding.sessionId === sessionId);
   }
 

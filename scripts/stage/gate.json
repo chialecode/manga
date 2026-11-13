@@ -30,7 +30,8 @@
       "apps/desktop/src/main/smoke/bench-polish.ts",
       "apps/desktop/src/main/smoke/bench-reader.ts",
       "apps/desktop/src/main/smoke/bench-window.ts",
-      "apps/desktop/src/main/smoke/bench-workspace.ts"
+      "apps/desktop/src/main/smoke/bench-workspace.ts",
+      "apps/desktop/src/main/smoke/bench-read-aloud.ts"
     ],
     "smokeWalk": [
       "apps/desktop/src/main/smoke/agent.ts",
@@ -65,7 +66,8 @@
       "apps/desktop/src/main/smoke/voice.ts",
       "apps/desktop/src/main/smoke/window-walk.ts",
       "apps/desktop/src/main/smoke/workspace-restart.ts",
-      "apps/desktop/src/main/smoke/workspace-walk.ts"
+      "apps/desktop/src/main/smoke/workspace-walk.ts",
+      "apps/desktop/src/main/smoke/deepseek-walk.ts"
     ],
     "lock": [
       "pnpm-lock.yaml"
@@ -83,6 +85,7 @@
       "scripts/dev-desktop.mjs",
       "scripts/stage/version-lib.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/win-process.mjs",
       "apps/desktop/forge.config.ts",
       "apps/desktop/package.json",
       "apps/desktop/vite.main.config.ts",
@@ -106,6 +109,7 @@
       "scripts/stage/test.mjs",
       "scripts/stage/report.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/win-process.mjs",
       "scripts/stage/version-lib.mjs",
       "scripts/stage/install-dev.mjs",
       "scripts/stage/release.mjs",
@@ -124,6 +128,7 @@
       "scripts/stage/package.mjs",
       "scripts/stage/light-open.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/win-process.mjs",
       "scripts/stage/version-lib.mjs",
       "scripts/stage/install-dev.mjs",
       "scripts/stage/release.mjs",
@@ -148,6 +153,7 @@
       "scripts/stage/bench-creative.mjs",
       "scripts/stage/bench-dictation.mjs",
       "scripts/stage/bench-import.mjs",
+      "scripts/stage/bench-read-aloud.mjs",
       "scripts/stage/bench-reader.mjs",
       "scripts/stage/bench-scale.mjs",
       "scripts/stage/bench-scan-pane.mjs",
@@ -155,6 +161,7 @@
       "scripts/voice-eval",
       "scripts/stage/power-throttling.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/win-process.mjs",
       "scripts/stage/version-lib.mjs",
       "scripts/stage/install-dev.mjs",
       "scripts/stage/release.mjs",
@@ -170,6 +177,7 @@
     "installer": [
       "scripts/stage/installer.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/win-process.mjs",
       "scripts/stage/version-lib.mjs",
       "scripts/stage/install-dev.mjs",
       "scripts/stage/release.mjs",
@@ -186,6 +194,7 @@
       "scripts/stage/release-previous.mjs",
       "scripts/stage/update-rehearsal.mjs",
       "scripts/stage/installer-lib.mjs",
+      "scripts/stage/win-process.mjs",
       "scripts/stage/version-lib.mjs",
       ".github/workflows/release.yml",
       ".github/actions-policy.json"
@@ -252,6 +261,8 @@
 
   "bench": {
     "targets": {
+      "ttsFirstAudioP95Ms": 300,
+      "readAloudGapP95Ms": 150,
       "searchP95Ms": 500,
       "contextP95Ms": 150,
       "indexedFirstScreenMs": 2000,
@@ -409,6 +420,20 @@
       "minAnswerSamples": 300
     },
     "creative": {
+      "ttsFirstAudio": {
+        "metric": "ttsFirstAudioP95Ms",
+        "stat": "p95",
+        "minSamples": 10,
+        "scale": { "answers": 10 },
+        "requirement": "AT-191：打包窗口里点击回答的“朗读”到第一块音频交给播放（假 DeepSeek，排除网络；每次回答文字不同，不走缓存），p95 ≤ 300 ms"
+      },
+      "readAloudGap": {
+        "metric": "readAloudGapP95Ms",
+        "stat": "p95",
+        "minSamples": 20,
+        "scale": { "paragraphs": 24 },
+        "requirement": "AT-191：打包窗口里朗读小说，段与段之间的静默（下一段在上一段播完前到达记 0），p95 ≤ 150 ms（假 DeepSeek，排除网络）"
+      },
       "semantic": {
         "metric": "semanticSearchP95Ms",
         "stat": "p95",
@@ -804,6 +829,7 @@
       "creative",
       "trace",
       "plugins",
+      "deepseek",
       "loop",
       "credentials-async",
       "credentials-async-restart",
@@ -1519,7 +1545,8 @@
         "^a source that misbehaves does not follow a redirect to a host that is not on the list",
         "^the access token is stored only protected, sent only to the API, never to a picture host, and never leaves the app",
         "^settings for media, recording and metadata stores a token through the credential handle",
-        "^pages opened outside the app opens only the metadata source's own https subject pages",
+        "^pages opened outside the app opens the metadata source's own https subject pages",
+        "^pages opened outside the app opens the ordinary web pages the app links to",
         "^pages opened outside the app refuses everything else",
         "^covers refuses a cover that is not a picture or is not a path the user picked",
         "^serveMedia over a file returns the same 404 for unknown, forged, expired, revoked and generation-bumped handles",
@@ -3147,7 +3174,7 @@
         "^Dictation controller, capsule, and inline revert/suggestion pill \\(U1\\) separates Chat Composer mic behavior: ask mode triggers dictation into draft without sending, note mode uses recorder$",
         "^EditableTargetAdapter across all 6 surfaces \\(U1\\) ",
         "^dictation shortcut and recording key conflict rules ",
-        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-174 / AT-182: "
+        "^voice dictation end-to-end integration AT-174 / AT-182: "
       ]
     },
     {
@@ -3172,7 +3199,7 @@
       "tests": [
         "^unified AsrEngine, model-protocol chat audio, vocabulary hints, and echo filter ",
         "^Voice transcription settings 5 sections, local ASR models, dictionary extensions, history, and ConnectionDialog offers transcriptionInterface selector in ConnectionDialog when purpose is transcription$",
-        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-177: "
+        "^voice dictation end-to-end integration AT-177: "
       ]
     },
     {
@@ -3181,7 +3208,7 @@
       "tests": [
         "^voice local model catalog, downloader, and tar verifier ",
         "^Voice transcription settings 5 sections, local ASR models, dictionary extensions, history, and ConnectionDialog renders all 5 sections, confirms local model download before starting, manages batch/suggestions/enrich, and retranscribes history$",
-        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-178: ",
+        "^voice dictation end-to-end integration AT-178: ",
         "finds the tools where the app looks for them in a packaged build, and never bundles ASR models$"
       ]
     },
@@ -3201,7 +3228,7 @@
       "tests": [
         "^Bangumi infobox parsing, detail enrichment, batch import and hotword ranking \\(X1\\) ",
         "^schema v16 migration & dictation backup/export isolation \\(X1 \\+ H1, AT-180, AT-182\\) ",
-        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) AT-180 / AT-181: "
+        "^voice dictation end-to-end integration AT-180 / AT-181: "
       ]
     },
     {
@@ -3217,7 +3244,7 @@
       "kind": "automated",
       "tests": [
         "^Dictation session state machine, 30d history / 24h audio, and learn-from-edits \\(H1 \\+ U1\\) ",
-        "^voice dictation end-to-end integration \\(M12 Wave 3A\\) Agent Isolation: "
+        "^voice dictation end-to-end integration Agent Isolation: "
       ]
     },
     {
@@ -3390,6 +3417,13 @@
     "dictation-local",
     "dictation-revert",
     "dictation-settings",
-    "dictation-boundary"
+    "dictation-boundary",
+    "deepseek-plugin",
+    "deepseek-models",
+    "deepseek-chat",
+    "web-search",
+    "read-aloud",
+    "dictation-deepseek",
+    "deepseek-network"
   ]
 }

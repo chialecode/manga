@@ -1,4 +1,5 @@
 import type { MessageKey, Translator } from "@manga/i18n";
+import { formatBytes } from "./format.ts";
 
 type T = Translator["t"];
 
@@ -49,11 +50,7 @@ export function spanLabel(ms: number): string {
   return `${Math.floor(seconds / 60)} m ${String(seconds % 60).padStart(2, "0")} s`;
 }
 
-export function sizeLabel(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+export const sizeLabel = formatBytes;
 
 /** What an entry is called: the kind of it, and for a compaction or a request what it was for. */
 export function entryTitle(t: T, entry: TraceEntry): string {

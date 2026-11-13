@@ -23,6 +23,8 @@ export const REFRESH_MIN_MS = 60_000;
 const AIRING_WITHIN_DAYS = 100;
 const FINISHED_AFTER_DAYS = 365;
 const SEARCH_LIMIT = 60;
+const MAX_CACHE_ENTRIES = 500;
+const STALE_CACHE_PRUNE_MS = 30 * 24 * 60 * 60_000;
 
 /** How long to keep an episode, from the date it aired (or, failing that, the date its show began). A date that cannot be read counts as ordinary. */
 export function cacheTtlMs(airdate: string | null | undefined, nowMs: number): number {
@@ -140,16 +142,22 @@ export class DanmakuService {
   /** The date that decides how long the comments are kept: the episode's own airing date from the entry the work is linked to, else the show's. */
   private airdateOf(target: Target): string | null {
     if (!target.workId) return null;
-    const row = this.store.sqlite.prepare("SELECT snapshot_json FROM work_links WHERE work_id = ? AND link_state = 'linked' AND provider_id = 'bangumi' ORDER BY confirmed_at DESC LIMIT 1").get(target.workId) as { snapshot_json: string } | undefined;
-    if (!row) return null;
-    try {
-      const snapshot = JSON.parse(row.snapshot_json) as { episodes?: Array<{ ep: number | null; sort: number; airdate?: string }>; fields?: { releaseDate?: unknown } };
-      const episode = target.ordinal === null ? undefined : snapshot.episodes?.find((item) => item.ep === target.ordinal || (item.ep === null && item.sort === target.ordinal));
-      if (episode?.airdate) return episode.airdate;
-      return typeof snapshot.fields?.releaseDate === "string" ? snapshot.fields.releaseDate : null;
-    } catch {
-      return null;
-    }
+    const pick = (json: string | undefined): string | null => {
+      if (!json) return null;
+      try {
+        const snapshot = JSON.parse(json) as { episodes?: Array<{ ep: number | null; sort: number; airdate?: string }>; fields?: { releaseDate?: unknown } };
+        const episode = target.ordinal === null ? undefined : snapshot.episodes?.find((item) => item.ep === target.ordinal || (item.ep === null && item.sort === target.ordinal));
+        if (episode?.airdate) return episode.airdate;
+        return typeof snapshot.fields?.releaseDate === "string" ? snapshot.fields.releaseDate : null;
+      } catch {
+        return null;
+      }
+    };
+    const meta = this.store.sqlite.prepare("SELECT snapshot_json FROM metadata_snapshots WHERE work_id = ? AND provider_id = 'bangumi' AND detached = 0 ORDER BY fetched_at DESC LIMIT 1").get(target.workId) as { snapshot_json: string } | undefined;
+    const fromMeta = pick(meta?.snapshot_json);
+    if (fromMeta) return fromMeta;
+    const link = this.store.sqlite.prepare("SELECT snapshot_json FROM work_links WHERE work_id = ? AND provider_id = 'bangumi' AND link_state = 'linked' ORDER BY confirmed_at DESC LIMIT 1").get(target.workId) as { snapshot_json: string } | undefined;
+    return pick(link?.snapshot_json);
   }
 
   // ------------------------------------------------------------------ cache
@@ -174,6 +182,9 @@ export class DanmakuService {
     this.store.sqlite.prepare(`INSERT INTO danmaku_cache(source, episode_id, fetched_at, expires_at, count, payload) VALUES (?,?,?,?,?,?)
       ON CONFLICT(source, episode_id) DO UPDATE SET fetched_at = excluded.fetched_at, expires_at = excluded.expires_at, count = excluded.count, payload = excluded.payload`)
       .run(this.cacheKey(), episodeId, fetchedAt, expiresAt, items.length, gzipSync(Buffer.from(JSON.stringify(items), "utf8")));
+    const cutoff = new Date(fetched - STALE_CACHE_PRUNE_MS).toISOString();
+    this.store.sqlite.prepare("DELETE FROM danmaku_cache WHERE expires_at < ?").run(cutoff);
+    this.store.sqlite.prepare("DELETE FROM danmaku_cache WHERE rowid NOT IN (SELECT rowid FROM danmaku_cache ORDER BY fetched_at DESC LIMIT ?)").run(MAX_CACHE_ENTRIES);
     return { fetchedAt, expiresAt };
   }
 
@@ -265,7 +276,11 @@ export class DanmakuService {
     if (subject !== null && target.ordinal !== null) {
       const mapped = await this.deps.client.bangumiSubject(subject, signal);
       const show = mapped.bangumi;
-      const episode = show?.episodes.find((item) => Number(item.episodeNumber) === target.ordinal);
+      const episode = show?.episodes.find((item) => {
+        if (item.episodeNumber === null || item.episodeNumber === undefined) return false;
+        const raw = String(item.episodeNumber).trim();
+        return raw !== "" && Number(raw) === target.ordinal;
+      });
       if (show && episode) {
         return { state: "matched", match: this.save(target, { animeId: show.animeId || null, episodeId: episode.episodeId, animeTitle: show.animeTitle, episodeTitle: episode.episodeTitle }, "bangumi", false) };
       }
@@ -335,9 +350,10 @@ export class DanmakuService {
     const match = matchInfo(saved);
     const cached = this.cacheRow(saved.episode_id);
     const fresh = cached !== undefined && Date.parse(cached.expires_at) > this.now();
-    const view = (row: CacheRow, flags: { fromCache: boolean; stale: boolean; warning: LoadWarning | null }): LoadOutcome => ({
-      state: "ok", items: this.readCache(row), count: row.count, fetchedAt: row.fetched_at, expiresAt: row.expires_at, match, attribution: DANMAKU_ATTRIBUTION, ...flags,
-    });
+    const view = (row: CacheRow, flags: { fromCache: boolean; stale: boolean; warning: LoadWarning | null }): LoadOutcome => {
+      const items = this.readCache(row);
+      return { state: "ok", items, count: items.length, fetchedAt: row.fetched_at, expiresAt: row.expires_at, match, attribution: DANMAKU_ATTRIBUTION, ...flags };
+    };
     if (cached && fresh && !input.refresh) return view(cached, { fromCache: true, stale: false, warning: null });
     if (cached && input.refresh) {
       const wait = REFRESH_MIN_MS - (this.now() - Date.parse(cached.fetched_at));

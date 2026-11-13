@@ -46,6 +46,7 @@ function Harness(props: { connections?: unknown[]; initial?: Partial<RecordingSe
             for (const [id, value] of Object.entries(promptCharsByConnection ?? {})) { if (value === null) delete merged[id]; else merged[id] = value; }
             return { ...current, ...rest, promptCharsByConnection: merged };
           });
+          return true;
         },
       }}
       onGoto={props.onGoto ?? (() => undefined)}
@@ -81,13 +82,19 @@ describe("the voice transcription settings page (AT-76)", () => {
     expect(screen.getByTestId("voice-connection-c2").textContent).not.toContain("当前使用");
     const input = screen.getByTestId("voice-limit-c2") as HTMLInputElement;
     expect(input.placeholder).toBe("600");
+    fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "120" } });
+    fireEvent.blur(input);
     expect(saved.at(-1)).toEqual({ promptCharsByConnection: { c2: 120 } });
     expect((screen.getByTestId("voice-limit-c2") as HTMLInputElement).value).toBe("120");
     // A value outside what the model protocol accepts is brought into range instead of being sent as it is.
+    fireEvent.focus(input);
     fireEvent.change(screen.getByTestId("voice-limit-c2"), { target: { value: "9" } });
+    fireEvent.blur(input);
     expect(saved.at(-1)).toEqual({ promptCharsByConnection: { c2: 50 } });
+    fireEvent.focus(input);
     fireEvent.change(screen.getByTestId("voice-limit-c2"), { target: { value: "" } });
+    fireEvent.blur(input);
     expect(saved.at(-1)).toEqual({ promptCharsByConnection: { c2: null } });
     await waitFor(() => expect((screen.getByTestId("voice-limit-c2") as HTMLInputElement).value).toBe(""));
     expect(host.of("dictionary.prompt").length).toBeGreaterThan(0);
@@ -101,7 +108,10 @@ describe("the voice transcription settings page (AT-76)", () => {
     expect(saved.at(-1)).toEqual({ language: "ja" });
     fireEvent.change(screen.getByTestId("voice-language"), { target: { value: "" } });
     expect(saved.at(-1)).toEqual({ language: null });
-    fireEvent.change(screen.getByTestId("voice-prompt-chars"), { target: { value: "900" } });
+    const promptChars = screen.getByTestId("voice-prompt-chars");
+    fireEvent.focus(promptChars);
+    fireEvent.change(promptChars, { target: { value: "900" } });
+    fireEvent.blur(promptChars);
     expect(saved.at(-1)).toEqual({ promptChars: 900 });
   });
 

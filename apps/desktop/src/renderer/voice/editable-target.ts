@@ -346,9 +346,13 @@ function createTiptapHandle(entry: TiptapEntry, editor: Editor): EditableTargetH
       let tr = editor.state.tr;
       if (entry.kind === "draft") tr = closeHistory(tr);
       tr = tr.insertText(text, safeFrom, safeTo);
-      const endPos = tr.selection.to;
-      if (entry.kind === "draft") tr = closeHistory(tr);
+      // Use transaction mapping instead of `tr.selection.to` because explicit `from/to` `insertText` maps an unrelated caret elsewhere.
+      const endPos = tr.mapping.map(safeTo, 1);
       editor.view.dispatch(tr);
+      if (entry.kind === "draft") {
+        // Close the history group AFTER the insert/replace transaction so subsequent typing within 500 ms stays a separate undo step.
+        editor.view.dispatch(closeHistory(editor.state.tr));
+      }
       inserted = true;
       rangeFrom = safeFrom;
       rangeTo = endPos;

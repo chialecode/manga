@@ -1,5 +1,5 @@
 import { MangaError, type AudioWarning } from "@manga/contracts";
-import { PCM_SAMPLE_RATE, wavFromPcm } from "./audio-files.ts";
+import { PCM_SAMPLE_RATE, stripWavHeaderIfPresent, wavFromPcm } from "./audio-files.ts";
 import type { VadEngine } from "./vad-client.ts";
 import {
   DEFAULT_VAD_CONFIG,
@@ -121,40 +121,6 @@ export function int16ToPcmBuffer(pcm16: Int16Array): Buffer {
     buf.writeInt16LE(pcm16[i]!, i * 2);
   }
   return buf;
-}
-
-function stripWavHeaderIfPresent(bytes: Uint8Array): Uint8Array {
-  if (
-    bytes.byteLength >= 44 &&
-    bytes[0] === 0x52 && // R
-    bytes[1] === 0x49 && // I
-    bytes[2] === 0x46 && // F
-    bytes[3] === 0x46 && // F
-    bytes[8] === 0x57 && // W
-    bytes[9] === 0x41 && // A
-    bytes[10] === 0x56 && // V
-    bytes[11] === 0x45 // E
-  ) {
-    let offset = 12;
-    while (offset + 8 <= bytes.byteLength) {
-      const chunkId = String.fromCharCode(
-        bytes[offset]!,
-        bytes[offset + 1]!,
-        bytes[offset + 2]!,
-        bytes[offset + 3]!,
-      );
-      const view = new DataView(bytes.buffer, bytes.byteOffset + offset + 4, 4);
-      const chunkSize = view.getUint32(0, true);
-      const dataStart = offset + 8;
-      if (chunkId === "data") {
-        const end = Math.min(bytes.byteLength, dataStart + chunkSize);
-        return bytes.subarray(dataStart, end);
-      }
-      offset = dataStart + chunkSize + (chunkSize % 2);
-    }
-    return bytes.subarray(44);
-  }
-  return bytes;
 }
 
 export function normalizePcm16kInput(input: AudioInputBuffer): {

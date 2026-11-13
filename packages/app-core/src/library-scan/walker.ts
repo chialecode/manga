@@ -69,36 +69,48 @@ async function list(request) {
     parentPort.postMessage({ id, type: "done", failed, truncated, cancelled: cancelled.has(id) });
   } catch (error) {
     parentPort.postMessage({ id, type: "error", code: (error && error.code) || "ERROR", message: String(error && error.message || error) });
+  } finally {
+    cancelled.delete(id);
   }
 }
 
 const SAMPLE = 64 * 1024;
 
 /** Size plus the first, middle and last 64 KiB: enough to tell a moved file from another file, cheap for a multi-gigabyte video. */
-async function sampleKey(file, size) {
-  const hash = crypto.createHash("sha256");
-  hash.update(String(size));
+async function sampleKey(file) {
   const handle = await fsp.open(file, "r");
   try {
+    const { size } = await handle.stat();
+    const hash = crypto.createHash("sha256");
+    hash.update(String(size));
     const offsets = size <= SAMPLE * 3 ? [0] : [0, Math.floor(size / 2) - SAMPLE / 2, size - SAMPLE];
     for (const offset of offsets) {
       const length = size <= SAMPLE * 3 ? size : SAMPLE;
-      const buffer = Buffer.alloc(length);
-      const { bytesRead } = await handle.read(buffer, 0, length, offset);
-      hash.update(buffer.subarray(0, bytesRead));
+      const buffer = Buffer.allocUnsafe(length);
+      let filled = 0;
+      while (filled < length) {
+        const { bytesRead } = await handle.read(buffer, filled, length - filled, offset + filled);
+        if (bytesRead === 0) break;
+        filled += bytesRead;
+      }
+      hash.update(buffer.subarray(0, filled));
     }
+    return hash.digest("hex");
   } finally { await handle.close(); }
-  return hash.digest("hex");
 }
 
 async function keys(request) {
   const { id, files } = request;
   const results = [];
-  for (const file of files) {
-    if (cancelled.has(id)) break;
-    try { results.push({ p: file.p, key: await sampleKey(file.abs, file.size) }); } catch (error) { results.push({ p: file.p, error: (error && error.code) || "ERROR" }); }
+  try {
+    for (const file of files) {
+      if (cancelled.has(id)) break;
+      try { results.push({ p: file.p, key: await sampleKey(file.abs) }); } catch (error) { results.push({ p: file.p, error: (error && error.code) || "ERROR" }); }
+    }
+    parentPort.postMessage({ id, type: "keys", results, cancelled: cancelled.has(id) });
+  } finally {
+    cancelled.delete(id);
   }
-  parentPort.postMessage({ id, type: "keys", results, cancelled: cancelled.has(id) });
 }
 `;
 
@@ -108,7 +120,7 @@ export type WalkResult = { failed: Array<{ p: string; code: string }>; truncated
 export class WalkerClient {
   private worker: Worker | null = null;
   private seq = 0;
-  private readonly pending = new Map<number, { onBatch?: (entries: WalkEntry[]) => void; resolve: (value: never) => void; reject: (error: Error) => void }>();
+  private readonly pending = new Map<number, { onBatch?: (entries: WalkEntry[]) => void; resolve: (value: never) => void; reject: (error: Error) => void; cleanup: () => void }>();
 
   private start(): Worker {
     if (this.worker) return this.worker;
@@ -118,12 +130,13 @@ export class WalkerClient {
       if (!item) return;
       if (message.type === "batch") { item.onBatch?.(message.entries ?? []); return; }
       this.pending.delete(message.id);
+      item.cleanup();
       if (message.type === "error") item.reject(new MangaError("LOCATION_UNAVAILABLE", `the folder could not be read (${String(message.code)})`, { details: { code: message.code } }));
       else item.resolve(message as never);
     });
     const fail = (error: Error) => {
       this.worker = null;
-      for (const item of this.pending.values()) item.reject(error);
+      for (const item of this.pending.values()) { item.cleanup(); item.reject(error); }
       this.pending.clear();
     };
     worker.on("error", fail);
@@ -136,8 +149,9 @@ export class WalkerClient {
     const worker = this.start();
     const id = ++this.seq;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { onBatch, resolve: resolve as (value: never) => void, reject });
       const abort = () => { worker.postMessage({ type: "cancel", id }); };
+      const cleanup = () => { signal?.removeEventListener("abort", abort); };
+      this.pending.set(id, { onBatch, resolve: resolve as (value: never) => void, reject, cleanup });
       if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
       worker.postMessage({ ...message, id });
     });
@@ -162,7 +176,7 @@ export class WalkerClient {
   dispose(): void {
     const worker = this.worker;
     this.worker = null;
-    for (const item of this.pending.values()) item.reject(new MangaError("CANCELLED", "the scan worker was closed"));
+    for (const item of this.pending.values()) { item.cleanup(); item.reject(new MangaError("CANCELLED", "the scan worker was closed")); }
     this.pending.clear();
     if (worker) void worker.terminate();
   }

@@ -7,7 +7,7 @@ import { fingerprintKeysOf, loadGate, readJson, repoRoot as root, runDir, stageF
 /**
  * node scripts/stage.mjs gate: the whole stage gate in one command, in the order that finds a failure soonest (LOOP-27, quality gates 2):
  *
- *   verify (without its test run) → test → package → installer → bench → report → package until the consecutive passes are reached → report
+ *   dependency audit → verify (without its test run) → test → package → installer → bench → report → package until the consecutive passes are reached → report
  *
  * A step whose result in the run directory is passed and current for the inputs it depends on (gate.json fingerprintOf) is not run again, so after a
  * change to the bench's own code only the bench and the report run, and after a change to the tests only the tests. The first failure stops the gate.
@@ -67,6 +67,9 @@ const realPlaces = () => {
 };
 const realPlacesAtStart = realPlaces();
 const fingerprintsAtStart = stageFingerprints(root, config);
+// Known vulnerabilities first: a few seconds, and an open advisory or an expired exception fails the gate (scripts/deps-exceptions.json).
+// It needs the registry; when it cannot run the gate fails as not run instead of passing without it.
+run("dependency audit", ["scripts/deps.mjs", "--audit"]);
 // The checks that are not tests (types, unused code, documents, publication, dependency boundaries); the tests themselves run once, in the next step.
 run("verify", ["scripts/verify.mjs", "--skip-tests"]);
 run("test", ["scripts/stage.mjs", "test"], { results: ["cases.json", "test-run.json"] });

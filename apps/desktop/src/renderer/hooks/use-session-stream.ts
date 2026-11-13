@@ -65,6 +65,9 @@ export function useSessionStream(sessionId: string | undefined, options: { versi
 
   const loadRef = useRef(load);
   loadRef.current = load;
+  const versionRef = useRef(options.version);
+  versionRef.current = options.version;
+  const loadedFor = useRef<{ sessionId: string | undefined; version: number }>({ sessionId: undefined, version: options.version });
 
   useEffect(() => {
     current.current = sessionId;
@@ -72,6 +75,7 @@ export function useSessionStream(sessionId: string | undefined, options: { versi
     oldest.current = undefined;
     olderBusy.current = false;
     setLoadingOlder(false);
+    loadedFor.current = { sessionId, version: versionRef.current };
     if (!sessionId) { setItems([]); setHasMore(false); setSession(null); setStatus("idle"); return; }
     // The previous session's messages are not shown under the new one while it loads.
     setItems([]);
@@ -80,7 +84,12 @@ export function useSessionStream(sessionId: string | undefined, options: { versi
     void load();
   }, [sessionId, load]);
 
-  useEffect(() => { if (sessionId) void load(); }, [options.version, sessionId, load]);
+  useEffect(() => {
+    if (!sessionId) return;
+    if (loadedFor.current.sessionId === sessionId && loadedFor.current.version === options.version) return;
+    loadedFor.current = { sessionId, version: options.version };
+    void load();
+  }, [options.version, sessionId, load]);
 
   useEffect(() => {
     if (!sessionId || !options.running) return;

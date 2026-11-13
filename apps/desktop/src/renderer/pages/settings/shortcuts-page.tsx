@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KEY_ACTIONS, MAX_CHORDS, chordLabel, chordOf, conflictsWith, keyAction, type KeyGroup } from "@manga/contracts/keys";
+import { KEY_ACTIONS, MAX_CHORDS, chordLabel, chordOf, conflictsWith, keyAction, type KeyGroup, type RecordingKeyPair } from "@manga/contracts/keys";
 import type { MessageKey, Translator } from "@manga/i18n";
 import type { useKeyBindings } from "../../hooks/use-key-bindings.ts";
 import { keyLabel } from "../settings-media.tsx";
@@ -12,7 +12,8 @@ const GROUPS: readonly KeyGroup[] = ["global", "video", "comic", "novel"];
 const nameOf = (t: T, id: string) => (
   id === "recording.holdKey" ? t("msettings.holdKey")
     : id === "recording.toggleKey" ? t("msettings.toggleKey")
-      : t(`keys.${id}` as MessageKey)
+      : id === "recording.dictationHoldKey" ? t("voice.dictation.shortcut")
+        : t(`keys.${id}` as MessageKey)
 );
 
 /** Waits for the next key and hands its chord over; Esc gives up. While it waits, the key belongs to it and nothing else in the window reacts. */
@@ -34,7 +35,7 @@ function useKeyCapture(waiting: boolean, onChord: (chord: string) => void, onCan
   }, [waiting, onChord, onCancel]);
 }
 
-function ActionRow(props: { t: T; id: string; keys: KeyBindings; recording: { holdKey: string; toggleKey: string }; adding: string | null; setAdding: (id: string | null) => void; message: (text: string) => void }) {
+function ActionRow(props: { t: T; id: string; keys: KeyBindings; recording: RecordingKeyPair; adding: string | null; setAdding: (id: string | null) => void; message: (text: string) => void }) {
   const { t, id, keys } = props;
   const entry = keyAction(id)!;
   const chords = keys.table[id] ?? [];
@@ -90,16 +91,37 @@ function ActionRow(props: { t: T; id: string; keys: KeyBindings; recording: { ho
  * Settings › Shortcuts (A-78, Q-26): every key of the readers and the window, grouped by reader, from the same table the key handling reads.
  * A key is added by clicking Add and pressing it; a key two actions would share is refused with the name of the action that has it.
  */
-export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: { holdKey: string; toggleKey: string }; onGoto: () => void }) {
+export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: RecordingKeyPair; onGoto: () => void }) {
   const { t, keys } = props;
   const [adding, setAdding] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const changed = Object.keys(keys.overrides).length;
+
+  const resetAll = () => {
+    const withDefaults = { ...keys.table };
+    for (const id of Object.keys(keys.overrides)) {
+      const entry = keyAction(id);
+      if (entry) withDefaults[id] = [...entry.defaults];
+    }
+    for (const id of Object.keys(keys.overrides)) {
+      const entry = keyAction(id);
+      if (!entry) continue;
+      for (const chord of entry.defaults) {
+        const other = conflictsWith(withDefaults, id, chord, props.recording)[0];
+        if (other) {
+          setMessage(t("shortcuts.resetConflict", { key: chordLabel(chord), action: nameOf(t, other) }));
+          return;
+        }
+      }
+    }
+    void keys.save(Object.fromEntries(Object.keys(keys.overrides).map((id) => [id, null]))).then((refused) => setMessage(refused ? t("shortcuts.refused", { reason: refused }) : ""));
+  };
+
   return (
     <SettingsPage id="shortcuts" title={t("settings.page.shortcuts")} hint={t("shortcuts.hint")}>
       <SettingsSection title={t("shortcuts.recording")} testId="shortcuts-recording">
-        <SettingsRow label={t("msettings.holdKey")}><kbd data-testid="shortcut-hold">{keyLabel(props.recording.holdKey, t)}</kbd></SettingsRow>
-        <SettingsRow label={t("msettings.toggleKey")}><kbd data-testid="shortcut-toggle">{keyLabel(props.recording.toggleKey, t)}</kbd></SettingsRow>
+        <SettingsRow label={t("msettings.holdKey")}><kbd data-testid="shortcut-hold">{keyLabel(props.recording.holdKey ?? "", t)}</kbd></SettingsRow>
+        <SettingsRow label={t("msettings.toggleKey")}><kbd data-testid="shortcut-toggle">{keyLabel(props.recording.toggleKey ?? "", t)}</kbd></SettingsRow>
         <SettingsRow label={t("shortcuts.recordingChange")}>
           <button type="button" className="link-button" data-testid="shortcuts-goto-recording" onClick={props.onGoto}>{t("settings.page.recording")}</button>
         </SettingsRow>
@@ -110,7 +132,7 @@ export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: { hol
           key={group}
           title={t(`shortcuts.group.${group}`)}
           testId={`shortcuts-${group}`}
-          actions={position === 0 ? <button type="button" className="secondary-button" data-testid="keys-reset-all" disabled={changed === 0} onClick={() => { void keys.save(Object.fromEntries(Object.keys(keys.overrides).map((id) => [id, null]))).then((refused) => setMessage(refused ? t("shortcuts.refused", { reason: refused }) : "")); }}>{t("shortcuts.resetAll")}</button> : undefined}
+          actions={position === 0 ? <button type="button" className="secondary-button" data-testid="keys-reset-all" disabled={changed === 0} onClick={resetAll}>{t("shortcuts.resetAll")}</button> : undefined}
         >
           {KEY_ACTIONS.filter((entry) => entry.group === group).map((entry) => (
             <ActionRow key={entry.id} t={t} id={entry.id} keys={keys} recording={props.recording} adding={adding} setAdding={setAdding} message={setMessage} />

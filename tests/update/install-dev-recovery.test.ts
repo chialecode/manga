@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeBuildInfo } from "@manga/app-core";
-import { findDefaultDevInstaller, runInstallDev } from "../../scripts/stage/install-dev.mjs";
+import { findDefaultDevInstaller, launchArgsAfterInstall, launchOutsideJob, quoteWindowsArg, runInstallDev } from "../../scripts/stage/install-dev.mjs";
 import { packagedFingerprintKeys } from "../../scripts/stage/lib.mjs";
 
 const scratch: string[] = [];
@@ -147,11 +147,18 @@ describe("Development installer recovery review (AT-158)", () => {
       output: path.relative(fixture.root, selected), sha256: sha256(selected), bytes: fs.statSync(selected).size } };
     const latestFile = path.join(fixture.root, "latest-package.json");
     const write = (value: unknown) => fs.writeFileSync(latestFile, JSON.stringify(value));
-    const find = () => findDefaultDevInstaller({ fingerprints, latestFile, desktopRoot, workspaceRoot: fixture.root });
+    const devFile = path.join(fixture.root, "dev-build.json");
+    const find = () => findDefaultDevInstaller({ fingerprints, latestFile, devFile, desktopRoot, workspaceRoot: fixture.root });
     write(latest);
-    expect(find()).toEqual({ file: selected, sha256: latest.installer.sha256 });
+    expect(find()).toEqual({ file: selected, sha256: latest.installer.sha256, recordFile: latestFile });
     write({ ...latest, sourceFingerprint: "d".repeat(64) });
     expect(find()).toBeNull();
+    // With the full package run's installer stale, the one install-dev built for itself from the current source is used; a stale one of those is not.
+    fs.writeFileSync(devFile, JSON.stringify(latest));
+    expect(find()).toEqual({ file: selected, sha256: latest.installer.sha256, recordFile: devFile });
+    fs.writeFileSync(devFile, JSON.stringify({ ...latest, sourceFingerprint: "e".repeat(64) }));
+    expect(find()).toBeNull();
+    fs.rmSync(devFile);
     // The window walks are bundled into the package too: a package built before a walk changed is not this one.
     write({ ...latest, smokeWalkScriptFingerprint: "0".repeat(64) });
     expect(find()).toBeNull();
@@ -166,4 +173,54 @@ describe("Development installer recovery review (AT-158)", () => {
     expect(result.reason).toContain("changed after packaging");
     expect(fixture.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
   });
+
+  it("starts the installed development app in the tray after every install, running before or not, and reports a launch kept inside the job (A-135)", async () => {
+    for (const [wasRunning, inJob] of [[true, false], [false, true]] as const) {
+      const fixture = devFixture();
+      if (!wasRunning) fs.rmSync(path.join(fixture.runtime, "running-instance.json"));
+      const launches: Array<{ exe: string; args: string[] }> = [];
+      const result = await runInstallDev({ ...fixture.options, background: true, relaunchFn: undefined, relaunchReadyTimeoutMs: 2_000,
+        isProcessAliveFn: (pid: number) => (pid === 770077 ? wasRunning && fixture.options.isProcessAliveFn(pid) : pid === 770079),
+        spawnInstallerFn: async () => {
+          writeBuildInfo(fixture.resources, { version: fixture.version, channel: "development", commit: "2222222", builtAt: "2026-11-08T11:00:00.000Z", schemaVersion: 14 });
+          return { status: 0 };
+        },
+        launchOutsideJobFn: (exe: string, args: string[]) => {
+          launches.push({ exe, args });
+          fs.writeFileSync(path.join(fixture.runtime, "running-instance.json"), JSON.stringify({ pid: 770079, channel: "development", testIdentity: true, execPath: fixture.executable, version: fixture.version, state: "ready" }));
+          return { pid: 770079, inJob };
+        },
+      });
+      expect(result).toMatchObject({ status: "passed", installed: true, wasRunning, relaunched: true, background: true, inJob, newVersion: fixture.version });
+      expect(launches).toEqual([{ exe: fixture.executable, args: ["--background"] }]);
+    }
+  });
+
+  it("keeps the gate's rehearsal rule for the test identity by default: reopen only an app that was running, with the caller's arguments (A-135)", async () => {
+    const fixture = devFixture();
+    fs.rmSync(path.join(fixture.runtime, "running-instance.json"));
+    const result = await runInstallDev({ ...fixture.options, spawnInstallerFn: async () => {
+      writeBuildInfo(fixture.resources, { version: fixture.version, channel: "development", commit: "2222222", builtAt: "2026-11-08T11:00:00.000Z", schemaVersion: 14 });
+      return { status: 0 };
+    } });
+    expect(result).toMatchObject({ status: "passed", installed: true, wasRunning: false, relaunched: false, background: false });
+    expect(fixture.counts().relaunchCalls).toBe(0);
+    expect(launchArgsAfterInstall(["--manga-smoke"], false)).toEqual(["--manga-smoke"]);
+    expect(launchArgsAfterInstall(["--background"], true)).toEqual(["--background"]);
+  });
+
+  it("quotes Windows command-line arguments and starts a process outside the job, or inside it when the job forbids leaving (A-135)", () => {
+    expect(quoteWindowsArg("--background")).toBe("--background");
+    expect(quoteWindowsArg(String.raw`Programs\MANGA Dev\manga.exe`)).toBe(String.raw`"Programs\MANGA Dev\manga.exe"`);
+    expect(quoteWindowsArg('a"b')).toBe(String.raw`"a\"b"`);
+    expect(quoteWindowsArg(String.raw`dir\ x\\`)).toBe(String.raw`"dir\ x\\\\"`);
+    expect(quoteWindowsArg("")).toBe("\"\"");
+    const systemRoot = process.env.SystemRoot;
+    if (process.platform !== "win32" || !systemRoot) return;
+    // A console program started detached opens no window and exits at once.
+    const cmd = path.join(systemRoot, "System32", "cmd.exe");
+    const started = launchOutsideJob(cmd, ["/d", "/c", "exit", "0"], process.env);
+    expect(Number.isInteger(started.pid)).toBe(true);
+    expect(typeof started.inJob).toBe("boolean");
+  }, 60_000);
 });

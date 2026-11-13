@@ -2,7 +2,8 @@
 import { MangaError, NOTE_TAG_MAX, type NoteDocument, createId, type CommandEnvelope, type SourceLocator } from "@manga/contracts";
 import type { Mutation } from "@manga/storage-drizzle";
 import { defineModule, type MangaModule } from "@manga/plugin-sdk";
-import { commitNoteOp, listNotes, noteHistory, openNoteSourceDetail, readAsset, readNote, restoreNoteRevision, setNoteTags } from "../reading-service.ts";
+import { commitNoteOp, listNotes, noteHistory, noteRefMutations, noteResourceId, openNoteSourceDetail, readAsset, readNote, restoreNoteRevision, setNoteTags } from "../reading-service.ts";
+import { coerceNoteDocument } from "../domain/note-document.ts";
 import { assertLocatorFits, describeMediaLocator } from "../domain/media-anchors.ts";
 import type { MangaProductApp } from "../product-app.ts";
 
@@ -29,9 +30,10 @@ export function createDraftNote(app: NotesHost, envelope: CommandEnvelope, draft
   });
   const blocks = [...quotes, { id: "b1", type: "paragraph", text: prepared.text }];
   const payload = JSON.stringify(quotes.length ? { schemaVersion: 2, blocks } : { blocks });
+  const workRow = prepared.resourceId ? app.store.sqlite.prepare("SELECT work_id FROM resources WHERE id = ?").get(prepared.resourceId) as { work_id: string | null } | undefined : undefined;
   app.store.commit({
     mutations: [
-      { sql: "INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", params: [objectId, "notes.document", "manga.notes", JSON.stringify({ kind: "library", resourceId: prepared.resourceId }), quotes.length ? 2 : 1, 1, prepared.title, payload, JSON.stringify(["口述"]), "[]", JSON.stringify({ text: prepared.text.slice(0, 80) }), now, now] },
+      { sql: "INSERT INTO content_objects(id, type, owner_module_id, scope_json, schema_version, revision, title, payload_json, tags_json, attachment_ids_json, preview_json, created_at, updated_at, work_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", params: [objectId, "notes.document", "manga.notes", JSON.stringify({ kind: "library", resourceId: prepared.resourceId }), quotes.length ? 2 : 1, 1, prepared.title, payload, JSON.stringify(["口述"]), "[]", JSON.stringify({ text: prepared.text.slice(0, 80) }), now, now, workRow?.work_id ?? null] },
       { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [objectId, 1, payload, now] },
       ...app.store.indexFragment({ id: createId("frag"), objectId, resourceId: prepared.resourceId ?? undefined, kind: "note", text: `${quotes.map((quote) => quote.text).join("\n")}\n${prepared.text}`.trim() }),
       ...mutations,
@@ -237,26 +239,26 @@ export function undoNote(app: NotesHost, envelope: CommandEnvelope) {
   const grant = app.grantOf(envelope);
   const input = envelope.input as { objectId: string; expectedRevision: number };
   if (!app.grants.canWriteObject(grant, input.objectId) && grant.access !== "owner") throw new MangaError("SCOPE_DENIED", "object is outside the authorized set");
-  const row = app.store.sqlite.prepare("SELECT revision FROM content_objects WHERE id = ?").get(input.objectId) as { revision: number } | undefined;
+  const row = app.store.sqlite.prepare("SELECT revision, tags_json FROM content_objects WHERE id = ? AND deleted_at IS NULL").get(input.objectId) as { revision: number; tags_json?: string } | undefined;
   if (!row) throw new MangaError("NOT_FOUND", "note missing");
   if (row.revision !== input.expectedRevision) throw new MangaError("REVISION_CONFLICT", "note revision changed");
   const previous = app.store.sqlite.prepare("SELECT payload_json FROM object_revisions WHERE object_id = ? AND revision = ?").get(input.objectId, row.revision - 1) as { payload_json: string } | undefined;
   if (!previous) throw new MangaError("NOT_FOUND", "no previous revision to restore");
   const next = row.revision + 1;
   const now = new Date().toISOString();
-  const payload = JSON.parse(previous.payload_json) as { blocks?: Array<{ id?: string; text?: string }> };
-  const text = (payload.blocks ?? []).map((block) => block.text ?? "").join("\n");
-  const linked = app.store.sqlite.prepare("SELECT resource_id FROM text_fragments WHERE object_id = ? AND resource_id IS NOT NULL LIMIT 1").get(input.objectId) as { resource_id?: string } | undefined;
-  const tags = app.store.sqlite.prepare("SELECT tags_json FROM content_objects WHERE id = ?").get(input.objectId) as { tags_json?: string } | undefined;
+  const document = coerceNoteDocument(JSON.parse(previous.payload_json));
+  const text = document.blocks.map((block) => block.text ?? "").join("\n");
+  const resourceId = noteResourceId(app.store, input.objectId);
   app.store.commit({
     mutations: [
-      { sql: "UPDATE content_objects SET revision = ?, payload_json = ?, tags_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, previous.payload_json, tags?.tags_json ?? "[]", JSON.stringify({ text: text.slice(0, 80) }), now, input.objectId] },
+      { sql: "UPDATE content_objects SET revision = ?, payload_json = ?, tags_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, previous.payload_json, row.tags_json ?? "[]", JSON.stringify({ text: text.slice(0, 80) }), now, input.objectId] },
       { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [input.objectId, next, previous.payload_json, now] },
       { sql: "DELETE FROM search_idx WHERE fragment_id IN (SELECT id FROM text_fragments WHERE object_id = ?)", params: [input.objectId] },
       { sql: "DELETE FROM text_fragments WHERE object_id = ?", params: [input.objectId] },
-      ...(payload.blocks ?? []).flatMap((block) => app.store.indexTextChunks({
+      ...noteRefMutations(app.store, input.objectId, document.blocks),
+      ...document.blocks.flatMap((block) => app.store.indexTextChunks({
         objectId: input.objectId,
-        resourceId: linked?.resource_id,
+        resourceId,
         partId: block.id,
         representationId: input.objectId,
         kind: "note",
@@ -279,8 +281,8 @@ export function assertNoteAccess(app: NotesHost, envelope: CommandEnvelope, obje
   }
   if (grant.access === "owner") return;
   if (app.grants.canWriteObject(grant, objectId)) return;
-  const linked = app.store.sqlite.prepare("SELECT resource_id FROM text_fragments WHERE object_id = ? AND resource_id IS NOT NULL LIMIT 1").get(objectId) as { resource_id?: string } | undefined;
-  if (!linked?.resource_id || !app.grants.canRead(grant, linked.resource_id)) throw new MangaError("SCOPE_DENIED", "note is outside the authorized set");
+  const resourceId = noteResourceId(app.store, objectId);
+  if (!resourceId || !app.grants.canRead(grant, resourceId)) throw new MangaError("SCOPE_DENIED", "note is outside the authorized set");
 }
 
 export function noteOp(app: NotesHost, envelope: CommandEnvelope, kind: "split" | "merge" | "move" | "copy" | "replace" | "insert" | "remove" | "setType" | "rename") {

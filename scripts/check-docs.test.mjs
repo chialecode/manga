@@ -1,6 +1,9 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareStages, parseStage, retiredDocumentErrors, stageLabelErrors, stageLabels } from "./check-docs.mjs";
+import { compareStages, parseStage, retiredDocumentErrors, stageLabelCodeErrors, stageLabelErrors, stageLabels } from "./check-docs.mjs";
 
 // Counterexamples for the stage-cleanup rules (documentation policy 8): a retired document must not linger, and
 // documents and code do not describe things by the stage they came from.
@@ -70,6 +73,11 @@ test("a fixed archive link may carry the label of the path it points at, but the
   assert.deepEqual(stageLabels("see https://example.com/docs/m1b-summary.md", "m5").map((entry) => entry.label), ["m1b"]);
 });
 
+test("a GitHub advisory id is not a label, but a label beside it still is", () => {
+  assert.deepEqual(stageLabels('"advisory": "GHSA-g3hv-75wg-m249"', "m5"), []);
+  assert.deepEqual(stageLabels("GHSA-g3hv-75wg-m249 since M2", "m5").map((entry) => entry.label), ["M2"]);
+});
+
 test("a registered document with a label fails, unless it is the current stage's own plan or report", () => {
   const registry = { currentStage: "m5", documents: [doc("a.md"), doc("docs/delivery/stage-plan.md", { retireAfter: "m5" })] };
   const markdown = new Map([["a.md", "intro\nsee the M1b report"], ["docs/delivery/stage-plan.md", "cleans up M0, M1a, M1b and M2 files"]]);
@@ -81,4 +89,18 @@ test("a registered document with a label fails, unless it is the current stage's
 test("a label in the registry's own descriptions is an error too", () => {
   const registry = { currentStage: "m5", documents: [doc("a.md", { scope: "reading, from M1b" })] };
   assert.equal(stageLabelErrors(registry, new Map([["a.md", "clean"]])).length, 1);
+});
+
+test("stageLabelCodeErrors scans plugins/ in addition to apps/, packages/, scripts/ and tests/", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-check-docs-plugins-"));
+  try {
+    const pluginDir = path.join(dir, "plugins", "provider-sample");
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(path.join(pluginDir, "manifest.json"), JSON.stringify({ description: "introduced in M2" }));
+    const errors = stageLabelCodeErrors(dir, "m5");
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /^plugins\/provider-sample\/manifest\.json:1: stage label M2/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

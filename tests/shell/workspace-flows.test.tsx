@@ -62,7 +62,7 @@ function installHost(handlers: Record<string, Handler> = {}) {
       }
     },
     onNotice: () => () => undefined,
-    async chooseDirectory() { return null; }, async chooseFile() { return null; }, async chooseAudio() { return null; }, async stashSecret() { return null; },
+    async chooseDirectory() { return null; }, async chooseAudio() { return null; }, async stashSecret() { return null; },
     async reveal() { return { status: "ok", value: {} }; },
   };
   return { calls, of: (id: string) => calls.filter((call) => call.commandId === id) };
@@ -539,7 +539,8 @@ describe("notes in the message list: four kinds of source (A-48)", () => {
       await waitFor(() => expect(screen.getByTestId("comic-position").textContent).toContain("3 / 6"));
       // The reader is a tab of its own, with nothing before it; leaving it is closing it, and the tab it was opened from is where it was.
       expect(tabTitles().length).toBe(before.length + 1);
-      expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", true);
+      fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+      expect(screen.getByTestId("comic-reader")).toBeTruthy();
       closeFocusedTab();
       await waitFor(() => expect(screen.queryByTestId("comic-reader")).toBeNull());
       expect(tabTitles()).toEqual(before);
@@ -850,9 +851,9 @@ describe("settings pages inside the app (A-49, A-52)", () => {
     expect(tabTitles()).toEqual([library]);
     expect(screen.getByTestId("shelf-comic")).toBeTruthy();
     // Back walks the pages that were visited; from the first page it leaves the settings, and the shelf is where it was.
-    fireEvent.click(screen.getByTestId("nav-back"));
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
     await waitFor(() => expect(screen.getByTestId("settings-area").getAttribute("data-page")).toBe(first));
-    fireEvent.click(screen.getByTestId("nav-back"));
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
     await waitFor(() => expect(screen.queryByTestId("settings-nav")).toBeNull());
     expect(screen.getByTestId("shelf-comic")).toBeTruthy();
     expect(screen.getByTestId("workspace-area").getAttribute("data-suspended")).toBe("false");

@@ -47,12 +47,12 @@ export async function addLibraryFolder(folder: string, mediaKind: LibraryKind): 
 }
 
 /** The notice a reader shows for an outcome, with the button that adds the folder when the file was outside. */
-export function relinkNotice(t: Translator["t"], outcome: RelinkOutcome, after: () => void): { error?: string; notice?: string; action?: { label: string; onClick: () => void } } {
+export function relinkNotice(t: Translator["t"], outcome: RelinkOutcome, after: () => void, onError?: (message: string) => void): { error?: string; notice?: string; action?: { label: string; onClick: () => void } } {
   switch (outcome.kind) {
     case "done": return { notice: outcome.pointersKept > 0 ? t("reading.sourceRepairKept", { count: outcome.pointersKept }) : t("reading.sourceRepairDone") };
     case "outside": return {
       notice: t("reading.relinkOutside", { folder: outcome.folder }),
-      action: { label: t("reading.relinkAddFolder"), onClick: () => { void addLibraryFolder(outcome.folder, outcome.mediaKind).then((added) => { if (added.kind === "added") after(); }); } },
+      action: { label: t("reading.relinkAddFolder"), onClick: () => { void addLibraryFolder(outcome.folder, outcome.mediaKind).then((added) => { if (added.kind === "added") after(); else if (added.kind === "failed") onError?.(added.message); }); } },
     };
     case "different": return { error: t("reading.relinkDifferent") };
     case "failed": return { error: outcome.message };

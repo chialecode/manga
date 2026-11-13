@@ -5,7 +5,7 @@ import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createId, MangaError, type CommandResult, type SearchHit, type SearchQuery } from "@manga/contracts";
 import { migrateAgentMedia, type AgentMediaMigration } from "./migrate-agent-media.ts";
-import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V12_SCHEMA_SQL, V12_TABLES_SQL, V13_SCHEMA_SQL, V13_TABLES_SQL, V14_TABLES_SQL, V15_TABLES_SQL, V16_BACKFILL_SQL, V16_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
+import { BASE_SCHEMA_SQL, PRODUCT_SCHEMA_VERSION, V10_SCHEMA_SQL, V10_TABLES_SQL, V11_SCHEMA_SQL, V11_TABLES_SQL, V12_SCHEMA_SQL, V12_TABLES_SQL, V13_SCHEMA_SQL, V13_TABLES_SQL, V14_TABLES_SQL, V15_TABLES_SQL, V16_BACKFILL_SQL, V16_TABLES_SQL, V17_SCHEMA_SQL, V17_TABLES_SQL, V2_SCHEMA_SQL, V3_SCHEMA_SQL, V4_SCHEMA_SQL, V5_SCHEMA_SQL, V6_SCHEMA_SQL, V7_SCHEMA_SQL, V8_SCHEMA_SQL, V9_CREATIVE_SQL, V9_SCHEMA_SQL } from "./sql.ts";
 import { ngramsFor, matchQuery } from "./ngrams.ts";
 import { migrateWorkspace, type WorkspaceMigration } from "./migrate-workspace.ts";
 import * as schema from "./schema.ts";
@@ -63,6 +63,8 @@ export class DrizzleStore {
     this.crashAt = options.crashAt;
     this.sqlite = new Database(this.dbPath);
     try {
+      this.sqlite.pragma("busy_timeout = 5000");
+      this.sqlite.pragma("foreign_keys = ON");
       this.sqlite.pragma("journal_mode = WAL");
       this.migrate();
       this.compactAfterMediaMove();
@@ -131,6 +133,14 @@ export class DrizzleStore {
       if (existingVersion < 16) {
         this.migrateV16Dictionary();
       }
+      // v17: provider accounts and the use of their services.
+      if (existingVersion < 17) {
+        // Only the columns that are missing: a library rebuilt from a newer one (as the older migrations' tests make them) may have them already.
+        const columns = new Set((this.sqlite.prepare("PRAGMA table_info(provider_connections)").all() as Array<{ name: string }>).map((col) => col.name));
+        for (const column of ["account_id", "provider_model"]) if (!columns.has(column)) this.sqlite.exec(`ALTER TABLE provider_connections ADD COLUMN ${column} TEXT`);
+        this.sqlite.exec(V17_SCHEMA_SQL);
+      }
+      this.sqlite.exec(V17_TABLES_SQL);
       this.maybeCrash("migration-before-version");
       this.sqlite.prepare("INSERT OR IGNORE INTO schema_meta(key, value) VALUES (?, ?)").run("schemaVersion", String(PRODUCT_SCHEMA_VERSION));
       this.sqlite.prepare("UPDATE schema_meta SET value = ? WHERE key = 'schemaVersion'").run(String(PRODUCT_SCHEMA_VERSION));
@@ -365,14 +375,14 @@ export class DrizzleStore {
       const existing = this.loadIdempotent(input.idempotencyKey);
       if (existing) return { seqs: [] };
     }
+    const seqs: number[] = [];
+    const now = new Date().toISOString();
     this.sqlite.exec("BEGIN IMMEDIATE");
     try {
       this.maybeCrash("in-tx-before-commit");
       for (const mutation of input.mutations) {
         this.sqlite.prepare(mutation.sql).run(...(mutation.params ?? []));
       }
-      const seqs: number[] = [];
-      const now = new Date().toISOString();
       for (const event of input.events) {
         const eventId = createId("evt");
         this.sqlite.prepare("INSERT INTO domain_events(event_id, type, payload_json, created_at) VALUES (?, ?, ?, ?)").run(eventId, event.type, JSON.stringify(event.payload), now);
@@ -389,15 +399,6 @@ export class DrizzleStore {
         );
       }
       this.sqlite.exec("COMMIT");
-      this.maybeCrash("after-commit-before-events");
-      for (const seq of seqs) {
-        const row = this.sqlite.prepare("SELECT type, payload_json FROM domain_events WHERE seq = ?").get(seq) as { type: string; payload_json: string };
-        const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
-        for (const listener of this.listeners) listener({ type: row.type, payload, seq });
-        this.sqlite.prepare("UPDATE domain_events SET published_at = ? WHERE seq = ?").run(now, seq);
-      }
-      this.maybeCrash("after-events");
-      return { seqs };
     } catch (error) {
       try {
         this.sqlite.exec("ROLLBACK");
@@ -406,6 +407,17 @@ export class DrizzleStore {
       }
       throw error;
     }
+    this.maybeCrash("after-commit-before-events");
+    for (const seq of seqs) {
+      const row = this.sqlite.prepare("SELECT type, payload_json FROM domain_events WHERE seq = ?").get(seq) as { type: string; payload_json: string };
+      const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+      for (const listener of this.listeners) {
+        try { listener({ type: row.type, payload, seq }); } catch { /* keep publishing remaining listeners/events */ }
+      }
+      this.sqlite.prepare("UPDATE domain_events SET published_at = ? WHERE seq = ?").run(now, seq);
+    }
+    this.maybeCrash("after-events");
+    return { seqs };
   }
 
   search(query: SearchQuery): SearchHit[] {
@@ -476,6 +488,10 @@ export class DrizzleStore {
         ],
       },
       {
+        sql: `DELETE FROM search_idx WHERE fragment_id = ?`,
+        params: [input.id],
+      },
+      {
         sql: `INSERT INTO search_idx(fragment_id, kind, resource_id, text, ngrams) VALUES (?, ?, ?, ?, ?)`,
         params: [input.id, input.kind, input.resourceId ?? "", input.text, ngrams],
       },
@@ -495,98 +511,146 @@ export class DrizzleStore {
     /** Code-point offset of `text` inside the part, so a later batch keeps locators aligned. */
     startOffset?: number;
   }): Mutation[] {
-    const size = input.size ?? 4000;
     const mutations: Mutation[] = [];
-    let index = 0;
-    let start = input.startOffset ?? 0;
-    while (index < input.text.length) {
-      let count = 0;
-      let cursor = index;
-      while (cursor < input.text.length && count < size) {
-        const code = input.text.codePointAt(cursor) ?? 0;
-        cursor += code > 0xffff ? 2 : 1;
-        count += 1;
-      }
-      const slice = input.text.slice(index, cursor);
-      if (slice.length) {
-        const end = start + count;
-        mutations.push(...this.indexFragment({
-          id: createId("frag"),
-          resourceId: input.resourceId,
-          objectId: input.objectId,
-          resourceRevisionId: input.resourceRevisionId,
+    for (const chunk of codePointChunks(input.text, input.size ?? 4000, input.startOffset ?? 0)) {
+      mutations.push(...this.indexFragment({
+        id: createId("frag"),
+        resourceId: input.resourceId,
+        objectId: input.objectId,
+        resourceRevisionId: input.resourceRevisionId,
+        partId: input.partId,
+        start: chunk.start,
+        end: chunk.end,
+        kind: input.kind,
+        text: chunk.slice,
+        locator: input.partId && input.representationId ? {
+          kind: "text",
           partId: input.partId,
-          start,
-          end,
-          kind: input.kind,
-          text: slice,
-          locator: input.partId && input.representationId ? {
-            kind: "text",
-            partId: input.partId,
-            representationId: input.representationId,
-            range: { start, end },
-          } : undefined,
-        }));
-      }
-      if (cursor === index) break;
-      index = cursor;
-      start += count;
+          representationId: input.representationId,
+          range: { start: chunk.start, end: chunk.end },
+        } : undefined,
+      }));
     }
     return mutations;
   }
 
   rebuildSearchIndex(): { fragments: number } {
-    const revisions = this.sqlite.prepare("SELECT id, resource_id, payload_json FROM resource_revisions").all() as Array<{ id: string; resource_id: string; payload_json: string }>;
+    const revisions = this.sqlite.prepare(`SELECT r.id, r.resource_id, r.payload_json FROM resource_revisions r
+      WHERE r.rowid = (SELECT r2.rowid FROM resource_revisions r2 WHERE r2.resource_id = r.resource_id ORDER BY r2.created_at DESC, r2.rowid DESC LIMIT 1)`).all() as Array<{ id: string; resource_id: string; payload_json: string }>;
     const resources = this.sqlite.prepare("SELECT id, title, aliases_json FROM resources").all() as Array<{ id: string; title: string; aliases_json: string }>;
-    const notes = this.sqlite.prepare("SELECT id, payload_json FROM content_objects WHERE type = 'notes.document' AND deleted_at IS NULL").all() as Array<{ id: string; payload_json: string }>;
+    const notes = this.sqlite.prepare("SELECT id, payload_json, json_extract(scope_json, '$.resourceId') AS scope_resource_id FROM content_objects WHERE type = 'notes.document' AND deleted_at IS NULL").all() as Array<{ id: string; payload_json: string; scope_resource_id: string | null }>;
     const noteResources = this.sqlite.prepare(`SELECT r.from_object_id AS objectId, a.resource_id AS resourceId
       FROM refs r JOIN anchors a ON a.id = r.to_id WHERE r.to_kind = 'anchor'`).all() as Array<{ objectId: string; resourceId: string }>;
     const noteResource = new Map(noteResources.map((row) => [row.objectId, row.resourceId]));
-    const mutations: Mutation[] = [];
-    for (const row of resources) {
-      mutations.push(...this.indexFragment({ id: createId("frag"), resourceId: row.id, kind: "title", text: row.title }));
-      const aliases = JSON.parse(row.aliases_json) as string[];
-      for (const alias of aliases) {
-        if (alias && alias !== row.title) mutations.push(...this.indexFragment({ id: createId("frag"), resourceId: row.id, kind: "alias", text: alias }));
+
+    const insertFragment = this.sqlite.prepare(`INSERT OR REPLACE INTO text_fragments(id, resource_id, object_id, kind, text, ngrams, locator_json, resource_revision_id, part_id, start_offset, end_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insertSearch = this.sqlite.prepare(`INSERT INTO search_idx(fragment_id, kind, resource_id, text, ngrams) VALUES (?, ?, ?, ?, ?)`);
+    let fragments = 0;
+
+    const writeFragment = (entry: {
+      id: string;
+      resourceId?: string;
+      objectId?: string;
+      kind: SearchHit["kind"];
+      text: string;
+      locator?: unknown;
+      resourceRevisionId?: string;
+      partId?: string;
+      start?: number;
+      end?: number;
+    }) => {
+      const ngrams = ngramsFor(entry.text);
+      insertFragment.run(
+        entry.id,
+        entry.resourceId ?? null,
+        entry.objectId ?? null,
+        entry.kind,
+        entry.text,
+        ngrams,
+        JSON.stringify(entry.locator ?? null),
+        entry.resourceRevisionId ?? null,
+        entry.partId ?? null,
+        entry.start ?? null,
+        entry.end ?? null,
+      );
+      insertSearch.run(entry.id, entry.kind, entry.resourceId ?? "", entry.text, ngrams);
+      fragments += 1;
+    };
+
+    const writeChunks = (input: {
+      resourceId?: string;
+      objectId?: string;
+      resourceRevisionId?: string;
+      partId?: string;
+      representationId?: string;
+      kind: SearchHit["kind"];
+      text: string;
+    }) => {
+      for (const chunk of codePointChunks(input.text, 4000, 0)) {
+        writeFragment({
+          id: createId("frag"),
+          resourceId: input.resourceId,
+          objectId: input.objectId,
+          resourceRevisionId: input.resourceRevisionId,
+          partId: input.partId,
+          start: chunk.start,
+          end: chunk.end,
+          kind: input.kind,
+          text: chunk.slice,
+          locator: input.partId && input.representationId ? {
+            kind: "text",
+            partId: input.partId,
+            representationId: input.representationId,
+            range: { start: chunk.start, end: chunk.end },
+          } : undefined,
+        });
       }
-    }
-    for (const revision of revisions) {
-      const payload = JSON.parse(revision.payload_json) as { normalized?: string; parts?: Array<{ id?: string; normalized?: string }> };
-      const parts = payload.parts?.length ? payload.parts : [{ id: "body", normalized: payload.normalized ?? "" }];
-      for (const part of parts) {
-        mutations.push(...this.indexTextChunks({
-          resourceId: revision.resource_id,
-          resourceRevisionId: revision.id,
-          partId: part.id || "body",
-          representationId: revision.id,
-          kind: "body",
-          text: part.normalized ?? "",
-        }));
-      }
-    }
-    for (const note of notes) {
-      const payload = JSON.parse(note.payload_json) as { blocks?: Array<{ id?: string; text?: string }> };
-      for (const block of payload.blocks ?? []) {
-        mutations.push(...this.indexTextChunks({
-          objectId: note.id,
-          resourceId: noteResource.get(note.id),
-          partId: block.id || "block",
-          representationId: note.id,
-          kind: "note",
-          text: block.text ?? "",
-        }));
-      }
-    }
+    };
+
     this.sqlite.exec("BEGIN IMMEDIATE");
     try {
       this.sqlite.exec("DELETE FROM search_idx; DELETE FROM text_fragments;");
-      for (const mutation of mutations) this.sqlite.prepare(mutation.sql).run(...(mutation.params ?? []));
+      for (const row of resources) {
+        writeFragment({ id: createId("frag"), resourceId: row.id, kind: "title", text: row.title });
+        const aliases = JSON.parse(row.aliases_json) as string[];
+        for (const alias of aliases) {
+          if (alias && alias !== row.title) writeFragment({ id: createId("frag"), resourceId: row.id, kind: "alias", text: alias });
+        }
+      }
+      for (const revision of revisions) {
+        const payload = JSON.parse(revision.payload_json) as { normalized?: string; parts?: Array<{ id?: string; normalized?: string }> };
+        const parts = payload.parts?.length ? payload.parts : [{ id: "body", normalized: payload.normalized ?? "" }];
+        for (const part of parts) {
+          writeChunks({
+            resourceId: revision.resource_id,
+            resourceRevisionId: revision.id,
+            partId: part.id || "body",
+            representationId: revision.id,
+            kind: "body",
+            text: part.normalized ?? "",
+          });
+        }
+      }
+      for (const note of notes) {
+        const payload = JSON.parse(note.payload_json) as { blocks?: Array<{ id?: string; text?: string }> };
+        const resourceId = noteResource.get(note.id) ?? note.scope_resource_id ?? undefined;
+        for (const block of payload.blocks ?? []) {
+          writeChunks({
+            objectId: note.id,
+            resourceId,
+            partId: block.id || "block",
+            representationId: note.id,
+            kind: "note",
+            text: block.text ?? "",
+          });
+        }
+      }
       this.sqlite.exec("COMMIT");
     } catch (error) {
       try { this.sqlite.exec("ROLLBACK"); } catch { /* ignore */ }
       throw error;
     }
-    return { fragments: mutations.length / 2 };
+    return { fragments };
   }
 
   counts(): Record<string, number> {
@@ -604,5 +668,26 @@ export class DrizzleStore {
 
   setMeta(key: string, value: string): void {
     this.sqlite.prepare("INSERT INTO schema_meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(key, value);
+  }
+}
+
+function* codePointChunks(text: string, size: number, startOffset: number): Generator<{ start: number; end: number; slice: string }> {
+  let index = 0;
+  let start = startOffset;
+  while (index < text.length) {
+    let count = 0;
+    let cursor = index;
+    while (cursor < text.length && count < size) {
+      const code = text.codePointAt(cursor) ?? 0;
+      cursor += code > 0xffff ? 2 : 1;
+      count += 1;
+    }
+    const slice = text.slice(index, cursor);
+    if (slice.length) {
+      yield { start, end: start + count, slice };
+    }
+    if (cursor === index) break;
+    index = cursor;
+    start += count;
   }
 }

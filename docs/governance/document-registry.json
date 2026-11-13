@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentStage": "m12",
+  "currentStage": "m13",
   "documents": [
     {
       "path": ".github/PULL_REQUEST_TEMPLATE.md",
@@ -486,20 +486,20 @@
       "kind": "plan",
       "status": "active",
       "owner": "技术负责人",
-      "scope": "当前阶段唯一计划：阶段开始的整理与依赖盘点、类 Typeless 的应用内听写（采集前端与回声消除、去除静默、ASR 引擎抽象与本地 sherpa-onnx 推理、本地模型目录与下载、OpenAI 兼容的外部转录与 input_audio 接口、词库的别名与读音、Bangumi 别名补全、音近召回与确定性替换、LLM 润色与防过度纠错、恢复原文与听写记录、从修改中学词、简繁统一）、评测集与基准、观察项、人工检查、B 执行 prompt",
-      "reviewed": "2026-11-13",
-      "basis": "A-130：本阶段范围（2026-11-12 用户要求类 Typeless 的语音体验，2026-11-13 提供选型报告并要求继续）；A-131：听写管线与选型；Q-23 的答复；Q-40 默认值；A-46：计划覆盖整个阶段、不分批；A-40 开源查证；A-35 依赖盘点",
-      "retireAfter": "m12"
+      "scope": "当前阶段唯一计划：阶段开始的整理与依赖盘点、DeepSeek 插件（声明式模型提供者插件与 model.provider 位置、按 GET /models 加入模型、共用密钥、DeepSeek 思考模式与 reasoning_content 回传、原生联网搜索、DeepSeek 语音识别接入识别引擎、语音合成与朗读、网页搜索工具）、schema v17、真实 API 契约、观察项与基准、人工检查、B 执行 prompt",
+      "reviewed": "2026-11-14",
+      "basis": "A-133：本阶段范围（2026-11-14 用户要求把 DeepSeek API 作为插件接入，启动后模型列表里能加入对应模型，并授权真实 API 测试）；A-134：插件形态与接入方式；Q-41 默认值；ACT-23 真实 API 授权范围；A-46：计划覆盖整个阶段、不分批；A-40 开源查证；A-35 依赖盘点",
+      "retireAfter": "m13"
     },
     {
       "path": "docs/delivery/stage-report.md",
       "kind": "evidence",
       "status": "active",
       "owner": "开发者 / 质量负责人",
-      "scope": "当前阶段报告：C0 整理与 D1 依赖盘点、工作包/需求/验收与断言迁移映射、utilityProcess 本地推理隔离与三个本地模型 CPU 实测、模型 SHA-256 清单与 ModelScope 核验、右 Alt 快捷键与输入法结论、Schema v16 词库补全与音近纠错润色管线、240 条评测集与采集前端五档开关对比、全套阶段门禁证据与源码指纹",
-      "reviewed": "2026-11-13",
-      "basis": "docs/delivery/stage-plan.md 第 9 节；A-130、A-131；VOICE-01、VOICE-03、VOICE-06、VOICE-09、VOICE-10—VOICE-17；AT-174—AT-183",
-      "retireAfter": "m12"
+      "scope": "当前阶段报告：C0 整理与 D1 依赖盘点、工作包/需求/验收映射、L1 的 reasoning_content 回传规则、提供者文件与接法白名单、schema v17 迁移、DeepSeek 真实契约结果与用量、Q-41 默认值的取舍、全套阶段门禁、朗读基准与源码指纹",
+      "reviewed": "2026-11-15",
+      "basis": "docs/delivery/stage-plan.md 第 9 节；A-133、A-134、A-132；PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03；AT-184—AT-193",
+      "retireAfter": "m13"
     },
     {
       "path": "docs/modules/comic.md",

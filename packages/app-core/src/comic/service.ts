@@ -12,8 +12,9 @@ import { ordinalFromParsed, ordinalLabel, parseOrdinalName, sortKeyFor } from ".
 import { readPdfPageSizes, renderPdfPage } from "../domain/pdfjs-document.ts";
 import { makeThumbnail, type ThumbnailResult } from "../media/thumbnails.ts";
 import type { MediaServices } from "../media/services.ts";
+import { errorMessage } from "../shared/utils.ts";
 import {
-  BROWSER_IMAGE_TYPES, fingerprintFile, mediaTypeForName, mobiTableOfFile, planDirectoryAsync, type MobiTable,
+  BROWSER_IMAGE_TYPES, fingerprintFile, mediaTypeForName, mobiTableOfFile, planDirectoryAsync, readMobiRecord, type MobiTable,
   scanCbz, scanComicDirectory, scanComicEpub, scanComicMobi, scanComicPdf, type DirectoryItem, type ScanOptions, type ScanResult,
 } from "./scan.ts";
 
@@ -108,7 +109,7 @@ export class ComicService {
     const sourcePlaced: PlacedPath | null = input.hosted ? placeInLibrary(this.store, sourcePath) : requireInLibrary(this.store, sourcePath);
     const findExisting = () => (sourcePlaced ? this.store.sqlite.prepare(`SELECT r.id AS resourceId, r.work_id AS workId, r.title AS title, r.ordinal_label AS ordinalLabel, v.id AS revisionId, v.fingerprint AS fingerprint
       FROM file_locations fl JOIN resource_revisions v ON v.id = fl.resource_revision_id JOIN resources r ON r.id = v.resource_id
-      WHERE fl.library_path_id = ? AND fl.relative_path = ? ORDER BY v.created_at DESC LIMIT 1`).get(sourcePlaced.libraryPathId, sourcePlaced.relativePath) : undefined) as { resourceId: string; workId: string; title: string; ordinalLabel: string | null; revisionId: string; fingerprint: string } | undefined;
+      WHERE fl.library_path_id = ? AND fl.relative_path = ? ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1`).get(sourcePlaced.libraryPathId, sourcePlaced.relativePath) : undefined) as { resourceId: string; workId: string; title: string; ordinalLabel: string | null; revisionId: string; fingerprint: string } | undefined;
     let existing = findExisting();
     const summary = (extra: Partial<ComicImportResult>): ComicImportResult => ({
       resourceId: "", workId: "", revisionId: "", title: "", ordinalLabel: null, pages: scan.manifest.pages.length, source: scan.source,
@@ -128,42 +129,11 @@ export class ComicService {
       }
     }
     if (input.hosted && scan.source === "dir") throw new MangaError("VALIDATION_ERROR", "a folder cannot be copied into the library; import it in place");
+    if (!existing && input.workId && !this.store.sqlite.prepare("SELECT id FROM works WHERE id = ?").get(input.workId)) {
+      throw new MangaError("NOT_FOUND", "work missing");
+    }
     const revisionId = createId("rev");
     const title = (input.title ?? scan.title).trim() || scan.title;
-    const mutations: Mutation[] = [];
-    let resourceId = existing?.resourceId;
-    let workId = existing?.workId ?? input.workId;
-    let ordinal = input.ordinal ? { ...input.ordinal, label: ordinalLabel(input.ordinal) } : undefined;
-    if (!resourceId) {
-      resourceId = createId("res");
-      if (!workId) {
-        workId = createId("work");
-        mutations.push({ sql: "INSERT INTO works(id,title,created_at,media_kind,updated_at) VALUES (?,?,?,?,?)", params: [workId, (input.workTitle ?? title).trim() || title, now, "comic", now] });
-      } else if (!this.store.sqlite.prepare("SELECT id FROM works WHERE id = ?").get(workId)) {
-        throw new MangaError("NOT_FOUND", "work missing");
-      }
-      mutations.push({
-        sql: "INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at, ordinal_label, ordinal_number, ordinal_type, sort_key) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        params: [resourceId, workId, "comic", title, JSON.stringify([title]), now, ordinal?.label ?? null, ordinal?.number ?? null, ordinal?.type ?? null, input.sortKey ?? sortKeyFor(ordinal, title)],
-      });
-      mutations.push({
-        sql: "UPDATE works SET updated_at = ?, media_kind = COALESCE((SELECT r.kind FROM resources r WHERE r.work_id = works.id ORDER BY r.sort_key, r.created_at, r.id LIMIT 1), media_kind) WHERE id = ?",
-        params: [now, workId],
-      });
-      mutations.push(...this.store.indexFragment({ id: createId("frag"), resourceId, kind: "title", text: title }));
-    } else {
-      ordinal = undefined;
-    }
-    const payload = {
-      id: revisionId,
-      format: `comic-${scan.source}`,
-      parserId: COMIC_PARSER_ID,
-      parts: [] as Array<{ id?: string }>,
-      toc: [] as unknown[],
-      traits: { pages: scan.manifest.pages.length, source: scan.source, unreadable: scan.manifest.pages.filter((page) => !page.ok).length },
-      warnings: scan.manifest.warnings,
-      comic: scan.manifest,
-    };
     let locationPath = sourcePath;
     let placed: Pick<PlacedPath, "libraryPathId" | "relativePath" | "managed"> = sourcePlaced ?? { libraryPathId: "", relativePath: "", managed: false };
     let staged: string | undefined;
@@ -176,31 +146,67 @@ export class ComicService {
       // A large archive is copied without holding the main thread; nothing below waits again until the rows are committed.
       await fsp.copyFile(sourcePath, staged);
       const raced = findExisting();
-      if (raced && raced.fingerprint === scan.fingerprint && raced.resourceId !== existing?.resourceId) {
+      if (raced && raced.fingerprint === scan.fingerprint) {
         fs.rmSync(staged, { force: true });
-        return summary({ resourceId: raced.resourceId, workId: raced.workId, revisionId: raced.revisionId, title: raced.title, ordinalLabel: raced.ordinalLabel, duplicate: true });
+        const result = summary({ resourceId: raced.resourceId, workId: raced.workId, revisionId: raced.revisionId, title: raced.title, ordinalLabel: raced.ordinalLabel, duplicate: true });
+        if (input.receipt) this.store.commit({ mutations: [], events: [], idempotencyKey: input.receipt.idempotencyKey, commandId: input.receipt.commandId, result });
+        return result;
       }
       existing = raced;
     }
-    mutations.push({
-      sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at, layout_json) VALUES (?,?,?,?,?,?,?)",
-      params: [revisionId, resourceId, scan.fingerprint, COMIC_PARSER_ID, JSON.stringify(payload), now, JSON.stringify(layoutFromPayload(payload))],
-    });
-    mutations.push(insertLocation({ revisionId, placed, fingerprint: scan.fingerprint }));
-    const result = summary({ resourceId, workId: workId!, revisionId, title, ordinalLabel: ordinal?.label ?? null, replaced: Boolean(existing) });
     try {
+      const mutations: Mutation[] = [];
+      let resourceId = existing?.resourceId;
+      let workId = existing?.workId ?? input.workId;
+      let ordinal = input.ordinal ? { ...input.ordinal, label: ordinalLabel(input.ordinal) } : undefined;
+      if (!resourceId) {
+        resourceId = createId("res");
+        if (!workId) {
+          workId = createId("work");
+          mutations.push({ sql: "INSERT INTO works(id,title,created_at,media_kind,updated_at) VALUES (?,?,?,?,?)", params: [workId, (input.workTitle ?? title).trim() || title, now, "comic", now] });
+        } else if (!this.store.sqlite.prepare("SELECT id FROM works WHERE id = ?").get(workId)) {
+          throw new MangaError("NOT_FOUND", "work missing");
+        }
+        mutations.push({
+          sql: "INSERT INTO resources(id, work_id, kind, title, aliases_json, created_at, ordinal_label, ordinal_number, ordinal_type, sort_key) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          params: [resourceId, workId, "comic", title, JSON.stringify([title]), now, ordinal?.label ?? null, ordinal?.number ?? null, ordinal?.type ?? null, input.sortKey ?? sortKeyFor(ordinal, title)],
+        });
+        mutations.push({
+          sql: "UPDATE works SET updated_at = ?, media_kind = COALESCE((SELECT r.kind FROM resources r WHERE r.work_id = works.id ORDER BY r.sort_key, r.created_at, r.id LIMIT 1), media_kind) WHERE id = ?",
+          params: [now, workId],
+        });
+        mutations.push(...this.store.indexFragment({ id: createId("frag"), resourceId, kind: "title", text: title }));
+      } else {
+        ordinal = undefined;
+      }
+      const payload = {
+        id: revisionId,
+        format: `comic-${scan.source}`,
+        parserId: COMIC_PARSER_ID,
+        parts: [] as Array<{ id?: string }>,
+        toc: [] as unknown[],
+        traits: { pages: scan.manifest.pages.length, source: scan.source, unreadable: scan.manifest.pages.filter((page) => !page.ok).length },
+        warnings: scan.manifest.warnings,
+        comic: scan.manifest,
+      };
+      mutations.push({
+        sql: "INSERT INTO resource_revisions(id, resource_id, fingerprint, parser_version, payload_json, created_at, layout_json) VALUES (?,?,?,?,?,?,?)",
+        params: [revisionId, resourceId, scan.fingerprint, COMIC_PARSER_ID, JSON.stringify(payload), now, JSON.stringify(layoutFromPayload(payload))],
+      });
+      mutations.push(insertLocation({ revisionId, placed, fingerprint: scan.fingerprint }));
+      const result = summary({ resourceId, workId: workId!, revisionId, title, ordinalLabel: ordinal?.label ?? null, replaced: Boolean(existing) });
       if (staged) fs.renameSync(staged, locationPath);
       this.store.commit({
         mutations,
         events: [{ type: "resource.imported", payload: { resourceId, revisionId, format: payload.format } }],
         ...(input.receipt ? { idempotencyKey: input.receipt.idempotencyKey, commandId: input.receipt.commandId, result } : {}),
       });
+      return result;
     } catch (error) {
       if (staged) fs.rmSync(staged, { force: true });
       if (input.hosted) fs.rmSync(locationPath, { force: true });
       throw error;
     }
-    return result;
   }
 
   async importOne(input: { sourcePath: string; title?: string; hosted?: boolean; workId?: string; ordinal?: Ordinal; signal?: AbortSignal; progress?: ScanOptions["progress"]; receipt?: { idempotencyKey: string; commandId: string } }): Promise<ComicImportResult> {
@@ -241,7 +247,7 @@ export class ComicService {
       } catch (error) {
         if (error instanceof MangaError && error.code === "CANCELLED") throw error;
         if (input.signal?.aborted) throw new MangaError("CANCELLED", "import was cancelled");
-        const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: error instanceof Error ? error.message : String(error) };
+        const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: errorMessage(error) };
         results.push({ relative: item.relative, error: known });
       }
       done += 1;
@@ -321,7 +327,7 @@ export class ComicService {
       ? source.path
       : source.kind === "zip"
         ? await this.media.zips.read(source.archive, source.entry, { signal: input.signal, maxBytes: 64 * 1024 * 1024 })
-        : fs.readFileSync(source.path).subarray(source.offset, source.offset + source.length);
+        : readMobiRecord(source.path, source.offset, source.length);
     const result = await makeThumbnail(bytes, { maxEdge: input.maxEdge, region: input.region, format, signal: input.signal });
     return { ...result, pageId: page.id };
   }
@@ -367,7 +373,7 @@ export class ComicService {
         const base = path.resolve(location.path);
         const target = path.resolve(base, ref.relativePath);
         const relative = path.relative(base, target);
-        if (relative.startsWith("..") || path.isAbsolute(relative)) throw new MangaError("PATH_ESCAPE", "page path leaves the comic folder");
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new MangaError("PATH_ESCAPE", "page path leaves the comic folder");
         return { kind: "file", path: target };
       }
       case "zip":
@@ -397,6 +403,19 @@ export class ComicService {
     const page = manifest.pages.find((item) => item.id === input.pageId);
     if (!page) throw new MangaError("NOT_FOUND", "page is not in this revision");
     const location = this.location(input.revisionId);
+    return this.pageHandleFor(manifest, location, page, input);
+  }
+
+  private async pageHandleFor(
+    manifest: ComicManifest,
+    location: Location | null,
+    page: ComicPage,
+    input: { resourceId: string; revisionId: string; variant?: "display" | "original" | "thumb"; maxEdge?: number; signal?: AbortSignal; sessionId?: string },
+  ): Promise<
+    | { available: false; reason: string }
+    | { available: true; kind: "image"; url: string; handle: string; mediaType: string; width: number; height: number; scaled: boolean; original: { width: number; height: number } }
+    | { available: true; kind: "pdf"; url: string; handle: string; mediaType: string; pageNumber: number; width: number; height: number }
+  > {
     if (!location?.available) return { available: false, reason: "original is not available" };
     if (!page.ok) return { available: false, reason: page.error ?? "page could not be read" };
     const binding = { moduleId: COMIC_MODULE, resourceId: input.resourceId, revisionId: input.revisionId, sessionId: input.sessionId };
@@ -421,7 +440,7 @@ export class ComicService {
       return { available: true, kind: "image", url: issued.url, handle: issued.handle, mediaType, width: page.width, height: page.height, scaled: false, original: { width: page.width, height: page.height } };
     }
     const edge = Math.max(64, Math.min(input.maxEdge ?? (variant === "thumb" ? 240 : DISPLAY_EDGE), DISPLAY_EDGE));
-    return this.derived(page, source, binding, strip && variant !== "thumb" ? { width: Math.min(edge, page.width) } : { maxEdge: edge }, input.signal, variant === "thumb" ? "webp" : "webp");
+    return this.derived(page, source, binding, strip && variant !== "thumb" ? { width: Math.min(edge, page.width) } : { maxEdge: edge }, input.signal, "webp");
   }
 
   private async derived(
@@ -438,7 +457,7 @@ export class ComicService {
         ? source.path
         : source.kind === "zip"
           ? await this.media.zips.read(source.archive, source.entry, { signal })
-          : fs.readFileSync(source.path).subarray(source.offset, source.offset + source.length);
+          : readMobiRecord(source.path, source.offset, source.length);
       return makeThumbnail(input, { ...scale, format, signal });
     }, signal);
     let width = made.width;
@@ -455,10 +474,27 @@ export class ComicService {
 
   /** The pages' own text in the manifest is identity only; handles for several pages at once keep a reader's preload to one call. */
   async pageHandles(input: { resourceId: string; revisionId: string; pageIds: string[]; variant?: "display" | "thumb"; maxEdge?: number; signal?: AbortSignal; sessionId?: string }) {
+    if (!input.pageIds.length) return [];
+    let manifest: ComicManifest;
+    let location: Location | null;
+    try {
+      manifest = this.loadManifest(input.resourceId, input.revisionId).manifest;
+      location = this.location(input.revisionId);
+    } catch (error) {
+      if (input.signal?.aborted) throw new MangaError("CANCELLED", "page request was cancelled");
+      const reason = error instanceof MangaError ? error.message : "page could not be read";
+      return input.pageIds.map((pageId) => ({ pageId, available: false as const, reason }));
+    }
+    const byId = new Map(manifest.pages.map((page) => [page.id, page]));
     const out: Array<{ pageId: string } & Awaited<ReturnType<ComicService["pageHandle"]>>> = [];
     for (const pageId of input.pageIds) {
       try {
-        out.push({ pageId, ...(await this.pageHandle({ ...input, pageId })) });
+        const page = byId.get(pageId);
+        if (!page) {
+          out.push({ pageId, available: false, reason: "page is not in this revision" });
+          continue;
+        }
+        out.push({ pageId, ...(await this.pageHandleFor(manifest, location, page, input)) });
       } catch (error) {
         if (input.signal?.aborted) throw new MangaError("CANCELLED", "page request was cancelled");
         out.push({ pageId, available: false, reason: error instanceof MangaError ? error.message : "page could not be read" });

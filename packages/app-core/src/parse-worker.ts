@@ -69,8 +69,12 @@ void (async () => {
       break;
     }
     if (message.type === "cancel" && message.id) {
-      jobs.get(message.id)?.abort();
-      send({ type: "result", id: message.id, value: { cancelled: true } });
+      const controller = jobs.get(message.id);
+      if (controller) {
+        controller.abort();
+      } else {
+        send({ type: "result", id: message.id, status: "error", error: { message: "parse cancelled", code: "CANCELLED" } });
+      }
       continue;
     }
     if (message.type === "parse" && message.id) {
@@ -78,15 +82,22 @@ void (async () => {
       jobs.set(message.id, controller);
       handle(message, controller.signal)
         .then((value) => send({ type: "result", id: message.id, status: "ok", value }))
-        .catch((error) => send({
-          type: "result",
-          id: message.id,
-          status: "error",
-          error: {
-            message: error instanceof Error ? error.message : String(error),
-            code: error instanceof MangaError ? error.code : "UNSUPPORTED_FORMAT",
-          },
-        }))
+        .catch((error: unknown) => {
+          const coded = error instanceof MangaError
+            ? error.code
+            : (error && typeof error === "object" && typeof (error as { code?: unknown }).code === "string"
+              ? (error as { code: string }).code
+              : "UNSUPPORTED_FORMAT");
+          send({
+            type: "result",
+            id: message.id,
+            status: "error",
+            error: {
+              message: error instanceof Error ? error.message : String(error),
+              code: coded,
+            },
+          });
+        })
         .finally(() => jobs.delete(message.id!));
     }
   }

@@ -14,11 +14,15 @@ export const MODEL_CAPABILITIES = ["tools", "structured_output", "web_search", "
 export type ModelCapability = (typeof MODEL_CAPABILITIES)[number];
 
 /** How hard a reasoning model thinks. Chat Completions takes it as `reasoning_effort`, Responses as `reasoning.effort`; a model without the reasoning capability is not sent it. */
-export const REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
+export const REASONING_EFFORTS = ["minimal", "low", "medium", "high", "max"] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 /** Which HTTP shape a transcription connection speaks: multipart `/audio/transcriptions` or `/chat/completions` with `input_audio`. */
-export const TRANSCRIPTION_INTERFACES = ["audio_transcriptions", "chat_input_audio"] as const;
+export const TRANSCRIPTION_INTERFACES = ["audio_transcriptions", "chat_input_audio", "deepseek_asr"] as const;
+
+/** How a chat service differs from plain Chat Completions (计划 4.3); see `TextRequest.dialect`. */
+export const MODEL_DIALECTS = ["deepseek"] as const;
+export type ModelDialect = (typeof MODEL_DIALECTS)[number];
 export type TranscriptionInterface = (typeof TRANSCRIPTION_INTERFACES)[number];
 
 /** Where a number of the profile came from: left at the default, typed by the person, or read from the service by a test. */
@@ -45,6 +49,13 @@ export const ModelProfileSchema = z.object({
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).max(MODEL_CAPABILITIES.length),
   reasoningEffort: z.enum(REASONING_EFFORTS).nullable(),
   transcriptionInterface: z.enum(TRANSCRIPTION_INTERFACES).default("audio_transcriptions"),
+  /** The dialect of the service, from the provider's catalogue (or the address, for DeepSeek added by hand). */
+  dialect: z.enum(MODEL_DIALECTS).optional(),
+  /**
+   * The reasoning levels the model declares, from the provider's catalogue: the settings show only these (`max` only where it is declared), and when the
+   * list is there "off" (`reasoningEffort: null`) means thinking is switched off rather than not mentioned.
+   */
+  reasoningLevels: z.array(z.enum(REASONING_EFFORTS)).max(REASONING_EFFORTS.length).optional(),
   source: z.object({
     contextWindow: z.enum(["default", "user", "detected"]),
     maxOutput: z.enum(["default", "user", "detected"]),
@@ -75,12 +86,15 @@ export const ModelProfilePatchSchema = z.object({
   transcriptionInterface: z.enum(TRANSCRIPTION_INTERFACES).optional(),
   limits: ModelLimitsSchema.partial().optional(),
 }).strict();
+
+/** What a detection from a provider's catalogue or model list may also set; a person never sets these. */
+export type ProviderProfilePatch = ModelProfilePatch & { dialect?: ModelDialect; reasoningLevels?: ModelProfile["reasoningLevels"] };
 export type ModelProfilePatch = z.infer<typeof ModelProfilePatchSchema>;
 
 const unique = <T>(values: readonly T[]): T[] => [...new Set(values)];
 
 /** Apply a patch (from the person) or a detection (from a test) to a profile, keeping it valid; a number that would not fit the other is refused by the caller's validation. */
-export function applyProfile(base: ModelProfile, patch: ModelProfilePatch, source: "user" | "detected"): ModelProfile {
+export function applyProfile(base: ModelProfile, patch: ProviderProfilePatch, source: "user" | "detected"): ModelProfile {
   const next: ModelProfile = {
     ...base,
     ...(patch.contextWindow !== undefined ? { contextWindow: patch.contextWindow } : {}),
@@ -89,6 +103,8 @@ export function applyProfile(base: ModelProfile, patch: ModelProfilePatch, sourc
     ...(patch.capabilities !== undefined ? { capabilities: unique(patch.capabilities) } : {}),
     ...(patch.reasoningEffort !== undefined ? { reasoningEffort: patch.reasoningEffort } : {}),
     ...(patch.transcriptionInterface !== undefined ? { transcriptionInterface: patch.transcriptionInterface } : {}),
+    ...(patch.dialect !== undefined ? { dialect: patch.dialect } : {}),
+    ...(patch.reasoningLevels !== undefined ? { reasoningLevels: patch.reasoningLevels } : {}),
     limits: { ...DEFAULT_MODEL_LIMITS, ...base.limits, ...(patch.limits ?? {}) },
     source: {
       contextWindow: patch.contextWindow !== undefined ? source : base.source.contextWindow,
@@ -98,14 +114,25 @@ export function applyProfile(base: ModelProfile, patch: ModelProfilePatch, sourc
   return next;
 }
 
-/** A profile whose numbers came from a test of another model: what was detected goes back to the default, what the person typed stays. */
+/** A profile whose numbers came from a test of another model: what was detected goes back to the default, what the person typed stays (clamped so `maxOutput < contextWindow` always holds). */
 export function forgetDetected(profile: ModelProfile): ModelProfile {
-  const own = (field: "contextWindow" | "maxOutput") => profile.source[field] === "detected";
+  const resetWindow = profile.source.contextWindow === "detected";
+  const resetMax = profile.source.maxOutput === "detected";
+  const contextWindow = resetWindow ? DEFAULT_MODEL_PROFILE.contextWindow : profile.contextWindow;
+  let maxOutput = resetMax ? DEFAULT_MODEL_PROFILE.maxOutput : profile.maxOutput;
+  let maxSource = resetMax ? ("default" as const) : profile.source.maxOutput;
+  if (maxOutput >= contextWindow) {
+    maxOutput = Math.max(256, Math.min(DEFAULT_MODEL_PROFILE.maxOutput, Math.floor(contextWindow / 2)));
+    maxSource = "default";
+  }
   return {
     ...profile,
-    contextWindow: own("contextWindow") ? DEFAULT_MODEL_PROFILE.contextWindow : profile.contextWindow,
-    maxOutput: own("maxOutput") ? DEFAULT_MODEL_PROFILE.maxOutput : profile.maxOutput,
-    source: { contextWindow: own("contextWindow") ? "default" : profile.source.contextWindow, maxOutput: own("maxOutput") ? "default" : profile.source.maxOutput },
+    contextWindow,
+    maxOutput,
+    source: {
+      contextWindow: resetWindow ? "default" : profile.source.contextWindow,
+      maxOutput: maxSource,
+    },
   };
 }
 
@@ -129,7 +156,7 @@ export function effectiveProfile(stored: string | null | undefined, verified: re
 }
 
 /** Why a test of a connection failed, in the words the person needs to fix it. */
-export const CONNECTION_FAILURES = ["auth", "address", "model", "timeout", "network", "rate_limit", "protocol", "other"] as const;
+export const CONNECTION_FAILURES = ["auth", "address", "model", "timeout", "network", "rate_limit", "protocol", "billing", "busy", "provider", "other"] as const;
 export type ConnectionFailure = (typeof CONNECTION_FAILURES)[number];
 
 export type ConnectionTestResult = {
@@ -143,6 +170,8 @@ export type ConnectionTestResult = {
   capabilities?: string[];
   /** What the service said about its own limits, when it did. */
   detected?: { contextWindow?: number; maxOutput?: number };
+  /** For a speech, recognition or search service: what the test got back (characters spoken, text heard, results found). */
+  service?: { kind: "speech" | "transcription" | "search"; detail: string };
   failure?: { category: ConnectionFailure; status?: number; detail?: string };
 };
 
@@ -164,6 +193,19 @@ export const AgentMediaSettingsSchema = z.object({
 export type AgentMediaSettings = z.infer<typeof AgentMediaSettingsSchema>;
 export const DEFAULT_AGENT_MEDIA_SETTINGS: AgentMediaSettings = { retentionDays: 30 };
 
+/**
+ * What the conversations talk with, chosen on the conversation page (A-137): the text connection (null: the first one; a project with its own model uses
+ * that), how hard it thinks (`off`, one of the model's levels, or null for what its settings say) and the window a task may fill (null: the model's whole
+ * window; less than it also keeps the answer to a quarter of it). A choice the model cannot take is ignored for it.
+ */
+export const AgentChatSettingsSchema = z.object({
+  connectionId: z.string().min(1).max(256).nullable(),
+  reasoningEffort: z.enum([...REASONING_EFFORTS, "off"]).nullable(),
+  contextWindow: z.number().int().min(16_384).max(10_000_000).nullable(),
+}).strict();
+export type AgentChatSettings = z.infer<typeof AgentChatSettingsSchema>;
+export const DEFAULT_AGENT_CHAT_SETTINGS: AgentChatSettings = { connectionId: null, reasoningEffort: null, contextWindow: null };
+
 /** What is kept of every request the agent makes (A-83, Q-29): the whole of it, or only its sizes and timing. */
 export const AgentTraceSettingsSchema = z.object({
   mode: z.enum(["full", "metadata"]),
@@ -179,7 +221,28 @@ export const TRACE_PART_LIMIT_BYTES = 256 * 1024;
 export const TRACE_KINDS = ["model", "tool", "compaction"] as const;
 export type TraceKind = (typeof TRACE_KINDS)[number];
 
+const providerRef = z.string().min(3).max(200).regex(/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\/[a-z0-9][a-z0-9._-]*$/);
+const SERVICE_KINDS = ["transcription", "speech", "search"] as const;
+
 export const ModelInputs = {
+  /** The providers the enabled provider plugins offer, with their catalogues, and the accounts already set up for each (计划 4.2). */
+  "providers.list": z.object({}).strict(),
+  /** Reads the models an account can use (`GET /models`), with a new key (a handle the page stashed) or an existing account's. */
+  "providers.discover": z.object({ providerRef, accountId: id.optional(), credentialHandle: id.optional() }).strict(),
+  /** Creates the account (or uses one) and the chosen connections in one step. `verified` is false when the list could not be read and the catalogue was used. */
+  "providers.add": z.object({
+    providerRef,
+    accountId: id.optional(),
+    credentialHandle: id.optional(),
+    label: z.string().trim().min(1).max(80).optional(),
+    models: z.array(z.string().min(1).max(128)).max(32),
+    services: z.array(z.enum(SERVICE_KINDS)).max(SERVICE_KINDS.length),
+    verified: z.boolean().default(true),
+  }).strict(),
+  /** Changes the key of an account; every connection of the account uses the new one. */
+  "providers.setKey": z.object({ accountId: id, credentialHandle: id }).strict(),
+  /** Removes an account with its key; only when no connection uses it any more. */
+  "providers.deleteAccount": z.object({ accountId: id }).strict(),
   /** Set the numbers and switches of a connection's model; anything left out keeps its value. */
   "connections.setProfile": z.object({ connectionId: id, profile: ModelProfilePatchSchema }).strict(),
   /** Ask a connection one question and look at what it can do; the result is kept with the connection. */
@@ -189,6 +252,7 @@ export const ModelInputs = {
     limits: AgentLimitsSchema.partial().optional(),
     trace: AgentTraceSettingsSchema.partial().optional(),
     media: AgentMediaSettingsSchema.partial().optional(),
+    chat: AgentChatSettingsSchema.partial().optional(),
   }).strict(),
   /** The requests, tool calls and compactions of one run, in order, without their contents. */
   "agent.trace.list": z.object({ runId: id }).strict(),

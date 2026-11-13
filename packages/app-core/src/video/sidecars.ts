@@ -35,8 +35,9 @@ export function discoverSidecars(videoFile: string): Sidecar[] {
       const lower = base.toLowerCase();
       if (lower !== lowerStem && !(lower.startsWith(lowerStem) && /^[.\-_ ]/.test(base.slice(stem.length)))) continue;
       const absolutePath = path.join(folder, entry.name);
+      const idBasis = folder === dir ? entry.name : path.relative(dir, absolutePath).replaceAll("\\", "/");
       found.push({
-        id: `x${createHash("sha1").update(entry.name).digest("hex").slice(0, 10)}`,
+        id: `x${createHash("sha1").update(idBasis).digest("hex").slice(0, 10)}`,
         fileName: entry.name,
         absolutePath,
         format,
@@ -64,9 +65,15 @@ export async function sampledFingerprint(file: string, signal?: AbortSignal): Pr
     for (const offset of offsets) {
       signal?.throwIfAborted();
       const length = offsets.length === 1 ? size : window;
-      const buffer = Buffer.alloc(length);
-      const { bytesRead } = await handle.read(buffer, 0, length, offset);
-      hash.update(buffer.subarray(0, bytesRead));
+      const buffer = Buffer.allocUnsafe(length);
+      let filled = 0;
+      while (filled < length) {
+        signal?.throwIfAborted();
+        const { bytesRead } = await handle.read(buffer, filled, length - filled, offset + filled);
+        if (bytesRead === 0) break;
+        filled += bytesRead;
+      }
+      hash.update(buffer.subarray(0, filled));
     }
     return `sv1:${hash.digest("hex")}`;
   } finally {

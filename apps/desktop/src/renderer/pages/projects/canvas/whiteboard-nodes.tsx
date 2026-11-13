@@ -2,6 +2,7 @@ import { createContext, memo, useContext, useEffect, useRef, useState, type Reac
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { BookOpen, Clapperboard, ExternalLink, FileText, Frame, Mic, Network, PenLine, Quote, Scissors, StickyNote } from "lucide-react";
 import type { Translator } from "@manga/i18n";
+import { isImeEvent } from "../../../lib/ime.ts";
 import type { FlowNode, WbRef } from "./whiteboard-model.ts";
 
 type T = Translator["t"];
@@ -53,11 +54,13 @@ function CardNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   const board = useBoard();
   const { t } = board;
   const stored = data.node.data;
+  const storedRef = useRef(stored);
+  storedRef.current = stored;
   const editing = board.editId === id;
   const [title, setTitle] = useState(text(stored.title));
   const [body, setBody] = useState(text(stored.text));
   const titleRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (editing) { setTitle(text(stored.title)); setBody(text(stored.text)); titleRef.current?.focus(); } }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (editing) { setTitle(text(storedRef.current.title)); setBody(text(storedRef.current.text)); titleRef.current?.focus(); } }, [editing]);
 
   const commit = () => {
     board.edit(null);
@@ -68,7 +71,7 @@ function CardNodeView({ id, data, selected }: NodeProps<FlowNode>) {
       <Resizer id={id} selected={selected} />
       <Handles />
       {editing ? (
-        <div className="wb-editor nodrag nowheel" onBlur={(event) => { if (leaves(event)) commit(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); board.edit(null); } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); commit(); } }}>
+        <div className="wb-editor nodrag nowheel" onBlur={(event) => { if (leaves(event)) commit(); }} onKeyDown={(event) => { if (isImeEvent(event)) return; if (event.key === "Escape") { event.stopPropagation(); board.edit(null); } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); commit(); } }}>
           <input ref={titleRef} data-testid={`wb-title-${id}`} value={title} placeholder={t("whiteboard.cardTitle")} aria-label={t("whiteboard.cardTitle")} onChange={(event) => setTitle(event.target.value)} />
           <textarea data-testid={`wb-body-${id}`} value={body} placeholder={t("whiteboard.cardText")} aria-label={t("whiteboard.cardText")} onChange={(event) => setBody(event.target.value)} />
         </div>
@@ -86,18 +89,20 @@ function TextNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   const board = useBoard();
   const { t } = board;
   const stored = text(data.node.data.text);
+  const storedRef = useRef(stored);
+  storedRef.current = stored;
   const editing = board.editId === id;
   const [value, setValue] = useState(stored);
   const area = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (editing) { setValue(stored); area.current?.focus(); } }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (editing) { setValue(storedRef.current); area.current?.focus(); } }, [editing]);
   const commit = () => { board.edit(null); if (value !== stored) board.update(id, { text: value }); };
   return (
-    <div className="wb-node wb-text" data-testid={`wb-node-${id}`} data-kind="text" onDoubleClick={() => board.edit(id)}>
+    <div className={`wb-node wb-text`} data-testid={`wb-node-${id}`} data-kind="text" onDoubleClick={() => board.edit(id)}>
       <Resizer id={id} selected={selected} min={{ w: 60, h: 28 }} />
       <Handles />
       {editing ? (
         <textarea ref={area} className="wb-editor nodrag nowheel" data-testid={`wb-body-${id}`} value={value} aria-label={t("whiteboard.addText")} placeholder={t("whiteboard.textPlaceholder")} onChange={(event) => setValue(event.target.value)} onBlur={commit}
-          onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); board.edit(null); } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); commit(); } }} />
+          onKeyDown={(event) => { if (isImeEvent(event)) return; if (event.key === "Escape") { event.stopPropagation(); board.edit(null); } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); commit(); } }} />
       ) : (
         <p className="wb-text-body">{stored || t("whiteboard.textPlaceholder")}</p>
       )}
@@ -109,10 +114,12 @@ function GroupNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   const board = useBoard();
   const { t } = board;
   const stored = text(data.node.data.title);
+  const storedRef = useRef(stored);
+  storedRef.current = stored;
   const editing = board.editId === id;
   const [value, setValue] = useState(stored);
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (editing) { setValue(stored); input.current?.focus(); } }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (editing) { setValue(storedRef.current); input.current?.focus(); } }, [editing]);
   const commit = () => { board.edit(null); if (value !== stored) board.update(id, { title: value }); };
   return (
     <div className={`wb-node wb-group wb-color-${colorOf(data.node.data.color)}`} data-testid={`wb-node-${id}`} data-kind="group">
@@ -121,7 +128,7 @@ function GroupNodeView({ id, data, selected }: NodeProps<FlowNode>) {
       <div className="wb-group-head" onDoubleClick={() => board.edit(id)}>
         {editing ? (
           <input ref={input} className="nodrag" data-testid={`wb-title-${id}`} value={value} aria-label={t("whiteboard.groupTitle")} onChange={(event) => setValue(event.target.value)} onBlur={commit}
-            onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); board.edit(null); } else if (event.key === "Enter") { event.preventDefault(); commit(); } }} />
+            onKeyDown={(event) => { if (isImeEvent(event)) return; if (event.key === "Escape") { event.stopPropagation(); board.edit(null); } else if (event.key === "Enter") { event.preventDefault(); commit(); } }} />
         ) : (
           <span>{stored || t("whiteboard.groupTitle")}</span>
         )}

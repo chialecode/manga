@@ -176,13 +176,17 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
   const badFolder = path.join(dir, "bad-library");
   fs.mkdirSync(badFolder, { recursive: true });
   fs.writeFileSync(path.join(badFolder, "broken.pdf"), Buffer.from("%PDF-1.4\nnot-a-page"));
+  let failureVisible = false;
   testHooks.pick = () => badFolder;
-  await toRail(view);
-  await openSettingsPage(view, "library");
-  await setSelect(view, "library-path-new-kind", "novel");
-  await clickTestId(view, "library-path-add");
-  const failureVisible = await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-last-"]')].some((el) => /失败 [1-9]/.test(el.textContent || ""))`, 20000);
-  testHooks.pick = undefined;
+  try {
+    await toRail(view);
+    await openSettingsPage(view, "library");
+    await setSelect(view, "library-path-new-kind", "novel");
+    await clickTestId(view, "library-path-add");
+    failureVisible = await waitUntil(view, `[...document.querySelectorAll('[data-testid^="library-path-last-"]')].some((el) => /失败 [1-9]/.test(el.textContent || ""))`, 20000);
+  } finally {
+    testHooks.pick = undefined;
+  }
   const pages = books.every((book) => opened[book.format]);
   return { ok: drafted && pages && switched && returned && failureVisible, pages, contexts: switched && returned, failureVisible, opened, ...(Object.keys(misses).length ? { misses } : {}), pdfDebug, pdfLayer, pdfSpans, pdfError, pdfReview, loop06 };
 }

@@ -5,6 +5,7 @@ import { profilePatch } from "../lib/model-profile.ts";
 import type { ConnectionForm } from "../lib/types.ts";
 import type { MigrationPlan } from "../pages/settings/general-page.tsx";
 import type { PlainTestResult, SaveConnectionResult } from "../pages/settings/connection-dialog.tsx";
+import type { ProviderAccount, ProviderInfo } from "../pages/settings/provider-dialog.tsx";
 import type { SettingsViewProps } from "../pages/settings/settings-view.tsx";
 import type { Services } from "./services.tsx";
 
@@ -12,10 +13,18 @@ import type { Services } from "./services.tsx";
  * What the settings pages do through the application: choosing where the data lives, applying a move, connections to models, the inventory. Moved out of
  * the shell so the settings tab can bring them with it; the state they hold (a move being confirmed, the inventory) lives as long as the tab shows it.
  */
-export function useSettingsActions(s: Services, active: boolean) {
+export function useSettingsActions(s: Services, active: boolean, modelsActive = false) {
   const { t } = s;
   const [migration, setMigration] = useState<MigrationPlan | null>(null);
   const [inventory, setInventory] = useState<Record<string, unknown> | null>(null);
+  /** The providers of the enabled provider plugins, their accounts, and the provider plugins that are offered but not on (计划 4.2). */
+  const [providers, setProviders] = useState<{ providers: ProviderInfo[]; accounts: ProviderAccount[]; offered: Array<{ pluginId: string; name: string; state: "not-installed" | "disabled" }> } | null>(null);
+
+  // Read again whenever the settings are (a plugin turned on or off changes them), while the models page is open.
+  useEffect(() => {
+    if (!modelsActive) return;
+    void attempt<NonNullable<typeof providers>>("providers.list").then((listed) => { if (listed.ok) setProviders(listed.value); });
+  }, [modelsActive, s.settings]);
 
   // The inventory is read when the page that shows it is open, not on every refresh.
   useEffect(() => {
@@ -86,6 +95,9 @@ export function useSettingsActions(s: Services, active: boolean) {
     const reason = code === "AUTHENTICATION_FAILED" || status === 401 || status === 403 ? "auth"
       : status === 404 ? "address"
       : code === "MODEL_CAPABILITY_MISSING" ? "capability"
+      : code === "PROVIDER_UNAVAILABLE" && (result.error.details as { reason?: string } | undefined)?.reason === "plugin_disabled" ? "provider"
+      : code === "PROVIDER_UNAVAILABLE" && (result.error.details as { kind?: string } | undefined)?.kind === "billing" ? "billing"
+      : code === "PROVIDER_UNAVAILABLE" && (result.error.details as { kind?: string } | undefined)?.kind === "busy" ? "busy"
       : code === "PROVIDER_UNAVAILABLE" || code === "CANCELLED" ? "network"
       : "other";
     return { ok: false, message: t("models.plain.fail", { message: t(`models.plain.reason.${reason}` as MessageKey) }) };
@@ -127,6 +139,35 @@ export function useSettingsActions(s: Services, active: boolean) {
     onProbeConnection: probeConnection,
     onTestConnection: testPlainConnection,
     onSkip: () => void attempt("settings.skipAi").then(() => s.refresh()),
+    providers,
+    onDiscover: async ({ providerRef, accountId, secret }) => {
+      const credentialHandle = secret ? await window.manga.stashSecret(secret) : undefined;
+      const found = await attempt("providers.discover", { providerRef, ...(accountId ? { accountId } : {}), ...(credentialHandle ? { credentialHandle } : {}) });
+      return found.ok ? found.value as never : { error: found.error.message };
+    },
+    onAddFromProvider: async ({ secret, ...input }) => {
+      const credentialHandle = secret ? await window.manga.stashSecret(secret) : undefined;
+      const added = await attempt<{ connections: unknown[] }>("providers.add", { ...input, ...(credentialHandle ? { credentialHandle } : {}) });
+      if (!added.ok) return { ok: false, message: added.error.message };
+      s.setNotice(t("provider.added", { count: added.value.connections.length }));
+      await s.refresh();
+      return { ok: true, count: added.value.connections.length };
+    },
+    onSetAccountKey: async (accountId, secret) => {
+      const changed = await attempt<{ connections: number }>("providers.setKey", { accountId, credentialHandle: await window.manga.stashSecret(secret) });
+      if (!changed.ok) return changed.error.message;
+      s.setNotice(t("models.account.keyChanged", { count: changed.value.connections }));
+      await s.refresh();
+      return null;
+    },
+    onDeleteAccount: async (accountId) => {
+      const removed = await attempt("providers.deleteAccount", { accountId });
+      if (!removed.ok) { s.setError(removed.error.message); return; }
+      s.setNotice(t("models.account.deleted"));
+      await s.refresh();
+    },
+    onOpenPlugins: () => s.open.settings("plugins"),
+    onOpenLink: (url) => { void window.manga.openExternal?.(url); },
   };
   const storage: SettingsViewProps["storage"] = {
     onScan: () => void attempt("inventory.scan").then((item) => setInventory(item.ok ? item.value : null)),

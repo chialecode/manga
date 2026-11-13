@@ -56,8 +56,8 @@ export function resourceBytes(app: InventoryHost, resourceId: string): number {
 }
 
 export function noteBytes(app: InventoryHost, objectId: string): number {
-  const row = app.store.sqlite.prepare("SELECT payload_json FROM content_objects WHERE id = ?").get(objectId) as { payload_json: string } | undefined;
-  return row ? Buffer.byteLength(row.payload_json) : 0;
+  const row = app.store.sqlite.prepare("SELECT length(CAST(payload_json AS BLOB)) AS bytes FROM content_objects WHERE id = ?").get(objectId) as { bytes: number } | undefined;
+  return row?.bytes ?? 0;
 }
 
 export function inventoryItemForResource(app: InventoryHost, row: { id: string; title: string; kind?: string; bytes?: number }, grant: ScopeGrant) {
@@ -229,11 +229,46 @@ export function inventorySync(app: InventoryHost, signal: AbortSignal, grant: Sc
   const resources = app.store.sqlite.prepare("SELECT id, title, kind, created_at AS createdAt FROM resources ORDER BY created_at DESC, id DESC").all() as Array<{ id: string; title: string; kind: string; createdAt: string }>;
   const resourceBytesTotal = resources.reduce((sum, row) => sum + (latestBytes.get(row.id)?.bytes ?? 0), 0);
   const listedResources = resources.slice(0, 100).map((row) => inventoryItemForResource(app, { id: row.id, title: row.title, kind: row.kind, bytes: latestBytes.get(row.id)?.bytes ?? 0 }, grant));
-  const notes = app.store.sqlite.prepare("SELECT id, title FROM content_objects WHERE type='notes.document' AND deleted_at IS NULL").all() as Array<{ id: string; title: string }>;
+  const notes = app.store.sqlite.prepare("SELECT id, title, length(CAST(payload_json AS BLOB)) AS bytes FROM content_objects WHERE type='notes.document' AND deleted_at IS NULL").all() as Array<{ id: string; title: string; bytes: number }>;
   const attachmentDir = app.layout.partitions.attachments;
   const attachments = fs.existsSync(attachmentDir) ? fs.readdirSync(attachmentDir).filter((name) => !name.startsWith(".")) : [];
   const indexed = app.store.sqlite.prepare("SELECT id, path, kind, hosted, bytes, file_count AS fileCount FROM indexed_roots").all() as Array<{ id: string; path: string; kind: string; hosted: number; bytes: number; fileCount: number }>;
   const mediaInfo = mediaInventory(app, attachmentDir);
+  let attachmentBytesTotal = 0;
+  const listedAttachments: Array<{
+    id: string;
+    kind: "attachment";
+    title: string;
+    bytes: number;
+    location: string;
+    hosted: boolean;
+    indexed: boolean;
+    available: boolean;
+    moduleEnabled: boolean;
+    status: "ready" | "missing";
+    revealable: boolean;
+  }> = [];
+  for (const name of attachments) {
+    const location = path.join(attachmentDir, name);
+    const exists = fs.existsSync(location);
+    const bytes = exists ? fs.statSync(location).size : 0;
+    attachmentBytesTotal += bytes;
+    if (!mediaInfo.claimed.has(name) && listedAttachments.length < 200) {
+      listedAttachments.push({
+        id: name,
+        kind: "attachment",
+        title: name,
+        bytes,
+        location,
+        hosted: true,
+        indexed: false,
+        available: exists,
+        moduleEnabled: true,
+        status: exists ? "ready" : "missing",
+        revealable: exists,
+      });
+    }
+  }
   const partitionStat = (name: string) => app.store.sqlite.prepare("SELECT bytes, file_count AS fileCount, missing, scanned_at AS scannedAt FROM partition_stats WHERE name = ?").get(name) as { bytes: number; fileCount: number; missing: number; scannedAt: string | null } | undefined;
   const backup = partitionStat("backups") ?? { bytes: 0, fileCount: 0, missing: fs.existsSync(app.layout.partitions.backups) ? 0 : 1, scannedAt: null };
   const cache = partitionStat("cache") ?? { bytes: 0, fileCount: 0, missing: fs.existsSync(app.layout.partitions.cache) ? 0 : 1, scannedAt: null };
@@ -267,7 +302,7 @@ export function inventorySync(app: InventoryHost, signal: AbortSignal, grant: Sc
       id: row.id,
       kind: "note" as const,
       title: row.title,
-      bytes: noteBytes(app, row.id),
+      bytes: row.bytes,
       location: app.layout.partitions.projects,
       hosted: true,
       indexed: true,
@@ -296,23 +331,7 @@ export function inventorySync(app: InventoryHost, signal: AbortSignal, grant: Sc
         fileCount: folder.files,
       };
     }),
-    ...attachments.filter((name) => !mediaInfo.claimed.has(name)).slice(0, 200).map((name) => {
-      const location = path.join(attachmentDir, name);
-      const exists = fs.existsSync(location);
-      return {
-        id: name,
-        kind: "attachment" as const,
-        title: name,
-        bytes: exists ? fs.statSync(location).size : 0,
-        location,
-        hosted: true,
-        indexed: false,
-        available: exists,
-        moduleEnabled: true,
-        status: exists ? "ready" as const : "missing" as const,
-        revealable: exists,
-      };
-    }),
+    ...listedAttachments,
     ...indexed.map((root) => ({
       id: root.id,
       kind: "indexed-root" as const,
@@ -341,8 +360,8 @@ export function inventorySync(app: InventoryHost, signal: AbortSignal, grant: Sc
   };
   const totals = {
     resource: { count: resources.length, bytes: resourceBytesTotal },
-    note: { count: notes.length, bytes: items.filter((item) => item.kind === "note").reduce((sum, item) => sum + item.bytes, 0) },
-    attachment: { count: attachments.length, bytes: items.filter((item) => item.kind === "attachment").reduce((sum, item) => sum + item.bytes, 0) },
+    note: { count: notes.length, bytes: notes.reduce((sum, item) => sum + item.bytes, 0) },
+    attachment: { count: attachments.length, bytes: attachmentBytesTotal },
     ...mediaInfo.totals,
     backup: { count: backup.fileCount, bytes: backup.bytes, missing: Boolean(backup.missing), scanned: Boolean(backup.scannedAt) },
     cache: { count: cache.fileCount, bytes: cache.bytes, missing: Boolean(cache.missing), scanned: Boolean(cache.scannedAt) },

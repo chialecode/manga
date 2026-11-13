@@ -5,7 +5,8 @@ import type { Context, JsonObject, Model, Tool } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { MangaError } from "@manga/contracts";
-import { completeChatCompletions, completeResponses, streamChatCompletions, streamResponses } from "./openai-http.ts";
+import { completeChatCompletions, completeResponses, contentFiltered, streamChatCompletions, streamResponses, type CompletedText } from "./openai-http.ts";
+import { toolNamesOf, toWireRequest, withLocalToolNames } from "./tool-names.ts";
 import type { ChatMessage, StreamEvent, TextRequest, ToolDefinition } from "./http.ts";
 
 export type AiRuntimeId = "native" | "pi";
@@ -14,11 +15,13 @@ function unknownCost() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 }
 
-type PiParams = { vision: boolean; reasoning: boolean; contextWindow: number; maxTokens: number; maxTokensField: "max_tokens" | "max_completion_tokens" };
+type PiParams = { vision: boolean; reasoning: boolean; contextWindow: number; maxTokens: number; maxTokensField: "max_tokens" | "max_completion_tokens"; dialect?: "deepseek" };
 
 const paramsOf = (request: TextRequest): PiParams => ({
   vision: request.messages.some((message) => message.images?.length),
-  reasoning: Boolean(request.reasoningEffort),
+  // A DeepSeek model is a reasoning model to pi either way, so pi says `thinking: disabled` when no effort is asked for (the service thinks by default).
+  reasoning: Boolean(request.reasoningEffort) || request.dialect === "deepseek",
+  ...(request.dialect ? { dialect: request.dialect } : {}),
   contextWindow: request.contextWindow ?? 128_000,
   maxTokens: request.maxOutputTokens ?? 8192,
   maxTokensField: request.maxTokensField ?? "max_tokens",
@@ -41,6 +44,7 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
       compat: { supportsDeveloperRole: false, supportsLongCacheRetention: false, supportsStrictMode: false },
     };
   }
+  const deepseek = params.dialect === "deepseek";
   return {
     id: modelId,
     name: modelId,
@@ -52,13 +56,16 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
     cost: unknownCost(),
     contextWindow: params.contextWindow,
     maxTokens: params.maxTokens,
+    // DeepSeek's levels are low, high and max; MANGA's names map onto them the same way the native runtime maps them (计划 4.3).
+    ...(deepseek ? { thinkingLevelMap: { minimal: "low", low: "low", medium: "high", high: "high", xhigh: "max", max: "max" } } : {}),
     compat: {
       supportsStore: false,
       supportsDeveloperRole: false,
       supportsReasoningEffort: params.reasoning,
-      supportsUsageInStreaming: false,
+      supportsUsageInStreaming: deepseek,
       supportsFinishReason: true,
-      maxTokensField: params.maxTokensField,
+      maxTokensField: deepseek ? "max_tokens" : params.maxTokensField,
+      ...(deepseek ? { thinkingFormat: "deepseek" as const, requiresReasoningContentOnAssistantMessages: true } : {}),
     },
   };
 }
@@ -81,7 +88,9 @@ function providerCallId(id: string): string {
 
 function piContext(request: TextRequest, api: "openai-responses" | "openai-completions"): Context {
   const messages: Context["messages"] = [];
-  for (const message of request.messages) {
+  // The thinking of the turn under way goes back as a thinking block, which pi sends as `reasoning_content`; an earlier turn's does not (计划 4.3).
+  const turnStart = request.messages.map((message) => message.role).lastIndexOf("user");
+  for (const [index, message] of request.messages.entries()) {
     if (message.role === "tool") {
       messages.push({
         role: "toolResult",
@@ -97,6 +106,7 @@ function piContext(request: TextRequest, api: "openai-responses" | "openai-compl
       messages.push({
         role: "assistant",
         content: [
+          ...(request.dialect === "deepseek" && index > turnStart && message.reasoning !== undefined ? [{ type: "thinking" as const, thinking: message.reasoning, thinkingSignature: "reasoning_content" }] : []),
           ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
           ...(message.toolCalls ?? []).map((call) => ({
             type: "toolCall" as const,
@@ -142,16 +152,30 @@ function safeJson(text: string): JsonObject {
 function mapPiError(message: string | undefined, signal?: AbortSignal): MangaError {
   const text = message ?? "provider failed";
   if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true });
-  const status = Number(/\b(40[0-9]|42[0-9]|5[0-9]{2})\b/.exec(text)?.[1]);
+  const status = Number(/\b(40[0-9]|41[0-9]|42[0-9]|5[0-9]{2})\b/.exec(text)?.[1]);
   const known = Number.isFinite(status) ? { status } : {};
+  if (/content[_ ]?filter/i.test(text)) return contentFiltered();
+  if (status === 402 || /insufficient[_ ]?balance|out of credit/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "the account has no balance left", { details: { status: 402, kind: "billing" } });
+  if (status === 503 || /overloaded|service unavailable/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "the service is busy", { retryable: true, details: { status: 503, kind: "busy" } });
   if (/context[ _-]?(length|window)|maximum context|too many tokens|token limit|prompt is too long|input is too long/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider HTTP 400", { details: { status: 400, kind: "context" } });
-  if (/\b401\b|unauthor|invalid api key|incorrect api key/i.test(text)) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status: 401 } });
-  if (/\b429\b|rate.?limit/i.test(text)) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details: { status: 429 } });
-  if (/\b404\b|not found/i.test(text)) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details: { status: 404, kind: /model/i.test(text) ? "model" : "path" } });
+  if (status === 401 || /unauthor|invalid api key|incorrect api key/i.test(text)) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status: 401 } });
+  if (status === 429 || /rate.?limit/i.test(text)) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details: { status: 429 } });
+  if (status === 404 || (!Number.isFinite(status) && /\bnot found\b/i.test(text))) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details: { status: 404, kind: /model/i.test(text) ? "model" : "path" } });
   if (/time.?out|timed out|abort/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "request timed out", { retryable: true, details: { kind: "timeout" } });
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo|connection error|fetch failed|invalid url/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider is not reachable", { retryable: true, details: { kind: "address" } });
   if (/unexpected token|not valid json|<!doctype|<html|unexpected end of json|without finish_reason|stream ended|empty (response|stream)/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider answered in an unexpected form", { details: { kind: "protocol" } });
-  return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", { retryable: true, details: Number.isFinite(status) ? known : { kind: "network" } });
+  return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", { retryable: !Number.isFinite(status) || status >= 500, details: Number.isFinite(status) ? known : { kind: "network" } });
+}
+
+/** DeepSeek's own web search is a tool pi does not know; it is added to the request pi built (计划 4.4). Its progress and citations are not read under pi. */
+function payloadHook(request: TextRequest) {
+  if (request.dialect !== "deepseek" || !request.nativeWebSearch) return {};
+  return {
+    onPayload: (params: unknown) => {
+      const body = params as { tools?: unknown[] };
+      return { ...body, tools: [...(body.tools ?? []), { type: "deepseek_web_search" }] };
+    },
+  };
 }
 
 function createByokModels(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, params: PiParams) {
@@ -181,11 +205,12 @@ export async function* streamTextPi(
 ): AsyncGenerator<StreamEvent> {
   const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
   const stream = request.reasoningEffort
-    ? models.streamSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
-    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}) });
+    ? models.streamSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...payloadHook(request) })
+    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}), ...payloadHook(request) });
   const args = new Map<number, { id: string; name: string; last: string }>();
   for await (const event of stream) {
     if (event.type === "text_delta") yield { type: "text-delta", text: event.delta };
+    if (event.type === "thinking_delta" && event.delta) yield { type: "reasoning-delta", text: event.delta };
     if (event.type === "toolcall_start") {
       const block = event.partial.content[event.contentIndex];
       if (block && block.type === "toolCall") {
@@ -207,9 +232,10 @@ export async function* streamTextPi(
       const serialized = JSON.stringify(event.toolCall.arguments ?? {});
       const callId = providerCallId(event.toolCall.id);
       const current = args.get(event.contentIndex) ?? { id: callId, name: event.toolCall.name, last: "" };
-      const delta = serialized.slice(current.last.length);
-      if (delta) yield { type: "tool-call-delta", callId, name: event.toolCall.name, argumentsDelta: delta };
-      args.set(event.contentIndex, { id: callId, name: event.toolCall.name, last: serialized });
+      if (current.last.length === 0) {
+        yield { type: "tool-call-delta", callId, name: event.toolCall.name, argumentsDelta: serialized };
+        args.set(event.contentIndex, { id: callId, name: event.toolCall.name, last: serialized });
+      }
     }
     if (event.type === "done") {
       const usage = event.message.usage;
@@ -220,6 +246,7 @@ export async function* streamTextPi(
         usage: {
           inputTokens: usage.input,
           outputTokens: usage.output,
+          ...(usage.cacheRead > 0 ? { cachedInputTokens: usage.cacheRead } : {}),
           costUsd: known ? usage.cost.total : undefined,
         },
       };
@@ -233,11 +260,11 @@ export async function completeTextPi(
   baseUrl: string,
   apiKey: string,
   request: TextRequest,
-): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; arguments: string }>; usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number } }> {
+): Promise<CompletedText> {
   const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
   const message = request.reasoningEffort
-    ? await models.completeSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
-    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}) });
+    ? await models.completeSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...payloadHook(request) })
+    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}), ...payloadHook(request) });
   if (message.stopReason === "aborted") {
     // Aborted by the caller is a cancel; aborted without the caller asking is the time running out.
     if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
@@ -251,12 +278,15 @@ export async function completeTextPi(
       : { id: "", name: "", arguments: "{}" }
   ));
   const known = message.usage.cost.total > 0;
+  const reasoning = message.content.filter((part) => part.type === "thinking").map((part) => part.type === "thinking" ? part.thinking : "").join("");
   return {
     text,
     toolCalls,
+    ...(reasoning ? { reasoning } : {}),
     usage: {
       inputTokens: message.usage.input,
       outputTokens: message.usage.output,
+      ...(message.usage.cacheRead > 0 ? { cachedInputTokens: message.usage.cacheRead } : {}),
       costUsd: known ? message.usage.cost.total : undefined,
     },
   };
@@ -268,10 +298,14 @@ export async function completeText(
   apiKey: string,
   request: TextRequest,
   runtime: AiRuntimeId = "native",
-): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; arguments: string }>; usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number } }> {
-  if (runtime === "pi") return completeTextPi(protocol, baseUrl, apiKey, request);
-  if (protocol === "openai-responses") return completeResponses(baseUrl, apiKey, request);
-  return completeChatCompletions(baseUrl, apiKey, request);
+): Promise<CompletedText> {
+  // The tools go out under names the service accepts and their calls come back under the tools' own (`tool-names.ts`).
+  const names = toolNamesOf(request);
+  const wire = toWireRequest(request, names);
+  const done = runtime === "pi" ? await completeTextPi(protocol, baseUrl, apiKey, wire)
+    : protocol === "openai-responses" ? await completeResponses(baseUrl, apiKey, wire)
+      : await completeChatCompletions(baseUrl, apiKey, wire);
+  return done.toolCalls.length ? { ...done, toolCalls: done.toolCalls.map((call) => ({ ...call, name: names.local(call.name) })) } : done;
 }
 
 export function streamText(
@@ -281,7 +315,10 @@ export function streamText(
   request: TextRequest,
   runtime: AiRuntimeId = "native",
 ): AsyncGenerator<StreamEvent> {
-  if (runtime === "pi") return streamTextPi(protocol, baseUrl, apiKey, request);
-  if (protocol === "openai-responses") return streamResponses(baseUrl, apiKey, request);
-  return streamChatCompletions(baseUrl, apiKey, request);
+  const names = toolNamesOf(request);
+  const wire = toWireRequest(request, names);
+  const events = runtime === "pi" ? streamTextPi(protocol, baseUrl, apiKey, wire)
+    : protocol === "openai-responses" ? streamResponses(baseUrl, apiKey, wire)
+      : streamChatCompletions(baseUrl, apiKey, wire);
+  return withLocalToolNames(events, names);
 }

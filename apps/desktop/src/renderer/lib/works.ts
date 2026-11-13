@@ -1,5 +1,6 @@
 import type { ShelfState, WorkContextPosition, WorkMediaKind, WorkResourceRow, WorkSummary } from "@manga/contracts/media";
 import type { Translator } from "@manga/i18n";
+import { formatClockMs as formatClockFromMs } from "./format.ts";
 
 export type { ShelfState, WorkContextPosition, WorkMediaKind, WorkResourceRow, WorkSummary };
 
@@ -58,12 +59,7 @@ export function resourceLabel(row: { title: string; ordinalLabel?: string | null
 export const percentOf = (fraction: number): number => Math.max(0, Math.min(100, Math.round(fraction * 100)));
 
 export function formatClockMs(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return formatClockFromMs(ms, { padMinutes: true });
 }
 
 /** "最近：第 3 话 12:30" or "项目 A：第 8 页": one context's position on a work's homepage (A-129). */

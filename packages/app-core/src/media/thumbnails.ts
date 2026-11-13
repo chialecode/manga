@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import { MangaError } from "@manga/contracts";
+import { errorMessage, writeFileAtomic } from "../shared/utils.ts";
 import { Lane } from "./process-runner.ts";
 
 /** Pixels a single decode may produce. A 20000 x 10000 scan passes; a decompression-bomb image is refused before decoding. */
@@ -34,7 +35,7 @@ function open(input: Buffer | string): Sharp {
 
 function translate(error: unknown): MangaError {
   if (error instanceof MangaError) return error;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   if (/pixel limit|exceeds pixel/i.test(message)) return new MangaError("UNSUPPORTED_FORMAT", "image is larger than the pixel budget");
   return new MangaError("UNSUPPORTED_FORMAT", `image cannot be decoded: ${message.split(/\r?\n/)[0]}`);
 }
@@ -88,9 +89,15 @@ export async function makeThumbnail(input: Buffer | string, request: ThumbnailRe
   }
 }
 
+type EnsureResult = { path: string; mediaType: string; width: number; height: number } | { path: string; mediaType: string; width?: undefined; height?: undefined };
+
+const AUTO_TRIM_WRITES = 64;
+
 /** Content-addressed cache of derived images. Everything in it can be rebuilt from the originals. */
 export class ThumbnailCache {
   private readonly lane = new Lane(3);
+  private readonly inFlight = new Map<string, { promise: Promise<EnsureResult>; controller: AbortController; waiters: number }>();
+  private writesSinceTrim = 0;
 
   readonly directory: string;
   private readonly budgetBytes: number;
@@ -121,31 +128,73 @@ export class ThumbnailCache {
     return null;
   }
 
-  /** Make (or find) the derived image for `key`. Concurrency is capped so a page of thumbnails does not saturate the machine. */
-  async ensure(key: string, make: () => Promise<ThumbnailResult>, signal?: AbortSignal): Promise<{ path: string; mediaType: string; width: number; height: number } | { path: string; mediaType: string; width?: undefined; height?: undefined }> {
+  /** Make (or find) the derived image for `key`. Concurrency is capped and identical in-flight keys are shared. */
+  async ensure(key: string, make: () => Promise<ThumbnailResult>, signal?: AbortSignal): Promise<EnsureResult> {
+    if (signal?.aborted) throw new MangaError("CANCELLED", "thumbnail was cancelled");
     const hit = this.find(key);
     if (hit) return hit;
-    return this.lane.run(async () => {
-      const again = this.find(key);
-      if (again) return again;
-      const result = await make();
-      const file = this.fileFor(key, result.mediaType);
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      const staging = `${file}.${process.pid}.tmp`;
-      fs.writeFileSync(staging, result.bytes);
-      fs.renameSync(staging, file);
-      return { path: file, mediaType: result.mediaType, width: result.width, height: result.height };
-    }, signal);
+    let entry = this.inFlight.get(key);
+    if (!entry) {
+      const controller = new AbortController();
+      const created: { promise: Promise<EnsureResult>; controller: AbortController; waiters: number } = {
+        promise: Promise.resolve() as unknown as Promise<EnsureResult>,
+        controller,
+        waiters: 0,
+      };
+      created.promise = this.lane.run(async () => {
+        const again = this.find(key);
+        if (again) return again;
+        const result = await make();
+        const file = this.fileFor(key, result.mediaType);
+        writeFileAtomic(file, result.bytes);
+        this.writesSinceTrim += 1;
+        if (this.writesSinceTrim >= AUTO_TRIM_WRITES) {
+          this.writesSinceTrim = 0;
+          setImmediate(() => { try { this.trim(); } catch { /* best-effort eviction */ } });
+        }
+        return { path: file, mediaType: result.mediaType, width: result.width, height: result.height };
+      }, controller.signal).finally(() => {
+        if (this.inFlight.get(key) === created) this.inFlight.delete(key);
+      });
+      created.promise.catch(() => undefined);
+      this.inFlight.set(key, created);
+      entry = created;
+    }
+    entry.waiters += 1;
+    let settled = false;
+    return new Promise<EnsureResult>((resolve, reject) => {
+      const finish = () => {
+        if (settled) return false;
+        settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        return true;
+      };
+      const onAbort = () => {
+        if (!finish()) return;
+        entry.waiters -= 1;
+        if (entry.waiters <= 0) entry.controller.abort();
+        reject(new MangaError("CANCELLED", "thumbnail was cancelled"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      entry.promise.then(
+        (value) => { if (finish()) resolve(value); },
+        (error: unknown) => { if (finish()) reject(error); },
+      );
+    });
   }
 
   totalBytes(): number {
     let total = 0;
     const walk = (dir: string) => {
       if (!fs.existsSync(dir)) return;
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      let entries: fs.Dirent[];
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
-        else total += fs.statSync(full).size;
+        else if (!entry.name.endsWith(".tmp")) {
+          try { total += fs.statSync(full).size; } catch { /* removed concurrently */ }
+        }
       }
     };
     walk(this.directory);
@@ -157,12 +206,16 @@ export class ThumbnailCache {
     const files: Array<{ file: string; size: number; at: number }> = [];
     const walk = (dir: string) => {
       if (!fs.existsSync(dir)) return;
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      let entries: fs.Dirent[];
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
         else if (!entry.name.endsWith(".tmp")) {
-          const stat = fs.statSync(full);
-          files.push({ file: full, size: stat.size, at: stat.mtimeMs });
+          try {
+            const stat = fs.statSync(full);
+            files.push({ file: full, size: stat.size, at: stat.mtimeMs });
+          } catch { /* removed concurrently */ }
         }
       }
     };

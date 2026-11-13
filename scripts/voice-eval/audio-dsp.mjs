@@ -255,7 +255,7 @@ function fftRadix2(re, im, dir) {
 }
 
 /**
- * Simulates Chromium's fixed aggressive single-channel WebRTC NoiseSuppression (`kHigh` in `mic.ts` before M12):
+ * Simulates Chromium's fixed aggressive single-channel WebRTC NoiseSuppression (`kHigh` in `mic.ts` before the dictation capture defaults, A-131):
  * 32 ms (512-sample) Hann STFT with 50% overlap, quantile/minimum-statistics stationary noise floor estimation,
  * aggressive over-subtraction (`alpha = 2.6`) and spectral floor (`-22 dB`), which suppresses stationary hum
  * while inevitably eroding low-energy consonant onsets/codas and distorting non-stationary competing speech.

@@ -15,7 +15,7 @@ const scrolled = new Map<string, number>();
 /** The main area of the settings view (A-101): the page the directory names, with its own scroll position kept. */
 export function SettingsPane(props: { page: SettingsPageId; onPage: (page: SettingsPageId) => void }) {
   const s = useServices();
-  const actions = useSettingsActions(s, props.page === "storage");
+  const actions = useSettingsActions(s, props.page === "storage", props.page === "models");
   const prefs = useMediaPrefs<ComicSettings, VideoSettings>({ comic: DEFAULT_COMIC_SETTINGS, video: DEFAULT_VIDEO_SETTINGS }, (message) => s.setError(message));
   const host = useRef<HTMLDivElement>(null);
 

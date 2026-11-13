@@ -15,6 +15,8 @@ export type ConnectionForm = {
   /** The numbers and switches of the model as typed, and as they were when the form was opened (only a change is saved). */
   profile?: ProfileForm;
   profileBefore?: ProfileForm;
+  /** The provider's name, for a connection added from a provider plugin: its address, model, purpose and key are not changed here (计划 4.2). */
+  provider?: string;
 };
 
 export type NoteSummary = {
@@ -48,6 +50,8 @@ export type ComposerState = {
   allowSemantic: boolean;
   /** The user turned webpage fetching on for the next task only. */
   allowWebpage: boolean;
+  /** The user turned "联网搜索" on for the next task only (计划 4.4). */
+  allowWebSearch?: boolean;
   /** How many minutes past the spoiler limit the next task may read subtitles; 0 keeps the default limit. */
   subtitleAheadMin: number;
 };
@@ -65,7 +69,7 @@ export type AttachedImage = {
   region?: { x: number; y: number; width: number; height: number };
 };
 
-export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], noteMaterials: [], images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, subtitleAheadMin: 0 });
+export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], noteMaterials: [], images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, allowWebSearch: false, subtitleAheadMin: 0 });
 
 export type AgentSelection = { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number; quote: string };
 

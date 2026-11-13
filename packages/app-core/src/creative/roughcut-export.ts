@@ -6,6 +6,7 @@ import {
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { TargetTaken, placeNoReplace } from "../acquisition/files.ts";
 import type { FfmpegService } from "../media/ffmpeg.ts";
+import { errorMessage } from "../shared/utils.ts";
 import { safeFileName } from "./export-file.ts";
 import { chapterMetadata, keptAudio, keptSubtitles, muxerFor, streamsFromProbe } from "./roughcut-plan.ts";
 
@@ -38,6 +39,8 @@ export type ExportRequest = {
   sources: Map<string, string>;
   /** What each clip's source says about its streams, by clip id. */
   streams: Map<string, RoughcutStreams>;
+  /** Exact container stream index of the non-attached-pic video stream, by clip id. */
+  videoIndices?: Map<string, number>;
   /** What a chapter is called, by clip id. */
   chapterTitles: Map<string, string>;
   destination: ExportDestination;
@@ -172,8 +175,7 @@ export class RoughcutExports {
       this.save(row.id, { state: "failed", error: { code: "INTERRUPTED", message: "the application stopped before the export finished" }, tmp: null });
     }
     for (const name of fs.existsSync(this.o.stagingRoot) ? fs.readdirSync(this.o.stagingRoot) : []) {
-      const known = this.o.store.sqlite.prepare("SELECT state FROM rough_cut_exports WHERE id = ?").get(name) as { state: string } | undefined;
-      if (!known) fs.rmSync(path.join(this.o.stagingRoot, name), { recursive: true, force: true });
+      if (!this.running.has(name)) fs.rmSync(path.join(this.o.stagingRoot, name), { recursive: true, force: true });
     }
   }
 
@@ -189,8 +191,9 @@ export class RoughcutExports {
     // rounds times to a thousandth, so half a millisecond past the keyframe is at or after its true time and before the next frame: this keyframe, never the one before.
     const seek = clip.actualInMs + 0.5;
     const args = ["-v", "error", "-nostdin", "-y", "-ss", toSeconds(seek), "-i", source];
-    if (!clip.toEnd) args.push("-t", toSeconds(clip.actualOutMs - clip.frameGapMs / 2 - seek));
-    args.push("-map", "0:v:0");
+    if (!clip.toEnd) args.push("-t", toSeconds(Math.max(1, clip.actualOutMs - clip.frameGapMs / 2 - seek)));
+    const videoIndex = request.videoIndices?.get(clip.clipId);
+    args.push("-map", videoIndex !== undefined ? `0:${videoIndex}` : "0:v:0");
     if (options.audioTracks) for (const index of keptAudio(streams, options)) args.push("-map", `0:a:${index}`);
     else args.push("-map", "0:a?");
     const subtitles = keptSubtitles(options);
@@ -332,7 +335,7 @@ export class RoughcutExports {
       const code = error instanceof MangaError ? error.code : "FAILED";
       this.save(exportId, {
         state: cancelled ? "cancelled" : "failed", tmp: null, progress: { step: null, files },
-        error: cancelled ? null : { code, message: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500) },
+        error: cancelled ? null : { code, message: errorMessage(error).slice(0, 500) },
       });
     } finally {
       fs.rmSync(stage, { recursive: true, force: true });
@@ -379,14 +382,44 @@ export class RoughcutExports {
   private async mediaEnd(file: string, tool: Tool, clip?: number): Promise<number> {
     const result = await tool("ffprobe", ["-v", "error", "-show_entries", "packet=stream_index,pts_time,duration_time:stream=index,codec_type", "-of", "compact", "-i", file], { redact: [file, path.dirname(file)], step: "check", clip });
     const timed = new Set<number>();
-    const packets: Array<{ stream: number; end: number }> = [];
+    const maxEndByStream = new Map<number, number>();
     for (const line of result.stdout.toString("utf8").split(/\r?\n/)) {
-      const fields = Object.fromEntries(line.split("|").slice(1).map((part) => { const at = part.indexOf("="); return [part.slice(0, at), part.slice(at + 1)]; }));
-      if (line.startsWith("stream|")) { if (fields.codec_type === "video" || fields.codec_type === "audio") timed.add(Number(fields.index)); }
-      else if (line.startsWith("packet|")) packets.push({ stream: Number(fields.stream_index), end: (Number(fields.pts_time) || 0) + (Number(fields.duration_time) || 0) });
+      if (line.startsWith("stream|")) {
+        let index = Number.NaN;
+        let codecType = "";
+        for (const part of line.split("|").slice(1)) {
+          const at = part.indexOf("=");
+          if (at < 0) continue;
+          const k = part.slice(0, at);
+          const v = part.slice(at + 1);
+          if (k === "index") index = Number(v);
+          else if (k === "codec_type") codecType = v;
+        }
+        if ((codecType === "video" || codecType === "audio") && Number.isFinite(index)) timed.add(index);
+      } else if (line.startsWith("packet|")) {
+        let streamIndex = Number.NaN;
+        let pts = 0;
+        let dur = 0;
+        for (const part of line.split("|").slice(1)) {
+          const at = part.indexOf("=");
+          if (at < 0) continue;
+          const k = part.slice(0, at);
+          const v = part.slice(at + 1);
+          if (k === "stream_index") streamIndex = Number(v);
+          else if (k === "pts_time") pts = Number(v) || 0;
+          else if (k === "duration_time") dur = Number(v) || 0;
+        }
+        if (Number.isFinite(streamIndex)) {
+          const end = pts + dur;
+          if (end > (maxEndByStream.get(streamIndex) ?? 0)) maxEndByStream.set(streamIndex, end);
+        }
+      }
     }
     let end = 0;
-    for (const packet of packets) if (timed.has(packet.stream) && packet.end > end) end = packet.end;
+    for (const stream of timed) {
+      const value = maxEndByStream.get(stream) ?? 0;
+      if (value > end) end = value;
+    }
     return Math.round(end * 1000);
   }
 
@@ -399,7 +432,7 @@ export class RoughcutExports {
         return candidate;
       } catch (error) {
         if (error instanceof TargetTaken) continue;
-        throw new MangaError("LOCATION_UNAVAILABLE", `the export could not be written: ${error instanceof Error ? error.message : String(error)}`);
+        throw new MangaError("LOCATION_UNAVAILABLE", `the export could not be written: ${errorMessage(error)}`);
       }
     }
     throw new MangaError("VALIDATION_ERROR", "there are too many files with this name");

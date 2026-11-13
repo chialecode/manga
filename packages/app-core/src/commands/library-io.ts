@@ -12,13 +12,13 @@ import { ordinalFromParsed, parseOrdinalName } from "../domain/ordinal.ts";
 import type { ScanHost, ScanJob } from "../library-scan/service.ts";
 import { assertOpenable, inLibrarySql, insertLocation, moveLocation, requireInLibrary } from "../library-locations.ts";
 import { sampledFingerprint } from "../video/sidecars.ts";
-import type { MangaProductApp } from "../product-app.ts";
 import { encodeResourceCursor, decodeResourceCursor, decodeWorkerAssets } from "../product-helpers.ts";
 import { snapshotRevision } from "./agent.ts";
 import { queueExtras } from "./media.ts";
+import type { AgentCommandHost } from "./shared.ts";
 
 /** What these commands use of the application. */
-export type LibraryIoHost = Pick<MangaProductApp, "agentAccess" | "assertWritable" | "builtinDanmakuCredentials" | "call" | "closed" | "comics" | "conversations" | "covers" | "danmaku" | "debugContext" | "extras" | "followFiles" | "grantOf" | "grants" | "interruptRuns" | "issueAgentGrant" | "layout" | "listModules" | "log" | "materials" | "media" | "metadata" | "notify" | "parseGeneration" | "parseWorker" | "pendingRecoveryJobs" | "projects" | "proposals" | "publicLayout" | "queryLog" | "quickTasks" | "requireModule" | "resolvePath" | "resolvePathFor" | "runAbort" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "suggestedQuery" | "trace" | "uiFacets" | "vault" | "videos" | "voice" | "workFolders">;
+export type LibraryIoHost = AgentCommandHost;
 
 export async function importText(app: LibraryIoHost, envelope: CommandEnvelope, signal: AbortSignal) {
   const input = envelope.input as { title: string; bytes: number[]; encoding?: "utf-8" | "utf-16le" };
@@ -125,6 +125,8 @@ export function scanHost(app: LibraryIoHost): ScanHost {
     afterImport: (resourceIds) => { queueExtras(app, { resources: resourceIds.map((resourceId) => ({ resourceId })) }); },
     moduleEnabled: (kind) => kind === "comic" ? app.runtime.gateway.has("comic.pages") : kind === "video" ? app.runtime.gateway.has("video.probe") : app.runtime.gateway.has("library.importDocument"),
     assertWritable: () => app.assertWritable(),
+    forgetRevision: (revisionId) => app.videos.forgetRevision(revisionId),
+    forgetWorkCovers: (workIds) => app.covers.forgetWorkCovers(workIds),
     notify: (topic, payload) => {
       app.notify(topic, payload);
       if (topic === "scan.finished") logScan(app, payload.job as ScanJob);
@@ -246,6 +248,7 @@ export async function inspectFile(app: LibraryIoHost, envelope: CommandEnvelope,
 export async function importComicDocument(app: LibraryIoHost, envelope: CommandEnvelope, signal: AbortSignal) {
   app.requireModule("comic.pages", "comic reading");
   const input = envelope.input as { title: string; bytes?: number[]; pathHandle?: string; hosted?: boolean; workId?: string; ordinal?: Ordinal };
+  app.assertWritable();
   const receipt = { idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId };
   let sourcePath = input.pathHandle ? app.resolvePathFor(input.pathHandle, ["file", "import", "directory"]) : undefined;
   let staged: string | undefined;
@@ -259,7 +262,6 @@ export async function importComicDocument(app: LibraryIoHost, envelope: CommandE
   }
   try {
     const result = await app.comics.importOne({ sourcePath, title: input.title, hosted, workId: input.workId, ordinal: input.ordinal, signal, receipt });
-    app.assertWritable();
     return { ...result, format: `comic-${result.source}`, kind: "comic" };
   } finally {
     if (staged) fs.rmSync(staged, { force: true });
@@ -268,11 +270,11 @@ export async function importComicDocument(app: LibraryIoHost, envelope: CommandE
 
 export async function importVideoDocument(app: LibraryIoHost, envelope: CommandEnvelope, signal: AbortSignal) {
   app.requireModule("video.probe", "video playback");
+  app.assertWritable();
   const input = envelope.input as { title: string; pathHandle?: string; workId?: string; ordinal?: Ordinal };
   if (!input.pathHandle) throw new MangaError("VALIDATION_ERROR", "a video is imported from a file on disk, not from bytes");
   const sourcePath = app.resolvePathFor(input.pathHandle, ["file", "import", "directory"]);
   const result = await app.videos.importOne({ sourcePath, title: input.title, workId: input.workId, ordinal: input.ordinal, signal, receipt: { idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId } });
-  app.assertWritable();
   return { ...result, format: "video", kind: "video" };
 }
 

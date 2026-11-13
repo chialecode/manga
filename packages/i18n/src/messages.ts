@@ -10,6 +10,7 @@ import { zhCNResearch } from "./messages-research.ts";
 import { zhCNAcquisition } from "./messages-acquisition.ts";
 import { zhCNRoughcut } from "./messages-roughcut.ts";
 import { zhCNPlugins } from "./messages-plugins.ts";
+import { zhCNProvider } from "./messages-provider.ts";
 import { zhCNSemantic } from "./messages-semantic.ts";
 import { zhCNShell } from "./messages-shell.ts";
 import { zhCNWorkspace } from "./messages-workspace.ts";
@@ -225,7 +226,7 @@ const zhCNBase = {
 } as const;
 
 // Later catalogs replace the wording of an earlier screen whose behavior changed.
-const zhCN = { ...zhCNBase, ...zhCNMedia, ...zhCNWorkspace, ...zhCNShell, ...zhCNCreative, ...zhCNDictation, ...zhCNCanvas, ...zhCNCopy, ...zhCNResearch, ...zhCNSemantic, ...zhCNPlugins, ...zhCNAcquisition, ...zhCNRoughcut, ...zhCNWorks, ...zhCNDanmaku, ...zhCNAgent, ...zhCNLight } as const;
+const zhCN = { ...zhCNBase, ...zhCNMedia, ...zhCNWorkspace, ...zhCNShell, ...zhCNCreative, ...zhCNDictation, ...zhCNCanvas, ...zhCNCopy, ...zhCNResearch, ...zhCNSemantic, ...zhCNPlugins, ...zhCNAcquisition, ...zhCNRoughcut, ...zhCNWorks, ...zhCNDanmaku, ...zhCNAgent, ...zhCNLight, ...zhCNProvider } as const;
 
 type MessageKey = keyof typeof zhCN;
 

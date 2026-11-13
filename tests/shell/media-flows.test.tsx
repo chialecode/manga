@@ -9,7 +9,7 @@ import { shelfMemory } from "../../apps/desktop/src/renderer/lib/shelf-memory.ts
 import { resetVideoSupport } from "../../apps/desktop/src/renderer/readers/video-support.ts";
 import { installMatchMedia, installMediaElement, installPointerEvent, removeMatchMedia } from "../helpers/dom.ts";
 import { installHost, stay, workDetail } from "../helpers/app-host.ts";
-import { closeFocusedTab, focusedTitle, goBack, openShelf, openWorkPage, settle, showTab, tabTitles } from "../helpers/workspace-ui.ts";
+import { closeFocusedTab, focusedTitle, openShelf, openWorkPage, settle, showTab, tabTitles, walk } from "../helpers/workspace-ui.ts";
 
 Element.prototype.scrollIntoView = () => {};
 
@@ -109,18 +109,19 @@ describe("media pages in the app", () => {
     await openWork("comic", "open-res_c1");
     fireEvent.click(screen.getByTestId("work-read"));
     await waitFor(() => expect(screen.getByTestId("comic-reader")).toBeTruthy());
-    // The reader is a tab of its own with nothing before it: back has nowhere to go from it, and the work's page did not change under it.
-    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", true);
-    expect(screen.getByTestId("nav-forward")).toHaveProperty("disabled", true);
+    // The reader is a tab of its own with nothing before it: back and forward have nowhere to go from it, and the work's page did not change under it.
+    const reader = focusedTitle();
+    await walk("back");
+    await walk("forward");
+    expect(screen.getByTestId("comic-reader")).toBeTruthy();
+    expect(focusedTitle()).toBe(reader);
     // The library tab is where it was: on the work's page, with the shelf behind it and nothing ahead of it.
     await showTab("合成漫画");
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
-    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false);
-    fireEvent.click(screen.getByTestId("nav-back"));
+    await walk("back");
     await waitFor(() => expect(screen.getByTestId("shelf-comic")).toBeTruthy());
     // And forward comes back to the work's page.
-    expect(screen.getByTestId("nav-forward")).toHaveProperty("disabled", false);
-    fireEvent.click(screen.getByTestId("nav-forward"));
+    await walk("forward");
     await waitFor(() => expect(screen.getByTestId("page-work")).toBeTruthy());
   });
 
@@ -250,7 +251,9 @@ describe("media pages in the app", () => {
     expect(screen.getByTestId("page-work")).toBeTruthy();
     // The new tab's own page is still the overview, and the first tab's history was not touched by it.
     expect(screen.getAllByTestId("shelf-all").length).toBe(1);
-    expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false);
+    // Its history still has the shelf behind the work's page.
+    await walk("back");
+    await waitFor(() => expect(screen.queryByTestId("page-work")).toBeNull());
     await settle();
   });
 });

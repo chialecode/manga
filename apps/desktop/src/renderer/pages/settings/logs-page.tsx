@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MessageKey, Translator } from "@manga/i18n";
+import { useAsyncGuard, useDebouncedSearch } from "../../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../../lib/api.ts";
+import { dayBounds } from "../../lib/format.ts";
 import { SettingsPage } from "./rows.tsx";
 
 type T = Translator["t"];
@@ -25,10 +27,6 @@ export type LogEntry = {
 type Found = { entries: LogEntry[]; nextBefore: number | null; total: number; categories: string[]; retention?: { days: number; rows: number } };
 const PAGE = 50;
 
-/** The start and the end of the chosen local day, as the instants the log compares against. */
-const dayStart = (value: string) => { const [y, m, d] = value.split("-").map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1).toISOString(); };
-const dayEnd = (value: string) => { const [y, m, d] = value.split("-").map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1, 23, 59, 59, 999).toISOString(); };
-
 /** A line the person can read: the catalog's sentence for the entry, or the command's name when this build has no sentence for it. */
 export function logSummary(t: T, entry: LogEntry): string {
   const key = entry.summaryKey as MessageKey;
@@ -51,8 +49,7 @@ export function LogsPage(props: { t: T; formatDate: (value: string) => string; o
   const [category, setCategory] = useState("");
   const [actor, setActor] = useState("");
   const [outcome, setOutcome] = useState("");
-  const [text, setText] = useState("");
-  const [query, setQuery] = useState("");
+  const search = useDebouncedSearch("", 250);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [entries, setEntries] = useState<LogEntry[]>([]);
@@ -61,46 +58,66 @@ export function LogsPage(props: { t: T; formatDate: (value: string) => string; o
   const [categories, setCategories] = useState<string[]>([]);
   const [retention, setRetention] = useState<Found["retention"]>();
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const latest = useRef(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const guard = useAsyncGuard();
+  const loadingMoreRef = useRef(false);
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
-  const input = useCallback((before?: number) => ({
-    ...(category ? { category } : {}),
-    ...(actor ? { actorKind: actor } : {}),
-    ...(outcome ? { outcome } : {}),
-    ...(query ? { q: query } : {}),
-    ...(from ? { from: dayStart(from) } : {}),
-    ...(to ? { to: dayEnd(to) } : {}),
-    limit: PAGE,
-    ...(before ? { before } : {}),
-  }), [category, actor, outcome, query, from, to]);
+  const input = useCallback((before?: number) => {
+    const fromIso = from ? dayBounds(from).from : undefined;
+    const toIso = to ? dayBounds(to).to : undefined;
+    return {
+      ...(category ? { category } : {}),
+      ...(actor ? { actorKind: actor } : {}),
+      ...(outcome ? { outcome } : {}),
+      ...(search.query ? { q: search.query } : {}),
+      ...(fromIso ? { from: fromIso } : {}),
+      ...(toIso ? { to: toIso } : {}),
+      limit: PAGE,
+      ...(before ? { before } : {}),
+    };
+  }, [category, actor, outcome, search.query, from, to]);
 
   const load = useCallback(async () => {
-    const request = ++latest.current;
+    const request = guard.next();
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
     const result = await attempt<Found>("log.query", input());
-    if (request !== latest.current) return;
-    if (!result.ok) { setStatus("error"); props.onError(result.error.message); return; }
+    if (!guard.isCurrent(request)) return;
+    if (!result.ok) { setStatus("error"); onErrorRef.current(result.error.message); return; }
     setEntries(asArray<LogEntry>(result.value.entries));
     setNext(result.value.nextBefore ?? null);
     setTotal(Number(result.value.total ?? 0));
     setCategories(asArray<string>(result.value.categories));
     setRetention(result.value.retention);
     setStatus("ready");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input]);
+  }, [input, guard]);
 
   useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setQuery(text.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [text]);
-
   async function more() {
-    if (next === null) return;
-    const result = await attempt<Found>("log.query", input(next));
-    if (!result.ok) { props.onError(result.error.message); return; }
-    setEntries((current) => [...current, ...asArray<LogEntry>(result.value.entries)]);
-    setNext(result.value.nextBefore ?? null);
+    if (next === null || loadingMoreRef.current) return;
+    const request = guard.next();
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const result = await attempt<Found>("log.query", input(next));
+      if (!guard.isCurrent(request)) return;
+      if (!result.ok) { onErrorRef.current(result.error.message); return; }
+      const incoming = asArray<LogEntry>(result.value.entries);
+      setEntries((current) => {
+        const seen = new Set(current.map((item) => item.id));
+        const unique = incoming.filter((item) => !seen.has(item.id));
+        return unique.length ? [...current, ...unique] : current;
+      });
+      setNext(result.value.nextBefore ?? null);
+    } finally {
+      if (guard.isCurrent(request)) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
   }
 
   const actorName = (entry: LogEntry) => entry.actorKind === "agent" ? t("logs.actorAgent") : entry.actorKind === "user" ? t("logs.actorUser") : t("logs.actorSystem");
@@ -123,13 +140,13 @@ export function LogsPage(props: { t: T; formatDate: (value: string) => string; o
           <option value="ok">{t("logs.outcomeOk")}</option>
           <option value="error">{t("logs.outcomeError")}</option>
         </select>
-        <input type="search" aria-label={t("logs.search")} placeholder={t("logs.search")} data-testid="logs-search" value={text} onChange={(event) => setText(event.target.value)} />
+        <input type="search" aria-label={t("logs.search")} placeholder={t("logs.search")} data-testid="logs-search" {...search.inputProps} />
         <label className="records-date"><span>{t("logs.from")}</span><input type="date" data-testid="logs-from" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} /></label>
         <label className="records-date"><span>{t("logs.to")}</span><input type="date" data-testid="logs-to" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} /></label>
       </div>
       {status === "loading" && !entries.length ? <p role="status" className="detail-muted">{t("status.loading")}</p> : null}
       {status === "ready" && entries.length === 0 ? <p className="detail-muted settings-empty" data-testid="logs-empty">{t("logs.empty")}</p> : null}
-      <ol className="logs-list" data-testid="logs-list" aria-busy={status === "loading"}>
+      <ol className="logs-list" data-testid="logs-list" aria-busy={status === "loading" || loadingMore}>
         {entries.map((entry) => (
           <li key={entry.id} className="log-row" data-testid={`log-${entry.id}`} data-outcome={entry.outcome} data-actor={entry.actorKind} data-category={entry.category}>
             <time className="log-time detail-muted" dateTime={entry.at}>{props.formatDate(entry.at)}</time>
@@ -143,7 +160,7 @@ export function LogsPage(props: { t: T; formatDate: (value: string) => string; o
       </ol>
       <div className="settings-pager">
         <span className="detail-muted" data-testid="logs-total">{t("logs.total", { shown: entries.length, total })}</span>
-        {next !== null ? <button type="button" className="secondary-button" data-testid="logs-more" onClick={() => void more()}>{t("logs.more")}</button> : null}
+        {next !== null ? <button type="button" className="secondary-button" data-testid="logs-more" disabled={loadingMore} onClick={() => void more()}>{t("logs.more")}</button> : null}
       </div>
     </SettingsPage>
   );

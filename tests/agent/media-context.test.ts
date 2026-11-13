@@ -463,7 +463,8 @@ describe("online metadata search for a task", () => {
     const sessionId = await session(ctx);
     const plain = ok<Record<string, any>>(await send(ctx, { sessionId, text: "x" }));
     await finish(ctx, { value: plain } as Call);
-    const toolNames = (request: Seen) => ((request.body.tools as Array<{ function: { name: string } }> | undefined) ?? []).map((tool) => tool.function.name);
+    // On the wire the command ids go without their dots (services refuse them); they are read back here.
+    const toolNames = (request: Seen) => ((request.body.tools as Array<{ function: { name: string } }> | undefined) ?? []).map((tool) => tool.function.name.replace(/_/g, "."));
     const plainRequest = model.seen.filter((request) => request.url.endsWith("/chat/completions") && request.body.tools).at(-1)!;
     expect(toolNames(plainRequest)).not.toContain("metadata.search");
     expect(toolNames(plainRequest)).toContain("material.subtitleWindow");

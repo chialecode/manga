@@ -15,10 +15,6 @@ const installDir = path.join(toolsRoot, "ffmpeg", lock.version);
 
 const sha256 = (file) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 
-export function ffmpegInstallDir() {
-  return installDir;
-}
-
 function verifyInstalled() {
   for (const [relative, expected] of Object.entries(lock.files)) {
     const file = path.join(installDir, relative);
@@ -54,19 +50,24 @@ function unpack(zip) {
   fs.rmSync(staging, { recursive: true, force: true });
 }
 
-if (process.argv.includes("--record")) {
-  // Maintainer step after changing the pinned archive: unpack it and record the hash of every shipped file.
-  unpack(download());
-  const files = {};
-  for (const relative of ["LICENSE.txt", ...fs.readdirSync(path.join(installDir, "bin")).map((name) => `bin/${name}`)]) files[relative] = sha256(path.join(installDir, relative));
-  fs.writeFileSync(lockFile, `${JSON.stringify({ ...lock, files }, null, 2)}
-`);
-  console.log(`recorded ${Object.keys(files).length} file hashes`);
-  process.exit(0);
+function main() {
+  if (process.argv.includes("--record")) {
+    // Maintainer step after changing the pinned archive: unpack it and record the hash of every shipped file.
+    unpack(download());
+    const files = {};
+    for (const relative of ["LICENSE.txt", ...fs.readdirSync(path.join(installDir, "bin")).map((name) => `bin/${name}`)]) files[relative] = sha256(path.join(installDir, relative));
+    fs.writeFileSync(lockFile, `${JSON.stringify({ ...lock, files }, null, 2)}\n`);
+    console.log(`recorded ${Object.keys(files).length} file hashes`);
+    process.exit(0);
+  }
+  if (!verifyInstalled()) {
+    unpack(download());
+    if (!verifyInstalled()) throw new Error("installed FFmpeg files do not match scripts/tools/ffmpeg.lock.json");
+  }
+  if (process.argv.includes("--print-dir")) console.log(installDir);
+  else console.log(`FFmpeg ${lock.version} verified at ${path.relative(root, installDir).replaceAll("\\", "/")}`);
 }
-if (!verifyInstalled()) {
-  unpack(download());
-  if (!verifyInstalled()) throw new Error("installed FFmpeg files do not match scripts/tools/ffmpeg.lock.json");
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
 }
-if (process.argv.includes("--print-dir")) console.log(installDir);
-else console.log(`FFmpeg ${lock.version} verified at ${path.relative(root, installDir).replaceAll("\\", "/")}`);

@@ -372,14 +372,26 @@ export async function closeTabs(view: BrowserWindow, kinds: readonly string[] | 
  * of its title; the answer is true once the tab is the focused one.
  */
 export async function showTab(view: BrowserWindow, match: { id?: string; kind?: string; title?: string }): Promise<boolean> {
-  const found = await view.webContents.executeJavaScript(`(() => {
+  // The chip's place is read until two reads a frame apart agree: a strip that is still being laid out (columns given their saved widths, a strip scrolling
+  // its chip into sight) would put the click on something else.
+  const locate = () => view.webContents.executeJavaScript(`(() => {
     const want = ${JSON.stringify(match)};
     const host = document.querySelector('[data-testid="context-host"][data-active="true"]');
-    const chip = host && [...host.querySelectorAll('[data-testid="tab"]')].find((item) => (!want.id || item.getAttribute("data-tab") === want.id) && (!want.kind || item.getAttribute("data-kind") === want.kind) && (!want.title || (item.querySelector(".tab-title")?.textContent ?? "").includes(want.title)));
+    // The view on screen only: the other views of the context keep their docks laid out under it, hidden (\`data-hidden-layer\`).
+    const chip = host && [...host.querySelectorAll('[data-testid="tab"]')].filter((item) => !item.closest("[data-hidden-layer]")).find((item) => (!want.id || item.getAttribute("data-tab") === want.id) && (!want.kind || item.getAttribute("data-kind") === want.kind) && (!want.title || (item.querySelector(".tab-title")?.textContent ?? "").includes(want.title)));
     if (!chip) return null;
+    // A strip with more tabs than it has room for scrolls: the chip is scrolled into sight first, as a person would.
+    chip.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
     const box = chip.getBoundingClientRect();
     return { id: chip.getAttribute("data-tab"), x: Math.round(box.left + Math.min(box.width / 2, 40)), y: Math.round(box.top + box.height / 2) };
-  })()`) as { id: string; x: number; y: number } | null;
+  })()`) as Promise<{ id: string; x: number; y: number } | null>;
+  let found = await locate();
+  for (let round = 0; found && round < 10; round += 1) {
+    await waitFrames(view, 1);
+    const next = await locate();
+    if (next && next.x === found.x && next.y === found.y) break;
+    found = next;
+  }
   if (!found) return false;
   view.webContents.sendInputEvent({ type: "mouseMove", x: found.x, y: found.y });
   view.webContents.sendInputEvent({ type: "mouseDown", x: found.x, y: found.y, button: "left", clickCount: 1 });

@@ -40,6 +40,13 @@ export function planComposition(
   const selected = new Set<string>();
   const diagnostics: string[] = [];
   const bindings: Binding[] = [];
+  const seenBindings = new Set<string>();
+  const addBinding = (capabilityId: string, providerModuleId: string) => {
+    const instanceId = `${capabilityId}:${providerModuleId}`;
+    if (seenBindings.has(instanceId)) return;
+    seenBindings.add(instanceId);
+    bindings.push({ capabilityId, providerModuleId, instanceId });
+  };
   const activationOrder: string[] = [];
 
   const featureModules = manifests.filter((item) => wantedFeatures.includes(item.featureId));
@@ -100,11 +107,7 @@ export function planComposition(
         }
         const chosen = ordered[0]!;
         selected.add(chosen.moduleId);
-        bindings.push({
-          capabilityId: need.capabilityId,
-          providerModuleId: chosen.moduleId,
-          instanceId: `${need.capabilityId}:${chosen.moduleId}`,
-        });
+        addBinding(need.capabilityId, chosen.moduleId);
         visit(chosen.moduleId);
       } else {
         if (need.required && ordered.length === 0) {
@@ -114,11 +117,7 @@ export function planComposition(
         }
         for (const chosen of ordered) {
           selected.add(chosen.moduleId);
-          bindings.push({
-            capabilityId: need.capabilityId,
-            providerModuleId: chosen.moduleId,
-            instanceId: `${need.capabilityId}:${chosen.moduleId}`,
-          });
+          addBinding(need.capabilityId, chosen.moduleId);
           visit(chosen.moduleId);
         }
       }

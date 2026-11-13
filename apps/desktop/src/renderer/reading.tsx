@@ -1,246 +1,55 @@
 import { NORMALIZATION_V1 } from "@manga/contracts/location";
 import { actionOf } from "@manga/contracts/keys";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { READER_PANEL_WIDTH } from "@manga/contracts/reading";
-import { Bookmark, BookmarkPlus, ChevronLeft, ChevronRight, Fullscreen, List, Maximize2, Minimize2, Search, Shrink, Type } from "lucide-react";
-import { createTranslator, type Translator } from "@manga/i18n";
+import { Bookmark, BookmarkPlus, ChevronLeft, ChevronRight, Fullscreen, List, Maximize2, Minimize2, Pause, Play, Search, Shrink, Square, Type, Volume2 } from "lucide-react";
+import { createTranslator, type MessageKey, type Translator } from "@manga/i18n";
 import { Input } from "./components/ui/input.tsx";
 import { PdfPageView } from "./pdf-page.tsx";
 import { fontStack, THEME_BACKGROUND, THEME_FOREGROUND } from "./reader/fonts.ts";
 import { layoutParagraphs } from "./reader/paragraphs.ts";
-import { ReadingSettings, type ReaderStyle } from "./reader/settings-panel.tsx";
+import { ReadingSettings } from "./reader/settings-panel.tsx";
 import { ReaderSidePanel, type ReaderPanel } from "./reader/side-panel.tsx";
 import { bookPercent, TURN_MS } from "./reader/pages.ts";
 import { usePager } from "./reader/use-pager.ts";
 import { useAutoHide } from "./reader/use-auto-hide.ts";
 import { EditableNumber } from "./readers/editable-number.tsx";
 import { useWindowFullscreen } from "./readers/window-fullscreen.tsx";
+import { isImeEvent, isTypingTarget } from "./lib/ime.ts";
 import { useKeyTable } from "./lib/key-table.tsx";
 import { useTab } from "./workspace/tab-context.tsx";
 import { MatchLink } from "./readers/match-link.tsx";
 import { SourceBanner } from "./readers/source-banner.tsx";
+import { useReadNovel } from "./reader/use-read-novel.ts";
+import { readAloudProblem } from "./voice/read-aloud.ts";
+import { Modal } from "./components/modal.tsx";
+import { PageCanvas, ReadingImage } from "./page-canvas.tsx";
+import {
+  highlightQuote,
+  highlightSlices,
+  pageNumberOf,
+  pageSelectionRange,
+  readingSegments,
+  readingSelection,
+  sliceSegmentHighlight,
+  type ReadingAsset,
+  type ReadingDocument,
+  type ReadingLabels,
+  type ReadingStyle,
+} from "./reading-helpers.ts";
 
-/** Code-point range of the actual DOM selection inside the reading body, plus the selected text. */
-export function readingSelection(body: HTMLElement, start: number, selection: Selection | null) {
-  if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
-  const range = selection.getRangeAt(0);
-  if (!body.contains(range.startContainer) || !body.contains(range.endContainer)) return null;
-  const prefix = range.cloneRange();
-  prefix.selectNodeContents(body);
-  prefix.setEnd(range.startContainer, range.startOffset);
-  const quote = range.toString();
-  if (!quote.trim()) return null;
-  const offset = start + [...prefix.toString()].length;
-  return { quote, start: offset, end: offset + [...quote].length };
-}
-
-/** Stored ranges are code points, so a highlight has to be translated before slicing UTF-16 text. */
-function utf16Offset(text: string, codePointOffset: number): number {
-  let count = 0;
-  let index = 0;
-  for (const char of text) {
-    if (count >= codePointOffset) break;
-    count += 1;
-    index += char.length;
-  }
-  return index;
-}
-
-type ReadingSegment = { kind: "text"; text: string } | { kind: "image"; assetId: string; offset: number };
-
-/** Split a text window so an illustration stays at its recorded code-point offset. */
-export function readingSegments(text: string, sliceStart: number, placements: Array<{ assetId: string; offset: number }>): ReadingSegment[] {
-  const ordered = [...placements].filter((item) => item.offset >= sliceStart && item.offset <= sliceStart + [...text].length).sort((left, right) => left.offset - right.offset);
-  const segments: ReadingSegment[] = [];
-  let cursor = 0;
-  for (const placement of ordered) {
-    const at = utf16Offset(text, placement.offset - sliceStart);
-    if (at > cursor) segments.push({ kind: "text", text: text.slice(cursor, at) });
-    segments.push({ kind: "image", assetId: placement.assetId, offset: placement.offset });
-    cursor = at;
-  }
-  if (cursor < text.length) segments.push({ kind: "text", text: text.slice(cursor) });
-  if (!segments.length) segments.push({ kind: "text", text });
-  return segments;
-}
-
-function ReadingImage(props: { asset?: ReadingAsset; src?: string; measure: number; offset?: number; pending: string; failed: string }) {
-  if (!props.asset) return <span className="text-sm text-[var(--color-subtle)]" data-testid="reading-image-failed">{props.failed}</span>;
-  if (!props.asset.mediaType.startsWith("image/")) {
-    return <span className="text-sm text-[var(--color-subtle)]" data-testid={`reading-image-failed-${props.asset.id}`}>{props.failed}</span>;
-  }
-  if (!props.src) return <span className="text-sm text-[var(--color-subtle)]" data-testid={`reading-image-pending-${props.asset.id}`}>{props.pending.replace("{count}", "1")}</span>;
-  return <img src={props.src} alt="" style={{ maxWidth: props.measure }} data-testid={`reading-image-${props.asset.id}`} data-offset={props.offset ?? undefined} />;
-}
-
-export function highlightSlices(text: string, highlight: { start: number; end: number } | null, sliceStart: number, sliceEnd: number): [string, string, string] | null {
-  if (!highlight || highlight.start < sliceStart || highlight.end > sliceEnd) return null;
-  const from = utf16Offset(text, highlight.start - sliceStart);
-  const to = utf16Offset(text, highlight.end - sliceStart);
-  if (from >= to) return null;
-  return [text.slice(0, from), text.slice(from, to), text.slice(to)];
-}
-
-export type ReadingAsset = { id: string; partId: string; name: string; mediaType: string; bytes: number };
-
-/** Positioned page model (PDF vector pages, EPUB fixed pages): user-space box, y up, baseline runs. */
-export type PageRenderItem =
-  | { k: "t"; x: number; y: number; s: number; f: string; t: string; c?: string; o?: number; w?: number; gx?: number[] }
-  | { k: "r"; x: number; y: number; w: number; h: number; c: string }
-  | { k: "e"; x: number; y: number; w: number; h: number; c: string }
-  | { k: "l"; p: number[]; c: string; w: number }
-  | { k: "i"; x: number; y: number; w: number; h: number; a?: string };
-export type PageRender = { w: number; h: number; items: PageRenderItem[]; truncated?: boolean };
-
-/** The one code-point offset a text run covers, so a selection inside the page view maps to the text layer. */
-function pageBoundaryOffset(node: Node, offset: number): number | null {
-  const anchor = (node instanceof Element ? node : node.parentElement)?.closest("[data-cp]") ?? null;
-  if (!anchor) return null;
-  const start = Number(anchor.getAttribute("data-cp"));
-  if (!Number.isFinite(start)) return null;
-  let within = 0;
-  const walker = document.createTreeWalker(anchor, NodeFilter.SHOW_TEXT);
-  let current = walker.nextNode();
-  while (current && current !== node) {
-    within += [...(current.textContent ?? "")].length;
-    current = walker.nextNode();
-  }
-  if (node instanceof Text) within += [...(node.textContent ?? "").slice(0, offset)].length;
-  else for (let index = 0; index < offset; index += 1) within += [...(node.childNodes[index]?.textContent ?? "")].length;
-  return start + within;
-}
-
-/** Code-point offsets of a DOM range inside the page view, using each run's data-cp anchor. */
-export function pageSelectionRange(range: Range): { start: number; end: number; quote: string } | null {
-  const start = pageBoundaryOffset(range.startContainer, range.startOffset);
-  const end = pageBoundaryOffset(range.endContainer, range.endOffset);
-  if (start === null || end === null || end <= start) return null;
-  return { start, end, quote: range.toString() };
-}
-
-export type ReadingDocument = {
-  resourceId: string;
-  revisionId: string;
-  title: string;
-  format: string;
-  warnings: string[];
-  toc: Array<{ label: string; partId: string }>;
-  parts: Array<{ id: string; title?: string; kind: string; length: number; textLayer: boolean; imageCount?: number; index?: number; sourceHref?: string }>;
-  slice: { partId: string; text: string; start: number; end: number; kind: string; textLayer: boolean; images?: ReadingAsset[]; placements?: Array<{ assetId: string; offset: number; width?: number; height?: number }>; render?: PageRender | null } | null;
-  progress?: { locator: unknown; consumed: Array<{ partId?: string; start: number; end: number }>; completion: string; restoredPartId?: string | null; restoredFrom?: string; restoredRange?: { start: number; end: number } | null } | null;
-  readRanges?: Array<{ partId?: string; start: number; end: number }>;
-  assets?: ReadingAsset[];
-  source: { available?: boolean; hosted?: boolean; path?: string };
-  /** Reader-applied subset of the book's author CSS; the shell only passes it while the user keeps defaults. */
-  authorStyle?: { fontFamily?: string; color?: string; background?: string; lineHeight?: number; textAlign?: string } | null;
+export {
+  PageCanvas,
+  highlightSlices,
+  pageSelectionRange,
+  readingSegments,
+  readingSelection,
+  type ReadingAsset,
+  type ReadingDocument,
+  type ReadingStyle,
 };
 
-export type ReadingStyle = ReaderStyle;
-
-const PAGE_FONTS: Record<string, string> = {
-  sans: '"Microsoft YaHei", system-ui, sans-serif',
-  serif: 'SimSun, "Noto Serif CJK SC", serif',
-  mono: 'Consolas, "Microsoft YaHei", monospace',
-};
-
-/** Render the stored positional model of one page: an SVG page box with positioned runs, boxes and images. */
-export function PageCanvas(props: { render: PageRender; assets: Record<string, string>; truncatedLabel: string }) {
-  const { w, h, items } = props.render;
-  return (
-    <div className="relative mx-auto mb-2" data-testid="reading-page-render" data-truncated={props.render.truncated ? "1" : undefined} style={{ maxWidth: "100%", background: "#ffffff", border: "1px solid var(--color-border)" }}>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ display: "block", width: "100%", height: "auto" }} role="img" aria-label="page">
-        {items.map((item, index) => {
-          if (item.k === "r") {
-            if (item.c === "none") return null;
-            return <rect key={index} x={item.x} y={h - item.y - item.h} width={item.w} height={item.h} fill={item.c} />;
-          }
-          if (item.k === "e") {
-            if (item.c === "none") return null;
-            return <ellipse key={index} cx={item.x + item.w / 2} cy={h - item.y - item.h / 2} rx={item.w / 2} ry={item.h / 2} fill={item.c} />;
-          }
-          if (item.k === "l") {
-            const points = item.p.map((value, index2) => index2 % 2 === 0 ? value : h - value).join(",");
-            return <polyline key={index} points={points} fill="none" stroke={item.c} strokeWidth={Math.max(item.w, 0.5)} />;
-          }
-          if (item.k === "i") {
-            const url = item.a ? props.assets[item.a] : undefined;
-            if (!url) return null;
-            return <image key={index} href={url} x={item.x} y={h - item.y - item.h} width={item.w} height={item.h} preserveAspectRatio="none" />;
-          }
-          const perGlyph = item.gx && item.gx.length === item.t.length ? item.gx : undefined;
-          return (
-            <text
-              key={index}
-              // The model supplies every glyph's origin, so joined and split Tj sequences of the same
-              // content draw identically regardless of the browser font's own metrics. The run's total
-              // advance (from the same model) still scales the glyph inks to the laid-out width, which
-              // keeps a horizontally squeezed run from spilling over the next run's origin.
-              x={perGlyph ? perGlyph.join(" ") : item.x}
-              y={h - item.y}
-              fontSize={item.s}
-              fontFamily={PAGE_FONTS[item.f] ?? PAGE_FONTS.sans}
-              fill={item.c ?? "#111111"}
-              textLength={item.w && item.w > 0 ? item.w : undefined}
-              lengthAdjust={item.w && item.w > 0 ? "spacingAndGlyphs" : undefined}
-              data-cp={item.o ?? undefined}
-              data-testid={`page-run-${index}`}
-            >{item.t}</text>
-          );
-        })}
-      </svg>
-      {props.render.truncated ? <p className="text-xs text-[var(--color-subtle)] p-1" data-testid="reading-page-truncated">{props.truncatedLabel}</p> : null}
-    </div>
-  );
-}
-
-function highlightQuote(text: string, sliceStart: number, highlight: { start: number; end: number } | null): string | null {
-  if (!highlight || highlight.start < sliceStart) return null;
-  const chars = [...text];
-  const from = highlight.start - sliceStart;
-  const to = highlight.end - sliceStart;
-  if (from >= to || to > chars.length) return null;
-  return chars.slice(from, to).join("");
-}
-
-function pageNumberOf(partId: string): number {
-  const match = /^page-(\d+)$/.exec(partId);
-  return match ? Number(match[1]) : 1;
-}
-
-type ReadingLabels = {
-  empty: string;
-  search: string;
-  progress: string;
-  note: string;
-  missing: string;
-  scan: string;
-  more: string;
-  image: string;
-  imageFailed: string;
-  bookmark: string;
-  bookmarkAdd: string;
-  bookmarkNone: string;
-  bookmarkRemove: string;
-  part: string;
-  hits: string;
-  hitNone: string;
-  jump: string;
-  toc: string;
-  source: string;
-  sourceOpen: string;
-  quote: string;
-  images: string;
-  selectForAgent: string;
-  viewPage?: string;
-  viewText?: string;
-  [key: string]: string | undefined;
-};
-
-/** True when a key press belongs to a text field, so reader shortcuts must not take it. */
-function typingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-}
+const DEFAULT_T = createTranslator("zh-CN").t;
 
 /** A reader narrower than this has its left panel float over the text (A-116). */
 const NARROW_READER_PX = 640;
@@ -315,8 +124,10 @@ export function ReadingPane(props: {
   /** "Match with Bangumi" in the title area; given only while the work is known and not linked. */
   onMatch?: () => void;
   labelsExtra: { sourceNeedsReview: string; sourceMissing: string; sourceRepair: string };
+  /** Reading the novel aloud (计划 4.8): given while a speech connection is there. */
+  readAloud?: { available: boolean; costHint: boolean; voice?: string; connectionId?: string; onCostHintOff: () => void };
 }) {
-  const t = props.t ?? createTranslator("zh-CN").t;
+  const t = props.t ?? DEFAULT_T;
   const slice = props.document?.slice;
   const root = useRef<HTMLElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
@@ -377,11 +188,29 @@ export function ReadingPane(props: {
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // Reading aloud marks the paragraph being heard; the pages follow the mark as they follow a jump.
+  const atRef = useRef(0);
+  const novelRead = useReadNovel({
+    resourceId: props.document?.resourceId ?? null,
+    slice: slice ?? null,
+    parts,
+    at: () => atRef.current,
+    available: Boolean(props.readAloud?.available) && !pdf && !render,
+    costHint: props.readAloud?.costHint ?? false,
+    ...(props.readAloud?.voice ? { voice: props.readAloud.voice } : {}),
+    ...(props.readAloud?.connectionId ? { connectionId: props.readAloud.connectionId } : {}),
+    onCostHintOff: () => props.readAloud?.onCostHintOff(),
+    onWindow: (partId, from) => (props.onWindow ?? props.onPart)(partId, from),
+    onMove: (partId, start) => props.onPart(partId, start),
+  });
+  const readMark = novelRead.mark && novelRead.mark.partId === slice?.partId ? { start: novelRead.mark.start, end: novelRead.mark.end } : null;
+  const shownHighlight = props.highlight ?? readMark;
   const currentPart = parts[partIndex];
-  // The controls get out of the way while the book is read; an open panel keeps them.
-  const controls = useAutoHide(root, { enabled: Boolean(props.document), hold: panel !== null || settingsOpen });
+  const immersive = fullscreen || windowFull.active;
+  // The controls get out of the way while the book is read; an open panel keeps them, and in full screen any pointer move across the window brings them back.
+  const controls = useAutoHide(root, { enabled: Boolean(props.document), hold: panel !== null || settingsOpen, wakeOnAnyPointerMove: immersive });
   const measure = Math.max(0, props.style.measurePx - props.style.marginPx * 2);
-  const marked = slice ? highlightSlices(slice.text, props.highlight, slice.start, slice.end) : null;
+  const marked = slice ? highlightSlices(slice.text, shownHighlight, slice.start, slice.end) : null;
   const spacing = props.style.paragraphSpacingPx ?? 0;
 
   const progress = props.document?.progress;
@@ -392,7 +221,7 @@ export function ReadingPane(props: {
     slice: slice ?? null,
     parts,
     style: props.style,
-    highlight: props.highlight,
+    highlight: shownHighlight,
     restored: progress?.restoredRange && progress.restoredPartId ? { partId: progress.restoredPartId, offset: progress.restoredRange.start } : null,
     shown: props.shown !== false,
     callbacks: {
@@ -411,24 +240,27 @@ export function ReadingPane(props: {
   const turnPage = (direction: 1 | -1) => (paged ? pager.go(direction) : turnPart(direction));
 
   const keys = useKeyTable();
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
+  const turnRef = useRef(turnPage);
+  turnRef.current = turnPage;
+  const canTurnKeys = tab.focused && (paged || (pageView && Boolean(render)));
   // Put on in the commit that makes the tab the focused one, so that a key pressed at once is not lost.
   useLayoutEffect(() => {
-    // Only the focused tab answers the keys (A-94).
-    if (!tab.focused || !(paged || (pageView && render))) return;
+    if (!canTurnKeys) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.isComposing || event.defaultPrevented || typingTarget(event.target)) return;
-      const action = actionOf(event, keys, "novel");
-      if (action === "novel.next") { event.preventDefault(); turnPage(1); }
-      else if (action === "novel.prev") { event.preventDefault(); turnPage(-1); }
+      if (isImeEvent(event) || event.defaultPrevented || isTypingTarget(event.target)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const action = actionOf(event, keysRef.current, "novel");
+      if (action === "novel.next") { event.preventDefault(); turnRef.current(1); }
+      else if (action === "novel.prev") { event.preventDefault(); turnRef.current(-1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [canTurnKeys]);
 
   // The wheel turns one page per gesture over the pages.
   const pagesBox = useRef<HTMLDivElement>(null);
-  const turnRef = useRef(turnPage);
-  turnRef.current = turnPage;
   useEffect(() => {
     const node = pagesBox.current;
     if (!paged || !node) return;
@@ -449,6 +281,8 @@ export function ReadingPane(props: {
 
   // Scrolling: the next window is appended near the end, and a wheel turned again at the end of a chapter goes on into the next one.
   const scrollWheel = useRef({ lastAt: 0, atEnd: false });
+  const scrollCtxRef = useRef({ slice, currentPart, parts, partIndex, onPart: props.onPart });
+  scrollCtxRef.current = { slice, currentPart, parts, partIndex, onPart: props.onPart };
   const nearEnd = () => {
     const node = scroll.current;
     if (paged || !node || !slice) return;
@@ -458,27 +292,34 @@ export function ReadingPane(props: {
     const node = scroll.current;
     if (paged || pageView || !node) return;
     const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey || event.deltaY <= 0 || !slice) return;
+      const ctx = scrollCtxRef.current;
+      if (event.ctrlKey || event.deltaY <= 0 || !ctx.slice) return;
       const now = Date.now();
       const state = scrollWheel.current;
       const fresh = now - state.lastAt > WHEEL_GESTURE_GAP_MS;
       state.lastAt = now;
       const bottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 2;
-      if (fresh && bottom && state.atEnd && slice.end >= (currentPart?.length ?? 0)) {
-        const next = parts[partIndex + 1];
-        if (next) props.onPart(next.id, 0);
+      if (fresh && bottom && state.atEnd && ctx.slice.end >= (ctx.currentPart?.length ?? 0)) {
+        const next = ctx.parts[ctx.partIndex + 1];
+        if (next) ctx.onPart(next.id, 0);
       }
       if (fresh) state.atEnd = bottom;
     };
     node.addEventListener("wheel", onWheel, { passive: true });
     return () => node.removeEventListener("wheel", onWheel);
-  });
+  }, [paged, pageView]);
+
   // A new chapter in the scrolling view starts at its top, and its window is the position.
+  const onPositionRef = useRef(props.onPosition);
+  onPositionRef.current = props.onPosition;
+  const highlightActiveRef = useRef(Boolean(props.highlight));
+  highlightActiveRef.current = Boolean(props.highlight);
+  const shown = props.shown !== false;
   useEffect(() => {
     if (paged || !slice) return;
-    if (!props.highlight && scroll.current) scroll.current.scrollTop = 0;
-    props.onPosition?.(slice.partId, slice.start, slice.end);
-  }, [paged, slice?.partId, slice?.start]);
+    if (!highlightActiveRef.current && scroll.current) scroll.current.scrollTop = 0;
+    if (shown) onPositionRef.current?.(slice.partId, slice.start, slice.end);
+  }, [paged, slice?.partId, slice?.start, slice?.end, shown]);
 
   // A passage the reader has picked and held for a moment becomes a tag; clearing the page selection (clicking into the input) keeps it.
   const onSelectRef = useRef(props.onSelect);
@@ -515,25 +356,43 @@ export function ReadingPane(props: {
   const bodyContent = (() => {
     if (!slice) return "";
     const placements = slice.placements ?? [];
+    const activeHighlight = marked ? shownHighlight : null;
+    const renderImage = (assetId: string, offset: number, keySuffix: string | number) => (
+      <ReadingImage key={`img-${offset}-${assetId}-${keySuffix}`} asset={slice.images?.find((item) => item.id === assetId)} src={props.assets[assetId]} measure={measure} offset={offset} pending={props.labels.images} failed={props.labels.imageFailed} />
+    );
     if (spacing > 0) {
-      const pieces = layoutParagraphs(slice.text, slice.start, marked ? props.highlight : null, placements);
+      const pieces = layoutParagraphs(slice.text, slice.start, activeHighlight, placements);
       let firstMark = true;
-      const image = (assetId: string, offset: number) => (
-        <ReadingImage key={`img-${offset}-${assetId}`} asset={slice.images?.find((item) => item.id === assetId)} src={props.assets[assetId]} measure={measure} offset={offset} pending={props.labels.images} failed={props.labels.imageFailed} />
-      );
       return pieces.map((piece, index) => {
         if (piece.kind === "separator") return <span key={`sep-${index}`} hidden>{piece.text}</span>;
-        if (piece.kind === "image") return image(piece.assetId, piece.offset);
+        if (piece.kind === "image") return renderImage(piece.assetId, piece.offset, index);
         return (
           <p key={`p-${piece.start}`} className="reader-paragraph" style={{ margin: `0 0 ${spacing}px`, whiteSpace: "pre-wrap" }}>
             {piece.parts.map((part, at) => {
-              if (part.kind === "image") return image(part.assetId, part.offset);
+              if (part.kind === "image") return renderImage(part.assetId, part.offset, at);
               if (!part.marked) return <span key={at}>{part.text}</span>;
               const first = firstMark;
               firstMark = false;
               return <mark key={at} data-testid={first ? "reading-quote-hit" : "reading-quote-hit-more"}>{part.text}</mark>;
             })}
           </p>
+        );
+      });
+    }
+    if (placements.length > 0) {
+      let firstMark = true;
+      return readingSegments(slice.text, slice.start, placements).map((segment, index) => {
+        if (segment.kind === "image") return renderImage(segment.assetId, segment.offset, index);
+        const split = sliceSegmentHighlight(segment.text, segment.start, segment.end, activeHighlight);
+        if (!split) return <span key={`text-${index}`}>{segment.text}</span>;
+        const first = firstMark;
+        firstMark = false;
+        return (
+          <Fragment key={`text-${index}`}>
+            {split[0]}
+            <mark data-testid={first ? "reading-quote-hit" : "reading-quote-hit-more"}>{split[1]}</mark>
+            {split[2]}
+          </Fragment>
         );
       });
     }
@@ -546,21 +405,14 @@ export function ReadingPane(props: {
         </>
       );
     }
-    if (placements.length > 0) {
-      return readingSegments(slice.text, slice.start, placements).map((segment, index) => segment.kind === "text" ? (
-        <span key={`text-${index}`}>{segment.text}</span>
-      ) : (
-        <ReadingImage key={segment.assetId} asset={slice.images?.find((item) => item.id === segment.assetId)} src={segment.assetId ? props.assets[segment.assetId] : undefined} measure={measure} offset={segment.offset} pending={props.labels.images} failed={props.labels.imageFailed} />
-      ));
-    }
     return slice.text;
   })();
 
   // Bring the jump target into view in the scrolling view without changing the stored read range; the pages place it themselves.
   useEffect(() => {
-    if (paged || !props.highlight || !body.current) return;
+    if (paged || !shownHighlight || !body.current) return;
     body.current.querySelector<HTMLElement>("[data-testid='reading-quote-hit']")?.scrollIntoView({ block: "center" });
-  }, [props.highlight, paged]);
+  }, [shownHighlight?.start, shownHighlight?.end, paged]);
 
   // A click on the left or right third of a page turns it; a click on the text closes a floating panel first.
   const onPagesClick = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -577,11 +429,13 @@ export function ReadingPane(props: {
   };
 
   const frame = pager.frame;
+  atRef.current = paged ? pager.at : slice?.start ?? 0;
   const bodyAttrs = {
     ref: body,
     "data-testid": "reading-body",
     "data-normalization": NORMALIZATION_V1,
     "data-part-id": slice?.partId,
+    "data-reading-aloud": readMark ? "true" : undefined,
   };
   const position = paged && pager.position
     ? t(pager.position.approx ? "reader.pagePositionApprox" : "reader.pagePosition", { page: pager.position.page, total: pager.position.total })
@@ -644,6 +498,19 @@ export function ReadingPane(props: {
             ) : null}
           </ReaderSidePanel>
         ) : null}
+        {novelRead.stoppedAt ? (
+          <div className="reader-read-ask" role="status" data-testid="reading-read-position">
+            <span>{t("readAloud.novel.moveAsk")}</span>
+            <button type="button" className="secondary-button" data-testid="reading-read-move" onClick={novelRead.moveHere}>{t("readAloud.novel.move")}</button>
+            <button type="button" className="link-button" data-testid="reading-read-keep" onClick={novelRead.keepPlace}>{t("readAloud.novel.keep")}</button>
+          </div>
+        ) : null}
+        {novelRead.error ? (
+          <div className="reader-read-ask" role="alert" data-testid="reading-read-error">
+            <span>{t((readAloudProblem(novelRead.error)?.key ?? "readAloud.error.other") as MessageKey)}</span>
+          </div>
+        ) : null}
+        {novelRead.asking ? <NovelCostAsk t={t} chars={novelRead.asking.chars} onGo={novelRead.confirm} onCancel={novelRead.cancelAsk} /> : null}
         <div ref={scroll} className="reader-scroll" data-testid="reading-scroll" data-flow={paged ? "paged" : "scroll"} style={{ background, color }} onScroll={nearEnd} onClick={paged ? undefined : onPagesClick}>
           {!props.document ? <p>{props.labels.empty}</p> : (
             <article>
@@ -748,6 +615,16 @@ export function ReadingPane(props: {
               <button ref={(node) => { panelButtons.current.toc = node; }} type="button" className="icon-button" data-testid="reading-panel-toc" aria-pressed={panel === "toc"} aria-label={t("reading.toc")} title={t("reading.toc")} onClick={() => openPanel("toc")}><List size={18} /></button>
               <button ref={(node) => { panelButtons.current.search = node; }} type="button" className="icon-button" data-testid="reading-panel-search" aria-pressed={panel === "search"} aria-label={props.labels.search} title={props.labels.search} onClick={() => openPanel("search")}><Search size={18} /></button>
               <button ref={(node) => { panelButtons.current.bookmarks = node; }} type="button" className="icon-button" data-testid="reading-panel-bookmarks" aria-pressed={panel === "bookmarks"} aria-label={props.labels.bookmark} title={props.labels.bookmark} onClick={() => openPanel("bookmarks")}><Bookmark size={18} /></button>
+              {novelRead.readable ? (novelRead.status === "idle" || novelRead.status === "error" ? (
+                <button type="button" className="icon-button" data-testid="reading-read-aloud" aria-label={t("readAloud.read")} title={t("readAloud.read")} onClick={novelRead.start}><Volume2 size={18} /></button>
+              ) : (
+                <>
+                  {novelRead.status === "paused"
+                    ? <button type="button" className="icon-button" data-testid="reading-read-resume" aria-label={t("readAloud.resume")} title={t("readAloud.resume")} onClick={novelRead.resume}><Play size={18} /></button>
+                    : <button type="button" className="icon-button" data-testid="reading-read-pause" data-status={novelRead.status} aria-label={t("readAloud.pause")} title={novelRead.status === "loading" ? t("readAloud.loading") : t("readAloud.pause")} onClick={novelRead.pause}><Pause size={18} /></button>}
+                  <button type="button" className="icon-button" data-testid="reading-read-stop" aria-label={t("readAloud.stop")} title={t("readAloud.stop")} onClick={novelRead.stop}><Square size={16} /></button>
+                </>
+              )) : null}
               <button type="button" className="icon-button" data-testid="reading-bookmark-add" aria-label={props.labels.bookmarkAdd} title={props.labels.bookmarkAdd} onClick={props.onBookmark} disabled={!slice}><BookmarkPlus size={18} /></button>
             </div>
             {render || pdfBytes ? (
@@ -765,5 +642,28 @@ export function ReadingPane(props: {
         </footer>
       ) : null}
     </section>
+  );
+}
+
+/** Before a novel is read aloud (计划 4.8, Q-41): what it is billed by, how much of the chapter is left, and “不再提示”. */
+function NovelCostAsk(props: { t: Translator["t"]; chars: number; onGo: (never: boolean) => void; onCancel: () => void }) {
+  const { t } = props;
+  const [never, setNever] = useState(false);
+  return (
+    <Modal
+      title={t("readAloud.novel.costTitle")}
+      description={t("readAloud.novel.costBody", { chars: props.chars })}
+      closeLabel={t("readAloud.novel.cancel")}
+      onClose={props.onCancel}
+      testId="reading-read-cost"
+      footer={(
+        <>
+          <button type="button" className="secondary-button" data-testid="reading-read-cost-cancel" onClick={props.onCancel}>{t("readAloud.novel.cancel")}</button>
+          <button type="button" className="primary-button" data-testid="reading-read-cost-go" onClick={() => props.onGo(never)}>{t("readAloud.novel.go")}</button>
+        </>
+      )}
+    >
+      <label className="flex gap-2 items-center"><input type="checkbox" data-testid="reading-read-cost-never" checked={never} onChange={(event) => setNever(event.target.checked)} />{t("readAloud.novel.never")}</label>
+    </Modal>
   );
 }

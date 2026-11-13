@@ -1,5 +1,5 @@
 /**
- * Messages for the one workspace (A-94): the window's menus and rail, the sidebar of projects and conversations, the tabs and their columns. Keys are
+ * Messages for the one workspace (A-94): the window's frame and rail, the sidebar of projects and conversations, the tabs and their columns. Keys are
  * grouped by the part of the window that shows them. No key here names a mode: there is one workspace, and the context a person works in is a project
  * or "最近".
  */
@@ -9,7 +9,6 @@ export const zhCNShell = {
   "shell.hideSidebar": "隐藏侧栏",
   "shell.showDock": "显示对话栏",
   "shell.hideDock": "隐藏对话栏",
-  "shell.menubar": "菜单",
   "shell.rail": "主导航",
   "shell.sidebar": "侧栏",
   "shell.dock": "Agent 对话",
@@ -17,31 +16,8 @@ export const zhCNShell = {
   "shell.resizeDock": "调整对话栏宽度（方向键微调，双击恢复默认）",
   "context.gone": "这个项目已经不存在，已回到“最近”",
 
-  // ---- the menus ----
-  "menu.file": "文件",
-  "menu.edit": "编辑",
-  "menu.view": "视图",
-  "menu.help": "帮助",
-  "menu.newProject": "新建项目",
-  "menu.newConversation": "新对话",
-  "menu.newTab": "新标签页",
-  "menu.reopenTab": "重新打开关闭的标签",
-  "menu.closeTab": "关闭标签",
-  "menu.importPackage": "导入资料包…",
-  "menu.exportPackage": "导出资料包…",
+  // ---- an undo offered in a notice ----
   "menu.undo": "撤销",
-  "menu.redo": "重做",
-  "menu.cut": "剪切",
-  "menu.copy": "复制",
-  "menu.paste": "粘贴",
-  "menu.selectAll": "全选",
-  "menu.find": "搜索…",
-  "menu.showSidebar": "显示侧栏",
-  "menu.showDock": "显示对话栏",
-  "menu.windowFullscreen": "窗口全屏",
-  "menu.screenFullscreen": "屏幕全屏",
-  "menu.shortcuts": "键盘快捷键",
-  "menu.logs": "日志与资料位置",
 
   // ---- the layout of a context's columns ----
   "layout.menu": "布局",
@@ -209,4 +185,8 @@ export const zhCNShell = {
   // ---- the conversation records (settings › records) ----
   "records.conv.project": "项目",
   "records.conv.projectAll": "全部项目",
+
+  // ---- the system tray ----
+  "tray.showWindow": "显示主窗口",
+  "tray.quit": "退出 MANGA",
 } as const;

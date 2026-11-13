@@ -48,14 +48,22 @@ export function Popup(props: {
   }, [anchor, box, name]);
 
   useEffect(() => {
-    const away = (event: MouseEvent) => {
+    let closed = false;
+    const away = (event: Event) => {
+      if (closed) return;
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (box.current?.contains(target) || anchor.current?.contains(target)) return;
+      closed = true;
       onClose();
     };
-    document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
+    // Capture phase ensures clicks on stopPropagation() controls (e.g. tab close) still dismiss the popup; mousedown stays for synthetic test events.
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("mousedown", away, true);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("mousedown", away, true);
+    };
   }, [anchor, box, onClose]);
 
   return (

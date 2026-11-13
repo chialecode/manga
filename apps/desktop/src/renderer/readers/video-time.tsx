@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
+import { isImeEvent } from "../lib/ime.ts";
 import { formatClockMs } from "./video-model.ts";
 
 type T = Translator["t"];
@@ -31,20 +32,21 @@ export function VideoTime(props: { t: T; currentMs: number; durationMs: number; 
   useEffect(() => { if (editing) { field.current?.focus(); field.current?.select(); } }, [editing]);
 
   const total = formatClockMs(durationMs);
-  const asked = useRef(props.openAsk ?? 0);
-  useEffect(() => {
-    if ((props.openAsk ?? 0) !== asked.current) { asked.current = props.openAsk ?? 0; open(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.openAsk]);
   function open() {
     if (props.disabled) return;
     setText(formatClockMs(currentMs));
     setInvalid(false);
     setEditing(true);
   }
+  const openRef = useRef(open);
+  openRef.current = open;
+  const asked = useRef(props.openAsk ?? 0);
+  useEffect(() => {
+    if ((props.openAsk ?? 0) !== asked.current) { asked.current = props.openAsk ?? 0; openRef.current(); }
+  }, [props.openAsk]);
   const commit = () => {
     const reason = props.onGo(text);
-    if (reason === null) { setEditing(false); setInvalid(false); } else setInvalid(true);
+    if (reason === null) { field.current?.blur(); setEditing(false); setInvalid(false); } else setInvalid(true);
   };
 
   if (editing) {
@@ -62,8 +64,9 @@ export function VideoTime(props: { t: T; currentMs: number; durationMs: number; 
           spellCheck={false}
           onChange={(event) => { setText(event.target.value); setInvalid(false); }}
           onKeyDown={(event) => {
+            if (isImeEvent(event)) return;
             if (event.key === "Enter") { event.preventDefault(); commit(); }
-            else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setEditing(false); }
+            else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); field.current?.blur(); setEditing(false); }
           }}
           onBlur={() => setEditing(false)}
         />

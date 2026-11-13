@@ -5,11 +5,16 @@
  */
 const DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
 const ZERO = DIGITS[0]!;
+const VALID_SORT_KEY = /^[0-9a-z]*[1-9a-z]$/;
+
+export function isValidSortKey(key: string): boolean {
+  return VALID_SORT_KEY.test(key);
+}
 
 /** A key strictly between `a` (the empty string is the start) and `b` (`null` is the end). Keys never end in the zero digit. */
 function midpoint(a: string, b: string | null): string {
   if (b !== null && a >= b) throw new Error(`sort key order is broken: ${a} is not before ${b}`);
-  if (a.endsWith(ZERO) || (b !== null && b.endsWith(ZERO))) throw new Error("a sort key cannot end in the zero digit");
+  if ((a !== "" && !VALID_SORT_KEY.test(a)) || (b !== null && !VALID_SORT_KEY.test(b))) throw new Error("a sort key must use base-36 digits and cannot end in the zero digit");
   if (b !== null) {
     let n = 0;
     while ((a[n] ?? ZERO) === b[n]) n += 1;

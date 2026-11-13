@@ -4,6 +4,8 @@ import { MangaError, createId } from "@manga/contracts";
 import type { VideoProbe } from "@manga/contracts";
 import { FfmpegService } from "../media/ffmpeg.ts";
 import type { MediaServices } from "../media/services.ts";
+import { errorMessage } from "../shared/utils.ts";
+import { primaryVideoStream } from "./extract-media.ts";
 import type { PlayCopyRow, PlayCopyStore } from "./play-copy-store.ts";
 import type { PlaybackPlan, PlayCopyReason } from "./playback.ts";
 
@@ -54,6 +56,9 @@ const ENCODERS: EncoderChoice[] = [
 
 export class PlayCopies {
   private encoder: Promise<EncoderChoice> | undefined;
+  private readonly creating = new Map<string, Promise<PlayCopySummary>>();
+  private readonly reservedBytes = new Map<string, number>();
+  private readonly activeByRevision = new Map<string, Set<string>>();
 
   private readonly store: PlayCopyStore;
   private readonly media: PlayCopyMedia;
@@ -118,6 +123,8 @@ export class PlayCopies {
 
   /** After a restart nothing is running: unfinished work is marked failed and its half-written files are removed. */
   recover(): number {
+    this.reservedBytes.clear();
+    this.activeByRevision.clear();
     const stale = this.store.all().filter((row) => row.state === "queued" || row.state === "running");
     for (const row of stale) {
       if (row.fileName) fs.rmSync(path.join(this.dir(), `${row.fileName}.part`), { force: true });
@@ -162,14 +169,29 @@ export class PlayCopies {
     }
   }
 
-  private evictFor(neededBytes: number, keepRevision: string): void {
-    let total = this.totalBytes();
+  private reservedTotal(excludeId?: string): number {
+    let sum = 0;
+    for (const [id, bytes] of this.reservedBytes) if (id !== excludeId) sum += bytes;
+    return sum;
+  }
+
+  private tryRemoveFile(file: string): void {
+    try {
+      fs.rmSync(file, { force: true });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code !== "EBUSY" && code !== "EPERM") throw error;
+    }
+  }
+
+  private evictFor(neededBytes: number, keepRevision: string, excludeId?: string): void {
+    let total = this.totalBytes() + this.reservedTotal(excludeId);
     if (total + neededBytes <= this.budgetBytes) return;
-    const candidates = this.store.all().filter((row) => row.state === "ready" && row.revisionId !== keepRevision).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    const candidates = this.store.all().filter((row) => row.state === "ready" && row.revisionId !== keepRevision && row.id !== excludeId).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
     for (const row of candidates) {
       if (total + neededBytes <= this.budgetBytes) break;
-      if (row.fileName) fs.rmSync(path.join(this.dir(), row.fileName), { force: true });
       this.media.handles.revokeSubject(`play-copy:${row.id}`);
+      if (row.fileName) this.tryRemoveFile(path.join(this.dir(), row.fileName));
       this.store.delete(row.id);
       total -= row.bytes ?? 0;
     }
@@ -183,25 +205,48 @@ export class PlayCopies {
     const reason = plan.copy.reason as PlayCopyReason | "unsupported_container";
     const existing = this.find(input.revisionId, reason, plan.audioStreamIndex);
     if (existing) return existing;
-    if (!this.media.ffmpeg.available) throw new MangaError("CAPABILITY_UNAVAILABLE", "the media tool is not installed");
-    const source = this.source(input.revisionId);
-    if (!source.available) throw new MangaError("NOT_FOUND", "the video file is not available");
-    const encoder = plan.copy.video === "encode" ? await this.chooseEncoder() : null;
-    const estimate = fs.statSync(source.path).size;
-    this.evictFor(estimate, input.revisionId);
-    const id = createId("pcopy");
-    const now = new Date().toISOString();
-    const fileName = `${id}.mp4`;
-    this.store.insert({
-      id, revisionId: input.revisionId, reason, state: "queued", audioStreamIndex: plan.audioStreamIndex, fileName, bytes: null, encoder: encoder?.name ?? "copy",
-      toolVersion: `${source.probe.tool.name} ${source.probe.tool.version}`, progress: 0, timestampCheck: null, error: null, createdAt: now, updatedAt: now,
+    const dedupKey = `${input.revisionId}|${reason}|${plan.audioStreamIndex ?? ""}`;
+    const pending = this.creating.get(dedupKey);
+    if (pending) return pending;
+    const work = (async (): Promise<PlayCopySummary> => {
+      if (!this.media.ffmpeg.available) throw new MangaError("CAPABILITY_UNAVAILABLE", "the media tool is not installed");
+      const source = this.source(input.revisionId);
+      if (!source.available) throw new MangaError("NOT_FOUND", "the video file is not available");
+      const encoder = plan.copy!.video === "encode" ? await this.chooseEncoder() : null;
+      const raced = this.find(input.revisionId, reason, plan.audioStreamIndex);
+      if (raced) return raced;
+      const estimate = fs.statSync(source.path).size;
+      this.evictFor(estimate, input.revisionId);
+      const id = createId("pcopy");
+      const now = new Date().toISOString();
+      const fileName = `${id}.mp4`;
+      this.reservedBytes.set(id, estimate);
+      try {
+        this.store.insert({
+          id, revisionId: input.revisionId, reason, state: "queued", audioStreamIndex: plan.audioStreamIndex, fileName, bytes: null, encoder: encoder?.name ?? "copy",
+          toolVersion: `${source.probe.tool.name} ${source.probe.tool.version}`, progress: 0, timestampCheck: null, error: null, createdAt: now, updatedAt: now,
+        });
+      } catch (error) {
+        this.reservedBytes.delete(id);
+        throw error;
+      }
+      const activeSet = this.activeByRevision.get(input.revisionId) ?? new Set<string>();
+      activeSet.add(id);
+      this.activeByRevision.set(input.revisionId, activeSet);
+      const job = this.media.jobs.submit<void>({
+        lane: "ffmpeg", kind: "play-copy", key: `play-copy:${id}`, owner: OWNER,
+        run: async (context) => this.run(id, source, plan, encoder, context),
+      });
+      void job.promise.catch(() => undefined).finally(() => {
+        activeSet.delete(id);
+        if (activeSet.size === 0 && this.activeByRevision.get(input.revisionId) === activeSet) this.activeByRevision.delete(input.revisionId);
+      });
+      return this.summary(this.store.get(id)!);
+    })().finally(() => {
+      if (this.creating.get(dedupKey) === work) this.creating.delete(dedupKey);
     });
-    const job = this.media.jobs.submit<void>({
-      lane: "ffmpeg", kind: "play-copy", key: `play-copy:${id}`, owner: OWNER,
-      run: async (context) => this.run(id, source, plan, encoder, context),
-    });
-    void job.promise.catch(() => undefined);
-    return this.summary(this.store.get(id)!);
+    this.creating.set(dedupKey, work);
+    return work;
   }
 
   private async run(id: string, source: SourceRow, plan: PlaybackPlan, encoder: EncoderChoice | null, context: { signal: AbortSignal; progress(fraction: number): void }): Promise<void> {
@@ -209,20 +254,22 @@ export class PlayCopies {
     const part = `${out}.part`;
     const touch = (state: CopyState, progress: number, at: string) => this.store.update(id, { state, progress, updatedAt: at });
     const fail = (error: unknown) => {
-      fs.rmSync(part, { force: true });
-      fs.rmSync(out, { force: true });
+      this.reservedBytes.delete(id);
+      this.tryRemoveFile(part);
+      this.tryRemoveFile(out);
       const cancelled = context.signal.aborted || (error instanceof MangaError && error.code === "CANCELLED");
       if (cancelled) {
         // A cancelled copy leaves nothing behind: no file, no row.
         this.store.delete(id);
       } else {
-        const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: error instanceof Error ? error.message : String(error) };
+        const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: errorMessage(error) };
         this.store.update(id, { state: "failed", error: known, updatedAt: new Date().toISOString() });
       }
     };
     try {
       touch("running", 0, new Date().toISOString());
       const copy = plan.copy!;
+      if (plan.videoStreamIndex === null) throw new MangaError("UNSUPPORTED_FORMAT", "the video has no video stream");
       const args = ["-v", "error", "-nostdin", "-y", "-progress", "pipe:1", "-i", source.path, "-map", `0:${plan.videoStreamIndex}`];
       if (plan.audioStreamIndex !== null && copy.audio !== "none") args.push("-map", `0:${plan.audioStreamIndex}`);
       if (copy.video === "copy") {
@@ -245,8 +292,11 @@ export class PlayCopies {
       context.signal.throwIfAborted();
       if (!fs.existsSync(part) || fs.statSync(part).size === 0) throw new MangaError("UNSUPPORTED_FORMAT", "the copy came out empty");
       fs.renameSync(part, out);
-      const check = await this.verify(source, out, context.signal);
-      this.store.update(id, { state: "ready", progress: 1, bytes: fs.statSync(out).size, timestampCheck: check, updatedAt: new Date().toISOString() });
+      const actualBytes = fs.statSync(out).size;
+      const check = await this.verify(source, out, plan.videoStreamIndex, context.signal);
+      this.evictFor(actualBytes, source.revisionId, id);
+      this.reservedBytes.delete(id);
+      this.store.update(id, { state: "ready", progress: 1, bytes: actualBytes, timestampCheck: check, updatedAt: new Date().toISOString() });
     } catch (error) {
       fail(error);
       throw error;
@@ -254,19 +304,24 @@ export class PlayCopies {
   }
 
   /** Frame times of the copy against the original's, so a copy that shifted or dropped frames is visible rather than silently trusted. */
-  private async verify(source: SourceRow, copyFile: string, signal: AbortSignal): Promise<TimestampCheck> {
-    const video = source.probe.streams.find((stream) => stream.type === "video" && stream.fps !== undefined) ?? source.probe.streams.find((stream) => stream.type === "video")!;
-    const original = await this.media.ffmpeg.packetTimeline(source.path, video.index, source.probe.startMs, { signal });
+  private async verify(source: SourceRow, copyFile: string, videoStreamIndex: number, signal: AbortSignal): Promise<TimestampCheck> {
+    const original = await this.media.ffmpeg.packetTimeline(source.path, videoStreamIndex, source.probe.startMs, { signal });
     const probe = await this.media.ffmpeg.probe(copyFile, { signal });
-    const copyVideo = probe.streams.find((stream) => stream.type === "video")!;
+    const copyVideo = primaryVideoStream(probe);
+    if (!copyVideo) throw new MangaError("UNSUPPORTED_FORMAT", "the copy has no video stream");
     const copy = await this.media.ffmpeg.packetTimeline(copyFile, copyVideo.index, probe.startMs, { signal });
     return compareTimelines(original.ptsMs, copy.ptsMs);
   }
 
   cancel(revisionId: string, copyId?: string): number {
+    const ids = new Set<string>();
     const rows = (copyId ? byIdIn(this.store, copyId, revisionId) : this.store.byRevision(revisionId)).filter((row) => row.state === "queued" || row.state === "running");
+    for (const row of rows) ids.add(row.id);
+    for (const activeId of this.activeByRevision.get(revisionId) ?? []) {
+      if (!copyId || activeId === copyId) ids.add(activeId);
+    }
     let count = 0;
-    for (const row of rows) if (this.media.jobs.cancelWhere((job) => job.key === `play-copy:${row.id}`) > 0) count += 1;
+    for (const id of ids) if (this.media.jobs.cancelWhere((job) => job.key === `play-copy:${id}`) > 0) count += 1;
     return count;
   }
 
@@ -274,12 +329,18 @@ export class PlayCopies {
     const rows = copyId ? byIdIn(this.store, copyId, revisionId) : this.store.byRevision(revisionId);
     for (const row of rows) {
       if (row.state === "queued" || row.state === "running") this.media.jobs.cancelWhere((job) => job.key === `play-copy:${row.id}`);
+      this.reservedBytes.delete(row.id);
       this.media.handles.revokeSubject(`play-copy:${row.id}`);
       if (row.fileName) {
-        fs.rmSync(path.join(this.dir(), row.fileName), { force: true });
-        fs.rmSync(path.join(this.dir(), `${row.fileName}.part`), { force: true });
+        this.tryRemoveFile(path.join(this.dir(), row.fileName));
+        this.tryRemoveFile(path.join(this.dir(), `${row.fileName}.part`));
       }
       this.store.delete(row.id);
+    }
+    if (!copyId && rows.length === 0) {
+      // Post-commit cleanup path (e.g. cleanupManualScan): play_copies rows were already removed atomically in SQLite.
+      this.cancel(revisionId);
+      this.removeStrays();
     }
     return rows.length;
   }

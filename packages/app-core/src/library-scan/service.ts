@@ -3,8 +3,10 @@ import path from "node:path";
 import { MangaError, createId } from "@manga/contracts";
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { planScan, SCAN_LIMITS, type ScanGroup, type ScanKind, type ScanUnit, type WalkEntry } from "./plan.ts";
+import { cleanupManualScan } from "./cleanup.ts";
 import { WalkerClient } from "./walker.ts";
 import { absoluteIn, moveLocation, relativeWithin } from "../library-locations.ts";
+import { errorMessage, escapeLike } from "../shared/utils.ts";
 
 /** What the scan needs from the application: reading one unit into the library, and the few things around it. */
 export type ScanHost = {
@@ -14,6 +16,8 @@ export type ScanHost = {
   moduleEnabled(kind: ScanKind): boolean;
   assertWritable(): void;
   notify(topic: string, payload: Record<string, unknown>): void;
+  forgetRevision?: (revisionId: string) => void;
+  forgetWorkCovers?: (workIds: readonly string[]) => void;
 };
 
 export type ScanSchedule = { onStartup: boolean; intervalMinutes: 0 | 30 | 60 | 360 | 1440 };
@@ -69,12 +73,11 @@ const PROGRESS_MS = 200;
 const KEY_BATCH = 200;
 /** How many registered files must be found, with the same identity, in the folder a library path is moved to. */
 const PATH_SAMPLE = 6;
-const likeEscape = (value: string) => value.replace(/[\\%_]/g, (char) => `\\${char}`);
 const yieldToLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
 const samePath = (a: string, b: string) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
 const within = (parent: string, child: string) => {
   const rel = path.relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 };
 
 export type ScanServiceOptions = { store: DrizzleStore; host: ScanHost; now?: () => number; tickMs?: number; startupDelayMs?: number; progressMs?: number };
@@ -100,6 +103,7 @@ export class ScanService {
   private readonly tickMs: number;
   private readonly startupDelayMs: number;
   private disposed = false;
+  private readonly mutatingPaths = new Set<string>();
 
   /** How often, at most, a scan tells the windows which works it has finished (A-114). */
   private readonly progressMs: number;
@@ -235,20 +239,26 @@ export class ScanService {
     this.host.assertWritable();
     const row = this.rowOf(pathId);
     if (row.managed === 1) throw new MangaError("VALIDATION_ERROR", "the application's own library path cannot be removed", { details: { reason: "managed" } });
-    this.cancel({ pathId });
-    await this.idle;
-    // The files of the path are outside the library from now on (A-80); each location keeps where its file was, so the page can say which folder to add back.
-    const held = this.store.sqlite.prepare("SELECT id, relative_path FROM file_locations WHERE library_path_id = ?").all(pathId) as Array<{ id: string; relative_path: string }>;
-    const mutations: Mutation[] = held.map((item) => ({ sql: "UPDATE file_locations SET legacy_path = ?, library_path_id = NULL, available = 0 WHERE id = ?", params: [absoluteIn(row.path, item.relative_path), item.id] }));
-    this.store.commit({
-      mutations: [
-        ...mutations,
-        { sql: "DELETE FROM library_files WHERE path_id = ?", params: [pathId] },
-        { sql: "DELETE FROM library_paths WHERE id = ?", params: [pathId] },
-      ],
-      events: [{ type: "library.pathRemoved", payload: { pathId } }],
-    });
-    return { pathId };
+    if (this.mutatingPaths.has(pathId)) throw new MangaError("REVISION_CONFLICT", "that library path is already being updated", { retryable: true, details: { reason: "path-busy" } });
+    this.mutatingPaths.add(pathId);
+    try {
+      this.cancel({ pathId });
+      await this.idle;
+      // The files of the path are outside the library from now on (A-80); each location keeps where its file was, so the page can say which folder to add back.
+      const held = this.store.sqlite.prepare("SELECT id, relative_path FROM file_locations WHERE library_path_id = ?").all(pathId) as Array<{ id: string; relative_path: string }>;
+      const mutations: Mutation[] = held.map((item) => ({ sql: "UPDATE file_locations SET legacy_path = ?, library_path_id = NULL, available = 0 WHERE id = ?", params: [absoluteIn(row.path, item.relative_path), item.id] }));
+      this.store.commit({
+        mutations: [
+          ...mutations,
+          { sql: "DELETE FROM library_files WHERE path_id = ?", params: [pathId] },
+          { sql: "DELETE FROM library_paths WHERE id = ?", params: [pathId] },
+        ],
+        events: [{ type: "library.pathRemoved", payload: { pathId } }],
+      });
+      return { pathId };
+    } finally {
+      this.mutatingPaths.delete(pathId);
+    }
   }
 
   /**
@@ -269,27 +279,33 @@ export class ScanService {
     for (const other of this.store.sqlite.prepare("SELECT id, path FROM library_paths WHERE id <> ?").all(pathId) as Array<{ id: string; path: string }>) {
       if (samePath(other.path, abs) || within(other.path, abs) || within(abs, other.path)) throw new MangaError("VALIDATION_ERROR", "that folder overlaps a library path that already exists", { details: { reason: "overlap", pathId: other.id } });
     }
-    this.cancel({ pathId });
-    await this.idle;
-    const registered = (this.store.sqlite.prepare("SELECT relative_path AS rel, size, fingerprint AS key FROM library_files WHERE path_id = ? AND state = 'present' AND fingerprint IS NOT NULL ORDER BY relative_path").all(pathId) as Array<{ rel: string; size: number; key: string }>);
-    const step = Math.max(1, Math.floor(registered.length / PATH_SAMPLE));
-    const sample = registered.filter((_, at) => at % step === 0).slice(0, PATH_SAMPLE);
-    // A comic folder is identified by its listing, not by sampled bytes; only single files are compared here, and a file that is not there at all counts as different.
-    const files: typeof sample = [];
-    for (const item of sample) {
-      const at = await fs.promises.stat(absoluteIn(abs, item.rel)).catch(() => null);
-      if (!at || at.isFile()) files.push(item);
+    if (this.mutatingPaths.has(pathId)) throw new MangaError("REVISION_CONFLICT", "that library path is already being updated", { retryable: true, details: { reason: "path-busy" } });
+    this.mutatingPaths.add(pathId);
+    try {
+      this.cancel({ pathId });
+      await this.idle;
+      const registered = (this.store.sqlite.prepare("SELECT relative_path AS rel, size, fingerprint AS key FROM library_files WHERE path_id = ? AND state = 'present' AND fingerprint IS NOT NULL ORDER BY relative_path").all(pathId) as Array<{ rel: string; size: number; key: string }>);
+      const step = Math.max(1, Math.floor(registered.length / PATH_SAMPLE));
+      const sample = registered.filter((_, at) => at % step === 0).slice(0, PATH_SAMPLE);
+      // A comic folder is identified by its listing, not by sampled bytes; only single files are compared here, and a file that is not there at all counts as different.
+      const files: typeof sample = [];
+      for (const item of sample) {
+        const at = await fs.promises.stat(absoluteIn(abs, item.rel)).catch(() => null);
+        if (!at || at.isFile()) files.push(item);
+      }
+      const found = files.length ? await this.walker.keys(files.map((item) => ({ p: item.rel, abs: absoluteIn(abs, item.rel), size: item.size })), new AbortController().signal) : new Map<string, string>();
+      const matched = files.filter((item) => found.get(item.rel) === item.key).length;
+      if (matched !== files.length) {
+        throw new MangaError("VALIDATION_ERROR", "the folder does not hold the files this library path has", { details: { reason: "fingerprint-mismatch", checked: files.length, matched } });
+      }
+      this.store.commit({
+        mutations: [{ sql: "UPDATE library_paths SET path = ? WHERE id = ?", params: [abs, pathId] }],
+        events: [{ type: "library.pathChanged", payload: { pathId, moved: true } }],
+      });
+      return { path: (await this.listPaths()).find((item) => item.id === pathId)!, checked: files.length };
+    } finally {
+      this.mutatingPaths.delete(pathId);
     }
-    const found = files.length ? await this.walker.keys(files.map((item) => ({ p: item.rel, abs: absoluteIn(abs, item.rel), size: item.size })), new AbortController().signal) : new Map<string, string>();
-    const matched = files.filter((item) => found.get(item.rel) === item.key).length;
-    if (matched !== files.length) {
-      throw new MangaError("VALIDATION_ERROR", "the folder does not hold the files this library path has", { details: { reason: "fingerprint-mismatch", checked: files.length, matched } });
-    }
-    this.store.commit({
-      mutations: [{ sql: "UPDATE library_paths SET path = ? WHERE id = ?", params: [abs, pathId] }],
-      events: [{ type: "library.pathChanged", payload: { pathId, moved: true } }],
-    });
-    return { path: (await this.listPaths()).find((item) => item.id === pathId)!, checked: files.length };
   }
 
   // ------------------------------------------------------------------ queue
@@ -306,8 +322,16 @@ export class ScanService {
     this.host.assertWritable();
     const row = this.rowOf(pathId);
     if (row.managed === 1) throw new MangaError("VALIDATION_ERROR", "the application's own library path is not scanned", { details: { reason: "managed" } });
+    if (this.mutatingPaths.has(pathId)) throw new MangaError("REVISION_CONFLICT", "that library path is currently being updated", { retryable: true, details: { reason: "path-busy" } });
     const existing = this.active?.job.pathId === pathId ? this.active : this.queue.find((item) => item.job.pathId === pathId);
-    if (existing) return existing.job;
+    if (existing) {
+      if (trigger === "manual" && existing.job.trigger !== "manual" && existing.job.stage !== "covers" && existing.job.stage !== "finish") {
+        existing.job.trigger = "manual";
+        this.store.sqlite.prepare("UPDATE scan_jobs SET trigger_kind = 'manual' WHERE id = ?").run(existing.job.id);
+        this.publish(existing.job, true);
+      }
+      return existing.job;
+    }
     const job = this.emptyJob(row, trigger);
     this.store.sqlite.prepare("INSERT INTO scan_jobs(id, path_id, trigger_kind, status, stage, started_at) VALUES (?,?,?,?,?,?)").run(job.id, job.pathId, trigger, "queued", "queued", new Date().toISOString());
     this.queue.push({ job, abort: new AbortController() });
@@ -320,7 +344,36 @@ export class ScanService {
   start(input: { pathId?: string; trigger?: ScanTrigger } = {}): ScanJob[] {
     const trigger = input.trigger ?? "manual";
     const ids = input.pathId ? [input.pathId] : (this.store.sqlite.prepare("SELECT id FROM library_paths WHERE managed = 0 ORDER BY created_at, id").all() as Array<{ id: string }>).map((row) => row.id);
-    return ids.map((id) => this.enqueue(id, trigger));
+    const jobs = ids.map((id) => this.enqueue(id, trigger));
+    if (!input.pathId && trigger === "manual") {
+      this.reconcileManagedPaths();
+    }
+    return jobs;
+  }
+
+  private reconcileManagedPaths(): void {
+    const managedRows = this.store.sqlite.prepare("SELECT * FROM library_paths WHERE managed = 1 ORDER BY created_at, id").all() as PathRow[];
+    for (const row of managedRows) {
+      const dir = fs.statSync(this.store.managedLibraryDir, { throwIfNoEntry: false })?.isDirectory()
+        ? this.store.managedLibraryDir
+        : path.resolve(row.path);
+      if (!fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) continue;
+      this.host.assertWritable();
+      const restored = (this.store.sqlite.prepare("SELECT resource_revision_id AS revisionId, relative_path AS rel FROM file_locations WHERE library_path_id = ? AND available = 0 AND relative_path IS NOT NULL").all(row.id) as Array<{ revisionId: string; rel: string }>)
+        .filter((loc) => fs.existsSync(absoluteIn(dir, loc.rel)));
+      if (restored.length) {
+        const restore = this.store.sqlite.prepare("UPDATE file_locations SET available = 1 WHERE library_path_id = ? AND resource_revision_id = ? AND relative_path = ?");
+        this.store.sqlite.transaction(() => {
+          for (const loc of restored) restore.run(row.id, loc.revisionId, loc.rel);
+        })();
+      }
+      const targetRow = { ...row, path: dir };
+      const unavailable = this.markUnavailable(targetRow, createId("scan"), [], false);
+      const cleaned = cleanupManualScan(this.store, this.host, targetRow, []);
+      if (restored.length || unavailable || cleaned.removedWorks || cleaned.removedResources) {
+        this.host.notify("work.updated", { reason: "scan", pathId: row.id });
+      }
+    }
   }
 
   /** Stop a scan (or every scan, or those of one path). What was committed before the stop stays. */
@@ -406,7 +459,7 @@ export class ScanService {
     this.publish(job, true);
   }
 
-  private finish(job: ScanJob, status: ScanStatus, error?: { code: string; message: string }): void {
+  private finish(job: ScanJob, status: ScanStatus, error?: { code: string; message: string }, cleaned = false): void {
     job.status = status;
     job.stage = "finish";
     job.current = null;
@@ -419,7 +472,7 @@ export class ScanService {
     if (job.startedAt) this.store.sqlite.prepare("UPDATE library_paths SET last_scan_at = ?, last_scan_json = ? WHERE id = ?").run(job.finishedAt, JSON.stringify(summary), job.pathId);
     this.publish(job, true);
     this.host.notify("scan.finished", { job });
-    if (job.added || job.changed || job.unavailable || job.moved) this.host.notify("work.updated", { reason: "scan", pathId: job.pathId });
+    if (job.added || job.changed || job.unavailable || job.moved || cleaned) this.host.notify("work.updated", { reason: "scan", pathId: job.pathId });
   }
 
   // ------------------------------------------------------------------ the scan itself
@@ -529,7 +582,7 @@ export class ScanService {
         } catch (error) {
           if (signal.aborted || (error instanceof MangaError && error.code === "CANCELLED")) break;
           job.failed += 1;
-          const known2 = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: error instanceof Error ? error.message : String(error) };
+          const known2 = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "UNSUPPORTED_FORMAT", message: errorMessage(error) };
           this.register(row.id, unit, key, null, job.id, "failed", known2);
         }
         job.processed += 1;
@@ -544,14 +597,18 @@ export class ScanService {
       tell(true);
       if (signal.aborted) return this.finish(job, "cancelled");
 
-      // 5. What is no longer there is marked, not deleted. Folders that could not be opened do not count as gone.
+      // 5. What is no longer there is marked; on a manual rescan, deleted resources and works without user content are cleaned up.
       const failedDirs = walk.failed.map((item) => item.p);
-      job.unavailable = this.markUnavailable(row, job.id, failedDirs, walk.truncated || plan.truncated);
+      const incomplete = walk.truncated || plan.truncated;
+      job.unavailable = this.markUnavailable(row, job.id, failedDirs, incomplete);
+      const cleaned = job.trigger === "manual" && !incomplete && !signal.aborted
+        ? cleanupManualScan(this.store, this.host, row, failedDirs)
+        : { removedWorks: 0, removedResources: 0, cleanedFiles: 0 };
       this.stage(job, "covers");
-      this.finish(job, "done");
+      this.finish(job, "done", undefined, Boolean(cleaned.removedWorks || cleaned.removedResources));
     } catch (error) {
       if (signal.aborted) return this.finish(job, "cancelled");
-      const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "INTERRUPTED", message: error instanceof Error ? error.message : String(error) };
+      const known = error instanceof MangaError ? { code: error.code, message: error.message } : { code: "INTERRUPTED", message: errorMessage(error) };
       this.finish(job, "failed", known);
     }
   }
@@ -604,6 +661,7 @@ export class ScanService {
   private relink(row: PathRow, unit: ScanUnit, key: string, job: ScanJob, candidates: Map<string, Array<{ pathId: string; rel: string; revisionId: string | null }>>): boolean {
     const gone = candidates.get(key)?.shift();
     if (!gone) return false;
+    this.host.assertWritable();
     const target = path.join(row.path, unit.rel);
     this.store.sqlite.transaction(() => {
       this.store.sqlite.prepare("DELETE FROM library_files WHERE path_id = ? AND relative_path = ?").run(row.id, unit.rel);
@@ -619,7 +677,7 @@ export class ScanService {
   private workOfGroup(pathId: string, group: ScanGroup): string | undefined {
     const rows = this.store.sqlite.prepare(`SELECT r.work_id AS workId, COUNT(*) AS n FROM library_files lf JOIN resources r ON r.id = lf.resource_id
       WHERE lf.path_id = ? AND lf.state != 'failed' AND r.work_id IS NOT NULL AND (lf.relative_path = ? OR lf.relative_path LIKE ? ESCAPE '\\')
-      GROUP BY r.work_id ORDER BY n DESC LIMIT 1`).all(pathId, group.key, `${likeEscape(group.key)}/%`) as Array<{ workId: string }>;
+      GROUP BY r.work_id ORDER BY n DESC LIMIT 1`).all(pathId, group.key, `${escapeLike(group.key)}/%`) as Array<{ workId: string }>;
     return rows[0]?.workId;
   }
 
@@ -633,18 +691,26 @@ export class ScanService {
 
   private markUnavailable(row: PathRow, jobId: string, failedDirs: string[], incomplete: boolean): number {
     if (incomplete) return 0;
+    const isFailed = (rel: string) => failedDirs.some((dir) => dir === "." || rel === dir || rel.startsWith(`${dir}/`));
     const missing = (this.store.sqlite.prepare("SELECT relative_path AS rel, resource_revision_id AS revisionId FROM library_files WHERE path_id = ? AND state IN ('present','failed') AND (seen_scan_id IS NULL OR seen_scan_id != ?)").all(row.id, jobId) as Array<{ rel: string; revisionId: string | null }>)
-      .filter((file) => !failedDirs.some((dir) => dir === "." || file.rel === dir || file.rel.startsWith(`${dir}/`)));
-    if (!missing.length) return 0;
+      .filter((file) => !isFailed(file.rel));
+    const missingRevisionIds = new Set(missing.map((file) => file.revisionId).filter((id): id is string => Boolean(id)));
+    const directLocations = (this.store.sqlite.prepare("SELECT resource_revision_id AS revisionId, relative_path AS rel FROM file_locations WHERE library_path_id = ? AND available = 1 AND relative_path IS NOT NULL").all(row.id) as Array<{ revisionId: string; rel: string }>)
+      .filter((loc) => !missingRevisionIds.has(loc.revisionId) && !isFailed(loc.rel) && !fs.existsSync(absoluteIn(row.path, loc.rel)));
+    if (!missing.length && !directLocations.length) return 0;
     const mark = this.store.sqlite.prepare("UPDATE library_files SET state = 'unavailable', updated_at = ? WHERE path_id = ? AND relative_path = ?");
     const locate = this.store.sqlite.prepare("UPDATE file_locations SET available = 0 WHERE resource_revision_id = ?");
+    const locateInPath = this.store.sqlite.prepare("UPDATE file_locations SET available = 0 WHERE library_path_id = ? AND resource_revision_id = ? AND relative_path = ?");
     const now = new Date().toISOString();
     this.store.sqlite.transaction(() => {
       for (const file of missing) {
         mark.run(now, row.id, file.rel);
         if (file.revisionId) locate.run(file.revisionId);
       }
+      for (const loc of directLocations) {
+        locateInPath.run(row.id, loc.revisionId, loc.rel);
+      }
     })();
-    return missing.length;
+    return missing.length + directLocations.length;
   }
 }

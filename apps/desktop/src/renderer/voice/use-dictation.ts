@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AudioWarning,
   type DictationMode,
   type DictationReplacement,
   type DictationSessionSnapshot,
-  type DictationStage,
   type DictationStopReason,
   type DictionarySuggestionItem,
 } from "@manga/contracts";
-import { chordOf, recordingCodeToChord, type KeyTable } from "@manga/contracts/keys";
+import type { KeyTable } from "@manga/contracts/keys";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { attempt, call, CommandError, messageOf } from "../lib/api.ts";
 import {
@@ -19,13 +18,14 @@ import {
   type EditableTargetHandle,
 } from "./editable-target.ts";
 import type { CapsuleAnchor, DictationUiStage } from "./dictation-capsule.tsx";
+import { createDictationHotkeyController, DOUBLE_TAP_MS, HOLD_MIN_MS } from "./dictation-hotkey.ts";
 import type { PillState } from "./dictation-pill.tsx";
 import { openMicrophone, type MicCaptureOptions } from "./mic.ts";
+import { encodePcmBase64 } from "./pcm-encoding.ts";
 import type { MicHandle } from "./recorder.ts";
 import type { RecordingSettings } from "./use-recorder.ts";
 
-export const HOLD_MIN_MS = 250;
-export const DOUBLE_TAP_MS = 350;
+export { DOUBLE_TAP_MS, HOLD_MIN_MS };
 export const PILL_TTL_MS = 10_000;
 export const MAX_DICTATION_MS = 300_000;
 
@@ -79,15 +79,6 @@ type SessionRuntime = {
   completed: boolean;
 };
 
-function encodePcmBase64(pcm: Int16Array): string {
-  const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-  }
-  return btoa(binary);
-}
-
 function computePaneAnchor(el: HTMLElement | null): CapsuleAnchor {
   if (!el || typeof window === "undefined") return null;
   const pane = el.closest(".dock-pane, .shell-dock, .settings-pane, [role='dialog'], .shell-main") as HTMLElement | null;
@@ -108,29 +99,6 @@ function computePillAnchor(target: EditableTargetHandle | null): { left: number;
     left: Math.max(16, rect.left),
     bottom: Math.max(16, window.innerHeight - rect.top + 8),
   };
-}
-
-function effectiveChords(keyTable: KeyTable, holdKeySetting: string): readonly string[] {
-  const fromTable = keyTable["global.dictationHold"];
-  if (fromTable && fromTable.length > 0) return fromTable;
-  const mapped = recordingCodeToChord(holdKeySetting);
-  return mapped ? [mapped] : ["RightAlt"];
-}
-
-function isMatchingKeyup(event: KeyboardEvent, chords: readonly string[]): boolean {
-  if ((event.code === "AltRight" || (event.key === "Alt" && event.location === 2)) && chords.includes("RightAlt")) {
-    return !event.ctrlKey && !event.shiftKey && !event.metaKey;
-  }
-  const chord = chordOf({
-    key: event.key,
-    code: event.code,
-    location: event.location,
-    ctrlKey: event.ctrlKey,
-    metaKey: event.metaKey,
-    altKey: event.altKey,
-    shiftKey: event.shiftKey,
-  });
-  return Boolean(chord && chords.includes(chord));
 }
 
 function fallbackKeyOf(reason: string | null | undefined): MessageKey | null {
@@ -167,22 +135,44 @@ export function useDictation(deps: DictationDeps): DictationHandle {
 
   const depsRef = useRef(deps);
   depsRef.current = deps;
-  const nowFn = () => (depsRef.current.now ? depsRef.current.now() : Date.now());
 
   const sessionRef = useRef<SessionRuntime | null>(null);
   const lastTargetRef = useRef<EditableTargetHandle | null>(null);
   const pillTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const tokenCounter = useRef(0);
 
-  // Hold / double-tap / IME composition tracking refs
-  const holdKeyDownRef = useRef(false);
-  const holdAbortedByComboRef = useRef(false);
-  const suppressNextKeyupRef = useRef(false);
-  const downAtRef = useRef(0);
-  const awaitingSecondTapUntilRef = useRef<number | null>(null);
-  const quickTapTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // IME composition tracking refs
   const waitingCompositionRef = useRef(false);
   const abortCompositionRef = useRef<(() => void) | null>(null);
+
+  const actionsRef = useRef<{
+    beginHold: () => void;
+    stop: (reason: DictationStopReason) => void;
+    cancel: () => void;
+  }>({
+    beginHold: () => undefined,
+    stop: () => undefined,
+    cancel: () => undefined,
+  });
+
+  const hotkey = useMemo(() => createDictationHotkeyController({
+    isEnabled: () => depsRef.current.enabled,
+    getKeyTable: () => depsRef.current.keyTable,
+    getHoldKeySetting: () => depsRef.current.settings.dictationHoldKey,
+    now: () => (depsRef.current.now ? depsRef.current.now() : Date.now()),
+    getSessionMode: () => sessionRef.current?.mode ?? null,
+    isWaitingComposition: () => waitingCompositionRef.current,
+    onStartHold: () => actionsRef.current.beginHold(),
+    onPromoteLocked: () => {
+      if (sessionRef.current) {
+        sessionRef.current.mode = "locked";
+        setMode("locked");
+      }
+    },
+    onStop: (reason) => actionsRef.current.stop(reason),
+    onCancel: () => actionsRef.current.cancel(),
+    onAbortComposition: () => abortCompositionRef.current?.(),
+  }), []);
 
   const armPillTimer = useCallback((ms = PILL_TTL_MS) => {
     globalThis.clearTimeout(pillTimerRef.current);
@@ -229,7 +219,8 @@ export function useDictation(deps: DictationDeps): DictationHandle {
     const t = i18n.t;
 
     if (snap.stage && snap.stage !== "done" && snap.stage !== "no_speech" && snap.stage !== "cancelled" && snap.stage !== "failed") {
-      setStage(snap.loadingModel ? "loading_model" : snap.stage);
+      const showLoading = Boolean(snap.loadingModel) && (snap.stage === "recording" || snap.stage === "recognizing");
+      setStage(showLoading ? "loading_model" : snap.stage);
     } else if (snap.loadingModel && !snap.stage) {
       setStage("loading_model");
     }
@@ -373,8 +364,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
   }, [armPillTimer, reportStartError, teardownSession]);
 
   const stop = useCallback(async (reason: DictationStopReason = "user") => {
-    globalThis.clearTimeout(quickTapTimerRef.current);
-    awaitingSecondTapUntilRef.current = null;
+    hotkey.resetTapWindow();
     const runtime = sessionRef.current;
     if (!runtime || runtime.cancelled || runtime.completed) return;
 
@@ -400,12 +390,11 @@ export function useDictation(deps: DictationDeps): DictationHandle {
       teardownSession(runtime);
       reportStartError(error);
     }
-  }, [applySnapshot, reportStartError, teardownSession]);
+  }, [applySnapshot, hotkey, reportStartError, teardownSession]);
 
   const cancel = useCallback(async () => {
-    globalThis.clearTimeout(quickTapTimerRef.current);
-    awaitingSecondTapUntilRef.current = null;
-    holdKeyDownRef.current = false;
+    hotkey.resetTapWindow();
+    hotkey.clearHoldDown();
 
     if (waitingCompositionRef.current) {
       abortCompositionRef.current?.();
@@ -423,7 +412,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
     } else {
       void attempt("dictation.cancel", {});
     }
-  }, [teardownSession]);
+  }, [hotkey, teardownSession]);
 
   const beginSession = useCallback(async (initialMode: DictationMode, preferredTarget: HTMLElement | null, explicitWorkId: string | null) => {
     const currentDeps = depsRef.current;
@@ -456,7 +445,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
     }
     const target = captureEditableTarget(preferredTarget);
     if (!target) {
-      holdKeyDownRef.current = false;
+      hotkey.clearHoldDown();
       currentDeps.setNotice(currentDeps.i18n.t("dictation.notice.noTarget"));
       return;
     }
@@ -505,7 +494,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
       return;
     }
 
-    if (runtime.cancelled) {
+    if (runtime.cancelled || runtime.completed) {
       mic.stop();
       target.dispose();
       teardownSession(runtime);
@@ -531,7 +520,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
     }
 
     const dictationId = String(started.dictationId ?? started.id ?? "");
-    if (!dictationId || runtime.cancelled) {
+    if (!dictationId || runtime.cancelled || runtime.completed) {
       mic.stop();
       target.dispose();
       teardownSession(runtime);
@@ -556,7 +545,24 @@ export function useDictation(deps: DictationDeps): DictationHandle {
       const data = encodePcmBase64(pcm);
       runtime.chain = runtime.chain.then(async () => {
         if (runtime.cancelled || runtime.completed) return;
-        await call("dictation.append", { dictationId, seq, data }, { key: `dic:${dictationId}:a${seq}` });
+        try {
+          const appended = await call<{ autoStopped?: boolean }>(
+            "dictation.append",
+            { dictationId, seq, data },
+            { key: `dic:${dictationId}:a${seq}` },
+          );
+          if (appended?.autoStopped && !runtime.cancelled && !runtime.completed && !runtime.stopRequested) {
+            runtime.stopRequested = "max_duration";
+            void stop("max_duration");
+          }
+        } catch (error) {
+          if (runtime.cancelled || runtime.completed) return;
+          runtime.completed = true;
+          runtime.target.dispose();
+          teardownSession(runtime);
+          reportStartError(error);
+          void attempt("dictation.cancel", { dictationId });
+        }
       });
 
       if (nextElapsed >= MAX_DICTATION_MS && !runtime.stopRequested) {
@@ -574,7 +580,13 @@ export function useDictation(deps: DictationDeps): DictationHandle {
     if (runtime.stopRequested) {
       void stop(runtime.stopRequested);
     }
-  }, [reportStartError, stop, teardownSession]);
+  }, [hotkey, reportStartError, stop, teardownSession]);
+
+  actionsRef.current = {
+    beginHold: () => { void beginSession("hold", null, depsRef.current.workId ?? null); },
+    stop: (reason) => { void stop(reason); },
+    cancel: () => { void cancel(); },
+  };
 
   const toggleFromButton = useCallback((targetEl?: HTMLElement | null, explicitWorkId?: string | null) => {
     if (sessionRef.current) {
@@ -618,11 +630,10 @@ export function useDictation(deps: DictationDeps): DictationHandle {
     const off = window.manga?.onNotice?.((notice) => {
       if (notice.topic !== "dictation.changed") return;
       const runtime = sessionRef.current;
-      if (!runtime) return;
+      if (!runtime || !runtime.dictationId) return;
       const snap = asSnapshot(notice.payload);
       const id = snap.dictationId ?? snap.id;
-      if (id && runtime.dictationId && id !== runtime.dictationId) return;
-      if (id && !runtime.dictationId) runtime.dictationId = id;
+      if (!id || id !== runtime.dictationId) return;
       applySnapshot(runtime, snap);
     });
     return () => { off?.(); };
@@ -631,136 +642,15 @@ export function useDictation(deps: DictationDeps): DictationHandle {
   // Global keyboard listener for hold-to-talk, <350ms double-tap lock, Esc cancel, and solo RightAlt menu suppression.
   useEffect(() => {
     if (!deps.enabled) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      const currentDeps = depsRef.current;
-      if (!currentDeps.enabled) return;
-      const chords = effectiveChords(currentDeps.keyTable, currentDeps.settings.dictationHoldKey);
-
-      if (event.key === "Escape" && (sessionRef.current || waitingCompositionRef.current)) {
-        event.preventDefault();
-        event.stopPropagation();
-        void cancel();
-        return;
-      }
-
-      const chord = chordOf({
-        key: event.key,
-        code: event.code,
-        location: event.location,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        altKey: event.altKey,
-        shiftKey: event.shiftKey,
-      });
-      const matches = Boolean(chord && chords.includes(chord));
-
-      if (event.repeat) {
-        if (matches) event.preventDefault();
-        return;
-      }
-
-      // Pressing any other key while RightAlt (or hold key) is held aborts dictation so shortcuts/AltGr combos pass through untouched.
-      if (holdKeyDownRef.current && !matches) {
-        holdKeyDownRef.current = false;
-        holdAbortedByComboRef.current = true;
-        void cancel();
-        return;
-      }
-
-      if (!matches) return;
-      // Suppress browser/OS menu bar focus on standalone RightAlt.
-      event.preventDefault();
-
-      const now = nowFn();
-
-      // Second tap within 350ms promotes the active session into hands-free locked mode.
-      if (awaitingSecondTapUntilRef.current !== null && now <= awaitingSecondTapUntilRef.current && sessionRef.current) {
-        globalThis.clearTimeout(quickTapTimerRef.current);
-        awaitingSecondTapUntilRef.current = null;
-        sessionRef.current.mode = "locked";
-        setMode("locked");
-        suppressNextKeyupRef.current = true;
-        return;
-      }
-
-      // Pressing the dictation key while locked stops and transcribes.
-      if (sessionRef.current && sessionRef.current.mode === "locked") {
-        suppressNextKeyupRef.current = true;
-        void stop("user");
-        return;
-      }
-
-      if (sessionRef.current || waitingCompositionRef.current) return;
-
-      holdKeyDownRef.current = true;
-      holdAbortedByComboRef.current = false;
-      downAtRef.current = now;
-      void beginSession("hold", null, currentDeps.workId ?? null);
-    };
-
-    const onKeyUp = (event: KeyboardEvent) => {
-      const currentDeps = depsRef.current;
-      if (!currentDeps.enabled) return;
-      const chords = effectiveChords(currentDeps.keyTable, currentDeps.settings.dictationHoldKey);
-      if (!isMatchingKeyup(event, chords)) return;
-
-      if (holdAbortedByComboRef.current) {
-        holdAbortedByComboRef.current = false;
-        return;
-      }
-
-      event.preventDefault();
-
-      if (suppressNextKeyupRef.current) {
-        suppressNextKeyupRef.current = false;
-        holdKeyDownRef.current = false;
-        return;
-      }
-
-      if (!holdKeyDownRef.current) return;
-      holdKeyDownRef.current = false;
-
-      if (waitingCompositionRef.current) {
-        abortCompositionRef.current?.();
-        return;
-      }
-
-      const now = nowFn();
-      const heldMs = now - downAtRef.current;
-      if (heldMs < HOLD_MIN_MS) {
-        awaitingSecondTapUntilRef.current = now + DOUBLE_TAP_MS;
-        globalThis.clearTimeout(quickTapTimerRef.current);
-        quickTapTimerRef.current = globalThis.setTimeout(() => {
-          awaitingSecondTapUntilRef.current = null;
-          if (sessionRef.current && sessionRef.current.mode === "hold") {
-            void cancel();
-          }
-        }, DOUBLE_TAP_MS);
-        return;
-      }
-
-      void stop("user");
-    };
-
-    const onWindowBlur = () => {
-      if (holdKeyDownRef.current) {
-        holdKeyDownRef.current = false;
-        const heldMs = nowFn() - downAtRef.current;
-        if (heldMs >= HOLD_MIN_MS) void stop("user");
-        else void cancel();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("keyup", onKeyUp, true);
-    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("keydown", hotkey.onKeyDown, true);
+    window.addEventListener("keyup", hotkey.onKeyUp, true);
+    window.addEventListener("blur", hotkey.onWindowBlur);
     return () => {
-      window.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("keyup", onKeyUp, true);
-      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("keydown", hotkey.onKeyDown, true);
+      window.removeEventListener("keyup", hotkey.onKeyUp, true);
+      window.removeEventListener("blur", hotkey.onWindowBlur);
     };
-  }, [beginSession, cancel, deps.enabled, stop]);
+  }, [deps.enabled, hotkey]);
 
   // Clean up if voice module is disabled or component unmounts.
   useEffect(() => {
@@ -770,7 +660,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
   }, [cancel, deps.enabled]);
 
   useEffect(() => () => {
-    globalThis.clearTimeout(quickTapTimerRef.current);
+    hotkey.dispose();
     globalThis.clearTimeout(pillTimerRef.current);
     lastTargetRef.current?.dispose();
     const runtime = sessionRef.current;
@@ -779,7 +669,7 @@ export function useDictation(deps: DictationDeps): DictationHandle {
       runtime.mic?.stop();
       runtime.target.dispose();
     }
-  }, []);
+  }, [hotkey]);
 
   return {
     active,

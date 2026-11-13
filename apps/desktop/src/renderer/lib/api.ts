@@ -26,6 +26,8 @@ export type HostState = {
   packaged?: boolean;
   appVersion?: string;
   buildInfo?: BuildInfo;
+  /** The window has its icon in the notification area (Windows), so its close button can put it there (A-136). */
+  tray?: boolean;
 };
 
 /** `defaultPath` only says where the dialog opens; the choice itself is still the person's. */
@@ -51,8 +53,6 @@ export interface MangaHost {
   command(payload: { commandId: string; idempotencyKey: string; input: unknown }): Promise<CommandResult>;
   state(): Promise<HostState>;
   chooseDirectory(): Promise<string | null>;
-  chooseFile(): Promise<CommandResult | null>;
-  chooseBook(): Promise<CommandResult | null>;
   choosePath(): Promise<string | null>;
   chooseAudio(): Promise<string | null>;
   pick?(request: PickRequest): Promise<PickResult | null>;
@@ -71,6 +71,10 @@ export interface MangaHost {
   quit?(): Promise<void>;
   /** Only pages on the allow list open, in the system browser. */
   openExternal?(url: string): Promise<boolean>;
+  /** Reading aloud (计划 4.7): PCM comes back through `onSpeech` in pieces, then the end or the failure. */
+  speak?(id: string, request: { text: string; voice?: string; connectionId?: string; task?: "read-aloud" | "novel" | "test" }): void;
+  stopSpeaking?(id: string): void;
+  onSpeech?(listener: (message: { id: string; kind: "chunk" | "end" | "error"; pcm?: Uint8Array; result?: unknown; error?: { code: string; message: string; retryable?: boolean; details?: Record<string, unknown> } }) => void): () => void;
   overlay?: {
     publish(state: OverlayState | null): void;
     onStop(listener: () => void): () => void;

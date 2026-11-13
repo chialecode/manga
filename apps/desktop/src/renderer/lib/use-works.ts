@@ -58,16 +58,20 @@ export function usePagedWorks(query: WorksQuery | null, refreshKey: number, page
   const token = useRef(0);
   const [manual, setManual] = useState(0);
   const queryKey = query ? JSON.stringify(query) : "";
+  const queryRef = useRef(query);
+  queryRef.current = query;
   const latest = useRef({ queryKey, nextCursor: state.nextCursor, loadingMore });
   latest.current = { queryKey, nextCursor: state.nextCursor, loadingMore };
 
   useEffect(() => {
-    if (!query) return;
+    const activeQuery = queryRef.current;
+    if (!activeQuery) return;
     const mine = ++token.current;
     const kept = cache?.get(cacheKey);
     setState((current) => current.queryKey === queryKey ? { ...current, status: current.items.length ? "ready" : "loading" } : kept?.items.length ? { queryKey, ...kept, status: "ready" } : { queryKey, items: [], total: 0, nextCursor: null, status: "loading" });
-    void attempt<WorkPage>("works.list", { ...query, ...GROUPED, limit: pageSize }).then((result) => {
+    void attempt<WorkPage>("works.list", { ...activeQuery, ...GROUPED, limit: pageSize }).then((result) => {
       if (mine !== token.current) return;
+      setLoadingMore(false);
       if (!result.ok) { setState((current) => ({ ...current, queryKey, status: "error", error: messageOf(result.error) })); return; }
       const page = normalizePage(result.value);
       if (cache) {
@@ -76,18 +80,16 @@ export function usePagedWorks(query: WorksQuery | null, refreshKey: number, page
         for (const old of [...cache.keys()].slice(0, Math.max(0, cache.size - CACHE_LIMIT))) cache.delete(old);
       }
       setState({ queryKey, items: page.items, total: page.total, nextCursor: page.nextCursor, status: "ready" });
-      setLoadingMore(false);
     });
-    // The query object is summarized by its key.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryKey, refreshKey, manual, pageSize]);
+  }, [cache, cacheKey, queryKey, refreshKey, manual, pageSize]);
 
   const loadMore = useCallback(() => {
+    const activeQuery = queryRef.current;
     const { nextCursor, loadingMore: busy, queryKey: key } = latest.current;
-    if (!query || !nextCursor || busy) return;
+    if (!activeQuery || !nextCursor || busy) return;
     const mine = token.current;
     setLoadingMore(true);
-    void attempt<WorkPage>("works.list", { ...query, ...GROUPED, cursor: nextCursor, limit: pageSize }).then((result) => {
+    void attempt<WorkPage>("works.list", { ...activeQuery, ...GROUPED, cursor: nextCursor, limit: pageSize }).then((result) => {
       if (mine !== token.current) return;
       setLoadingMore(false);
       if (!result.ok) { setState((current) => current.queryKey === key ? { ...current, status: "error", error: messageOf(result.error) } : current); return; }
@@ -98,8 +100,8 @@ export function usePagedWorks(query: WorksQuery | null, refreshKey: number, page
         return { ...current, status: "ready", error: undefined, items: [...current.items, ...page.items.filter((item) => !known.has(item.id))], total: page.total, nextCursor: page.nextCursor };
       });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryKey, pageSize]);
+  }, [pageSize]);
 
-  return { items: state.queryKey === queryKey ? state.items : [], total: state.total, nextCursor: state.nextCursor, status: state.queryKey === queryKey ? state.status : "loading", loadingMore, error: state.error, loadMore, reload: () => setManual((value) => value + 1) };
+  const matches = state.queryKey === queryKey;
+  return { items: matches ? state.items : [], total: matches ? state.total : 0, nextCursor: matches ? state.nextCursor : null, status: matches ? state.status : "loading", loadingMore, error: matches ? state.error : undefined, loadMore, reload: () => setManual((value) => value + 1) };
 }
