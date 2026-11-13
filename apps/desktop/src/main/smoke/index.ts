@@ -5,6 +5,7 @@ import path from "node:path";
 import { MangaProductApp, type resolveLaunchLayout } from "@manga/app-core";
 import { createId } from "@manga/contracts";
 import { productWindow } from "../window-options.ts";
+import type { AsrService } from "../asr-service.ts";
 import { openLibrary, openRecords, openShelf, viewport, waitDrawn, waitFrames, waitUntil } from "./driver.ts";
 import { actor, caller, capturePage, toRail } from "./common.ts";
 import { runAgentSmoke } from "./agent.ts";
@@ -29,7 +30,7 @@ import { runTraceSmoke } from "./trace-walk.ts";
  */
 type Layout = ReturnType<typeof resolveLaunchLayout>;
 
-export async function runSmoke(input: { appService: MangaProductApp | undefined; ownerGrant: string | undefined; window: BrowserWindow; layout: Layout }): Promise<void> {
+export async function runSmoke(input: { appService: MangaProductApp | undefined; ownerGrant: string | undefined; window: BrowserWindow; layout: Layout; asrService?: AsrService }): Promise<void> {
   const layout = input.layout;
   let appService = input.appService;
   const ownerGrant = input.ownerGrant;
@@ -87,6 +88,9 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       merge(await runMediaSmoke({ appService, grant: ownerGrant, view: window, evidenceDir }));
     } else if (phaseName === "voice") {
       merge(await runVoiceSmoke({ appService, grant: ownerGrant, view: window, evidenceDir }));
+    } else if (phaseName === "dictation") {
+      const { runDictationSmoke } = await import("./dictation-walk.ts");
+      merge(await runDictationSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs, asrService: input.asrService }));
     } else if (phaseName === "formats") {
       merge(await runFormatsSmoke(appService, ownerGrant, window, layout.partitions.logs));
     } else if (phaseName === "window-walk") {
@@ -161,6 +165,14 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
       markerRestored = measured.ok === true;
       fs.mkdirSync(layout.partitions.logs, { recursive: true });
       fs.writeFileSync(path.join(layout.partitions.logs, "bench-chat-window.json"), `${JSON.stringify(measured, null, 2)}\n`);
+    } else if (phaseName === "bench-dictation") {
+      const { measureDictationBench } = await import("./bench-dictation.ts");
+      const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_DICTATION_SPEC), "utf8"));
+      const measured = await measureDictationBench(appService, ownerGrant, window, input.asrService, spec);
+      reportExtras.dictationOk = measured.ok;
+      markerRestored = measured.ok === true;
+      fs.mkdirSync(layout.partitions.logs, { recursive: true });
+      fs.writeFileSync(path.join(layout.partitions.logs, "bench-dictation-window.json"), `${JSON.stringify(measured, null, 2)}\n`);
     } else if (phaseName === "bench-pane") {
       const spec = JSON.parse(fs.readFileSync(String(process.env.MANGA_SMOKE_PANE_SPEC), "utf8")) as { resourceId: string; notes: number };
       await toRail(window);

@@ -4,6 +4,7 @@ import path from "node:path";
 import esbuild from "esbuild";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MANIFEST_NAME, REQUIRED_ASSETS, verifyBundledAssets, type AssetManifest } from "../../apps/desktop/src/main/bundled-assets.ts";
+import { locateAsrHostEntry, locateGtcrnModel } from "../../apps/desktop/src/main/asr-service.ts";
 import { stageBundledAssets } from "../../scripts/desktop-assets.ts";
 import { VadWorkerClient, locateVadAssets } from "../../packages/app-core/src/voice/vad-client.ts";
 import { locateFfmpeg } from "../../packages/app-core/src/media/ffmpeg.ts";
@@ -24,7 +25,9 @@ const write = (file: string, content: string | Buffer) => { fs.mkdirSync(path.di
 function fakeRoot(): string {
   const root = path.join(tmp, "root");
   fs.mkdirSync(path.join(root, "scripts", "tools"), { recursive: true });
-  for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "subtitle-font.lock.json"]) fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(root, "scripts", "tools", name));
+  for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "gtcrn.lock.json", "speech-asr.lock.json", "subtitle-font.lock.json"]) {
+    fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(root, "scripts", "tools", name));
+  }
   const ffmpegLock = JSON.parse(fs.readFileSync(path.join(repo, "scripts", "tools", "ffmpeg.lock.json"), "utf8")) as { version: string };
   const home = path.join(root, "dist", "tools", "ffmpeg", ffmpegLock.version);
   for (const name of ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe", "avcodec-62.dll", "avutil-60.dll"]) write(path.join(home, "bin", name), `stand-in ${name}`);
@@ -34,6 +37,14 @@ function fakeRoot(): string {
     if (!fs.existsSync(path.join(silero, name))) throw new Error("the Silero model is not in the tool cache; run: node scripts/tools/fetch-silero-vad.mjs");
     write(path.join(root, "dist", "tools", "silero-vad", name), fs.readFileSync(path.join(silero, name)));
   }
+  const gtcrn = path.join(repo, "dist", "tools", "gtcrn");
+  for (const name of ["gtcrn_simple.onnx", "LICENSE"]) {
+    if (!fs.existsSync(path.join(gtcrn, name))) throw new Error("the GTCRN denoiser model is not in the tool cache; run: node scripts/tools/fetch-gtcrn.mjs");
+    write(path.join(root, "dist", "tools", "gtcrn", name), fs.readFileSync(path.join(gtcrn, name)));
+  }
+  // Stand-in ASR smoke model in the local tool cache: packaging must NEVER stage ASR models into resources/.
+  write(path.join(root, "dist", "tools", "asr", "sense-voice-funasr-nano-int8", "model.int8.onnx"), "stand-in-asr-model-never-bundled");
+  write(path.join(root, "dist", "tools", "asr", "sense-voice-funasr-nano-int8", "tokens.txt"), "<blk> 0\n");
   // The subtitle font is eight megabytes: a stand-in file takes its place, the licence is the real one.
   write(path.join(root, "dist", "tools", "subtitle-font", "NotoSansSC-Regular.otf"), "stand-in font");
   write(path.join(root, "dist", "tools", "subtitle-font", "LICENSE"), "SIL OPEN FONT LICENSE Version 1.1\n");
@@ -69,6 +80,7 @@ beforeAll(async () => {
   write(path.join(renderer, "assets", "worker-DDD.js"), "tiny");
   build = path.join(tmp, "build");
   write(path.join(build, "parse-worker.cjs"), "module.exports = {};\n");
+  write(path.join(build, "asr-host.cjs"), "module.exports = {};\n");
   // The real worker bundle, built the way the main bundle builds it.
   await esbuild.build({ absWorkingDir: repo, entryPoints: ["packages/app-core/src/voice/vad-worker.ts"], outfile: path.join(build, "vad-worker.cjs"), bundle: true, platform: "node", format: "cjs" });
   resources = path.join(tmp, "resources");
@@ -99,7 +111,7 @@ describe.skipIf(mediaPrerequisitesAbsent)("what a package carries", () => {
   });
 
   it("lists third-party notices whose files are in the package", () => {
-    expect(manifest.notices.map((notice) => notice.name)).toEqual(["FFmpeg", "Silero VAD", "ONNX Runtime Web", "Noto Sans SC", "PDF.js"]);
+    expect(manifest.notices.map((notice) => notice.name)).toEqual(["FFmpeg", "Silero VAD", "GTCRN", "ONNX Runtime Web", "Noto Sans SC", "PDF.js"]);
     for (const notice of manifest.notices) {
       expect(notice.license.length, notice.name).toBeGreaterThan(0);
       expect(notice.source, notice.name).toMatch(/^https:\/\//);
@@ -127,12 +139,17 @@ describe.skipIf(mediaPrerequisitesAbsent)("what a package carries", () => {
     expect(found?.path).toBe(path.join(resources, "subtitle-font", "NotoSansSC-Regular.otf"));
   });
 
-  it("finds the tools where the app looks for them in a packaged build", () => {
+  it("finds the tools where the app looks for them in a packaged build, and never bundles ASR models", () => {
     const tools = locateFfmpeg({ env: {}, resourcesPath: resources, cwd: tmp });
     expect(tools?.ffmpeg).toBe(path.join(resources, "ffmpeg", "bin", "ffmpeg.exe"));
     const vad = locateVadAssets({ env: {}, resourcesPath: resources, cwd: tmp });
     expect(vad?.modelPath).toBe(path.join(resources, "vad", "silero_vad.onnx"));
     expect(vad?.ortEntry).toBe(path.join(resources, "vad", "ort", "ort.node.min.js"));
+    expect(locateGtcrnModel({ env: {}, resourcesPath: resources, cwd: tmp })).toBe(path.join(resources, "gtcrn", "gtcrn_simple.onnx"));
+    expect(locateAsrHostEntry({ resourcesPath: resources, baseDir: tmp, cwd: tmp })).toBe(path.join(resources, "asr-host.cjs"));
+    expect(fs.readFileSync(path.join(resources, "gtcrn", "LICENSE"), "utf8")).toContain("MIT License");
+    expect(fs.existsSync(path.join(resources, "asr"))).toBe(false);
+    expect(manifest.assets.some((asset) => /asr\/|sense-voice|qwen3-asr|funasr-nano|model\.int8\.onnx/i.test(asset.path))).toBe(false);
   });
 
   it("runs the voice filter from the staged layout with the bundled worker file", async () => {
@@ -205,16 +222,25 @@ describe.skipIf(mediaPrerequisitesAbsent)("a package that is missing something s
 });
 
 describe.skipIf(mediaPrerequisitesAbsent)("packaging stops when a tool is not in the cache", () => {
-  it("names the command that fetches FFmpeg, and the one that fetches the voice model", () => {
+  it("names the command that fetches FFmpeg, the voice filter model, and the GTCRN denoiser model", () => {
     const empty = path.join(tmp, "empty-root");
     fs.mkdirSync(path.join(empty, "scripts", "tools"), { recursive: true });
-    for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "subtitle-font.lock.json"]) fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(empty, "scripts", "tools", name));
+    for (const name of ["ffmpeg.lock.json", "silero-vad.lock.json", "gtcrn.lock.json", "subtitle-font.lock.json"]) {
+      fs.copyFileSync(path.join(repo, "scripts", "tools", name), path.join(empty, "scripts", "tools", name));
+    }
     expect(() => stageBundledAssets(path.join(tmp, "out1"), { repoRoot: empty, rendererDir: renderer, buildDir: build })).toThrow(/fetch-ffmpeg\.mjs/);
-    // FFmpeg present, model absent.
+    // FFmpeg present, Silero model absent.
     const ffmpegLock = JSON.parse(fs.readFileSync(path.join(repo, "scripts", "tools", "ffmpeg.lock.json"), "utf8")) as { version: string };
     write(path.join(empty, "dist", "tools", "ffmpeg", ffmpegLock.version, "bin", "ffmpeg.exe"), "x");
     write(path.join(empty, "dist", "tools", "ffmpeg", ffmpegLock.version, "LICENSE.txt"), "x");
     expect(() => stageBundledAssets(path.join(tmp, "out2"), { repoRoot: empty, rendererDir: renderer, buildDir: build })).toThrow(/fetch-silero-vad\.mjs/);
+    // Silero + ONNX Runtime Web present, GTCRN absent.
+    for (const name of ["silero_vad.onnx", "LICENSE"]) {
+      write(path.join(empty, "dist", "tools", "silero-vad", name), fs.readFileSync(path.join(repo, "dist", "tools", "silero-vad", name)));
+    }
+    fs.cpSync(path.join(root, "node_modules", "onnxruntime-web"), path.join(empty, "node_modules", "onnxruntime-web"), { recursive: true });
+    fs.cpSync(path.join(root, "node_modules", "onnxruntime-common"), path.join(empty, "node_modules", "onnxruntime-common"), { recursive: true });
+    expect(() => stageBundledAssets(path.join(tmp, "out2-gtcrn"), { repoRoot: empty, rendererDir: renderer, buildDir: build })).toThrow(/fetch-gtcrn\.mjs/);
   });
 
   it("stops when a worker bundle or the app window build is missing", () => {

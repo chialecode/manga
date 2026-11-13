@@ -1,21 +1,21 @@
 {
   "status": "passed",
-  "stage": "m11",
-  "sourceFingerprint": "dc377aa3dd1b6908973f1b9b6d87f3fa37bba24aeb400d0a45a1d37ce9d9c8c6",
-  "smokeScriptFingerprint": "84aea18197957e49a49e8e9c4e4f55cac9ace6e98a212af2b3b5d3f1c1cd4a55",
+  "stage": "m12",
+  "sourceFingerprint": "5e200d35cdf0098a4bcc45afa16dfd0a2c79948a7cbe43293a555f2cde4174c2",
+  "smokeScriptFingerprint": "b2c8e77be997469010ec989d106cb874f233023dcfec344114f7b4e51b4455dc",
   "smokeChecksScriptFingerprint": "c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f",
-  "smokeBenchScriptFingerprint": "1532610373b76fedac5903c47c3350ad4d0e209b853f60015d693de9206ba143",
-  "smokeWalkScriptFingerprint": "58fa4c5cdfe4d1187bb6c02cd57b242c1523d81c5ab046d8183439b9926053ce",
-  "lockFingerprint": "97e74474b5207dfe933e28f2977cfc9db778c3475cbbf65d56ba4e25bb52c2c3",
-  "buildScriptFingerprint": "3cb3dbe850da3702a24a419087d2f8a678b49f319ce5a68e5de61db21b86599b",
-  "gateScriptFingerprint": "342b275147cf13da9687ca2a88d32824c5b0a99f35bfaee6b4f22b31391a05fc",
-  "testScriptFingerprint": "0d93bca6a89864c7e04ec6b6bcc791fc00808f6046d1da4d57e3ba3d122771c8",
-  "packageScriptFingerprint": "9fe76d800c26f18029352ad7a3bd55b55f1dd3085a9754b92dbd3dd352187972",
-  "benchScriptFingerprint": "a143abb87f2ecf8de46dec88bda61bbd5b1da23dd0b9ddac625c26e896c4628f",
-  "installerScriptFingerprint": "ccf083e32fc67946d607c5ff9911f6b03ac7b75e515929527716e96cea7c11dd",
-  "releaseScriptFingerprint": "68a9a41eb30d145a9ee18864651ab0bf45dae245efb9fa9977e48a20693e9665",
-  "at": "2026-11-12T00:34:46.422Z",
-  "seconds": 448.69,
+  "smokeBenchScriptFingerprint": "c7277cf4a5547e093413e230654d58262c5cbe67302569e4ba1d469b884f892c",
+  "smokeWalkScriptFingerprint": "0ac6e678b9648c801af1f63afe1bf3a748c75a3526eed05908c2d38d8d7226bb",
+  "lockFingerprint": "f66f660c5687fac3a2e0305de6149de2a874d456b2c452a41204271501f8a951",
+  "buildScriptFingerprint": "8d89734043d4054648698ec4d01802964ff9a3f30a08114a4ed7362a59af5cda",
+  "gateScriptFingerprint": "b5b8efb0fa24dc6fbb91e3abab596c2964b11ac511ce8d5f0a9de73efc1febd4",
+  "testScriptFingerprint": "6c4bfbbfd2e16cc5a7680f6239b21cc21eeccffd99cda43bf51df861e2c85212",
+  "packageScriptFingerprint": "681cc0f80c931e687b1419b5a5ca82233cb05e5b2f2135ce2f4baa6f2ffd1ca6",
+  "benchScriptFingerprint": "61ced7ba4b65523a5727540ddb0b417d7f8ac367dfa99e64736b83e9960804ec",
+  "installerScriptFingerprint": "e71dac1ced8d95d9c7c00cc8eb5eea061836c9553a34650d7695b69e29f23a09",
+  "releaseScriptFingerprint": "305a24bbbd8a8a61ccb9da3d626c5db276597fd63f64ad941bbeab1fed19ccab",
+  "at": "2026-11-13T19:02:01.892Z",
+  "seconds": 452.08,
   "format": "unsigned per-user NSIS installer (electron-builder, --prepackaged, testIdentity)",
   "electronBuilder": "26.18.0",
   "steps": [
@@ -27,25 +27,29 @@
       "name": "release: installer built and configured",
       "ok": true,
       "version": "0.1.1",
-      "megabytes": 203,
-      "seconds": 47
+      "megabytes": 209,
+      "seconds": 162
     },
     {
       "name": "development: installer built and configured",
       "ok": true,
-      "version": "0.1.1-dev.202611120034",
-      "megabytes": 203,
-      "seconds": 47
+      "version": "0.1.1-dev.202611131902",
+      "megabytes": 209,
+      "seconds": 162
     },
     {
       "name": "release: installed per user without elevation into the chosen folder",
       "ok": true,
       "version": "0.1.1",
       "publisher": "chialecode",
-      "seconds": 8
+      "seconds": 9
     },
     {
-      "name": "release: Start menu and desktop shortcuts",
+      "name": "release: Start menu and desktop shortcuts after a silent first install",
+      "ok": true
+    },
+    {
+      "name": "release: the executable and the windows show the channel's icon",
       "ok": true
     },
     {
@@ -57,12 +61,16 @@
     {
       "name": "development: installed per user without elevation into the chosen folder",
       "ok": true,
-      "version": "0.1.1-dev.202611120034",
+      "version": "0.1.1-dev.202611131902",
       "publisher": "chialecode",
       "seconds": 9
     },
     {
-      "name": "development: Start menu and desktop shortcuts",
+      "name": "development: Start menu and desktop shortcuts after a silent first install",
+      "ok": true
+    },
+    {
+      "name": "development: the executable and the windows show the channel's icon",
       "ok": true
     },
     {
@@ -97,7 +105,9 @@
       "name": "release: the registered \"Open with\" command starts light open on the file",
       "ok": true,
       "status": 0,
-      "phase": "light-unsupported"
+      "phase": "light-unsupported",
+      "failed": [],
+      "lightDir": true
     },
     {
       "name": "nothing written to the roaming profile",
@@ -111,6 +121,14 @@
       "previousVersion": "0.1.1",
       "upgradedVersion": "0.1.2",
       "registryVersion": "0.1.2"
+    },
+    {
+      "name": "release: silent over-install kept the Start menu shortcut and did not make the removed desktop one again",
+      "ok": true
+    },
+    {
+      "name": "development: silent over-install made the desktop shortcut again and no Start menu shortcut",
+      "ok": true
     },
     {
       "name": "release: \"Open with\" registration preserved after 0.1.1 -> 0.1.2 over-install, extension defaults untouched",
@@ -204,7 +222,7 @@
       "name": "packaged electron-updater: full restart, differential quit, signature rejection and saved drafts",
       "ok": true,
       "kind": "electron-nsis",
-      "seconds": 186.24
+      "seconds": 193.72
     },
     {
       "name": "real install-dev: saved draft, relaunch, release isolation and abandoned quit",
@@ -230,8 +248,8 @@
     },
     "previousVersion": "0.1.1",
     "upgradedVersion": "0.1.2",
-    "appAsarSha256": "4ac7df77a4128415bd34946356497ffc7166aa9fa53f3cfa70f0c79c3aa8aa84",
-    "previousAsarSha256": "4ac7df77a4128415bd34946356497ffc7166aa9fa53f3cfa70f0c79c3aa8aa84",
+    "appAsarSha256": "c6f47320bf5220dbb0608fc25fc0aaf332ad879d2eedfd8977c0a8674d084a9b",
+    "previousAsarSha256": "c6f47320bf5220dbb0608fc25fc0aaf332ad879d2eedfd8977c0a8674d084a9b",
     "verifiedInstallerExecuted": true,
     "dataIntact": true,
     "backupCreated": true,
@@ -244,8 +262,8 @@
         "previousVersion": "0.1.1",
         "version": "0.1.2",
         "downloader": "electron-updater",
-        "downloadBytes": 212522053,
-        "fullBytes": 212522053,
+        "downloadBytes": 219300811,
+        "fullBytes": 219300811,
         "usedDifferential": false,
         "oldProcessExited": true,
         "newProcessStarted": true,
@@ -256,15 +274,15 @@
         "workspaceRestored": true,
         "savedTabSelectedBeforeNavigation": true,
         "emptyLibraryOnboarding": true,
-        "readyMs": 22661
+        "readyMs": 24118
       },
       {
         "mode": "quit",
         "previousVersion": "0.1.1",
         "version": "0.1.2",
         "downloader": "electron-updater",
-        "downloadBytes": 486027,
-        "fullBytes": 212522053,
+        "downloadBytes": 511507,
+        "fullBytes": 219300811,
         "usedDifferential": true,
         "oldProcessExited": true,
         "newProcessStarted": true,
@@ -275,13 +293,13 @@
         "workspaceRestored": true,
         "savedTabSelectedBeforeNavigation": true,
         "emptyLibraryOnboarding": true,
-        "readyMs": 22156
+        "readyMs": 21432
       }
     ],
     "development": {
       "kind": "electron-nsis",
-      "oldVersion": "0.1.1-dev.202611120034",
-      "newVersion": "0.1.1-dev.202611120035",
+      "oldVersion": "0.1.1-dev.202611131902",
+      "newVersion": "0.1.1-dev.202611131903",
       "draftWasUnsaved": true,
       "draftPreserved": true,
       "installed": true,
@@ -291,17 +309,17 @@
       "timeoutMs": 30000,
       "timedOutWithoutForceKill": true,
       "stayedAliveAfterWriteCompleted": true,
-      "installDevMs": 16288
+      "installDevMs": 16676
     },
     "records": {
       "downloadBytes": {
-        "fullBytes": 212522053,
-        "differentialBytes": 486027,
-        "savedRatio": 0.9977130514544766
+        "fullBytes": 219300811,
+        "differentialBytes": 511507,
+        "savedRatio": 0.9976675553653105
       },
-      "restartToReadyMs": 22661,
-      "installDevMs": 16288
+      "restartToReadyMs": 24118,
+      "installDevMs": 16676
     },
-    "seconds": 186.24
+    "seconds": 193.72
   }
 }

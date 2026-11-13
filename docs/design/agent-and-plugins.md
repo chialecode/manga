@@ -249,6 +249,7 @@ stateDiagram-v2
 - **退出恢复：** `command_requests` 只证明命令开始，不能当作完成证据。同步操作按命令一致且成功的 `operations` 回执恢复为 `applied`。项目包导出在发布前保存仅限主进程的临时文件与成品摘要；发布后退出但尚无回执时，重启核对成品大小与 SHA-256，可补回执并恢复为已执行。未完成的操作退回 `pending`，清除对应的未完成命令请求，用户可重新选位置确认。粗剪导出把任务编号与回执一起登记，重启按导出任务的完成或中断状态恢复，不能把任务登记当作导出成功。
 - **结果回到 Agent：** 已执行、拒绝、失效与失败的简短结果放在下一轮材料上下文前部；只消费实际 Token 预算容纳的结果，在创建该轮任务的同一事务里以 `result_json.reportedRunId` 标记。容纳不下的结果留给后续任务，重试沿用已冻结的上下文。失败只汇报简短中文类别，可能含本机路径或任意外部文本的原始诊断只给所有者查看。
 - **按任务加上的外部调用：** 输入框左侧“+”（本次任务）菜单提供三项可按次勾选的外部工具：`metadata.search`（联网搜索 Bangumi 资料）、`semantic.search`（调用 Embedding 服务做语义检索，仅在 `manga.semantic` 模块开启且配好 Embedding 连接时显示）与 `webpage.fetch`（抓取指定 URL 保存为本项目网页版本，仅在项目对话且 `manga.research` 模块开启时显示）。勾选写入本次运行的临时授权（`allowCommands`），重试同一运行沿用，下一次新任务清空；模块关闭或未勾选时工具不进入清单且命令层直接拒绝，不因开启外部调用放宽任务的资料读取范围或防剧透边界。
+- **听写、本地模型与学词命令的所有者专属边界（VOICE-10、VOICE-17）：** 应用内听写（`dictation.*`）、本地语音模型管理（`asrModel.*`）、词典维护与编辑观测（`dictionary.*`，含 `dictionary.importBatch`、`dictionary.cancelImportMetadata`、`dictionary.observeEdit`）以及学词建议确认（`dictionary.suggestions.*`）全部登记于 `OWNER_COMMANDS` 并强制校验 `owner(envelope)`，不出现在任何 Agent 工具清单或提议类型中。本机听写记录表 `dictation_history` 不建立全文或向量索引，不进入 `library.search`、会话消息流、运行材料（`agent-materials`）或上下文快照（`agent-context`），Agent 无法启动听写，也无法读取听写音频与历史记录。
 
 ### 6.2 凭据与敏感信息
 
@@ -365,9 +366,9 @@ MANGA 拥有公开插件 SDK、命令、上下文和数据协议。运行时实�
 
 | 用途 | 输入与输出 | 路由约束 |
 | --- | --- | --- |
-| LLM | 文本/已授权材料 → 回复、整理、工具调用 | 不接收原始音频；对话成功只证明文本调用，不证明嵌入或转录 |
+| LLM | 文本/已授权材料 → 回复、整理、工具调用 | 不接收原始音频；对话成功只证明文本调用，不证明嵌入或转录；听写润色仅接收识别与音近替换后的文本及受限候选词 |
 | Embedding | 授权文本片段 → 数值向量 | 独立向量模型；记录维度、模型/索引版本；缺配置时语义检索不可用，已有本地全文检索继续 |
-| ASR | 经用户授权的音频 → 转录文本 | 只发送到独立 ASR 配置；缺配置时本地拒绝、不上传、不回退 LLM；后续整理只向 LLM 传授权转录文本 |
+| ASR | 经用户授权的音频 → 转录文本 | 只发往用户为听写或录音笔记独立选定的唯一引擎（本机 `sherpa-onnx` 模型，或 `purpose = 'transcription'` 的外部连接）；不可用时明确报错、零跨引擎自动回退、绝不回退普通文本连接 |
 
 连接/模型目录按用途筛选；目录响应只是候选，不自动选择或变更当前模型。用途、配置版本和请求序号共同约束晚到探测结果；修改连接/模型后清除旧能力验证。发送前检查任务用途和模型用途，错配必须在网络前拒绝；不以试着上传音频的方法探测文本模型是否支持 ASR。未提供的 ASR/Embedding 保持未配置及 not-run，不能写成服务失败。用途隔离、LLM/ASR 路由与设置已落实；语义索引见 SEARCH-02。
 
@@ -375,7 +376,7 @@ MANGA 拥有公开插件 SDK、命令、上下文和数据协议。运行时实�
 
 采用 BYOK；按 [ADR-0007](../decisions/0007-technology-stack.md) 首版实际接入自研适配器与 PI（`@earendil-works/pi-ai`）两种 AI runtime，在设置中切换。runtime 与连接/协议/模型分别配置，启动任务时冻结所选 runtime；切换只影响后续任务，已有会话、授权、材料版本和工具证据保留，旧配置兼容自研实现。对应实时 ASR 传输使用 ws。它们留在服务侧适配器，不能接管工具授权、范围与修订保护，也不将供应商类型写入公共契约。具体模型/ASR 服务、凭据由用户按用途配置，材料范围受宿主授权约束。
 
-首批支持 OpenAI 格式，作为已确认要求。文本分别适配 Responses 与 Chat Completions 的消息、工具调用和流式事件；不得混用两套事件格式。Chat Completions 按最严格的服务发送：只有一条 system 消息且在最前（开头连续的几条合成一条），之后出现的系统内容（摘要、附在早先对话之后的材料、视觉识别结果）作为以 `System:` 开头的用户消息，PI 运行时同样如此；不少开源模型的对话模板拒绝其他排法。不带参数的工具调用可能给出空字符串，按 `{}` 处理；模型最后一轮既不调用工具、又只有空白时，任务记为可重试的失败，而不是空回答的成功。文件转录独立适配 audio/transcriptions，使用 multipart 的 file/model 等接口字段，已完成录音可转为提供者支持的上传格式；用户选择的外部音频原件不修改，后续采集音频按保留设置管理。Realtime/WebSocket 转录是后续能力，不是文件转录的前置条件；OpenAI 兼容性也不代表时间戳、说话人识别或人声筛选可用，这些能力须单独验证。
+首批支持 OpenAI 格式，作为已确认要求。文本分别适配 Responses 与 Chat Completions 的消息、工具调用和流式事件；不得混用两套事件格式。Chat Completions 按最严格的服务发送：只有一条 system 消息且在最前（开头连续的几条合成一条），之后出现的系统内容（摘要、附在早先对话之后的材料、视觉识别结果）作为以 `System:` 开头的用户消息，PI 运行时同样如此；不少开源模型的对话模板拒绝其他排法。不带参数的工具调用可能给出空字符串，按 `{}` 处理；模型最后一轮既不调用工具、又只有空白时，任务记为可重试的失败，而不是空回答的成功。语音识别由统一的 `AsrEngine` 按 `AsrCapabilities` 能力描述适配三类引擎：（1）OpenAI 兼容文件转录 `/audio/transcriptions`（`transcriptionInterface: "audio_transcriptions"`，multipart 的 `file`/`model`/`prompt`/`language`）；（2）OpenAI 兼容对话接口音频输入 `/chat/completions`（`transcriptionInterface: "chat_input_audio"`，仅在 `purpose = 'transcription'` 连接上启用，发送 base64 WAV `input_audio` 与仅含逐字转写要求和专名参考列表的系统消息）；（3）本地 `sherpa-onnx` 离线模型（在独立 `utilityProcess` 中运行）。听写与录音笔记可各自选定引擎，已完成录音按所选引擎块长上限切分；用户选择的外部音频原件不修改，后续采集音频按保留设置管理。Realtime/WebSocket 转录是后续能力，不是文件转录的前置条件；OpenAI 兼容性也不代表时间戳、说话人识别或人声筛选可用，这些能力须单独验证。
 
 按 A-29，文档不指定具体模型或服务默认值。开发测试读取环境变量中的 OpenAI 兼容 LLM/ASR 配置；必要测试缺配置时才按[开发流程](../dev-rules/development-workflow.md#model-test-config)询问开发者。应用通过 BYOK 设置独立绑定模型，不把测试环境自动变为产品预设。ASR 的有限真实短测（见[执行状态](../delivery/status.md#真实服务与真实库试验聚合结果)）只证明合成样本，不代表完整设置界面或录音流程已验收。
 

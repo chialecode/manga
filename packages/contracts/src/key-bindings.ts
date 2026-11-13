@@ -47,9 +47,10 @@ export const KEY_ACTIONS: readonly KeyActionDef[] = [
   action("global.dock", ["Ctrl+Alt+B"]),
   action("global.newConversation", ["Ctrl+N"]),
   action("global.newProject", ["Ctrl+Shift+N"]),
-  // The search box and the settings (A-100, A-101).
+  // The search box, the settings and in-app voice dictation (A-100, A-101, A-130).
   action("global.search", ["Ctrl+K"]),
   action("global.settings", ["Ctrl+,"]),
+  action("global.dictationHold", ["RightAlt"]),
 
   action("video.toggle", ["Space", "K"]),
   action("video.seekBack", ["ArrowLeft"]),
@@ -89,7 +90,7 @@ export const KEY_ACTIONS: readonly KeyActionDef[] = [
 const BY_ID = new Map(KEY_ACTIONS.map((entry) => [entry.id, entry]));
 export const keyAction = (id: string): KeyActionDef | undefined => BY_ID.get(id);
 
-const NAMED = new Set(["Space", "Esc", "Enter", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
+const NAMED = new Set(["Space", "Esc", "Enter", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "RightAlt"]);
 const FUNCTION_KEY = /^F(?:[1-9]|1[0-9]|2[0-4])$/;
 
 /** The most chords one action keeps. */
@@ -103,6 +104,7 @@ export function parseChord(chord: string): { ctrl: boolean; alt: boolean; shift:
     if (rest.startsWith(name) && rest.length > name.length) { flags[flag] = true; rest = rest.slice(name.length); }
   }
   const key = rest;
+  if (key === "RightAlt" && (flags.ctrl || flags.alt || flags.shift)) return null;
   const printable = [...key].length === 1 && key !== " ";
   if (!printable && !NAMED.has(key) && !FUNCTION_KEY.test(key)) return null;
   if (printable && /[a-z]/.test(key)) return null;
@@ -116,10 +118,12 @@ export const isChord = (chord: string): boolean => parseChord(chord) !== null;
 
 /**
  * The chord of a key event, or null for a key that is only a modifier. Shift is part of the chord for a key that is not one printable
- * character, and for any key pressed with Ctrl (or Cmd) or Alt.
+ * character, and for any key pressed with Ctrl (or Cmd) or Alt. Solo RightAlt (`code === "AltRight"`, `key === "Alt"`, without Ctrl/Shift/Meta
+ * or `AltGraph`) maps to `"RightAlt"` without disturbing `LeftAlt + Arrow` or `AltGr` combinations.
  */
-export function chordOf(event: { key: string; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; metaKey?: boolean }): string | null {
+export function chordOf(event: { key: string; code?: string; location?: number; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; metaKey?: boolean }): string | null {
   const raw = event.key;
+  if ((event.code === "AltRight" || event.location === 2) && raw === "Alt" && !event.ctrlKey && !event.shiftKey && !event.metaKey) return "RightAlt";
   if (raw === "Control" || raw === "Alt" || raw === "Shift" || raw === "Meta" || raw === "AltGraph" || raw === "CapsLock" || raw === "Dead" || raw === "Process" || raw === "Unidentified") return null;
   const key = raw === " " ? "Space" : raw === "Escape" ? "Esc" : [...raw].length === 1 ? raw.toUpperCase() : raw;
   const printable = [...key].length === 1;
@@ -128,7 +132,7 @@ export function chordOf(event: { key: string; ctrlKey?: boolean; altKey?: boolea
   return `${ctrl ? "Ctrl+" : ""}${event.altKey ? "Alt+" : ""}${withShift ? "Shift+" : ""}${key}`;
 }
 
-const SHOWN: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" };
+const SHOWN: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", RightAlt: "右 Alt" };
 
 /** How a chord is shown: arrows as arrows, the parts apart (`Ctrl + Shift + D`). */
 export function chordLabel(chord: string): string {
@@ -138,9 +142,48 @@ export function chordLabel(chord: string): string {
   return parts.join(" + ");
 }
 
+export type RecordingKeyPair = { holdKey?: string; toggleKey?: string };
+export const DEFAULT_RECORDING_KEYS: Required<RecordingKeyPair> = { holdKey: "F9", toggleKey: "F8" };
+
+const CODE_TO_CHORD: Record<string, string> = {
+  AltRight: "RightAlt",
+  Escape: "Esc",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backslash: "\\",
+  Minus: "-",
+  Equal: "=",
+  Semicolon: ";",
+  Quote: "'",
+  Backquote: "`",
+};
+
+/** Maps a `KeyboardEvent.code` stored by recording settings (`F9`, `F8`, `KeyV`, `AltRight`) to a chord name in this table. */
+export function recordingCodeToChord(code: string | null | undefined): string | null {
+  if (!code) return null;
+  const mapped = CODE_TO_CHORD[code]
+    ?? (/^Key[A-Z]$/.test(code) ? code.slice(3) : /^Digit[0-9]$/.test(code) ? code.slice(5) : code);
+  return isChord(mapped) ? mapped : null;
+}
+
+function recordingEntries(recording?: RecordingKeyPair): Array<{ id: string; chord: string }> {
+  const pair = recording ?? DEFAULT_RECORDING_KEYS;
+  const out: Array<{ id: string; chord: string }> = [];
+  const hold = recordingCodeToChord(pair.holdKey);
+  if (hold) out.push({ id: "recording.holdKey", chord: hold });
+  const toggle = recordingCodeToChord(pair.toggleKey);
+  if (toggle) out.push({ id: "recording.toggleKey", chord: toggle });
+  return out;
+}
+
 export const KeyOverridesSchema = z.record(z.string().regex(/^[a-z]+\.[A-Za-z]+$/).max(48), z.array(z.string().max(40)).max(MAX_CHORDS));
 /** What is saved: only the actions the person changed. An empty list is an action with no key. */
 export type KeyOverrides = z.infer<typeof KeyOverridesSchema>;
+/** Every action mapped to its active chords (`resolveKeys` output). */
+export type KeyTable = Record<string, readonly string[]>;
 
 /** Every action with the keys it answers to now: the person's own where they changed it, else the defaults. */
 export function resolveKeys(overrides: KeyOverrides | null | undefined): Record<string, string[]> {
@@ -156,35 +199,44 @@ export type KeyConflict = { chord: string; actions: string[] };
 
 /**
  * Two actions answer to one key when they are in the same group, or one of them is a global one: only one reader is in front at a time,
- * so a video key and a comic key may be the same.
+ * so a video key and a comic key may be the same. Recording's hold (`F9`) and toggle (`F8`) keys are window-wide too.
  */
-export function findConflicts(resolved: Record<string, readonly string[]>): KeyConflict[] {
+export function findConflicts(resolved: Record<string, readonly string[]>, recording?: RecordingKeyPair): KeyConflict[] {
   const found: KeyConflict[] = [];
   const seen = new Set<string>();
+  const rec = recordingEntries(recording);
   for (const entry of KEY_ACTIONS) {
     for (const chord of resolved[entry.id] ?? []) {
-      const sharing = KEY_ACTIONS.filter((other) => (other.group === entry.group || other.group === "global" || entry.group === "global") && (resolved[other.id] ?? []).includes(chord));
+      const sharing = [
+        ...KEY_ACTIONS
+          .filter((other) => (other.group === entry.group || other.group === "global" || entry.group === "global") && (resolved[other.id] ?? []).includes(chord))
+          .map((other) => other.id),
+        ...rec.filter((item) => item.chord === chord).map((item) => item.id),
+      ];
       if (sharing.length < 2) continue;
-      const key = `${chord}|${sharing.map((item) => item.id).sort().join(",")}`;
+      const key = `${chord}|${[...sharing].sort().join(",")}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      found.push({ chord, actions: sharing.map((item) => item.id) });
+      found.push({ chord, actions: sharing });
     }
   }
   return found;
 }
 
 /** The other actions that already use `chord` where `actionId` would use it. */
-export function conflictsWith(resolved: Record<string, readonly string[]>, actionId: string, chord: string): string[] {
+export function conflictsWith(resolved: Record<string, readonly string[]>, actionId: string, chord: string, recording?: RecordingKeyPair): string[] {
   const entry = keyAction(actionId);
   if (!entry) return [];
-  return KEY_ACTIONS
-    .filter((other) => other.id !== actionId && (other.group === entry.group || other.group === "global" || entry.group === "global") && (resolved[other.id] ?? []).includes(chord))
-    .map((other) => other.id);
+  return [
+    ...KEY_ACTIONS
+      .filter((other) => other.id !== actionId && (other.group === entry.group || other.group === "global" || entry.group === "global") && (resolved[other.id] ?? []).includes(chord))
+      .map((other) => other.id),
+    ...recordingEntries(recording).filter((item) => item.chord === chord).map((item) => item.id),
+  ];
 }
 
 /** A reason the overrides cannot be kept, or null: an action that does not exist, a chord that is not one, a fixed key, a key two actions share. */
-export function checkOverrides(overrides: KeyOverrides): string | null {
+export function checkOverrides(overrides: KeyOverrides, recording?: RecordingKeyPair): string | null {
   for (const [id, chords] of Object.entries(overrides)) {
     const entry = keyAction(id);
     if (!entry) return `unknown key action: ${id}`;
@@ -192,7 +244,7 @@ export function checkOverrides(overrides: KeyOverrides): string | null {
     for (const chord of chords) if (!isChord(chord)) return `not a key: ${chord}`;
     if (new Set(chords).size !== chords.length) return `${id} lists a key twice`;
   }
-  const conflict = findConflicts(resolveKeys(overrides))[0];
+  const conflict = findConflicts(resolveKeys(overrides), recording)[0];
   return conflict ? `${conflict.chord} is used by ${conflict.actions.join(" and ")}` : null;
 }
 

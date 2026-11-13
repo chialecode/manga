@@ -21,9 +21,12 @@
     "linkedom": "0.18.13",
     "mdast-util-to-markdown": "2.2.1",
     "onnxruntime-web": "1.31.1",
+    "opencc-js": "1.4.2",
     "pdfjs-dist": "6.4.299",
+    "pinyin-pro": "3.29.5",
     "sharp": "0.35.5",
     "sqlite-vec": "0.1.9",
+    "wanakana": "5.3.1",
     "yauzl": "3.4.0",
     "zod": "4.6.7"
   },

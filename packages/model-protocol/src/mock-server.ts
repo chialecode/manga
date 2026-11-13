@@ -1,5 +1,15 @@
 import http from "node:http";
 
+export type CapturedChatAudioRequest = {
+  url: string;
+  model: string;
+  temperature?: number;
+  systemContext: string | null;
+  audioFormat: string;
+  audioBytes: Buffer;
+  rawBody: Record<string, unknown>;
+};
+
 export type MockProviderOptions = {
   mode?: "ok" | "unauthorized" | "rate-limited" | "missing-capability" | "timeout" | "disconnect" | "malicious-json" | "truncated-stream" | "always-tools" | "no-vision" | "model-missing" | "protocol-mismatch" | "wrong-shape" | "forbidden" | "server-error";
   protocolPrefix?: string;
@@ -13,16 +23,61 @@ export type MockProviderOptions = {
   delayMs?: number;
   /** Sees every parsed request body, so a test can check what a model was actually given. */
   onRequest?: (request: { url: string; body: Record<string, unknown> }) => void;
+  /** Sees every `/chat/completions` request carrying `input_audio` parts, with decoded audio bytes and system context. */
+  onAudioRequest?: (capture: CapturedChatAudioRequest) => void;
+  /** Configurable stub transcript (or error response) for `/chat/completions` `input_audio` requests. */
+  audioTranscript?: string | ((capture: CapturedChatAudioRequest) => string | { status: number; message: string });
+  /** Configurable stub transcript (or error response) for `/audio/transcriptions` requests. */
+  transcriptionText?: string | ((request: { url: string; bodyBytes: number; rawBody: Buffer }) => string | { status: number; message: string });
   /** Answers a request in place of the usual answer: an error status with its message, or the words to say (and the input tokens the service claims to have counted). */
   respond?: (request: { url: string; body: Record<string, unknown> }) => undefined | { status: number; message: string } | { text: string; inputTokens?: number };
   /** The only key the service accepts (`Authorization: Bearer <key>`); any other gets a 401. Without it every key is accepted. */
   expectKey?: string;
 };
 
-export function startMockProvider(options: MockProviderOptions = {}): Promise<{ url: string; close: () => Promise<void> }> {
+function extractInputAudioCapture(url: string, json: Record<string, unknown>): CapturedChatAudioRequest | null {
+  const messages = Array.isArray(json.messages) ? (json.messages as Array<Record<string, unknown>>) : [];
+  let systemContext: string | null = null;
+  for (const msg of messages) {
+    if (msg?.role === "system" && typeof msg.content === "string") {
+      systemContext = systemContext === null ? msg.content : `${systemContext}\n\n${msg.content}`;
+    }
+  }
+  for (const msg of messages) {
+    if (!Array.isArray(msg?.content)) continue;
+    for (const part of msg.content as Array<Record<string, unknown>>) {
+      if (part?.type === "input_audio" && part.input_audio && typeof part.input_audio === "object") {
+        const audioObj = part.input_audio as { data?: unknown; format?: unknown };
+        const data = typeof audioObj.data === "string" ? audioObj.data : "";
+        const format = typeof audioObj.format === "string" ? audioObj.format : "wav";
+        return {
+          url,
+          model: typeof json.model === "string" ? json.model : "",
+          ...(typeof json.temperature === "number" ? { temperature: json.temperature } : {}),
+          systemContext,
+          audioFormat: format,
+          audioBytes: Buffer.from(data, "base64"),
+          rawBody: json,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+export function startMockProvider(options: MockProviderOptions = {}): Promise<{
+  url: string;
+  close: () => Promise<void>;
+  audioCaptures: CapturedChatAudioRequest[];
+  requestCount: () => number;
+}> {
   const prefix = options.protocolPrefix ?? "";
   const mode = options.mode ?? "ok";
+  const audioCaptures: CapturedChatAudioRequest[] = [];
+  let totalRequests = 0;
+
   const server = http.createServer((req, res) => {
+    totalRequests += 1;
     const url = req.url ?? "";
     if (mode === "timeout") return;
     if (options.expectKey !== undefined && req.headers.authorization !== `Bearer ${options.expectKey}`) {
@@ -86,9 +141,18 @@ export function startMockProvider(options: MockProviderOptions = {}): Promise<{ 
     const chunks: Buffer[] = [];
     req.on("data", (chunk) => chunks.push(chunk as Buffer));
     req.on("end", () => setTimeout(() => {
+      const rawBuffer = Buffer.concat(chunks);
       if (transcribe) {
+        const answer = typeof options.transcriptionText === "function"
+          ? options.transcriptionText({ url, bodyBytes: rawBuffer.byteLength, rawBody: rawBuffer })
+          : options.transcriptionText ?? "synthetic transcript";
+        if (typeof answer === "object" && "status" in answer) {
+          res.writeHead(answer.status, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: { message: answer.message } }));
+          return;
+        }
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ text: "synthetic transcript" }));
+        res.end(JSON.stringify({ text: answer }));
         return;
       }
       if (url.endsWith("/embeddings")) {
@@ -96,9 +160,21 @@ export function startMockProvider(options: MockProviderOptions = {}): Promise<{ 
         res.end(JSON.stringify({ data: [{ embedding: [0.01, 0.02, 0.03], index: 0 }] }));
         return;
       }
-      const body = Buffer.concat(chunks).toString("utf8");
+      const body = rawBuffer.toString("utf8");
       const json = body ? JSON.parse(body) as { stream?: boolean; tools?: unknown[]; messages?: Array<{ role?: string }>; input?: Array<{ type?: string }> } : {};
       if (body) options.onRequest?.({ url, body: json as Record<string, unknown> });
+
+      const audioCapture = chat && body ? extractInputAudioCapture(url, json as Record<string, unknown>) : null;
+      if (audioCapture) {
+        audioCaptures.push(audioCapture);
+        options.onAudioRequest?.(audioCapture);
+        if (mode === "missing-capability") {
+          res.writeHead(404, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: { message: "input_audio not available" } }));
+          return;
+        }
+      }
+
       const custom = body ? options.respond?.({ url, body: json as Record<string, unknown> }) : undefined;
       if (custom && "status" in custom) {
         res.writeHead(custom.status, { "content-type": "application/json" });
@@ -128,6 +204,24 @@ export function startMockProvider(options: MockProviderOptions = {}): Promise<{ 
         res.end("data: [DONE]\n\n");
         return;
       }
+
+      if (audioCapture) {
+        const answer = typeof options.audioTranscript === "function"
+          ? options.audioTranscript(audioCapture)
+          : options.audioTranscript ?? "synthetic transcript";
+        if (typeof answer === "object" && "status" in answer) {
+          res.writeHead(answer.status, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: { message: answer.message } }));
+          return;
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({
+          choices: [{ message: { role: "assistant", content: answer } }],
+          usage: { prompt_tokens: 4, completion_tokens: 2 },
+        }));
+        return;
+      }
+
       // A text-only model rejects image parts the way hosted ones do: with a client error naming the input.
       if (mode === "no-vision" && /"(image_url|input_image)"/.test(body)) {
         res.writeHead(400, { "content-type": "application/json" });
@@ -214,6 +308,8 @@ export function startMockProvider(options: MockProviderOptions = {}): Promise<{ 
       resolve({
         url: `http://127.0.0.1:${port}${prefix}`,
         close: () => new Promise((done) => server.close(() => done())),
+        audioCaptures,
+        requestCount: () => totalRequests,
       });
     });
   });

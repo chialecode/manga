@@ -204,14 +204,22 @@ async function openTraceStep(view: BrowserWindow, sessionId: string, runId: stri
   if (!(await viaSidebar(view, "conversation", `session-open-${sessionId}`, 8000))) return "the conversation did not open from the sidebar";
   const link = `bubble-trace-${runId}:agent`;
   // The list draws only the rows near the viewport: an older run is scrolled to, a screen at a time, as a person would.
-  let found = await waitUntil(view, `document.querySelector('[data-testid="${link}"]')`, 6000);
-  for (let screen = 0; !found && screen < 60; screen += 1) {
-    await js(view, `(() => { const s = [...document.querySelectorAll('[data-testid="chat-log"]')].map((log) => log.firstElementChild).find((el) => el && el.clientHeight > 0 && el.querySelector('[data-testid^="bubble-"]')); if (!s) return false; s.dispatchEvent(new WheelEvent("wheel", { deltaY: -400, bubbles: true })); s.scrollTop = Math.max(0, s.scrollTop - s.clientHeight * 0.8); return true; })()`);
-    found = await waitUntil(view, `document.querySelector('[data-testid="${link}"]')`, 400);
+  const scrollToRun = async (firstWaitMs: number): Promise<boolean> => {
+    let found = await waitUntil(view, `document.querySelector('[data-testid="${link}"]')`, firstWaitMs);
+    for (let screen = 0; !found && screen < 60; screen += 1) {
+      await js(view, `(() => { const s = [...document.querySelectorAll('[data-testid="chat-log"]')].map((log) => log.firstElementChild).find((el) => el && el.clientHeight > 0 && el.querySelector('[data-testid^="bubble-"]')); if (!s) return false; s.dispatchEvent(new WheelEvent("wheel", { deltaY: -400, bubbles: true })); s.scrollTop = Math.max(0, s.scrollTop - s.clientHeight * 0.8); return true; })()`);
+      found = await waitUntil(view, `document.querySelector('[data-testid="${link}"]')`, 400);
+    }
+    return found;
+  };
+  // The virtualizer can remove the row between finding it and the next renderer task, and the log can still scroll itself to the newest message
+  // while late content settles. Look up and click in the same task; if the row went away, scroll back to it and try again, as a person would.
+  let clicked = false;
+  for (let attempt = 0; !clicked && attempt < 3; attempt += 1) {
+    if (!(await scrollToRun(attempt === 0 ? 6000 : 400))) return `no ${link} in the page`;
+    clicked = await clickTestId(view, link, 2000);
   }
-  if (!found) return `no ${link} in the page`;
-  // The virtualizer can remove the row between finding it and the next renderer task. Look up and click in the same task, waiting again if it moved.
-  if (!(await clickTestId(view, link, 6000))) return `the ${link} button moved out of the page before it could be clicked`;
+  if (!clicked) return `the ${link} button moved out of the page before it could be clicked, three times`;
   return (await waitUntil(view, `document.querySelector('[data-testid="trace-dialog"]')`, 6000)) ? "open" : "the record dialog did not open";
 }
 

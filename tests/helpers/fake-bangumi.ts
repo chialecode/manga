@@ -19,9 +19,12 @@ export type FakeSubject = {
   rating: { score: number; total: number; rank: number };
   tags: Array<{ name: string; count: number }>;
 };
+export type FakeInfobox = Array<{ key: string; value: string | Array<{ k?: string | null; v: string }> }>;
 export type FakeRelation = { id: number; type: number; name: string; name_cn: string; images: FakeSubject["images"] | null; relation: string };
 export type FakeCharacter = { id: number; name: string; summary: string; type: number; relation: string; images: { large: string; medium: string; small: string; grid: string } | null; actors: Array<{ id: number; name: string; images: { large: string; medium: string; small: string; grid: string } | null }> };
 export type FakePerson = { id: number; name: string; type: number; career: string[]; relation: string; eps: string; images: { large: string; medium: string; small: string; grid: string } | null };
+export type FakeCharacterDetail = { id: number; name: string; type: number; summary: string; locked: boolean; images: FakeCharacter["images"]; infobox: FakeInfobox | null };
+export type FakePersonDetail = { id: number; name: string; type: number; career: string[]; summary: string; locked: boolean; images: FakePerson["images"]; infobox: FakeInfobox | null };
 export type FakeEpisode = { id: number; type: number; name: string; name_cn: string; sort: number; ep: number; airdate: string; duration: string };
 /** One scripted answer, used instead of the normal one the next time `match` fits. */
 export type Scripted = { status: number; headers?: Record<string, string>; body?: string; destroy?: boolean; delayMs?: number };
@@ -47,6 +50,8 @@ export class FakeBangumi {
   readonly episodes = new Map<number, FakeEpisode[]>();
   readonly characters = new Map<number, FakeCharacter[]>();
   readonly persons = new Map<number, FakePerson[]>();
+  readonly characterDetails = new Map<number, FakeCharacterDetail>();
+  readonly personDetails = new Map<number, FakePersonDetail>();
   readonly images = new Map<string, { bytes: Buffer; mediaType: string }>();
   readonly requests: FakeRequest[] = [];
   private readonly rules: Array<{ match: (request: FakeRequest) => boolean; answers: Scripted[] }> = [];
@@ -81,7 +86,8 @@ export class FakeBangumi {
 
   /** Back to an empty, online server; the listening port stays. */
   reset(): void {
-    this.subjects.clear(); this.relations.clear(); this.episodes.clear(); this.characters.clear(); this.persons.clear(); this.images.clear();
+    this.subjects.clear(); this.relations.clear(); this.episodes.clear(); this.characters.clear(); this.persons.clear();
+    this.characterDetails.clear(); this.personDetails.clear(); this.images.clear();
     this.requests.length = 0; this.rules.length = 0; this.offline = false;
   }
 
@@ -128,6 +134,37 @@ export class FakeBangumi {
   person(subjectId: number, id: number, over: Partial<FakePerson> = {}): FakePerson {
     const entry: FakePerson = { id, name: `Synthetic Staff ${id}`, type: 1, career: ["producer"], relation: "导演", eps: "", images: this.avatars(`p${id}`), ...over };
     this.persons.set(subjectId, [...(this.persons.get(subjectId) ?? []), entry]);
+    return entry;
+  }
+
+  characterDetail(id: number, over: Partial<FakeCharacterDetail> = {}): FakeCharacterDetail {
+    const entry: FakeCharacterDetail = {
+      id,
+      name: `Synthetic Character ${id}`,
+      type: 1,
+      summary: `Invented character detail ${id}.`,
+      locked: false,
+      images: this.avatars(`c${id}`),
+      infobox: null,
+      ...over,
+    };
+    this.characterDetails.set(id, entry);
+    return entry;
+  }
+
+  personDetail(id: number, over: Partial<FakePersonDetail> = {}): FakePersonDetail {
+    const entry: FakePersonDetail = {
+      id,
+      name: `Synthetic Actor ${id}`,
+      type: 1,
+      career: ["seiyu"],
+      summary: `Invented person detail ${id}.`,
+      locked: false,
+      images: this.avatars(`p${id}`),
+      infobox: null,
+      ...over,
+    };
+    this.personDetails.set(id, entry);
     return entry;
   }
 
@@ -193,6 +230,43 @@ export class FakeBangumi {
       const limit = Number(url.searchParams.get("limit") ?? 100);
       const offset = Number(url.searchParams.get("offset") ?? 0);
       json({ total: all.length, limit, offset, data: all.slice(offset, offset + limit) });
+      return;
+    }
+    const charDetailMatch = /^\/v0\/characters\/(\d+)$/.exec(url.pathname);
+    if (charDetailMatch) {
+      const id = Number(charDetailMatch[1]);
+      const explicit = this.characterDetails.get(id);
+      if (explicit) { json(explicit); return; }
+      for (const list of this.characters.values()) {
+        const found = list.find((item) => item.id === id);
+        if (found) {
+          json({ id: found.id, name: found.name, type: found.type, summary: found.summary, locked: false, images: found.images, infobox: null });
+          return;
+        }
+      }
+      json({ title: "Not Found", description: "synthetic" }, 404);
+      return;
+    }
+    const personDetailMatch = /^\/v0\/persons\/(\d+)$/.exec(url.pathname);
+    if (personDetailMatch) {
+      const id = Number(personDetailMatch[1]);
+      const explicit = this.personDetails.get(id);
+      if (explicit) { json(explicit); return; }
+      for (const list of this.characters.values()) {
+        const actor = list.flatMap((item) => item.actors).find((item) => item.id === id);
+        if (actor) {
+          json({ id: actor.id, name: actor.name, type: 1, career: ["seiyu"], summary: "", locked: false, images: actor.images, infobox: null });
+          return;
+        }
+      }
+      for (const list of this.persons.values()) {
+        const staff = list.find((item) => item.id === id);
+        if (staff) {
+          json({ id: staff.id, name: staff.name, type: staff.type, career: staff.career, summary: "", locked: false, images: staff.images, infobox: null });
+          return;
+        }
+      }
+      json({ title: "Not Found", description: "synthetic" }, 404);
       return;
     }
     json({ title: "Not Found", description: "synthetic" }, 404);

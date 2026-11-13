@@ -66,7 +66,9 @@ const rendererUrl = (): string => LIGHT_WINDOW_VITE_DEV_SERVER_URL
   : pathToFileURL(path.join(__dirname, `../renderer/${LIGHT_WINDOW_VITE_NAME}/index.html`)).href;
 
 function windowIconPath(): string | undefined {
-  return [path.join(process.resourcesPath, "icon.ico"), path.resolve(__dirname, "../../assets/icon.ico"), path.resolve(__dirname, "../../assets/icon.png")].find((file) => fs.existsSync(file));
+  // As the full application's windows (index.ts): the installed copy's own icon, or the channel's in a source run.
+  const source = channel.channel === "development" ? "icon-dev" : "icon";
+  return [path.join(process.resourcesPath, "icon.ico"), path.resolve(__dirname, `../../assets/${source}.ico`), path.resolve(__dirname, `../../assets/${source}.png`)].find((file) => fs.existsSync(file));
 }
 
 function errorKind(error: unknown): "missing" | "unsupported" | "broken" {
@@ -173,6 +175,8 @@ function createWindow(file: string | null): LightWindow {
     },
   });
   window.setMenuBarVisibility(false);
+  // As the full application's smoke windows: the walk's own input events only, the system's mouse passes through (index.ts).
+  if (smoke) window.setIgnoreMouseEvents(true);
   if (saved?.maximized && windows.size === 0) window.maximize();
   const entry: LightWindow = { window, opened: null, error: null, resume: null, flushed: false, closing: false };
   const contentsId = window.webContents.id;

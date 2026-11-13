@@ -13,6 +13,7 @@ import { RoughcutCommandInputs } from "./inputs-roughcut.ts";
 import { ProposalCommandInputs } from "./inputs-proposals.ts";
 import { WorkFileCommandInputs } from "./inputs-works.ts";
 import { DanmakuCommandInputs } from "./inputs-danmaku.ts";
+import { DictationCommandInputs } from "./inputs-dictation.ts";
 import { ModelInputs, ModelProfilePatchSchema } from "./inputs-models.ts";
 import { UpdateCommandInputs } from "./update.ts";
 import { OrdinalSchema } from "./media.ts";
@@ -266,6 +267,7 @@ export const CommandInputs = {
   ...ProposalCommandInputs,
   ...WorkFileCommandInputs,
   ...DanmakuCommandInputs,
+  ...DictationCommandInputs,
   ...ModelInputs,
   ...UpdateCommandInputs,
 };

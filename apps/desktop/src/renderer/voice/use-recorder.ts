@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { AsrEngineSelection, ChineseVariant, DictationInsertMode, PolishMode } from "@manga/contracts";
 import type { Translator } from "@manga/i18n";
 import { attempt, call } from "../lib/api.ts";
 import { autoAddMaterial } from "../lib/materials.ts";
@@ -20,16 +21,55 @@ export type RecordingSettings = {
   promptChars: number;
   promptCharsByConnection: Record<string, number>;
   overlay: { x?: number; y?: number };
+  echoCancellation: boolean;
+  systemLoopbackAec: boolean;
+  browserNoiseSuppression: boolean;
+  autoGainControl: boolean;
+  gtcrnDenoise: boolean;
+  dictationHoldKey: string;
+  dictationInsertMode: DictationInsertMode;
+  polishMode: PolishMode;
+  polishPrompts: { light?: string | null; formal?: string | null };
+  polishConnectionId: string | null;
+  chineseVariant: ChineseVariant;
+  dictationEngine: AsrEngineSelection | null;
+  captureEngine: AsrEngineSelection | null;
+  localIdleMinutes: number;
+  retainDictationAudio24h: boolean;
 };
 
 /** What a save may carry: the same fields, and a connection's hint length or overlay position that is `null` goes back to its default. */
 export type RecordingPatch = Partial<Omit<RecordingSettings, "promptCharsByConnection" | "overlay">> & {
   promptCharsByConnection?: Record<string, number | null>;
-  overlay?: { x?: number | null; y?: number | null };
+  overlay?: { x?: number | null; y?: null | number };
 };
 
 export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
-  deviceId: null, holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, language: null, promptChars: 600, promptCharsByConnection: {}, overlay: {},
+  deviceId: null,
+  holdKey: "F9",
+  toggleKey: "F8",
+  retention: "keep",
+  duckPlayback: "lower",
+  boundaryMarginMs: 300,
+  language: null,
+  promptChars: 600,
+  promptCharsByConnection: {},
+  overlay: {},
+  echoCancellation: true,
+  systemLoopbackAec: false,
+  browserNoiseSuppression: false,
+  autoGainControl: true,
+  gtcrnDenoise: false,
+  dictationHoldKey: "RightAlt",
+  dictationInsertMode: "stream_replace",
+  polishMode: "light",
+  polishPrompts: {},
+  polishConnectionId: null,
+  chineseVariant: "simplified",
+  dictationEngine: null,
+  captureEngine: null,
+  localIdleMinutes: 10,
+  retainDictationAudio24h: false,
 };
 
 export type RecorderDeps = {
@@ -60,16 +100,24 @@ export function useRecorder(deps: RecorderDeps) {
   contextRef.current = deps.contextId ?? null;
   /** The context the running recording began in: it belongs to that project even if the person moves on. */
   const startedIn = useRef<string | null>(null);
+  const [settings, setSettings] = useState<RecordingSettings>(DEFAULT_RECORDING_SETTINGS);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const noticeRef = useRef({ i18n, setNotice });
+  noticeRef.current = { i18n, setNotice };
   const recorder = useMemo(() => new Recorder({
     call: (commandId, input, options) => call(commandId, input, options) as Promise<never>,
-    openMic: deps.openMic ?? openMicrophone,
+    openMic: deps.openMic ?? ((deviceId) => openMicrophone(deviceId, {
+      echoCancellation: settingsRef.current.echoCancellation,
+      systemLoopbackAec: settingsRef.current.systemLoopbackAec,
+      browserNoiseSuppression: settingsRef.current.browserNoiseSuppression,
+      autoGainControl: settingsRef.current.autoGainControl,
+      onSystemAecFallback: () => noticeRef.current.setNotice(noticeRef.current.i18n.t("dictation.notice.systemAecFallback")),
+    })),
     now: deps.now ?? (() => performance.now()),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
   const state = useSyncExternalStore(recorder.subscribe, recorder.getState);
-  const [settings, setSettings] = useState<RecordingSettings>(DEFAULT_RECORDING_SETTINGS);
-  const settingsRef = useRef(settings);
-  settingsRef.current = settings;
 
   const reloadSettings = useCallback(async () => {
     const result = await attempt<Partial<RecordingSettings>>("settings.getRecording");

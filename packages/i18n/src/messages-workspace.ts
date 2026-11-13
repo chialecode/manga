@@ -409,6 +409,7 @@ export const zhCNWorkspace = {
   "keys.global.newProject": "新建项目",
   "keys.global.search": "打开搜索框",
   "keys.global.settings": "打开设置",
+  "keys.global.dictationHold": "按住听写（松开出字，连按两下锁定免提）",
   "keys.video.toggle": "播放 / 暂停",
   "keys.video.seekBack": "快退（按住连续快退）",
   "keys.video.seekForward": "快进（按住临时加速）",

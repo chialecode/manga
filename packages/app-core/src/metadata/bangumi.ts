@@ -1,6 +1,6 @@
 import net from "node:net";
 import { z } from "zod";
-import { MangaError } from "@manga/contracts";
+import { type DictionaryAliasKind, MangaError } from "@manga/contracts";
 import type { components } from "./bangumi-openapi.ts";
 
 /** Bangumi API v0, read only. Types come from the official OpenAPI spec; Zod checks the fields MANGA actually uses at run time. */
@@ -20,15 +20,18 @@ type Episode = components["schemas"]["Episode"];
 type Relation = components["schemas"]["v0_subject_relation"];
 type RelatedCharacterSpec = components["schemas"]["RelatedCharacter"];
 type RelatedPersonSpec = components["schemas"]["RelatedPerson"];
+type CharacterDetailSpec = components["schemas"]["Character"];
+type PersonDetailSpec = components["schemas"]["PersonDetail"];
 
 const ImagesSchema = z.object({
   large: z.string().default(""), common: z.string().default(""), medium: z.string().default(""), small: z.string().default(""), grid: z.string().default(""),
 });
 
-const InfoboxSchema = z.array(z.object({
+export const InfoboxSchema = z.array(z.object({
   key: z.string(),
-  value: z.union([z.string(), z.array(z.object({ k: z.string().optional(), v: z.string() }))]),
+  value: z.union([z.string(), z.array(z.object({ k: z.string().nullish(), v: z.string() }))]),
 }));
+export type BangumiInfobox = z.infer<typeof InfoboxSchema>;
 
 export const BangumiSubjectSchema = z.object({
   id: z.number().int(),
@@ -76,6 +79,29 @@ export type BangumiPerson = z.infer<typeof PersonSchema>;
 
 const EpisodesSchema = z.object({ total: z.number().default(0), limit: z.number().default(0), offset: z.number().default(0), data: z.array(EpisodeSchema) });
 
+export const BangumiCharacterDetailSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  type: z.number().int().default(1),
+  summary: z.string().default(""),
+  locked: z.boolean().default(false),
+  images: ImagesSchema.nullish(),
+  infobox: InfoboxSchema.nullish(),
+});
+export type BangumiCharacterDetail = z.infer<typeof BangumiCharacterDetailSchema>;
+
+export const BangumiPersonDetailSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  type: z.number().int().default(1),
+  career: z.array(z.string()).default([]),
+  summary: z.string().default(""),
+  locked: z.boolean().default(false),
+  images: ImagesSchema.nullish(),
+  infobox: InfoboxSchema.nullish(),
+});
+export type BangumiPersonDetail = z.infer<typeof BangumiPersonDetailSchema>;
+
 // The schemas above must accept everything the published spec says the server can send for the fields they name.
 type Accepts<Input, Spec extends Input> = Spec;
 /** @public */
@@ -86,6 +112,10 @@ export type _RelationCompatible = Accepts<z.input<typeof RelationSchema>, Pick<R
 export type _CharacterCompatible = Accepts<z.input<typeof CharacterSchema>, Pick<RelatedCharacterSpec, "id" | "name" | "summary" | "type" | "images" | "relation" | "actors">>;
 /** @public */
 export type _PersonCompatible = Accepts<z.input<typeof PersonSchema>, Pick<RelatedPersonSpec, "id" | "name" | "type" | "career" | "images" | "relation" | "eps">>;
+/** @public */
+export type _CharacterDetailCompatible = Accepts<z.input<typeof BangumiCharacterDetailSchema>, Pick<CharacterDetailSpec, "id" | "name" | "type" | "summary" | "locked" | "images">>;
+/** @public */
+export type _PersonDetailCompatible = Accepts<z.input<typeof BangumiPersonDetailSchema>, Pick<PersonDetailSpec, "id" | "name" | "type" | "career" | "summary" | "locked" | "images">>;
 /** @public */
 export type _EpisodeCompatible = Accepts<z.input<typeof EpisodeSchema>, Pick<Episode, "id" | "type" | "name" | "name_cn" | "sort" | "airdate" | "duration">>;
 
@@ -316,6 +346,16 @@ export class BangumiClient {
     return this.json(`/v0/subjects/${encodeURIComponent(String(id))}/persons`, z.array(PersonSchema), { signal });
   }
 
+  /** `GET /v0/characters/{id}`: character detail with parsed infobox (Chinese name, kana, romaji, aliases). */
+  character(id: number | string, signal?: AbortSignal): Promise<BangumiCharacterDetail> {
+    return this.json(`/v0/characters/${encodeURIComponent(String(id))}`, BangumiCharacterDetailSchema, { signal });
+  }
+
+  /** `GET /v0/persons/{id}`: person / voice actor detail with parsed infobox (Chinese name, kana, romaji, aliases). */
+  person(id: number | string, signal?: AbortSignal): Promise<BangumiPersonDetail> {
+    return this.json(`/v0/persons/${encodeURIComponent(String(id))}`, BangumiPersonDetailSchema, { signal });
+  }
+
   /** Main episodes (type 0) and specials, up to `max`; long series arrive in pages of 100. */
   async episodes(id: number | string, max = 300, signal?: AbortSignal): Promise<BangumiEpisode[]> {
     const all: BangumiEpisode[] = [];
@@ -398,4 +438,77 @@ export function normalizeSubject(subject: BangumiSubject, pageOrigin = BANGUMI_P
     sourceUrl: `${pageOrigin}/subject/${subject.id}`,
     aliases: [...new Set(infoboxValues(subject.infobox, ["别名"]).map((name) => name.slice(0, 128)).filter(Boolean))].slice(0, 12),
   };
+}
+
+function aliasKindFromInfoboxSubKey(subKey: string | null | undefined): DictionaryAliasKind {
+  const clean = (subKey ?? "").trim();
+  if (!clean) return "alias";
+  if (clean === "纯假名" || clean === "假名" || clean === "平假名" || clean === "片假名") return "kana";
+  if (clean === "罗马字" || clean === "罗马音" || /^romaji$/i.test(clean)) return "romaji";
+  if (clean === "英文名" || clean === "英文" || /^english(?:\s+name)?$/i.test(clean)) return "english";
+  return "alias";
+}
+
+/**
+ * Extracts the canonical dictionary term and typed aliases from a Bangumi character/person detail record.
+ * Handles all three real-world Bangumi wiki infobox edge cases:
+ * 1. `infobox` may be `null` or `undefined` (falls back to top-level `name`).
+ * 2. Duplicate keys such as multiple `"简体中文名"` or `"别名"` rows (iterates all matching items via `filter`, never `find`).
+ * 3. `"别名"` array elements may be keyless `{ v: "..." }` or `{ k: "纯假名" | "罗马字" | "英文名" | ..., v: "..." }`.
+ * When `"简体中文名"` is present, the first Chinese name becomes the canonical `term` and the original `name` is demoted to an `alias`.
+ */
+export function parseBangumiInfoboxNames(
+  topName: string,
+  infobox: BangumiInfobox | null | undefined,
+): { term: string; aliases: Array<{ alias: string; kind: DictionaryAliasKind }> } {
+  const clean = (raw: string) => raw.replace(/\s+/g, " ").trim();
+  const baseName = clean(topName);
+  if (!infobox || infobox.length === 0) {
+    return { term: baseName, aliases: [] };
+  }
+
+  const cnNames: string[] = [];
+  for (const item of infobox.filter((entry) => entry.key.trim() === "简体中文名")) {
+    if (typeof item.value === "string") {
+      const v = clean(item.value);
+      if (v) cnNames.push(v);
+    } else {
+      for (const sub of item.value) {
+        const v = clean(sub.v);
+        if (v) cnNames.push(v);
+      }
+    }
+  }
+
+  const rawAliases: Array<{ alias: string; kind: DictionaryAliasKind }> = [];
+  for (const item of infobox.filter((entry) => entry.key.trim() === "别名")) {
+    if (typeof item.value === "string") {
+      const v = clean(item.value);
+      if (v) rawAliases.push({ alias: v, kind: "alias" });
+    } else {
+      for (const sub of item.value) {
+        const v = clean(sub.v);
+        if (v) rawAliases.push({ alias: v, kind: aliasKindFromInfoboxSubKey(sub.k) });
+      }
+    }
+  }
+
+  const term = cnNames[0] ?? baseName;
+  const candidates: Array<{ alias: string; kind: DictionaryAliasKind }> = [];
+  if (cnNames.length > 0 && baseName && baseName !== term) {
+    candidates.push({ alias: baseName, kind: "alias" });
+  }
+  for (const extraCn of cnNames.slice(1)) {
+    candidates.push({ alias: extraCn, kind: "alias" });
+  }
+  candidates.push(...rawAliases);
+
+  const seen = new Set<string>();
+  const aliases: Array<{ alias: string; kind: DictionaryAliasKind }> = [];
+  for (const candidate of candidates) {
+    if (!candidate.alias || candidate.alias === term || seen.has(candidate.alias)) continue;
+    seen.add(candidate.alias);
+    aliases.push(candidate);
+  }
+  return { term, aliases };
 }

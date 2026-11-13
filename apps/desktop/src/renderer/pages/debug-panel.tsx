@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Copy, X } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { attempt } from "../lib/api.ts";
 import { redactForDebug } from "../lib/debug-redact.ts";
 import type { NovelDebug } from "../lib/reader-context.ts";
 import type { VideoFacts } from "../readers/video-health.ts";
+import { getMicDiagnostics, subscribeMicDiagnostics } from "../voice/mic.ts";
 
 type T = Translator["t"];
 
@@ -94,8 +95,9 @@ export function DebugPanel(props: {
     setReport(result.value);
   }, [sessionId, resourceId, workId, page]);
   useEffect(() => { if (view.open) void load(); }, [view.open, load, props.version]);
+  const audio = useSyncExternalStore(subscribeMicDiagnostics, getMicDiagnostics, () => null);
 
-  const document = redactForDebug({ generatedAt: report?.generatedAt ?? new Date().toISOString(), page, current: { ...props.live, scope: report?.scope, model: report?.model, tools: report?.tools, budget: report?.budget }, lastRun: report?.lastRun ?? null, events: props.events.slice(-30) });
+  const document = redactForDebug({ generatedAt: report?.generatedAt ?? new Date().toISOString(), page, current: { ...props.live, ...(audio ? { audio } : {}), scope: report?.scope, model: report?.model, tools: report?.tools, budget: report?.budget }, lastRun: report?.lastRun ?? null, events: props.events.slice(-30) });
 
   async function copy() {
     const text = JSON.stringify(document, null, 2);
@@ -159,6 +161,17 @@ export function DebugPanel(props: {
                   <span data-testid="debug-video-playing">{t("debug.video.playing")}：{props.video.playing === "play_copy" ? t("video.copyBadge") : props.video.playing === "original" ? t("debug.video.original") : "-"} · {props.video.decision}{props.video.reasons.length ? ` (${props.video.reasons.join(", ")})` : ""}</span>
                   {" · "}<span data-testid="debug-video-element">{t("debug.video.element")}：readyState {props.video.readyState} · networkState {props.video.networkState} · {t("debug.video.frames", { decoded: props.video.decodedFrames, dropped: props.video.droppedFrames })} · {props.video.width}×{props.video.height} · {t(`debug.video.health.${props.video.health}` as never)}</span>
                   {" · "}<span data-testid="debug-video-subtitles">{t("debug.video.subtitles")}：{props.video.subtitleRenderer} ({props.video.subtitleStatus}) · {t("debug.video.defaultFont")} {props.video.defaultFont} · {t("debug.video.missingFonts")} {props.video.missingFonts.length ? props.video.missingFonts.join("、") : t("debug.none")}</span>
+                </dd>
+              </div>
+            ) : null}
+            {audio ? (
+              <div data-testid="debug-audio" data-fallback={audio.systemAecFallback ? "true" : "false"}>
+                <dt>{t("debug.audio")}</dt>
+                <dd>
+                  <span data-testid="debug-audio-applied">{JSON.stringify(audio.applied)}</span>
+                  {" · "}
+                  <span data-testid="debug-audio-requested">{JSON.stringify(audio.requested)}</span>
+                  {audio.systemAecFallback ? <>{" · "}<span data-testid="debug-audio-fallback">{t("debug.audioFallback")}</span></> : null}
                 </dd>
               </div>
             ) : null}

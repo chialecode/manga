@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+ipcRenderer.setMaxListeners(50);
+
 const saveListeners = new Set<() => unknown>();
 ipcRenderer.on("manga:save-now", (_event: unknown, token: string) => {
   const tasks = [...saveListeners].map((fn) => Promise.resolve().then(() => fn()));

@@ -443,19 +443,15 @@ export class UpdateService {
    * Create a pre-update backup copy of `manga.sqlite` in `layout.partitions.backups` (`manga.sqlite.preupdate-v<previousVersion>.sqlite`).
    */
   writePreUpdateBackup(previousVersion = this.buildInfo.version, options: { refresh?: boolean } = {}): string | null {
-    let temporary: string | undefined;
     try {
       const backupsDir = this.layout.partitions.backups;
       fs.mkdirSync(backupsDir, { recursive: true });
       const safeVer = previousVersion.replace(/[^A-Za-z0-9._-]/g, "_");
       const targetPath = path.join(backupsDir, `manga.sqlite.preupdate-v${safeVer}.sqlite`);
       if (options.refresh || !fs.existsSync(targetPath)) {
-        // serialize() takes a SQLite snapshot including committed WAL pages. Copying only the main
-        // file after an unchecked checkpoint can silently omit saved records.
-        const snapshot = this.store.sqlite.serialize();
-        temporary = `${targetPath}.part`;
-        fs.writeFileSync(temporary, snapshot);
-        fs.renameSync(temporary, targetPath);
+        // copyForBackup serializes the live SQLite snapshot (including committed WAL pages)
+        // and strips `agent_requests` + `dictation_history` before atomically renaming into place.
+        this.store.copyForBackup(targetPath);
         this.log.record({
           actorKind: "system",
           category: "backup",
@@ -470,7 +466,6 @@ export class UpdateService {
       }
       return fs.statSync(targetPath).size > 0 ? targetPath : null;
     } catch {
-      if (temporary) { try { fs.rmSync(temporary, { force: true }); } catch { /* retry will replace the partial backup */ } }
       return null;
     }
   }

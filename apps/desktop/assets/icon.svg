@@ -1,15 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
-  <defs>
-    <linearGradient id="manga-bg" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#DE6C9B" />
-      <stop offset="52%" stop-color="#AD3268" />
-      <stop offset="100%" stop-color="#84204D" />
-    </linearGradient>
-  </defs>
-  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#manga-bg)" />
-  <rect x="36" y="36" width="440" height="440" rx="96" stroke="#F8E4ED" stroke-opacity="0.28" stroke-width="8" />
-  <path
-    d="M116 384V128H174L256 262L338 128H396V384H340V226L274 332H238L172 226V384H116Z"
-    fill="#FFFFFF"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1024 1024" fill="none">
+  <!-- MANGA: a white "M" on dark gray. Letter height (250-780), stroke (110), corner radius (28) and square match the other channel's icon; icon-dev.svg adds the "DEV" badge. -->
+  <rect x="48" y="48" width="928" height="928" rx="200" fill="#3C4043" />
+  <path d="M232 278A28 28 0 0 1 260 250H342L512 527L682 250H764A28 28 0 0 1 792 278V752A28 28 0 0 1 764 780H710A28 28 0 0 1 682 752V453L548 672H476L342 453V752A28 28 0 0 1 314 780H260A28 28 0 0 1 232 752Z" fill="#FFFFFF" />
 </svg>

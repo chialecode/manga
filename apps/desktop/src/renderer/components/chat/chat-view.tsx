@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useChat, type ChatDeps } from "../../hooks/use-chat.ts";
 import type { RecorderHandle } from "../../voice/use-recorder.ts";
+import type { DictationHandle } from "../../voice/use-dictation.ts";
 import type { StreamNote, StreamVoice } from "../../hooks/use-session-stream.ts";
 import type { ComposerProps } from "./composer.tsx";
 import { ChatPane } from "./chat-pane.tsx";
@@ -12,6 +13,7 @@ export type ChatViewProps = ChatDeps & {
   formatDate: (value: string) => string;
   /** The recording hook, when the voice module is on; the microphone is absent otherwise. */
   recorder: RecorderHandle | null;
+  dictation?: DictationHandle | null;
   noModel: boolean;
   onSettings: () => void;
   onStop: () => void;
@@ -99,6 +101,12 @@ export function useChatView(props: ChatViewProps) {
     onSubtitleAhead: (minutes) => props.patchComposer({ subtitleAheadMin: minutes }),
     onMaterials: () => setMaterials(true),
     mic,
+    dictation: props.dictation
+      ? {
+        active: props.dictation.active,
+        onToggle: (target) => props.dictation!.toggleFromButton(target, props.target.workId ?? null),
+      }
+      : null,
   };
 
   const pane = (

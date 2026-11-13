@@ -23,6 +23,9 @@ import {
   DEFAULT_ICON_ICO,
   DEFAULT_ICON_PNG,
   DEFAULT_ICON_SVG,
+  DEV_ICON_ICO,
+  DEV_ICON_PNG,
+  DEV_ICON_SVG,
   ICON_SIZES,
   INSTALLER_META,
   TEST_CHANNEL_INSTALL,
@@ -147,7 +150,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), "manga-package-"));
 const selectedPhases = onlyPhases ? config.package.smoke.filter((name) => onlyPhases.includes(name)) : config.package.smoke;
 // The window walk starts from an empty library (the app must open on the library paths), so it gets a Profile of its own; the creative walk and
 // the plugin walk make their own projects, library path and plugin, and do not share a Profile with the phases before them.
-const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13", "update"]);
+const OWN_PROFILE = new Set(["window-walk", "creative", "plugins", "trace", "workspace-migrated", "loop", "credentials-async", "migrate-v13", "update", "dictation"]);
 // The restart of the workspace is the next start of the Profile the window walk used (it left two contexts in a known shape); the upgrade check starts on a
 // synthetic v11 library made here, before the application has seen it.
 const SAME_PROFILE_AS = { "workspace-restart": "window-walk", "workspace-closed": "window-walk", "credentials-async-restart": "credentials-async", "migrate-v13-restart": "migrate-v13" };
@@ -160,6 +163,7 @@ const homes = {};
 // The media and recording phases drive the real window with synthetic samples; they have to exist for the gate to mean anything.
 const samplesRoot = path.join(root, "dist/samples/media");
 const speechClip = path.join(samplesRoot, "voice/tts-clips/zh-CN-1.wav");
+const localAsrModelDir = path.join(root, "dist/tools/asr/sense-voice-funasr-nano-int8");
 // The release workflow's check (`--ci`): a phase gate.json `optionalSamplePhases` ties to optional samples this runner could not make is left out
 // and named with the reason in package.json; any other phase still has to pass. Stage evidence never passes `--ci`.
 const ciRun = process.argv.includes("--ci");
@@ -171,9 +175,10 @@ const phases = selectedPhases.filter((phase) => !excusedPhases.some((entry) => e
 for (const entry of excusedPhases) console.log(JSON.stringify({ check: "stage-package", excused: entry.phase, reason: entry.reason }));
 for (const phase of phases) {
   if (phase === "credentials-async" && !fs.existsSync(path.join(legacyCredentials, "legacy.json"))) throw new Error("the legacy credentials Profile is missing; run: node --experimental-strip-types scripts/samples/build-legacy-credentials.mjs");
-  if ((phase === "media" || phase === "voice" || phase === "window-walk" || phase === "creative" || phase === "loop") && !fs.existsSync(path.join(samplesRoot, "manifest.json"))) throw new Error("synthetic samples are missing; run: node scripts/samples/generate-media-samples.mjs");
+  if ((phase === "media" || phase === "voice" || phase === "dictation" || phase === "window-walk" || phase === "creative" || phase === "loop") && !fs.existsSync(path.join(samplesRoot, "manifest.json"))) throw new Error("synthetic samples are missing; run: node scripts/samples/generate-media-samples.mjs");
 }
-if (phases.includes("voice") && !fs.existsSync(speechClip)) throw new Error("the synthetic speech clip is missing; run: node scripts/samples/generate-media-samples.mjs");
+if ((phases.includes("voice") || phases.includes("dictation")) && !fs.existsSync(speechClip)) throw new Error("the synthetic speech clip is missing; run: node scripts/samples/generate-media-samples.mjs");
+if ((phases.includes("voice") || phases.includes("dictation")) && !fs.existsSync(localAsrModelDir)) throw new Error("the local SenseVoice ASR model cache is missing; run: node scripts/tools/fetch-speech-asr.mjs");
 const electronVersion = fs.readFileSync(path.join(appPath, "version"), "utf8").trim();
 // The plugin walk downloads from a seed and a tracker on the loopback address, run here in a process of their own; the tracker's address in the
 // magnet carries a made-up secret that must never reach the page or the logs. Nothing reaches a public tracker, the DHT or the LAN.
@@ -307,6 +312,8 @@ async function smoke(phase) {
         MANGA_SMOKE_EVIDENCE_DIR: evidence,
         MANGA_SMOKE_SAMPLES: samplesRoot,
         MANGA_SMOKE_AUDIO: speechClip,
+        ...((phase === "voice" || phase === "dictation") ? { MANGA_SMOKE_ASR_MODEL_DIR: localAsrModelDir } : {}),
+        ...(phase === "dictation" ? { MANGA_SMOKE_ALLOW_LOOPBACK_MODEL: "1" } : {}),
         ELECTRON_ENABLE_LOGGING: "1",
         ...(smokePluginPublicKey ? { MANGA_SMOKE_PLUGIN_PUBLIC_KEY: smokePluginPublicKey } : {}),
         ...(bt?.env ?? {}),
@@ -314,7 +321,7 @@ async function smoke(phase) {
         ...(credentialServices?.env ?? {}),
         ...(phase.startsWith("migrate-v13") ? { MANGA_SMOKE_V12_SPEC: path.join(home, "v12-spec.json") } : {}),
       },
-      timeout: phase === "loop" ? 900_000 : phase === "update" ? 240_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
+      timeout: phase === "loop" ? 900_000 : phase === "update" ? 240_000 : phase === "dictation" ? 300_000 : phase.startsWith("credentials-async") || phase.startsWith("migrate-v13") ? 180_000 : phase.startsWith("agent") ? 90_000 : phase === "media" ? 600_000 : phase === "voice" ? 240_000 : phase === "window-walk" ? 900_000 : phase === "creative" ? 300_000 : phase === "workspace-restart" || phase === "workspace-closed" || phase === "workspace-migrated" ? 120_000 : phase === "plugins" ? 420_000 : phase === "reading-loop" || phase === "reading-loop-restart" || phase === "formats" || phase === "trace" ? 120_000 : 60_000,
     });
   } finally {
     await bt?.swarm.close();
@@ -336,7 +343,7 @@ async function smoke(phase) {
     if (traffic.status !== "passed") throw new Error(`smoke ${phase}: ${traffic.detail.problems.join("; ")}`);
   }
   if (phase === "migrate-v13" || phase === "migrate-v13-restart") report.migrationFiles = migrationFiles(v12Seeds["migrate-v13"]);
-  if (phase === "loop" || phase === "update" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
+  if (phase === "loop" || phase === "update" || phase === "dictation" || phase.startsWith("credentials-async") || phase.startsWith("migrate-v13")) {
     if (report.notRun) throw new Error(`${phase} smoke did not run`);
     if (report.ok !== true) throw new Error(`${phase} smoke failed: ${(report.observations ?? []).filter((row) => row.status !== "passed").map((row) => row.name).join(", ")}`);
   }
@@ -867,6 +874,13 @@ async function observeInstallerInfo() {
     if (!svgExists || pngDims?.width !== 512 || pngDims?.height !== 512 || !icoInspection.valid || icoInspection.sizes.length !== ICON_SIZES.length) {
       problems.push(`icon verification failed: ${JSON.stringify(detail.icons)}`);
     }
+    // The development channel's icon (the "DEV" badge) in the same forms.
+    const devPngDims = fs.existsSync(DEV_ICON_PNG) ? pngSize(fs.readFileSync(DEV_ICON_PNG)) : null;
+    const devIco = fs.existsSync(DEV_ICON_ICO) ? inspectIco(fs.readFileSync(DEV_ICON_ICO)) : { valid: false, sizes: [], problems: ["missing ico"] };
+    detail.devIcons = { svgExists: fs.existsSync(DEV_ICON_SVG), pngDims: devPngDims, icoValid: devIco.valid, icoSizes: devIco.sizes };
+    if (!detail.devIcons.svgExists || devPngDims?.width !== 512 || devPngDims?.height !== 512 || !devIco.valid || devIco.sizes.length !== ICON_SIZES.length) {
+      problems.push(`development icon verification failed: ${JSON.stringify(detail.devIcons)}`);
+    }
 
     const cfg = installerConfig("release", { output: "out", include: "inc.nsh", version: "0.1.1", testIdentity: true });
     const cfgProblems = checkInstallerConfig("release", cfg, installerInclude("release", { testIdentity: true }), { testIdentity: true });
@@ -1005,6 +1019,7 @@ const observations = [
   // The dependency and Agent loop stage (计划第 7 节).
   ...(smokeReports.loop?.observations ?? []),
   ...(smokeReports.voice?.observations ?? []),
+  ...(smokeReports.dictation?.observations ?? []),
   ...(smokeReports.light?.observations ?? []),
   ...["credentials-async", "credentials-async-restart", "migrate-v13", "migrate-v13-restart", "migrate-v13-newer", "data-locations-fresh", "data-locations-upgrade", "update"].flatMap((name) => smokeReports[name]?.observations ?? []),
 ];
@@ -1069,6 +1084,24 @@ fs.writeFileSync(path.join(evidence, "scenarios.json"), `${JSON.stringify({
   observations: observations.map((row) => ({ name: row.name, status: row.status, detail: row.detail ?? null })),
 }, null, 2)}\n`);
 const readingLoopTimings = smokeReports["reading-loop"]?.timings ?? {};
+const verifiedAssets = (() => {
+  const resourcesDir = path.join(appPath, "resources");
+  const manifestPath = path.join(resourcesDir, "assets.manifest.json");
+  let manifestAssets = [];
+  try { manifestAssets = JSON.parse(fs.readFileSync(manifestPath, "utf8")).assets ?? []; } catch { manifestAssets = []; }
+  const byId = new Map(manifestAssets.map((item) => [item.id, item]));
+  const out = {};
+  for (const id of config.package.assets ?? []) {
+    const meta = byId.get(id);
+    if (!meta || typeof meta.path !== "string" || meta.path.startsWith("app.asar/")) {
+      out[id] = false;
+      continue;
+    }
+    const target = path.join(resourcesDir, meta.path);
+    out[id] = fs.existsSync(target) && fs.statSync(target).size === meta.bytes && sha256(fs.readFileSync(target)) === meta.sha256;
+  }
+  return out;
+})();
 const tempDirs = tempWatch.passed();
 if (tempDirs.left > 0) {
   console.error(JSON.stringify({ status: "failed", check: "stage-package", reason: "temporary directories left behind", ...tempDirs }));
@@ -1109,9 +1142,11 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
   // The bundled BitTorrent plugin in the packaged window: offered, installed with confirmed permissions, run in a process of its own, a loopback download imported, stopped and started again.
   plugins: { ok: smokeReports.plugins?.ok ?? false, steps: smokeReports.plugins?.steps ?? [] },
   missingAsset,
+  assets: verifiedAssets,
   installer: installerSummary,
   media: smokeReports.media ? { steps: smokeReports.media.steps, matrix: smokeReports.media.matrix, timings: smokeReports.media.timings } : null,
   voice: smokeReports.voice ? { steps: smokeReports.voice.steps } : null,
+  dictation: smokeReports.dictation ? { ok: smokeReports.dictation.ok, observations: (smokeReports.dictation.observations ?? []).length } : null,
   // Light open in the packaged window: the first frame and page of one run, and the working set after a video opened (the bench measures them five times).
   light: smokeReports.light ? { ok: smokeReports.light.ok, timings: smokeReports.light.timings } : null,
   // Operation-level timing from the real reading-loop run, not from click dispatch.
@@ -1135,22 +1170,4 @@ fs.writeFileSync(path.join(evidence, "package.json"), `${JSON.stringify({
 }, null, 2)}\n`);
 console.log(JSON.stringify({ status: "passed", check: "stage-package", passStreak, output: appPath }));
 fs.writeFileSync(latestDesktopPackage, `${JSON.stringify({ target: path.relative(root, appPath).replaceAll("\\", "/"), evidence: path.relative(root, evidence).replaceAll("\\", "/"), installer: installerSummary, appDigest: appDigestAtStart, stage, ...fingerprints }, null, 2)}\n`);
-// The local development install is updated once per change: after a `stage package` run on its own, or by the gate's last step (it runs this
-// file three times, and the installed app would be asked to quit and reopen each time).
-if (packagedChannel === "development" && process.env.MANGA_PACKAGE_IN_GATE === "1") {
-  console.log("[install-dev] left to the gate's last step");
-} else if (packagedChannel === "development") {
-  try {
-    const devInstall = await runInstallDev({
-      installerPath: madeInstaller.installer,
-      newVersion: madeInstaller.version,
-      expectedSha256: installerSummary.sha256,
-      packagedAppDir: appPath,
-      evidenceDir: evidence,
-    });
-    const { relaunchedPid: _pid, abortedPidStillAlive: _alive, ...devSummary } = devInstall;
-    console.log(JSON.stringify({ check: "stage-install-dev", ...devSummary }));
-  } catch (error) {
-    console.error(`[install-dev] ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
+// The local development install is not updated here: the agent runs `stage install-dev` whenever the next step is the person's manual check (development-workflow), not on every package or gate run.

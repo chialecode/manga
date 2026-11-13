@@ -199,6 +199,60 @@
       "noteContent": false
     },
     {
+      "commandId": "asrModel.cancel",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "asrModel.delete",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "asrModel.download",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "asrModel.import",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "asrModel.list",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "asrModel.pause",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "capture.acceptDraft",
       "moduleId": "manga.voice",
       "owner": true,
@@ -694,7 +748,106 @@
       "noteContent": false
     },
     {
+      "commandId": "dictation.append",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.cancel",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.history.clear",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.history.delete",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.history.list",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.history.retranscribe",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.start",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.status",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictation.stop",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "dictionary.add",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.cancelImportMetadata",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.importBatch",
       "moduleId": "manga.voice",
       "owner": true,
       "agent": false,
@@ -713,6 +866,15 @@
     },
     {
       "commandId": "dictionary.list",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.observeEdit",
       "moduleId": "manga.voice",
       "owner": true,
       "agent": false,
@@ -740,6 +902,24 @@
     },
     {
       "commandId": "dictionary.removedWorks",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.suggestions.decide",
+      "moduleId": "manga.voice",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "dictionary.suggestions.list",
       "moduleId": "manga.voice",
       "owner": true,
       "agent": false,

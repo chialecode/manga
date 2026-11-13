@@ -144,7 +144,7 @@ export function SettingsView(props: SettingsViewProps) {
           </SettingsPage>
         );
       case "recording":
-        return <VoicePage t={t} settings={props.settings} recording={props.recording} onGoto={props.onGoto} onError={props.onError} onNotice={props.onNotice} />;
+        return <VoicePage t={t} settings={props.settings} recording={props.recording} keyTable={props.keys.table} formatDate={i18n.formatDate} onGoto={props.onGoto} onError={props.onError} onNotice={props.onNotice} />;
       case "library":
         return <LibraryPage t={t} scan={props.scan} formatDate={i18n.formatDate} refreshKey={props.refreshKey} onViewRecords={props.onViewRecords} onChanged={props.onChanged} onError={props.onError} onNotice={props.onNotice} />;
       case "semantic":

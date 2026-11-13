@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DictionaryAliasKindSchema, DictionaryCategorySchema } from "./dictation.ts";
 const maxAttachmentBytes = 128 * 1024 * 1024;
 export const PackageAttachmentNameSchema = z.string().min(1).max(240).refine(name => !/[\\/:<>"|?*\x00-\x1f]/.test(name) && !/[. ]$/.test(name) && name !== "." && name !== ".." && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name), "unsafe attachment name");
 const id = z.string().min(1).max(512);
@@ -108,6 +109,17 @@ export const LibraryPackageManifestSchema = z.object({
   dictionary: z.array(z.object({
     id, scope: z.enum(["global", "work"]), work_id: z.string().max(256), term: z.string().min(1).max(128), heard: z.string().max(128).nullable(),
     source: z.string().min(1).max(200), created_at: z.string(), updated_at: z.string(),
+    category: DictionaryCategorySchema.optional(),
+    disabled: z.union([z.boolean(), z.number().int().min(0).max(1)]).optional(),
+    blocked: z.array(z.string().min(1).max(128)).max(64).optional(),
+    blocked_json: json.optional(),
+    aliases: z.array(z.object({
+      id: id.optional(),
+      alias: z.string().min(1).max(128),
+      kind: DictionaryAliasKindSchema,
+      source: z.string().min(1).max(200).optional(),
+      created_at: z.string().optional(),
+    }).strict()).max(64).optional(),
   }).strict()).max(250000).optional(),
   mediaProbes: z.array(z.object({ resource_revision_id: id, probe_json: json, tool_version: z.string(), created_at: z.string() }).strict()).max(250000).optional(),
   /** Reading bookmarks. Optional so packages written before bookmarks existed still import. */

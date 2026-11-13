@@ -1,0 +1,26 @@
+{
+  "modelId": "sense-voice-funasr-nano-int8",
+  "name": "SenseVoice Fun-ASR-Nano (int8)",
+  "kind": "senseVoice",
+  "version": "2025-12-17",
+  "license": "Apache-2.0",
+  "source": {
+    "repository": "https://github.com/k2-fsa/sherpa-onnx",
+    "tag": "asr-models",
+    "asset": "sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2",
+    "sha256": "257936ea9a64cbe33200274e6367fc26d373ff6ca58b996b15108ffd6b9f6148",
+    "bytes": 187693225
+  },
+  "topLevelDirectory": "sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17",
+  "files": {
+    "model.int8.onnx": {
+      "sha256": "9dc6e72aa8bc6f5966cf2857a0ce3a425b1d72e91500e147d66329f407c017a1",
+      "bytes": 263531902
+    },
+    "tokens.txt": {
+      "sha256": "2db4bb25d046e8849e336c9465e248e1694914d996c58c71bdeca18cfb722992",
+      "bytes": 939815
+    }
+  }
+}

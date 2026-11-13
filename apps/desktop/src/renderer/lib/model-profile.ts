@@ -1,4 +1,4 @@
-import type { ModelInputType, ModelProfile, ModelProfilePatch, ReasoningEffort } from "@manga/contracts/models";
+import type { ModelInputType, ModelProfile, ModelProfilePatch, ReasoningEffort, TranscriptionInterface } from "@manga/contracts/models";
 import { MODEL_CAPABILITIES, MODEL_INPUT_TYPES, REASONING_EFFORTS } from "@manga/contracts/models";
 
 export { MODEL_CAPABILITIES, MODEL_INPUT_TYPES, REASONING_EFFORTS };
@@ -15,6 +15,7 @@ export type ProfileForm = {
   fileMiB: string;
   videoMiB: string;
   videoSeconds: string;
+  transcriptionInterface: TranscriptionInterface;
 };
 
 const MiB = 1024 * 1024;
@@ -29,6 +30,7 @@ export const profileForm = (profile: ModelProfile): ProfileForm => ({
   fileMiB: mib(profile.limits.fileBytes),
   videoMiB: mib(profile.limits.videoBytes),
   videoSeconds: String(profile.limits.videoSeconds),
+  transcriptionInterface: profile.transcriptionInterface ?? "audio_transcriptions",
 });
 
 const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().every((item, index) => item === [...b].sort()[index]);
@@ -48,6 +50,7 @@ export function profilePatch(before: ProfileForm, after: ProfileForm): ModelProf
   if (after.videoMiB !== before.videoMiB) limits.videoBytes = Math.round(Number(after.videoMiB) * MiB);
   if (after.videoSeconds !== before.videoSeconds) limits.videoSeconds = Math.round(Number(after.videoSeconds));
   if (Object.keys(limits).length) patch.limits = limits;
+  if (after.transcriptionInterface !== before.transcriptionInterface) patch.transcriptionInterface = after.transcriptionInterface;
   return patch;
 }
 

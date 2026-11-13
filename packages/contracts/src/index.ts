@@ -22,6 +22,8 @@ export * from "./inputs-roughcut.ts";
 export * from "./inputs-proposals.ts";
 export * from "./inputs-works.ts";
 export * from "./inputs-danmaku.ts";
+export * from "./dictation.ts";
+export * from "./inputs-dictation.ts";
 export * from "./roughcut.ts";
 export * from "./inputs-plugins.ts";
 export * from "./plugin.ts";

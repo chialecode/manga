@@ -83,6 +83,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/tools/fetch-silero-vad.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-gtcrn.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-speech-asr.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/tools/fetch-subtitle-font.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --experimental-strip-types scripts/samples/build-legacy-credentials.mjs
@@ -132,6 +136,8 @@ jobs:
           node scripts/tools/fetch-ffmpeg.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/tools/fetch-silero-vad.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/tools/fetch-gtcrn.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/tools/fetch-subtitle-font.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

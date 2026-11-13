@@ -77,6 +77,8 @@ export type TextRequest = {
   maxTokensField?: "max_tokens" | "max_completion_tokens";
   /** How hard a reasoning model thinks: `reasoning_effort` for Chat Completions, `reasoning.effort` for Responses. Left out when the model does not reason. */
   reasoningEffort?: "minimal" | "low" | "medium" | "high";
+  /** Sampling temperature when the model does not reason; omitted when `reasoningEffort` is set. */
+  temperature?: number;
   /** The model's window, for runtimes that need to know it. */
   contextWindow?: number;
 };

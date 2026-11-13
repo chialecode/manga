@@ -17,6 +17,10 @@ export type ModelCapability = (typeof MODEL_CAPABILITIES)[number];
 export const REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
+/** Which HTTP shape a transcription connection speaks: multipart `/audio/transcriptions` or `/chat/completions` with `input_audio`. */
+export const TRANSCRIPTION_INTERFACES = ["audio_transcriptions", "chat_input_audio"] as const;
+export type TranscriptionInterface = (typeof TRANSCRIPTION_INTERFACES)[number];
+
 /** Where a number of the profile came from: left at the default, typed by the person, or read from the service by a test. */
 export type ProfileSource = "default" | "user" | "detected";
 
@@ -40,6 +44,7 @@ export const ModelProfileSchema = z.object({
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).min(1).max(MODEL_INPUT_TYPES.length),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).max(MODEL_CAPABILITIES.length),
   reasoningEffort: z.enum(REASONING_EFFORTS).nullable(),
+  transcriptionInterface: z.enum(TRANSCRIPTION_INTERFACES).default("audio_transcriptions"),
   source: z.object({
     contextWindow: z.enum(["default", "user", "detected"]),
     maxOutput: z.enum(["default", "user", "detected"]),
@@ -55,6 +60,7 @@ export const DEFAULT_MODEL_PROFILE: ModelProfile = {
   inputTypes: ["text"],
   capabilities: ["tools"],
   reasoningEffort: null,
+  transcriptionInterface: "audio_transcriptions",
   source: { contextWindow: "default", maxOutput: "default" },
   limits: { ...DEFAULT_MODEL_LIMITS },
 };
@@ -66,6 +72,7 @@ export const ModelProfilePatchSchema = z.object({
   inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).max(MODEL_INPUT_TYPES.length).optional(),
   capabilities: ModelProfileSchema.shape.capabilities.optional(),
   reasoningEffort: ModelProfileSchema.shape.reasoningEffort.optional(),
+  transcriptionInterface: z.enum(TRANSCRIPTION_INTERFACES).optional(),
   limits: ModelLimitsSchema.partial().optional(),
 }).strict();
 export type ModelProfilePatch = z.infer<typeof ModelProfilePatchSchema>;
@@ -81,6 +88,7 @@ export function applyProfile(base: ModelProfile, patch: ModelProfilePatch, sourc
     ...(patch.inputTypes !== undefined ? { inputTypes: unique(["text" as const, ...patch.inputTypes]) } : {}),
     ...(patch.capabilities !== undefined ? { capabilities: unique(patch.capabilities) } : {}),
     ...(patch.reasoningEffort !== undefined ? { reasoningEffort: patch.reasoningEffort } : {}),
+    ...(patch.transcriptionInterface !== undefined ? { transcriptionInterface: patch.transcriptionInterface } : {}),
     limits: { ...DEFAULT_MODEL_LIMITS, ...base.limits, ...(patch.limits ?? {}) },
     source: {
       contextWindow: patch.contextWindow !== undefined ? source : base.source.contextWindow,

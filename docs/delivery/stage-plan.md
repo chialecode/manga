@@ -1,14 +1,10 @@
-# 当前阶段计划（M11）：首个正式版、更新的退路与轻量打开
+# 当前阶段计划（M12）：类 Typeless 的听写
 
-日期：2026-11-09。角色：A 规划；B 连续实施与自检；A 集中审查。本文是整个阶段的唯一计划，兼作跨模块变更提案（A-46）。B 的执行 prompt 在[第 11 节](#prompt)，不另建 prompt 文件。路径固定、不带阶段名；下一阶段开始时由 A 按[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)改写。上一阶段的计划与报告在合并提交里：[计划归档](https://github.com/chialecode/manga/blob/cfe76d4/docs/delivery/stage-plan.md)、[报告归档](https://github.com/chialecode/manga/blob/cfe76d4/docs/delivery/stage-report.md)。
+日期：2026-11-13。角色：A 规划；B 连续实施与自检；A 集中审查。本文是整个阶段的唯一计划，兼作跨模块变更提案（A-46）。B 的执行 prompt 在[第 11 节](#prompt)，不另建 prompt 文件。路径固定、不带阶段名；下一阶段开始时由 A 按[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)改写。上一阶段的计划与报告在合并提交里：[计划归档](https://github.com/chialecode/manga/blob/f9aea92/docs/delivery/stage-plan.md)、[报告归档](https://github.com/chialecode/manga/blob/f9aea92/docs/delivery/stage-report.md)。
 
-用户 2026-11-09 同意 A 推荐的方向（回复“M11 按推荐”）：先让第一个正式版真正发出去、在本机每周自动更新，以便之后按实际使用的反馈安排工作。推荐的内容是：修好发布流水线；更新后新版本启动失败时能回到上一版（LOOP-32）；两处登记的小问题（LOOP-33、LOOP-34）；门禁提速；阶段开始的整理。
+用户 2026-11-12 要求下一阶段细化语音功能，做类似 Typeless 的体验：对语音降噪、去除静默，交给 ASR 模型得到文本，再按文本与词库优化内容。词库可以预先准备，也可以是看动画时从 Bangumi 等处取得的专有名词（主角名、CV 名等）。同时要提供本地模型下载，并以标准的公共 API 形式接入外部模型。2026-11-13 用户提供了选型调研并要求继续。
 
-用户同时提出**轻量打开**：把 MANGA 作为文件的打开方式，例如打开一个视频时不运行整个 MANGA，只用 MANGA 的视频播放器打开，这个播放器只有单纯的播放功能，没有笔记、没有录音；漫画同样只用 MANGA 的漫画阅读器打开。
-
-同日用户追加两项：（1）录音的悬浮框记住上次拖到的位置，下次录音就在那里出现；不显示输入设备的名字，只用图案的深浅表示有声音输入；把它做小。（2）“最近”列表里的资源可以右键直接移除；“最近”和各个项目的进度各记各的，资源库里怎么显示进度还没想好，请 A 推荐。
-
-范围记为 **A-127**，轻量打开的设计记为 **A-128**，追加的两项记为 **A-129**（资源库显示各处看得最远的进度，见 4.10）。A 没说到的细节先定了默认值，登记为[用户待办的 Q-39](../../USER-ACTIONS.md#q-39)，B 按默认实现，用户以后可以改。需求是 READ-05（新增）、DATA-07（补充启动失败的退路）、VOICE-05（悬浮框）、LIB-03（资源库的进度）与 UI-10（从“最近”移除），验收是 [AT-164—AT-173](roadmap-and-acceptance.md#at-light-open)。
+范围记为 **A-130**，管线与选型记为 **A-131**。A 没说到的细节先定了默认值，登记为[用户待办的 Q-40](../../USER-ACTIONS.md#q-40)，B 按默认实现，用户以后可以改。待答的 Q-23 由这次要求答复：采用第 1—6 项。需求是 VOICE-10—VOICE-17（新增），验收是 [AT-174—AT-183](roadmap-and-acceptance.md#at-dictation)。
 
 本计划一次列出本阶段的全部交付、退出条件和收尾流程。B 连续完成全部工作包后一次交付，A 一次集中审查。人工检查与待决问题按 A-53 记在用户待办，不阻塞开发。
 
@@ -16,149 +12,158 @@
 
 | 项目 | 约定 |
 | --- | --- |
-| 阶段 | 发布流水线修复（R1）；更新后启动失败的退路（R2）；轻量打开：独立入口与打包（L1）、不依赖资料库的媒体服务（L2）、轻量视频播放器（L3）、轻量漫画阅读器（L4）、“打开方式”的注册（L5）、轻量进程的生命周期（L6）；门禁提速与两处小问题（G1）；录音悬浮框（V1）；从“最近”移除与资源库的进度（P1）；测试、走查与基准（T1）；文档（W1）；阶段开始的整理（C0）；依赖盘点（D1） |
-| 代码基线 | `main @ cfe76d4`（[PR #10](https://github.com/chialecode/manga/pull/10) 于 2026-11-09 squash 合并）；没有未合并的前置分支 |
-| 工作分支 | `feat/m11-release-light-open`，A 已从基线创建。本计划所在的提交是阶段提交的起点；B 的实施、A 的审查修复与人工反馈修复全部 amend 进同一提交 |
-| 关联需求 | 新增 READ-05（轻量打开）；DATA-07 补充“新版本启动失败时回到上一版”；DATA-06（安装包注册“打开方式”、卸载时清除）；受影响的既有行为：READ-02、READ-03 的播放器与阅读器组件被轻量窗口复用，完整应用里的行为不变；VOICE-05 的悬浮框改小、只记位置；LIB-03 的资源库进度改为各处看得最远的；UI-10 的“最近”可以移除资源；资料库结构升到 v15 |
-| 关联验收 | 新增 AT-164—AT-173；既有的全部窗口观察、`installer` 步骤与基准照常重跑 |
-| 可连续执行 | 本地实现；合成样本、测试、打包、基准、文档同步；第 5.1 节的整理；阶段提交与 amend |
-| 外部操作 | 未授权：push、PR、合并、触发 workflow。A 审查收敛后在用户待办登记一项授权请求（push、PR、合并，以及合并后以 `dry_run=true` 试运行一次 `release.yml`）。本阶段的测试不访问 GitHub；R1 的修复在本机用同一个下载脚本与锁文件验证，CI 上的验证在合并后的试运行里 |
+| 阶段 | 应用内听写的会话、入口与插入（U1）；采集前端（A1）；去除静默（S1）；识别引擎的能力描述与外部接口（E1）；本地推理进程（N1）；模型目录、下载与导入（M1）；词库扩展、schema v16 与 Bangumi 补全（X1）；音近召回与确定性替换（R1）；润色、防过度纠错与简繁（P1）；听写记录与从修改中学词（H1）；评测集与基准（Q1）；测试与走查（T1）；文档（W1）；阶段开始的整理（C0）；依赖盘点与新增依赖（D1） |
+| 代码基线 | `main @ 3b9d498`（上一阶段的 [PR #11](https://github.com/chialecode/manga/pull/11) 于 2026-11-12 squash 合并为 `f9aea92`，#12—#20 是发布流水线的追加修复，同日发布 v0.1.1）；没有未合并的前置分支 |
+| 工作分支 | `feat/m12-voice-dictation`，A 已从基线创建。本计划所在的提交是阶段提交的起点；B 的实施、A 的审查修复与人工反馈修复全部 amend 进同一提交 |
+| 关联需求 | 新增 VOICE-10—VOICE-17；受影响的既有行为：VOICE-03、VOICE-06 的转写可以改用本地引擎（块的切法与位置映射不变）；VOICE-09 的词典扩展为别名与读音；VOICE-01 的采集约束改为浏览器降噪默认关（录音笔记与听写共用）；资料库结构升到 v16 |
+| 关联验收 | 新增 AT-174—AT-183；既有的全部窗口观察、`installer` 步骤与基准照常重跑 |
+| 可连续执行 | 本地实现；新增第 3 节列出的依赖；下载钉住版本与哈希的模型与工具到 `dist/tools/`；合成样本、测试、打包、基准、文档同步；第 5.1 节的整理；阶段提交与 amend |
+| 外部操作 | 未授权：push、PR、合并、触发 workflow；真实服务的契约（[ACT-21](../../USER-ACTIONS.md#act-21)，可选）。A 审查收敛后在用户待办登记一项授权请求（push、PR、合并）。测试只用本地的假服务 |
 
 **退出条件与覆盖**
 
 | 条件 | 做法 | 工作包 | 验收证据 |
 | --- | --- | --- | --- |
-| 发布流水线能跑通 | FFmpeg 改钉月末构建并更新哈希；锁文件只接受月末构建的标签（检查随 `verify` 运行）；`release.yml` 在占用 Windows 运行器之前先核对三个工具的下载地址都还在，不在就以清楚的原因失败 | R1 | AT-164；合并后的试运行 |
-| 更新后启动失败能回到上一版 | 正式版更新前保留当前版本的安装包；新版本连续两次没能启动完成，下次启动先问用户是否回到上一版；回到上一版时按需恢复升级前的资料库备份，并且不再自动装回这个版本 | R2 | AT-165 |
-| “打开方式”里有 MANGA | 安装包把视频、漫画与图片类型注册进“打开方式”与“默认应用”的候选，不改任何默认；卸载时全部清除；两个通道与测试身份各用各的注册名 | L5 | AT-166 |
-| 轻量视频播放器 | 只有播放功能；不开资料库、不启动插件与 Agent、不联网；记住每个文件看到哪里；不能直接播放的文件按需生成播放副本 | L1、L2、L3、L6 | AT-167 |
-| 轻量漫画阅读器 | 只有阅读功能；CBZ、ZIP 与图片所在的文件夹；同上的隔离与记住位置 | L1、L2、L4、L6 | AT-168 |
-| 轻量窗口与完整应用互不影响 | 一个文件一个窗口，所有轻量窗口共用一个进程；与完整应用同时运行；开发版自动更新与正式版安装更新前先让轻量窗口记住位置后关闭 | L6 | AT-169 |
-| 轻量打开足够快、足够轻 | 冷启动到第一帧、第一页有门槛；轻量的主进程与界面打包后不含资料库、插件、Agent 与更新的代码 | L1、T1 | AT-170；`bench.json` |
-| 门禁提速与小问题 | 基准不改门槛与测量方法，去掉多余的等待与重复准备；LOOP-33、LOOP-34 修好 | G1 | AT-171；`gate-run.json` |
-| 录音悬浮框又小又记得位置 | 用真实的鼠标拖动找出位置没记住的原因并修好；悬浮框只剩随音量深浅变化的图案、时间与停止按钮 | V1 | AT-172 |
-| 从“最近”移除；资源库的进度 | “最近”的资源与作品右键“从最近移除”，进度与笔记不动；资源库的卡片、排序与作品主页按各处看得最远的进度显示，作品主页列出各处的位置（schema v15） | P1 | AT-173 |
+| 在 MANGA 里任何能打字的地方听写 | 按住快捷键说话、松开插入光标处；锁定免提；取消；焦点变化与输入法组合的处理；对话栏“问 Agent”的麦克风是听写；Agent 没有入口 | U1 | AT-174 |
+| 声音前端不伤识别 | 回声消除开、浏览器降噪关；可选系统回声消除与 GTCRN 回混降噪；媒体压低；音量过低与削波提示 | A1 | AT-175 |
+| 只送有声音的部分 | 首尾静音裁掉、长停顿压短、两侧留余量；整段无声不送；复述热词按无效 | S1 | AT-176 |
+| 本地与外部引擎同一套用法 | 能力描述决定送热词、提示还是上下文；OpenAI 兼容转录与对话接口的音频输入；听写与录音笔记各选引擎；不自动换服务 | E1 | AT-177 |
+| 本地模型可下载、可信、可删 | 用户确认后下载；Range 续传；固定 SHA-256；越界条目拒绝；本地导入；删除；不进安装包 | M1 | AT-178 |
+| 本地推理稳定 | `utilityProcess` 里的 sherpa-onnx；崩溃隔离与重启；闲置释放；完整应用与轻量入口不加载它 | N1 | AT-179 |
+| 词库认得作品里的人名 | 别名、误写、读音、类别、停用、批量导入；Bangumi 补全中文名、别名、假名与罗马字；当前作品的热词；v16 迁移 | X1 | AT-180 |
+| 纠错准而不乱改 | 音近召回与确定性替换；润色档位与可改的提示词；四道防过度纠错；简繁 | R1、P1 | AT-181 |
+| 改得回来、学得会 | 恢复原文与 Ctrl+Z；听写记录；从修改中学词 | U1、H1 | AT-182 |
+| 效果与速度可衡量 | 合成评测集与评测脚本；纠错样本集的门槛；两项新基准门槛与记录项 | Q1 | AT-183；`bench.json` |
 | 阶段开始的整理 | 上一阶段的报告提炼后删除；去掉以前阶段的标签；按内容整理文件 | C0 | 文档检查；报告的整理记录 |
-| 依赖盘点 | 按 A-35 与 ADR-0007 的复查条件逐项处理 | D1 | ADR-0007 版本表；完整回归 |
+| 依赖盘点 | 按 A-35 与 ADR-0007 的复查条件逐项处理；新增依赖按第 3 节 | D1 | ADR-0007 版本表；完整回归 |
 
-**阶段完成的判定。** 以下依次满足后，Agent 侧完成，可以请求用户授权 push、PR 与合并（A-24、A-53）：（1）B 自检的必需用例与门禁全部通过；（2）A 集中审查收敛。合并后以 `dry_run=true` 试运行一次 `release.yml`，通过后下一个周一的定时运行发布第一个正式版 `0.1.1`。人工检查与待答复问题记在用户待办，不是合并的前提；`productAcceptance` 保持 not-run。
+**阶段完成的判定。** 以下依次满足后，Agent 侧完成，可以请求用户授权 push、PR 与合并（A-24、A-53）：（1）B 自检的必需用例与门禁全部通过；（2）A 集中审查收敛。人工检查、ACT-21 的契约与待答复问题记在用户待办，不是合并的前提；`productAcceptance` 保持 not-run。
 
 **阶段完成后，用户可以：**
 
-- 在资源管理器里对视频、CBZ 或图片点右键 › 打开方式 › MANGA（或在“默认应用”里把它设为默认），只打开一个干净的播放器或阅读器，完整的 MANGA 不启动；再打开别的文件时，同一个轻量进程里多一个窗口，秒开；
-- 下个周一起收到第一个正式版，之后每周自动更新；万一新版本启动不了，下次打开时可以一键回到上一版；
-- 跑一次门禁的时间更短；
-- 录音时看到一个小小的悬浮框，有声音时图案变深；拖到哪里，下次就在哪里出现；
-- 在“最近”里右键把不想看到的资源移除；资源库里看到的是这部作品在各处看得最远的进度。
+- 在对话栏、笔记、文稿、白板、导图和搜索框里按住右 Alt 说话，松开就得到加好标点、去掉口水词、人名写对的文字；不满意可以一步回到原文；
+- 在“设置 › 语音转录”里一键下载本地模型，离线、免费地听写，也可以继续用自己的转录服务，或者接入阿里云百炼这类用对话接口识别音频的服务；
+- 看哪部作品，就自动用那部作品的角色名与声优名帮助识别；名字被写错后改一次，确认后下次就对了；
+- 外放看番时听写，MANGA 自己的视频声音不会被识别进去；
+- 录音笔记也可以改用本地模型转写。
 
 ## 2. A 已核对的现场
 
-- **发布流水线**：ACT-17 第（4）项的试运行（2026-11-08，run 42532664898）与 2026-11-09 的第一次定时运行（run 42568183042）都在 `check` 的“取得媒体前置”失败：`scripts/tools/ffmpeg.lock.json` 钉的是 BtbN 的每日构建 `autobuild-2026-10-01-13-06`，下载返回 404。BtbN 的每日构建大约只留两周，每月最后一天的构建留得很久（2026-11-09 查到最早的是 `autobuild-2024-12-31-13-02`）；`autobuild-2026-10-31-12-59` 里有同一系列的 `ffmpeg-n8.1.3-27-g8dca1586f4-win64-lgpl-shared-8.1.zip`。另外两个工具钉在固定提交（Silero VAD、思源黑体子集），地址都还在。本机门禁用 `dist/tools/` 里已经下载好的工具，所以没发现这个问题。`decide` 两次都通过，`build` 与 `publish` 都没运行，没有发布任何东西。
-- **主进程入口**（`apps/desktop/src/main/index.ts`，855 行）：顶层就导入 `@manga/app-core`（资料库、插件、Agent、更新），模块加载时就解析数据位置、写启动指针、取单实例锁。打包配置（`apps/desktop/vite.main.config.ts`）把主进程打成一个文件，并且 `inlineDynamicImports: true`：在同一个包里改成动态导入并不能推迟这些模块的加载，所以轻量打开要有**自己的入口文件**，见 4.1。界面只有一个入口（`forge.config.ts` 的 `main_window`）。
-- **播放器与阅读器**：`apps/desktop/src/renderer/readers/` 里的 `video-player.tsx`（634 行）与 `comic-reader.tsx`（682 行）依赖工作区的标签、标记、弹幕、截图与 Agent 的上下文；底下的钩子与小组件（`use-video-source`、`use-video-playback`、`use-subtitles`、`video-seekbar`、`video-time`、`video-volume`、`video-model`、`video-keys`、`comic-model`、`comic-page`、`use-page-sources`）通过 `lib/api.ts` 按命令名调用主进程，用到的命令是 `video.playbackPlan`、`video.playCopy`、`video.handle`、`video.subtitles`、`video.subtitleHandle`、`video.fonts`、`video.frameIndex`、`video.cancelFrameIndex`、`comic.pages`、`comic.pageHandles`。
-- **媒体服务**（`packages/app-core/src/`）：不碰资料库的有 `video/playback.ts`（`decidePlayback`）、`video/sidecars.ts`、`video/cues.ts`、`media/ffmpeg.ts`（探测）、`media/handles.ts`、`media/serve.ts`、`media/zip-pool.ts` 与 `comic/scan.ts` 的类型判断；按资源编号读资料库的是 `video/service.ts`、`video/play-copy.ts` 与 `comic/service.ts`。
-- **类型**（`comic/scan.ts`）：视频 13 种扩展（`.mkv .mp4 .m4v .mov .avi .webm .ts .m2ts .flv .wmv .ogv .mpg .mpeg`），图片 11 种，归档 `.cbz .zip`。
-- **安装包的文件关联**：electron-builder 26.18.0 自带的 `fileAssociations` 在 NSIS 里用 `APP_ASSOCIATE` 宏，它会写 `Software\Classes\.<扩展名>` 的默认值，也就是把这个类型的默认程序抢过来，卸载时也不还原（`node_modules/app-builder-lib/templates/nsis/include/FileAssociation.nsh`）。所以本阶段**不用**它，见 4.5。安装包已有自己的 NSIS 片段（`installer-lib.mjs` 生成的 include），按用户安装，写 `HKCU`。
-- **更新的现状**：正式版下载与验签后由 MANGA 执行安装（A-125）；electron-updater 的缓存目录里有当前版本的安装包（差分下载的基准）；每次结构升级前自动留 `manga.sqlite.premigrate-v<旧版本>`；较旧的应用拒绝打开较新的资料库。还没有“新版本启动失败”的任何处理（LOOP-32）。
-- **录音悬浮框**（`apps/desktop/src/main/overlay.ts`、`overlay-model.ts`）：独立的置顶窗口，默认 280×84，内容是红点、“录音中”、时间、音量条、一行“方式 · 保留与否 · 设备名”与“停止”按钮，整块可拖动（`-webkit-app-region: drag`）。窗口的 `moved` 事件后 400 ms 把位置与大小写进录音设置的 `overlay`，下次打开时 `placeOverlay` 用它（还在某个屏幕上才用）。没有任何用例用真实的鼠标拖动过它；`close()` 会丢掉还没写的那一次保存，所以拖完 400 ms 内停止录音，位置就丢了。用户反馈拖过之后下次不在原处，确切原因由 B 用真实拖动查明。
-- **“最近”与进度**：进度表 `progress` 按“上下文 + 资源 + 版本”各记一行，“最近”是上下文 `''`（A-96）。“最近”的媒介列表直接取上下文 `''` 的进度行，一部作品只列一次（A-105），没有移除的办法；项目的列表来自项目材料，右键已有“从项目移除”。资源库的卡片、按进度排序与作品主页用视图 `progress_latest`，即最近一次有动作的那一行，并注明来自哪个项目；防剧透按各处看得最远的位置（Q-33）。所以在一个项目里从头翻了一下，资源库就显示 1%。
-- **门禁用时**（上一阶段最终门禁，`docs/evidence/gate/gate-run.json`）：整套 2149 s；`bench` 588 s，最慢的几段是工作区 145 s、规模窗口 137 s、扫描与停靠栏 103 s、阅读器 79 s；`package` 每次约 340—350 s。
-- **本地参考**：按开发流程 2.5 从仓库根向上找到参考索引，里面没有文件关联、轻量播放器或更新回退的条目，记为“未找到对应参考”。
+- **采集**（`apps/desktop/src/renderer/voice/mic.ts:13`）：`getUserMedia` 的约束是 `{ channelCount: 1, echoCancellation: true, noiseSuppression: true }`，没写 `autoGainControl`（Chromium 默认开）。`pcm-worklet.ts` 转 16 kHz 单声道 16 位 PCM，经 `capture.append` 分块交给主进程。录音笔记与对话栏麦克风共用这条链路。
+- **静默与转写**（`packages/app-core/src/voice/`）：`vad-client.ts` 在 `worker_threads` 里用 onnxruntime-web 跑 Silero VAD；`vad-segmenter.ts` 两侧各留 300 ms、1.5 s 内合并；`chunks.ts` 单块不超过 30 s；`transcribe.ts` 每块带词典提示（`dictionary.prompt(workId, limit)`），识别结果只复述提示时记为 `prompt-echo` 并在重试时不带提示。
+- **端口**（`voice/ports.ts`）：`AsrPort` 只有 `resolve` 与 `transcribe(connection, { fileName, bytes, mimeType, prompt, language, timestamps, signal })`，由 `product-app.ts` 的 `asrPort(this)` 实现为 OpenAI 格式的 multipart 转录；`LlmPort.complete` 只收 `system` 与 `user`，没有温度等选项。注释写明：音频只经所选的一个转录连接离开本机，不回退到别的服务，不送给文本模型。
+- **词典**（`voice/dictionary.ts`）：表 `dictionary_terms`（`scope`、`work_id`、`term`、`heard`、`source`，上限 5000 条）；`termsFromMetadata` 从作品已缓存的 Bangumi 快照取作品名、别名、角色名（`subject_characters.name`，即 `/v0/subjects/{id}/characters` 返回的日文原名）与声优名；手写词条优先，刷新只增删自动词条。
+- **Bangumi**（`metadata/bangumi.ts`、`metadata/bangumi-openapi.ts`）：客户端已有 `characters(subjectId)`；OpenAPI 类型里有 `/v0/characters/{id}` 与 `/v0/persons/{id}`，但客户端还没调用它们。
+- **子进程与打包**：`apps/desktop/src/main/plugin-process.ts` 用 `utilityProcess.fork` 运行插件，可作为推理进程的样板；`apps/desktop/vite.main.config.ts` 的 `NATIVE` 列表（`better-sqlite3`、`sharp`、`@napi-rs/canvas`、`electron-updater`）不打进包，`bundleWorker` 把独立运行的 worker 打成单个 CJS 文件；轻量打开有 `checkLightClosure` 与打包的 `light-boundary` 两道检查。
+- **可输入文字的地方**：对话栏 `components/chat/composer.tsx` 与收起时的 `capsule.tsx`（textarea）、笔记 `note-editor.tsx` 与文稿 `pages/projects/copy/draft-editor.tsx`（Tiptap 与 CodeMirror 共用块状态和输入法屏障）、白板 `canvas/whiteboard-nodes.tsx` 与导图 `canvas/mindmap-tab.tsx`（textarea）、搜索框 `search-box.tsx`。键位在单一键位表里，“设置 › 键盘快捷键”是 `pages/settings/shortcuts-page.tsx`；录音的 `holdKey`（F9）与 `toggleKey`（F8）只在应用内有效。
+- **资料库**：`packages/storage-drizzle/src/sql.ts` 的 `PRODUCT_SCHEMA_VERSION = 15`；迁移的备份、可中断重做与旧版拒绝打开都有现成机制。
+- **合成语音**：`scripts/samples/generate-media-samples.mjs` 已用 Windows 自带的 `System.Speech` 合成 16 kHz 单声道语音；打包烟测的 voice 阶段用 Chromium 的假采集设备播放它。
+- **系统工具**：Windows 自带 `%SystemRoot%\System32\tar.exe`，本机为 bsdtar 3.8.9（libarchive，含 bz2lib 1.0.8）。
 
-## 3. 开源查证（2026-11-09）
+## 3. 开源查证（2026-11-12、2026-11-13）
 
-查询来源是官方文档与上游仓库，日期为 2026-11-09。本阶段**不新增依赖**：用到的都是现有依赖或 Windows 与 Electron 自带的能力。
+依据是用户 2026-11-13 提供的选型调研（查询日期 2026-11-12，各项附官方链接），A 在 2026-11-13 复核了下表中的版本、许可与模型哈希：npm 注册表，以及 sherpa-onnx `asr-models` 与 `speech-enhancement-models` 两个 Release 的 `checksum.txt`。调研中标为“未证实”的项目，由 B 在本机实测补齐（见表中的“B 实测”）。
 
 | 需要 | 候选与依据 | 判断 |
 | --- | --- | --- |
-| FFmpeg 的固定版本 | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) 的 Releases：每日构建约两周后删除，月末构建长期保留（2026-11-09 用 GitHub API 列出，最早到 2024-12-31） | **继续用 BtbN 的 LGPL shared 构建，改钉月末构建**。gyan.dev 的构建是 GPL，与已定的 LGPL（Q-17）不符；自己编译 FFmpeg 或把压缩包放进本仓库的 Release 要么成本高，要么需要额外的发布授权，不采用 |
-| 工具的缓存 | `actions/cache` | **本阶段不用**：要改 Actions 允许列表（仓库设置，需要授权）；月末构建加上提前核对地址已经够用。以后有需要再作为单独的授权项 |
-| “打开方式”的注册 | electron-builder 的 `fileAssociations`（见第 2 节，会抢默认程序）；Windows 的做法：[File Types](https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types)（`OpenWithProgids` 列出候选程序，`HKCU\Software\Classes` 只对当前用户生效，改完调用 `SHChangeNotify(SHCNE_ASSOCCHANGED)`，卸载时删自己的 ProgID）与 [Default Programs](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs)（`Capabilities` 加 `RegisteredApplications` 让程序出现在“默认应用”的候选里；“默认应用的选择应当由用户决定”） | **在现有的 NSIS 片段里自己写注册**：只加 `OpenWithProgids`、自己的 ProgID、`Applications\<可执行文件>` 与 `Capabilities`，绝不写扩展名键的默认值；卸载时删掉这些。Windows 10 起程序不能自己把自己设为默认，由用户在“打开方式”或“默认应用”里选 |
-| 轻量进程的单实例 | Electron 45 的 `app.requestSingleInstanceLock` 与 `second-instance`（[文档](https://www.electronjs.org/docs/latest/api/app)）。文档没有写锁的范围；Chromium 按用户数据目录区分单实例 | **轻量进程先把 `userData` 设到自己的目录再取锁**，与完整应用各持各的锁。B 必须用打包产物的测试证明两边能同时持锁、第二次打开轻量文件进入同一个轻量进程；证明不了就停下来报告，不改用别的猜测 |
-| 轻量界面 | 复用现有的 React 组件与钩子，新增一个渲染入口 | 不引入新的播放器库：现有的播放、字幕与漫画组件已经过门禁，换库会让两套播放器行为不一致 |
-| 启动失败的退路 | electron-updater 没有回退功能；NSIS 安装包可以覆盖安装较旧的版本 | **自己写**：更新前保留当前版本的安装包与它的哈希，启动标记由新的引导入口记录（4.2） |
+| 本地推理运行时 | [`sherpa-onnx-node`](https://www.npmjs.com/package/sherpa-onnx-node) 2.0.1 与 `sherpa-onnx-win-x64` 2.0.1（Apache-2.0，2026-10-26 发布，已满 14 天）；Node-API 插件，win-x64 解压约 23 MB（含 onnxruntime 1.28.2）；npm 包只有 CPU；Electron ≥ 21 的 V8 内存笼要求返回音频的接口传 `enableExternalBuffer: false` | **采用**，在 `utilityProcess` 里运行。**B 实测**：打包后的 Electron 45 能否在 `utilityProcess` 里载入并识别。证明不了就停下来报告 A，不改用别的猜测方案 |
+| 本地 ASR 模型 | sherpa-onnx 的 [Qwen3-ASR](https://k2-fsa.github.io/sherpa/onnx/qwen3-asr/index.html)、[Fun-ASR-Nano](https://k2-fsa.github.io/sherpa/onnx/funasr-nano/index.html) 文档；权重许可：Qwen3-ASR-0.6B 与 Fun-ASR-Nano-2512 都是 Apache-2.0；公开评测见 Qwen3-ASR 技术报告（arXiv:2601.21337）与 Fun-ASR-Nano 模型卡。`checksum.txt`（2026-11-13 复核）：`sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2` `393f8a14e2f5fb96746aaab342997a40641001fbd5bf9592a080a8329178ee96`；`sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2` `257936ea9a64cbe33200274e6367fc26d373ff6ca58b996b15108ffd6b9f6148`；`sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2` `eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b` | **目录收这三个**：Qwen3-ASR-0.6B int8（推荐，热词经 `stream.setOption("hotwords", …)`）；sense-voice-funasr-nano int8（极速，CTC，无热词）；Fun-ASR-Nano int8（热词与提示）。**不收**：2024 版 SenseVoice-Small 与 Paraformer（权重为 FunASR `MODEL_LICENSE v1.1`，含“仅供参考与学习”的条款）、FireRedASR（不支持日语）、Whisper（sherpa-onnx 的 C 接口不能传 `initial_prompt`）。**B 实测**：三个模型在本机 CPU 上的载入时间、内存、10 s 语音的用时，以及 Node 接口的配置键名与每次识别时设置热词的方法 |
+| 模型分发 | sherpa-onnx [GitHub Releases `asr-models`](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models)（覆盖全部三个模型与 `checksum.txt`；国内不稳定）；ModelScope `csukuangfj/asr-models`（国内直连，调研称含 funasr-nano-int8、不含 qwen3-asr，API 返回 SHA-256，支持 Range）；Hugging Face 的部分新仓库匿名访问返回 401 | **GitHub 是每个模型的基准来源**，哈希以它的 `checksum.txt` 为准；ModelScope 上的文件只有在 SHA-256 与 GitHub 完全相同时才列为另一个来源（**B 实测**后写进目录）；不用 Hugging Face。不自建镜像（需要额外的发布授权） |
+| 解压 `.tar.bz2` | Windows 10 1803 起自带的 `tar.exe`（bsdtar，libarchive，本机 3.8.9 含 bz2）；npm 上的 bz2 解压库较旧 | **用系统的 `tar.exe`**，按绝对路径调用；先 `-tvf` 列出条目，拒绝绝对路径、盘符、`..` 与链接，再解压。没有 `tar.exe` 时说明原因，并提示改为导入解压好的文件夹 |
+| 降噪 | [GTCRN](https://github.com/Xiaobin-Rong/gtcrn)（模型 MIT，`gtcrn_simple.onnx` 536 KB，16 kHz，sherpa-onnx 内置 `OfflineSpeechDenoiser`；`speech-enhancement-models` 的 `checksum.txt` 中哈希为 `e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534`）；RNNoise（固定 48 kHz）；DeepFilterNet（官方 2023 年后未再发版、无官方 npm 包）。公开实验（arXiv:2501.02452、arXiv:2512.17562、arXiv:2607.11157）显示全强度单通道降噪会让现代 ASR 变差，与原声混合可以挽回 | **GTCRN 作为可选项，默认关**，在推理进程里运行，输出按 75% 降噪与 25% 原声混合；随安装包附带（536 KB，附许可声明）。不采用 RNNoise 与 DeepFilterNet |
+| 浏览器音频处理 | Chromium 的 `echoCancellation: true` 以本应用的音频输出为参考信号（覆盖 MANGA 自己播放的视频）；`echoCancellation: "all"` 自 M141 起在 Windows 上可用（系统回环为参考，源码固定增加 170 ms 延迟）；`noiseSuppression: true` 在源码里固定为 `kHigh`，没有强度可调；`voiceIsolation` 依赖硬件，不可靠 | 回声消除默认 `true`；“消除其他应用的声音”打开时用 `"all"`；**降噪默认关**；不用 `voiceIsolation`。**B 实测**：Electron 45 里 `"all"` 被接受（`getSettings()` 的回显），以及类型声明的补充 |
+| 中文读音 | [`pinyin-pro`](https://github.com/zh-lx/pinyin-pro) 3.29.5（MIT，2026-10-10；官方基准的多音字准确率 99.846%，可拆声母、韵母与声调） | **采用** |
+| 日文读音 | [`wanakana`](https://github.com/WaniKani/WanaKana) 5.3.1（MIT，2023-11-20 之后没有新版本，但功能单一且稳定：假名与罗马音互转）；日文汉字注音的 `lindera-wasm-nodejs-ipadic` 2.0.0（MIT，gzip 约 4 MB）；`kuroshiro` 加 `kuromoji`（多年未维护，载入后内存很大） | **采用 `wanakana`**。汉字注音本阶段不做（Bangumi 的“纯假名”“罗马字”别名已能覆盖多数角色），登记为 LOOP-39；不采用 kuromoji |
+| 音近召回 | [`HaujetZhao/asr-hotword`](https://github.com/HaujetZhao/asr-hotword)（MIT，Python，最近提交 2026-06）：声母、韵母、声调的模糊匹配（平翘舌、前后鼻音），音节 2-gram 倒排粗筛，加权编辑距离局部对齐，黑名单。npm 上没有宽松许可的同类 JS 库 | **把算法移植为 TypeScript**，文件头与第三方声明里保留 MIT 许可与来源（含所依据的提交）。编辑距离与多模式匹配自己写在移植里，不另加库 |
+| 简繁 | [`opencc-js`](https://github.com/nk2028/opencc-js) 1.4.2（代码 MIT、词典 Apache-2.0，2026-08-22） | **采用** |
+| 外部接口 | OpenAI `/v1/audio/transcriptions`（`prompt` 有效；Groq、硅基流动、whisper.cpp 服务兼容，后两者不支持或不用 `prompt`）；阿里云百炼兼容模式**没有** `/audio/transcriptions`，`qwen3-asr-flash` 走 `/chat/completions` 的 `input_audio`，热词与背景写在 system 消息里；火山引擎是私有的 WebSocket 协议 | **支持两种标准形态**：已有的转录接口，新增对话接口的 `input_audio`。私有协议与流式识别登记为 LOOP-37 |
+| 润色与防过度纠错 | HyPoradise（arXiv:2309.15701）、SoftCorrect（arXiv:2212.01039）、RobustGER：只把可疑位置交给模型、高置信的字照抄，能减少误改 | **润色走已有的文本连接**，加四道防线（4.9）。本地 LLM（`node-llama-cpp` 3.22.3，MIT）不在本阶段（LOOP-38） |
+| 全量 ACG 词库 | [`bangumi/Archive`](https://github.com/bangumi/Archive)（每周构建，压缩约 330 MB；维基数据 CC BY-SA，要求署名并开放派生数据） | 本阶段不做（LOOP-39）。只在用户的作品上用 API 补全 |
 
 ## 4. 设计
 
-### 4.1 独立入口与打包（L1）
+### 4.1 听写会话、入口与插入（U1）
 
-- **引导入口**：新增 `apps/desktop/src/main/bootstrap.ts`，作为打包后的主进程入口（`main.cjs`）。它只用 Node 与 Electron 自带的模块，完成两件事：（1）按命令行选择 `light-main.cjs`（带 `--manga-light`）或 `full-main.cjs`（其余情况，包括 `--manga-smoke` 与 `--quit-for-update`）；（2）正式版的启动标记（4.2）。现有的 `index.ts` 改为完整应用的入口，行为不变。
-- **分开打包**：Forge 的 Vite 插件为完整应用、轻量与引导各打一个主进程文件；轻量另有自己的 preload（`preload-light.ts`）与渲染入口（`light_window`：`src/light/index.html`）。
-- **边界**：轻量的主进程只能导入新的 `@manga/app-core/light` 子路径（4.2 的媒体服务）与 Electron；轻量的界面只能导入 `renderer/readers/` 的钩子与小组件、`renderer/components/` 的基础控件和主题样式，不能导入工作区、Agent、笔记、录音、弹幕、截图、资料库的模块。用依赖边界检查（随 `verify` 运行）与打包产物的检查双重保证：打包后的 `light-main.cjs` 与轻量界面的产物里不能出现 `better-sqlite3`、`drizzle`、`MangaProductApp`、插件运行时、Agent 运行时与 `electron-updater`。
-- **命令行**：`<可执行文件> --manga-light "<文件>"`；不带文件时打开一个空窗口，可以拖文件进来或点“打开文件…”。只认 4.5 列出的类型，其他文件给出“轻量打开不支持这种文件”并说明能打开哪些。
+- **与录音笔记分开。** 新增 `packages/app-core/src/voice/dictation/` 与命令 `dictation.start`、`dictation.append`、`dictation.stop`、`dictation.cancel`、`dictation.status`；不写 `capture_sessions`，没有位置事件。属于模块 `manga.voice`（Facet `service`/`ui`），模块停用时听写不可用，迟到的结果按代次丢弃。这些命令只给界面用，Agent 的工具与命令访问里都没有，由用例证明。
+- **阶段：** recording → trimming → recognizing → correcting → polishing → done，另有 no_speech、failed、cancelled；每步通过 `dictation.changed` 通知界面，带原文、替换后的文字、最终文字与退回原因。音频留在内存里，单次最长 5 分钟，到时自动结束并说明。
+- **按键：** 在单一键位表里新增“按住听写”（默认右 Alt）、“锁定听写”（快速按两下）与“取消”（Esc，只在听写时生效）。B 先实测右 Alt：单独按下不能触发菜单、不能打断输入法、按住时不能反复触发；做不到时默认改为 F7，并在 Q-40 第 2 项写明。录音笔记的 F8、F9 不变。
+- **插入目标：** 按下听写键时，记下获得焦点的可编辑元素与选区。界面新增一个插入适配层：textarea 与 input 用 `setRangeText` 并派发 `input` 事件，让 React 状态跟上；Tiptap 与 CodeMirror 用各自的事务。每个插入都返回一个句柄，可以整段替换（原文换成润色结果，或恢复原文），每次替换是一个撤销步骤。结束时元素还在，就插回记下的选区（那里的文字被改过时，插到当前光标处）；元素已经不在（标签关了），就在提示里显示结果并提供“复制”。输入法正在组合时，等组合结束才开始录音。
+- **对话栏：** `composer.tsx` 与 `capsule.tsx` 的麦克风在“问 Agent”时是听写，文字填进输入框、不发送；在“笔记”时仍是现在的录音笔记。
+- **出字：** 默认先插入识别的原文，再原地换成最终文字；设置里可以改为等最终文字再插入。插入后 10 s 内，出字处有一个小提示：“已润色 · 恢复原文”（有替换时还可以展开，看每处替换依据的词条）。
+- **指示：** 获得焦点的面板底部中间显示一个小胶囊：录音时是随音量变化的麦克风图案与时长，之后依次是“识别中”“润色中”；锁定时多一个“结束”按钮。录音悬浮框（VOICE-05）只属于录音笔记，听写不用它。
 
-### 4.2 更新后启动失败的退路（R2，LOOP-32）
+### 4.2 采集前端（A1）
 
-- **更新前保留上一版**：正式版在执行新版本的安装包之前，把当前版本的安装包（electron-updater 缓存里的那一份）复制到 `%LOCALAPPDATA%\manga\cache\updater\previous\`，记下版本号与 SHA-512；同一时间只留一份。没有这份安装包时（例如第一次是手动安装、缓存被清掉）照常更新，只是之后不提供一键回退，改为给出下载页链接。
-- **启动标记**：引导入口在加载完整应用之前，把“版本、第几次尝试”写进 `runtime\launch-attempt.json`；完整应用的窗口就绪（现有的 `instanceReady`）后删掉它。只对更新后的前三次启动计数，开发版与测试身份的 `pnpm dev` 不做。
-- **询问**：同一个新版本连续两次没能启动完成，第三次启动时引导入口在加载任何别的代码之前弹出系统对话框：“MANGA 0.1.y 上次没能正常启动。” 按钮是“回到 0.1.x”“再试一次”“打开下载页”。不自动回退。
-- **回到上一版**：先核对保留的安装包的 SHA-512 与记录相同（不同就不执行，改为给出下载页）；新版本若升级过资料库，说明“会恢复更新前自动备份的资料库，更新后的改动会丢失”，把现在的资料库改名留下（`manga.sqlite.rolledback-<时间>`），用 `manga.sqlite.premigrate-v<旧版本>` 恢复；然后静默运行上一版的安装包并重新打开。回退之后，自动更新跳过这个版本，等有更新的版本时才再更新；“设置 › 更新”里显示“已跳过 0.1.y”，可以手动取消。
-- **演练**：测试身份的正式版装 A、更新到 B，B 由测试专用的开关在启动时退出（只对测试身份生效，正式身份忽略），两次之后第三次启动出现询问；选回退后是 A、资料库是升级前的备份、操作日志里有记录；选“再试一次”时不回退。
+- `mic.ts` 的约束改为：`echoCancellation` 取设置（默认 `true`，“消除其他应用的声音”打开时为 `"all"`）、`noiseSuppression: false`、`autoGainControl: true`、`channelCount: 1`。补 `MediaTrackConstraints` 的类型声明。录音笔记与听写共用，开始采集后用 `getSettings()` 记下实际生效的值，写进调试面板。
+- 环境降噪（GTCRN）默认关，打开后在推理进程里处理裁剪后的音频，输出为 `0.75 × 降噪 + 0.25 × 原声`，混合比是一个有单元用例的常量。外部引擎也先经过这一步（推理进程要先启动）。
+- 听写与录音笔记期间，压低或暂停 MANGA 里正在播放的视频，沿用现有的 `duckPlayback`。
+- 音量提示：整段人声的峰值低于 −30 dBFS 时提示“声音很小”，超过 1% 的样本到达满幅时提示“声音过大”。提示不阻止识别。
+- 评测（4.11）比较浏览器降噪开与关、自动增益开与关、环境降噪开与关，结果写进报告。评测显示默认值不合适时，交给 A 决定是否改，B 不自行改。
 
-### 4.3 不依赖资料库的媒体服务（L2）
+### 4.3 去除静默（S1）
 
-- **位置**：`packages/app-core/src/light/`，由子路径 `@manga/app-core/light` 导出，只依赖第 2 节列出的不碰资料库的模块。
-- **会话**：`openFile(path)` 判断类型，返回一个会话编号（只在本进程内有效，代替资源编号）与基本信息；不写任何资料库。
-- **视频**：用 FFmpeg 探测，`decidePlayback` 决定直接播放、重封装或需要播放副本；同名外挂字幕（`sidecars`）与内嵌字幕、字体附件；逐帧所需的帧索引放在内存里。
-- **播放副本**：与完整应用同一套生成规则，但索引是轻量自己的一个 JSON 文件，不是资料库表；放在轻量的缓存目录，上限 2 GB，超过时删最久没用的。只在用户点“转换后播放”后生成。B 可以把 `video/play-copy.ts` 的存储抽成接口，让完整应用与轻量各用一种实现，但完整应用的行为与它的全部用例不能变。
-- **漫画**：CBZ 与 ZIP 用现有的 `ZipPool`；图片文件打开它所在的文件夹，按完整应用同样的自然排序列出图片，从这一张开始；页面句柄与完整应用同一套 `manga-media` 协议。PDF、EPUB、MOBI 漫画不在轻量里打开（Q-39 第 1 项）。
-- **命令**：轻量主进程只应答 4.3 需要的这些命令，命令名与返回格式与完整应用相同（第 2 节列出的那些），这样现有的钩子不用改；契约在 `packages/contracts/src/` 里共用，用例比对两边的返回格式。其他任何命令一律拒绝。
-- **上一个与下一个**：视频按同一个文件夹里的视频文件、漫画按同一个文件夹里的 CBZ/ZIP 或子文件夹，用自然排序。
+- 结束后用现有的 Silero VAD 对整段音频做一次筛选，复用 `vad-segmenter` 的参数：两侧各留 300 ms，长于 1 s 的停顿压成 400 ms 的静音，拼成一段送识别。
+- 没有任何人声段：不送识别，提示“没有听到声音”，记为 no_speech。
+- 识别结果只复述热词、提示或词条（沿用 `prompt-echo` 的判断，推广到热词列表）时按无效处理：不插入，提示“没有听清，请再说一次”。
+- 锁定免提时不会因为停顿自动结束，只有单次 5 分钟的上限。
 
-### 4.4 轻量视频播放器与漫画阅读器（L3、L4）
+### 4.4 识别引擎的能力描述与外部接口（E1）
 
-- **窗口**：应用绘制的标题栏与窗口按钮（与完整应用同样的样式与 Windows 11 贴靠行为），标题是文件名；“…”菜单里有“打开文件…”“在资源管理器中显示”“关于”。可以把文件拖进窗口换成它。主题跟随系统的深浅色（Q-39 第 9 项）。
-- **视频**：播放与暂停、进度条与时间（可编辑的时间跳转）、音量与静音、倍速（R 与菜单）、←/→ 跳 5 秒、按住 → 临时倍速、逐帧、全屏与窗口全屏、音轨、字幕（内嵌与同名外挂，ASS 原样渲染，可关）、上一集与下一集（同一个文件夹）、不能直接播放时说明原因并提供“转换后播放”。键位与完整应用的默认键位表相同，只是没有截图、弹幕与录音的键。**没有**：弹幕、截图、笔记、录音、Agent、作品与元数据、加入粗剪。
-- **漫画**：翻页、阅读方向（默认从右到左）、单页、双页与长条、适配与缩放、全屏、页码跳转、上一卷与下一卷。**没有**：区域选取、截图、笔记、Agent、作品与元数据。
-- **记住位置**：每个文件记住看到哪里（视频的时间、漫画的页码）。存在轻量自己的 `positions.json` 里，键是“小写的完整路径 + 大小 + 修改时间”的 SHA-256，**不存文件名与路径**；最多 500 条，超过时删最久没打开的。续播规则与完整应用相同。不进入完整应用的资源库与进度。
-- **实现方式**：复用第 2 节列出的钩子与小组件，各写一个轻量的外壳组件（`LightVideoPlayer`、`LightComicReader`），不在完整应用的 `VideoPlayer`、`ComicReader` 里加“轻量模式”的分支。需要从大组件里抽出的公共部分（例如控制条的布局）可以抽，完整应用的界面与它的全部窗口观察不能变。
+- 新增 `AsrEngine`，统一本地引擎与外部连接。每个引擎有一份能力描述：`hotwords`（最多几个，0 为不支持）、`promptChars`（提示的上限，0 为不支持）、`context`（能否在 system 消息里写背景）、`language`、`timestamps`、`maxUploadBytes`、`maxSeconds`。
+- 按能力生成词库提示：热词（本地的 Qwen3-ASR 与 Fun-ASR-Nano，用逗号分隔，最多 50 个）；提示（OpenAI 兼容转录，沿用现有按模型限制截取的提示）；背景（对话接口，system 消息写“可能出现的专有名词：…”，最多 50 个）。都不支持的引擎不送任何提示。
+- 外部连接：转录连接新增一个“接口形态”选项。“转录接口”是现有的 multipart `/audio/transcriptions`；“对话接口的音频输入”是 `/chat/completions`，消息里带 `input_audio`（WAV 的 base64），取回复的文本。连接测试对两种形态都用一段合成语音。
+- 现有的 `AsrPort` 改为基于 `AsrEngine`：录音笔记也可以选本地引擎，块仍不超过 30 s，位置映射不变。
+- 设置分别选“听写用的引擎”与“录音笔记用的引擎”，可选项是已装的本地模型与已配置的转录连接。所选引擎不可用（没配置、连接失败、模型没装或载入失败）时说明原因并给出设置入口，不换到另一个服务。
 
-### 4.5 “打开方式”的注册（L5）
+### 4.5 本地推理进程（N1）
 
-- **注册的类型**（Q-39 第 2 项）：视频 13 种（第 2 节）；漫画 `.cbz`；图片 `.jpg .jpeg .png .webp .avif .gif .bmp`（打开它所在的文件夹为漫画）。`.zip` 与文件夹不注册（`.zip` 太通用），但可以拖进轻量窗口或用“打开文件…”打开。
-- **写什么**（都在 `HKCU`，安装时写、卸载时删）：
-  - ProgID：正式版 `MANGA.Video`、`MANGA.Comic`、`MANGA.Image`；开发版 `MANGA.Dev.*`；测试身份 `MANGA.Test.*`、`MANGA.DevTest.*`。各自有说明、图标与 `shell\open\command` = `"<可执行文件>" --manga-light "%1"`。
-  - 每个扩展名在 `Software\Classes\.<扩展名>\OpenWithProgids` 下加自己的 ProgID（空值）。**绝不写扩展名键的默认值。**
-  - `Software\Classes\Applications\<可执行文件名>`：`FriendlyAppName`（“MANGA”或“MANGA Dev”）与 `SupportedTypes`。
-  - `Software\MANGA\<通道>\Capabilities`（`ApplicationName`、`ApplicationDescription`、`FileAssociations`）与 `Software\RegisteredApplications` 里的一项，让 MANGA 出现在“设置 › 应用 › 默认应用”的候选里。
-  - 写完与删完都调用 `SHChangeNotify(SHCNE_ASSOCCHANGED)`。
-- **卸载**：删除上面全部；扩展名键的默认值不碰（它本来就不是 MANGA 写的）。用户把 MANGA 设为默认后再卸载，由 Windows 按自己的规则重新询问。
-- **覆盖安装**：重写同样的内容，结果与全新安装相同。
-- **检查**：`stage installer` 在安装后核对测试身份的这些注册都在、扩展名键的默认值没有变化，卸载后核对全部消失；真实身份的快照（A-125 的 4.8）加入真实身份的 ProgID、`OpenWithProgids` 值、`Applications` 与 `Capabilities`，前后必须相同。安装器配置的检查（`checkInstallerConfig`）拒绝出现 `fileAssociations` 与任何写扩展名默认值的语句。
+- 新入口 `apps/desktop/src/main/asr-host.ts`，由 `bundleWorker` 打成 `asr-host.cjs`。第一次需要时用 `utilityProcess.fork` 启动（`serviceName: "MANGA speech"`），经 MessagePort 通信。`sherpa-onnx-node` 加进 `NATIVE`，打包时 `sherpa-onnx-node` 与 `sherpa-onnx-win-x64` 两个包都放在 asar 之外。
+- 请求：`load(modelId, kind, files)`、`recognize(samples, { hotwords, language })`、`denoise(samples)`、`unload`、`ping`。一次一个请求，排队处理。取消听写只丢弃结果；正在识别时退出应用，就结束这个进程。
+- 每种模型的 `OfflineRecognizer` 配置与“每次识别设置热词”的方法，由 B 按 sherpa-onnx 2.0.1 的源码与示例核实后写进报告。所有返回音频的接口都传 `enableExternalBuffer: false`。
+- 闲置 10 分钟（可设置）后卸载模型，进程随之退出。进程崩溃时这次听写失败并说明原因，下一次重新启动进程；同一个模型 1 分钟内崩溃两次，就标为“载入失败”，在设置里说明。
+- 边界：完整应用的主进程包与轻量打开的闭包都不得包含 `sherpa-onnx-node`，由 `check-deps.mjs` 与打包产物检查共同保证。推理进程不访问资料库与网络。
 
-### 4.6 轻量进程的生命周期（L6）
+### 4.6 模型目录、下载与导入（M1）
 
-- **一个轻量进程、多个窗口**：轻量进程把 `userData` 设到 `%LOCALAPPDATA%\manga\light\runtime`（开发版在 `manga-dev\light\`，测试身份在各自的目录下），再取单实例锁；后来的 `--manga-light` 调用通过 `second-instance` 在已有进程里开新窗口。最后一个窗口关掉，进程退出。
-- **数据只在一处**：轻量只写 `<应用数据根>\light\`（`runtime`、`positions.json`、`cache`、`logs`）。不解析也不写完整应用的启动指针，不建资料库，不在“文档”和“下载”里建任何东西，不联网。
-- **与完整应用并存**：两个进程互不等待、互不影响；完整应用的单实例与 `second-instance` 行为不变。
-- **更新与开发版自动更新**：轻量进程在自己的 `runtime` 里写运行标记（进程号、可执行文件、通道），并监听同样的退出请求。`stage install-dev` 与正式版的“重启以更新”或退出时安装，在执行安装包之前先请轻量进程记住位置后退出（10 秒内）；退不出就不安装，说明“请先关闭轻量播放窗口”，完整应用的更新留到下次退出时。轻量窗口不在更新后自动重开。轻量进程自己不检查更新。
-- **单独运行时**：只开着轻量窗口、完整应用没运行时，不发生任何更新动作。
+- 目录写在代码里（`packages/app-core/src/voice/models/catalog.ts`）。每个模型记：编号、名称、类型（`qwen3Asr`、`funasrNano`、`senseVoice` 等，以 sherpa-onnx 的配置键为准）、语言、热词能力、许可与链接、压缩包名、大小、SHA-256、各来源的地址，以及解压后每个必需文件的相对路径、大小与 SHA-256。B 先按第 3 节的哈希从 GitHub 下载并校验压缩包，再计算各文件的哈希，写明查询日期。
+- 下载：在主进程里用现有的网络层（跟随系统代理），只允许目录里写明的主机。先写到 `<应用数据根>\models\.staging\<编号>.part`，旁边的状态文件记已下载的字节数与 ETag。按 Range 续传；续传前先重算已有部分的哈希，校验通过才继续。可以暂停与取消，进度走现有的任务机制（新任务类型 `model-download`）。用户在确认框里看过大小、许可与来源，点了下载才发请求。默认先试 ModelScope 来源（有时），失败或没有时用 GitHub；可以手动选。
+- 校验与解压：大小与 SHA-256 都相符后，用 `%SystemRoot%\System32\tar.exe` 先列出条目、拒绝越界，再解压到暂存目录；逐个核对必需文件的大小与哈希；全部通过后整体改名为 `<应用数据根>\models\asr\<编号>\`，原子地更新 `models\installed.json`。任何一步失败都清空这个模型的暂存，不启用。
+- 导入：可以导入一个压缩包（与下载同样校验），或一个解压好的文件夹（逐个核对必需文件的哈希）。
+- 删除：模型正在载入或使用时先让推理进程卸载它，再删目录、更新清单，显示释放的空间。
+- 数据位置：`<应用数据根>\models\` 不进备份与资料包；卸载时按现有应用数据的规则处理（B 核对并写进数据与安全）。
+- 门禁用的模型：极速模型（sense-voice-funasr-nano int8）与 `gtcrn_simple.onnx` 记进工具锁文件（固定的 Release 资产名加 SHA-256），由现有的工具下载脚本放到 `dist/tools/`；`check-tool-links.mjs --pins` 扩展规则，接受“固定资产名加哈希”的形态。GTCRN 随安装包附带并附许可声明；ASR 模型不随安装包。
 
-### 4.7 门禁提速与两处小问题（G1）
+### 4.7 词库扩展、schema v16 与 Bangumi 补全（X1）
 
-- **基准**：按 `bench.json` 的 `records.sectionSeconds`，从最慢的段开始（工作区、规模窗口、扫描与停靠栏、阅读器），去掉多余的固定等待、重复的种子数据准备与可以合并的窗口启动。**不改任何门槛、样本数与测量方法**；改动前后各跑一次相关段核对指标没有系统性变化。目标是 `bench` 总用时不超过 450 s；做不到时在报告里逐段写明剩下的时间花在哪里、为什么不能再减。
-- **LOOP-33**：启动时把处于“执行中”而所属模块已关闭的提议标为失败，原因是“模块已关闭”，卡片随之更新；有用例。
-- **LOOP-34**：“设置 › 更新”底部的“更新内容”加与上面各行一致的内边距；深浅主题各截一张图。
+- **schema v16**：`dictionary_terms` 加 `category`（character、actor、work、term、other，从来源推出初值）与 `disabled`；新表 `dictionary_aliases`（词条、文字、种类：alias、heard、kana、romaji、english，来源）。现有的 `heard` 迁移为 heard 种类的别名；B 决定保留还是重建去掉这一列，但不得丢任何数据。另有新表 `dictionary_suggestions`（建议词）、`dictation_history`（听写记录）、`bangumi_details`（角色与人物详情的缓存，键为种类与编号）。迁移沿用现有机制：迁移前备份、中断后重做、较新版本的资料不被旧版本打开。
+- **读音**：载入词库时在内存里生成，不入库。汉字用 `pinyin-pro` 按整个词条取读音（多音字按词处理）；假名用 `wanakana` 转罗马音；拉丁字母转小写。
+- **Bangumi 补全**：客户端新增 `character(id)` 与 `person(id)`。“从 Bangumi 资料加入”与“刷新”时，按主角、配角、他们的声优的顺序读取详情，每部作品最多 60 个请求，一个接一个发，沿用现有的 User-Agent、限流与退避；作为可取消的任务，显示进度；结果存入 `bangumi_details`。解析 `infobox` 时：同名键（“简体中文名”“别名”）可能出现多次，要全部遍历；“别名”的值里有的项没有 `k`；`infobox` 可能是 null，此时回退到顶层的 `name`。映射：有简体中文名时，它成为自动词条的正式写法，日文原名降为别名；“纯假名”为 kana，“罗马字”为 romaji，“英文名”为 english，其余为 alias。手写词条不受影响。
+- **当前作品与热词**：当前作品取自获得焦点的标签所属的作品（没有时只用全局词典）。热词顺序为手写的、主角、配角、声优、其他；去掉停用的；最多 50 个。
+- **批量导入**：一行一条，或用逗号、顿号分隔；`词条 | 别名1, 别名2` 写法可选；跳过重复与空行，报告新增与跳过的数量。
+- **界面**：词典列表增加别名、类别、停用与来源的显示和编辑。
 
-### 4.8 发布流水线（R1）
+### 4.8 音近召回与确定性替换（R1）
 
-- **FFmpeg**：`scripts/tools/ffmpeg.lock.json` 改钉 `autobuild-2026-10-31-12-59` 的 `ffmpeg-n8.1.3-27-g8dca1586f4-win64-lgpl-shared-8.1.zip`；B 下载核对压缩包与各文件的 SHA-256，`LICENSE.txt` 仍是 LGPL；本机 `dist/tools/` 换成这一份后跑完整的媒体用例与 `stage package` 的 `media` 阶段。
-- **只接受月末构建**：新增检查（随 `verify` 运行，不联网）：FFmpeg 锁文件的标签必须是某月最后一天的 `autobuild-YYYY-MM-DD-HH-MM`；另外两个锁文件的地址必须钉在 40 位的提交哈希上。
-- **提前核对地址**：新增 `scripts/tools/check-tool-links.mjs`，对三个锁文件的地址发 HEAD 请求（跟随重定向，只看状态码）。`release.yml` 的 `decide` 在决定发布之后运行它，任何一个不在就失败并写明是哪一个；`check` 照常下载与校验。按质量门禁，推送前也在本机跑一次。workflow 的静态检查随之更新；`ci.yml` 不变。
-- **合并后**：以 `dry_run=true` 手动试运行一次（属于本阶段末尾请求的授权）；之后等下一个周一的定时运行。
+- 把 asr-hotword 的核心移植到 `packages/app-core/src/voice/correct/`：音素表示（声母、韵母、声调；罗马音；拉丁字母），模糊规则（z/zh、c/ch、s/sh、n/l、an/ang、en/eng、in/ing，声调不同的代价较低），音节 2-gram 倒排粗筛，加权编辑距离的局部对齐精排，黑名单（每个词条可以写“不要替换的写法”）。
+- 输出：每处候选的起止位置、原文、词条、得分（0—1）。规则：与词条或别名完全相同的直接替换；得分 ≥ 0.9、且词条属于当前作品或是手写的，直接替换；0.75—0.9 的作为候选交给润色（最多 15 个）；更低的忽略。阈值是有单元用例的常量，由 B 在纠错样本集上调好，写进报告。
+- 索引在词库变化时增量更新。1 万条词条时，替换一句话的 p95 ≤ 30 ms（基准 `dictationCorrectionMs`）。
 
-### 4.9 录音悬浮框（V1）
+### 4.9 润色、防过度纠错与简繁（P1）
 
-- **先找原因**：在打包窗口里用真实的鼠标（系统输入，不用 `setBounds`）拖动悬浮框，停止录音，再开始录音，看它出现在哪里；分别试拖完马上停止、拖到第二块屏幕（没有时用两块虚拟工作区的单元用例代替）。把查到的原因写进报告。已知要改的：关闭时把还没写的保存立即写掉，而不是丢掉；拖动结束（`moved`）与关闭都写。
-- **只记位置**：大小不再由用户定，设置里的 `overlay` 只用 `x`、`y`；以前存过的位置按右上角对齐换算到新的大小（原来贴着屏幕右边的，仍贴着右边）。设置页里关于悬浮框大小的选项去掉，保留“恢复默认位置”。
-- **做小**：约 116×36 的圆角条，从左到右是麦克风图案、时间（`m:ss`）、停止按钮（方块图标）。麦克风图案的颜色深浅随输入音量变化：没有声音时是浅灰，有声音时变成主色并随音量加深（每 100 ms 更新，开了“减少动态效果”时只在有、无声音之间切换）。正在结束时图案变灰、时间停住、停止按钮不可用。不显示设备名、录音方式与是否保留音频；这些放进整块的可访问名称与悬停提示（例如“录音中 1:23，单击切换，保留音频，麦克风：…”），提示里的设备名只在本机显示。
-- **不变的**：置顶、不抢焦点、不在任务栏、只显示传进来的状态并只能请求停止；页面的 CSP 与传入状态的检查照旧（`parseOverlayState` 仍校验 `label`，只是不再显示它）。
+- **档位**：原文（不请求文本模型）；轻度（加标点、去口水词、句中改口时只留改后的说法、按候选纠正专名，不改意思、不扩写）；书面（再整理成书面语）。默认轻度；没有文本连接时按原文处理。提示词在“设置 › 语音转录”里可以查看、修改、恢复默认，默认值放在代码里。
+- **四道防线**：（1）原文档，或轻度档下没有候选、也没有口水词与改口的迹象时，跳过模型；（2）提示只带召回的候选（“正式写法 | 读音或原名 | 类别与作品”，最多 15 个），并写明“没有读音相近的片段时不得套用候选、不得改变语气”；（3）低温度（`LlmPort.complete` 增加可选的 `temperature`，连接不支持时忽略）；（4）检查结果：长度与替换后文字之比超出 0.4—1.4，出现了替换后文字与候选里都没有的词典词条或拉丁字母、片假名词，失败，或超过 5 s，都退回替换后的文字并记下原因。
+- **简繁**：最后用 `opencc-js` 统一成简体（可选繁体或不转）。与词条完全相同的片段在转换前后保持词条的写法。
 
-### 4.10 从“最近”移除与资源库的进度（P1）
+### 4.10 听写记录与从修改中学词（H1）
 
-- **从“最近”移除**：“最近”的媒介列表里每一项（一部作品或一个不属于作品的资源）右键有“从最近移除”。只是从“最近”的列表里拿掉：进度、笔记、截图、录音与对话都不动；在“最近”里再次打开它（之后有新的动作）时重新出现；不影响任何项目的列表与资源库。提示条写“已从最近移除《…》”，带“撤销”。
-- **存储**：新表 `recent_dismissals(key TEXT PRIMARY KEY, dismissed_at TEXT NOT NULL)`，`key` 与列表项的键相同（`work:<id>` 或 `resource:<id>`）；列表只列最后动作晚于 `dismissed_at` 的项。作品或资源被删除时一并删掉对应的行。资料库结构升到 **v15**：升级前照常留备份，迁移可以中断后重来，旧版本拒绝打开。
-- **资源库的进度（A-129，A 的推荐）**：资源库的卡片、按进度排序、“已读/已看 x%”与作品主页显示这个资源**在各处看得最远**的进度，完成状态是“任何一处读完就算读完”。理由：资源库回答的是“这部作品我看了多少”，与在哪个项目里看无关；它不会因为在一个项目里从头翻一下就倒退；与防剧透的“看得最远”一致；各处的位置一个都不丢。作品主页的进度下面列出各处的位置（“最近：第 3 话 12:30 · 项目 A：第 1 话 05:00”），只是显示；从资源库打开时仍在当前所在的项目或“最近”里、从它自己的位置继续（A-96 不变）。旧的“注明来自哪个项目”改为注明看得最远的那一处。用新视图 `progress_furthest`（每个资源与版本取百分比最大的一行，相同时取较新的）实现，随 v15 建立；`progress_latest` 仍供需要“最近一次”的地方使用。
+- **记录**：每次听写在 `dictation_history` 里记时间、引擎与模型、原文、替换后的文字、最终文字、档位、退回原因、各步用时、当前作品。保留 30 天，在启动时与之后每天清理一次。“设置 › 语音转录 › 听写记录”可以复制原文或结果、删除一条、清空。不进备份与资料包，Agent 读不到。打开“保留最近的听写音频 24 小时”后，音频以 WAV 存在 `<应用数据根>\dictation-audio\`，过期删除；有音频的记录可以换一个引擎“重新识别”。
+- **学词**：插入后的 60 s 内，插入适配层跟踪这段文字的范围（textarea 按输入事件调整偏移，Tiptap 与 CodeMirror 用各自的位置映射；跟踪不了就放弃）。失焦或到时后，比较插入的文字与现在的文字。被改的片段是 2—16 个字、新写法不是已有的词条或别名、旧写法与新写法的读音得分 ≥ 0.6 时，生成一条建议：“把「新写法」加入词典？（识别成了「旧写法」）”。出字处的小提示与设置里的“建议词”都能看到。确认后：新写法已是词条，就把旧写法加为它的 heard 别名；否则新建手写词条（当前作品，没有作品时全局），旧写法为 heard 别名。忽略后，同一组写法不再提示。
+
+### 4.11 评测集与基准（Q1）
+
+- **评测集**：`scripts/voice-eval/` 生成约 80 句合成语音，全部用 Windows 自带的语音合成；没有中文语音时脚本说明原因、记为 not-run。人名与作品名全部虚构，不用真实的人名。句子分三组：40 句含专名（中文音译的日式人名、作品名、少量英文词）；20 句含口水词与句中改口；20 句不含专名、但有和词条读音相近的普通词（用来量误改）。每句有三个版本：干净的、加 10 dB 合成风扇噪声的、加 10 dB 另一个合成人声的（模拟外放对白）。
+- **评测脚本**：对每个已下载的模型，分别跑只识别、加替换、加润色（润色只在本地环境文件配置了文本连接时跑）三步，输出字错率、专名召回率、误改率与各步用时，写进基准的记录项。另外跑 4.2 的开关对比。只在开发机运行，CI 不跑。
+- **纠错样本集**：`tests/fixtures/voice-correction.json`，至少 200 对“识别文字 → 期望文字”，每对写明来源（某个模型在评测集上的实际输出，或手写的混淆）。单元用例的门槛：确定性替换加候选的专名召回率 ≥ 0.85，不含专名的句子误改率 ≤ 1%。B 先测出基线；达不到时先改进，仍达不到就写进报告交 A 决定，不自行放宽。
 
 ## 5. 工作包与顺序
 
@@ -168,130 +173,131 @@
 
 **A 已做（在本计划所在的提交里）：**
 
-- 上一阶段的报告提炼后删除。仍有效的内容已在正本里：门禁的规则（结果文件、真实位置的核对、只在门禁最后一步安装开发版）在质量门禁；测试与演练不写真实位置在质量门禁；下载暂存的位置在领域模型与获取模块；审查结论的摘要在执行状态。入链改为归档链接 `https://github.com/chialecode/manga/blob/cfe76d4/docs/delivery/stage-report.md#<锚点>`；文档导航与 GitBook 目录里去掉报告（B 新建后加回）。
-- 登记表 `currentStage` 改为 `m11`，本计划的 `retireAfter` 改为 `m11`，报告的条目去掉。
-- 登记表改为 `m11` 后文档检查报出代码与测试里 6 处上一阶段的标签（走查与工作流检查的注释、基准的注释、`install-dev` 与发布测试里的阶段名），已去掉；文档检查与 `verify --skip-tests` 通过。
-- 新增 A-127、A-128，及用户追加两项的 A-129；需求 VOICE-05、LIB-03、UI-10 补充；验收 AT-172、AT-173；需求新增 READ-05，DATA-07 补充；验收 AT-164—AT-171；交付路线 2.2 改为本阶段，上一阶段的能力并入 2.1；ACT-19 的完成与 ACT-17 第（4）项的试运行结果写回用户待办与执行状态；新增 Q-39；LOOP-32、LOOP-33、LOOP-34 改为“本阶段处理”，新增 LOOP-35（从轻量窗口转到完整应用）。
+- 上一阶段的报告提炼后删除：仍有效的内容（门禁与发布演练的结果、三个主进程文件的分工、悬浮框位置的根因、v15 迁移的结果）已在执行状态与各正本里。入链改为归档链接 `https://github.com/chialecode/manga/blob/f9aea92/docs/delivery/stage-report.md#<锚点>`（`f9aea92` 已确认在 `origin/main` 的历史里）；`README.md`、`docs/README.md` 与 `docs/SUMMARY.md` 去掉报告（B 新建后加回）。
+- 登记表 `currentStage` 改为 `m12`，本计划的 `retireAfter` 改为 `m12`，报告的条目去掉。
+- 改为 `m12` 后文档检查报出的上一阶段标签（确认记录、执行状态、文档导航与用户待办里的“M11”和旧分支名）已去掉；文档检查通过。
+- 新增 A-130、A-131；需求 VOICE-10—VOICE-17；验收 AT-174—AT-183 与追踪矩阵；交付路线 2.2 改为本阶段；执行状态的当前阶段与分支；用户待办新增 Q-40 与 ACT-21，Q-23 移入“最近处理完的”；后续 loop 新增 LOOP-36—LOOP-40。
 
 **B 执行时再核对一遍：**
 
 | 位置 | 内容判断 | 处理 |
 | --- | --- | --- |
-| `.env.local` | 开发者的本地配置与凭据，必需 | 保留；不读取与任务无关的值 |
-| `dist/design-refs/`、`dist/samples/` | 用户提供的界面参考、合成样本 | 原样保留 |
-| `dist/tools/` | 固定版本的工具 | FFmpeg 按 R1 换成新的一份，旧的删掉；其余保留 |
+| `.env.local` | 开发者的本地配置与凭据，必需 | 保留；不读取与任务无关的值。ACT-21 需要的连接变量由用户自己加，B 只在报告里写变量名 |
+| `dist/design-refs/`、`dist/samples/` | 用户提供的界面参考、合成样本 | 原样保留；评测集生成到 `dist/samples/voice-eval/` |
+| `dist/tools/` | 固定版本的工具 | 保留；按 4.6 加入极速模型与 GTCRN |
 | `dist/desktop/`、`dist/plugins/` | 上一阶段最后的打包产物与安装包 | 阶段末重新打包时覆盖 |
-| `dist/release/v0.1.1/` | 上一阶段在阶段分支上的本地发布演练产物，用户可以用它在本机装正式版 | 第一个正式版在 GitHub 上发布之前保留；本阶段末的本地发布演练会覆盖它 |
-| `%APPDATA%\manga-release\` | 第一方插件与正式版更新的签名私钥（ACT-08），已移出仓库的 `dist/` | 原样保留，不读不输出私钥，不得重新生成 |
-| `dist/evidence-runs/` | `current/`（上一阶段最后一次门禁与发布演练） | `current/` 在本阶段第一次门禁时覆盖；其余零散日志删除 |
-| 系统临时目录里的 `manga-*` | 以前失败运行留下的现场 | 确认没有正在运行的门禁后删除，只记数量 |
-| 本地分支 `rebuild/m1`—`rebuild/m8`、`feat/m6-project-workspace`、`backup/main-pre-rewrite` | 历史改写时留下的备份与旧分支 | 保留：用户 2026-11-09 选择全部保留 |
+| `dist/release/v0.1.1/` | 上一阶段的本地发布演练产物；v0.1.1 已在 GitHub 上发布 | 删除；本阶段不做发布演练 |
+| `dist/gate-review.log`、`dist/release-review.log` | 上一阶段审查时的日志，结论已在归档报告里 | 删除 |
+| `dist/evidence-runs/` | `current/`（上一阶段最后一次门禁）、按日期命名的 `pre-push-*.log`、`l1-combining-marks/`（上一阶段的排查目录） | `current/` 在本阶段第一次门禁时覆盖；先看 `l1-combining-marks/` 的内容，仍有用的结论提炼进执行状态或对应的 LOOP，然后删除；日志删除 |
+| `%APPDATA%\manga-release\` | 两把签名私钥（ACT-08） | 原样保留，不读不输出私钥，不得重新生成 |
+| 系统临时目录里的 `manga-*`（A 盘点时有 2 个） | 以前失败运行留下的现场 | 确认没有正在运行的门禁后删除，只记数量 |
+| `apps/desktop/.vite/`、`tsconfig.tsbuildinfo` | 构建缓存 | 保留，打包时重建 |
 | `docs/evidence/gate/` | 上一阶段最后一次门禁的证据 | 本阶段最后一次门禁时整体替换 |
 
 **去掉以前阶段的标签（A-57）。** A 已运行文档检查；B 交付前再运行一次。`docs/evidence/gate/` 里的 `stage` 字段随本阶段最后一次门禁整体替换。Git 提交信息与固定归档链接里的路径不改。
 
-### 5.2 D1 依赖盘点
+### 5.2 D1 依赖盘点与新增依赖
 
-B 实施开始与门禁之前各跑一次 `pnpm outdated -r`，按“满 14 天的最新版本”处理；主版本或行为变化的升级先单独做并跑对应的回归，失败时回退并在 ADR-0007 的例外表写明尝试的版本、失败的命令、上游限制与复查条件。最小发行龄策略不绕过。本阶段不新增依赖；确实需要时先在报告里写明理由与第 3 节同样的查证，再加。
+B 在实施开始与门禁之前各跑一次 `pnpm outdated -r`，按“满 14 天的最新版本”处理；主版本或行为变化的升级先单独做并跑对应的回归，失败时回退，并在 ADR-0007 的例外表写明尝试的版本、失败的命令、上游限制与复查条件。最小发行龄策略不绕过。
+
+新增依赖只限第 3 节判定为采用的：`sherpa-onnx-node` 与 `sherpa-onnx-win-x64`（只在推理进程）、`pinyin-pro`、`wanakana`、`opencc-js`，精确版本写进 manifest 与锁文件，并登记进 ADR-0007 的版本表与第三方许可声明。确实需要别的依赖时，先在报告里写明理由与同样的查证，再加。
 
 ### 5.3 工作包
 
 | 包 | 内容 | 关键失败路径 | 验收 |
 | --- | --- | --- | --- |
-| R1 发布流水线 | 4.8 | 锁文件改回每日构建时 `verify` 失败；某个工具地址 404 时 `decide` 失败并写明是哪一个；新的 FFmpeg 下媒体用例与 `media` 阶段全部通过 | AT-164 |
-| R2 启动失败的退路 | 4.2 | 没有保留的安装包；保留的安装包被改过；新版本升级过资料库；用户选“再试一次”；回退后自动更新不再装回这个版本；开发版不计数 | AT-165 |
-| L1 独立入口与打包 | 4.1 | 打包产物里出现被禁止的模块时检查失败；`--manga-smoke` 与 `--quit-for-update` 仍走完整应用；不支持的文件给出说明 | AT-170 |
-| L2 轻量媒体服务 | 4.3 | 文件在打开后被删或被改；CBZ 里有路径穿越或压缩炸弹（沿用 `ZipPool` 的拒绝）；不能直接播放；播放副本超过上限；轻量收到未列出的命令 | AT-167、AT-168 |
-| L3 轻量视频播放器 | 4.4 | 只有外挂字幕；多音轨；最后一集按“下一集”；拖进一个不支持的文件 | AT-167 |
-| L4 轻量漫画阅读器 | 4.4 | 打开文件夹中间的一张图片；文件夹里混有非图片；双页与长条切换后位置不丢 | AT-168 |
-| L5 “打开方式”的注册 | 4.5 | 扩展名键原本有别的程序的默认值（安装与卸载后都不变）；覆盖安装；卸载；两个通道同时装着；测试身份不碰真实身份 | AT-166 |
-| L6 生命周期 | 4.6 | 连续打开三个文件；完整应用已在运行时打开轻量；轻量开着时 `install-dev` 与正式版的“重启以更新”；轻量窗口退不出；只开着轻量时没有任何更新动作 | AT-169 |
-| V1 录音悬浮框 | 4.9 | 拖完马上停止录音；保存的位置所在的屏幕被拔掉；旧的 280×84 设置；没有声音、持续有声音、开了“减少动态效果”；正在结束 | AT-172 |
-| P1 从“最近”移除与资源库的进度 | 4.10 | 移除后在“最近”再打开；移除后在项目里打开（“最近”不出现）；撤销；被移除的作品被删除；一个资源在“最近”看到 80%、在项目里看到 10%（资源库显示 80%）；只在项目里读完；v14 资料的升级、中断后重来、旧版本拒绝打开 | AT-173 |
-| G1 门禁提速与小问题 | 4.7 | 改动后某个基准指标出现系统性变化（回退该改动）；LOOP-33 的提议在模块重新打开后不会被再次执行 | AT-171 |
+| U1 听写会话、入口与插入 | 4.1 | 右 Alt 触发菜单或打断输入法；识别中标签被关；插入处的文字在识别时被改过；输入法组合中按键；Esc；锁定后切换应用；模块停用时结果迟到；Agent 试图调用 | AT-174、AT-182 |
+| A1 采集前端 | 4.2 | `"all"` 不被接受时说明并退回 `true`；没有麦克风；设备在听写中断开；视频在听写中被关 | AT-175 |
+| S1 去除静默 | 4.3 | 整段静音；只有呼吸与键盘声；开头就是话；5 分钟上限；复述热词 | AT-176 |
+| E1 识别引擎 | 4.4 | 能力为 0 的引擎不收任何提示；连接认证失败、超时、超过上传上限；所选引擎不可用时其他服务收到 0 个请求；本地引擎转写 3 分钟的录音笔记 | AT-177 |
+| N1 本地推理进程 | 4.5 | 打包后载入失败（停下报告）；识别中进程被结束；1 分钟内两次崩溃；闲置卸载后再用；应用退出时进程退出；闭包检查 | AT-179 |
+| M1 模型目录、下载与导入 | 4.6 | 下载到一半断网与重启应用后续传；ETag 变化时从头下载；哈希不符；越界条目与链接；磁盘空间不够；没有 `tar.exe`；文件夹导入缺文件；删除正在用的模型 | AT-178 |
+| X1 词库、v16 与 Bangumi 补全 | 4.7 | v15 资料迁移、中断、旧版本打开；`infobox` 的三种边界；超过请求预算；403 或 429；手写词条与自动词条重名；停用的词条不进热词 | AT-180 |
+| R1 音近召回与替换 | 4.8 | 不含专名的句子里读音相近的普通词；词条是另一个词条的一部分；拉丁字母与罗马音；黑名单；1 万条词条的速度 | AT-181、AT-183 |
+| P1 润色、防线与简繁 | 4.9 | 过长、新专名、超时、错误；原文档不请求；改过的提示词与恢复默认；繁体输入；词条写法在简繁转换中不变 | AT-181 |
+| H1 记录与学词 | 4.10 | 30 天过期；音频 24 小时过期；备份与资料包不含记录；跟踪不了的范围；同一组写法忽略后不再提示；建议的新写法已是词条 | AT-182 |
+| Q1 评测与基准 | 4.11 | 没有中文语音时评测记为 not-run；没有模型时只跑能跑的；纠错样本集的门槛 | AT-183 |
 | T1 测试、走查与基准 | 第 7 节 | — | 第 7 节 |
-| W1 文档 | 需求 READ-05、DATA-06、DATA-07、VOICE-05、LIB-03、UI-10 按实现改为“已实现”；领域模型（v15、`recent_dismissals`、`progress_furthest`）；AT-164—AT-171；交互设计（轻量窗口的布局、菜单、键位与空状态）；总体架构（引导入口与三个主进程文件、轻量的边界）；数据与安全（轻量的数据位置、注册表项与卸载、回退时的资料库恢复）；质量门禁（新的检查与观察、基准的段落用时）；仓库地图（新目录与脚本）；Git 与 GitHub（工具地址的核对、试运行）；执行状态；README 的“用 MANGA 打开文件” | — | 文档检查 |
+| W1 文档 | 需求 VOICE-10—VOICE-17 按实现改为“已实现”，VOICE-01、VOICE-09 补充；领域模型（v16 的表与关系、听写的阶段）；语音模块规格（听写、引擎、模型、词库与纠错，按模块规格模板补全）；交互设计（听写胶囊、出字处的提示、“设置 › 语音转录”的新分区、快捷键）；总体架构（推理进程与边界）；数据与安全（模型与听写音频的位置、下载的主机允许列表、哈希校验、不进备份、卸载）；Agent 与插件（听写不对 Agent 开放）；质量门禁（新的观察、评测与基准）；仓库地图（新目录与脚本）；第三方许可声明（asr-hotword 的移植、GTCRN、新依赖）；执行状态；README 的听写一节 | — | 文档检查 |
 
 ### 5.4 顺序
 
-1. C0；D1 的第一次盘点。
-2. R1（它让合并后的发布能跑通，最先做）。
-3. L1 → L2 → L3、L4 → L5 → L6（入口与边界先定下来，后面的界面与注册都依赖它）。
-4. R2（依赖 L1 的引导入口）。
-5. V1、P1（与轻量打开无关，可以在任何时候插进来做）。
-6. G1；T1、W1；最后一次 `pnpm outdated -r`；`stage gate`；本地发布演练；报告与整理记录。
+1. C0；D1 的第一次盘点与新增依赖。
+2. N1 的最小验证：打包后的 `utilityProcess` 能载入 `sherpa-onnx-node` 并用极速模型识别一段合成语音。这一步决定后面的本地路线，最先做；证明不了就停下来报告 A，其余不依赖本地推理的工作包继续做。
+3. M1 → E1 → S1、A1（引擎与模型就绪后，打通录音到文字的路径）。
+4. X1 → R1 → P1（词库、替换与润色）。
+5. U1 → H1（界面、插入、恢复与学词）。
+6. Q1；T1、W1；最后一次 `pnpm outdated -r`；`stage gate`；报告与整理记录。
 
 可以按依赖调整顺序，但不得跳过任何一个工作包。
 
 ## 6. 界面要点
 
-- 轻量窗口与完整应用同一套主题变量与控件；控制条的自动隐藏、全屏与键位表与完整应用一致。窗口默认 960×600，记住上次的大小与位置（存在轻量自己的目录里）。
-- 空窗口（不带文件启动）显示“把视频、CBZ 或图片拖到这里，或点‘打开文件…’”，并列出支持的类型。
-- 打开失败（文件不存在、格式不支持、文件损坏）在窗口中间说明原因，不弹系统对话框。
-- 启动失败的询问是系统对话框（4.2），因为那时界面可能还起不来；文案写清楚“回到 0.1.x”会发生什么。
-- 所有新控件有可访问名称，可以用键盘操作；状态变化对读屏软件可见。
+- “设置 › 语音转录”分为：听写（快捷键、出字方式、档位、提示词）、识别引擎（听写与录音笔记各自的选择；本地模型列表，含语言、热词、许可、大小、来源、下载进度、暂停、删除、导入；外部连接的接口形态）、声音（回声消除、消除其他应用的声音并注明延迟、环境降噪、录音时视频的声音）、词典（别名、类别、停用、批量导入、从 Bangumi 资料加入与刷新、建议词）、听写记录（保留音频的开关）。沿用现有设置页的控件与布局。
+- 听写胶囊与出字处的提示用现有的主题变量；不显示设备名；系统开启“减少动态效果”时，音量图案改为有声与无声两档。
+- 所有新控件有可访问名称，可以用键盘操作；听写的状态变化对读屏软件可见（`aria-live`）。
+- 文案用中文，说清原因与下一步，例如“没有听到声音”“本地模型还没下载：去下载”“润色超时，已保留原文”。
 
 ## 7. 样本、门禁与基准
 
-**样本。** 全部合成：现有的合成视频（H.264/HEVC、MKV/MP4、外挂与内嵌字幕、多音轨）与合成漫画（CBZ、图片文件夹）；为“上一集与下一集”生成同一文件夹里的三集；启动失败的演练用测试身份与测试专用的开关。
+**样本。** 全部合成：评测集与观察用的语音由 Windows 自带的语音合成生成；人名与作品名虚构；假转录服务、假对话接口、假模型下载服务（提供一个小的合成模型包，用于下载、续传、篡改与越界的用例）与假 Bangumi（加入 `/v0/characters/{id}` 与 `/v0/persons/{id}`）都在本机。
+
+**单元与集成用例（新增，必需）：** 能力描述与提示生成；对话接口的请求格式；去除静默的长度计算；下载的续传、哈希、越界与清理；目录的完整性（每个模型的哈希与必需文件都有）；v16 迁移（备份、中断、旧版拒绝）；`infobox` 解析；热词顺序；音近召回的规则与阈值；纠错样本集的门槛；四道防线；简繁与词条保护；听写记录的保留与导出排除；学词的比较规则；命令访问里 Agent 看不到听写命令。
 
 **窗口与安装观察（新增，必需）：**
 
 | 观察 | 内容 |
 | --- | --- |
-| `light-video` | 用 `--manga-light` 打开合成视频：第一帧出现；播放、暂停、跳转、倍速、音轨、字幕开关；下一集；关掉再开同一个文件，从上次的位置继续；轻量的目录之外（资料库、“文档”、“下载”、完整应用的启动指针）没有任何新文件 |
-| `light-video-copy` | 打开一个需要播放副本的文件：显示原因；点“转换后播放”后能播放；副本在轻量的缓存里 |
-| `light-comic` | 打开 CBZ 与文件夹中间的一张图片：从正确的一页开始；翻页、方向、双页、长条、页码跳转、下一卷；关掉再开记住页码 |
-| `light-multi` | 连续用三个 `--manga-light` 调用打开三个文件：只有一个轻量进程、三个窗口；完整应用同时在运行，两边的单实例互不影响 |
-| `light-update` | 临时“机器”里装着测试身份的开发版并开着轻量窗口：`install-dev` 先让轻量窗口退出再安装；让轻量窗口拒绝退出时不安装并说明原因 |
-| `light-boundary` | 检查打包产物（4.1）：轻量的主进程与界面里没有被禁止的模块 |
-| `voice-overlay` | 4.9：真实拖动悬浮框后停止、再开始录音，位置相同；拖完马上停止也相同；没有声音与有声音时图案的颜色不同；悬浮框里没有设备名；截图（浅色，有声音时） |
-| `recent-remove` | 4.10：在“最近”的漫画列表里右键“从最近移除”，项消失、提示可撤销；撤销后回来；再移除后从资源库打开它，“最近”里重新出现；资源库卡片显示看得最远的进度 |
-| `update-rollback` | 4.2 的演练：两次启动失败后询问；回退后是上一版、资料库是升级前的备份、跳过了这个版本；选“再试一次”时不回退 |
-| `installer` 步骤扩展 | 测试身份安装后注册都在、扩展名键的默认值不变；卸载后全部消失；真实身份的快照前后相同（4.5） |
+| `dictation-insert` | AT-174：五处输入的听写（假转录服务）、锁定、Esc、切换标签、输入法组合、对话栏两种模式的麦克风 |
+| `dictation-local` | AT-179：打包应用用 `dist/tools/` 里的极速模型做一次真实的本地听写；结束推理进程后再听写；闲置卸载（测试里把闲置时间设短） |
+| `dictation-revert` | AT-182：恢复原文、Ctrl+Z、出字处的提示、改一个人名后出现建议并确认 |
+| `dictation-settings` | 本地模型的下载（假下载服务：进度、暂停、续传、校验失败）、词典的别名与建议词、听写记录；截图（浅色与深色） |
+| `dictation-boundary` | 打包产物：`sherpa-onnx-node` 只在 `asr-host.cjs` 里；轻量打开的闭包检查通过；安装包里没有 ASR 模型 |
+| `voice` 阶段（已有）扩展 | 采集约束的实际值；录音笔记改用本地引擎转写一段合成录音 |
 
-上一阶段全部的窗口观察保留。截图只留关键状态：轻量视频（浅色与深色，带控制条与字幕）、轻量漫画、空窗口、启动失败的询问、“设置 › 更新”的“更新内容”（LOOP-34）、新的录音悬浮框、作品主页的各处位置。截图不含本机路径。
+上一阶段全部的窗口观察保留。截图只留关键状态：听写胶囊（录音、识别中）、出字处的提示、本地模型列表（下载中与已装）、词典的别名、听写记录。截图不含本机路径与设备名。
 
-**基准（新增门槛）**：`lightVideoFirstFrameMs`：冷启动（轻量进程未运行）用 `--manga-light` 打开一个可以直接播放的 1080p H.264 合成视频，到第一帧画出来，5 次的 p95 ≤ 2000 ms；`lightComicFirstPageMs`：同样打开一个 CBZ 到第一页画出来，p95 ≤ 1500 ms；`lightSecondOpenMs`：轻量进程已在运行时再打开一个视频到第一帧，p95 ≤ 800 ms。**记录项**：轻量进程打开一个视频后的内存（工作集）；用完整应用打开同一个视频（库外，从进程启动到第一帧）的用时，作为对照。B 先测出基线；门槛达不到时先优化，仍达不到就在报告里写明原因交 A 决定，B 不自行放宽。
+**基准（新增门槛）**：`dictationLocalReleaseToTextMs`：打包应用里极速模型已载入，假采集设备播放约 4 s 的合成语音，从松开到文字插入，5 次的 p95 ≤ 1500 ms；`dictationCorrectionMs`：1 万条词条时替换一句话，p95 ≤ 30 ms。**记录项**：各模型的载入时间与推理进程的内存（推荐模型在开发机上下载了时才记）；评测脚本的字错率、专名召回率、误改率与各步用时；4.2 的开关对比。B 先测出基线；门槛达不到时先优化，仍达不到就在报告里写明原因交 A 决定，B 不自行放宽。
 
-**门禁。** 修复先用子集确认（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`、单个测试文件），最后在最终源码上跑一次 `node scripts/stage.mjs gate`（跑前确认机器空闲、启动它的应用在前台，不锁屏；跑的过程中不改工作树）。证据整体替换 `docs/evidence/gate/`，总量不超过 5 MiB，复制前先看过新截图，不含本机路径。门禁通过后在干净的工作树上再跑一次本地发布演练（`publish: false`）。
+**门禁。** 修复先用子集确认（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`、单个测试文件）；只改走查时只重跑 package。最后在最终源码上跑一次 `node scripts/stage.mjs gate`。跑前确认机器空闲、启动它的应用在前台、不锁屏，跑的过程中不改工作树；门禁会打开窗口，开跑前先在聊天里告诉用户。证据整体替换 `docs/evidence/gate/`，总量不超过 5 MiB，复制前先看过新截图，不含本机路径。本阶段不做本地发布演练（没有改安装与更新）；如果改到了安装包的内容（GTCRN 与新的原生模块），`installer` 步骤照常运行。
 
 ## 8. 人工检查
 
-B 在用户待办里新增人工检查（编号从 H-96 起），写到用户能直接照做：右键 › 打开方式里出现 MANGA，选“始终使用”后双击视频进入轻量播放器而完整应用没有启动；轻量播放器的播放、字幕、键位、下一集与记住位置；轻量漫画阅读器；轻量窗口与完整应用同时开着；门禁通过后开发版自动更新时轻量窗口被关掉；卸载开发版后“打开方式”里不再有 MANGA Dev、其他程序的默认关联没变；录音悬浮框拖到别处（含第二块屏幕）后下次录音出现在原处，说话与不说话时图案的变化；“最近”里右键移除与撤销；资源库与作品主页的进度。人工检查保持 not-run，不由脚本代填。
+B 在用户待办里新增人工检查（编号从 H-104 起），写到用户能直接照做：用真实的麦克风在五处输入里听写；右 Alt 在用户的键盘与输入法下是否好用；在“设置 › 语音转录”里真实下载推荐模型与极速模型（看速度、暂停、续传）；用自己资料库里一部关联了 Bangumi 的作品，说出角色名与声优名，比较本地模型与自己的转录连接；外放播放 MANGA 里的视频时听写（回声消除），以及用别的播放器外放时打开“消除其他应用的声音”；改错一个名字后确认建议，再说一次；恢复原文；听写记录。真实的鼠标、键盘与麦克风只在人工检查里用，自动观察不移动用户的鼠标、不抢焦点。人工检查保持 not-run，不由脚本代填。
 
 ## 9. B 交付与 A 审查
 
-- B 新建本阶段报告 `docs/delivery/stage-report.md`（并加回登记表、`docs/README.md` 与 `docs/SUMMARY.md`）：按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射；写明三个主进程文件的分工与边界检查的结果、悬浮框位置没记住的原因与修法、v15 迁移的结果、轻量媒体服务复用了哪些模块、注册表项的完整清单与卸载结果、轻量进程的生命周期、启动失败退路的流程与演练结果、FFmpeg 的新版本与哈希、基准数值（含基线与对照）与门禁各步用时、依赖盘点结果、整理记录与源码指纹。
-- B 交付前自检：第 1 节的退出条件逐条有证据；`stage gate` 通过；本地发布演练通过；文档检查通过；暂存内容核对过；一个带 DCO 签名的阶段提交（amend 本计划所在的提交，消息按最终结果重写）。
-- A 审查时重点看：轻量的主进程与界面确实不加载资料库、插件、Agent 与更新的代码；轻量不写自己目录之外的任何地方；注册绝不写扩展名键的默认值，卸载清干净，测试身份不碰真实身份；完整应用的行为与全部既有观察不变；退路只执行哈希相符的安装包，不自动回退，资料库恢复前先把现在的留下；更新与开发版自动更新前轻量窗口能退出、退不出就不安装；基准的门槛与测量方法没有被改动；FFmpeg 仍是 LGPL 构建；悬浮框位置没记住的原因是用真实拖动查明的；从“最近”移除不删任何进度与用户内容；v15 迁移有备份、可重来、旧版本拒绝。
+- B 新建本阶段报告 `docs/delivery/stage-report.md`（并加回登记表、`README.md`、`docs/README.md` 与 `docs/SUMMARY.md`）：按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射；写明 N1 的最小验证结果（含 `enableExternalBuffer` 的处理）；三个模型的配置键名、热词的设置方法与本机实测（载入时间、内存、用时）；目录里每个模型的来源、哈希与查询日期；右 Alt 的实测结论；v16 迁移的结果；音近召回的阈值与纠错样本集的结果；评测脚本的结果与 4.2 的开关对比；基准数值与门禁各步用时；依赖盘点结果；整理记录与源码指纹。
+- B 交付前自检：第 1 节的退出条件逐条有证据；`stage gate` 通过；文档检查通过；暂存内容核对过（不含模型文件与本机路径）；一个带 DCO 签名的阶段提交（amend 本计划所在的提交，消息按最终结果重写）。
+- A 审查时重点看：音频只发往所选的一个引擎，失败时不换服务，Agent 碰不到听写；下载只在用户确认后发生、只访问目录里的主机，哈希不符与越界条目一定被拒、暂存清空；推理进程不进完整应用主进程与轻量闭包，崩溃不影响应用；去除静默不切掉字头字尾；纠错的门槛与样本来源是真实的、没有为通过而挑样本；四道防线确实生效，退回时保留了原文；v16 迁移有备份、可重来、旧版拒绝，旧词条一条不少；听写记录不进备份与资料包；基准的门槛与测量方法没有被改动；录音笔记的既有行为与全部既有观察不变（除了降噪默认关）。
 
 ## 10. 待处理事项入口
 
-- 需要用户的：[Q-39](../../USER-ACTIONS.md#q-39)（本阶段先用的默认值）；仍待答复的 [Q-38](../../USER-ACTIONS.md#q-38)、[Q-37](../../USER-ACTIONS.md#q-37)、[Q-36](../../USER-ACTIONS.md#q-36)；[ACT-08](../../USER-ACTIONS.md#act-08)（备份两把私钥）；[ACT-18](../../USER-ACTIONS.md#act-18)。都不阻塞本阶段。
-- 新增的后续项：从轻量窗口转到完整应用（LOOP-35）。留在[执行状态的后续 loop](status.md#followup-loops)。
-- 顺延的 Agent 侧后续项保持不变（LOOP-10、11、12、14、15、16、18、21、30、31）。
+- 需要用户的：[Q-40](../../USER-ACTIONS.md#q-40)（本阶段先用的默认值）；[ACT-21](../../USER-ACTIONS.md#act-21)（可选的真实契约）；仍待答复的 [Q-39](../../USER-ACTIONS.md#q-39)、[Q-38](../../USER-ACTIONS.md#q-38)、[Q-37](../../USER-ACTIONS.md#q-37)；[ACT-08](../../USER-ACTIONS.md#act-08)（备份两把私钥）；[ACT-18](../../USER-ACTIONS.md#act-18)。都不阻塞本阶段。
+- 新增的后续项：全局听写（LOOP-36）、流式与私有协议（LOOP-37）、本地润色模型（LOOP-38）、全量离线词库与日文汉字注音（LOOP-39）、语音改写选区（LOOP-40）。留在[执行状态的后续 loop](status.md#followup-loops)。
+- 顺延的 Agent 侧后续项保持不变（LOOP-10、11、12、14、15、16、18、21、30、31、35）。
 
 <a id="prompt"></a>
 ## 11. 交给 B 的执行 prompt
 
 ```text
-你是 Agent B，在本仓库的分支 feat/m11-release-light-open 上连续完成当前阶段（首个正式版、更新的退路与轻量打开）。
+你是 Agent B，在本仓库的分支 feat/m12-voice-dictation 上连续完成当前阶段（类 Typeless 的听写）。
 
-依据：AGENTS.md；docs/delivery/stage-plan.md（本阶段唯一计划，全部工作包 C0、D1、R1、R2、L1—L6、V1、P1、G1、T1、W1，设计 4.1—4.10）；确认记录 A-125、A-127、A-128、A-129；需求 READ-05、DATA-06、DATA-07、VOICE-05、LIB-03、UI-10；验收 AT-164—AT-173；用户待办 Q-39（按其中的默认实现；用户答复后以答复为准）。
+依据：AGENTS.md；docs/delivery/stage-plan.md（本阶段唯一计划，全部工作包 C0、D1、U1、A1、S1、E1、N1、M1、X1、R1、P1、H1、Q1、T1、W1，设计 4.1—4.11）；确认记录 A-130、A-131；需求 VOICE-10—VOICE-17；验收 AT-174—AT-183；用户待办 Q-40（按其中的默认实现；用户答复后以答复为准）。
 
 要求：
-1. 先核对现场（git status、分支基于 main@cfe76d4、计划所在的提交），再按计划第 5.4 节的顺序连续实施，不逐工作包询问。
-2. 本阶段不新增依赖；依赖盘点按 5.2。FFmpeg 按 4.8 改钉月末构建，下载后核对压缩包与各文件的 SHA-256 与 LGPL 许可证。
-3. 轻量打开按 4.1、4.3—4.6：独立的引导入口与三个主进程文件；轻量的主进程只用 @manga/app-core/light 与 Electron，界面只用 readers 的钩子与小组件和基础控件；依赖边界检查与打包产物检查双重保证不加载资料库、插件、Agent 与更新的代码。轻量只写 <应用数据根>\light\，不写启动指针、不建资料库、不在“文档”“下载”里建东西、不联网。轻量进程先设 userData 再取单实例锁，并用打包产物的测试证明它与完整应用各持各的锁；证明不了就停下报告。
-4. 不在完整应用的 VideoPlayer、ComicReader 里加轻量分支；完整应用的行为与全部既有窗口观察不能变。轻量命令与完整应用同名同格式，契约共用并有比对用例。
-5. “打开方式”的注册按 4.5：不用 electron-builder 的 fileAssociations；绝不写扩展名键的默认值；卸载删干净；测试身份不碰真实身份，真实身份的注册表快照前后相同；安装器配置检查拒绝 fileAssociations。
-6. 启动失败的退路按 4.2：不自动回退；只执行哈希相符的安装包；恢复资料库前先把现在的改名留下；回退后跳过这个版本；开发版不计数；测试专用的启动失败开关只对测试身份生效。
-7. 更新与 install-dev 前先请轻量进程记住位置后退出，10 秒内退不出就不安装并说明（4.6）。
-8. 录音悬浮框按 4.9：先用真实的鼠标拖动查明位置没记住的原因（写进报告），再修；只记位置，做小，用图案深浅表示有声音，不显示设备名。从“最近”移除与资源库的进度按 4.10：移除只是从“最近”的列表拿掉，不删进度与用户内容；资源库按各处看得最远的进度；schema v15 迁移有备份、可重来、旧版本拒绝打开。
-9. 基准按第 7 节：新增三个门槛先测基线，达不到先优化，仍达不到写进报告交 A 决定，不自行放宽；G1 的提速不改任何门槛、样本数与测量方法。
-10. 改写测试与走查时断言不减；删除的断言在迁移映射里写明由什么替代。只用合成样本。本阶段的测试不访问 GitHub。
-11. 修复先用子集确认；最后在最终源码上跑一次 node scripts/stage.mjs gate（跑前确认机器空闲、启动它的应用在前台，不锁屏；跑的过程中不改工作树）；证据替换 docs/evidence/gate/（≤ 5 MiB，截图不含本机路径，复制前先看过新截图）；门禁通过后在干净的工作树上跑一次本地发布演练（publish: false）。
-12. 新建本阶段报告 docs/delivery/stage-report.md（计划第 9 节，并加回登记表、docs/README.md 与 docs/SUMMARY.md），更新用户待办的人工检查（计划第 8 节，从 H-96 起）、执行状态与各正本；把全部改动 amend 进本阶段唯一的 DCO 签名提交，消息按最终结果写。不 push、不触发 workflow。
-13. 结束时按开发流程 2.4 给出首选下一步：推荐交给 A 集中审查，并附审查 prompt。
+1. 先核对现场（git status、分支基于 main@3b9d498、计划所在的提交），再按计划第 5.4 节的顺序连续实施，不逐工作包询问。
+2. 新增依赖只限第 3 节判定采用的（sherpa-onnx-node 与 sherpa-onnx-win-x64、pinyin-pro、wanakana、opencc-js），精确版本，登记 ADR-0007 与第三方许可声明；依赖盘点按 5.2。asr-hotword 的移植保留 MIT 许可与来源提交。
+3. 先做 N1 的最小验证：打包后的 Electron 45 在 utilityProcess 里载入 sherpa-onnx-node，并用极速模型识别一段合成语音。证明不了就停下来报告 A（写明错误与尝试过的做法），只继续不依赖本地推理的工作包。
+4. 音频只发往用户所选的一个引擎，不自动换服务；听写命令不对 Agent 开放；推理进程不进完整应用主进程与轻量闭包（check-deps 与打包产物双重检查）。
+5. 模型下载按 4.6：用户确认后才发请求；只访问目录里的主机；Range 续传并重算已有部分的哈希；压缩包与每个必需文件都核对 SHA-256；用系统 tar.exe 前先列出条目并拒绝越界与链接；失败时清空暂存；安装包不含 ASR 模型。目录里的哈希以 sherpa-onnx GitHub Release 的 checksum.txt 为准，ModelScope 只在哈希相同时列为来源。
+6. 采集按 4.2（降噪默认关、回声消除默认开）；开关对比的结果写进报告，不自行改默认值。
+7. 词库按 4.7：schema v16 迁移有备份、可重来、旧版本拒绝打开，旧词条与“手写优先”一条不少；Bangumi 补全每部作品最多 60 个请求，测试只用假 Bangumi。
+8. 纠错与润色按 4.8、4.9：阈值与门槛写成有用例的常量；纠错样本集每对写明来源，不为通过而挑样本；四道防线退回时保留原文；门槛达不到先改进，仍达不到写进报告交 A 决定，不自行放宽。
+9. 听写记录与学词按 4.10：不进备份与资料包，Agent 读不到；学词经用户确认才加入。
+10. 基准按第 7 节：两个新门槛先测基线；不改任何既有门槛、样本数与测量方法。
+11. 只用合成样本与虚构的人名；测试只用本地的假服务；ACT-21 没有授权时真实契约记为 not-run。自动观察不移动用户的鼠标、不抢焦点；真实输入的检查写进用户待办。
+12. 改写测试与走查时断言不减，删除的断言在迁移映射里写明由什么替代。修复先用子集确认；最后在最终源码上跑一次 node scripts/stage.mjs gate（跑前确认机器空闲、启动它的应用在前台，不锁屏，并先在聊天里告诉用户；跑的过程中不改工作树）；证据替换 docs/evidence/gate/（≤ 5 MiB，截图不含本机路径与设备名，复制前先看过新截图）。
+13. 新建本阶段报告 docs/delivery/stage-report.md（计划第 9 节，并加回登记表、README.md、docs/README.md 与 docs/SUMMARY.md），更新用户待办的人工检查（计划第 8 节，从 H-104 起）、执行状态与各正本；把全部改动 amend 进本阶段唯一的 DCO 签名提交，消息按最终结果写。不 push、不触发 workflow。
+14. 结束时按开发流程 2.4 给出首选下一步：推荐交给 A 集中审查，并附审查 prompt。
 ```

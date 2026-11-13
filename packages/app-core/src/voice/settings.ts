@@ -1,5 +1,15 @@
-import { MangaError, PROMPT_LIMIT_DEFAULT, PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } from "@manga/contracts";
-import { checkOverrides, type KeyOverrides } from "@manga/contracts/keys";
+import {
+  MangaError,
+  PROMPT_LIMIT_DEFAULT,
+  PROMPT_LIMIT_MAX,
+  PROMPT_LIMIT_MIN,
+  type AsrEngineSelection,
+  type ChineseVariant,
+  type DictationInsertMode,
+  type PolishMode,
+  type PolishPrompts,
+} from "@manga/contracts";
+import { checkOverrides, findConflicts, resolveKeys, type KeyOverrides } from "@manga/contracts/keys";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 
 export type Overlay = { x?: number; y?: number };
@@ -20,6 +30,21 @@ export type RecordingSettings = {
   /** The longest dictionary hint sent with a block of audio, in characters. A model may take less than this, so a connection can have its own limit. */
   promptChars: number;
   promptCharsByConnection: Record<string, number>;
+  echoCancellation: boolean;
+  systemLoopbackAec: boolean;
+  browserNoiseSuppression: boolean;
+  autoGainControl: boolean;
+  gtcrnDenoise: boolean;
+  dictationHoldKey: string;
+  dictationInsertMode: DictationInsertMode;
+  polishMode: PolishMode;
+  polishPrompts: PolishPrompts;
+  polishConnectionId: string | null;
+  chineseVariant: ChineseVariant;
+  dictationEngine: AsrEngineSelection | null;
+  captureEngine: AsrEngineSelection | null;
+  localIdleMinutes: number;
+  retainDictationAudio24h: boolean;
 };
 
 export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
@@ -33,6 +58,21 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   language: null,
   promptChars: PROMPT_LIMIT_DEFAULT,
   promptCharsByConnection: {},
+  echoCancellation: true,
+  systemLoopbackAec: false,
+  browserNoiseSuppression: false,
+  autoGainControl: true,
+  gtcrnDenoise: false,
+  dictationHoldKey: "RightAlt",
+  dictationInsertMode: "stream_replace",
+  polishMode: "light",
+  polishPrompts: {},
+  polishConnectionId: null,
+  chineseVariant: "simplified",
+  dictationEngine: null,
+  captureEngine: null,
+  localIdleMinutes: 10,
+  retainDictationAudio24h: false,
 };
 
 export type MediaSettings = {
@@ -121,12 +161,29 @@ export function readRecordingSettings(store: DrizzleStore): RecordingSettings {
   return { ...settings, overlay: normalizeOverlay(settings.overlay) };
 }
 
-export function writeRecordingSettings(store: DrizzleStore, patch: Partial<Omit<RecordingSettings, "overlay" | "promptCharsByConnection">> & { overlay?: { x?: number | null; y?: number | null }; promptCharsByConnection?: Record<string, number | null> }): RecordingSettings {
+export function writeRecordingSettings(
+  store: DrizzleStore,
+  patch: Partial<Omit<RecordingSettings, "overlay" | "promptCharsByConnection" | "polishPrompts">> & {
+    overlay?: { x?: number | null; y?: number | null };
+    promptCharsByConnection?: Record<string, number | null>;
+    polishPrompts?: PolishPrompts;
+  },
+): RecordingSettings {
   const current = readRecordingSettings(store);
   const byConnection = { ...current.promptCharsByConnection };
   for (const [connectionId, value] of Object.entries(patch.promptCharsByConnection ?? {})) {
     if (value === null) delete byConnection[connectionId];
     else byConnection[connectionId] = value;
+  }
+  const polishPrompts: PolishPrompts = { ...current.polishPrompts };
+  if (patch.polishPrompts) {
+    for (const key of ["light", "formal"] as const) {
+      if (key in patch.polishPrompts) {
+        const val = patch.polishPrompts[key];
+        if (val === null || val === undefined) delete polishPrompts[key];
+        else polishPrompts[key] = val;
+      }
+    }
   }
   let overlay: Overlay = { ...current.overlay };
   if (patch.overlay) {
@@ -138,15 +195,21 @@ export function writeRecordingSettings(store: DrizzleStore, patch: Partial<Omit<
       if (overlay.x === undefined || overlay.y === undefined) overlay = {};
     }
   }
-  const next: RecordingSettings = { ...current, ...patch, promptCharsByConnection: byConnection, overlay };
+  const next: RecordingSettings = { ...current, ...patch, promptCharsByConnection: byConnection, polishPrompts, overlay };
   if (next.deviceId === undefined) next.deviceId = null;
-  for (const key of [next.holdKey, next.toggleKey]) {
+  for (const key of [next.holdKey, next.toggleKey, next.dictationHoldKey]) {
     if (!KEY_NAME.test(key)) throw new MangaError("VALIDATION_ERROR", "a recording key must be a key name such as F9");
   }
   // Two commands on one key would make one of them unreachable, and the user would not learn which until recording.
   if (next.holdKey === next.toggleKey) throw new MangaError("VALIDATION_ERROR", "hold and toggle recording need different keys");
+  const media = readMediaSettings(store);
+  const conflict = findConflicts(resolveKeys(media.keys), { holdKey: next.holdKey, toggleKey: next.toggleKey })[0];
+  if (conflict) throw new MangaError("VALIDATION_ERROR", `${conflict.chord} is used by ${conflict.actions.join(" and ")}`);
   const limit = (value: number) => Number.isInteger(value) && value >= PROMPT_LIMIT_MIN && value <= PROMPT_LIMIT_MAX;
   if (!limit(next.promptChars) || Object.values(next.promptCharsByConnection).some((value) => !limit(value))) throw new MangaError("VALIDATION_ERROR", `the hint length must be between ${PROMPT_LIMIT_MIN} and ${PROMPT_LIMIT_MAX} characters`);
+  if (!Number.isInteger(next.localIdleMinutes) || next.localIdleMinutes < 1 || next.localIdleMinutes > 120) {
+    throw new MangaError("VALIDATION_ERROR", "localIdleMinutes must be an integer between 1 and 120");
+  }
   store.setMeta(RECORDING_KEY, JSON.stringify(next));
   return next;
 }
@@ -180,12 +243,13 @@ export function writeMediaSettings(
   },
 ): MediaSettings {
   const current = readMediaSettings(store);
+  const rec = readRecordingSettings(store);
   const keys: KeyOverrides = { ...current.keys };
   for (const [id, chords] of Object.entries(patch.keys ?? {})) {
     if (chords === null) delete keys[id];
     else keys[id] = chords;
   }
-  const problem = checkOverrides(keys);
+  const problem = checkOverrides(keys, { holdKey: rec.holdKey, toggleKey: rec.toggleKey });
   if (problem) throw new MangaError("VALIDATION_ERROR", problem);
   const video = { ...current.video, ...(patch.video ?? {}), rates: patch.video?.rates ? normalizeRates(patch.video.rates) : current.video.rates };
   const next: MediaSettings = { keys, comic: { ...current.comic, ...(patch.comic ?? {}) }, video };

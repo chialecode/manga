@@ -85,6 +85,7 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
   const root = sources.repoRoot ?? repoRoot;
   const ffmpegLock = lock<{ version: string; source: { repository: string; tag: string; url: string; zipSha256: string }; license: string }>("ffmpeg.lock.json", root);
   const sileroLock = lock<{ version: string; commit: string; license: string }>("silero-vad.lock.json", root);
+  const gtcrnLock = lock<{ name: string; version: string; commit: string; license: string }>("gtcrn.lock.json", root);
   const fontLock = lock<{ name: string; family: string; version: string; commit: string; license: string; files: Record<string, { url: string }> }>("subtitle-font.lock.json", root);
   const assets: BundledAsset[] = [];
   mkdirSync(resourcesDir, { recursive: true });
@@ -137,6 +138,16 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
   assets.push(record(resourcesDir, "ort-wasm-loader", "vad/ort/ort-wasm-simd-threaded.mjs"));
   assets.push(record(resourcesDir, "ort-license", "vad/ort/LICENSE"));
 
+  // Speech denoiser: the small (~523 KB) GTCRN 16 kHz model and its MIT licence travel with the app; ASR speech recognition
+  // models (`dist/tools/asr/*`) are NEVER bundled into `resources/` — users download or import ASR models on demand.
+  const gtcrnDir = path.join(root, "dist", "tools", "gtcrn");
+  if (!existsSync(path.join(gtcrnDir, "gtcrn_simple.onnx")) || !existsSync(path.join(gtcrnDir, "LICENSE"))) {
+    fail("the GTCRN denoiser model is not in the tool cache; run: node scripts/tools/fetch-gtcrn.mjs");
+  }
+  copyFiles(gtcrnDir, path.join(resourcesDir, "gtcrn"), ["gtcrn_simple.onnx", "LICENSE"]);
+  assets.push(record(resourcesDir, "gtcrn-model", "gtcrn/gtcrn_simple.onnx"));
+  assets.push(record(resourcesDir, "gtcrn-license", "gtcrn/LICENSE"));
+
   // The subtitle renderer's fallback font: Chinese and Japanese subtitles whose style fonts are neither in the file nor on the machine are drawn with it.
   const fontDir = path.join(root, "dist", "tools", "subtitle-font");
   if (!existsSync(path.join(fontDir, "NotoSansSC-Regular.otf"))) fail("the subtitle font is not in the tool cache; run: node scripts/tools/fetch-subtitle-font.mjs");
@@ -145,7 +156,7 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
   assets.push(record(resourcesDir, "subtitle-font-license", "subtitle-font/LICENSE"));
 
   // Worker bundles.
-  for (const [id, name] of [["parse-worker", "parse-worker.cjs"], ["vad-worker", "vad-worker.cjs"]] as const) {
+  for (const [id, name] of [["parse-worker", "parse-worker.cjs"], ["vad-worker", "vad-worker.cjs"], ["asr-host", "asr-host.cjs"]] as const) {
     const built = path.join(sources.buildDir, name);
     if (!existsSync(built)) fail(`${name} is missing from the build (${sources.buildDir})`);
     cpSync(built, path.join(resourcesDir, name));
@@ -185,6 +196,7 @@ export function stageBundledAssets(resourcesDir: string, sources: Sources): Asse
     notices: [
       { name: "FFmpeg", version: ffmpegLock.version, license: ffmpegLock.license, source: ffmpegLock.source.url, files: ["ffmpeg/LICENSE.txt", "ffmpeg/SOURCE.txt"] },
       { name: "Silero VAD", version: sileroLock.version, license: sileroLock.license, source: `https://github.com/snakers4/silero-vad/tree/${sileroLock.commit}`, files: ["vad/LICENSE"] },
+      { name: "GTCRN", version: gtcrnLock.version, license: gtcrnLock.license, source: `https://github.com/Xiaobin-Rong/gtcrn/tree/${gtcrnLock.commit}`, files: ["gtcrn/LICENSE"] },
       { name: "ONNX Runtime Web", version: ortVersion, license: "MIT", source: "https://github.com/microsoft/onnxruntime", files: ["vad/ort/LICENSE"] },
       { name: fontLock.name, version: fontLock.version, license: fontLock.license, source: `https://github.com/notofonts/noto-cjk/tree/${fontLock.commit}`, files: ["subtitle-font/LICENSE"] },
       { name: "PDF.js", version: (JSON.parse(readFileSync(path.join(pdfjs, "package.json"), "utf8")) as { version: string }).version, license: "Apache-2.0", source: "https://github.com/mozilla/pdf.js", files: [`${PDFJS_DIR}/LICENSE`] },

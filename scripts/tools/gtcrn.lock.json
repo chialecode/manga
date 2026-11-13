@@ -1,0 +1,21 @@
+{
+  "name": "GTCRN",
+  "version": "simple-16k-502ebfab64",
+  "commit": "502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73",
+  "license": "MIT",
+  "files": {
+    "gtcrn_simple.onnx": {
+      "repository": "https://github.com/k2-fsa/sherpa-onnx",
+      "tag": "speech-enhancement-models",
+      "asset": "gtcrn_simple.onnx",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx",
+      "sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
+      "bytes": 535638
+    },
+    "LICENSE": {
+      "url": "https://raw.githubusercontent.com/Xiaobin-Rong/gtcrn/502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73/LICENSE",
+      "sha256": "c467165e5860b4a7494ef4a6e2788e4115d95b5b8989bb5f86287089adddf794",
+      "bytes": 1069
+    }
+  }
+}

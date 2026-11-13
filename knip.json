@@ -8,7 +8,7 @@
       "ignoreDependencies": ["sharp", "fflate", "@napi-rs/canvas", "@tiptap/core", "bencode", "create-torrent", "bittorrent-tracker", "webtorrent", "@electron-forge/cli", "@electron/asar", "electron", "electron-updater", "resedit", "semver"]
     },
     "apps/desktop": {
-      "entry": ["src/main/index.ts", "src/main/bootstrap.ts", "src/main/light/main.ts", "src/preload/preload.ts", "src/preload/preload-light.ts", "src/main/parse-worker.ts", "src/renderer/main.tsx", "src/light/main.tsx", "forge.config.ts", "vite.*.config.ts", "danmaku-define.ts"],
+      "entry": ["src/main/index.ts", "src/main/bootstrap.ts", "src/main/light/main.ts", "src/preload/preload.ts", "src/preload/preload-light.ts", "src/main/parse-worker.ts", "src/main/asr-host.ts", "src/renderer/main.tsx", "src/light/main.tsx", "forge.config.ts", "vite.*.config.ts", "danmaku-define.ts"],
       "project": ["src/**/*.{ts,tsx}", "*.ts"],
       "ignore": ["src/renderer/pdf-worker-types.ts"],
       "ignoreDependencies": ["better-sqlite3", "@electron-forge/plugin-fuses"]

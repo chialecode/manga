@@ -8,6 +8,8 @@ import { Modal } from "./components/modal.tsx";
 import { MatchHost } from "./pages/work-match.tsx";
 import { RecordingReview } from "./voice/review-panel.tsx";
 import { useRecorder } from "./voice/use-recorder.ts";
+import { useDictation } from "./voice/use-dictation.ts";
+import { useReaderContext } from "./lib/reader-context.ts";
 import { usePackage } from "./hooks/use-package.ts";
 import { useScan } from "./hooks/use-scan.ts";
 import { useScreenshots, type RichNotice } from "./hooks/use-screenshots.tsx";
@@ -291,13 +293,35 @@ export function App() {
   const pkg = usePackage({ i18n, setError, setNotice, refresh });
   const shots = useScreenshots({ i18n, setError, setRichNotice, setNotice, contextId: context });
   const recorder = useRecorder({ i18n, setError, setNotice, enabled: voiceOn, contextId: context });
-  const update = useUpdate({
-    enabled: Boolean(host?.writable),
-    recordingActive: voiceOn && recorder.state.phase !== "idle",
-    setError,
-  });
   const keyBindings = useKeyBindings();
   const keyTable = keyBindings.table;
+  const activeReader = useReaderContext();
+  const focusedWorkId = useSyncExternalStore(
+    controller.subscribe,
+    () => {
+      const tab = controller.focusedTab();
+      return tab && typeof tab.target?.workId === "string" ? tab.target.workId : null;
+    },
+    () => null,
+  );
+  const activeWorkId = activeReader?.workId ?? focusedWorkId;
+  const dictation = useDictation({
+    i18n,
+    enabled: voiceOn,
+    settings: recorder.settings,
+    keyTable,
+    contextId: context,
+    workId: activeWorkId,
+    recorderBusy: recorder.state.phase !== "idle",
+    setError,
+    setNotice,
+    onOpenVoiceSettings: () => shellStore.enterSettings("recording"),
+  });
+  const update = useUpdate({
+    enabled: Boolean(host?.writable),
+    recordingActive: voiceOn && (recorder.state.phase !== "idle" || dictation.active),
+    setError,
+  });
 
   const depsRef = useRef<Parameters<typeof createOpeners>[0] extends () => infer D ? D : never>(null as never);
   depsRef.current = {
@@ -345,6 +369,7 @@ export function App() {
     pkg,
     update,
     recorder,
+    dictation,
     voiceOn,
     keyBindings,
     screenshots: shots.port,

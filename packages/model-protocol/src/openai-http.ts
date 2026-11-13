@@ -45,6 +45,7 @@ function chatLimits(request: TextRequest): Record<string, unknown> {
   return {
     ...(request.maxOutputTokens ? { [request.maxTokensField ?? "max_tokens"]: request.maxOutputTokens } : {}),
     ...(request.reasoningEffort ? { reasoning_effort: request.reasoningEffort } : {}),
+    ...(request.temperature !== undefined && !request.reasoningEffort ? { temperature: request.temperature } : {}),
   };
 }
 
@@ -53,6 +54,7 @@ function responseLimits(request: TextRequest): Record<string, unknown> {
   return {
     ...(request.maxOutputTokens ? { max_output_tokens: request.maxOutputTokens } : {}),
     ...(request.reasoningEffort ? { reasoning: { effort: request.reasoningEffort } } : {}),
+    ...(request.temperature !== undefined && !request.reasoningEffort ? { temperature: request.temperature } : {}),
   };
 }
 

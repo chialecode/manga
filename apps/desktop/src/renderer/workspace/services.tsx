@@ -10,6 +10,7 @@ import type { HostState } from "../lib/api.ts";
 import type { WorkMediaKind, WorkSummary } from "../lib/works.ts";
 import type { ScreenshotPort } from "../hooks/use-screenshots.tsx";
 import type { RecorderHandle } from "../voice/use-recorder.ts";
+import type { DictationHandle } from "../voice/use-dictation.ts";
 import type { useScan } from "../hooks/use-scan.ts";
 import type { usePackage } from "../hooks/use-package.ts";
 import type { useKeyBindings } from "../hooks/use-key-bindings.ts";
@@ -90,6 +91,7 @@ export type Services = {
   pkg: ReturnType<typeof usePackage>;
   update: UpdateHandle;
   recorder: RecorderHandle;
+  dictation?: DictationHandle;
   voiceOn: boolean;
   keyBindings: ReturnType<typeof useKeyBindings>;
   screenshots: ScreenshotPort;

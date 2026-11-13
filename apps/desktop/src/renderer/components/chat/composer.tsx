@@ -145,6 +145,7 @@ export type ComposerProps = {
   onSubtitleAhead: (minutes: number) => void;
   onMaterials: () => void;
   mic: Parameters<typeof MicButton>[0] | null;
+  dictation?: { active: boolean; onToggle: (target: HTMLTextAreaElement | null) => void } | null;
   placeholder?: string;
   inputTestId?: string;
 };
@@ -224,7 +225,21 @@ export function Composer(props: ComposerProps) {
           ) : null}
           <span className="flex-1" />
           <Menu label={t("chat.plus")} testId="chat-plus" align="end" trigger={<Plus size={16} />} items={plus} />
-          {props.mic ? <MicButton {...props.mic} /> : null}
+          {props.mode === "ask" && props.dictation ? (
+            <button
+              type="button"
+              className="icon-button chat-mic"
+              data-testid="chat-mic"
+              data-mode="dictation"
+              aria-pressed={props.dictation.active}
+              aria-label={props.dictation.active ? t("dictation.micAskStop") : t("dictation.micAskStart")}
+              title={props.dictation.active ? t("dictation.micAskStop") : t("dictation.micAskStart")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => props.dictation!.onToggle(area.current)}
+            >
+              {props.dictation.active ? <Square size={15} /> : <Mic size={16} />}
+            </button>
+          ) : props.mic ? <MicButton {...props.mic} /> : null}
           {props.running ? (
             <button type="button" className="chat-send" data-testid="agent-stop" aria-label={t("agent.stop")} title={t("agent.stop")} onClick={props.onStop}><Square size={14} /></button>
           ) : (
