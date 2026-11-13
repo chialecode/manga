@@ -570,7 +570,8 @@ describe("voice dictation end-to-end integration (M12 Wave 3A)", () => {
     expect(conflictRes.error?.code).toBe("VALIDATION_ERROR");
   });
 
-  it("AT-178: enforces download confirmation, supports pause + HTTP 206 Range resume, cleans staging on checksum mismatch, and unloads active model before delete", async () => {
+  // Installs a model archive through Windows' own tar.exe (bsdtar); GNU tar on the Linux CI lists entries in another format.
+  it.runIf(process.platform === "win32")("AT-178: enforces download confirmation, supports pause + HTTP 206 Range resume, cleans staging on checksum mismatch, and unloads active model before delete", async () => {
     const workDir = makeWorkDir("manga-dic-models-");
     const server: FakeModelServer = await startFakeModelServer();
     closeables.push(() => server.close());

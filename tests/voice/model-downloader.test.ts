@@ -24,6 +24,10 @@ import { testTempRoot } from "../helpers/global-temp.ts";
 
 const BANNED_COPY_PATTERNS = [/导入(?:本地)?文件(?!夹)/, /标题栏/, /托管/];
 
+// The archive checks run Windows' own tar.exe (bsdtar, from System32 in the product). GNU tar on the Linux CI lists entries in
+// another format and cannot make the test archives (`@archive`), so these run on Windows only: the full stage gate there covers them.
+const onWindows = process.platform === "win32";
+
 describe("voice local model catalog, downloader, and tar verifier", () => {
   const tempDirs: string[] = [];
   const servers: FakeModelServer[] = [];
@@ -104,7 +108,7 @@ describe("voice local model catalog, downloader, and tar verifier", () => {
     });
   });
 
-  it("requires confirmed: true before issuing any network request and enforces HTTPS + host allowlist on redirects", async () => {
+  it.runIf(onWindows)("requires confirmed: true before issuing any network request and enforces HTTPS + host allowlist on redirects", async () => {
     const workDir = makeTempDir("voice-dl-gate-");
     const fixture = createSyntheticModelFixture(workDir);
     const srv = await startFakeModelServer({
@@ -175,7 +179,7 @@ describe("voice local model catalog, downloader, and tar verifier", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("resumes with HTTP Range 206 after mid-stream drop, and restarts from byte 0 on .part tamper, ETag change, or 200 response", async () => {
+  it.runIf(onWindows)("resumes with HTTP Range 206 after mid-stream drop, and restarts from byte 0 on .part tamper, ETag change, or 200 response", async () => {
     const workDir = makeTempDir("voice-dl-range-");
     const fixture = createSyntheticModelFixture(workDir, { weightsByteLength: 64 * 1024 });
     const cutBytes = 16 * 1024;
@@ -310,7 +314,7 @@ describe("voice local model catalog, downloader, and tar verifier", () => {
     expect(installedVia200.state).toBe("installed");
   });
 
-  it("supports pause, resume, cancel, disk-full rejection, multi-source fallback, and manual sourceId selection", async () => {
+  it.runIf(onWindows)("supports pause, resume, cancel, disk-full rejection, multi-source fallback, and manual sourceId selection", async () => {
     const workDir = makeTempDir("voice-dl-ctrl-");
     const fixture = createSyntheticModelFixture(workDir, { weightsByteLength: 64 * 1024 });
     const srv = await startFakeModelServer({
@@ -435,7 +439,7 @@ describe("voice local model catalog, downloader, and tar verifier", () => {
     expect(srv.requests.map((r) => r.url)).toEqual(["/github-good.tar.bz2"]);
   });
 
-  it("rejects 1-byte tampered archives, traversal/drive/symlink/hardlink/tar-bomb archives, missing tar.exe, and cleans .staging", async () => {
+  it.runIf(onWindows)("rejects 1-byte tampered archives, traversal/drive/symlink/hardlink/tar-bomb archives, missing tar.exe, and cleans .staging", async () => {
     const workDir = makeTempDir("voice-dl-sec-");
     const fixture = createSyntheticModelFixture(workDir);
 
@@ -582,7 +586,7 @@ describe("voice local model catalog, downloader, and tar verifier", () => {
     });
   });
 
-  it("verifies archive & folder imports, calls unloadModel before delete, and returns freedBytes", async () => {
+  it.runIf(onWindows)("verifies archive & folder imports, calls unloadModel before delete, and returns freedBytes", async () => {
     const workDir = makeTempDir("voice-dl-import-");
     const fixture = createSyntheticModelFixture(workDir);
     const events: string[] = [];
