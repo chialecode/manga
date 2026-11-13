@@ -1,6 +1,6 @@
 # 用户待办
 
-核对日期：2026-11-13。
+核对日期：2026-11-14。
 
 这一页列出需要你本人做的全部事项：
 
@@ -76,7 +76,6 @@ Agent 收到后的处理：
 
 | 编号 | 操作与范围 | 现状 | 授权后 Agent 做什么 |
 | --- | --- | --- | --- |
-| <a id="act-22"></a>ACT-22 | 类 Typeless 听写阶段的远端操作：<br>（1）push 本地分支 `feat/m12-voice-dictation`（一个带 DCO 签名的阶段提交）；<br>（2）创建到 `main` 的 PR；<br>（3）CI 通过后 squash 合并，删除远端阶段分支，同步本地 `main` | A 集中审查已于 2026-11-13 收敛，修复后在最终源码上重跑完整门禁，全部通过（[报告第 11 节](docs/delivery/stage-report.md#a-review)）。Q-40 的答复、可选的 ACT-21 与人工检查 H-104—H-111 都不是前提（A-53）。合并后，下一个周一 UTC 0 点的定时运行会把听写带进正式版。**2026-11-14 你已授权（push、PR、检查通过后 squash 合并并清理分支）**，阶段内追加后在最终源码上重跑的整套门禁通过（[报告第 9 节](docs/delivery/stage-report.md#gate)） | Agent 按顺序执行，CI 失败时停下，在这里写明原因，不反复重跑 |
 | <a id="act-21"></a>ACT-21 | 可选：类 Typeless 听写阶段的有限真实契约，都只用合成语音与虚构的人名：<br>（1）Bangumi 只读：读 2 个角色与 2 个人物的详情，共不超过 10 个请求，核对 `infobox` 的实际结构与补全别名的解析；<br>（2）用你自己的转录连接（OpenAI 兼容的转录接口）与一个支持对话接口音频输入的连接（例如阿里云百炼的 qwen3-asr-flash），各发不超过 5 个请求，核对热词提示与音频输入的格式；连接与密钥由你在本地的环境文件里配置，Agent 不读取与任务无关的值；<br>（3）报告只写请求是否被接受、返回的文字与期望的相似度，不记录密钥 | B 在本阶段按假服务实现与测试；没有授权时这些契约记为 not-run，不影响开发与合并。本地模型从 GitHub 与 ModelScope 下载公开的模型文件属于已选依赖的获取，不在本项 | 按写明的请求数上限运行 `MANGA_LIVE_*` 契约测试一次，结果写进阶段报告与执行状态的“真实服务”一节 |
 | <a id="act-18"></a>ACT-18 | 打开 GitHub 上 Actions 的“要求固定完整 SHA”（`sha_pinning_required`）：仓库的期望配置 `.github/actions-policy.json` 与 Git 规则都写着要求，实际设置是关的。现有的 workflow 已经全部用完整 SHA，打开后不影响运行 | 2026-11-08 A 执行 ACT-17 时发现，一直以来都是关的；不影响现在的 CI。打开后，用标签而不是 SHA 引用 Action 的 workflow 会被 GitHub 直接拒绝 | 回复“授权 ACT-18”；Agent 用 `gh api` 打开这一项并核对 |
 | <a id="act-14"></a>ACT-14 | 可选：用你自己的模型连接，对 PDF 与视频输入做有限的真实试验：<br>（1）只用合成材料：一份几页的合成 PDF 与一段约 10 s 的合成视频，不用你的资源库；<br>（2）只调用你指定的、本来就支持 PDF 或视频输入的那个连接，每种输入各发 2—3 次请求；<br>（3）报告只写请求是否被接受、模型是否读到了内容、耗时与 Token 用量，不写密钥与回答全文 | 不急：本阶段只对本地的假模型服务验证（计划 4.5）。B 交付后再授权更合适，那时可以直接用新版本试 | 按你写明的连接与次数调用一次，结果写进执行状态的真实服务试验一节 |
@@ -860,6 +859,13 @@ ASS 默认保留文件自带的样式。
 
 ## 最近处理完的
 
+- <a id="act-22"></a>**ACT-22 类 Typeless 听写阶段的远端操作**：你 2026-11-14 授权到合并并清理分支，又授权“直到 MANGA 与 DELTA 都可以开始下一个阶段”。Agent 已执行：
+  - 合并前在最终源码上重跑整套 `stage gate` 通过（[阶段报告第 9、12 节](docs/delivery/stage-report.md#stage-additions)）；
+  - push 阶段分支并创建 [PR #21](https://github.com/chialecode/manga/pull/21)；
+  - CI 第一次运行时，6 个要用 Windows 自带 `tar.exe` 的模型压缩包用例在 Linux 上失败；追加一个提交，改为只在 Windows 上运行后通过；
+  - squash 合并为 `92d1b0b`，删除远端与本地阶段分支，同步本地 `main`；
+  - 合并后的状态记录另开一个只改文档的 PR。
+  - 产品验收（H-104—H-111）仍为 not-run。
 - <a id="start-dictation"></a>**2026-11-13 开始下一阶段**：你 2026-11-12 要求下一阶段细化语音功能，做类似 Typeless 的体验（降噪、去除静默、ASR、按词库优化文字、本地模型下载与标准公共 API）；2026-11-13 提供选型调研并让 Agent 继续。A 写成[当前阶段计划](docs/delivery/stage-plan.md)（A-130、A-131），细节的默认值见 [Q-40](#q-40)。
 - <a id="q-23"></a>**Q-23 语音转录还要加哪些功能**：2026-11-12 由你对下一阶段的要求答复（A-130）：采用第 1—6 项（从修改中学词、简繁统一、自定义润色提示词、词典批量导入、语音问 Agent、本地离线转录），在当前阶段实现；第 7 项（转写已有的音频或视频文件）、第 8 项（区分说话人）、第 9 项（口述翻译）、第 10 项（文本替换）不做。
 - <a id="act-20"></a>**ACT-20 首个正式版、更新的退路与轻量打开阶段的远端操作**：你 2026-11-12 授权，并授权完成之后的剩余操作直到正式版发布成功。Agent 已执行：push 阶段分支并创建 [PR #11](https://github.com/chialecode/manga/pull/11)；CI 的 `repository-quality` 与 DCO 一次通过，squash 合并为 `f9aea92`，删除远端与本地阶段分支，同步本地 `main`。合并后按第（4）项以 `dry_run=true` 运行 `release.yml`：FFmpeg 等工具都能下载（R1 生效），但全套测试第一次在 GitHub 的 Windows 运行器上运行，24 项失败，没有建标签、没有发布。原因与处理：（1）资料库位置的路径检查把 8.3 短文件名与大小写不同的同一目录误判为链接（运行器的临时目录就是短文件名），这是真实缺陷，`isReparsePath` 改为逐级检查链接与 junction，并补回归测试 `tests/runtime/reparse-path.test.ts`；（2）需要 GPU 编码器的 HEVC 10-bit 样本与需要 Windows 中英文语音的 30 分钟录音样本本来就是可选样本，运行器上生成不了，用到它们的测试改为样本缺失时报告为跳过（开发机上照常运行）；（3）后台进程优先级的测试改为与调用方比较（运行器本身就以低于正常的优先级运行）。这三项经 [PR #12](https://github.com/chialecode/manga/pull/12) 合入后，第二次试运行只剩 1 项失败：插件测试把心跳设为 40 ms、连续漏 3 次就结束插件，满负载的运行器上健康的插件也被结束，改为测试默认 1 秒心跳、只有“插件不再应答”那项用短心跳（[PR #13](https://github.com/chialecode/manga/pull/13)）。之后的试运行依次处理：（4）发布流水线的 `stage test --ci` 与 `stage package --ci` 对运行器上生成不了的可选样本所对应的用例与打包阶段记为“豁免”，`gate.json` 写明哪些用例和阶段依赖哪个可选样本（[PR #14](https://github.com/chialecode/manga/pull/14)、[PR #15](https://github.com/chialecode/manga/pull/15)）；（5）窗口巡检进入窗口全屏后等布局稳定再量阅读区（[PR #16](https://github.com/chialecode/manga/pull/16)）；（6）安装检查读取每用户卸载项时，全新账户没有该注册表键不再报错（[PR #17](https://github.com/chialecode/manga/pull/17)）；（7）真实缺陷：经 8.3 短路径启动时，窗口页面地址的长短拼写不同，所有 IPC 被拒，资源管理器“打开方式”启动的轻量打开只显示空窗口；`isAppPage` 改为按文件的真实路径比较，并补回归测试（[PR #18](https://github.com/chialecode/manga/pull/18)）；（8）跨卷发布测试在刚关闭的应用释放目录前就删除，改为带重试删除（[PR #19](https://github.com/chialecode/manga/pull/19)）。第 9 次试运行 decide、check、build 全部通过；随后以 `dry_run=false` 运行，2026-11-12 发布 [MANGA v0.1.1](https://github.com/chialecode/manga/releases/tag/v0.1.1)。Agent 下载发布产物，用应用内置的更新校验确认安装包签名有效，`latest.yml` 的 SHA-512 与 `SHA256SUMS` 都与安装包一致。
