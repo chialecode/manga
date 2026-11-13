@@ -264,7 +264,7 @@
 ### 10.2 首选可执行下一步：请用户授权 push、PR 与 squash 合并
 
 - **阶段判断**：B 自检的必需用例与门禁全部通过，A 集中审查已收敛（[第 11 节](#a-review)），修复后在最终源码上重跑的完整 `stage gate` 通过。按计划第 1 节，Agent 侧已完成。
-- **首选动作**：按用户 2026-11-14 的授权执行 [ACT-22](../../USER-ACTIONS.md#act-22)：push 阶段分支、创建到 `main` 的 PR、CI 通过后 squash 合并并清理分支。
+- **结果**：已按用户 2026-11-14 的授权执行 [ACT-22](../../USER-ACTIONS.md#act-22)：[PR #21](https://github.com/chialecode/manga/pull/21) squash 合并为 `main@92d1b0b`，阶段分支已清理。下一步是用户开启下一阶段。
 - **不是前提的事项**：[Q-40](../../USER-ACTIONS.md#q-40) 的答复、可选的 [ACT-21](../../USER-ACTIONS.md#act-21) 与人工检查 [H-104](../../USER-ACTIONS.md#h-104)—[H-111](../../USER-ACTIONS.md#h-111) 都不阻塞合并（A-53），`productAcceptance` 保持 `not-run`。
 
 <a id="a-review"></a>
