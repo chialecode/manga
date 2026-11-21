@@ -5,16 +5,16 @@ import { LibraryPackageManifestSchema, MangaError, PackageAttachmentNameSchema, 
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { applyCreative, checkCreative, collectCreative, creativeIsEmpty, type CreativeHooks, type CreativeSection } from "../creative/library-section.ts";
 import { placeInLibrary } from "../library-locations.ts";
+import { sha256File, writeFileAtomic } from "../shared/utils.ts";
 import { WorkFolders } from "../work-folders.ts";
-import { comparablePath, ownedFileFingerprint, pathsOverlap, copyOwnedFile, listCopyFiles, fingerprintTree } from "./file-ownership.ts";
+import { PACKAGE_COPIED_MANIFEST, recoverOrRollback } from "./location-recovery.ts";
+
+export { recoverOrRollback };
 
 const FORMAT = "manga-library-package-v1";
 const MAX_MANIFEST_BYTES = 64 * 1024 * 1024;
 const MAX_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024;
-
-function sha256File(file: string): string {
-  return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
-}
+const LINK_FALLBACK = new Set(["EXDEV", "EPERM", "ENOSYS", "ENOTSUP", "EOPNOTSUPP", "UNKNOWN", "EMLINK", "EACCES"]);
 
 function sqlValue(value: unknown): string | number | bigint | Buffer | null {
   if (value === null || value === undefined) return null;
@@ -330,7 +330,15 @@ export function exportLibraryPackage(store: DrizzleStore, destDir: string, optio
 
 /** The same export, written so it can be stopped: nothing stays on disk when it is. */
 export async function exportLibraryPackageCancellable(store: DrizzleStore, destDir: string, options: PackageExportOptions = {}): Promise<LibraryPackageManifest> {
+  const resolvedDest = path.resolve(destDir);
+  const attachmentsRoot = path.resolve(store.attachmentsDir);
+  if (resolvedDest === attachmentsRoot || resolvedDest.startsWith(attachmentsRoot + path.sep)) {
+    throw new MangaError("PUBLISH_CONFLICT", "package destination is inside attachments");
+  }
   const existed = fs.existsSync(destDir);
+  if (existed && fs.readdirSync(destDir).length) {
+    throw new MangaError("PUBLISH_CONFLICT", "package destination requires an empty directory");
+  }
   const steps = exportSteps(store, destDir, options);
   try {
     let step = steps.next();
@@ -344,7 +352,7 @@ export async function exportLibraryPackageCancellable(store: DrizzleStore, destD
     steps.return(undefined as never);
     // A stopped or failed export leaves nothing behind: what it wrote is removed, a folder that was there before stays.
     if (!existed) fs.rmSync(destDir, { recursive: true, force: true });
-    else for (const name of fs.readdirSync(destDir)) fs.rmSync(path.join(destDir, name), { recursive: true, force: true });
+    else if (fs.existsSync(destDir)) for (const name of fs.readdirSync(destDir)) fs.rmSync(path.join(destDir, name), { recursive: true, force: true });
     throw error;
   }
 }
@@ -743,9 +751,10 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         const resourceId = finalRevisionOwner.get(row.id) ?? row.resource_id;
         const revisionId = revisionIds.get(row.id)!;
         if (replacedRevisions.has(row.id)) {
-          // The replaced payload's index and media belong to the old text; they are rebuilt from the package below.
+          // The replaced payload's index, locations and media belong to the old text; they are rebuilt from the package below.
           run("DELETE FROM search_idx WHERE fragment_id IN (SELECT id FROM text_fragments WHERE resource_revision_id = ? AND object_id IS NULL)", row.id);
           run("DELETE FROM text_fragments WHERE resource_revision_id = ? AND object_id IS NULL", row.id);
+          run("DELETE FROM file_locations WHERE resource_revision_id = ?", row.id);
           run("DELETE FROM resource_assets WHERE resource_revision_id = ?", row.id);
           run("DELETE FROM resource_revisions WHERE id = ?", row.id);
         }
@@ -1019,10 +1028,23 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         run("INSERT OR REPLACE INTO subject_persons(work_id, provider_id, subject_id, person_id, position, name, relation, career_json, episodes, image_hash, fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
           workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.subject_id, row.person_id, row.position, row.name, row.relation, row.career_json, row.episodes, creditImage(row.image, row.fetched_at), row.fetched_at);
       }
-      for (const row of manifest.metadataSnapshots) run("INSERT OR REPLACE INTO metadata_snapshots(work_id, provider_id, external_id, snapshot_json, fetched_at, source_url, api_version, detached) VALUES (?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.fetched_at ?? null, row.source_url ?? null, row.api_version ?? null, row.detached ?? 0);
-      for (const row of manifest.metadataOverrides) run("INSERT OR REPLACE INTO metadata_overrides(work_id, fields_json, locked_json, cleared_json) VALUES (?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.fields_json, row.locked_json, row.cleared_json);
-      for (const row of manifest.metadataCandidates) run("INSERT OR REPLACE INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)", row.id, row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null, row.provider_id, row.payload_json, row.external_id ?? null, row.search_id ?? null, row.state ?? "open", row.created_at ?? null);
-      for (const row of manifest.workLinks) run("INSERT OR REPLACE INTO work_links(work_id, provider_id, external_id, snapshot_json, confirmed_at, namespace, subject_type, link_state, match_basis) VALUES (?,?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.confirmed_at, row.namespace ?? "", row.subject_type ?? null, row.link_state ?? "linked", row.match_basis ?? null);
+      for (const row of manifest.metadataSnapshots) {
+        if (skippedWork.has(row.work_id)) continue;
+        run("INSERT OR REPLACE INTO metadata_snapshots(work_id, provider_id, external_id, snapshot_json, fetched_at, source_url, api_version, detached) VALUES (?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.fetched_at ?? null, row.source_url ?? null, row.api_version ?? null, row.detached ?? 0);
+      }
+      for (const row of manifest.metadataOverrides) {
+        if (skippedWork.has(row.work_id)) continue;
+        run("INSERT OR REPLACE INTO metadata_overrides(work_id, fields_json, locked_json, cleared_json) VALUES (?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.fields_json, row.locked_json, row.cleared_json);
+      }
+      for (const row of manifest.metadataCandidates) {
+        if (row.work_id && skippedWork.has(row.work_id)) continue;
+        const candidateId = hasRow(store, "metadata_candidates", row.id) ? createId("cand") : row.id;
+        run("INSERT OR REPLACE INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)", candidateId, row.work_id ? (workIds.get(row.work_id) ?? row.work_id) : null, row.provider_id, row.payload_json, row.external_id ?? null, row.search_id ?? null, row.state ?? "open", row.created_at ?? null);
+      }
+      for (const row of manifest.workLinks) {
+        if (skippedWork.has(row.work_id)) continue;
+        run("INSERT OR REPLACE INTO work_links(work_id, provider_id, external_id, snapshot_json, confirmed_at, namespace, subject_type, link_state, match_basis) VALUES (?,?,?,?,?,?,?,?,?)", workIds.get(row.work_id) ?? row.work_id, row.provider_id, row.external_id, row.snapshot_json, row.confirmed_at, row.namespace ?? "", row.subject_type ?? null, row.link_state ?? "linked", row.match_basis ?? null);
+      }
       // Media the application keeps gets a real location row in its own library path, so a hosted book stays readable after the round trip.
       // Usability is judged from the verified staging copy, because durable files are published after these inserts.
       // A file of the user's own folders comes back as a location outside the library, unless an older package names a path that is
@@ -1112,6 +1134,7 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
         applyCreative(store, creative, { ...options.creative, mapTarget: (kind, id) => targets[kind]?.get(id) ?? id }, (projectId) => actionOr("project", projectId), strategy);
       }
       // Publish durable files before the DB commit so committed rows never refer to missing copies.
+      const copiedAcrossVolumes: string[] = [];
       for (const attachment of manifest.attachments) {
         if (missingMedia.has(attachment.id)) continue;
         // Pictures of the images table were read into it above; they are not kept as files as well.
@@ -1123,7 +1146,27 @@ export function importLibraryPackageResolved(store: DrizzleStore, sourceDir: str
           throw new MangaError("PUBLISH_CONFLICT", `attachment already exists with different content: ${attachment.id}`);
         }
         fs.mkdirSync(home, { recursive: true });
-        fs.linkSync(path.join(staging, attachment.id), target);
+        const stagedFile = path.join(staging, attachment.id);
+        try {
+          fs.linkSync(stagedFile, target);
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException | undefined)?.code ?? "";
+          if (!LINK_FALLBACK.has(code)) throw error;
+          // Cross-volume fallback (e.g. attachments and managed library on different drives): record ownership in staging first, then atomic copy + fsync + rename.
+          copiedAcrossVolumes.push(attachment.id);
+          writeFileAtomic(path.join(staging, PACKAGE_COPIED_MANIFEST), JSON.stringify(copiedAcrossVolumes));
+          const tmp = path.join(home, `.${attachment.id}.${jobId.slice(-8)}.tmp`);
+          try {
+            fs.copyFileSync(stagedFile, tmp, fs.constants.COPYFILE_EXCL);
+            const fd = fs.openSync(tmp, "r+");
+            try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+            if (fs.existsSync(target)) throw new MangaError("PUBLISH_CONFLICT", `attachment appeared concurrently: ${attachment.id}`);
+            fs.renameSync(tmp, target);
+          } catch (copyError) {
+            try { fs.rmSync(tmp, { force: true }); } catch { /* ignore cleanup error */ }
+            throw copyError;
+          }
+        }
         published.push(target);
         created.push(target);
       }
@@ -1269,194 +1312,4 @@ export function remapLocator(locatorJson: string, revisionIds: Map<string, strin
   } catch {
     return locatorJson;
   }
-}
-
-export type RecoveryOutcome = { jobs: number; removed: string[]; needsReview: string[]; recovered: string[] };
-function sameFile(a: string, b: string): boolean {
-  try {
-    const left = fs.statSync(a);
-    const right = fs.statSync(b);
-    return left.ino === right.ino && left.dev === right.dev && left.size === right.size;
-  } catch {
-    return false;
-  }
-}
-
-type LocationPayload = {
-  copies?: Array<{ partition: string; source: string; target: string; indexedOnly?: boolean }>;
-  targetRoot?: string;
-  liveRoot?: string;
-  verified?: Array<{ partition: string; bytes: number; fingerprint: string }>;
-};
-
-export function recoverOrRollback(store: DrizzleStore, action: "recover" | "rollback", liveRoot?: string): RecoveryOutcome {
-  const jobs = store.sqlite.prepare("SELECT * FROM recovery_jobs WHERE status IN ('running','interrupted','failed','planned','needs-review')").all() as Array<{ id: string; kind: string; stage: string; status: string; staging_path: string | null; payload_json: string }>;
-  const removed: string[] = [];
-  const needsReview: string[] = [];
-  const recovered: string[] = [];
-  for (const job of jobs) {
-    if (job.kind === "location-migrate") {
-      if (action === "rollback") {
-        const outcome = rollbackLocationJob(store, job, liveRoot ?? JSON.parse(job.payload_json).liveRoot);
-        removed.push(...outcome.removed);
-        needsReview.push(...outcome.needsReview);
-        continue;
-      }
-      const outcome = resumeLocationCopy(store, job, liveRoot);
-      needsReview.push(...outcome.needsReview);
-      if (outcome.status === "copied") recovered.push(job.id);
-      continue;
-    }
-    if (action !== "rollback") {
-      store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-      needsReview.push(job.id);
-      continue;
-    }
-    const payload = JSON.parse(job.payload_json) as { attachments?: string[]; managed?: string[] };
-    if (job.kind === "package-import" && job.staging_path) {
-      // The transaction never committed, so published hard links of staged files are orphans.
-      const managed = new Set(payload.managed ?? []);
-      for (const name of payload.attachments ?? []) {
-        const staged = path.join(job.staging_path, name);
-        const target = path.join(managed.has(name) ? store.managedLibraryDir : store.attachmentsDir, name);
-        if (fs.existsSync(staged) && fs.existsSync(target) && sameFile(staged, target)) {
-          fs.unlinkSync(target);
-          removed.push(target);
-        }
-      }
-      if (fs.existsSync(job.staging_path)) {
-        fs.rmSync(job.staging_path, { recursive: true, force: true });
-        removed.push(job.staging_path);
-      }
-    }
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'rolled-back', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-  }
-  return { jobs: jobs.length, removed, needsReview, recovered };
-}
-
-export function resumeLocationCopy(
-  store: DrizzleStore,
-  job: { id: string; payload_json: string; status: string },
-  liveRoot?: string,
-): { status: "copied" | "needs-review" | "blocked"; needsReview: string[]; verified: Array<{ partition: string; bytes: number; fingerprint: string }>; targetRoot?: string } {
-  const payload = JSON.parse(job.payload_json) as LocationPayload;
-  const live = liveRoot ? comparablePath(liveRoot) : undefined;
-  const targetRoot = payload.targetRoot ? comparablePath(payload.targetRoot) : undefined;
-  const relocated = store.getMeta("relocatedRoot");
-  const published = relocated && targetRoot ? comparablePath(relocated) === targetRoot : false;
-  if (live && targetRoot && pathsOverlap(live, targetRoot) && !published) {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    return { status: "blocked", needsReview: [job.id], verified: [], targetRoot: payload.targetRoot };
-  }
-  if (published) {
-    return { status: "copied", needsReview: [], verified: payload.verified ?? [], targetRoot: payload.targetRoot };
-  }
-  if (!payload.copies?.length || !payload.targetRoot) {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    return { status: "needs-review", needsReview: [job.id], verified: [] };
-  }
-  try {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'running', stage = 'copy', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    const verified: Array<{ partition: string; bytes: number; fingerprint: string }> = [];
-    for (const copy of payload.copies) {
-      if (copy.indexedOnly) continue;
-      const dest = copy.target;
-      fs.mkdirSync(dest, { recursive: true });
-      const files = listCopyFiles(copy.source);
-      for (const file of files) {
-        const relative = file.relativePath.replace(/^\.\//, "");
-        const targetFile = path.join(dest, relative);
-        const owned = store.sqlite.prepare("SELECT state, fingerprint, absolute_path AS path FROM migration_owned_files WHERE job_id = ? AND partition = ? AND relative_path = ?").get(job.id, copy.partition, relative) as { state: string; fingerprint: string | null; path: string } | undefined;
-        if (owned?.state === "committed" && fs.existsSync(targetFile)) {
-          const destHash = ownedFileFingerprint(targetFile);
-          if (destHash === owned.fingerprint || destHash === ownedFileFingerprint(file.absolutePath)) continue;
-          if (copy.partition === "data" && targetFile.endsWith(".sqlite")) continue;
-          store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-          return { status: "needs-review", needsReview: [job.id], verified };
-        }
-        if (owned?.state === "copying" && fs.existsSync(targetFile)) {
-          try { fs.unlinkSync(targetFile); } catch {
-            store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-            return { status: "needs-review", needsReview: [job.id], verified };
-          }
-        } else if (fs.existsSync(targetFile)) {
-          store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-          return { status: "needs-review", needsReview: [job.id], verified };
-        }
-        store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)").run(
-          job.id, copy.partition, relative, targetFile, "planned", null,
-        );
-        store.sqlite.prepare("UPDATE migration_owned_files SET state = 'copying' WHERE job_id = ? AND partition = ? AND relative_path = ?").run(job.id, copy.partition, relative);
-        const hash = copyOwnedFile(file.absolutePath, targetFile);
-        store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?").run(hash, job.id, copy.partition, relative);
-      }
-      const destTree = fingerprintTree(dest);
-      for (const file of files) {
-        const relative = file.relativePath.replace(/^\.\//, "");
-        const targetFile = path.join(dest, relative);
-        if (!fs.existsSync(targetFile) || (
-          ownedFileFingerprint(targetFile) !== ownedFileFingerprint(file.absolutePath)
-          && !(copy.partition === "data" && targetFile.endsWith(".sqlite"))
-        )) {
-          throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} is missing a source file`, { details: { partition: copy.partition, relative } });
-        }
-      }
-      verified.push({ partition: copy.partition, bytes: destTree.bytes, fingerprint: destTree.hash });
-    }
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'running', stage = 'verify', payload_json = ?, updated_at = ? WHERE id = ?").run(
-      JSON.stringify({ ...payload, verified }), new Date().toISOString(), job.id,
-    );
-    return { status: "copied", needsReview: [], verified, targetRoot: payload.targetRoot };
-  } catch (error) {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'failed', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    throw error;
-  }
-}
-
-function rollbackLocationJob(
-  store: DrizzleStore,
-  job: { id: string; payload_json: string },
-  liveRoot?: string,
-): { removed: string[]; needsReview: string[] } {
-  const owned = store.sqlite.prepare("SELECT absolute_path AS path, state, fingerprint FROM migration_owned_files WHERE job_id = ?").all(job.id) as Array<{ path: string; state: string; fingerprint: string | null }>;
-  const live = liveRoot ? comparablePath(liveRoot) : undefined;
-  const payload = JSON.parse(job.payload_json) as { targetRoot?: string };
-  const targetRoot = payload.targetRoot ? comparablePath(payload.targetRoot) : undefined;
-  // A root this library already published to is authoritative even if the job row still looks unfinished.
-  const relocated = store.getMeta("relocatedRoot");
-  const published = relocated && targetRoot ? comparablePath(relocated) === targetRoot : false;
-  if (published || (live && targetRoot && pathsOverlap(live, targetRoot))) {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    return { removed: [], needsReview: [job.id] };
-  }
-  if (!owned.length) {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    return { removed: [], needsReview: [job.id] };
-  }
-  const removed: string[] = [];
-  let uncertain = false;
-  for (const file of owned) {
-    try {
-      if (!fs.existsSync(file.path)) continue;
-      const resolved = comparablePath(file.path);
-      const real = comparablePath(fs.realpathSync(file.path));
-      if (!targetRoot || !resolved.startsWith(targetRoot + path.sep) || real !== resolved
-        || (live && pathsOverlap(live, resolved)) || file.state !== "committed"
-        || !file.fingerprint || ownedFileFingerprint(file.path) !== file.fingerprint) {
-        uncertain = true;
-        continue;
-      }
-      fs.unlinkSync(file.path);
-      removed.push(file.path);
-    } catch {
-      uncertain = true;
-    }
-  }
-  if (uncertain) {
-    store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-    return { removed, needsReview: [job.id] };
-  }
-  store.sqlite.prepare("DELETE FROM migration_owned_files WHERE job_id = ?").run(job.id);
-  store.sqlite.prepare("UPDATE recovery_jobs SET status = 'rolled-back', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
-  return { removed, needsReview: [] };
 }

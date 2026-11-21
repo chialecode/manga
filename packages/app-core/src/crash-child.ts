@@ -67,7 +67,7 @@ if (op === "locations.apply") {
   await app.call(actor, {
     commandId: "settings.applyLocations",
     idempotencyKey: "crash-loc-apply",
-    input: { checkpointId: proposed.value?.checkpointId, pathHandle: handle },
+    input: { checkpointId: (proposed.value as { checkpointId?: string } | undefined)?.checkpointId, pathHandle: handle },
   }, grant.handle);
 }
 app.close();

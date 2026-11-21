@@ -4,6 +4,7 @@ import type { Translator } from "@manga/i18n";
 import { asArray, call, messageOf } from "../lib/api.ts";
 import type { NoteDoc, NoteRevision } from "../lib/types.ts";
 import { autoAddMaterial } from "../lib/materials.ts";
+import { localStorageDrafts } from "../note-schema.ts";
 
 export type NotesDeps = {
   i18n: Translator;
@@ -26,7 +27,7 @@ export function useNotes(deps: NotesDeps) {
   const [focusBlock, setFocusBlock] = useState<string | null>(null);
   const request = useRef(0);
 
-  async function open(objectId: string, focusBlockId?: string): Promise<void> {
+  async function open(objectId: string, focusBlockId?: string, options?: { remount?: boolean }): Promise<void> {
     const mine = ++request.current;
     let value: { revision?: number; title?: string; tags?: string[]; document?: { blocks?: NoteBlock[] }; sourceStatus?: string; sources?: Array<{ resourceId?: string }> };
     try {
@@ -45,6 +46,7 @@ export function useNotes(deps: NotesDeps) {
       sourceStatus: value.sourceStatus,
       resourceId: value.sources?.[0]?.resourceId ?? null,
     });
+    if (options?.remount) setEpoch((current) => current + 1);
     setFocusBlock(focusBlockId ?? null);
     setShowHistory(false);
     setRenaming(false);
@@ -54,19 +56,23 @@ export function useNotes(deps: NotesDeps) {
 
   async function save(blocks: NoteBlock[], expectedRevision: number, title: string, tags: string[]): Promise<number | void> {
     if (!doc) return;
+    const targetId = doc.objectId;
     // A failed save throws: the editor keeps its draft and says so.
-    const value = await call("notes.replace", { objectId: doc.objectId, expectedRevision, blocks, title, tags });
+    const value = await call("notes.replace", { objectId: targetId, expectedRevision, blocks, title, tags });
     const revision = Number(value.revision ?? expectedRevision + 1);
-    setDoc((current) => current?.objectId === doc.objectId ? { ...current, revision, blocks, title, tags } : current);
+    setDoc((current) => current?.objectId === targetId ? { ...current, revision, blocks, title, tags } : current);
     return revision;
   }
 
   async function rename(title: string, tags: string[]): Promise<void> {
     if (!doc) return;
+    const targetId = doc.objectId;
+    const targetRevision = doc.revision;
     const parsedTags = tags.map((item) => item.trim()).filter(Boolean);
     try {
-      const value = await call("notes.rename", { objectId: doc.objectId, expectedRevision: doc.revision, title, tags: parsedTags });
-      setDoc({ ...doc, revision: Number(value.revision ?? doc.revision + 1), title, tags: parsedTags });
+      const value = await call("notes.rename", { objectId: targetId, expectedRevision: targetRevision, title, tags: parsedTags });
+      const nextRevision = Number(value.revision ?? targetRevision + 1);
+      setDoc((current) => current?.objectId === targetId ? { ...current, revision: nextRevision, title, tags: parsedTags } : current);
       deps.onTitle?.(title);
       setRenaming(false);
       deps.setNotice(i18n.t("notes.titleSaved"));
@@ -77,25 +83,31 @@ export function useNotes(deps: NotesDeps) {
 
   async function loadHistory(): Promise<void> {
     if (!doc) return;
+    const targetId = doc.objectId;
+    const mine = request.current;
     try {
-      setHistory(asArray<NoteRevision>(await call("notes.history", { objectId: doc.objectId })));
+      const revisions = asArray<NoteRevision>(await call("notes.history", { objectId: targetId }));
+      if (mine !== request.current) return;
+      setHistory(revisions);
       setShowHistory(true);
     } catch (error) {
-      deps.setError(messageOf(error));
+      if (mine === request.current) deps.setError(messageOf(error));
     }
   }
 
   async function restore(revision: number): Promise<void> {
     if (!doc) return;
+    const targetId = doc.objectId;
+    const targetRevision = doc.revision;
     try {
-      await call("notes.restore", { objectId: doc.objectId, expectedRevision: doc.revision, revision });
+      await call("notes.restore", { objectId: targetId, expectedRevision: targetRevision, revision });
     } catch (error) {
       deps.setError(messageOf(error));
       return;
     }
-    // The editor is rebuilt from the restored revision, otherwise its stale buffer would overwrite it.
-    setEpoch((current) => current + 1);
-    await open(doc.objectId);
+    // Drop any pre-restore local draft, then fetch the restored document and remount the editor in the same batch.
+    localStorageDrafts.clear(targetId);
+    await open(targetId, undefined, { remount: true });
   }
 
   return {

@@ -19,8 +19,10 @@ export type FrameAnswer = { frame: number; ptsMs: number; totalFrames: number; d
  */
 export function answerFrame(index: FrameIndex, durationMs: number, query: { timeMs?: number; frame?: number; delta?: number }): FrameAnswer {
   const pts = index.ptsMs;
+  if (!pts.length) throw new MangaError("NOT_FOUND", "the video has no indexed frames");
   let frame: number;
   if (query.frame !== undefined) {
+    if (!Number.isInteger(query.frame) || query.frame < 0) throw new MangaError("VALIDATION_ERROR", "frame must be a non-negative integer");
     if (query.frame >= pts.length) throw new MangaError("NOT_FOUND", `the video has ${pts.length} frames`);
     frame = query.frame;
   } else {
@@ -34,7 +36,8 @@ export function answerFrame(index: FrameIndex, durationMs: number, query: { time
     }
     frame = low;
   }
-  frame = Math.max(0, Math.min(pts.length - 1, frame + (query.delta ?? 0)));
+  const delta = query.delta !== undefined && Number.isFinite(query.delta) ? Math.trunc(query.delta) : 0;
+  frame = Math.max(0, Math.min(pts.length - 1, frame + delta));
   return {
     frame, ptsMs: pts[frame]!, totalFrames: pts.length, durationMs, variableFrameRate: index.variableFrameRate,
     previousMs: frame > 0 ? pts[frame - 1]! : null, nextMs: frame + 1 < pts.length ? pts[frame + 1]! : null,

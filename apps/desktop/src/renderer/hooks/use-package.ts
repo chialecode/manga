@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import { attempt, call, CommandError, messageOf } from "../lib/api.ts";
 
@@ -21,6 +21,8 @@ export function usePackage(deps: { i18n: Translator; setError: (message?: string
   /** Covers go into a backup by default (A-51); the choice is kept for the session. */
   const [includeCovers, setIncludeCovers] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importingRef = useRef(false);
 
   function decide(kind: string, rowId: string, action: PackageStrategy | null) {
     setDecisions((current) => {
@@ -74,23 +76,27 @@ export function usePackage(deps: { i18n: Translator; setError: (message?: string
   }
 
   async function applyImport() {
-    if (!handle) return;
+    if (!handle || importingRef.current) return;
+    importingRef.current = true;
+    setImporting(true);
     const rows = Object.entries(decisions).map(([key, action]) => {
       const separator = key.indexOf(":");
       return { kind: key.slice(0, separator), id: key.slice(separator + 1), action };
     });
     try {
       await call("package.importResolved", { pathHandle: handle, strategy, ...(rows.length ? { decisions: rows } : {}) });
+      setNotice(i18n.t("settings.packageImported"));
+      cancel();
+      await refresh();
     } catch (error) {
       setError(messageOf(error));
-      return;
+    } finally {
+      importingRef.current = false;
+      setImporting(false);
     }
-    setNotice(i18n.t("settings.packageImported"));
-    cancel();
-    await refresh();
   }
 
-  return { preview, strategy, setStrategy, decisions, decide, cancel, exportPackage, cancelExport, exporting, includeCovers, setIncludeCovers, previewPackage, applyImport };
+  return { preview, strategy, setStrategy, decisions, decide, cancel, exportPackage, cancelExport, exporting, importing, includeCovers, setIncludeCovers, previewPackage, applyImport };
 }
 
 export type PackageFlow = ReturnType<typeof usePackage>;

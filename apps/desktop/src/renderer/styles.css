@@ -150,6 +150,13 @@ html, body, #root {
   app-region: no-drag;
 }
 
+/* What stands over the title bar's drag areas (the tops of the columns, A-136) is pressed, not dragged: a popup, a menu or a dialog that reaches
+   up there, and the capsule in the main area's tab strip. */
+:is(.menu-list, [role="menu"], [role="dialog"], [role="listbox"], [role="tooltip"], .popup, .chat-capsule > *) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 /* Shared shell and component values. Reader paper colors remain a separate user preference. */
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--color-scroll) transparent; }
 button, select, input, textarea { font: inherit; }

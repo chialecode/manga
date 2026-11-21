@@ -8,10 +8,14 @@ export type ContextItem = { id: string; label: string; onSelect: () => void; dis
  */
 export function ContextMenu(props: { x: number; y: number; label: string; items: ContextItem[]; onClose: () => void; testId?: string }) {
   const box = useRef<HTMLDivElement>(null);
-  const [at, setAt] = useState(0);
+  const [at, setAt] = useState(() => {
+    const first = props.items.findIndex((item) => !item.disabled);
+    return first >= 0 ? first : 0;
+  });
   const [place, setPlace] = useState({ left: props.x, top: props.y });
   const { onClose } = props;
   const previous = useRef<Element | null>(typeof document === "undefined" ? null : document.activeElement);
+  const picked = useRef(false);
   const enabled = props.items.map((item, position) => ({ item, position })).filter((entry) => !entry.item.disabled);
 
   useLayoutEffect(() => {
@@ -43,11 +47,9 @@ export function ContextMenu(props: { x: number; y: number; label: string; items:
       window.removeEventListener("pointerdown", away, true);
       window.removeEventListener("blur", onClose);
       window.removeEventListener("resize", onClose);
-      if (origin instanceof HTMLElement && origin.isConnected) origin.focus();
+      if (!picked.current && origin instanceof HTMLElement && origin.isConnected) origin.focus();
     };
   }, [onClose]);
-
-  useEffect(() => { setAt(enabled[0]?.position ?? 0); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onKey(event: React.KeyboardEvent) {
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); return; }
@@ -73,7 +75,7 @@ export function ContextMenu(props: { x: number; y: number; label: string; items:
             tabIndex={position === at ? 0 : -1}
             data-testid={`${props.testId ?? "context-menu"}-${item.id}`}
             data-danger={item.danger ? "true" : undefined}
-            onClick={(event) => { event.stopPropagation(); onClose(); item.onSelect(); }}
+            onClick={(event) => { event.stopPropagation(); picked.current = true; onClose(); item.onSelect(); }}
           >{item.label}</button>
         </div>
       ))}

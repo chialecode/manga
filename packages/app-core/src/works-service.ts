@@ -23,7 +23,8 @@ import { readLayout } from "./domain/revision-layout.ts";
 import { contextName, recentActionTimestamp, touchWorkMutation } from "./progress-service.ts";
 import { workKindMutation } from "./reading-service.ts";
 import { inLibrarySql, outsideSql, resolveLocation } from "./library-locations.ts";
-import { groupKeySql, missingCount, outsideCount, userContentSql, versionCount, versionsOf, workHoldsUserContent } from "./works-versions.ts";
+import { availableResourceSql, groupKeySql, userContentSql, versionCounts, versionsOf, workHoldsUserContent } from "./works-versions.ts";
+import { escapeLike as escapeLikeRaw } from "./shared/utils.ts";
 
 type WorkRow = {
   id: string;
@@ -54,7 +55,7 @@ function decodeCursor(cursor: string): { k: Array<string | number>; id: string }
   }
 }
 
-const escapeLike = (text: string) => `%${text.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+const escapeLike = (text: string) => `%${escapeLikeRaw(text)}%`;
 
 export function parseProjection(json: string): WorkProjection {
   try {
@@ -217,58 +218,122 @@ export function listWorks(store: DrizzleStore, grant: ScopeGrant, input: { limit
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   return {
-    items: page.map((row) => summarize(store, row)),
+    items: summarize(store, page, owner ? undefined : grant.readResourceIds),
     total,
     nextCursor: rows.length > limit && last ? encodeCursor({ k: secondExpr ? [last.k1, last.k2] : [last.k1], id: last.id }) : null,
   };
 }
 
-function summarize(store: DrizzleStore, row: WorkRow): WorkSummary {
-  const resourceCount = (store.sqlite.prepare("SELECT COUNT(*) AS n FROM resources WHERE work_id = ?").get(row.id) as { n: number }).n;
-  const finished = (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND EXISTS (
-      SELECT 1 FROM progress_furthest p
-      WHERE p.resource_id = r.id
-        AND p.resource_revision_id = (SELECT v.id FROM resource_revisions v WHERE v.resource_id = r.id ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1)
-        AND p.completion_state = 'completed')`).get(row.id) as { n: number }).n;
-  // The card continues with a resource in a library path: the last one opened, else the first (A-113).
-  const lastId = (store.sqlite.prepare(`SELECT r.id FROM resources r WHERE r.id = ? AND ${inLibrarySql("r")}`).get(row.last_resource_id ?? "") as { id: string } | undefined)?.id
-    ?? (store.sqlite.prepare(`SELECT r.id FROM resources r WHERE r.work_id = ? AND ${inLibrarySql("r")} ORDER BY r.sort_key, r.created_at, r.id LIMIT 1`).get(row.id) as { id: string } | undefined)?.id;
-  const last = lastId
-    ? store.sqlite.prepare(`SELECT r.id, r.title, r.ordinal_label AS ordinalLabel, (SELECT v.id FROM resource_revisions v WHERE v.resource_id = r.id ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1) AS revisionId FROM resources r WHERE r.id = ?`).get(lastId) as { id: string; title: string; ordinalLabel: string | null; revisionId: string | null } | undefined
-    : undefined;
-  // The card shows the furthest position across all contexts and says which context it is from (A-129).
-  const progressCompleted = resourceCount > 0 && finished >= resourceCount;
-  const furthest = store.sqlite.prepare(`SELECT p.percent AS percent, p.completion_state AS completion, p.context_id AS contextId
-      FROM resources r
-      JOIN progress_furthest p ON p.resource_id = r.id
-        AND p.resource_revision_id = (SELECT v.id FROM resource_revisions v WHERE v.resource_id = r.id ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1)
-      WHERE r.work_id = ? AND ${inLibrarySql("r")} AND (p.percent > 0 OR p.completion_state = 'completed')
-      ORDER BY r.sort_key DESC, CASE WHEN p.completion_state = 'completed' THEN 1 ELSE p.percent END DESC, p.last_interaction_at DESC
-      LIMIT 1`).get(row.id) as { percent: number; completion: string; contextId: string } | undefined;
-  const progress = progressCompleted ? 1 : (furthest ? (furthest.completion === "completed" ? 1 : furthest.percent) : 0);
-  const linked = Boolean(store.sqlite.prepare("SELECT 1 FROM work_links WHERE work_id = ? AND link_state = 'linked'").get(row.id));
-  const projection = parseProjection(row.projection_json);
-  const author = projectedValue(projection, "author");
-  return {
-    id: row.id,
-    title: displayTitle(row),
-    author: typeof author === "string" ? author : row.author,
-    mediaKind: row.media_kind as WorkSummary["mediaKind"],
-    shelf: row.shelf_state as ShelfState,
-    coverId: row.cover_id,
-    lastResource: last ? { id: last.id, title: last.title, ordinalLabel: last.ordinalLabel, revisionId: last.revisionId } : null,
-    progress,
-    progressCompleted,
-    progressContext: furthest ? { contextId: furthest.contextId || null, name: contextName(store, furthest.contextId) } : null,
-    finishedCount: finished,
-    resourceCount,
-    versionCount: versionCount(store, row.id),
-    outsideCount: outsideCount(store, row.id),
-    missingCount: missingCount(store, row.id),
-    linked,
-    createdAt: row.created_at,
-    lastOpenedAt: row.last_opened_at,
+function summarize(store: DrizzleStore, rows: WorkRow[], allowedResourceIds?: readonly string[]): WorkSummary[] {
+  if (!rows.length) return [];
+  const workIds = rows.map((row) => row.id);
+  const workMarks = workIds.map(() => "?").join(",");
+  const scopeFilter = allowedResourceIds !== undefined
+    ? (allowedResourceIds.length ? ` AND r.id IN (${allowedResourceIds.map(() => "?").join(",")})` : " AND 1 = 0")
+    : "";
+  const scopeParams = allowedResourceIds?.length ? allowedResourceIds : [];
+  const located = (available: 0 | 1) => `EXISTS (SELECT 1 FROM resource_revisions flv JOIN file_locations fl ON fl.resource_revision_id = flv.id WHERE flv.resource_id = r.id AND fl.available = ${available})`;
+  type ResourceStat = {
+    workId: string;
+    id: string;
+    title: string;
+    ordinalLabel: string | null;
+    sortKey: string;
+    createdAt: string;
+    revisionId: string | null;
+    inLib: number;
+    avail: number;
+    outside: number;
+    missing: number;
+    percent: number | null;
+    completion: string | null;
+    contextId: string | null;
+    lastInteractionAt: string | null;
   };
+  const resourceRows = store.sqlite.prepare(`SELECT r.work_id AS workId, r.id AS id, r.title AS title, r.ordinal_label AS ordinalLabel,
+      r.sort_key AS sortKey, r.created_at AS createdAt,
+      v.id AS revisionId,
+      CASE WHEN ${inLibrarySql("r")} THEN 1 ELSE 0 END AS inLib,
+      CASE WHEN ${availableResourceSql("r")} THEN 1 ELSE 0 END AS avail,
+      CASE WHEN ${outsideSql("r")} THEN 1 ELSE 0 END AS outside,
+      CASE WHEN NOT ${outsideSql("r")} AND ${located(0)} AND NOT ${located(1)} THEN 1 ELSE 0 END AS missing,
+      p.percent AS percent, p.completion_state AS completion, p.context_id AS contextId, p.last_interaction_at AS lastInteractionAt
+    FROM resources r
+    LEFT JOIN resource_revisions v ON v.id = (SELECT v2.id FROM resource_revisions v2 WHERE v2.resource_id = r.id ORDER BY v2.created_at DESC, v2.rowid DESC LIMIT 1)
+    LEFT JOIN progress_furthest p ON p.resource_id = r.id AND p.resource_revision_id = v.id
+    WHERE r.work_id IN (${workMarks})${scopeFilter}
+    ORDER BY r.work_id, r.sort_key, r.created_at, r.id`).all(...workIds, ...scopeParams) as ResourceStat[];
+  const byWork = new Map<string, ResourceStat[]>();
+  for (const r of resourceRows) {
+    const list = byWork.get(r.workId);
+    if (list) list.push(r);
+    else byWork.set(r.workId, [r]);
+  }
+  const linkedSet = new Set(
+    (store.sqlite.prepare(`SELECT DISTINCT work_id AS id FROM work_links WHERE work_id IN (${workMarks}) AND link_state = 'linked'`).all(...workIds) as Array<{ id: string }>).map((item) => item.id),
+  );
+  const versions = allowedResourceIds === undefined ? versionCounts(store, workIds) : new Map<string, number>();
+  const contextNames = new Map<string, string>();
+  const resolveContext = (contextId: string): string => {
+    let cached = contextNames.get(contextId);
+    if (cached === undefined) { cached = contextName(store, contextId); contextNames.set(contextId, cached); }
+    return cached;
+  };
+  return rows.map((row) => {
+    const list = byWork.get(row.id) ?? [];
+    const resourceCount = list.length;
+    let finished = 0;
+    let outside = 0;
+    let missing = 0;
+    let preferredLast: ResourceStat | undefined;
+    let firstAvailable: ResourceStat | undefined;
+    let furthest: ResourceStat | undefined;
+    let furthestScore = -1;
+    for (const item of list) {
+      if (item.completion === "completed") finished += 1;
+      if (item.outside === 1) outside += 1;
+      if (item.missing === 1) missing += 1;
+      if (item.inLib === 1 && item.avail === 1) {
+        if (row.last_resource_id && item.id === row.last_resource_id) preferredLast = item;
+        if (!firstAvailable) firstAvailable = item;
+      }
+      if (item.inLib === 1 && ((item.percent ?? 0) > 0 || item.completion === "completed")) {
+        const score = item.completion === "completed" ? 1 : (item.percent ?? 0);
+        const better = !furthest
+          || item.sortKey > furthest.sortKey
+          || (item.sortKey === furthest.sortKey && (
+            score > furthestScore
+            || (score === furthestScore && (item.lastInteractionAt ?? "") > (furthest.lastInteractionAt ?? ""))
+          ));
+        if (better) { furthest = item; furthestScore = score; }
+      }
+    }
+    const last = preferredLast ?? firstAvailable;
+    const progressCompleted = resourceCount > 0 && finished >= resourceCount;
+    const progress = progressCompleted ? 1 : (furthest ? furthestScore : 0);
+    const projection = parseProjection(row.projection_json);
+    const author = projectedValue(projection, "author");
+    return {
+      id: row.id,
+      title: displayTitle(row),
+      author: typeof author === "string" ? author : row.author,
+      mediaKind: row.media_kind as WorkSummary["mediaKind"],
+      shelf: row.shelf_state as ShelfState,
+      coverId: row.cover_id,
+      lastResource: last ? { id: last.id, title: last.title, ordinalLabel: last.ordinalLabel, revisionId: last.revisionId } : null,
+      progress,
+      progressCompleted,
+      progressContext: furthest ? { contextId: furthest.contextId || null, name: resolveContext(furthest.contextId ?? "") } : null,
+      finishedCount: finished,
+      resourceCount,
+      versionCount: versions.get(row.id) ?? 1,
+      outsideCount: outside,
+      missingCount: missing,
+      linked: linkedSet.has(row.id),
+      createdAt: row.created_at,
+      lastOpenedAt: row.last_opened_at,
+    };
+  });
 }
 
 export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantRegistry, workId: string): Record<string, unknown> {
@@ -313,7 +378,7 @@ export function getWork(store: DrizzleStore, grant: ScopeGrant, grants: GrantReg
   const snapshots = store.sqlite.prepare("SELECT provider_id AS providerId, external_id AS externalId, fetched_at AS fetchedAt, source_url AS sourceUrl, api_version AS apiVersion, detached FROM metadata_snapshots WHERE work_id = ?").all(workId) as Array<{ providerId: string; externalId: string; fetchedAt: string | null; sourceUrl: string | null; apiVersion: string | null; detached: number }>;
   const override = readOverride(store, workId);
   return {
-    ...summarize(store, row),
+    ...summarize(store, [row], grant.access === "owner" ? undefined : [...readable])[0]!,
     originalTitle: row.title,
     fields: projection,
     override,

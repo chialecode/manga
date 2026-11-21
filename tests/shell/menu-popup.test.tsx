@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Menu } from "../../apps/desktop/src/renderer/components/menu.tsx";
-import { popupOpen } from "../../apps/desktop/src/renderer/components/popup.tsx";
+import { Popup, popupOpen } from "../../apps/desktop/src/renderer/components/popup.tsx";
+import { ContextMenu } from "../../apps/desktop/src/renderer/workspace/context-menu.tsx";
 
 const read = (path: string) => readFileSync(join(process.cwd(), "apps/desktop/src/renderer", path), "utf8").replace(/\r\n/g, "\n");
 
@@ -132,5 +133,86 @@ describe("menus with groups (AT-107)", () => {
     const shelf = read("styles-shelf.css");
     expect(shelf).toMatch(/\.menu-group \+ \.menu-group \{[^}]*border-top/);
     expect(shelf).toMatch(/\.menu-group-title \{[^}]*white-space: nowrap/);
+  });
+
+  it("does not steal focus back when a ContextMenu item moves focus on select, but restores focus on Escape (US-06)", () => {
+    const { rerender } = render(
+      <div>
+        <button type="button" data-testid="origin-btn">原按钮</button>
+        <input type="text" data-testid="rename-input" />
+      </div>,
+    );
+    screen.getByTestId("origin-btn").focus();
+    expect(document.activeElement).toBe(screen.getByTestId("origin-btn"));
+    let closed = false;
+    const onClose = () => { closed = true; };
+    rerender(
+      <div>
+        <button type="button" data-testid="origin-btn">原按钮</button>
+        <input type="text" data-testid="rename-input" />
+        <ContextMenu
+          x={10}
+          y={10}
+          label="菜单"
+          onClose={onClose}
+          items={[{ id: "rename", label: "重命名", onSelect: () => { screen.getByTestId("rename-input").focus(); } }]}
+        />
+      </div>,
+    );
+    fireEvent.click(screen.getByTestId("context-menu-rename"));
+    expect(closed).toBe(true);
+    rerender(
+      <div>
+        <button type="button" data-testid="origin-btn">原按钮</button>
+        <input type="text" data-testid="rename-input" />
+      </div>,
+    );
+    expect(document.activeElement).toBe(screen.getByTestId("rename-input"));
+
+    // Escape dismiss restores focus back to origin button
+    screen.getByTestId("origin-btn").focus();
+    closed = false;
+    rerender(
+      <div>
+        <button type="button" data-testid="origin-btn">原按钮</button>
+        <input type="text" data-testid="rename-input" />
+        <ContextMenu
+          x={10}
+          y={10}
+          label="菜单"
+          onClose={onClose}
+          items={[{ id: "rename", label: "重命名", onSelect: () => undefined }]}
+        />
+      </div>,
+    );
+    fireEvent.keyDown(screen.getByTestId("context-menu-rename"), { key: "Escape" });
+    expect(closed).toBe(true);
+    rerender(
+      <div>
+        <button type="button" data-testid="origin-btn">原按钮</button>
+        <input type="text" data-testid="rename-input" />
+      </div>,
+    );
+    expect(document.activeElement).toBe(screen.getByTestId("origin-btn"));
+  });
+
+  it("dismisses Popup on capture-phase pointerdown even when an outside target stops propagation (US-29)", () => {
+    const onClose = vi.fn();
+    render(
+      <div>
+        <div
+          data-testid="outside-blocker"
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          外部区域
+        </div>
+        <Popup open anchor={{ current: null }} onClose={onClose} testId="test-popup">
+          <span>弹窗内容</span>
+        </Popup>
+      </div>,
+    );
+    fireEvent.pointerDown(screen.getByTestId("outside-blocker"));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,7 @@
 import net from "node:net";
 import { z } from "zod";
 import { type DictionaryAliasKind, MangaError } from "@manga/contracts";
+import { Lane } from "../media/process-runner.ts";
 import type { components } from "./bangumi-openapi.ts";
 
 /** Bangumi API v0, read only. Types come from the official OpenAPI spec; Zod checks the fields MANGA actually uses at run time. */
@@ -178,9 +179,7 @@ export class BangumiClient {
   private readonly maxRetries: number;
   private readonly timeoutMs: number;
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
-  private active = 0;
-  private readonly waiting: Array<() => void> = [];
-  private readonly concurrency: number;
+  private readonly lane: Lane;
   /** Requests actually sent, for the real-contract test's own budget. */
   requests = 0;
 
@@ -194,7 +193,7 @@ export class BangumiClient {
     this.maxRetries = options.maxRetries ?? 2;
     this.timeoutMs = options.timeoutMs ?? 15_000;
     this.sleep = options.sleep ?? defaultSleep;
-    this.concurrency = options.concurrency ?? 2;
+    this.lane = new Lane(options.concurrency ?? 2);
   }
 
   // ------------------------------------------------------------------ transport
@@ -208,24 +207,13 @@ export class BangumiClient {
     return url;
   }
 
-  private async slot<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-    if (this.active >= this.concurrency) {
-      await new Promise<void>((resolve, reject) => {
-        const wake = () => { signal?.removeEventListener("abort", abort); resolve(); };
-        const abort = () => { const at = this.waiting.indexOf(wake); if (at >= 0) this.waiting.splice(at, 1); reject(new MangaError("CANCELLED", "the request was cancelled")); };
-        this.waiting.push(wake);
-        signal?.addEventListener("abort", abort, { once: true });
-      });
-    }
-    this.active += 1;
-    try { return await work(); } finally {
-      this.active -= 1;
-      this.waiting.shift()?.();
-    }
+  private slot<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return this.lane.run(work, signal);
   }
 
   private async send(rawUrl: string, init: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }, kind: "api" | "image"): Promise<Response> {
     let url = this.checkUrl(rawUrl);
+    const method = (init.method ?? "GET").toUpperCase();
     for (let attempt = 0; ; attempt += 1) {
       init.signal?.throwIfAborted();
       let response: Response | undefined;
@@ -237,16 +225,22 @@ export class BangumiClient {
         const signal = init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs);
         this.requests += 1;
         try {
-          response = await this.options.fetch(url.toString(), { method: init.method ?? "GET", headers, body: init.body, signal, redirect: "manual" });
+          response = await this.options.fetch(url.toString(), { method, headers, body: init.body, signal, redirect: "manual" });
         } catch (error) {
           if (init.signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
           const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
           throw new MangaError("PROVIDER_UNAVAILABLE", timedOut ? "Bangumi did not answer in time" : "Bangumi cannot be reached from this network", { retryable: true, details: { reason: timedOut ? "timeout" : "network" }, cause: error });
         }
         if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
-          const target = new URL(response.headers.get("location")!, url);
-          // A redirect may only lead to another allowed host: never to a private address or an unlisted site.
-          try { url = this.checkUrl(target.toString()); } catch (error) {
+          if (method !== "GET" && method !== "HEAD") {
+            await response.body?.cancel().catch(() => undefined);
+            throw new MangaError("FORBIDDEN", "the server redirected a request that carries data", { details: { reason: "redirect_blocked" } });
+          }
+          // A redirect may only lead to another allowed host: never to a private address, malformed URL, or unlisted site.
+          try {
+            const target = new URL(response.headers.get("location")!, url);
+            url = this.checkUrl(target.toString());
+          } catch (error) {
             await response.body?.cancel().catch(() => undefined);
             throw new MangaError("FORBIDDEN", "the server redirected to an address that is not allowed", { details: { reason: "redirect_blocked" }, cause: error });
           }
@@ -283,19 +277,35 @@ export class BangumiClient {
     }
   }
 
-  private async readBody(response: Response, limit: number): Promise<Buffer> {
+  private async readBody(response: Response, limit: number, signal?: AbortSignal): Promise<Buffer> {
     const declared = Number(response.headers.get("content-length"));
     if (Number.isFinite(declared) && declared > limit) { await response.body?.cancel().catch(() => undefined); throw new MangaError("PROVIDER_UNAVAILABLE", "the response is larger than allowed", { details: { reason: "too_large" } }); }
     const chunks: Buffer[] = [];
     let total = 0;
     const reader = response.body?.getReader();
     if (!reader) return Buffer.alloc(0);
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > limit) { await reader.cancel().catch(() => undefined); throw new MangaError("PROVIDER_UNAVAILABLE", "the response is larger than allowed", { details: { reason: "too_large" } }); }
-      chunks.push(Buffer.from(value));
+    const onAbort = () => { void reader.cancel().catch(() => undefined); };
+    if (signal?.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new MangaError("CANCELLED", "the request was cancelled");
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
+        if (done) break;
+        total += value.byteLength;
+        if (total > limit) { await reader.cancel().catch(() => undefined); throw new MangaError("PROVIDER_UNAVAILABLE", "the response is larger than allowed", { details: { reason: "too_large" } }); }
+        chunks.push(Buffer.from(value));
+      }
+    } catch (error) {
+      if (error instanceof MangaError) throw error;
+      if (signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
+      const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+      throw new MangaError("PROVIDER_UNAVAILABLE", timedOut ? "Bangumi did not answer in time" : "Bangumi connection failed while reading the response", { retryable: true, details: { reason: timedOut ? "timeout" : "network" }, cause: error });
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
     }
     return Buffer.concat(chunks, total);
   }
@@ -308,7 +318,7 @@ export class BangumiClient {
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
         signal: init.signal,
       }, "api");
-      const raw = await this.readBody(response, this.options.maxJsonBytes ?? 4 * 1024 * 1024);
+      const raw = await this.readBody(response, this.options.maxJsonBytes ?? 4 * 1024 * 1024, init.signal);
       let parsed: unknown;
       try { parsed = JSON.parse(raw.toString("utf8")); } catch { throw new MangaError("PROVIDER_UNAVAILABLE", "Bangumi sent something that is not JSON", { details: { reason: "schema" } }); }
       const checked = schema.safeParse(parsed);
@@ -376,7 +386,7 @@ export class BangumiClient {
         await response.body?.cancel().catch(() => undefined);
         throw new MangaError("UNSUPPORTED_FORMAT", "the address did not return a picture", { details: { reason: "not_image" } });
       }
-      return { bytes: await this.readBody(response, this.options.maxImageBytes ?? 12 * 1024 * 1024), mediaType };
+      return { bytes: await this.readBody(response, this.options.maxImageBytes ?? 12 * 1024 * 1024, signal), mediaType };
     }, signal);
   }
 }

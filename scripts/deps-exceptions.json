@@ -1,0 +1,23 @@
+{
+  "description": "Known advisories accepted for now. Each entry: advisory (GHSA id), package, reason (why it cannot be fixed or does not apply), reviewBy (YYYY-MM-DD; past that date the stage gate fails again). Entries are added only with the reason written in the stage report.",
+  "exceptions": [
+    {
+      "advisory": "GHSA-2p57-rm9w-gvfp",
+      "package": "ip",
+      "reason": "No fixed release. Only imported by bittorrent-tracker's tracker-server UDP parser (lib/server/parse-udp.js); the BitTorrent plugin runs the tracker client only, so isPublic is never reached.",
+      "reviewBy": "2027-02-14"
+    },
+    {
+      "advisory": "GHSA-3g3m-2fjr-6pw4",
+      "package": "glob",
+      "reason": "Dev-only: @electron/asar inside the packaging toolchain globs the repository's own build output; the fix needs glob 14, a major the toolchain does not accept yet.",
+      "reviewBy": "2027-02-14"
+    },
+    {
+      "advisory": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "reason": "Dev-only: electron-builder's @electron/universal matches fixed patterns from the repository's own build config; the fix needs minimatch 11, a major the toolchain does not accept yet.",
+      "reviewBy": "2027-02-14"
+    }
+  ]
+}

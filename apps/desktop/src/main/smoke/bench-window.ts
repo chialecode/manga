@@ -94,6 +94,9 @@ export type ScaleSpec = {
  * smoke window produces no regular animation frames, so paint is not part of the figure), and IPC polling from the main process does
  * not inflate or hide it.
  */
+/** What `timed` presses instead of clicking: Alt + Left, back. */
+const BACK_KEY = "Alt+ArrowLeft";
+
 export async function measureScaleWindowBench(appService: MangaProductApp, grant: string, view: BrowserWindow, spec: ScaleSpec): Promise<Record<string, unknown>> {
   const call = caller(appService, grant);
   const launchedAt = Number(process.env.MANGA_SMOKE_LAUNCHED_AT ?? Date.now());
@@ -103,7 +106,9 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
   const timed = (clickTestId: string | null, until: string, timeoutMs = 15_000, detail = 0) => view.webContents.executeJavaScript(`new Promise((resolve) => {
     const started = performance.now();
     const target = ${JSON.stringify(clickTestId)};
-    if (target) {
+    // Alt + ←: back, the way the settings and a tab are walked (the title bar has no back button, A-136).
+    if (target === "${BACK_KEY}") window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true, cancelable: true }));
+    else if (target) {
       const el = ${PICK}(target);
       if (!el) { resolve({ ok: false, ms: -1, reason: "missing " + target }); return; }
       el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, cancelable: true, detail: ${detail} }));
@@ -316,14 +321,14 @@ export async function measureScaleWindowBench(appService: MangaProductApp, grant
     }
   }
 
-  // The settings view: in from the rail's gear until its directory and page are drawn, and out with the back arrow until the workspace under it is drawn again.
+  // The settings view: in from the rail's gear until its directory and page are drawn, and out with Alt + ← until the workspace under it is drawn again.
   const settingsMs: number[] = [];
   const settingsUp = `${present("settings-nav")} && ${present("page-settings")}`;
   const workspaceBack = `!document.querySelector('[data-testid="settings-area"]') && document.querySelector('[data-testid="workspace-area"]')?.getAttribute("data-suspended") === "false" && ${DRAWN}(document.querySelector('[data-testid="context-host"][data-active="true"] [data-testid="tab-panel"][data-focused="true"]'))`;
   for (let round = 0; round < 6; round += 1) {
     keep(`settings in ${round}`, await timed("nav-settings", settingsUp, 15_000, 1), settingsMs);
     await waitFrames(view, 1);
-    keep(`settings out ${round}`, await timed("nav-back", workspaceBack, 15_000, 1), settingsMs);
+    keep(`settings out ${round}`, await timed(BACK_KEY, workspaceBack, 15_000, 1), settingsMs);
     await waitFrames(view, 1);
   }
 

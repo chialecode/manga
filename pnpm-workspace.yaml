@@ -3,6 +3,8 @@ packages:
   - plugins/*
   - apps/*
 nodeLinker: hoisted
+# New versions are taken only once they are 7 days old; Dependabot's cooldown and scripts/deps.mjs use the same age.
+minimumReleaseAge: 10080
 allowBuilds:
   esbuild: true
   better-sqlite3: true
@@ -21,3 +23,7 @@ allowBuilds:
   electron-winstaller: false
 overrides:
   "@electron/rebuild": "4.2.0"
+  # Security fixes for transitive dependencies (dependency audit 2026-11-14).
+  "undici@6": "6.29.1"
+  "undici@7": "7.30.2"
+  "ip-address@10": "10.7.6"

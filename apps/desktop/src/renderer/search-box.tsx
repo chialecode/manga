@@ -4,6 +4,7 @@ import { FolderKanban, Search, Sparkles, TextSearch, X } from "lucide-react";
 import { FIND_QUERY_MAX, type FindGroup, type FindItem, type FindType, type RailView } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
 import { asArray, attempt } from "./lib/api.ts";
+import { isImeEvent } from "./lib/ime.ts";
 import { searchStateKey, type SemanticHitView, type SemanticSearchView } from "./lib/semantic-model.ts";
 import { RAIL_ICON } from "./rail.tsx";
 import { VIEW_LABEL } from "./sidebar.tsx";
@@ -51,6 +52,8 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
   const titles = useMemo(() => new Map(((s.workspace?.resources as Array<{ id: string; title: string }> | undefined) ?? []).map((item) => [item.id, item.title])), [s.workspace]);
   const textScope = scope === null || TEXT_SCOPES.includes(scope);
 
+  const setErrorRef = useRef(s.setError);
+  setErrorRef.current = s.setError;
   // The names that match come as the text is typed; an answer that arrives after a newer question is dropped.
   useEffect(() => {
     if (!query) { latestFind.current += 1; setGroups([]); setFound(""); setBody(null); setSemantic(null); return; }
@@ -60,18 +63,22 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
       void (async () => {
         const result = await attempt<{ groups: FindGroup[] }>("workspace.find", { q: query.slice(0, FIND_QUERY_MAX), ...(scope ? { view: scope } : {}), perType: 4 });
         if (mine !== latestFind.current) return;
-        if (!result.ok) { s.setError(result.error.message); return; }
+        if (!result.ok) { setErrorRef.current(result.error.message); return; }
         setGroups(result.value.groups);
         setFound(query);
         setActive(-1);
       })();
     }, FIND_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, scope]);
 
-  // The texts and the semantic index are asked when Enter says so; what was shown for another text goes.
-  useEffect(() => { setBody((current) => (current && current.text !== query ? null : current)); setSemantic((current) => (current && current.text !== query ? null : current)); }, [query]);
+  // The texts and the semantic index are asked when Enter says so; changing text or scope invalidates stale results and in-flight runs.
+  useEffect(() => {
+    latestBody.current += 1;
+    setBusy(false);
+    setBody(null);
+    setSemantic(null);
+  }, [query, scope]);
 
   async function runBody() {
     if (!query || busy || !textScope) return;
@@ -123,7 +130,7 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
   }
 
   function onKeyDown(event: ReactKeyboardEvent) {
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (isImeEvent(event)) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       if (rows.length === 0) return;
       event.preventDefault();
@@ -142,10 +149,11 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
     }
   }
 
+  const activeRowId = active >= 0 ? rows[active]?.id : undefined;
   useEffect(() => {
-    if (active < 0) return;
-    list.current?.querySelector<HTMLElement>(`[id="${rows[active]?.id}"]`)?.scrollIntoView?.({ block: "nearest" });
-  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!activeRowId) return;
+    document.getElementById(activeRowId)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeRowId]);
 
   const typeLabel = (type: FindType): string => (type === "project" ? t("sidebar.projects") : t(VIEW_LABEL[type as RailView]));
   const iconOf = (type: string, size: number): ReactNode => {
@@ -184,7 +192,7 @@ export function SearchBox(props: { initialQuery: string; initialScope: string | 
           className="search-popup"
           data-testid="search-box"
           aria-describedby={undefined}
-          onEscapeKeyDown={(event) => { if ((event as KeyboardEvent).isComposing) event.preventDefault(); }}
+          onEscapeKeyDown={(event) => { if (isImeEvent(event as KeyboardEvent)) event.preventDefault(); }}
           // The dialog would focus a trigger it does not have: the focus goes back to where it was, or, after something was opened, to that tab (`done`).
           onCloseAutoFocus={(event) => {
             event.preventDefault();

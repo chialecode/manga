@@ -2,9 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { MangaProductApp } from "@manga/app-core";
-import { createId } from "@manga/contracts";
 import { clickTestId, closeTabs, openFromShelf, setField, sleep, trustedClick, waitForTestId, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
-import { exitScreenFullscreen, fullscreenRoundTrip, toRail } from "./common.ts";
+import { caller, exitScreenFullscreen, fullscreenRoundTrip, js, requireSamplePath, toRail, until } from "./common.ts";
 import { differenceMask, glyphCells } from "./glyph-cells.ts";
 import { expectedPlace, judgeDialogue, judgeTopCaption, MEASURE, type Measure, type Verdict } from "./subtitle-check.ts";
 import { runRealVideoTrial } from "./real-video.ts";
@@ -19,8 +18,6 @@ import { WINDOW_SIZES } from "./window-walk.ts";
  * Samples come from MANGA_SMOKE_SAMPLES (the generated dist/samples/media); without them the phase reports not-run.
  */
 
-const actor = { kind: "user" as const, id: "desktop-user" };
-
 type Input = { appService: MangaProductApp; grant: string; view: BrowserWindow; evidenceDir: string | undefined };
 type Step = { id: string; ok: boolean; detail?: unknown };
 
@@ -31,24 +28,6 @@ const PAGE_DRAWN = `(() => {
   const canvas = page?.querySelector("canvas");
   return Boolean(page && ((img && img.complete && img.naturalWidth > 0) || (canvas && canvas.width > 0)));
 })()`;
-
-const js = <T>(view: BrowserWindow, code: string): Promise<T> => view.webContents.executeJavaScript(code) as Promise<T>;
-
-/** Poll a renderer expression until it is truthy; returns its value, or null on timeout. */
-async function until<T>(view: BrowserWindow, expression: string, timeoutMs = 15_000): Promise<T | null> {
-  const value = await js<T | null>(view, `new Promise((resolve) => {
-    const started = Date.now();
-    const tick = () => {
-      let value = null;
-      try { value = (${expression}); } catch { value = null; }
-      if (value) resolve(value);
-      else if (Date.now() - started > ${timeoutMs}) resolve(null);
-      else setTimeout(tick, 25);
-    };
-    tick();
-  })`);
-  return value;
-}
 
 /** The clock's own format, `m:ss.mmm`, written here so the smoke does not import renderer code. */
 function clockText(ms: number): string {
@@ -67,14 +46,9 @@ function percentile(values: number[], p: number): number | null {
 export async function runMediaSmoke(input: Input): Promise<Record<string, unknown> & { ok: boolean }> {
   const { appService, grant, view } = input;
   const root = process.env.MANGA_SMOKE_SAMPLES;
-  if (!root || !fs.existsSync(path.join(root, "manifest.json"))) return { ok: true, notRun: true, reason: "MANGA_SMOKE_SAMPLES does not point at the generated samples" };
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8")) as { samples: Array<{ id: string; path: string; status: string }> };
-  const samplePath = (id: string) => {
-    const entry = manifest.samples.find((item) => item.id === id);
-    if (!entry || entry.status !== "generated") throw new Error(`sample ${id} is not available`);
-    return path.join(root, entry.path);
-  };
-  const call = (commandId: string, body: Record<string, unknown>) => appService.call(actor, { commandId, idempotencyKey: createId("smoke"), input: body }, grant);
+  if (!root || !fs.existsSync(path.join(root, "manifest.json"))) return { ok: false, notRun: true, reason: "MANGA_SMOKE_SAMPLES does not point at the generated samples" };
+  const samplePath = (id: string) => requireSamplePath(root, id);
+  const call = caller(appService, grant);
   const steps: Step[] = [];
   const record = (id: string, ok: boolean, detail?: unknown) => { steps.push({ id, ok, ...(detail !== undefined ? { detail } : {}) }); console.error(`media step ${id}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, 600)}`); return ok; };
   let crash: { reason: string; exitCode: number } | null = null;

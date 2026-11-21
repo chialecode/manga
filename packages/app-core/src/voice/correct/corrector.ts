@@ -130,8 +130,21 @@ function isAsciiWordCode(code: number): boolean {
   );
 }
 
+/** Length-preserving case fold so UTF-16 character offsets always match the original text (even with chars like `İ` U+0130). */
+function foldSameLength(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.length === text.length) return lower;
+  let out = "";
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    const lc = ch.toLowerCase();
+    out += lc.length === 1 ? lc : ch;
+  }
+  return out;
+}
+
 function foldSurface(text: string): string {
-  return text.trim().toLowerCase();
+  return foldSameLength(text.trim());
 }
 
 function analyzeSurface(surface: string): IndexedVariant {
@@ -408,55 +421,53 @@ export class PhoneticCorrector {
 
     const currentWorkId = options?.currentWorkId ?? null;
     const maxCandidates = options?.maxCandidates ?? MAX_POLISH_CANDIDATES;
-    const textLower = rawText.toLowerCase();
+    const textLower = foldSameLength(rawText);
     const allMatches: RawMatch[] = [];
 
     // Phase 1: Exact surface & alias scan (respecting ASCII word boundaries)
-    if (textLower.length === rawText.length) {
-      const checkBucket = (
-        pos: number,
-        bucket: Array<{ termId: string; variantIdx: number; folded: string }> | undefined,
-      ) => {
-        if (!bucket) return;
-        for (let b = 0; b < bucket.length; b += 1) {
-          const item = bucket[b]!;
-          const end = pos + item.folded.length;
-          if (end > textLower.length) continue;
-          if (item.folded.length > 2 && !textLower.startsWith(item.folded, pos)) continue;
+    const checkBucket = (
+      pos: number,
+      bucket: Array<{ termId: string; variantIdx: number; folded: string }> | undefined,
+    ) => {
+      if (!bucket) return;
+      for (let b = 0; b < bucket.length; b += 1) {
+        const item = bucket[b]!;
+        const end = pos + item.folded.length;
+        if (end > textLower.length) continue;
+        if (item.folded.length > 2 && !textLower.startsWith(item.folded, pos)) continue;
 
-          const indexed = this.terms.get(item.termId);
-          if (!indexed) continue;
-          const variant = indexed.variants[item.variantIdx]!;
+        const indexed = this.terms.get(item.termId);
+        if (!indexed) continue;
+        const variant = indexed.variants[item.variantIdx]!;
 
-          // Enforce ASCII word boundaries so e.g. "cat" does not match inside "category"
-          if (variant.pureAsciiWord) {
-            if (pos > 0 && isAsciiWordCode(rawText.charCodeAt(pos - 1))) continue;
-            if (end < rawText.length && isAsciiWordCode(rawText.charCodeAt(end))) continue;
-          }
-
-          const matchedText = rawText.slice(pos, end);
-          if (this.isBlocked(indexed, textLower, pos, end, matchedText)) continue;
-
-          allMatches.push({
-            termId: item.termId,
-            indexed,
-            variant,
-            start: pos,
-            end,
-            matchedText,
-            score: 1.0,
-            isExact: true,
-            // Rule (§4.8): exact match with term or alias -> direct replacement!
-            directEligible: true,
-          });
+        // Enforce ASCII word boundaries so e.g. "cat" does not match inside "category"
+        if (variant.pureAsciiWord) {
+          if (pos > 0 && isAsciiWordCode(rawText.charCodeAt(pos - 1))) continue;
+          if (end < rawText.length && isAsciiWordCode(rawText.charCodeAt(end))) continue;
         }
-      };
 
-      for (let pos = 0; pos < textLower.length; pos += 1) {
-        checkBucket(pos, this.exactByPrefix.get(textLower[pos]!));
-        if (pos + 1 < textLower.length) {
-          checkBucket(pos, this.exactByPrefix.get(textLower.slice(pos, pos + 2)));
-        }
+        const matchedText = rawText.slice(pos, end);
+        if (this.isBlocked(indexed, textLower, pos, end, matchedText)) continue;
+
+        allMatches.push({
+          termId: item.termId,
+          indexed,
+          variant,
+          start: pos,
+          end,
+          matchedText,
+          score: 1.0,
+          isExact: true,
+          // Rule (§4.8): exact match with term or alias -> direct replacement!
+          directEligible: true,
+        });
+      }
+    };
+
+    for (let pos = 0; pos < textLower.length; pos += 1) {
+      checkBucket(pos, this.exactByPrefix.get(textLower[pos]!));
+      if (pos + 1 < textLower.length) {
+        checkBucket(pos, this.exactByPrefix.get(textLower.slice(pos, pos + 2)));
       }
     }
 

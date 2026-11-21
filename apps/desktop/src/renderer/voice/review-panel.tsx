@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Pause, Play } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
 import type { SegmentAnchor } from "@manga/contracts/media";
+import { attempt } from "../lib/api.ts";
 import { formatClock } from "../readers/video-model.ts";
 import { captureBus, type LatestPosition } from "./capture-bus.ts";
 import { useRecordings, useReview, type Review, type ReviewSegment, type SessionSummary } from "./use-review.ts";
@@ -84,10 +85,12 @@ function SessionReview(props: {
   formatDate: (value: string) => string;
 }) {
   const { t } = props;
-  const { review, status, error, busy, act } = useReview(props.sessionId);
+  const { review, status, error, busy, act, reportError } = useReview(props.sessionId);
   const audio = useRef<HTMLAudioElement>(null);
   const audioUrl = useRef<string | null>(null);
   const stopAt = useRef<number | null>(null);
+  const playSeq = useRef(0);
+  const pendingSeekCleanup = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string; term: string; heard: string } | null>(null);
@@ -103,7 +106,15 @@ function SessionReview(props: {
     element.addEventListener("timeupdate", onTime);
     element.addEventListener("pause", onPause);
     element.addEventListener("ended", onPause);
-    return () => { element.removeEventListener("timeupdate", onTime); element.removeEventListener("pause", onPause); element.removeEventListener("ended", onPause); element.pause(); };
+    return () => {
+      playSeq.current += 1;
+      pendingSeekCleanup.current?.();
+      pendingSeekCleanup.current = null;
+      element.removeEventListener("timeupdate", onTime);
+      element.removeEventListener("pause", onPause);
+      element.removeEventListener("ended", onPause);
+      element.pause();
+    };
   }, [review !== null]);
 
   const items = useMemo(() => {
@@ -123,17 +134,39 @@ function SessionReview(props: {
   async function play(segment: ReviewSegment) {
     const element = audio.current;
     if (!element) return;
-    if (playing === segment.id) { element.pause(); return; }
+    if (playing === segment.id) {
+      playSeq.current += 1;
+      pendingSeekCleanup.current?.();
+      pendingSeekCleanup.current = null;
+      stopAt.current = null;
+      element.pause();
+      return;
+    }
+    const seq = ++playSeq.current;
+    pendingSeekCleanup.current?.();
+    pendingSeekCleanup.current = null;
     if (!audioUrl.current) {
-      const handle = await act<{ url: string }>("audio", "capture.audioHandle", { sessionId: session.id });
-      if (!handle.ok) return;
+      const handle = await attempt<{ url: string }>("capture.audioHandle", { sessionId: session.id });
+      if (seq !== playSeq.current) return;
+      if (!handle.ok) { reportError(handle.error.message); return; }
+      reportError("");
       audioUrl.current = handle.value.url;
       element.src = handle.value.url;
     }
     stopAt.current = segment.endMs;
-    element.currentTime = segment.startMs / 1000;
+    const startSec = segment.startMs / 1000;
+    const applyStart = () => { element.currentTime = startSec; };
+    applyStart();
+    if (element.readyState < 1) {
+      const onLoaded = () => {
+        pendingSeekCleanup.current = null;
+        if (playSeq.current === seq) applyStart();
+      };
+      element.addEventListener("loadedmetadata", onLoaded, { once: true });
+      pendingSeekCleanup.current = () => element.removeEventListener("loadedmetadata", onLoaded);
+    }
     setPlaying(segment.id);
-    try { await element.play(); } catch { setPlaying(null); }
+    try { await element.play(); } catch { if (playSeq.current === seq) setPlaying(null); }
   }
 
   async function saveRevision(segment: ReviewSegment) {

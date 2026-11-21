@@ -76,7 +76,6 @@ async function bootRealApp() {
       };
     },
     async chooseDirectory() { return null; },
-    async chooseFile() { return null; },
     async chooseAudio() { return null; },
     async stashSecret() { return null; },
     async reveal() { return { status: "ok", value: {} }; },

@@ -64,7 +64,11 @@ describe("the plugins a package carries", () => {
       const listed = await ctx.app.call(ctx.actor, { commandId: "plugin.bundled", idempotencyKey: "bundled-1", input: {} }, ctx.grant.handle);
       expect(listed.status).toBe("ok");
       const items = (listed.value as { bundled: Array<{ id: string; installed: boolean; trust: string }> }).bundled;
-      expect(items).toEqual([expect.objectContaining({ id: "manga.acquisition-bt", installed: false, trust: "first-party" })]);
+      expect(items).toEqual([
+        expect.objectContaining({ id: "manga.acquisition-bt", installed: false, trust: "first-party" }),
+        // The DeepSeek provider (PLUG-07): declarative, offered the same way, installed only when the person installs it.
+        expect.objectContaining({ id: "manga.provider-deepseek", installed: false, trust: "first-party" }),
+      ]);
     } finally {
       ctx.app.close();
     }

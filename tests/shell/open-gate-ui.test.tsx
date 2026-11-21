@@ -63,7 +63,6 @@ function installHost(handlers: Record<string, Handler> = {}, extra: Record<strin
     },
     onNotice(listener: (notice: Notice) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     async chooseDirectory() { return null; },
-    async chooseFile() { return null; },
     async chooseAudio() { return null; },
     async stashSecret() { return null; },
     async reveal() { return { status: "ok", value: {} }; },

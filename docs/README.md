@@ -6,7 +6,7 @@
 | 编写日期 | 2026-09-19；2026-10-06 更新 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速、安装与自动更新、首个正式版与轻量打开都已合入 main（最近合并提交 `f9aea92`，发布修复到 `3b9d498`，已发布 v0.1.1）；当前阶段（类 Typeless 的听写）在 `feat/m12-voice-dictation` 按[当前阶段计划](delivery/stage-plan.md)完成 B 侧实施与完整阶段门禁，交付证据见[当前阶段报告](delivery/stage-report.md)，待 A 集中审查。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
+| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速、安装与自动更新、首个正式版与轻量打开、类 Typeless 的听写都已合入 main（最近合并提交 `92d1b0b`，已发布 v0.1.1）；当前阶段（DeepSeek 插件）在 `feat/m13-deepseek-plugin` 已完成 B 实施、A 集中审查、试用反馈修复、全仓代码审查重构、无用代码与文档清理及合并前依赖盘点，正按已授权的 [ACT-24](../USER-ACTIONS.md#act-24) 推进 PR 与合并。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
 
 ## 1. 阅读顺序
 
@@ -25,7 +25,7 @@
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
 | [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
 | [最近一次门禁证据](evidence/gate/) | 最近一次阶段门禁（test、package、bench、report）的脱敏结果，随阶段更新；过程文档与轮次证据按[阶段收尾清理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
-| [当前阶段计划](delivery/stage-plan.md) / [当前阶段报告](delivery/stage-report.md) | 当前阶段唯一计划（A-46）与 B 交付报告：阶段开始的整理、依赖盘点、类 Typeless 的听写（采集前端、去除静默、本地与外部 ASR、本地模型下载、词库与音近纠错、润色与恢复原文、从修改中学词、评测基准）、观察项与基准、人工检查及门禁证据指纹 |
+| [当前阶段计划](delivery/stage-plan.md) / [当前阶段报告](delivery/stage-report.md) | 当前阶段唯一计划（A-46）与 B 交付报告：阶段开始的整理与依赖盘点、DeepSeek 插件（声明式提供者插件、从 DeepSeek 加入模型与 schema v17、思考与工具循环、联网搜索与网页搜索、DeepSeek 语音识别、回答与小说朗读、用量与费用估算、真实 API 契约）、观察项与基准、人工检查；报告含映射、L1 的回传规则、v17 迁移、真实契约与用量、门禁与朗读基准 |
 | [模块规格](modules/library.md) | 各内置模块的数据所有权、命令、上下文、停用与恢复 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 

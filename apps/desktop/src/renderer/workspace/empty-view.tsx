@@ -1,17 +1,9 @@
 import type { WorkspaceView } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
-import { VIEW_LABEL } from "../sidebar.tsx";
-import { useServices, type Openers } from "./services.tsx";
+import { VIEW_LABEL, manageAction } from "../sidebar.tsx";
+import { useServices } from "./services.tsx";
 
-/** The management entry of a feature view (the sidebar's entry and the empty view's button): the shelf of a medium, the records, the objects, the downloads. */
-export function manageAction(view: WorkspaceView, open: Openers): (() => void) | null {
-  if (view === "conversation") return () => open.records({ type: "conversation" });
-  if (view === "note") return () => open.records({ type: "note" });
-  if (view === "novel" || view === "comic" || view === "video") return () => open.library(view);
-  if (view === "whiteboard" || view === "mindmap" || view === "draft" || view === "roughcut") return () => open.objects(view);
-  if (view === "downloads") return () => open.downloads();
-  return null;
-}
+export { manageAction };
 
 /**
  * The main area of a feature view that has no tab yet (A-107): one line that says so and the view's management entry, a little above the middle. Shown

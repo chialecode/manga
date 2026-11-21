@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import os from "node:os";
 import { MangaError } from "@manga/contracts";
+import { errorMessage } from "../shared/utils.ts";
 
 export type ToolRun = {
   code: number | null;
@@ -30,12 +31,26 @@ export type ToolRunOptions = {
 };
 
 const DEFAULT_TIMEOUT = 120_000;
+const MAX_LINE_BUFFER_CHARS = 1024 * 1024;
+
+function replaceLiteral(text: string, needle: string, replacement: string, caseInsensitive: boolean): string {
+  if (!needle) return text;
+  if (!caseInsensitive) return text.split(needle).join(replacement);
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(escaped, "gi"), replacement);
+}
 
 /** Replace file paths and the user's home directory so a tool's complaint can be shown without leaking where files live. */
 export function redactToolText(text: string, extra: string[] = []): string {
   let out = text;
-  for (const secret of [...extra, os.homedir()]) {
-    if (secret && secret.length > 2) out = out.split(secret).join("<path>").split(secret.replace(/\\/g, "/")).join("<path>");
+  const ci = process.platform === "win32";
+  // Longest secrets first so a parent folder never partially hides a full file path containing spaces.
+  const secrets = [...new Set([...extra, os.homedir()].filter((secret) => Boolean(secret) && secret.length > 2))]
+    .sort((a, b) => b.length - a.length);
+  for (const secret of secrets) {
+    out = replaceLiteral(out, secret, "<path>", ci);
+    const slashed = secret.replace(/\\/g, "/");
+    if (slashed !== secret) out = replaceLiteral(out, slashed, "<path>", ci);
   }
   out = out.replace(/(?:[A-Za-z]:|\\\\\?\\[A-Za-z]:)[\\/][^\s"'<>|*?]*/g, "<path>");
   out = out.replace(/(?:^|[\s"'=])(\/(?:home|Users|tmp|var|mnt|media)\/[^\s"'<>|*?]*)/g, (match, p1: string) => match.replace(p1, "<path>"));
@@ -60,7 +75,7 @@ export function runTool(file: string, args: string[], options: ToolRunOptions = 
     try {
       child = spawn(file, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], cwd: options.cwd });
     } catch (error) {
-      reject(new MangaError("CAPABILITY_UNAVAILABLE", `tool could not be started: ${redactToolText(error instanceof Error ? error.message : String(error), options.redact)}`));
+      reject(new MangaError("CAPABILITY_UNAVAILABLE", `tool could not be started: ${redactToolText(errorMessage(error), options.redact)}`));
       return;
     }
     options.onSpawn?.(child.pid);
@@ -81,14 +96,25 @@ export function runTool(file: string, args: string[], options: ToolRunOptions = 
     const timer = setTimeout(() => stop("timeout"), timeoutMs);
     const onAbort = () => stop("cancelled");
     options.signal?.addEventListener("abort", onAbort, { once: true });
+    const emitLine = (line: string) => {
+      try {
+        options.onStdoutLine?.(line);
+      } catch {
+        stop("cancelled");
+      }
+    };
     child.stdout.on("data", (chunk: Buffer) => {
       if (options.onStdoutLine) {
         lineBuffer += chunk.toString("utf8");
         let at = lineBuffer.indexOf("\n");
         while (at >= 0) {
-          options.onStdoutLine(lineBuffer.slice(0, at).replace(/\r$/, ""));
+          emitLine(lineBuffer.slice(0, at).replace(/\r$/, ""));
           lineBuffer = lineBuffer.slice(at + 1);
           at = lineBuffer.indexOf("\n");
+        }
+        if (lineBuffer.length > Math.min(maxStdout, MAX_LINE_BUFFER_CHARS)) {
+          lineBuffer = "";
+          stop("output-limit");
         }
         return;
       }
@@ -103,7 +129,7 @@ export function runTool(file: string, args: string[], options: ToolRunOptions = 
     const finish = (code: number | null, signal: NodeJS.Signals | null) => {
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
-      if (options.onStdoutLine && lineBuffer) options.onStdoutLine(lineBuffer.replace(/\r$/, ""));
+      if (options.onStdoutLine && lineBuffer) emitLine(lineBuffer.replace(/\r$/, ""));
       resolve({ code, signal, stdout: Buffer.concat(out), stderr: redactToolText(err, options.redact), durationMs: Date.now() - started, killed });
     };
     child.on("error", (error) => {

@@ -74,4 +74,3 @@ export type AnchorResolveResult = {
 
 export const NORMALIZATION_V1 = "text-nfc-lf-v1";
 export const PARSER_V1 = "novel-parser-v1";
-export const PARSER_V2_SPACING = "novel-parser-v2-spacing";

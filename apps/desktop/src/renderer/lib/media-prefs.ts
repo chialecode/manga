@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { attempt } from "./api.ts";
 
 type Kind = "comic" | "video";
@@ -23,19 +23,20 @@ export const mediaPrefs = {
 export function useMediaPrefs<C extends object, V extends object>(defaults: { comic: C; video: V }, onError: (message: string) => void) {
   const [comic, setComic] = useState<C>(defaults.comic);
   const [video, setVideo] = useState<V>(defaults.video);
+  const defaultsRef = useRef(defaults);
+  defaultsRef.current = defaults;
   useEffect(() => {
     let cancelled = false;
     void attempt<{ comic?: Partial<C>; video?: Partial<V> }>("settings.getMedia").then((saved) => {
       if (cancelled || !saved.ok) return;
-      if (saved.value.comic) setComic({ ...defaults.comic, ...saved.value.comic });
-      if (saved.value.video) setVideo({ ...defaults.video, ...saved.value.video });
+      if (saved.value.comic) setComic({ ...defaultsRef.current.comic, ...saved.value.comic });
+      if (saved.value.video) setVideo({ ...defaultsRef.current.video, ...saved.value.video });
     });
     const off = mediaPrefs.subscribe((kind, patch) => {
       if (kind === "comic") setComic((current) => ({ ...current, ...patch }));
       else setVideo((current) => ({ ...current, ...patch }));
     });
     return () => { cancelled = true; off(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return {
     comic: { settings: comic, change: (patch: Partial<C>) => {

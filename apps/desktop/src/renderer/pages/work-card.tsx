@@ -73,11 +73,14 @@ export const WorkCard = memo(function WorkCard(props: {
   index: number;
   tabbable: boolean;
   layout?: "card" | "row";
+  landscape?: boolean;
+  coverAspectRatio?: string;
   /** The context the shelf is shown in: the percentage is the latest position in any context, and a position from another one says whose it is. */
   context?: string | null;
 }) {
   const { t, work, actions } = props;
-  const landscape = work.mediaKind === "video";
+  const isVideo = work.mediaKind === "video";
+  const landscape = Boolean(props.landscape);
   const completed = work.progressCompleted === true || (work.resourceCount > 0 && work.finishedCount >= work.resourceCount);
   const percent = completed ? 100 : percentOf(work.progress);
   const line = progressLine(t, work);
@@ -105,9 +108,9 @@ export const WorkCard = memo(function WorkCard(props: {
         onClick={open}
         onKeyDown={(event) => { if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) { event.preventDefault(); actions.onDetail(work.id); } }}
       >
-        <span className={`work-cover ${landscape ? "is-landscape" : ""}`}>
+        <span className={`work-cover ${landscape ? "is-landscape" : ""}`} style={!landscape && props.coverAspectRatio ? { aspectRatio: props.coverAspectRatio } : undefined}>
           <CoverImage url={props.coverUrl} coverId={work.coverId} kind={work.mediaKind} title={work.title} landscape={landscape} />
-          {landscape ? <span className="cover-play" aria-hidden="true"><Play size={18} fill="currentColor" /></span> : null}
+          {isVideo ? <span className="cover-play" aria-hidden="true"><Play size={18} fill="currentColor" /></span> : null}
         </span>
         <span className="work-text">
           <span className="work-title" title={work.title}>{work.title}</span>
@@ -116,7 +119,7 @@ export const WorkCard = memo(function WorkCard(props: {
           {percent > 0 ? (
             <span className="work-progress" data-testid={`work-progress-${work.id}`}>
               <span className="work-progress-head">
-                <span className="work-progress-label">{completed ? shelfLabel(t, "finished", work.mediaKind) : t(landscape ? "card.watched" : "card.read", { percent })}</span>
+                <span className="work-progress-label">{completed ? shelfLabel(t, "finished", work.mediaKind) : t(isVideo ? "card.watched" : "card.read", { percent })}</span>
                 {origin ? <span className="work-origin" data-testid={`work-origin-${work.id}`} title={t("card.origin", { name: origin })}>{t("card.origin", { name: origin })}</span> : null}
               </span>
               <span className="work-progress-bar" aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>

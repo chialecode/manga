@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { AsrEngineSelection, ChineseVariant, DictationInsertMode, PolishMode } from "@manga/contracts";
+import {
+  DEFAULT_RECORDING_SETTINGS,
+  type RecordingSettings,
+  type RecordingSettingsPatch,
+} from "@manga/contracts/recording";
 import type { Translator } from "@manga/i18n";
 import { attempt, call } from "../lib/api.ts";
 import { autoAddMaterial } from "../lib/materials.ts";
@@ -7,70 +11,10 @@ import { captureBus } from "./capture-bus.ts";
 import { openMicrophone } from "./mic.ts";
 import { Recorder, type MicHandle, type RecorderState } from "./recorder.ts";
 
-export type RecordingSettings = {
-  /** `null` is the system default microphone. */
-  deviceId: string | null;
-  holdKey: string;
-  toggleKey: string;
-  retention: "keep" | "discard";
-  duckPlayback: "none" | "lower" | "pause";
-  boundaryMarginMs: number;
-  /** The language the recordings are in, as the service wants it ("zh", "ja"); `null` leaves it to the service. */
-  language: string | null;
-  /** How long the dictionary hint sent with each block of audio may be, and the lengths set for single connections. */
-  promptChars: number;
-  promptCharsByConnection: Record<string, number>;
-  overlay: { x?: number; y?: number };
-  echoCancellation: boolean;
-  systemLoopbackAec: boolean;
-  browserNoiseSuppression: boolean;
-  autoGainControl: boolean;
-  gtcrnDenoise: boolean;
-  dictationHoldKey: string;
-  dictationInsertMode: DictationInsertMode;
-  polishMode: PolishMode;
-  polishPrompts: { light?: string | null; formal?: string | null };
-  polishConnectionId: string | null;
-  chineseVariant: ChineseVariant;
-  dictationEngine: AsrEngineSelection | null;
-  captureEngine: AsrEngineSelection | null;
-  localIdleMinutes: number;
-  retainDictationAudio24h: boolean;
-};
+export { DEFAULT_RECORDING_SETTINGS, type RecordingSettings };
 
 /** What a save may carry: the same fields, and a connection's hint length or overlay position that is `null` goes back to its default. */
-export type RecordingPatch = Partial<Omit<RecordingSettings, "promptCharsByConnection" | "overlay">> & {
-  promptCharsByConnection?: Record<string, number | null>;
-  overlay?: { x?: number | null; y?: null | number };
-};
-
-export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
-  deviceId: null,
-  holdKey: "F9",
-  toggleKey: "F8",
-  retention: "keep",
-  duckPlayback: "lower",
-  boundaryMarginMs: 300,
-  language: null,
-  promptChars: 600,
-  promptCharsByConnection: {},
-  overlay: {},
-  echoCancellation: true,
-  systemLoopbackAec: false,
-  browserNoiseSuppression: false,
-  autoGainControl: true,
-  gtcrnDenoise: false,
-  dictationHoldKey: "RightAlt",
-  dictationInsertMode: "stream_replace",
-  polishMode: "light",
-  polishPrompts: {},
-  polishConnectionId: null,
-  chineseVariant: "simplified",
-  dictationEngine: null,
-  captureEngine: null,
-  localIdleMinutes: 10,
-  retainDictationAudio24h: false,
-};
+export type RecordingPatch = RecordingSettingsPatch;
 
 export type RecorderDeps = {
   i18n: Translator;
@@ -105,17 +49,22 @@ export function useRecorder(deps: RecorderDeps) {
   settingsRef.current = settings;
   const noticeRef = useRef({ i18n, setNotice });
   noticeRef.current = { i18n, setNotice };
+  const openMicRef = useRef(deps.openMic);
+  openMicRef.current = deps.openMic;
+  const nowRef = useRef(deps.now);
+  nowRef.current = deps.now;
   const recorder = useMemo(() => new Recorder({
     call: (commandId, input, options) => call(commandId, input, options) as Promise<never>,
-    openMic: deps.openMic ?? ((deviceId) => openMicrophone(deviceId, {
-      echoCancellation: settingsRef.current.echoCancellation,
-      systemLoopbackAec: settingsRef.current.systemLoopbackAec,
-      browserNoiseSuppression: settingsRef.current.browserNoiseSuppression,
-      autoGainControl: settingsRef.current.autoGainControl,
-      onSystemAecFallback: () => noticeRef.current.setNotice(noticeRef.current.i18n.t("dictation.notice.systemAecFallback")),
-    })),
-    now: deps.now ?? (() => performance.now()),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    openMic: (deviceId) => (openMicRef.current
+      ? openMicRef.current(deviceId)
+      : openMicrophone(deviceId, {
+        echoCancellation: settingsRef.current.echoCancellation,
+        systemLoopbackAec: settingsRef.current.systemLoopbackAec,
+        browserNoiseSuppression: settingsRef.current.browserNoiseSuppression,
+        autoGainControl: settingsRef.current.autoGainControl,
+        onSystemAecFallback: () => noticeRef.current.setNotice(noticeRef.current.i18n.t("dictation.notice.systemAecFallback")),
+      })),
+    now: () => (nowRef.current ? nowRef.current() : performance.now()),
   }), []);
   const state = useSyncExternalStore(recorder.subscribe, recorder.getState);
 
@@ -125,9 +74,9 @@ export function useRecorder(deps: RecorderDeps) {
   }, []);
   useEffect(() => { if (enabled) void reloadSettings(); }, [enabled, reloadSettings]);
 
-  const saveSettings = useCallback(async (patch: RecordingPatch) => {
+  const saveSettings = useCallback(async (patch: RecordingPatch): Promise<boolean> => {
     setSettings((current) => {
-      const { promptCharsByConnection, overlay, ...rest } = patch;
+      const { promptCharsByConnection, overlay, polishPrompts, ...rest } = patch;
       const next: RecordingSettings = { ...current, ...rest };
       if (overlay) {
         if (overlay.x === null || overlay.y === null) next.overlay = {};
@@ -138,10 +87,26 @@ export function useRecorder(deps: RecorderDeps) {
         for (const [id, value] of Object.entries(promptCharsByConnection)) { if (value === null) delete merged[id]; else merged[id] = value; }
         next.promptCharsByConnection = merged;
       }
+      if (polishPrompts) {
+        const merged = { ...current.polishPrompts };
+        for (const key of ["light", "formal"] as const) {
+          if (key in polishPrompts) {
+            const value = polishPrompts[key];
+            if (value === null || value === undefined) delete merged[key];
+            else merged[key] = value;
+          }
+        }
+        next.polishPrompts = merged;
+      }
       return next;
     });
     const result = await attempt("settings.setRecording", patch);
-    if (!result.ok) { setError(result.error.message); await reloadSettings(); }
+    if (!result.ok) {
+      setError(result.error.message);
+      await reloadSettings();
+      return false;
+    }
+    return true;
   }, [setError, reloadSettings]);
 
   const begin = useCallback(async (mode: "hold" | "toggle") => {
@@ -165,7 +130,7 @@ export function useRecorder(deps: RecorderDeps) {
   /** The end of a press on the hold button: only a recording that the press started is ended by it. */
   const endHold = useCallback(() => {
     const current = recorder.getState();
-    if (current.mode === "hold" || current.phase === "starting") void recorder.stop("user");
+    if (current.mode === "hold" && (current.phase === "recording" || current.phase === "starting")) void recorder.stop("user");
   }, [recorder]);
   // Turning the voice module off ends a recording in progress (what was captured is saved) and says so.
   useEffect(() => {
@@ -188,6 +153,7 @@ export function useRecorder(deps: RecorderDeps) {
   useEffect(() => {
     if (!enabled) return;
     const onDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.ctrlKey || event.altKey || event.metaKey) return;
       if (event.code === settingsRef.current.holdKey) {
         event.preventDefault();
@@ -201,7 +167,7 @@ export function useRecorder(deps: RecorderDeps) {
     const onUp = (event: KeyboardEvent) => {
       if (event.code !== settingsRef.current.holdKey) return;
       const current = recorder.getState();
-      if (current.mode === "hold" || current.phase === "starting") void recorder.stop("user");
+      if (current.mode === "hold" && (current.phase === "recording" || current.phase === "starting")) void recorder.stop("user");
     };
     const onBlur = () => {
       const current = recorder.getState();

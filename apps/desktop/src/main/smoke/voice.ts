@@ -3,9 +3,8 @@ import path from "node:path";
 import { createServer } from "node:http";
 import { BrowserWindow } from "electron";
 import { MangaProductApp } from "@manga/app-core";
-import { createId } from "@manga/contracts";
 import { clickTestId, openFromShelf, pressChord, sleep, waitForTestId } from "./driver.ts";
-import { ensureDock } from "./common.ts";
+import { caller, ensureDock, js, until } from "./common.ts";
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../overlay-model.ts";
 
 /**
@@ -15,24 +14,7 @@ import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../overlay-model.ts";
  */
 
 const TERMINAL = new Set(["done", "no_speech", "failed", "pending", "cancelled"]);
-const actor = { kind: "user" as const, id: "desktop-user" };
 type Input = { appService: MangaProductApp; grant: string; view: BrowserWindow; evidenceDir: string | undefined };
-
-const js = <T>(view: BrowserWindow, code: string): Promise<T> => view.webContents.executeJavaScript(code) as Promise<T>;
-
-async function until<T>(view: BrowserWindow, expression: string, timeoutMs: number): Promise<T | null> {
-  return js<T | null>(view, `new Promise((resolve) => {
-    const started = Date.now();
-    const tick = () => {
-      let value = null;
-      try { value = (${expression}); } catch { value = null; }
-      if (value) resolve(value);
-      else if (Date.now() - started > ${timeoutMs}) resolve(null);
-      else setTimeout(tick, 25);
-    };
-    tick();
-  })`);
-}
 
 async function waitForOverlay(view: BrowserWindow, present: boolean, timeoutMs = 5000): Promise<BrowserWindow | undefined> {
   const deadline = Date.now() + timeoutMs;
@@ -66,8 +48,8 @@ function clickOverlayStop(overlay: BrowserWindow): void {
 export async function runVoiceSmoke(input: Input): Promise<Record<string, unknown> & { ok: boolean }> {
   const { appService, grant, view } = input;
   const clip = process.env.MANGA_SMOKE_AUDIO;
-  if (!clip || !fs.existsSync(clip)) return { ok: true, notRun: true, reason: "MANGA_SMOKE_AUDIO does not point at a synthetic speech clip" };
-  const call = (commandId: string, body: Record<string, unknown>) => appService.call(actor, { commandId, idempotencyKey: createId("smoke"), input: body }, grant);
+  if (!clip || !fs.existsSync(clip)) return { ok: false, notRun: true, reason: "MANGA_SMOKE_AUDIO does not point at a synthetic speech clip" };
+  const call = caller(appService, grant);
   const evidence = input.evidenceDir;
   const shotsDir = evidence ? path.join(evidence, "screenshots") : undefined;
   const steps: Array<{ id: string; ok: boolean; detail?: unknown }> = [];

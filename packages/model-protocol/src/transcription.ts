@@ -1,5 +1,6 @@
 import { MangaError } from "@manga/contracts";
 import {
+  createRequestSignal,
   joinApiPath,
   mapHttpError,
   networkError,
@@ -54,7 +55,8 @@ function buildChatAudioSystemContent(request: ChatAudioTranscriptionRequest): st
 
 function mapErrorWithRetryAfter(response: Response, bodyText: string): MangaError {
   const error = mapHttpError(response.status, bodyText);
-  const wait = Number(response.headers.get("retry-after"));
+  const rawWait = response.headers.get("retry-after");
+  const wait = rawWait !== null && rawWait.trim() !== "" ? Number(rawWait) : Number.NaN;
   if (response.status === 429 && Number.isFinite(wait) && wait >= 0) {
     return new MangaError(error.code, error.message, {
       retryable: true,
@@ -62,6 +64,53 @@ function mapErrorWithRetryAfter(response: Response, bodyText: string): MangaErro
     });
   }
   return error;
+}
+
+async function postTranscriptionJson<T>(
+  url: string,
+  init: { headers: Record<string, string>; body: FormData | string },
+  request: { signal?: AbortSignal; timeoutMs?: number },
+  fetchImpl: typeof fetch,
+): Promise<T> {
+  if (request.signal?.aborted) {
+    throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
+  }
+  const req = createRequestSignal(request.timeoutMs ?? 60_000, request.signal);
+  try {
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: init.headers,
+      body: init.body,
+      redirect: "error",
+      signal: req.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw mapErrorWithRetryAfter(response, text);
+    }
+    try {
+      requireMachineAnswer(response);
+    } catch (error) {
+      void response.body?.cancel().catch(() => undefined);
+      throw error;
+    }
+    const bodyText = await response.text();
+    return parseJsonAnswer<T>(bodyText, "JSON");
+  } catch (error) {
+    if (request.signal?.aborted) {
+      throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
+    }
+    if (req.isTimedOut()) {
+      throw new MangaError("PROVIDER_UNAVAILABLE", "transcription request timed out", {
+        retryable: true,
+        details: { kind: "timeout" },
+      });
+    }
+    if (error instanceof MangaError) throw error;
+    throw networkError(error, request.signal);
+  } finally {
+    req.clear();
+  }
 }
 
 export async function transcribeAudio(
@@ -86,66 +135,29 @@ export async function transcribeAudio(
   copy.set(request.bytes);
   body.set("file", new Blob([copy], { type: request.mimeType }), request.fileName);
 
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, request.timeoutMs ?? 60_000);
-  const onAbort = () => controller.abort();
-  request.signal?.addEventListener("abort", onAbort, { once: true });
-
-  try {
-    const response = await fetchImpl(url, {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}` },
-      body,
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw mapErrorWithRetryAfter(response, text);
-    }
-    requireMachineAnswer(response);
-    const json = parseJsonAnswer<{
-      text?: string;
-      duration?: number;
-      language?: string;
-      segments?: Array<{ start?: unknown; end?: unknown; text?: unknown }>;
-    }>(await response.text().catch(() => ""), "JSON");
-    const segments = Array.isArray(json.segments)
-      ? json.segments
-          .filter(
-            (item) =>
-              typeof item.start === "number" &&
-              typeof item.end === "number" &&
-              typeof item.text === "string" &&
-              (item.end as number) >= (item.start as number),
-          )
-          .map((item) => ({ start: item.start as number, end: item.end as number, text: item.text as string }))
-      : undefined;
-    return {
-      text: json.text ?? "",
-      ...(segments?.length ? { segments } : {}),
-      ...(typeof json.duration === "number" ? { duration: json.duration } : {}),
-      ...(typeof json.language === "string" ? { language: json.language } : {}),
-    };
-  } catch (error) {
-    if (request.signal?.aborted) {
-      throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    }
-    if (timedOut) {
-      throw new MangaError("PROVIDER_UNAVAILABLE", "transcription request timed out", {
-        retryable: true,
-        details: { kind: "timeout" },
-      });
-    }
-    if (error instanceof MangaError) throw error;
-    throw networkError(error, request.signal);
-  } finally {
-    clearTimeout(timer);
-    request.signal?.removeEventListener("abort", onAbort);
-  }
+  const json = await postTranscriptionJson<{
+    text?: string;
+    duration?: number;
+    language?: string;
+    segments?: Array<{ start?: unknown; end?: unknown; text?: unknown }>;
+  }>(url, { headers: { authorization: `Bearer ${apiKey}` }, body }, request, fetchImpl);
+  const segments = Array.isArray(json.segments)
+    ? json.segments
+        .filter(
+          (item) =>
+            typeof item.start === "number" &&
+            typeof item.end === "number" &&
+            typeof item.text === "string" &&
+            (item.end as number) >= (item.start as number),
+        )
+        .map((item) => ({ start: item.start as number, end: item.end as number, text: item.text as string }))
+    : undefined;
+  return {
+    text: json.text ?? "",
+    ...(segments?.length ? { segments } : {}),
+    ...(typeof json.duration === "number" ? { duration: json.duration } : {}),
+    ...(typeof json.language === "string" ? { language: json.language } : {}),
+  };
 }
 
 /**
@@ -186,62 +198,33 @@ export async function transcribeChatAudio(
     ],
   };
 
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, request.timeoutMs ?? 60_000);
-  const onAbort = () => controller.abort();
-  request.signal?.addEventListener("abort", onAbort, { once: true });
-
-  try {
-    const response = await fetchImpl(url, {
-      method: "POST",
+  const json = await postTranscriptionJson<{
+    choices?: Array<{
+      message?: {
+        content?: string | Array<{ type?: string; text?: string }> | null;
+      };
+    }>;
+  }>(
+    url,
+    {
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw mapErrorWithRetryAfter(response, text);
-    }
-    requireMachineAnswer(response);
-    const json = parseJsonAnswer<{
-      choices?: Array<{
-        message?: {
-          content?: string | Array<{ type?: string; text?: string }> | null;
-        };
-      }>;
-    }>(await response.text().catch(() => ""), "JSON");
-    if (!Array.isArray(json.choices)) throw protocolError("no choices");
-    const rawContent = json.choices[0]?.message?.content;
-    let text = "";
-    if (typeof rawContent === "string") {
-      text = rawContent;
-    } else if (Array.isArray(rawContent)) {
-      text = rawContent
-        .map((part) => (part && typeof part.text === "string" ? part.text : ""))
-        .join("");
-    }
-    return { text };
-  } catch (error) {
-    if (request.signal?.aborted) {
-      throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    }
-    if (timedOut) {
-      throw new MangaError("PROVIDER_UNAVAILABLE", "transcription request timed out", {
-        retryable: true,
-        details: { kind: "timeout" },
-      });
-    }
-    if (error instanceof MangaError) throw error;
-    throw networkError(error, request.signal);
-  } finally {
-    clearTimeout(timer);
-    request.signal?.removeEventListener("abort", onAbort);
+    },
+    request,
+    fetchImpl,
+  );
+  if (!Array.isArray(json.choices)) throw protocolError("no choices");
+  const rawContent = json.choices[0]?.message?.content;
+  let text = "";
+  if (typeof rawContent === "string") {
+    text = rawContent;
+  } else if (Array.isArray(rawContent)) {
+    text = rawContent
+      .map((part) => (part && typeof part.text === "string" ? part.text : ""))
+      .join("");
   }
+  return { text };
 }

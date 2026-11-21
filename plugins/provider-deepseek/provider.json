@@ -1,0 +1,70 @@
+{
+  "format": "manga-provider-v1",
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "baseUrl": "https://api.deepseek.com",
+  "hosts": ["api.deepseek.com"],
+  "keyUrl": "https://platform.deepseek.com/api_keys",
+  "discovery": "openai-models",
+  "dialect": "deepseek",
+  "models": [
+    {
+      "id": "deepseek-flash",
+      "name": "DeepSeek V4.1 Flash",
+      "description": "对话与看图，速度快、价格低",
+      "adapter": "openai-chat-completions",
+      "contextWindow": 1048576,
+      "maxOutput": 393216,
+      "inputTypes": ["text", "image"],
+      "capabilities": ["tools", "web_search", "reasoning"],
+      "reasoning": { "levels": ["low", "high", "max"], "default": "high", "canDisable": true },
+      "suggested": true,
+      "price": { "input": { "usd": 0.3, "per": 1000000 }, "cachedInput": { "usd": 0.006, "per": 1000000 }, "output": { "usd": 1.2, "per": 1000000 } }
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "name": "DeepSeek V4 Pro",
+      "description": "推理更强，只收文字，价格约为 Flash 的 3 倍",
+      "adapter": "openai-chat-completions",
+      "contextWindow": 1048576,
+      "maxOutput": 393216,
+      "inputTypes": ["text"],
+      "capabilities": ["tools", "web_search", "reasoning"],
+      "reasoning": { "levels": ["low", "high", "max"], "default": "high", "canDisable": true },
+      "suggested": false,
+      "price": { "input": { "usd": 1.32, "per": 1000000 }, "cachedInput": { "usd": 0.044, "per": 1000000 }, "output": { "usd": 3.96, "per": 1000000 } }
+    }
+  ],
+  "services": [
+    {
+      "kind": "transcription",
+      "adapter": "deepseek-asr@1",
+      "name": "语音识别",
+      "description": "16 kHz WAV，每次不超过 8 MiB、120 秒；自动识别语言，不支持热词",
+      "limits": { "uploadBytes": 8388608, "seconds": 120 },
+      "suggested": true,
+      "price": { "usd": 0.116, "per": 3600, "unit": "second" }
+    },
+    {
+      "kind": "speech",
+      "adapter": "deepseek-tts@1",
+      "name": "语音合成",
+      "description": "边合成边播放；每次不超过 10,000 计费字符（汉字算 2 个）",
+      "limits": { "billedChars": 10000, "requestBytes": 65536 },
+      "voices": [{ "id": "stella", "name": "Stella（女声）" }, { "id": "tide", "name": "Tide（男声）" }],
+      "suggested": true,
+      "price": { "usd": 0.45, "per": 10000, "unit": "char" }
+    },
+    {
+      "kind": "search",
+      "adapter": "deepseek-search@1",
+      "name": "网页搜索",
+      "description": "每次最多 10 条结果（标题、网站、日期、摘要）",
+      "limits": { "queryChars": 128, "results": 10 },
+      "suggested": true,
+      "price": { "usd": 0.75, "per": 1000, "unit": "search" }
+    }
+  ],
+  "pricesCheckedAt": "2026-11-14",
+  "priceNote": "估算按官方价格页的标准价（高峰时段与原价）计算，不区分低谷时段，也不计限时折扣"
+}

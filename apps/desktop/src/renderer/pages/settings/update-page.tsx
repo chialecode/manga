@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Translator } from "@manga/i18n";
 import type { HostState } from "../../lib/api.ts";
 import type { UpdateHandle } from "../../hooks/use-update.ts";
@@ -35,6 +36,13 @@ export function UpdatePage(props: {
     return t("update.state.idle");
   })();
 
+  // What the about box used to give (A-136): the facts above and the license, as text to paste into a report. No local path is in it.
+  const [copied, setCopied] = useState(false);
+  const copySummary = async () => {
+    const summary = [`MANGA ${versionText}`, `${t("about.channel")}: ${channelLabel}`, `${t("about.commit")}: ${commitText}`, `${t("about.builtAt")}: ${builtAtRaw || "-"}`, `${t("about.license")}: Apache-2.0`].join("\n");
+    try { await navigator.clipboard?.writeText?.(summary); setCopied(true); } catch { setCopied(false); }
+  };
+
   const autoCheck = status?.settings.autoCheck ?? true;
   const autoDownload = status?.settings.autoDownload ?? true;
 
@@ -52,6 +60,15 @@ export function UpdatePage(props: {
         </SettingsRow>
         <SettingsRow label={t("update.builtAt")}>
           <span data-testid="update-built-at">{builtAtText}</span>
+        </SettingsRow>
+        <SettingsRow label={t("about.license")}>
+          <span data-testid="update-license">Apache-2.0</span>
+        </SettingsRow>
+        <SettingsRow label={t("about.copy")}>
+          <span className="flex items-center gap-2">
+            <button type="button" className="secondary-button" data-testid="update-copy" onClick={() => void copySummary()}>{t("about.copy")}</button>
+            {copied ? <span className="detail-muted" role="status" data-testid="update-copied">{t("about.copied")}</span> : null}
+          </span>
         </SettingsRow>
         <SettingsRow label={t("update.lastChecked")}>
           <span data-testid="update-last-checked">{lastCheckedText}</span>

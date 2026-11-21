@@ -19,6 +19,7 @@ import { runAgentMediaBench } from "./bench-agent-media.mjs";
 import { benchProcessNoThrottle } from "./power-throttling.mjs";
 import { benchLightOpen } from "./light-open.mjs";
 import { collectVoiceRecords, runDictationCorrectionBench, runDictationWindowBench } from "./bench-dictation.mjs";
+import { runReadAloudBench } from "./bench-read-aloud.mjs";
 
 // LOOP-13: this process (where the service-layer figures are measured) and the bench windows (apps/desktop/src/main/smoke/power-throttling.ts) ask
 // Windows not to slow them down for power, so a figure does not depend on which application is in front. Only the bench acts on it;
@@ -343,6 +344,7 @@ const canvasRaw = {
 let importRuns;
 let proposalRuns;
 let dictationWindowRun;
+let readAloudRun;
 sectionStarted = performance.now();
 for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
   const idStarted = performance.now();
@@ -422,6 +424,16 @@ for (const [id, wanted] of Object.entries(config.bench.creative ?? {})) {
       detail: dictationWindowRun.detail,
     };
   }
+  if (id === "ttsFirstAudio" || id === "readAloudGap") {
+    // One window run gives both figures (计划第 7 节): answers read aloud, then a novel.
+    readAloudRun ??= await runReadAloudBench({ ...appCommand, answers: config.bench.creative.ttsFirstAudio?.minSamples ?? 10, paragraphs: config.bench.creative.readAloudGap?.scale?.paragraphs ?? 24 });
+    creative[id] = {
+      kind: "electron-read-aloud",
+      scale: id === "ttsFirstAudio" ? { answers: readAloudRun.firstAudioMs?.length ?? 0 } : { paragraphs: (readAloudRun.gapMs?.length ?? -1) + 1 },
+      raw: (id === "ttsFirstAudio" ? readAloudRun.firstAudioMs : readAloudRun.gapMs) ?? [],
+      detail: { ok: readAloudRun.ok === true, failures: readAloudRun.failures ?? [readAloudRun.reason], requests: readAloudRun.requests, wait: id === "ttsFirstAudio" ? "click on 朗读 to the first block handed to the playback, the controller's clock" : "the silence at each paragraph boundary, 0 when the next was there first" },
+    };
+  }
   if (id === "dictationCorrection") {
     const result = runDictationCorrectionBench({
       terms: wanted.scale.terms ?? 10_000,
@@ -488,7 +500,7 @@ const metrics = {
   lightSecondOpenMs: light.secondOpenMs.length ? p95(light.secondOpenMs) : Number.POSITIVE_INFINITY,
   ...creativeMetrics,
 };
-const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && (dictationWindowRun ? dictationWindowRun.ok === true : true) && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
+const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && (dictationWindowRun ? dictationWindowRun.ok === true : true) && (readAloudRun ? readAloudRun.ok === true : true) && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
 fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   status: passed ? "passed" : "failed",
   stage,

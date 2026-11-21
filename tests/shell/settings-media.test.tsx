@@ -52,7 +52,7 @@ const videoDefaults = { rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customR
  * navigation. This puts the four components side by side, as the one old panel did, so every choice is exercised the same way. Which
  * pages the navigation offers for a set of modules is checked on its own below.
  */
-function renderSettings(options: { facets?: string[]; recording?: Partial<RecordingSettings>; save?: (patch: Partial<RecordingSettings>) => Promise<void>; onModulesChanged?: () => void; onError?: (message: string) => void; onNotice?: (message: string) => void; comic?: (patch: unknown) => void; video?: (patch: unknown) => void } = {}) {
+function renderSettings(options: { facets?: string[]; recording?: Partial<RecordingSettings>; save?: (patch: Partial<RecordingSettings>) => Promise<boolean>; onModulesChanged?: () => void; onError?: (message: string) => void; onNotice?: (message: string) => void; comic?: (patch: unknown) => void; video?: (patch: unknown) => void } = {}) {
   const facets = new Set(options.facets ?? ["comic", "video", "metadata", "voice", "notes"]);
   const hidden = hiddenSettingsPages(facets);
   return render(
@@ -68,7 +68,7 @@ function renderSettings(options: { facets?: string[]; recording?: Partial<Record
         video={videoDefaults}
         onVideo={(options.video ?? (() => undefined)) as never}
       />
-      {hidden.has("recording") ? null : <Recording t={i18n.t} settings={{ ...DEFAULT_RECORDING_SETTINGS, ...options.recording }} save={options.save ?? (async () => undefined)} onNotice={options.onNotice ?? (() => undefined)} />}
+      {hidden.has("recording") ? null : <Recording t={i18n.t} settings={{ ...DEFAULT_RECORDING_SETTINGS, ...options.recording }} save={options.save ?? (async () => true)} onNotice={options.onNotice ?? (() => undefined)} />}
       {hidden.has("sources") ? null : <Providers t={i18n.t} onError={options.onError ?? (() => undefined)} onNotice={options.onNotice ?? (() => undefined)} />}
     </>,
   );
@@ -133,17 +133,22 @@ describe("settings for media, recording and metadata", () => {
     expect(minimal).not.toContain("sources");
     // The pages that hold the switches and the logs stay, so a module that was turned off can always be turned on again.
     expect(minimal).toEqual(expect.arrayContaining(["general", "library", "modules", "logs"]));
-    expect(listed([])).not.toEqual(expect.arrayContaining(["models", "quick", "usage"]));
+    expect(listed([])).not.toEqual(expect.arrayContaining(["models", "agent", "quick", "usage"]));
   });
 
   it("changes recording choices one at a time", async () => {
     installHost();
-    const save = vi.fn(async () => undefined);
+    const save = vi.fn(async () => true);
     renderSettings({ save });
     fireEvent.change(screen.getByTestId("msettings-retention"), { target: { value: "discard" } });
     fireEvent.change(screen.getByTestId("msettings-duck"), { target: { value: "pause" } });
-    fireEvent.change(screen.getByTestId("msettings-margin"), { target: { value: "450" } });
-    fireEvent.change(screen.getByTestId("msettings-margin"), { target: { value: "99999" } });
+    const margin = screen.getByTestId("msettings-margin");
+    fireEvent.focus(margin);
+    fireEvent.change(margin, { target: { value: "450" } });
+    fireEvent.blur(margin);
+    fireEvent.focus(margin);
+    fireEvent.change(margin, { target: { value: "99999" } });
+    fireEvent.blur(margin);
     expect(save.mock.calls.map((call) => call[0])).toEqual([{ retention: "discard" }, { duckPlayback: "pause" }, { boundaryMarginMs: 450 }, { boundaryMarginMs: 2000 }]);
   });
 
@@ -152,7 +157,7 @@ describe("settings for media, recording and metadata", () => {
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { enumerateDevices: async () => [
       { kind: "audioinput", deviceId: "default", label: "默认" }, { kind: "audioinput", deviceId: "mic1", label: "耳机麦克风" }, { kind: "videoinput", deviceId: "cam", label: "相机" },
     ] } });
-    const save = vi.fn(async () => undefined);
+    const save = vi.fn(async () => true);
     renderSettings({ save });
     await waitFor(() => expect(screen.getByRole("option", { name: "耳机麦克风" })).toBeTruthy());
     expect(screen.queryByRole("option", { name: "相机" })).toBeNull();
@@ -166,11 +171,12 @@ describe("settings for media, recording and metadata", () => {
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { enumerateDevices: async () => [] } });
     renderSettings({ recording: { deviceId: "gone" } });
     await waitFor(() => expect((screen.getByTestId("msettings-device") as HTMLSelectElement).value).toBe("gone"));
+    expect(screen.getByTestId("msettings-device").textContent).not.toContain("gone");
   });
 
   it("picks a key by pressing it, refuses the other action's key, and lets Escape back out", async () => {
     installHost();
-    const save = vi.fn(async () => undefined);
+    const save = vi.fn(async () => true);
     renderSettings({ save });
     const hold = screen.getByTestId("msettings-hold-key");
     expect(hold.textContent).toBe("F9");
@@ -193,7 +199,7 @@ describe("settings for media, recording and metadata", () => {
 
   it("AT-172 restores the floating box's default position without size controls", async () => {
     installHost();
-    const save = vi.fn(async () => undefined);
+    const save = vi.fn(async () => true);
     const notices: string[] = [];
     renderSettings({ save, onNotice: (message) => notices.push(message) });
     const resetBtn = screen.getByTestId("msettings-overlay-reset");
@@ -210,12 +216,17 @@ describe("settings for media, recording and metadata", () => {
     renderSettings({ comic, video });
     fireEvent.change(screen.getByTestId("msettings-comic-direction"), { target: { value: "ltr" } });
     fireEvent.click(screen.getByTestId("msettings-comic-cover"));
-    fireEvent.change(screen.getByTestId("msettings-video-step"), { target: { value: "10" } });
-    fireEvent.change(screen.getByTestId("msettings-video-step"), { target: { value: "500" } });
+    const step = screen.getByTestId("msettings-video-step");
+    fireEvent.focus(step);
+    fireEvent.change(step, { target: { value: "10" } });
+    fireEvent.blur(step);
+    fireEvent.focus(step);
+    fireEvent.change(step, { target: { value: "500" } });
+    fireEvent.blur(step);
     fireEvent.change(screen.getByTestId("msettings-video-hold"), { target: { value: "3" } });
     fireEvent.click(screen.getByTestId("msettings-video-autonext"));
     expect(comic.mock.calls.map((call) => call[0])).toEqual([{ direction: "ltr" }, { coverAlone: false }]);
-    expect(video.mock.calls.map((call) => call[0])).toEqual([{ seekStepSeconds: 10 }, { holdRate: 3 }, { autoNext: true }]);
+    expect(video.mock.calls.map((call) => call[0])).toEqual([{ seekStepSeconds: 10 }, { seekStepSeconds: 120 }, { holdRate: 3 }, { autoNext: true }]);
   });
 
   it("keeps the subtitles in a screenshot unless the person turns that off, and a reset of the style leaves it alone (AT-109)", async () => {
@@ -237,17 +248,22 @@ describe("settings for media, recording and metadata", () => {
     installHost();
     const video = vi.fn();
     renderSettings({ video });
-    expect(screen.getByTestId("msettings-subtitle-size")).toHaveProperty("value", "5");
-    fireEvent.change(screen.getByTestId("msettings-subtitle-size"), { target: { value: "6.5" } });
-    // A size outside the standard's room to move is not taken.
-    fireEvent.change(screen.getByTestId("msettings-subtitle-size"), { target: { value: "20" } });
+    const size = screen.getByTestId("msettings-subtitle-size");
+    expect(size).toHaveProperty("value", "5");
+    fireEvent.focus(size);
+    fireEvent.change(size, { target: { value: "6.5" } });
+    fireEvent.blur(size);
+    // Out-of-range size clamps to the standard maximum on commit.
+    fireEvent.focus(size);
+    fireEvent.change(size, { target: { value: "20" } });
+    fireEvent.blur(size);
     fireEvent.change(screen.getByTestId("msettings-subtitle-font"), { target: { value: "kai" } });
     fireEvent.change(screen.getByTestId("msettings-subtitle-placement"), { target: { value: "inside" } });
     fireEvent.click(screen.getByTestId("msettings-subtitle-outline"));
     fireEvent.change(screen.getByTestId("msettings-ass-style"), { target: { value: "standard" } });
     fireEvent.click(screen.getByTestId("msettings-subtitle-reset"));
     expect(video.mock.calls.map((call) => call[0])).toEqual([
-      { subtitleSizePct: 6.5 }, { subtitleFont: "kai" }, { subtitlePlacement: "inside" }, { subtitleOutline: false }, { assStyle: "standard" },
+      { subtitleSizePct: 6.5 }, { subtitleSizePct: 8 }, { subtitleFont: "kai" }, { subtitlePlacement: "inside" }, { subtitleOutline: false }, { assStyle: "standard" },
       { subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep" },
     ]);
   });

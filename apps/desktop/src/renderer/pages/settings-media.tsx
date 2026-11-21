@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { KEY_ACTIONS, recordingCodeToChord, type KeyTable } from "@manga/contracts/keys";
-import type { ReadingStylePatch, ShellPreference } from "@manga/contracts/reading";
+import { FONT_PRESETS, type ReadingStylePatch, type ShellPreference } from "@manga/contracts/reading";
 import type { MessageKey, Translator } from "@manga/i18n";
+import { NumberField } from "../components/number-field.tsx";
+import { useAsyncGuard } from "../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../lib/api.ts";
+import { FONT_PRESET_LABEL, isPreset, useInstalledFonts } from "../reader/fonts.ts";
 import type { ComicSettings } from "../readers/comic-reader.tsx";
 import type { VideoSettings } from "../readers/video-player.tsx";
 import { CustomRate, RateList } from "./settings-rates.tsx";
@@ -13,6 +16,15 @@ type T = Translator["t"];
 
 type ModuleRow = { featureId: string; moduleId: string; displayName: string; wanted: boolean; state: string; core: boolean };
 type ProviderRow = { id: string; displayName: string; kind: "online" | "local"; namespace: string; enabled: boolean; credentialConfigured: boolean };
+
+const MODULE_STATES = new Set(["starting", "degraded", "failed", "stopping", "disabled", "stopped"]);
+
+function moduleStateLabel(t: T, row: ModuleRow, switching: boolean): string {
+  if (switching) return t("msettings.moduleSwitching");
+  if (!row.wanted) return t("msettings.moduleOff");
+  if (row.state === "active") return t("msettings.moduleOn");
+  return MODULE_STATES.has(row.state) ? t(`msettings.moduleState.${row.state}` as MessageKey) : t("msettings.moduleState.unknown");
+}
 
 /** The key as a person reads it: the physical key's name without the layout words. */
 export function keyLabel(code: string, t?: T): string {
@@ -66,19 +78,25 @@ export function Modules(props: { t: T; onChanged: () => Promise<void> | void }) 
   const [rows, setRows] = useState<ModuleRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string>();
+  const guard = useAsyncGuard();
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<{ modules: ModuleRow[] }>("settings.getModules");
+    if (!guard.isCurrent(token)) return;
     if (result.ok) setRows(asArray<ModuleRow>(result.value.modules));
     else setProblem(result.error.message);
-  }, []);
+  }, [guard]);
   useEffect(() => { void load(); }, [load]);
 
   async function toggle(row: ModuleRow) {
+    if (busy !== null) return;
     setBusy(row.featureId);
     setProblem(undefined);
     const result = await attempt<{ modules: ModuleRow[] }>("settings.setModule", { featureId: row.featureId, enabled: !row.wanted });
+    if (!guard.isAlive()) return;
     if (result.ok) setRows(asArray<ModuleRow>(result.value.modules));
     else { setProblem(result.error.message); await load(); }
+    if (!guard.isAlive()) return;
     setBusy(null);
     await props.onChanged();
   }
@@ -95,7 +113,7 @@ export function Modules(props: { t: T; onChanged: () => Promise<void> | void }) 
               <input type="checkbox" role="switch" data-testid={`module-${row.featureId}`} checked={row.wanted} disabled={busy !== null} aria-busy={busy === row.featureId} onChange={() => void toggle(row)} />
               <span>{moduleName(t, row)}</span>
             </label>
-            <span className="detail-muted" data-testid={`module-state-${row.featureId}`}>{busy === row.featureId ? t("msettings.moduleSwitching") : row.wanted && row.state === "active" ? t("msettings.moduleOn") : row.wanted ? row.state : t("msettings.moduleOff")}</span>
+            <span className="detail-muted" data-testid={`module-state-${row.featureId}`}>{moduleStateLabel(t, row, busy === row.featureId)}</span>
           </li>
         ))}
       </ul>
@@ -104,11 +122,17 @@ export function Modules(props: { t: T; onChanged: () => Promise<void> | void }) 
   );
 }
 
-export function Recording(props: { t: T; settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<void>; onNotice: (message: string) => void; keyTable?: KeyTable }) {
+export function Recording(props: { t: T; settings: RecordingSettings; save: (patch: RecordingPatch) => Promise<boolean>; onNotice: (message: string) => void; keyTable?: KeyTable }) {
   const { t, settings } = props;
   const [devices, setDevices] = useState<Array<{ id: string; label: string }>>([]);
   const [clash, setClash] = useState(false);
-  const refresh = useCallback(() => { void listMicrophones().then(setDevices); }, []);
+  const guard = useAsyncGuard();
+  const refresh = useCallback(() => {
+    const token = guard.next();
+    void listMicrophones().then((found) => {
+      if (guard.isCurrent(token)) setDevices(found);
+    });
+  }, [guard]);
   useEffect(() => { refresh(); }, [refresh]);
   const missing = settings.deviceId !== null && !devices.some((device) => device.id === settings.deviceId);
 
@@ -133,7 +157,7 @@ export function Recording(props: { t: T; settings: RecordingSettings; save: (pat
         <span>{t("msettings.device")}</span>
         <select data-testid="msettings-device" value={settings.deviceId ?? ""} onChange={(event) => void props.save({ deviceId: event.target.value || null })} onFocus={refresh}>
           <option value="">{t("msettings.deviceDefault")}</option>
-          {missing ? <option value={settings.deviceId ?? ""}>{settings.deviceId}</option> : null}
+          {missing ? <option value={settings.deviceId ?? ""}>{t("msettings.deviceUnavailable")}</option> : null}
           {devices.map((device) => <option key={device.id} value={device.id}>{device.label}</option>)}
         </select>
       </label>
@@ -158,10 +182,10 @@ export function Recording(props: { t: T; settings: RecordingSettings; save: (pat
       </label>
       <label className="msettings-field">
         <span>{t("msettings.margin")}</span>
-        <input type="number" min={0} max={2000} step={50} data-testid="msettings-margin" value={settings.boundaryMarginMs} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) void props.save({ boundaryMarginMs: Math.max(0, Math.min(2000, Math.round(value))) }); }} />
+        <NumberField min={0} max={2000} step={50} integer testId="msettings-margin" value={settings.boundaryMarginMs} onCommit={(boundaryMarginMs) => { void props.save({ boundaryMarginMs }); }} />
       </label>
       <div>
-        <button type="button" className="secondary-button" data-testid="msettings-overlay-reset" onClick={() => { void props.save({ overlay: { x: null, y: null } }).then(() => props.onNotice(t("msettings.overlayDone"))); }}>{t("msettings.overlayReset")}</button>
+        <button type="button" className="secondary-button" data-testid="msettings-overlay-reset" onClick={() => { void props.save({ overlay: { x: null, y: null } }).then((ok) => { if (ok) props.onNotice(t("msettings.overlayDone")); }); }}>{t("msettings.overlayReset")}</button>
       </div>
     </section>
   );
@@ -170,24 +194,33 @@ export function Recording(props: { t: T; settings: RecordingSettings; save: (pat
 /** The novel reader's defaults: what a book opens with until the reader's own settings change it. */
 function NovelPrefs(props: { t: T; reading: ShellPreference["reading"]; onReading: (patch: ReadingStylePatch) => void }) {
   const { t, reading } = props;
+  const fonts = useInstalledFonts();
+  const family = reading.fontFamily ?? "sans";
+  const known = isPreset(family) || fonts.families.includes(family);
   return (
     <section className="msettings-section" data-testid="msettings-novel" aria-labelledby="msettings-novel-title">
       <h3 id="msettings-novel-title">{t("msettings.novel")}</h3>
       <label className="msettings-field">
         <span>{t("reading.fontFamily")}</span>
-        <select data-testid="msettings-novel-font" value={reading.fontFamily} onChange={(event) => props.onReading({ fontFamily: event.target.value })}>
-          <option value="sans">{t("reading.fontSans")}</option>
-          <option value="serif">{t("reading.fontSerif")}</option>
-          <option value="mono">{t("reading.fontMono")}</option>
+        <select data-testid="msettings-novel-font" value={family} onFocus={fonts.load} onMouseDown={fonts.load} onChange={(event) => props.onReading({ fontFamily: event.target.value })}>
+          <optgroup label={t("reader.fontPresets")}>
+            {FONT_PRESETS.map((preset) => <option key={preset} value={preset}>{t(FONT_PRESET_LABEL[preset])}</option>)}
+          </optgroup>
+          {!known ? <option value={family}>{family}</option> : null}
+          {fonts.families.length ? (
+            <optgroup label={t("reader.fontInstalled")}>
+              {fonts.families.map((name) => <option key={name} value={name}>{name}</option>)}
+            </optgroup>
+          ) : null}
         </select>
       </label>
       <label className="msettings-field">
         <span>{t("reading.fontSize")}</span>
-        <input type="number" min={14} max={32} data-testid="msettings-novel-size" value={reading.fontSizePx} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 14 && value <= 32) props.onReading({ fontSizePx: Math.round(value) }); }} />
+        <NumberField min={14} max={32} integer testId="msettings-novel-size" value={reading.fontSizePx} onCommit={(fontSizePx) => props.onReading({ fontSizePx })} />
       </label>
       <label className="msettings-field">
         <span>{t("reading.lineHeight")}</span>
-        <input type="number" min={1.2} max={2.4} step={0.1} data-testid="msettings-novel-line" value={reading.lineHeight} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 1.2 && value <= 2.4) props.onReading({ lineHeight: Math.round(value * 10) / 10 }); }} />
+        <NumberField min={1.2} max={2.4} step={0.1} testId="msettings-novel-line" value={reading.lineHeight} onCommit={(value) => props.onReading({ lineHeight: Math.round(value * 10) / 10 })} />
       </label>
       <label className="msettings-field">
         <span>{t("reader.flow")}</span>
@@ -238,7 +271,7 @@ export function MediaPrefs(props: { t: T; facets: Set<string>; reading: ShellPre
           <h3 id="msettings-video-title">{t("msettings.video")}</h3>
           <label className="msettings-field">
             <span>{t("msettings.videoStep")}</span>
-            <input type="number" min={1} max={120} data-testid="msettings-video-step" value={props.video.seekStepSeconds} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 1 && value <= 120) props.onVideo({ seekStepSeconds: Math.round(value) }); }} />
+            <NumberField min={1} max={120} integer testId="msettings-video-step" value={props.video.seekStepSeconds} onCommit={(seekStepSeconds) => props.onVideo({ seekStepSeconds })} />
           </label>
           <label className="msettings-field">
             <span>{t("msettings.videoHold")}</span>
@@ -262,7 +295,7 @@ export function MediaPrefs(props: { t: T; facets: Set<string>; reading: ShellPre
             <p className="detail-muted">{t("msettings.subtitleHint")}</p>
             <label className="msettings-field">
               <span>{t("msettings.subtitleSize")}</span>
-              <input type="number" min={3} max={8} step={0.5} data-testid="msettings-subtitle-size" value={props.video.subtitleSizePct} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 3 && value <= 8) props.onVideo({ subtitleSizePct: Math.round(value * 10) / 10 }); }} />
+              <NumberField min={3} max={8} step={0.5} testId="msettings-subtitle-size" value={props.video.subtitleSizePct} onCommit={(value) => props.onVideo({ subtitleSizePct: Math.round(value * 10) / 10 })} />
             </label>
             <label className="msettings-field">
               <span>{t("msettings.subtitleFont")}</span>
@@ -302,26 +335,40 @@ export function Providers(props: { t: T; onError: (message: string) => void; onN
   const { t } = props;
   const [rows, setRows] = useState<ProviderRow[] | null>(null);
   const [tokens, setTokens] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onError: props.onError, onNotice: props.onNotice });
+  callbacksRef.current = { onError: props.onError, onNotice: props.onNotice };
+
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<{ providers: ProviderRow[] }>("metadata.providers");
+    if (!guard.isCurrent(token)) return;
     if (result.ok) setRows(asArray<ProviderRow>(result.value.providers));
-    else props.onError(result.error.message);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    else callbacksRef.current.onError(result.error.message);
+  }, [guard]);
   useEffect(() => { void load(); }, [load]);
 
   async function save(row: ProviderRow, patch: { enabled?: boolean; token?: string; clear?: boolean }) {
-    let credentialHandle: string | undefined;
-    if (patch.token) {
-      const handle = await window.manga.stashSecret(patch.token);
-      if (!handle) { props.onError(t("msettings.failed", { message: "credential" })); return; }
-      credentialHandle = handle;
+    if (busyId !== null) return;
+    setBusyId(row.id);
+    try {
+      let credentialHandle: string | undefined;
+      if (patch.token) {
+        const handle = await window.manga.stashSecret(patch.token);
+        if (!guard.isAlive()) return;
+        if (!handle) { callbacksRef.current.onError(t("msettings.failed", { message: t("msettings.credentialFailed") })); return; }
+        credentialHandle = handle;
+      }
+      const result = await attempt("metadata.setProvider", { providerId: row.id, enabled: patch.enabled ?? row.enabled, ...(credentialHandle ? { credentialHandle } : {}), ...(patch.clear ? { clearCredential: true } : {}) });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
+      setTokens((current) => ({ ...current, [row.id]: "" }));
+      callbacksRef.current.onNotice(t("msettings.saved"));
+      await load();
+    } finally {
+      if (guard.isAlive()) setBusyId(null);
     }
-    const result = await attempt("metadata.setProvider", { providerId: row.id, enabled: patch.enabled ?? row.enabled, ...(credentialHandle ? { credentialHandle } : {}), ...(patch.clear ? { clearCredential: true } : {}) });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    setTokens((current) => ({ ...current, [row.id]: "" }));
-    props.onNotice(t("msettings.saved"));
-    await load();
   }
 
   const online = (rows ?? []).filter((row) => row.kind === "online");
@@ -332,19 +379,19 @@ export function Providers(props: { t: T; onError: (message: string) => void; onN
       {rows === null ? <p role="status" className="detail-muted">{t("msettings.loading")}</p> : null}
       {online.map((row) => (
         <div key={row.id} className="msettings-provider" data-testid={`provider-${row.id}`}>
-          <label className="msettings-check"><input type="checkbox" role="switch" data-testid={`provider-enabled-${row.id}`} checked={row.enabled} onChange={(event) => void save(row, { enabled: event.target.checked })} />{row.displayName} · {t("msettings.providerEnabled")}</label>
+          <label className="msettings-check"><input type="checkbox" role="switch" data-testid={`provider-enabled-${row.id}`} disabled={busyId !== null} checked={row.enabled} onChange={(event) => void save(row, { enabled: event.target.checked })} />{row.displayName} · {t("msettings.providerEnabled")}</label>
           <p className="detail-muted">{t("msettings.providerOnline")}</p>
           <label className="msettings-field">
             <span>{t("msettings.providerToken")}</span>
-            <input type="password" autoComplete="off" data-testid={`provider-token-${row.id}`} value={tokens[row.id] ?? ""} onChange={(event) => setTokens((current) => ({ ...current, [row.id]: event.target.value }))} />
+            <input type="password" autoComplete="off" data-testid={`provider-token-${row.id}`} disabled={busyId !== null} value={tokens[row.id] ?? ""} onChange={(event) => setTokens((current) => ({ ...current, [row.id]: event.target.value }))} />
           </label>
           <p className="detail-muted">{t("msettings.providerTokenHint")}</p>
           <div className="msettings-actions">
-            <button type="button" className="secondary-button" data-testid={`provider-token-save-${row.id}`} disabled={!tokens[row.id]} onClick={() => void save(row, { token: tokens[row.id] })}>{t("msettings.providerTokenSave")}</button>
+            <button type="button" className="secondary-button" data-testid={`provider-token-save-${row.id}`} disabled={busyId !== null || !tokens[row.id]} onClick={() => void save(row, { token: tokens[row.id] })}>{t("msettings.providerTokenSave")}</button>
             {row.credentialConfigured ? (
               <>
                 <span className="detail-muted" data-testid={`provider-token-set-${row.id}`}>{t("msettings.providerTokenSet")}</span>
-                <button type="button" className="link-button" data-testid={`provider-token-clear-${row.id}`} onClick={() => void save(row, { clear: true })}>{t("msettings.providerTokenClear")}</button>
+                <button type="button" className="link-button" data-testid={`provider-token-clear-${row.id}`} disabled={busyId !== null} onClick={() => void save(row, { clear: true })}>{t("msettings.providerTokenClear")}</button>
               </>
             ) : null}
           </div>

@@ -1,7 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, screen, shell, type IpcMainInvokeEvent } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   LIGHT_COMIC_EXTENSIONS, LIGHT_EXTRA_EXTENSIONS, LIGHT_IMAGE_EXTENSIONS, LIGHT_VIDEO_EXTENSIONS, LightMediaService, LightPositions, MEDIA_SCHEME, serveMedia,
   type LightOpened, type LightPosition,
@@ -10,6 +9,8 @@ import { appRootOf, channelInfoOf, lightDirsOf, packagedVersion } from "../launc
 import { answerQuitRequest, clearLightInstance, readQuitRequest, writeLightInstance } from "../light-runtime.ts";
 import { isAppPage, permissionAllowed } from "../permissions.ts";
 import { parseWindowAction, productWindow, windowControlsDrawn } from "../window-options.ts";
+import { resolveAppIconPath, resolveRendererUrl } from "../window-assets.ts";
+import { createOpenTracker, createSecondInstanceQueue, type OpenTracker } from "./open-queue.ts";
 import { DEFAULT_LIGHT_BOUNDS, fileArgument, placeWindow, readWindowState, writeWindowState, type LightWindowState } from "./window-state.ts";
 
 /**
@@ -55,20 +56,27 @@ type LightWindow = {
   resume: unknown;
   flushed: boolean;
   closing: boolean;
+  openTracker: OpenTracker;
 };
 const windows = new Map<number, LightWindow>();
 let service: LightMediaService | null = null;
 let positions: LightPositions | null = null;
 let quitting = false;
 
-const rendererUrl = (): string => LIGHT_WINDOW_VITE_DEV_SERVER_URL
-  ? `${LIGHT_WINDOW_VITE_DEV_SERVER_URL}/index.html`
-  : pathToFileURL(path.join(__dirname, `../renderer/${LIGHT_WINDOW_VITE_NAME}/index.html`)).href;
+const rendererUrl = (): string => resolveRendererUrl({
+  devServerUrl: LIGHT_WINDOW_VITE_DEV_SERVER_URL,
+  viteName: LIGHT_WINDOW_VITE_NAME,
+  baseDir: __dirname,
+  appendIndexHtml: true,
+});
 
 function windowIconPath(): string | undefined {
-  // As the full application's windows (index.ts): the installed copy's own icon, or the channel's in a source run.
-  const source = channel.channel === "development" ? "icon-dev" : "icon";
-  return [path.join(process.resourcesPath, "icon.ico"), path.resolve(__dirname, `../../assets/${source}.ico`), path.resolve(__dirname, `../../assets/${source}.png`)].find((file) => fs.existsSync(file));
+  return resolveAppIconPath({
+    channel: channel.channel,
+    packaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    baseDir: __dirname,
+  });
 }
 
 function errorKind(error: unknown): "missing" | "unsupported" | "broken" {
@@ -97,6 +105,9 @@ function flushWindowPosition(entry: LightWindow, timeoutMs = 1000): Promise<void
       settled = true;
       clearTimeout(timer);
       ipcMain.removeListener("light:saved", onSaved);
+      if (!entry.window.isDestroyed() && !entry.window.webContents.isDestroyed()) {
+        entry.window.webContents.removeListener("destroyed", done);
+      }
       resolve();
     };
     const onSaved = (event: Electron.IpcMainEvent) => {
@@ -111,31 +122,44 @@ function flushWindowPosition(entry: LightWindow, timeoutMs = 1000): Promise<void
 
 async function openIn(entry: LightWindow, file: string | null): Promise<void> {
   if (!service || !positions) return;
+  const seq = entry.openTracker.next();
   if (entry.opened) {
     await flushWindowPosition(entry, 500);
-    if (entry.opened) service.close(entry.opened.sessionId);
+    if (!entry.openTracker.isCurrent(seq) || entry.window.isDestroyed()) return;
+    if (entry.opened) {
+      service.close(entry.opened.sessionId);
+      entry.opened = null;
+    }
   }
-  entry.opened = null;
   entry.error = null;
   entry.resume = null;
   entry.flushed = false;
   entry.closing = false;
   if (file) {
     try {
-      entry.opened = await service.open(file);
+      const opened = await service.open(file);
+      if (!entry.openTracker.isCurrent(seq) || entry.window.isDestroyed()) {
+        service.close(opened.sessionId);
+        return;
+      }
+      entry.opened = opened;
       // An image opened from Explorer starts at that image (4.3); otherwise the file goes on where it was left.
-      const startsAtImage = entry.opened.kind === "comic" && entry.opened.startPageId !== null;
-      entry.resume = startsAtImage ? null : positions.resume(entry.opened.key, service.pageIdsOf(entry.opened.sessionId));
+      const startsAtImage = opened.kind === "comic" && opened.startPageId !== null;
+      entry.resume = startsAtImage ? null : positions.resume(opened.key, service.pageIdsOf(opened.sessionId));
     } catch (error) {
+      if (!entry.openTracker.isCurrent(seq) || entry.window.isDestroyed()) return;
       entry.error = { kind: errorKind(error), detail: error instanceof Error ? error.message : String(error) };
     }
   }
-  if (entry.window.isDestroyed()) {
-    if (entry.opened) service.close(entry.opened.sessionId);
+  if (!entry.openTracker.isCurrent(seq) || entry.window.isDestroyed()) {
+    if (entry.opened && entry.window.isDestroyed()) {
+      service.close(entry.opened.sessionId);
+      entry.opened = null;
+    }
     return;
   }
   entry.window.setTitle(entry.opened ? `${entry.opened.name} - MANGA` : "MANGA");
-  entry.window.webContents.send("light:changed");
+  if (!entry.window.webContents.isDestroyed()) entry.window.webContents.send("light:changed");
 }
 
 function stateOf(entry: LightWindow) {
@@ -178,7 +202,7 @@ function createWindow(file: string | null): LightWindow {
   // As the full application's smoke windows: the walk's own input events only, the system's mouse passes through (index.ts).
   if (smoke) window.setIgnoreMouseEvents(true);
   if (saved?.maximized && windows.size === 0) window.maximize();
-  const entry: LightWindow = { window, opened: null, error: null, resume: null, flushed: false, closing: false };
+  const entry: LightWindow = { window, opened: null, error: null, resume: null, flushed: false, closing: false, openTracker: createOpenTracker() };
   const contentsId = window.webContents.id;
   windows.set(contentsId, entry);
   const appUrl = rendererUrl();
@@ -191,9 +215,14 @@ function createWindow(file: string | null): LightWindow {
   });
   window.webContents.session.setPermissionCheckHandler((contents, permission, requestingOrigin, details) =>
     permission !== "media" && permissionAllowed({ permission, requestingUrl: details.requestingUrl ?? requestingOrigin, appUrl, fromAppWindow: own(contents) }));
-  const pushState = () => { if (!window.isDestroyed()) window.webContents.send("manga:window-state", { controls: windowControlsDrawn(process.platform), maximized: window.isMaximized() }); };
+  const pushState = () => {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      window.webContents.send("manga:window-state", { controls: windowControlsDrawn(process.platform), maximized: window.isMaximized() });
+    }
+  };
   window.on("maximize", pushState);
   window.on("unmaximize", pushState);
+  window.on("restore", pushState);
   const remember = () => {
     if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return;
     const normal = window.getNormalBounds();
@@ -228,8 +257,12 @@ function createWindow(file: string | null): LightWindow {
     });
   });
   window.on("closed", () => {
+    entry.openTracker.invalidate();
     windows.delete(contentsId);
-    if (entry.opened) service?.close(entry.opened.sessionId);
+    if (entry.opened) {
+      service?.close(entry.opened.sessionId);
+      entry.opened = null;
+    }
   });
   void openIn(entry, file);
   if (LIGHT_WINDOW_VITE_DEV_SERVER_URL) void window.loadURL(appUrl);
@@ -328,13 +361,19 @@ async function leaveForUpdate(): Promise<void> {
 
 /** When each window's file was asked for (the benchmark's second open), by the window. */
 const askedAt = new WeakMap<BrowserWindow, number>();
+const secondInstances = createSecondInstanceQueue<{ argv: string[]; spawned: number }>();
+
+function handleSecondInstance(item: { argv: string[]; spawned: number }): void {
+  if (quitting) return;
+  const created = createWindow(fileArgument(item.argv));
+  if (Number.isFinite(item.spawned)) askedAt.set(created.window, item.spawned);
+}
 
 app.on("second-instance", (_event, argv) => {
   if (quitting) return;
-  const created = createWindow(fileArgument(argv));
   // The benchmark names the moment it started the second process, to time the open from there to the first frame.
   const spawned = smoke ? Number(argv.find((arg) => arg.startsWith("--manga-smoke-spawned-at="))?.split("=")[1]) : Number.NaN;
-  if (Number.isFinite(spawned)) askedAt.set(created.window, spawned);
+  secondInstances.push({ argv: [...argv], spawned });
 });
 
 app.on("window-all-closed", () => {
@@ -352,6 +391,7 @@ void app.whenReady().then(async () => {
   writeLightInstance(dirs.runtime, { pid: process.pid, execPath: process.execPath, channel: channel.channel, testIdentity: channel.testIdentity, startedAt: new Date().toISOString() });
   setInterval(() => { void leaveForUpdate(); }, 150).unref();
   const first = createWindow(fileArgument(process.argv));
+  secondInstances.markReady(handleSecondInstance);
   if (smoke) {
     const { runLightSmoke } = await import("./smoke.ts");
     await runLightSmoke({ first: first.window, dirs, windows: () => [...windows.values()].map((entry) => entry.window), service: service!, positions: positions!, askedAt: (window) => askedAt.get(window) ?? null });

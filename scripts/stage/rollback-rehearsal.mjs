@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { readBuildInfoIfPresent } from "./version-lib.mjs";
+import { isProcessAlive } from "./win-process.mjs";
 
 /**
  * `update-rollback` (4.2, LOOP-32), run by `stage installer` on its test identity: the release test identity has `previous` installed and
@@ -19,7 +20,7 @@ import { readBuildInfoIfPresent } from "./version-lib.mjs";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const sha = (algorithm, file) => createHash(algorithm).update(fs.readFileSync(file)).digest("hex");
 const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; } };
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === "EPERM"; } };
+const alive = isProcessAlive;
 
 /** Capture the real Win32 launch-failure dialog (`#32770`) of `pid` into `outFile` via `PrintWindow`, then close it (`cancelId` = "再试一次"). */
 function captureAndDismissDialog(pid, outFile) {

@@ -1,321 +1,270 @@
-# 当前阶段报告（M12）：类 Typeless 的听写
+# 当前阶段报告（M13）：DeepSeek 插件
 
-日期：2026-11-13（B 的全链路门禁完成于 `2026-11-12T22:51:27Z`；A 审查修复后在最终源码上重跑，完成于 `2026-11-13T02:16:38Z`）。分支：`feat/m12-voice-dictation`（基于 `main@3b9d498`）。角色：B 连续实施、评测与门禁自检完成；A 集中审查已收敛（结论与修复见[第 11 节](#a-review)）。唯一计划见[当前阶段计划](stage-plan.md)。门禁汇总状态：`automationStatus: "self-check-passed"`、`engineeringReviewable: true`；`productAcceptance` 恒为 `not-run`，可选真实服务契约 [ACT-21](../../USER-ACTIONS.md#act-21) 与新增人工检查 [H-104](../../USER-ACTIONS.md#h-104)—[H-111](../../USER-ACTIONS.md#h-111) 均保持 `not-run`。
+日期：2026-11-15（B 在最终源码上的全链路门禁完成于 `2026-11-15T08:37:03Z`）。分支：`feat/m13-deepseek-plugin`（基于 `main@2726b0e`）。角色：B 连续实施与门禁自检完成；A 集中审查已收敛（[第 10 节](#a-review)）；同日按用户试用反馈完成 7 项修复并通过快速门禁、真实密钥契约与本机开发版更新（[第 11 节](#user-feedback-fixes)）。2026-11-17 按用户反馈追加标题栏、托盘、对话模型选择与本周发布失败的修复（[第 13 节](#feedback-2026-11-17)，A-136、A-137）。唯一计划见[当前阶段计划](stage-plan.md)；需求 PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03，验收 [AT-184—AT-193](roadmap-and-acceptance.md#at-deepseek)，确认记录 A-133、A-134、A-132。产品验收保持 not-run：自动化通过不等于产品验收，人工检查 [H-112](../../USER-ACTIONS.md#h-112)—[H-123](../../USER-ACTIONS.md#h-123) 未执行。
 
-<a id="c0-d1"></a>
+<a id="cleanup"></a>
 ## 1. C0 阶段开始的整理与 D1 依赖盘点
 
 ### 1.1 C0 整理记录（计划 5.1）
 
 | 对象 | 处置结果 |
 | --- | --- |
-| 上一阶段报告 `docs/delivery/stage-report.md` | 有效结论均已提炼进[执行状态](status.md)、[ADR-0007](../decisions/0007-technology-stack.md) 与确认记录，并由固定归档链接（`f9aea92`）引用；旧文件已在阶段开始时移除并取消旧登记，本文件为本阶段新建报告（`retireAfter: "m12"`） |
-| `dist/evidence-runs/l1-combining-marks/`（`22,944` B） | 排查结论早已记入 [LOOP-04](status.md#loop-04)，旧目录已删除；`tests/reading/pdf-combining-marks.test.ts` 每次运行都会重新写出该目录（测量与对比图），属于测试输出，不是遗留 |
-| `dist/release/v0.1.1/`（约 `229 MB`） | 首个正式版 `v0.1.1` 已发布至 GitHub Releases，本地演练结论已记入[执行状态](status.md)，构建产物目录已删除 |
-| `dist/evidence-runs/` 旧排查日志（`review-*.log`、`fix-*.log`）与系统临时目录 `manga-*` | 确认无运行中门禁后清理旧阶段日志与遗留 `manga-*` 临时目录；本阶段门禁运行输出位于 `dist/evidence-runs/current/`，脱敏门禁证据已同步至 [`docs/evidence/gate/`](../evidence/gate/)（`28` 个文件，`3,498,776` B = `3.34 MiB` ≤ `5 MiB`），`stage test` 与 `stage package` 前后统计系统临时目录 `manga-*` 残留均为 `0` |
-| `.env.local` 与 `%APPDATA%\manga-release\` | `.env.local` 与仓库外两把签名私钥（`plugin-signing.key`、`update-signing.key`）原样保留，未读取无关配置值、未输出私钥明文 |
-| `dist/design-refs/`、`dist/samples/`、`dist/tools/` | 原样保留；`dist/tools/` 新增按锁文件校验拉取的 `gtcrn/`（随包语音增强模型与 MIT 许可）及 `asr/sense-voice-funasr-nano-int8/`（仅供本机离线烟测与基准使用，绝不打入安装包） |
-| 本地备份分支（`rebuild/*`、`backup/main-pre-rewrite`） | 按用户既有决定原样保留，未触碰 |
-| 以前阶段标签与公开内容检查（A-57） | `node scripts/check-docs.mjs` 与 `node scripts/check-publication.mjs`（扫描 `1,123` 个文件，`0` 项违规）全部通过：永久正本与代码零旧阶段标签、零本机绝对路径、零外部未采用参考工程名 |
+| 上一阶段报告与标签 | A 在计划提交里已提炼后删除，入链改为归档链接；B 交付前文档检查通过（`check-docs` 69 份文档、1070 个本地链接），没有以前阶段的标签。新增的测试名与注释不带阶段标签（`schema-v17-migration.test.ts` 里的旧标签已去掉）；文档检查对 GHSA 编号里的字母数字串（如 `m249`）不再误报为阶段标签（`scripts/check-docs.mjs`，补了用例） |
+| `.env.local`、`.local/deepseek.key` | 保留；密钥只由契约测试按计划 4.10 从文件读取，没有复制、打印或写进日志与证据 |
+| `.local/gate-run.log`、`.local/loop-phase.log`、`dist/a-review-*.log`、`dist/evidence-runs/` 里的旧日志 | 看过没有未提炼的结论后删除 |
+| 系统临时目录里的 `manga-*` | 确认没有门禁在运行后删除 31 个 |
+| `dist/design-refs/`、`dist/samples/`、`dist/tools/` | 原样保留 |
+| `dist/desktop/`、`dist/plugins/`、`dist/evidence-runs/current/` | 由本阶段的打包与门禁覆盖 |
+| `%APPDATA%\manga-release\` | 原样保留，没有读取或输出私钥；DeepSeek 插件由打包脚本用其中的插件私钥签名 |
+| `docs/evidence/gate/` | 整体替换为本阶段最后一次门禁的结果（2.5 MiB，见第 8 节） |
+| Dependabot | 开始时没有开着的 PR |
 
-### 1.2 D1 依赖盘点记录（计划 5.2，A-35）
+### 1.2 D1 依赖盘点（A-35、A-132）
 
-阶段开始与最终门禁前各执行一次 `pnpm outdated -r`，严格遵守最小发行龄策略（`minimumReleaseAge: 20160` 分钟不绕过、不写豁免），核对日期 `2026-11-13`，结果已同步登记至 [ADR-0007](../decisions/0007-technology-stack.md)：
+阶段开始时 `node scripts/deps.mjs` 列出 26 项满 7 天的更新，不绕过最小发行龄（`minimumReleaseAge: 10080`），没有新增第三方依赖。逐项结果写在 [ADR-0007 的本阶段一节](../decisions/0007-technology-stack.md)：同主版本 23 项升级（Electron 45.2.3、Vite 8.3.6、Vitest 5.1.0、pdfjs-dist 6.5.438、pi-ai 1.5.0、Tiptap 3.33.0 等）；`@types/node` 升到 26.6.6；`dockview`/`dockview-core` 用覆盖固定在 8.8.3（锁文件里有不满 7 天的 8.9.0）；`@napi-rs/canvas` 1.1.0 与 jsdom 31.0.0 回退（前者 PDF 渲染用例崩溃，后者界面用例启动即报错）。漏洞 17 条：有修复版本的用覆盖升级，`ip`、`glob`、`minimatch` 三条登记为例外（`scripts/deps-exceptions.json`，复查 2027-02-14，原因见 ADR）。
 
-| 包 | 变更前 | 变更后 | 核验依据与结论 |
-| --- | --- | --- | --- |
-| `@tanstack/react-virtual` | `3.14.23` | `3.14.24` | `2026-10-29 10:55 UTC` 发行（已满 14 天；`3.14.28` 未满龄）；5000 条长对话虚拟列表与动态行高通过 |
-| `@tiptap/core`、`extension-document`、`extension-text`、`pm`、`react` | `3.32.0` | `3.32.1` | `2026-10-28 19:47 UTC` 发行（已满 14 天；`3.33.0` 未满龄）；笔记与文稿富文本编辑、听写插入与分步撤销通过 |
-| `dockview-react`（含配套 `dockview` / `dockview-core`） | `8.7.1` | `8.8.0` | `2026-10-28 21:10 UTC` 发行（已满 14 天；`8.9.0` 未满龄）；多视图标签页与四宫格分屏走查通过 |
-| `lucide-react` | `1.63.0` | `1.64.0` | `2026-10-29 06:10 UTC` 发行（已满 14 天；`1.66.0` 未满龄）；完整应用、听写胶囊与轻量界面图标类型及渲染通过 |
-| `sherpa-onnx-node`、`sherpa-onnx-win-x64` | 新增（`apps/desktop`） | `2.0.1` | Apache-2.0，`2026-10-26` 发行（内置 ONNX Runtime `1.28.2`，N-API 预编译免重编）；平台包置于 `optionalDependencies` 兼容 Linux CI `--frozen-lockfile`，打包解包至 `app.asar.unpacked` 且仅由 `asr-host.cjs` 加载 |
-| `pinyin-pro`、`wanakana`、`opencc-js` | 新增（`packages/app-core`） | `3.29.5`、`5.3.1`、`1.4.2` | 精确锁定（发行日期分别为 `2026-10-10`、`2023-11-20`、`2026-08-22`；前两者 MIT，`opencc-js` 代码 MIT、OpenCC 词表 Apache-2.0）；分别承担中文拼音规整、日文假名/罗马字归一与主进程简繁转换 |
-| `.tar.bz2` 解压实现 | — | 零新增 npm 包 | 直接调用 Windows 11 系统内置 `%SystemRoot%\System32\tar.exe`（`bsdtar`）完成两步归档安全检查与解压，**未引入任何第三方 JS tar/bzip2 解压依赖** |
-| `linkedom` | `0.18.13` | 保持 `0.18.13` | 已登记例外不变：`0.18.14` 依赖 `@acemir/cssom` CommonJS 具名导出限制未变，`0.18.15`（`2026-11-01` 发行）未满 14 天 |
-| 其余直接依赖（`electron` `45.1.0`、`@types/node` `24.19.2`、`electron-builder` `26.18.0`、`electron-updater` `6.8.11` 等） | 现锁定精确版本 | 保持不变 | `@types/node` 随 Electron 45 的 Node 24.22 固定在 24.x；`electron-builder` 与 `electron-updater` 的 npm `latest` 仍为现版本；`electron` `45.3.1`、`vite` `8.3.8`、`vitest` `5.1.0`、`knip` `6.45.1`、`@earendil-works/pi-ai` `1.5.2` 等候选均于 `2026-10-30` 后发行，未满 14 天。门禁前复跑 `pnpm outdated -r` 确认除 `linkedom` 外满龄同主版本待升项为 `0` |
+门禁前复跑：knip 6.44.1 → 6.44.2（期间新满 7 天的补丁）；canvas 与 jsdom 没有新发行，保持。门禁的依赖审计通过。
+
+**升级的遗留，在门禁里发现并修复：** pdfjs-dist 升级时漏改了 `apps/desktop/src/renderer/pdf-page.tsx` 里写死的版本断言，打包版的 PDF 阅读器因此拒绝加载新版库（单元用例用的假 pdf.js 也写着旧版本号，所以没有发现）。现在两处 PDF 视图共用 `readers/pdf-doc.ts` 的 `EXPECTED_VERSION`；解析器标识随之改为 `pdfjs-dist@6.5.438`（只记录、不参与比较，以前升级时也一样改）。
 
 <a id="mapping"></a>
-## 2. 工作包、需求、验收与断言迁移映射
+## 2. 工作包、需求与验收映射
 
-### 2.1 工作包交付映射（计划第 5.3 节）
+| 工作包 | 需求 / 验收 | 实现位置 | 验证证据 | 状态与限制 |
+| --- | --- | --- | --- | --- |
+| P1 声明式提供者插件 | PLUG-07 / AT-184 | `packages/contracts/src/provider.ts`、`plugin.ts`（`model.provider`、`DECLARATIVE_SLOTS`、拒绝原因 `provider`）；`packages/app-core/src/plugins/`；`providers/registry.ts`；`plugins/provider-deepseek/` | `tests/plugins/provider-plugin.test.ts`；观察 `deepseek-plugin`、`deepseek-network`（停用期间 0 个请求） | 已实现 |
+| M1 加入模型、账户、v17 | MODEL-06 / AT-185 | `commands/providers.ts`；`providers/access.ts`；`storage-drizzle/src/sql.ts`（v17）；`renderer/pages/settings/provider-dialog.tsx`、`models-page.tsx` | `schema-v17-migration.test.ts`、`provider-plugin.test.ts`、`models-providers.test.tsx`；观察 `deepseek-models`（浅色与深色截图） | 已实现 |
+| L1 思考与工具循环 | MODEL-07 / AT-186 | `model-protocol/src/openai-http.ts`、`pi-ai.ts`；`commands/agent-run.ts`；`components/chat/messages.tsx`（思考过程） | `deepseek-thinking.test.ts`、`deepseek-agent.test.ts`；观察 `deepseek-chat`；真实契约 `tool-loop-native`、`tool-loop-pi` | 已实现 |
+| N1 原生联网搜索 | MODEL-07 / AT-187 | `openai-http.ts`（`deepseek_web_search`、`server_tool_event`、`annotations`、`server_tool_calls`）；`agent-run.ts`（下一轮带回）；`composer.tsx` | `deepseek-agent.test.ts`（含下一个任务带回）；观察 `deepseek-chat`、`deepseek-network`；真实契约 `native-search`、`native-search-passback` | 已实现；PI 运行时下只发起搜索（LOOP-47） |
+| G1 网页搜索 | SEARCH-03 / AT-188 | `providers/web-search.ts`；`model-protocol/src/deepseek-services.ts`；`research/finder-panels.tsx` | `tests/research/web-search.test.ts`；观察 `web-search`；真实契约 `web-search` | 已实现；走查不点“抓取并保存”（会访问真实网站），留给 H-115 |
+| A1 DeepSeek 语音识别 | VOICE-18 / AT-189 | `voice/engine/asr-engine.ts`（`deepseek_asr`，按静默分段 ≤ 110 s，429/503 再试两次） | `deepseek-asr.test.ts`；观察 `dictation-deepseek`、`deepseek-network`（只有 `file` 字段）；真实契约 `asr-100s` | 已实现 |
+| R1 合成与回答朗读 | VOICE-19 / AT-190（基准门槛见 AT-191） | `providers/speech.ts`；`main/index.ts`（`manga:speak`）；`renderer/voice/read-aloud.ts`、`speech-worklet.ts`；`voice-page.tsx` | `deepseek-speech.test.ts`、`read-aloud.test.ts`；观察 `read-aloud`；基准 `ttsFirstAudioP95Ms`；真实契约 `speech-round-trip`、`speech-long` | 已实现 |
+| R2 小说朗读 | VOICE-19 / AT-191 | `renderer/reader/use-read-novel.ts`；`reading.tsx` | `read-aloud.test.ts`（分段、计费字数）；观察 `read-aloud`；基准 `readAloudGapP95Ms` | 已实现；跨窗口与跨章继续没有自动观察，在 H-118 里看 |
+| U1 用量与费用 | MODEL-03 联动 / AT-192 | `providers/usage.ts`；`ops/usage.ts`；`usage-page.tsx`；`agent-run.ts`（`costEstimated`） | `tests/research/usage-services.test.ts` | 已实现；费用标为估算 |
+| X1 真实 API 契约 | AT-193 | `tests/real/deepseek-contract.test.ts` | 第 5 节 | 已实现 |
+| T1 测试、走查与基准 | 全部 | `apps/desktop/src/main/smoke/deepseek-walk.ts`、`bench-read-aloud.ts`；`scripts/stage/bench-read-aloud.mjs`；`scripts/stage/package.mjs` 的 `deepseekTraffic` | 第 7、8 节 | 已实现 |
+| W1 文档 | — | 需求、领域模型、模块规格、协议、外部扩展、交互、数据与安全、质量门禁、仓库地图、执行状态、README、用户待办 | 文档检查通过 | 已实现 |
 
-| 工作包 | 实现位置（仓库相对路径） | 验证命令与证据 | 状态与边界 |
-| --- | --- | --- | --- |
-| `C0` 阶段开始整理 | `docs/governance/document-registry.json`、清理旧构建与日志目录 | `node scripts/check-docs.mjs`、`node scripts/check-publication.mjs` | `passed` |
-| `D1` 依赖盘点与新依赖接入 | `package.json`、`apps/desktop/package.json`、`packages/app-core/package.json`、`pnpm-lock.yaml`、`docs/decisions/0007-technology-stack.md` | `pnpm outdated -r`、`node scripts/verify.mjs` | `passed`（升级 4 组、仅新增计划批准的 5 个包） |
-| `U1` 应用内听写与六处输入目标 | `apps/desktop/src/renderer/voice/use-dictation.ts`、`editable-target.ts`、`dictation-capsule.tsx`、`dictation-pill.tsx`、`apps/desktop/src/renderer/styles-voice.css`、对话栏/笔记/文稿/白板/导图/搜索框挂载 | `tests/shell/dictation-keys.test.ts`、`tests/shell/editable-target.test.ts`、`tests/shell/dictation-ui.test.tsx`；烟测 `dictation-insert`、`dictation-revert`；截图 `ui-dictation-capsule-recording.png`、`ui-dictation-capsule-recognizing.png`、`ui-dictation-pill.png` | `passed`；真实麦克风与实体右 `Alt` 手感见 [H-104](../../USER-ACTIONS.md#h-104)、[H-105](../../USER-ACTIONS.md#h-105) |
-| `A1` 采集前端、系统回声消除与 GTCRN 回混 | `packages/contracts/src/dictation.ts`、`apps/desktop/src/renderer/voice/mic.ts`、`recorder.ts`、`apps/desktop/src/main/asr-host.ts`（`0.75 * wet + 0.25 * dry`）、`scripts/tools/gtcrn.lock.json`、`scripts/desktop-assets.ts` | `tests/voice/asr-service.test.ts`、`tests/package/bundled-assets.test.ts`、烟测 `voice`（`audio-constraints`）、`scripts/voice-eval/run-eval.mjs`（§4.2 五档对比） | `passed`（`AT-175`）；Windows Loopback 实机回声消除见 [H-108](../../USER-ACTIONS.md#h-108) |
-| `S1` 去除静默与质量诊断 | `packages/app-core/src/voice/silence-trimmer.ts` | `tests/voice/silence-trimmer.test.ts`；烟测 `dictation-insert`（全静音 `no_speech` 不插入、零外部请求） | `passed`（`AT-176`） |
-| `E1` 识别引擎能力描述与外部接口（零跨引擎静默回退） | `packages/app-core/src/voice/engine/asr-engine.ts`、`prompt-builder.ts`、`packages/model-protocol/src/openai-http.ts`、`transcription.ts`、`packages/contracts/src/inputs-models.ts`、`packages/app-core/src/voice/dictation/service.ts`、`packages/app-core/src/commands/voice.ts` | `tests/voice/asr-engine.test.ts`、`tests/agent/models-page.test.tsx`、`tests/voice/dictation-integration.test.ts`；打包烟测 `dictation-insert` | `passed`（`AT-177`，假服务闭环且失败保留临时音频供重试）；真实端点契约 [ACT-21](../../USER-ACTIONS.md#act-21) `not-run` |
-| `N1` 本地推理进程 `utilityProcess` 隔离与闭包 | `apps/desktop/src/main/asr-host.ts`、`asr-protocol.ts`、`asr-service.ts`、`apps/desktop/forge.config.ts`、`apps/desktop/vite.main.config.ts`、`scripts/check-deps.mjs` | `tests/voice/asr-service.test.ts`；打包烟测 `dictation-local`、`dictation-boundary`、`voice`（`local-capture`）；静态 `checkMainClosure` 与 `checkLightClosure` | `passed`（`AT-179`，详见[第 3 节](#n1)与[第 4 节](#models)） |
-| `M1` 模型目录、下载、续传、校验与导入 | `packages/app-core/src/voice/models/catalog.ts`、`downloader.ts`、`tar-extract.ts`、`service.ts` | `tests/voice/model-downloader.test.ts`；打包烟测 `dictation-local`、`dictation-settings` | `passed`（`AT-178`）；真实外网下载体验见 [H-106](../../USER-ACTIONS.md#h-106) |
-| `X1` 词库、Schema v16 迁移与 Bangumi 角色/人物补全 | `packages/storage-drizzle/src/schema.ts`、`sql.ts`、`store.ts`、`packages/app-core/src/voice/dictionary.ts`、`packages/app-core/src/metadata/bangumi.ts`、`apps/desktop/src/renderer/pages/settings/dictionary-editor.tsx` | `tests/library/schema-v16-migration.test.ts`、`tests/voice/dictionary-bangumi.test.ts`；打包烟测 `migrated-profile`、`dictation-settings` | `passed`（`AT-180`）；真实 Bangumi 详情契约 [ACT-21](../../USER-ACTIONS.md#act-21) `not-run` |
-| `R1` 发音规整、2-gram 音近召回与确定性替换 | `packages/app-core/src/voice/correct/phonemes.ts`、`align.ts`、`index-2gram.ts`、`corrector.ts`（`HaujetZhao/asr-hotword` MIT TS 移植） | `tests/voice/phonetic-correct.test.ts`、`tests/voice/correction-eval-gate.test.ts`（`252` 对真实模型输出）；基准 `dictationCorrectionMs` | `passed`（`AT-181`、`AT-183`：召回率 `0.9521` ≥ `0.85`，误改率 `0.0000` ≤ `1%`，1 万词 `p95 = 0.63 ms` ≤ `30 ms`） |
-| `P1` 三档 LLM 润色、四道防线与简繁保护 | `packages/app-core/src/voice/polish/polisher.ts`、`guards.ts`、`prompts.ts`、`opencc.ts` | `tests/voice/polish-guards.test.ts`、`tests/voice/dictation-integration.test.ts`；打包烟测 `dictation-revert` | `passed`（`AT-181`） |
-| `H1` 听写记录、备份/资料包剔除与 60s 从修改中学词 | `packages/app-core/src/voice/dictation/history.ts`、`learn.ts`、`packages/storage-drizzle/src/store.ts`（`copyForBackup`）、`packages/app-core/src/commands/access.ts`、`apps/desktop/src/renderer/pages/settings/voice-page.tsx` | `tests/voice/dictation-history-learn.test.ts`、`tests/voice/dictation-integration.test.ts`；打包烟测 `dictation-settings`、`dictation-boundary`；截图 `ui-dictation-settings-dark.png`、`ui-dictation-settings-light.png`、`ui-dictation-dictionary.png`、`ui-dictation-history.png` | `passed`（`AT-182`） |
-| `Q1` 240 条离线评测集、前端开关对比与纠错回归集 | `scripts/voice-eval/generate-corpus.mjs`、`corpus.json`、`audio-dsp.mjs`、`sherpa-runner.mjs`、`metrics.mjs`、`run-eval.mjs`、`tests/fixtures/voice-correction.json` | `node scripts/voice-eval/run-eval.mjs`、`tests/voice/correction-eval-gate.test.ts` | `passed`（`AT-183`，详见[第 8 节](#eval)） |
-| `T1` 测试、打包窗口走查与听写基准 | `apps/desktop/src/main/smoke/dictation-walk.ts`、`voice.ts`、`bench-dictation.ts`、`scripts/stage/bench-dictation.mjs`、`gate.json`、`package.mjs`、`bench.mjs`、`report.mjs`、`scripts/stage-report.test.mjs` | `node scripts/stage.mjs gate`（`test`、`package` × 3、`installer`、`bench`、`report`、`install-dev`） | `passed`（计划第 7 节，详见[第 9 节](#gate)） |
-| `W1` 正本同步、许可证声明与人工检查步骤 | `docs/product/requirements.md`、`docs/delivery/roadmap-and-acceptance.md`、`docs/design/*.md`、`docs/modules/voice.md`、`docs/dev-rules/*.md`、`docs/decisions/0007-technology-stack.md`、`README.md`、`USER-ACTIONS.md`、`docs/delivery/status.md`、`docs/delivery/stage-report.md` | `node scripts/verify.mjs --skip-tests`、`evaluateStageEvidence` | `passed` |
+<a id="l1"></a>
+## 3. L1 最小验证的结论：`reasoning_content` 的回传规则
 
-### 2.2 需求与验收用例追踪（`VOICE-10`—`VOICE-17` 及联动项，`AT-174`—`AT-183`）
+先在假服务与真实 API 上让自研运行时走通“开思考 + 3 步工具循环”（真实探测 12 + 4 个请求，flash 与 v4-pro 各自核对），结论：
 
-| 需求 / 验收编号 | 自动化与打包验证覆盖 | 门禁状态 | 产品验收 / 人工检查 |
-| --- | --- | --- | --- |
-| `VOICE-01`、`VOICE-03`、`VOICE-06`、`VOICE-09`（联动更新） | 默认 `echoCancellation: true, noiseSuppression: false, autoGainControl: true`；统一 `AsrEngine`（本地 + 外部双接口）；对话栏麦克风 `agent` 听写不自动发送 / `note` 录音笔记；五分区“设置 › 语音转录” | `passed` | `not-run`（[H-11](../../USER-ACTIONS.md#h-11)、[H-102](../../USER-ACTIONS.md#h-102)、[H-104](../../USER-ACTIONS.md#h-104)） |
-| `VOICE-10` → `AT-174` 应用内听写的入口与插入 | `tests/shell/dictation-keys.test.ts`、`tests/shell/editable-target.test.ts`、`tests/shell/dictation-ui.test.tsx`；打包观察 `dictation-insert`、`dictation-revert` | `passed` | `not-run`（[H-104](../../USER-ACTIONS.md#h-104)、[H-105](../../USER-ACTIONS.md#h-105)、[H-110](../../USER-ACTIONS.md#h-110)） |
-| `VOICE-11` → `AT-175` 采集前端：回声消除、降噪与媒体压低 | `tests/voice/asr-service.test.ts`、打包观察 `voice`（`audio-constraints`）、`scripts/voice-eval/run-eval.mjs` 五档开关对比 | `passed` | `not-run`（[H-108](../../USER-ACTIONS.md#h-108)） |
-| `VOICE-12` → `AT-176` 去除静默与无效结果 | `tests/voice/silence-trimmer.test.ts`；打包观察 `dictation-insert`（全静音 `no_speech` 不插入、零请求） | `passed` | `not-run`（[H-104](../../USER-ACTIONS.md#h-104)） |
-| `VOICE-13` → `AT-177` 识别引擎的能力描述与外部接口 | `tests/voice/asr-engine.test.ts`、`tests/agent/models-page.test.tsx`、`tests/voice/dictation-integration.test.ts`；打包观察 `dictation-insert` | `passed` | `not-run`（[ACT-21](../../USER-ACTIONS.md#act-21)、[H-107](../../USER-ACTIONS.md#h-107)） |
-| `VOICE-14` → `AT-178`、`AT-179`、`AT-183` 本地模型的下载、校验与推理 | `tests/voice/model-downloader.test.ts`、`tests/voice/asr-service.test.ts`、`scripts/check-deps.mjs`；打包观察 `dictation-local`、`dictation-boundary`、`voice`（`local-capture`）；基准 `dictationLocalReleaseToTextMs = 389.4 ms` | `passed` | `not-run`（[H-106](../../USER-ACTIONS.md#h-106)） |
-| `VOICE-15` → `AT-180` 词库的别名、读音与 Bangumi 补全 | `tests/library/schema-v16-migration.test.ts`、`tests/voice/dictionary-bangumi.test.ts`；打包观察 `migrated-profile`、`dictation-settings` | `passed` | `not-run`（[ACT-21](../../USER-ACTIONS.md#act-21)、[H-107](../../USER-ACTIONS.md#h-107)） |
-| `VOICE-16` → `AT-181`、`AT-183` 音近纠错、润色与防过度纠错 | `tests/voice/phonetic-correct.test.ts`、`tests/voice/correction-eval-gate.test.ts`（`252` 对）、`tests/voice/polish-guards.test.ts`；打包观察 `dictation-revert`；基准 `dictationCorrectionMs = 0.63 ms` | `passed` | `not-run`（[H-107](../../USER-ACTIONS.md#h-107)、[H-110](../../USER-ACTIONS.md#h-110)） |
-| `VOICE-17` → `AT-182` 恢复原文、听写记录与从修改中学词 | `tests/voice/dictation-history-learn.test.ts`、`tests/voice/dictation-integration.test.ts`；打包观察 `dictation-revert`、`dictation-settings`、`dictation-boundary` | `passed` | `not-run`（[H-109](../../USER-ACTIONS.md#h-109)、[H-110](../../USER-ACTIONS.md#h-110)、[H-111](../../USER-ACTIONS.md#h-111)） |
+- 思考模式下，**最后一条用户消息之后**、带工具调用的每个助手消息，在之后的每次请求里都要原样带回 `reasoning_content`；缺少时服务返回 400（文字与假服务一致）。
+- **更早轮次**的助手消息不需要带回思考内容（契约 `next-turn-without-reasoning` 通过），所以下一轮只带回答文字，节省上下文。
+- 模型自己搜索时，回答带的 `server_tool_calls` 在多轮里原样带回；本阶段既在同一任务的下一步带回，也在同一会话的下一个任务里随这条回答带回（门禁走查时发现会话历史漏带，已修复并补了用例）。
+- 内置联网搜索只在开启思考时能与函数工具同用，所以“联网搜索”在推理等级为关闭时把这次任务改为“低”并说明。
 
-### 2.3 断言迁移核对（0 断言损失）
+数据结构因此是：思考内容与 `server_tool_calls` 作为助手消息的一部分存进 `agent_messages.payload_json`，发送时按方言与轮次决定是否带上；不另建表。
 
-- **临时 N1 验证脚本 → 正式打包烟测与单测**：Wave 1 用于最早验证打包态 `utilityProcess` 的临时探针模块（覆盖 `asr-host.cjs` 派生、`sense-voice-funasr-nano-int8` 载入与识别、GTCRN `denoise` 长度不变与有限值、模拟崩溃后主进程存活并自动重拉起、空闲自动退出、主进程/轻量入口闭包与零随包 ASR 模型）已完整迁入正式打包烟测 `apps/desktop/src/main/smoke/dictation-walk.ts`（`dictation-local`、`dictation-boundary`）、单元契约 `tests/voice/asr-service.test.ts` 以及静态门禁 `scripts/check-deps.mjs`（`checkMainClosure` 与 `checkLightClosure`），断言只增不减。
-- **既有 `voice.ts` 烟测扩展**：`apps/desktop/src/main/smoke/voice.ts`（`12 / 12` 步）完整保留原有紧凑录音悬浮框（`116×36` DIP、整数拖动记忆、无设备名、转写与时间线锚点）与录音笔记全部断言，新增 `audio-constraints`（核验 `echoCancellation: true, noiseSuppression: false, autoGainControl: true`）与 `local-capture`（使用本地模型 `sense-voice-funasr-nano-int8` 完成录音笔记采集转写，`cloudUploadsDelta: 0`）；对话栏麦克风在问答（`ask`）与笔记（`note`）双模式下的分流由 `dictation-walk.ts`（`dictation-insert`）核验。
-- **既有测试套件**：全仓原有测试零删减、零放宽门槛；`bench.json` 原有 `63` 项基准门槛与样本数保持不变，新增 `2` 项听写门槛合计 `65` 项全部通过。
+<a id="provider-file"></a>
+## 4. 提供者文件、接法白名单与 v17 迁移
 
-<a id="n1"></a>
-## 3. N1 最小验证与本地推理子进程隔离
+- **提供者文件**（`manga-provider-v1`，≤ 64 KiB）：`id`、`name`、`baseUrl`（https）、`hosts`（≤ 8，地址的主机必须在其中）、`keyUrl`、`discovery: "openai-models"`、`models`（窗口、输出、输入类型、能力、推理等级、默认勾选、价格）、`services`（种类、接法、限制、声音、价格与单位）、价格的核对日期。
+- **接法白名单**：`openai-chat-completions`（方言 `deepseek`）、`deepseek-asr@1`、`deepseek-tts@1`、`deepseek-search@1`。引用其他接法、非 https 地址、未声明的主机、文件缺失或无效、与清单不符、缺网络权限的包，`inspect` 以 `provider` 拒绝。
+- **v17 迁移**：备份 `manga.sqlite.premigrate-v16`；新增 `provider_accounts`、`service_usage`，`provider_connections` 增 `account_id`、`provider_model`，旧连接的 `adapter_id` 回填为 `openai-http`。用例覆盖：已有连接与密钥一条不少、中断后完成、第二次不改动、与新建资料结构一致、只认识 v16 的版本拒绝打开。
 
-1. **进程形态与通信协议**：本地语音识别与 GTCRN 语音增强完全运行在 Electron `utilityProcess.fork` 派生的独立子进程 `resources/asr-host.cjs`（`serviceName: "MANGA speech"`）中，主进程 `AsrService`（`apps/desktop/src/main/asr-service.ts` + `asr-protocol.ts`）经 `MessageChannelMain`（`MessagePort`）发送结构化请求（`ping`、`load`、`transcribe`、`denoise`、`unload`、`status`、`shutdown`）。主进程、渲染进程与轻量窗口进程均不加载任何 ONNX 原生插件。
-2. **打包解包与 Electron V8 内存笼兼容**：
-   - `apps/desktop/forge.config.ts` 的 `stageUnpackedSpeechRuntime` 将 `sherpa-onnx-node@2.0.1` 与 `sherpa-onnx-win-x64@2.0.1`（内置 `onnxruntime.dll` `1.28.2`）解包至 `resources/app.asar.unpacked/node_modules/`，`asr-host.cjs` 通过自定义 `createRequire` 定位解包目录加载 N-API 原生绑定，无需 `@electron/rebuild` 重编 C++。
-   - **关键实测发现（Electron 45 V8 Memory Cage）**：Electron 45 启用 V8 指针压缩与外部缓冲沙箱笼，`sherpa-onnx-node` 默认通过 `napi_create_external_arraybuffer` 返回音频样本会在 Electron `utilityProcess` 中触发致命错误。`apps/desktop/src/main/asr-host.ts` 在调用 `OfflineSpeechDenoiser.run(samples, sampleRate, false)` 及波形读取接口时显式传入 `enableExternalBuffer: false`，使原生层拷贝进受管 `ArrayBuffer`，打包态实测 `6.54 s` 语音 GTCRN 增强耗时 `355.61 ms`、输出采样数精确一致且零崩溃。
-3. **故障隔离、空闲释放与干净退出**：
-   - 子进程异常退出时主进程与窗口不受影响，当前请求立即以中文错误收敛，下一次听写自动重新拉起；若 `60 s` 内连续崩溃达 `2` 次则进入 `load_failed` 停止自动重启，直至用户重新选择模型或点击重试。
-   - 默认闲置 `10 分钟`（`600,000 ms`，设置范围 `1..120` 分钟）无请求自动释放识别器并退出 `asr-host` 子进程；应用触发 `before-quit` 时同步关闭子进程，无残留进程。
-4. **闭包与体积红线核验**：`scripts/check-deps.mjs` 的 `checkMainClosure`、`checkLightClosure` 与 `checkTree` 静态扫描确认主进程入口、轻量入口及 `@manga/app-core` 零引用 `sherpa-onnx-node` 或 `asr-host.ts`；打包观察 `dictation-boundary` 核验构建产物 `main.cjs`、`light-main.cjs`、`preload-light.cjs` 与轻量页面不含 `sherpa-onnx` 与 `asr-host` 字样，`full-main.cjs` 不含对 `sherpa-onnx-node` 的 `require` 或 `import`（它只按路径 fork `asr-host.cjs`），且安装包 `resources/` 除随包的 `gtcrn/gtcrn_simple.onnx`（`535,638` B）与 `gtcrn/LICENSE`（`1,069` B）外零本地 ASR 模型泄漏（`bundledModelLeaks: []`）。
+<a id="x1"></a>
+## 5. X1 真实 API 契约（ACT-23）
 
-<a id="models"></a>
-## 4. 三个本地 ASR 模型的配置键名、热词设置与本机 CPU 实测
+在最终源码上完整运行一次，15 项全部通过，24 个请求（结果只记状态、形状、耗时、计费单位与相似度，不含回答正文；密钥只从文件读取，输出经过滤，结果文件里没有密钥）：
 
-基于打包态 `Electron 45.1.0` `utilityProcess` + `sherpa-onnx-node@2.0.1`（CPU `numThreads = min(4, max(1, cpus - 1))`，`provider: "cpu"`）逐一完成三个官方 int8 模型的配置核对与本机实测（该开发机非参考机，用于验证功能闭环与量级）：
+| 用例 | 结果 |
+| --- | --- |
+| `models` | 200，列出两个声明的模型 |
+| `chat-thinking-off` | 首字 270 ms，整次 640 ms |
+| `tool-loop-native` | 4 次请求（3 步工具 + 回答），每步都有思考内容，单次 616—1071 ms |
+| `next-turn-without-reasoning` | 不带上一轮思考，通过 |
+| `tool-loop-pi` | 4 次请求，通过（PI 运行时不报告缓存命中的令牌数） |
+| `vision` | 通过（flash 收图） |
+| `native-search` / `native-search-passback` | 4 与 2 个搜索事件、各 2 个引用；带回后的下一轮通过 |
+| `effort-max` | 通过 |
+| `speech-round-trip` | 56 个计费字，首块 785 ms，识别回来的相似度 1 |
+| `speech-long` | 2048 个计费字（237.6 s 音频），首块 878 ms |
+| `asr-100s` | 100 s 合成语音，相似度 0.952 |
+| `web-search` ×2 | 各 3 条结果，280 / 654 ms |
+| `errors` | 错误密钥 401、不存在的模型 400、空文本合成 400 |
 
-| 模型 ID | `OfflineRecognizer` 实测配置键与流级选项 | 热词能力 | 冷载入耗时 | 子进程常驻 / 峰值工作集 | 10 s 合成语音识别耗时（3 次中位数） |
-| --- | --- | --- | --- | --- | --- |
-| `qwen3-asr-0.6B-int8`（默认推荐） | `modelConfig.qwen3Asr = { convFrontend, encoder, decoder, tokenizer, hotwords: "" }`；每次请求 `stream.setOption("hotwords", csv)` | 支持（最多 `50` 词，逗号分隔；评测集 A 组配合音近纠错专名召回达 `100%`） | `2,458.0 ms`（评测批跑 `2,957.4 ms`） | 空载 `95.7 MiB` → 载入 `1,129.8 MiB`（增量 `+1,034.1 MiB`，推理峰值 `1,666.4 MiB`） | `1,404.8 ms`（`[1405.1, 1404.8, 1394.8]`） |
-| `sense-voice-funasr-nano-int8`（极速轻量） | `modelConfig.senseVoice = { model, language: "auto", useInverseTextNormalization: 1 }`，`modelConfig.tokens`；`stream.setOption("use_itn", "1")` | 不支持（`hotwordsMax: 0`，CTC 结构无热词槽，专名完全走第 2 层确定性音近替换与第 3 层候选召回） | `858.5 ms`（门禁基准实测 `795.7 ms`，含派生 `835.0 ms`） | 空载 `98.6 MiB` → 载入 `426.3 MiB`（增量 `+327.7 MiB`，门禁工作集 `423.6 MiB` / 峰值 `453.1 MiB`） | `201.2 ms`（`[208.1, 201.2, 200.5]`；门禁 4 s 热态松键到出字 `p95 = 392.1 ms`） |
-| `funasr-nano-int8`（中文/方言备选） | `modelConfig.funasrNano = { encoderAdaptor, llm, embedding, tokenizer, systemPrompt: "You are a helpful assistant.", userPrompt: "语音转写：", maxNewTokens: 512, temperature: 1e-6, topP: 0.8, seed: 42, itn: 1, hotwords: "" }`；每次请求 `stream.setOption("hotwords", csv)` 与 `stream.setOption("itn", "1")` | 支持（最多 `50` 词；实测显式开启 `itn: 1` 可稳定输出中文标点，默认 `0` 则无标点） | `3,658.0 ms`（评测批跑 `4,533.9 ms`） | 空载 `95.9 MiB` → 载入 `1,164.9 MiB`（增量 `+1,069.0 MiB`，推理峰值 `1,294.6 MiB`） | `1,944.9 ms`（`[1944.9, 1797.6, 1990.9]`） |
+**阶段用量**：A 规划的 7 个探测之外，B 合计 73 个请求（L1 探测 12、N1 探测 3、L1 走通 4、契约第一次 23、最终契约 24），估算约 0.25 美元（按插件里的价格），在 ACT-23 的 300 个请求、2 美元以内。用量记在被忽略的 `.local/deepseek-usage.log`。第一次契约的原生搜索因为提示词没有触发搜索，改了提示词后在最终运行里触发并通过。
 
-<a id="catalog"></a>
-## 5. 本地模型目录、SHA-256 清单与 ModelScope 核验结论
+<a id="decisions"></a>
+## 6. Q-41 默认值与实现中的取舍
 
-### 5.1 固定目录与精确 SHA-256 清单（核对日期：`2026-11-13`）
-
-所有本地模型均固定在 `packages/app-core/src/voice/models/catalog.ts`（ASR 模型存放于 `<应用数据根>\models\<id>\`）与 `scripts/tools/gtcrn.lock.json`（随包 `resources/gtcrn/`）：
-
-1. **`qwen3-asr-0.6B-int8`**（Apache-2.0）
-   - 下载地址：`https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2`
-   - 归档大小与 SHA-256：`878,702,423` B / `393f8a14e2f5fb96746aaab342997a40641001fbd5bf9592a080a8329178ee96`
-   - 必需内部文件校验：
-     - `conv_frontend.onnx`：`44,148,281` B / `d22dc4423e0940e49884e903d2ea2f7e5567c14fc1aed97e4e26d6b8f208ef9e`
-     - `encoder.int8.onnx`：`182,491,662` B / `60748d3e6744a57c9c91e1b17424a6c2990567e8adceb0783940c03ed98fa9d9`
-     - `decoder.int8.onnx`：`755,914,231` B / `4f6885be5959ae26af3089d38ee7972c5fafbeeb1cf8d5e76eab6d8b61ca5771`
-     - `tokenizer/vocab.json`：`2,776,833` B / `ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910`
-     - `tokenizer/merges.txt`：`1,671,853` B / `8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5`
-     - `tokenizer/tokenizer_config.json`：`12,487` B / `4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c`
-2. **`sense-voice-funasr-nano-int8`**（Apache-2.0）
-   - 下载地址：`https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2`
-   - 归档大小与 SHA-256：`187,693,225` B / `257936ea9a64cbe33200274e6367fc26d373ff6ca58b996b15108ffd6b9f6148`
-   - 必需内部文件校验：
-     - `model.int8.onnx`：`263,531,902` B / `9dc6e72aa8bc6f5966cf2857a0ce3a425b1d72e91500e147d66329f407c017a1`
-     - `tokens.txt`：`939,815` B / `2db4bb25d046e8849e336c9465e248e1694914d996c58c71bdeca18cfb722992`
-3. **`funasr-nano-int8`**（Apache-2.0）
-   - 下载地址：`https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2`
-   - 归档大小与 SHA-256：`841,730,611` B / `eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b`
-   - 必需内部文件校验：
-     - `encoder_adaptor.int8.onnx`：`238,277,200` B / `d0246c823f2c34133ae0efee395d8a189c8f92643e3432f866939ee34d34492c`
-     - `llm.int8.onnx`：`600,339,316` B / `7f0c5a508b41474b1b1ec1cdbdefafd2cf8b3642c6915a0a425265b7b7d2c960`
-     - `embedding.int8.onnx`：`155,583,106` B / `a05d2816e284fcca29a5dccb2c14b9edeb638fd983a84cd4a447248889b6a408`
-     - `Qwen3-0.6B/vocab.json`：`2,776,833` B / `ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910`
-     - `Qwen3-0.6B/merges.txt`：`1,671,853` B / `8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5`
-     - `Qwen3-0.6B/tokenizer.json`：`11,422,654` B / `aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4`
-4. **随包 GTCRN 16 kHz 语音增强模型**（MIT，锁文件 `scripts/tools/gtcrn.lock.json`）
-   - `gtcrn_simple.onnx`：`https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx`（`535,638` B / `e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534`）
-   - `LICENSE`：`https://raw.githubusercontent.com/Xiaobin-Rong/gtcrn/502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73/LICENSE`（`1,069` B / `c467165e5860b4a7494ef4a6e2788e4115d95b5b8989bb5f86287089adddf794`）
-
-### 5.2 ModelScope 镜像核验与未收录依据（计划第 3 节）
-
-`2026-11-13` 对官方维护者同源 ModelScope 仓库 `csukuangfj/asr-models` 逐一发起真实探测：
-
-- `sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2`：HTTP `404`（未镜像上传）；
-- `sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2`：HTTP `404`（未镜像上传）；
-- `sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2`：HTTP `200`/`206`（跳转至 `cdn-lfs-cn-1.modelscope.cn`，仓库提交 `aaa5ba79578cfa70554580e132d1d512649fbb1d`），实测归档体积为 `750,635,863` B、SHA-256 为 `c1e1bf4b31249e7f4b1af9c0e7682efa72aed939e04274cbc969ba3cb60a0c60`（旧版 `llm_prefill` + `llm_decode` 拆分权重构建），与 GitHub Release `checksum.txt` 公布的 `841,730,611` B 合并 `llm.int8.onnx` 归档（`eb43d7cc...`）不一致。
-
-按计划第 3 节“仅当两边文件完全一致（同一 SHA-256）时才把两个地址都写进该模型的候选源”的安全规则，`catalog.ts` 当前只收录 GitHub Releases 官方源；下载器保留完整的 HTTPS 重定向主机白名单、`.part` HTTP `Range` 断点续传（正确处理 `206` 追加、`200` 重头覆盖与 `416` 恢复）、`%SystemRoot%\System32\tar.exe` 两步清单预检（`-tvf` 核验类型前缀、声明的解压总量不超过按模型推算的上限（必需文件总量 × 2 + 32 MiB、压缩包 × 4、64 MiB 三者取大）与条目数不超过 `2,000`，配合 `-tf` 纯路径列表规避中文 Windows `bsdtar 3.8.9` 月份 GBK 字节导致的误判，拒绝符号链接、硬链接、绝对路径与 `..`）及内部权重逐文件 SHA-256 核验，无法直连 GitHub 的环境可直接通过“从文件导入”（`asrModel.importFile`）走同一套离线校验启用。
-
-<a id="shortcut"></a>
-## 6. 右 `Alt`（`AltRight`）快捷键与输入法实测结论
-
-- **Windows 原生菜单栏焦点拦截修复**：应用启动与建窗时执行 `Menu.setApplicationMenu(null)` 与 `window.removeMenu()`，消除 Windows 单独按下 `Alt` 键激活系统菜单栏抢走输入框光标与键盘事件的问题（界面顶部四个应用内自绘菜单不受影响）。
-- **状态机与按键区分**：`use-dictation.ts` 与按键状态机精确匹配 `event.code === "AltRight"`（物理右 `Alt`）：
-  - 按住达到 `250 ms`（`HOLD_THRESHOLD_MS`）才进入录音；短按 `< 250 ms` 静默忽略（零音频缓冲、零识别请求、零胶囊闪烁）；
-  - `350 ms`（`DOUBLE_TAP_WINDOW_MS`）内快速双击进入免提锁定录音，再按一次结束并送识别；
-  - 按住期间按下其他键组合（如 `Alt+Tab` 或编辑器快捷键）立即标记 `comboUsed` 并放弃本次触发；
-  - `Esc` 立即取消当前听写、丢弃缓冲、不改输入框内容与选区；
-  - 输入法组合输入期（`compositionstart` 至 `compositionend` 或 `keyCode === 229`）屏蔽快捷键触发与插入动作，不打断候选词上屏。
-- **结论**：单元状态机与打包态真实 Electron 窗口（`dictation-insert`、`dictation-revert`、`dictation-local`）全部验证通过，**保留右 `Alt`（`RightAlt`）作为默认听写快捷键**，未回退至 `F7`；各品牌实体键盘与真实中文/日文输入法手感由 [H-105](../../USER-ACTIONS.md#h-105) 覆盖。
-
-<a id="pipeline"></a>
-## 7. Schema v16 迁移、词库补全、音近纠错、润色防线与隐私边界
-
-1. **Schema v15 → v16 迁移**：
-   - `dictionary_terms` 新增 `category`（`character` / `actor` / `work` / `term` / `other`）、`disabled`、`blocked_json`，同时保留原 `heard` 列确保旧资料包导入导出向前向后兼容，迁移时已有手写词条保持优先、不覆盖；
-   - 新增 `dictionary_aliases`（级联外键）、`dictionary_suggestions`、`dictation_history`、`bangumi_details` 四张表及索引；
-   - 迁移前自动生成 `premigrate` 一致备份，支持中断后重入恢复，旧版本遇到 `v17+` 明确拒绝打开（`tests/library/schema-v16-migration.test.ts`、打包观察 `migrated-profile` 与 `dictation-walk.ts`）。
-2. **Bangumi 角色与人物别名顺序补全**：`packages/app-core/src/voice/dictionary.ts` 与 `packages/app-core/src/metadata/bangumi.ts` 对当前作品按主要角色优先顺序逐个请求 `/v0/characters/{id}` 与 `/v0/persons/{id}`（单作品上限 `60` 个请求、严格串行不并发洪泛），结果缓存在 `bangumi_details`；完整兼容 `infobox: null`、多个同名 `"简体中文名"` / `"别名"` 项、无子键 `{ v }` 数组元素，以及以 `"简体中文名"` 升为正名并将原日文 `name` 降为 `alias` 的归一化逻辑。
-3. **发音规整与音近纠错（`HaujetZhao/asr-hotword` MIT TS 移植）**：`packages/app-core/src/voice/correct/` 基于 `HaujetZhao/asr-hotword`（提交 `7e282137e780ac4096cac537bef360235d2efe43`）移植 2-gram 增量倒排索引与音素编辑距离，修复上游同音不同调代价不对称缺陷（统一对称 `0.4` 声调代价）并扩展日文假名/罗马字对齐。相似度 `>= 0.9`（至少双音节/双假名且无同分冲突）直接确定性替换，`0.75–0.9` 召回最多 `15` 个候选供润色参考。在 `tests/fixtures/voice-correction.json`（由本阶段三个真实本地模型跑出的 `252` 对样本）上实测专名召回率 **`0.9521`**（门槛 `>= 0.85`，原始 ASR 仅 `0.1470`）、非实体近音句误改率 **`0.0000`**（门槛 `<= 1%`）。
-4. **LLM 三档润色、四道防线与简繁保护**：支持 `off`（原文）、`light`（默认轻度）与 `formal`（书面）三档及自定义提示词；强制执行四道防线（`temperature: 0.1` 且不支持该参数的模型自动去掉重试、`5 s` `AbortSignal` 超时回退第 2 层文本、输出长度比越出 `[0.4, 1.4]` 丢弃回退、引入原文与候选表均不存在的新词库实体时拦截回退）；`opencc-js` 在主进程惰性初始化，转换前切分并保护个人词典正名区间不被简繁二次改写。
-5. **听写记录、60 秒学词与隐私隔离**：
-   - 听写文本记录本机最多保留 `30 天`；可选音频保留 `24 小时`（位于 `<应用数据根>\dictation-audio\`，启动与定时清理过期文件并支持换引擎 `dictation.retranscribe`）；
-   - 插入后 `60 s` 内用户在同处手动改词将生成词条建议（内联胶囊与设置页均可一键确认入库或永久忽略）；
-   - `copyForBackup` 在生成 `premigrate` 与 `preupdate` 备份时删除 `dictation_history` 与 `agent_requests` 并执行 `VACUUM` 擦除空闲页，资料包与项目包导出同样不含这两张表；
-   - `dictation.*`、`asrModel.*`、`dictionary.suggestions.*` 全部列入 `OWNER_COMMANDS`，Agent 工具列表、全文检索与材料上下文均完全不可见（`dictation-boundary` 实测验证）。
-
-<a id="eval"></a>
-## 8. 离线评测集（`scripts/voice-eval`）与采集前端开关对比
-
-### 8.1 240 条合成评测集三模型实测（计划第 6 节）
-
-评测集由 `80` 条虚构二次元测试句（A 组 `40` 条含中文/日文译名/声优专名、B 组 `20` 条含语气词与句中自我改口、C 组 `20` 条不含任何专名的近音干扰句，配 `40` 个词典词条）经 Windows SAPI 合成 `clean`、风扇稳态噪声 `fan10db`、旁人说话干扰 `speech10db` 三组共 `240` 个 16 kHz 单声道 WAV（净语音时长 `410.07 s`）。未开启在线文本连接（`llmPolishStatus: "not-run"`），以下为三个本地模型在离线门禁下的完整对比：
-
-| 模型 | 管线层级 | 总体 CER | 专名召回率（命中 / 总计） | C 组近音误改率 | 单句延迟 p95 |
-| --- | --- | --- | --- | --- | --- |
-| `sense-voice-funasr-nano-int8` | 仅原始 ASR（`asr_only`） | `16.73%` | `10.78%`（`33 / 306`） | `0.00%` | `291.47 ms` |
-| `sense-voice-funasr-nano-int8` | ASR + 音近确定性纠错（`asr_plus_correct`） | **`6.42%`** | **`91.83%`**（`281 / 306`，直接替换 `87.58%`） | **`0.00%`**（`0 / 60`） | `0.13 ms`（仅纠错层） |
-| `qwen3-asr-0.6B-int8` | 仅原始 ASR（`asr_only`） | `17.43%` | `15.69%`（`48 / 306`） | `0.00%` | `3,272.87 ms` |
-| `qwen3-asr-0.6B-int8` | ASR + 音近确定性纠错（`asr_plus_correct`） | **`8.66%`**（`clean` `3.24%`） | **`92.48%`**（`283 / 306`，`clean` `98.04%`；A 组叠加热词达 **`100%`** `70/70`） | **`0.00%`**（`0 / 60`） | `0.12 ms`（仅纠错层） |
-| `funasr-nano-int8` | 仅原始 ASR（`asr_only`） | `13.29%` | `16.99%`（`52 / 306`） | `0.00%` | `1,938.52 ms` |
-| `funasr-nano-int8` | ASR + 音近确定性纠错（`asr_plus_correct`） | **`4.54%`**（`clean` `2.40%`） | **`94.44%`**（`289 / 306`，A 组叠加热词 CER **`2.26%`** / 召回 **`97.14%`**） | **`0.00%`**（`0 / 60`） | `0.12 ms`（仅纠错层） |
-
-### 8.2 采集前端开关五档对比与默认值核定（计划第 4.2 节）
-
-在 `sense-voice-funasr-nano-int8` + 音近纠错管线上对五种采集前端配置跨四种声学条件（`clean`、`fan10db`、`speech10db`、小音量 `quietClean`）逐一跑完对比（记录于 `bench.json` 的 `records.voice.evaluation.switchComparison`）：
-
-| 配置档位 | `clean` CER / 专名召回 | `fan10db` CER / 专名召回 | `speech10db` CER / 专名召回 | `quietClean` CER / 专名召回 | C 组误改率 | 结论 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `capture_default`（`browserNS=off, AGC=on, GTCRN=off`，当前默认） | `4.74%` / `92.16%` | `5.52%` / `93.14%` | **`8.58%`** / **`92.16%`** | `4.92%` / `92.16%` | `0.00%` | 各条件最均衡，旁人干扰下最稳 |
-| `browser_ns_on`（`browserNS=on, AGC=on, GTCRN=off`） | `4.86%` / `92.16%` | `5.52%` / `94.12%` | `9.72%` / **`88.24%`** | `4.92%` / `93.14%` | `0.00%` | 强谱减压伤辅音，`speech10db` 专名召回下降 `3.92` 个百分点 |
-| `agc_off`（`browserNS=off, AGC=off, GTCRN=off`） | `4.80%` / `92.16%` | `5.52%` / `93.14%` | `8.94%` / `90.20%` | `4.92%` / `92.16%` | `0.00%` | 弱音细节略逊于开启自动增益 |
-| `gtcrn_mix_075`（`browserNS=off, AGC=on, GTCRN=0.75*wet+0.25*dry`） | **`4.62%`** / **`94.12%`** | `5.76%` / `93.14%` | `10.32%` / `90.20%` | `5.16%` / `93.14%` | `0.00%` | 干净与稳态风扇环境专名召回最高，相比 `100%` 湿信号显著避免过抑制 |
-| `gtcrn_full_100`（`browserNS=off, AGC=on, GTCRN=1.0*wet`） | `5.10%` / `94.12%` | `7.44%` / `94.12%` | **`16.63%`** / **`79.41%`** | `5.28%` / `93.14%` | `0.00%` | 纯湿信号严重损伤人声与专名音素，不采用 |
-
-**核定结论**：实测数据完全印证计划 4.2 节与 A-131 的判断——保持默认 `echoCancellation: true`、`browserNoiseSuppression: false`、`autoGainControl: true`、`gtcrnDenoise: false`，并将可选“环境降噪（GTCRN）”固定采用 `0.75 * enhanced + 0.25 * raw` 干湿回混，无需修改默认值。
+- 按 Q-41 的默认实现：插件随应用提供、由用户安装一次；不加 `safety_check` 与服务端标题；加入时默认勾选目录里推荐的模型与全部服务；新连接只在该用途未选定时成为默认；后台小任务关思考；思考过程默认折叠；联网搜索按次勾选；朗读声音默认 `stella`。
+- **朗读费用提示**：实现为开始朗读时都提示，直到用户选“不再提示”（设置 `novelCostHint`），比“第一次朗读一本书时说明”更保守。
+- **录音笔记的识别块**沿用 30 s（计划允许 ≤ 60 s），位置映射不变；听写超过上限时按静默分段（≤ 110 s）。
+- **模型配置的来源标签**“测试读到”改为“自动读到”：提供者的模型列表填入的配置也用这个标记。
+- **`dictation-deepseek`** 放在 `deepseek` 阶段里，而不是扩展已有的 `dictation` 阶段：DeepSeek 引擎需要插件、账户与假服务，与本阶段其他观察共用一套准备。
 
 <a id="gate"></a>
-## 9. 阶段门禁、基准数值与源码指纹
+## 7. 门禁、基准与源码指纹
 
-### 9.1 全链路 `stage gate` 每步结果与耗时
+### 7.1 `stage gate`（最终源码）
 
-- **环境**：Windows 11 `win32 x64`、Node `v26.12.1`、Electron `45.1.0`。
-- **哪一次**：下表是阶段内追加（[第 12 节](#stage-additions)）后在最终源码上的整套门禁，`2026-11-14` 完成，`package.passStreak` 已改为 2。
-- **之前各次**：B 交付时的一次 `2,373 s`；2026-11-13 追加后的一次 `passStreak 3`。
-- **两次运行的关系**：
-  - 2026-11-14 第一次运行到第二次 `package` 时失败：`agent-media-native` 的“查看发送记录”按钮在合成点击前被虚拟列表移出页面。
-  - 修复窗口观察后，第二次运行沿用了仍然有效的 `test`、`installer`、`bench` 结果，其余步骤重跑并通过。
+| 步骤 | 结果 | 用时 |
+| --- | --- | --- |
+| 依赖审计 | 通过 | 3 s |
+| verify（类型、knip、文档、公开内容、依赖边界） | 通过 | 31 s |
+| 测试（全量：253 个文件通过、8 个按条件跳过；3095 个用例通过、11 个跳过） | 通过 | 92 s |
+| 打包与窗口观察（第 1 遍 / 第 2 遍） | 通过 | 451 s / 456 s |
+| 安装包 | 通过 | 449 s |
+| 基准 | 通过 | 603 s（最慢：scanPane 134.8 s、workspace 128.3 s、reader 74.4 s） |
+| 报告 | 通过 | 0 s |
 
-| 门禁步骤 | 状态 | 耗时 | 覆盖与关键结果 |
+过程记录：第一次门禁停在打包（上面的 pdf.js 版本断言）；修复后通过，但看截图时发现三处界面问题（来源标签、网页结果的日期显示原始时间戳、标题与网站名挤在一行），修复后重跑；那一次的第 2 遍打包里 `workspace-restart` 的“把书的标签切到前面”失败一次（合成点击后 3 秒内焦点没有切过去），这一项在同一源码上的其他四遍都通过，重跑后连续两遍通过。它在负载下偶发，没有改动走查本身。
+
+### 7.2 新增基准（[`docs/evidence/gate/bench.json`](../evidence/gate/bench.json)）
+
+| 指标 | 门槛 | 结果 | 样本 |
 | --- | --- | --- | --- |
-| `verify` | `passed` | `34 s` | `tsc --noEmit`、`knip`、`check-docs.mjs`、`check-tool-links.mjs --pins`、`check-publication.mjs`、`check-workflows.mjs`、`check-deps.mjs`、`findUncommentedSmokeSleeps` |
-| `test` | `passed` | `105 s`（第一次运行，第二次沿用） | Vitest 共 `3,047` 项：`3,037 passed`、`0 failed`、`10 skipped`（仅已知前置跳项）；`cases.json` `217 / 217 passed`；`tempDirs.left = 0` |
-| `package`（连续 2 次） | `passed` | `489 s / 440 s` | `passStreak: 2`；`scenarios.json` `185 / 185 passed`；第二次沿用同一构建与安装包 |
-| `installer` | `passed` | `453 s`（第一次运行，第二次沿用；原来约 `535 s`） | `38 / 38` 步全绿。4 个测试身份安装包同时打出，共 `162 s`（原来逐个约 `4 × 52 s`）；其余同上一次：双通道安装、并存、覆盖、卸载，“打开方式”注册，`update-rollback`，真实 `electron-updater` 整包与差分下载验签及 NSIS 升级演练，真实安装快照前后一致 |
-| `bench` | `passed` | `560 s`（第一次运行，第二次沿用） | **`65 / 65` 项性能门槛全部达标**；最慢分段：工作区 `145.5 s`、扫描与停靠栏 `107.4 s`、阅读器 `74.5 s`、规模窗口 `69 s`、对话 `33.3 s` |
-| `report` | `passed` | `< 1 s` | `automationStatus: "self-check-passed"`，`errors: []`，`productAcceptance: "not-run"` |
-| `install-dev`（不是门禁步骤） | `passed` | `16 s` | 门禁通过后、请用户人工检查前单独执行：本机 `MANGA Dev` 从 `0.1.2-dev.202611131511` 静默更新至 `0.1.2-dev.202611131924`（`releaseUntouched: true`，更新前未运行） |
+| `ttsFirstAudioP95Ms`（点击回答的“朗读”到第一块音频交给播放，假服务、不走缓存） | ≤ 300 ms | 51 ms | 10 条不同的回答（第一条含打开 AudioWorklet） |
+| `readAloudGapP95Ms`（小说段间静默，下一段先到记 0） | ≤ 150 ms | 0 ms | 24 段、23 个段界 |
 
-### 9.2 新增听写基准与关键对照指标（[`docs/evidence/gate/bench.json`](../evidence/gate/bench.json)）
+基准的走查里，回答改为每条答完就朗读：对话列表是虚拟列表，朗读控件的高度变化之后列表可能不再贴底，新回答落在可见区下方（与用户需要点“回到底部”的情况一致，登记为 LOOP-48）。测量方法、门槛与样本数没有改。
 
-| 指标 | 实测结果 | 门槛 | 测量口径与记录值 |
-| --- | --- | --- | --- |
-| `dictationLocalReleaseToTextMs` | **`442.7 ms`** | ≤ `1500 ms` | 打包窗口已载入本地极速模型 `sense-voice-funasr-nano-int8` 热态下，约 `4 s` 合成语音从松开右 `Alt` 到编辑框文字出现（B 交付时 `p95 = 392.1 ms`，A 重跑 `389.4 ms`） |
-| `dictationCorrectionMs` | **`0.76 ms`** | ≤ `30 ms` | `10,000` 个词典词条（含拼音与假名读音）对一段约 `200` 字中文的 2-gram 音近召回与确定性替换 `p95`（50 次运行） |
-| 记录项：`migrationV14`（v13 → v16 连续迁移） | `63.4 ms` | 记录项 | 100 次运行（含 `premigrate` 备份及 v14—v16 的表与视图变化） |
-| 其余 63 项既有性能门槛 | 全部在目标内 | 见[执行状态验证基线](status.md) | 检索 `0.78 ms`、冷启动 `61.1 ms`、规模冷启动 `649 ms`、扫描事件循环 `p99 = 45.9 ms`、白板打开 `34.1 ms`、导图折叠 `48.4 ms`、四宫格晚到帧 `0%`、对话打开 `61.4 ms`、轻量视频首帧 `463 ms`、轻量漫画首页 `302 ms` |
+### 7.3 指纹（[`docs/evidence/gate/report.json`](../evidence/gate/report.json)）
 
-### 9.3 最终源码与证据指纹（[`docs/evidence/gate/report.json`](../evidence/gate/report.json)）
+源码 `c9721ce4c999a90a60638d3886678ed8e83c5e2f45b6488e1c2de85702ca66ce`；锁文件 `a85080e7e45dcc90f64f147885fb5d5580b67d3c61499090c89e659bf0c9fb6c`；走查脚本 `af435457fc0f21cd0e36553e979217aa08a1dcfb214edf918a364febadf8b54a`；基准脚本 `b9445a0df7293308b0cb9970e0825acbb169375f7a07a9bc39c41814b1217690`。
 
-- 阶段分支：`feat/m12-voice-dictation`（基于 `main@3b9d498`，全部本阶段变更收敛为单个带 `Signed-off-by` DCO 签名的阶段提交）。下列指纹来自阶段内追加后在最终源码上的整套门禁（2026-11-14）。之后只加了不在指纹范围内的 `scripts/quick-gate.mjs` 与文档。
-- `sourceFingerprint`: `5e200d35cdf0098a4bcc45afa16dfd0a2c79948a7cbe43293a555f2cde4174c2`
-- `smokeScriptFingerprint`: `b2c8e77be997469010ec989d106cb874f233023dcfec344114f7b4e51b4455dc`
-- `smokeChecksScriptFingerprint`: `c1c2ca8355f5436eaea59f327db57acd6a3419b757d63496efc9cba9abc2023f`
-- `smokeBenchScriptFingerprint`: `c7277cf4a5547e093413e230654d58262c5cbe67302569e4ba1d469b884f892c`
-- `smokeWalkScriptFingerprint`: `35f236c7c11de47ca86e6c106e61e9bed48c281e54ad613ebbee15a5258575f4`
-- `lockFingerprint`: `f66f660c5687fac3a2e0305de6149de2a874d456b2c452a41204271501f8a951`
-- `buildScriptFingerprint`: `8d89734043d4054648698ec4d01802964ff9a3f30a08114a4ed7362a59af5cda`
-- `gateScriptFingerprint`: `b5b8efb0fa24dc6fbb91e3abab596c2964b11ac511ce8d5f0a9de73efc1febd4`
-- `testScriptFingerprint`: `6c4bfbbfd2e16cc5a7680f6239b21cc21eeccffd99cda43bf51df861e2c85212`
-- `packageScriptFingerprint`: `681cc0f80c931e687b1419b5a5ca82233cb05e5b2f2135ce2f4baa6f2ffd1ca6`
-- `benchScriptFingerprint`: `61ced7ba4b65523a5727540ddb0b417d7f8ac367dfa99e64736b83e9960804ec`
-- `installerScriptFingerprint`: `e71dac1ced8d95d9c7c00cc8eb5eea061836c9553a34650d7695b69e29f23a09`
-- `releaseScriptFingerprint`: `305a24bbbd8a8a61ccb9da3d626c5db276597fd63f64ad941bbeab1fed19ccab`
+**装到本机的开发版**：`0.1.2-dev.202611150750`（`stage install-dev` 通过，前一版 `0.1.2-dev.202611131924`，正式版未动）。
+
+<a id="evidence"></a>
+## 8. 证据
+
+`docs/evidence/gate/` 整体替换为最终门禁的结果：`bench.json`、`cases.json`、`install-dev.json`、`installer.json`、`media-smoke.json`、`package.json`、`report.json`、`scenarios.json`（192 项观察）、`test-run.json`、`voice-smoke.json`，以及截图 `ui-deepseek-models-light/dark`、`ui-deepseek-chat-thinking`、`ui-deepseek-chat-sources`、`ui-deepseek-novel-reading`、`ui-deepseek-research-web`、`ui-launch-guard-dialog`（复制前看过，不含本机路径与密钥）。共 2.5 MiB。
 
 <a id="next-step"></a>
-## 10. 已知限制、待用户事项与首选下一步
+## 9. 已知限制与下一步
 
-### 10.1 已知限制与后续登记
-
-- **产品验收与真实外部调用未执行**：`productAcceptance` 保持 `not-run`；真实麦克风、实体右 `Alt` 与系统级输入法、真实外网模型下载体验、Windows 应用回声消除等留给用户待办 [H-104](../../USER-ACTIONS.md#h-104)—[H-111](../../USER-ACTIONS.md#h-111)；Bangumi 角色/人物详情与外部转录 / `input_audio` 连接的真实在线契约留给可选授权 [ACT-21](../../USER-ACTIONS.md#act-21)（`not-run`）；评测集的在线 LLM 润色对比（`MANGA_LIVE_VOICE_EVAL_LLM=1`）默认不联网，记为 `not-run`。
-- **本阶段明确不做的后续项（已登记于[执行状态后续 loop](status.md#followup-loops)）**：跨应用全局听写（[LOOP-36](status.md#loop-36)）、边说边出字流式识别与私有协议适配器（[LOOP-37](status.md#loop-37)）、应用内本地大语言模型润色（[LOOP-38](status.md#loop-38)）、Bangumi 全量离线词表与无假名日文汉字自动注音（[LOOP-39](status.md#loop-39)）、选中文字说语音指令改写（[LOOP-40](status.md#loop-40)）。
-
-### 10.2 首选可执行下一步：请用户授权 push、PR 与 squash 合并
-
-- **阶段判断**：B 自检的必需用例与门禁全部通过，A 集中审查已收敛（[第 11 节](#a-review)），修复后在最终源码上重跑的完整 `stage gate` 通过。按计划第 1 节，Agent 侧已完成。
-- **结果**：已按用户 2026-11-14 的授权执行 [ACT-22](../../USER-ACTIONS.md#act-22)：[PR #21](https://github.com/chialecode/manga/pull/21) squash 合并为 `main@92d1b0b`，阶段分支已清理。下一步是用户开启下一阶段。
-- **不是前提的事项**：[Q-40](../../USER-ACTIONS.md#q-40) 的答复、可选的 [ACT-21](../../USER-ACTIONS.md#act-21) 与人工检查 [H-104](../../USER-ACTIONS.md#h-104)—[H-111](../../USER-ACTIONS.md#h-111) 都不阻塞合并（A-53），`productAcceptance` 保持 `not-run`。
+- **限制**：PI 运行时下内置搜索不显示进度与来源、不带回 `server_tool_calls`（LOOP-47）；朗读后对话列表可能不贴底（LOOP-48）；小说跨窗口与跨章继续、网页“抓取并保存”没有自动观察（H-115、H-118）；DeepSeek 的 OCR、网页抓取与文件解析、边生成边朗读、PDF 朗读没有接入（LOOP-43—LOOP-46）。
+- **需要用户的**：人工检查 H-112—H-120（需要自己的 DeepSeek 密钥）；Q-41 的答复（以答复为准再调整）。都不阻塞审查。
+- **首选下一步**：A 审查已收敛，请用户按 [ACT-24](../../USER-ACTIONS.md#act-24) 授权 push、PR 与合并（见第 10 节）。
 
 <a id="a-review"></a>
-## 11. A 集中审查（2026-11-13）
+## 10. A 集中审查（2026-11-15）
 
-依据 `AGENTS.md`、`REVIEW.md` 与计划第 1、4、5、7、9 节逐项复核代码、测试与门禁证据。B 交付时的证据指纹（`sourceFingerprint` `34b5d838…`）与审查开始时的 `HEAD` 全部一致。
+按计划第 9 节的审查重点逐项读了实现与用例，结论：**收敛，可以请求授权 push、PR 与合并**。局部问题已由 A 直接修复并 amend 进同一个阶段提交，在最终源码上重跑了整套 `stage gate`（10.3）。
 
-### 11.1 复核通过的项
+### 10.1 逐项结论
 
-| 审查项 | 核对方式与结论 |
+| 审查重点 | 结论与依据 |
 | --- | --- |
-| 音频只发往所选的一个引擎；Agent 碰不到听写 | `AsrEngine` 按所选引擎发送，失败直接报错，不换服务；润色连接取不到时按原文处理，不换文本连接。`dictation.*`、`asrModel.*`、`dictionary.suggestions.*`、`dictionary.observeEdit` 只在 `OWNER_COMMANDS`，`AGENT_COMMANDS` 是白名单且不含它们；听写不写操作日志的正文。**发现一处缺口，已修复（11.2 第 1 项）** |
-| 推理进程隔离 | `asr-host.ts` 只由 `utilityProcess.fork` 运行；`check-deps.mjs` 的 `checkMainClosure`（从 `src/main/index.ts` 沿相对、`@manga/*` 与 `require` 追踪）与 `checkLightClosure` 都禁止 `sherpa-onnx*` 与 `asr-host`，自测覆盖；打包观察 `dictation-boundary` 再查构建产物与安装包（`bundledModelLeaks: []`）。GTCRN 的 `run` 传 `enableExternalBuffer: false`；崩溃记账、1 分钟两次标为载入失败与闲置卸载有单测与打包观察 |
-| 模型下载 | `asrModel.download` 的输入要求 `confirmed: true`，服务与下载器各再检查一次；每一跳重定向都过 HTTPS 与主机允许列表（拒绝凭据、IP 字面量与回环）；Range 续传前重算已有部分的哈希，ETag 或 `Content-Range` 不符、`416` 时从头下载；超过目录声明的大小立即失败；`tar.exe` 只按 `%SystemRoot%` 的绝对路径调用、环境变量最小化，先 `-tvf` 拒绝链接与特殊条目并累计声明大小，再 `-tf` 拒绝绝对路径、盘符、`..`、保留设备名与大小写冲突；压缩包与每个必需文件都核对大小与 SHA-256；任何失败都清空该模型的暂存。ModelScope 只有 funasr-nano 一个文件，且哈希与 GitHub 不同，按计划不收，结论成立 |
-| Schema v16 | 迁移在单事务内，`ALTER TABLE` 前查列，可重入；迁移前备份 `premigrate-v15`，旧版遇到 v17 拒绝打开；旧 `heard` 回填为 heard 别名、类别按来源推出，用例核对行数不少、手写优先不变 |
-| Bangumi 补全 | 按主角、配角、声优排序去重，串行，每部作品按传输层计数不超过 60 次；`infobox` 为 null、同名键多次、别名项没有 `k` 三种边界都有用例。限制：最后一个请求遇到 429 时，客户端已有的退避重试（最多 2 次）可能让该作品多出 1—2 次请求，随后整个任务报错停止，记在 11.3 |
-| 去除静默 | 首段前与末段后各留 300 ms；≤ 1 s 的停顿原样保留；更长的停顿两侧各留 200 ms、合计 400 ms；8 ms 渐变只落在静音余量里，不会切到字头字尾；整段无声为 `no_speech` 且不送识别 |
-| 音近纠错与样本集 | 阈值是有用例的常量（直接替换 0.9、候选 0.75、候选最多 15 个）；上游提交 `7e28213`（2026-06-10）在 GitHub 上存在，文件头保留 MIT 许可与来源。样本集 252 对里 218 对标为模型输出，A 在本机评测缓存 `dist/samples/voice-eval/asr-cache.json` 里逐条找到了相同文字；全量 720 条评测（三模型 × 三声学条件）的召回率为 91.8%—94.4%，误改率 0，与样本集的结果一致，看不出为通过门槛挑样本 |
-| 润色四道防线与简繁 | 跳过条件、只带候选的提示、温度 0.1（不支持时去掉重试）、5 s 超时、长度比 0.4—1.4、新出现的词条、拉丁字母与片假名词都会退回替换后的文字并记原因；OpenCC 转换前用私用区占位保护词条写法 |
-| 备份与资料包 | `premigrate` 与 `preupdate` 都经 `copyForBackup` 删除 `agent_requests` 与 `dictation_history` 后 `VACUUM`；资料包与项目包不导出听写记录、建议词与 Bangumi 详情缓存。**备份的取快照方式已改（11.2 第 2 项）** |
-| 既有行为与基准 | 录音笔记的提示复述处理与以前一致（识别结果只复述提示时按 `prompt-echo` 重试不带提示）；既有 63 项基准的门槛、样本数与测量方法未改，只新增两项；`gate.json` 只删了一个已不存在的截图名并补了新观察；全部既有观察保留并通过 |
+| 停用、卸载、信任移除时零网络请求 | 成立。对话、后台小任务、识别、合成、搜索与服务测试都先经过 `providers/access.ts` 的 `connectionAccess`/`providerOf`：插件不可用时在发请求前以 `PROVIDER_UNAVAILABLE` 拒绝，进行中的调用由 `cancelUnavailable` 取消。A 补了两处：见 10.2 的第 1、2 项 |
+| 只用白名单接法、只访问声明的主机 | 成立。`ProviderFileSchema` 只认四种接法与 https 地址，`baseUrl` 的主机必须在 `hosts` 里；每次调用前 `checkAddress` 再核对主机与私网；提供者连接不能改地址、模型或用途。测试用的假服务地址只在 `--manga-smoke` 且设了环境变量时生效 |
+| 密钥不离开主进程、不进日志与证据 | 成立。朗读经 `manga:speak` 只把 PCM 交给页面，密钥只在主进程读取；ASR、TTS 与搜索的请求 `redirect: "error"`。A 用 `.local/deepseek.key` 的内容（及其前缀）检索了阶段提交的全部文件，没有命中 |
+| v17 迁移 | 成立。沿用迁移前备份（`premigrate-v16`）、同一事务、版本最后发布；只补缺少的列，第二次启动不改动；只认识 v16 的版本拒绝打开。四个用例覆盖备份、连接与密钥一条不少、中断后完成与结构一致 |
+| `reasoning_content` 与 `server_tool_calls` 的回传 | 成立。两个运行时都只在最后一条用户消息之后的助手消息里带回思考内容；`server_tool_calls` 在同一任务与同一会话的下一个任务里带回（`sessionHistoryForNewRun`），只在 `deepseek` 方言下发送 |
+| PI 下搜索的限制（LOOP-47） | 可以接受。A 在 ACT-23 内做了真实探测：一步里模型先内置搜索、再调用函数工具，下一步按 PI 的做法不带 `server_tool_calls` 发回，服务照常接受（200）并给出回答。所以 PI 下只是没有进度、来源与搜索上下文，工具循环不会因此失败。结论已写进 LOOP-47 |
+| 联网搜索不放进资料库内容；`web.search` 的可用性 | 成立。搜索词只由模型或用户在面板里给出，没有代码把文件名、路径或正文拼进搜索词；`web.search` 只在本次任务勾了“联网搜索”、配置了搜索服务时进工具清单，模型自己能搜索时不提供。界面判断可用性的一处不精确登记为 LOOP-49 |
+| 音频只发往所选的一个引擎；朗读不写盘、听写时暂停 | 成立。DeepSeek 识别只送 `file`，429/503 有限重试后报错，不换引擎；合成的 PCM 只在内存里缓存（10 分钟、单段 8 MiB、总计 64 MiB）；`openMicrophone` 开始时暂停朗读，不自动继续 |
+| 费用标为估算 | 成立。对话按提供者文件的价格估算时记 `costEstimated` 与价格核对日期，使用记录显示“约”与说明 |
+| 门禁后的修复 | pdf.js 两处视图共用 `EXPECTED_VERSION`，但与 app-core 的 `PDFJS_VERSION` 仍是两份手写常量，A 补了与实际安装版本核对的用例（10.2 第 3 项）；模型来源标签已改为“自动读到”；网页结果的日期只显示年月日、网站与日期另起一行。基准的门槛、测量方法与样本数没有改；基准走查改为逐条朗读回答的理由（LOOP-48）成立 |
+| knip 的配置提示 | 实际是 9 条，归为两类：`apps/desktop` 的 8 个入口已由 knip 的 Electron Forge 与 Vite 插件识别，属于多余；`.css` 不在 `project` 里，样式文件的导入没有被跟踪。A 删去多余入口、把 `.css` 加进 `project`，knip 不再有提示；用一个临时的未使用文件确认它仍会报出 |
 
-### 11.2 A 的修复（已并入阶段提交）
+### 10.2 A 的修复
 
-1. **“自动选择”时载入失败的本地模型会被跳过，音频改发外部连接（隐私）**：听写引擎为“自动选择”（默认）时，`resolveDictationEngine` 只挑 `ready` 或 `installed` 的本地模型；已装模型处于 `loading` 或 `load_failed` 时会落到第一个转录连接，音频在用户没有选择的情况下离开本机，与“所选引擎不可用时不换服务”和界面文案“优先已安装的本地模型”都不符。改为已装的本地模型（`ready`、`loading`、`installed`、`load_failed` 依次）总是优先，载入失败时说明原因，不发给连接（`packages/app-core/src/product-app.ts`）。`tests/voice/dictation-integration.test.ts` 的 AT-177 用例新增断言：自动选择加载入失败时 `dictation.start` 报 `model_load_failed`，转录与对话接口收到 0 个请求；去掉修复时该断言失败（原先返回 `ok`，音频发给了转录连接）。
-2. **备份不再把整个资料库读进内存**：B 把 `premigrate` 备份从“检查点后复制文件”改成了 `sqlite.serialize()`（`preupdate` 原本就是），大资料库升级时主进程要多占一份整库大小的内存。改为 `VACUUM INTO`：同样包含已提交的 WAL 页，逐页写盘（`packages/storage-drizzle/src/store.ts`）；`tests/update/update-service.test.ts` 注入备份失败的位置相应改为 `copyForBackup`。
-3. **偶发的 `dictation-local` 观察**：A 第一次重跑门禁时，“结束推理进程后再听写”的一步失败了一次（单独复跑 3 次都通过，B 的 3 次也都通过），根因无法从现场确定。走查改为等主进程确认进程已退出再开始下一次听写（最多 5 s，替代固定的 200 ms），并在失败时记下第二次按键是否开始、输入框字数与胶囊文字，以便下次定位；没有加重试。修复后的完整门禁里三次打包都通过（`exitObserved: true`、`respawnStarted: true`）。
-4. **文档与配置的更正**：报告与 ADR-0007 里五个新依赖的发行日期按 npm 注册表改正（`sherpa-onnx-node` 与 `sherpa-onnx-win-x64` 2.0.1 为 2026-10-26，`pinyin-pro` 3.29.5 为 2026-10-10，`wanakana` 5.3.1 为 2023-11-20，`opencc-js` 1.4.2 为 2026-08-22，都已满 14 天）；报告里解压的上限（实为按模型推算的上限与 2,000 个条目，不是“4 GiB / 256”）、词条类别名（`actor` / `other`）、`full-main.cjs` 的检查口径与 `l1-combining-marks` 目录的来由（测试每次重新生成）按代码改正；`knip.json` 去掉三个已被实际引用、不需要忽略的依赖。
+1. **视觉识读也经过插件闸门**（`commands/agent-run.ts`）：另配的视觉连接读图时原来直接读取密钥，没有经过 `connectionAccess`。目前提供者连接不能改成“视觉”用途，所以还走不到这条路径；修复后任何视觉连接都与对话连接一样受插件启停约束，停用时也会取消。
+2. **插件停用后朗读不再从内存播放**（`providers/speech.ts`）：命中缓存时原来跳过了插件检查，停用后同一段文字仍能读出（不发请求）。现在先核对提供者，再查缓存；补了用例（`tests/voice/deepseek-speech.test.ts`）。
+3. **pdf.js 版本与安装版本一致**（新用例 `tests/reading/pdfjs-version.test.ts`）：渲染端的 `EXPECTED_VERSION`、主进程的 `PDFJS_VERSION` 与解析器标识都要等于实际安装的 `pdfjs-dist`。以后升级漏改会在单元测试里失败，不用等打包后的 `formats`。
+4. **knip 配置**（`knip.json`）：见 10.1。
+5. **网页链接打不开**（`apps/desktop/src/main/permissions.ts`）：主进程的 `manga:open-external` 原来只放行 Bangumi 的条目页，计划要求用系统浏览器打开的三处（联网搜索的引用来源、材料搜寻结果的“在浏览器打开”、加入弹窗里的密钥申请页）点了没有反应；走查没有点这些链接（会打开真实浏览器），所以没有发现。现在另放行普通网页：http 或 https、默认端口、不带用户名与密码、公开的域名，IP 地址、本机、单段名称与保留名仍拒绝，其他协议照旧拒绝。规则写进[数据与安全第 2 节](../dev-rules/data-and-security.md)，用例在 `tests/shell/main-process.test.ts`。
 
-修复后：受影响的测试子集通过（语音、v16 迁移与命令登记 37 个文件 323 项；备份、迁移与更新 15 个文件 138 项）；`node scripts/verify.mjs --skip-tests` 通过；完整 `stage gate` 在最终源码上通过（第 9 节），证据整体替换了 `docs/evidence/gate/`（28 个文件，3.33 MiB）。
+### 10.3 验证
 
-### 11.3 遗留限制（不阻塞合并）
+A 修复后，在最终源码上重跑了整套 `node scripts/stage.mjs gate`，全部通过：
 
-- Bangumi 补全遇到 429 时，客户端已有的退避重试可能让一部作品多出最多 2 次请求，随后任务停止并提示稍后再试；如果要严格按“每部作品 60 次”计数，需要把剩余预算传进客户端的重试，登记为 [LOOP-41](status.md#loop-41)。
-- 模型下载只给每次连接设了 30 s 的建立超时，数据流中途停住时不会自己超时，用户可以暂停或取消；计划没有要求，登记为 [LOOP-42](status.md#loop-42)。
-- `dictation-local` 第一次偶发失败的根因未确定，已加诊断字段；再出现时按证据里的字段判断是没开始、失败还是没听到声音。
+| 步骤 | 结果 | 用时 |
+| --- | --- | --- |
+| 依赖审计 | 通过 | 2 s |
+| verify（类型、knip、文档、公开内容、依赖边界） | 通过，knip 没有配置提示 | 33 s |
+| 测试（254 个文件通过、8 个按条件跳过；3098 个用例通过、11 个跳过） | 通过 | 98 s |
+| 打包与窗口观察（第 1 遍 / 第 2 遍） | 通过 | 518 s / 452 s |
+| 安装包 | 通过 | 447 s |
+| 基准（最慢：workspace 128.5 s、scanPane 102.4 s、reader 74.4 s） | 通过；`ttsFirstAudioP95Ms` 42 ms（门槛 300），`readAloudGapP95Ms` 0 ms（门槛 150） | 556 s |
+| 报告 | 通过 | 0 s |
 
-<a id="stage-additions"></a>
-## 12. 阶段内追加（用户 2026-11-13、11-14 要求，已并入阶段提交）
+第一次重跑在测试一步停下：所有用例都通过，但门禁用例 `AT-47-query-boundaries` 按名字匹配的一个测试被 A 改了名（`tests/shell/main-process.test.ts`），这一项因此没有匹配到测试。A 在 `scripts/stage/gate.json` 里改了这条匹配式，并把新增的“普通网页”用例加进同一项，第二次重跑全部通过。
 
-A 审查收敛后，用户在同一阶段内追加了以下要求；它们不改变听写功能，按 Git 规则 amend 进本阶段提交，并在最终源码上重跑完整门禁（第 9 节）。
+证据整体替换为这次门禁的结果（同第 8 节的文件，共 2.5 MiB，截图复制前看过，没有本机路径与密钥）。源码指纹 `1468c2afba52b2f8a6e569d01afb9e1c516e8d7189ec65bcaeaa7a7ef24ed2ef`。`stage install-dev` 通过，本机的开发版更新为 `0.1.2-dev.202611150931`（前一版 `0.1.2-dev.202611150750`）；人工检查请用这个版本。
+
+### 10.4 真实 API 用量（ACT-23）
+
+A 审查的探测不超过 8 个请求（两次提示没有触发搜索，换了提示后触发），探测用的临时用例已删除，只记了状态与形状。整个阶段合计：A 规划 7 个、B 73 个、A 审查不超过 8 个，共不超过 88 个，估算不到 0.3 美元，在 300 个请求、2 美元以内。用量记在被忽略的 `.local/deepseek-usage.log`。
+
+### 10.5 不阻塞的后续
+
+- **LOOP-49（新增）**：对话框判断“联网搜索”是否可用时，按第一个文字连接判断；项目另选了模型时，菜单项可能显示为可用或不可用而与实际不符。服务端按任务实际用的连接判断，不会多发请求，只是勾选可能不生效或没法勾选。
+- LOOP-47、LOOP-48 照旧；人工检查 H-112—H-120 与 Q-41 的答复不是合并的前提（A-53）。
+
+<a id="user-feedback-fixes"></a>
+## 11. 用户试用反馈的 7 项修复与快速门禁验证（2026-11-15）
+
+同日用户试用开发版后提出 7 项反馈，已全部在 `feat/m13-deepseek-plugin` 修复并合入同一阶段提交：
+
+| 编号 | 用户反馈与根因 | 修复位置 | 回归测试与窗口观察 |
+| --- | --- | --- | --- |
+| 1 | 删掉本地文件后手动“扫描资源库”，总览里仍残留已删作品/资源 | `packages/app-core/src/library-scan/cleanup.ts`、`service.ts`、`commands/library-io.ts`、`works-service.ts`、`works-versions.ts`、`sidebar-service.ts`；`apps/desktop/src/renderer/pages/shelf.tsx`、`sidebar-data.ts`：手动扫描（`trigger = "manual"`，含将排队中的启动/定时扫描升级为手动及整库扫描时对账 `managed = 1` 下载位置）清理源文件缺失且无任何用户内容（笔记、书签、录音、截图、对话、词典、字段覆盖、已确认弹幕、粗剪片段）的资源与空作品（离线盘与不可读目录不清理），作废媒体/封面句柄并发出刷新通知；含用户内容但无可用资源的作品按 AT-77 保留，不再以空白卡片占用总览架面、侧栏与未归入列表 | `tests/library/manual-rescan-cleanup.test.ts`、`tests/library/shelf-overview-and-portrait.test.tsx`；观察 `library-in-locations`、`scan-incremental` |
+| 2 | 关联 Bangumi 后封面没有变成同步的竖版，动漫页与总览仍裁成横版卡片 | `packages/app-core/src/metadata/covers.ts`、`service.ts`；`apps/desktop/src/renderer/lib/covers.ts`、`pages/shelf.tsx`、`work-card.tsx`、`work-home.tsx`、`sidebar.tsx`、`styles-shelf.css`：非 `file` 来源封面按 `>=` 等级更新（重匹配或刷新 Bangumi 时替换为最新竖版封面，锁定封面不动）；`covers.handles` 命中缩略图缓存时返回按比例缩放后的纵向宽高；总览架面、动漫书架、作品卡片、作品主页与侧栏封面格按竖版比例展示 | `tests/metadata/bangumi-portrait-cover.test.ts`、`tests/library/shelf-overview-and-portrait.test.tsx`；观察 `media-view-covers` |
+| 3 | 窗口全屏下移动鼠标唤不出底栏，隐藏底栏区域仍可误点 | `apps/desktop/src/renderer/reader/use-auto-hide.ts`、`reading.tsx`、`readers/comic-reader.tsx`、`video-player.tsx`、`editable-number.tsx`、`video-time.tsx`、`styles-reader.css`、`styles-video.css`：小说、漫画、视频三种阅读器在窗口全屏下捕获 `pointermove`/`mousemove`/`dragover` 唤醒底栏；隐藏态底栏设 `pointer-events: none` 并拦截误触；页码与时间输入框卸载前主动释放焦点避免自动隐藏卡死 | `tests/shell/reader-fullscreen-capsule.test.tsx`；观察 `frame-window-fullscreen`、`overlays-comic`、`overlays-player`、`overlays-novel` |
+| 4 | 开启系统代理 TUN 模式时，DeepSeek 读取模型列表与调用被 DNS 私网检查拦截 | `packages/app-core/src/providers/registry.ts`：`checkAddress` 在生产环境执行主机白名单与 `dns.lookup` 校验，继续拦截字面量 IP、本机后缀、回环、RFC 1918 局域网、IPv6 ULA 与 NAT64，同时放行已声明 https 主机在本地代理 TUN 模式下的 RFC 2544 Fake-IP（`198.18.0.0/15`）与运营商级 NAT（`100.64.0.0/10`） | `tests/plugins/provider-plugin.test.ts`、`tests/real/deepseek-contract.test.ts` |
+| 5 | DeepSeek 插件已启用但连接仍标“插件已停用”，测试错误分类失真、模型页状态不即时同步 | `packages/app-core/src/plugins/service.ts`、`product-app.ts`、`model-probe.ts`、`commands/connections.ts`、`commands/providers.ts`；`apps/desktop/src/renderer/pages/settings/models-page.tsx`：启动与 `restore`/`plugin.changed` 先加载声明式 `model.provider` 文件并清除已可用连接上陈旧的 `"provider"` 错误；`probeConnection` 按 `failureOf` 精确映射非插件错误；`secretFor` 正常 `release()` 访问计数；停用时展示清单显示名；模型页在挂载与 `plugin.changed`/`settings.changed` 时实时对账（另顺手修复 `App.tsx` 与 `tests/shell/settings-view-ui.test.tsx` 初始挂载时 `savedRail` 尚未刷入 `railRef` 的竞态） | `tests/plugins/provider-plugin.test.ts`、`tests/shell/models-providers.test.tsx`、`tests/shell/settings-view-ui.test.tsx`；观察 `deepseek-plugin`（停用再启用并完成连接测试） |
+| 6 | 最小化窗口时没有收进系统托盘图标 | `apps/desktop/src/main/tray.ts`、`index.ts`、`packages/i18n/src/messages-shell.ts`：Windows 主窗口最小化时隐藏任务栏按钮（`setSkipTaskbar(true)`）并创建按通道区分的系统托盘图标（`icon.ico` / `icon-dev.ico`，提示 `MANGA` / `MANGA Dev`）；单击、双击、右键中文菜单（“显示主窗口”“退出 MANGA”）、外部还原与二次启动（`second-instance`）均还原并聚焦窗口（保留最大化状态）且移除托盘图标；退出、重启与 `--quit-for-update` 时调用 `destroyWindowTray()` 清理 | `tests/runtime/tray.test.ts`；观察 `window-minimize-tray` |
+| 7 | 对话栏收起时右上角录音/笔记胶囊遮挡阅读画面与右上区域 | `apps/desktop/src/renderer/components/chat/capsule.tsx`、`shell.tsx`、`workspace/host.tsx`、`styles-frame.css`、`styles-workspace.css`：将 `.chat-capsule` 停靠进主区 34 px 标签条右侧（高 28 px），在标签栏与分栏切换器预留 `--capsule-bar-w` 宽度，笔记输入浮层避开阅读器顶部提示条且在切换离可记笔记页面时自动收起，完全不压住下方正文或视频画面 | `tests/shell/reader-fullscreen-capsule.test.tsx`；观察 `capsule-clear-of-controls` |
+
+### 11.1 两级门禁与证据对应关系（[质量门禁 2](../dev-rules/quality-gates.md#gate-tiers)）
+
+- **整套门禁证据（[`docs/evidence/gate/`](../evidence/gate/)）**：对应第 10.3 节 A 集中审查完成时的整套 `node scripts/stage.mjs gate` 运行，源码指纹为 `1468c2afba52b2f8a6e569d01afb9e1c516e8d7189ec65bcaeaa7a7ef24ed2ef`（锁文件 `a85080e7e45dcc90f64f147885fb5d5580b67d3c61499090c89e659bf0c9fb6c`）。
+- **最终源码上的验证（阶段内用户反馈修复，按两级门禁执行 `quick-gate.mjs`）**：最终源码指纹为 `8570c724047f3b7ddc30df5b862895e0707566db0f269795c519fd400c2842f5`（走查脚本指纹 `d8006806425e32f98da6cd1391b1b7a8cbc9be14cf1a550de232df2b3cbb9a2d`，锁文件不变）：
+  1. `node scripts/verify.mjs`：通过（根与桌面端 `tsc --noEmit`、`knip` 零提示、70 份文档 / 1092 个本地链接、公开内容检查、依赖与闭包检查、Vitest 259 个文件 / 3129 个用例通过）。
+  2. `node scripts/quick-gate.mjs --phases deepseek,voice`：通过，用时 `175 s`（`overBudget: false`，预算 300 s：`verify` 44 s、关联测试 88 s、重新打出 Electron Forge 桌面包并跑 `deepseek,voice` 42 s；7 项观察全部通过，含停用后再启用并重跑探针的 `deepseek-plugin`、`deepseek-models`、`deepseek-chat`、`web-search`、`read-aloud`、`dictation-deepseek`、`deepseek-network`，临时目录残留 0）。
+  3. `MANGA_PACKAGE_REUSE_BUILD=1 node scripts/quick-gate.mjs --all-tests --phases window-walk,media`：通过，用时 `276 s`（`overBudget: false`，预算 300 s：`verify` 44 s、全量测试 `--all-tests` 260 个文件通过 / 8 个按条件跳过 95 s、沿用同指纹桌面包跑 `window-walk,media` 137 s；86 项观察全部通过，含新增的 `window-minimize-tray`、`frame-window-fullscreen`、`capsule-clear-of-controls`、`overlays-comic`/`player`/`novel`、`media-view-covers`、`library-in-locations`、`scan-incremental`、`menus:episodes-audio`，临时目录残留 0）。
+  4. **真实 DeepSeek API 契约（ACT-23）**：在最终源码上执行 `tests/real/deepseek-contract.test.ts -t "installs the bundled DeepSeek plugin"`（零 `testOrigin` 与零 DNS 覆盖，走生产 `MangaProductApp` 安装随包插件、读取模型列表、加入 5 个连接、重开 Profile、探测 `deepseek-flash` 并测试转录/合成/搜索三项服务），`4.68 s` 全部通过，共 9 个请求。本轮修复验证合计 27 个请求（子任务自检 18 + 最终合入复核 9），整个阶段累计不超过 115 个请求（此前 ≤ 88 + 本轮 27）、估算低于 0.35 美元，在 ACT-23 授权的 300 个请求、2 美元以内；密钥与本机路径未出现在任何输出、证据或提交中。
+  5. **更新本机开发版（`node scripts/stage.mjs install-dev`）**：从上述最终桌面包构建开发版按用户安装包后执行通过（`13.57 s`），正在运行的 `MANGA Dev`（`0.1.2-dev.202611150931`）经 `--quit-for-update` 保存退出，静默覆盖安装并重新启动就绪为 **`0.1.2-dev.202611151303`**（正式版零触碰，`releaseUntouched: true`）。产品验收与 [USER-ACTIONS.md](../../USER-ACTIONS.md#checks) 中各项 `H-*` 保持 `not-run`。
+
+<a id="a135"></a>
+## 12. 阶段内追加：开发版装完常驻托盘（A-135，2026-11-16）
+
+用户要求把其他项目开发版的同一规范同步到本阶段：开发版常驻运行，每次本机重装后都要在后台（托盘）把它打开（[A-135](../decisions/confirmed-decisions.md)）。
 
 | 要求 | 实现位置 | 验证 |
 | --- | --- | --- |
-| **安装快捷方式**：静默安装（无人参与）首次安装时两个通道都创建桌面与开始菜单快捷方式；覆盖安装或自动更新时正式版不新建，开发版每次重新创建桌面快捷方式（提示有新版本）、不新建开始菜单快捷方式；有人参与的安装在向导里两项都可选 | `scripts/stage/installer-lib.mjs` 的 `shortcutsNsis`（NSIS 自定义页与 `customInit` / `customInstall` / `customUnInstall`，`createDesktopShortcut` 与 `createStartMenuShortcut` 关闭，由 include 自己创建与删除）；`checkInstallerConfig` 核对 | `tests/runtime/installer-config.test.ts`；`stage installer` 首装两项都在、正式版覆盖安装保留开始菜单且不重建已删的桌面快捷方式、开发版覆盖安装重建桌面且不建开始菜单；另用会删除快捷方式的旧卸载程序做过一次升级，快捷方式被恢复 |
-| **应用图标**：正式版与开发版都是深灰底 `#3C4043` 白色 “M”（字母高度 250–780、笔画 110，按 1024 单位），开发版另加右下角琥珀色 “DEV” 角标、一眼区分（2026-11-14 再次调整）。用户指出小尺寸下角标粗细不一后，`generateAppIcons` 改为先把 SVG 渲染成 1024 像素，再按面积平均缩成 512 与 16—256 各尺寸，不再用 `sharp` 的 lanczos3 直接缩小 | `apps/desktop/assets/icon-dev.svg/.png/.ico`；`installer-lib.mjs` 的 `channelIcons` 用于安装包、卸载项、可执行文件与 `resources/icon.*`，并同步 `assets.manifest.json` 里两个图标的大小与哈希（否则启动自检报“安装不完整”，`stage installer` 的开发版首次启动发现并已修复）；源码运行时窗口按通道取图标 | `installer-config.test.ts` 新用例（含 `averageDown` 的面积平均）；`stage installer` 两通道“可执行文件与窗口用本通道的图标”；`stage package` 的安装信息观察核对开发版图标的尺寸 |
-| **开发版安装时机**：每次需要用户人工检查时由 Agent 自动安装（B 交付整个阶段、A 审查修复或返工后、按用户反馈修复后请用户复查），用户不用自己装；小功能做完、只为自动验证的打包与门禁不装（2026-11-14 用户纠正） | `scripts/stage/package.mjs` 与 `gate.mjs` 不再调用 `install-dev`；[开发流程](../dev-rules/development-workflow.md#dev-install-at-handoff)、[质量门禁](../dev-rules/quality-gates.md)、[Q-38](../../USER-ACTIONS.md#q-38) 第 3 项与 DATA-07 同步 | 门禁运行中本机开发版未被改动；门禁通过后单独执行 `stage install-dev` 一次（第 9.1 节） |
-| **烟测窗口不受真实鼠标干扰**（修复 `workspace-restart`、`frame-resize` 偶发失败）：观察窗口显示后，人手移动鼠标经过窗口会混进合成的拖动与点击 | `apps/desktop/src/main/index.ts`、`light/main.ts` 在 `--manga-smoke` 时 `setIgnoreMouseEvents(true)` | 诊断时指针落在显示中的烟测窗口内的采样占 `770 / 859`；修复后 `stage package` 单独 1 次与门禁内 2 次全部通过 |
-| **门禁提速**（2026-11-14 用户要求） | `scripts/stage/installer.mjs` 一开始同时打出 4 个测试身份安装包（两个通道、`0.1.2` 升级包、更新演练的下一个开发版，各用自己的工作目录）；`gate.json` 的 `package.passStreak` 从 3 改为 2 | `installer` `535 s → 453 s`（打包 `4 × 52 s → 162 s`）；第三次 `package` 每次约 7 分钟，不再跑 |
-| **两级门禁**（2026-11-14 用户决定）：整套 `stage gate` 只在 B 交付整个阶段时跑一次，其余修改都只跑约 5 分钟内的快速门禁 | 新增 `scripts/quick-gate.mjs`：`verify --skip-tests`、与改动文件相关的 Vitest、`--phases` 点名的打包烟测阶段，超过 300 秒提示；[质量门禁](../dev-rules/quality-gates.md#gate-tiers)、[开发流程](../dev-rules/development-workflow.md#gate-tiers)、仓库地图与 README 同步 | 在本阶段工作树上实测：不点阶段 `81 s`，点 `loop` 阶段（沿用现有构建）`125 s` |
-| **窗口观察偶发失败**：2026-11-14 第一次门禁的第二次 `package` 中，`agent-media-native` 找到“查看发送记录”按钮后，对话记录又自己滚向最新消息，虚拟列表把那一行移出页面，合成点击落空 | `apps/desktop/src/main/smoke/loop-media.ts` 的 `openTraceStep`：没点到时重新滚回那条运行再点，最多 3 次，像人一样操作 | 先单独跑 `loop` 阶段通过（13 / 13），再跑整套门禁通过（第 9.1 节） |
-| **PR 的 Linux CI**（2026-11-14）：`model-downloader.test.ts` 的 5 个用例与 `dictation-integration.test.ts` 的 AT-178 在 Ubuntu 上失败。它们用 Windows 自带的 `tar.exe`（bsdtar）造测试压缩包并核对条目清单；GNU tar 的清单格式不同，也不支持 `@archive` | 这 6 个用例按仓库已有做法只在 Windows 上运行（`it.runIf(process.platform === "win32")`），产品代码不变（产品只用 `System32	ar.exe`）；目录清单用例仍在所有平台运行 | 按两级门禁只跑快速门禁：`38 s` 通过，Windows 上 11 个用例全部执行并通过。第 9 节整套门禁的证据对应此前的源码，只差这处测试条件 |
+| 每次安装成功后都在托盘打开 `MANGA Dev`，不论原来是否在运行；门禁演练用的测试身份保持“原来在运行才按原参数重开” | `scripts/stage/install-dev.mjs`：`background` 默认对真实开发版为真，安装后总启动并加 `--background`（`launchArgsAfterInstall`）；`install-dev.json` 新增 `background`、`inJob` | `tests/update/install-dev-recovery.test.ts`：原来在运行 / 没运行两种都在托盘打开、只加一次 `--background`；测试身份默认不启动 |
+| 脱离 Agent 命令沙箱的作业对象；不允许脱离时照常启动并如实报告 | `launchOutsideJob`：Node 不能请求 `CREATE_BREAKAWAY_FROM_JOB`，由一段 PowerShell 调 `CreateProcessW`，被拒（拒绝访问）时去掉该标志重试，再用 `IsProcessInJob` 判断；`inJob` 时命令输出提示从开始菜单打开一次 | 同一测试文件在 Windows 上真实启动一个不开窗口的控制台进程并读回 `pid`、`inJob`；按 Windows 规则引用参数（空格、引号、结尾反斜杠） |
+| `--background` 启动不显示窗口，只出现托盘图标 | `apps/desktop/src/main/index.ts`：`startInTray` 时窗口 `show: false`、`skipTaskbar: true`，再 `windowTray.parkInTray()`；建不了托盘图标时照常显示窗口。`apps/desktop/src/main/tray.ts`：新增 `parkInTray()` | `tests/runtime/tray.test.ts`：从未显示的窗口进托盘、不重复建图标，点托盘图标后显示、获得焦点并回到任务栏；建不了图标时 `parkInTray()` 返回假 |
 
-人工检查：[H-84](../../USER-ACTIONS.md#h-84)、[H-85](../../USER-ACTIONS.md#h-85) 已写明新的快捷方式规则；开发版图标在 H-84 的安装界面与桌面快捷方式上即可看到。
+验证：上述两个测试文件 20 项通过（连同 `tests/update/release-and-install-dev.test.ts` 共 30 项）；`node scripts/check-publication.mjs` 通过；根 `tsconfig` 类型检查通过。整套 `stage gate` 未重跑（按[两级门禁](../dev-rules/quality-gates.md#gate-tiers)）；门禁里调用 `runInstallDev` 的三处（包观察、升级演练、轻量窗口）都用测试身份，行为不变。本机已装的 `MANGA Dev` 仍是 `0.1.2-dev.202611151303`，要到下一次需要你人工检查、Agent 执行 `stage install-dev` 时才带上这项改动。
+
+<a id="feedback-2026-11-17"></a>
+## 13. 阶段内追加：标题栏、托盘、对话模型与本周发布失败（A-136、A-137，2026-11-17）
+
+用户 2026-11-17 的四项反馈，按 [A-136](../decisions/confirmed-decisions.md)、[A-137](../decisions/confirmed-decisions.md) 实现并合入同一阶段提交；没说到的细节按用户待办 Q-42 的默认值。
+
+| 反馈 | 实现位置 | 验证 |
+| --- | --- | --- |
+| 去掉标题栏的后退、前进与“文件、编辑、视图、帮助”，主区的标签挪进标题栏（类 Obsidian），其他图标跟着侧栏与对话栏变化 | `apps/desktop/src/renderer/shell.tsx`：没有横贯的一行，图标栏顶部是侧栏开关，`TitleEnd`（状态、停止、对话栏开关、窗口按钮）停靠栏常驻时放在它的顶部，否则放在主区右上并量出宽度（`--title-end-w`）；主区窄到右端旁边不足 200 px 放标签时（接近手机比例的窄窗）标题栏在主区上方单独占一行、标签移到下面（`data-title-row="own"`）；`styles-frame.css`：各栏顶部 36 px，标签条空白、侧栏标题行、对话栏顶部与设置的空白条是拖动区，`styles.css` 让弹出的菜单、对话框与胶囊不被拖动区盖住；拖动区只算屏幕上的视图（别的视图的标签条隐藏着仍排在下面，Chromium 也收它们的拖动区）；`workbench.tsx` 去掉菜单、关于弹窗与只在菜单里的屏幕全屏；`settings/update-page.tsx` 加许可证与“复制版本信息” | `tests/shell/window-frame.test.tsx`（右端随停靠栏移动、窄窗、拖动区规则）、`shell-ui`、`window-fullscreen`、`reader-fullscreen-capsule`、`settings-view-ui`、`media-flows`、`workspace-flows`、`update-ui`；窗口观察 `workspace-frame`、`frame-*`、`version-about` 与 `rail-walk`、`bench-window` 改为按新结构测量（标签在窗口顶边、窄窗标签在单独一行之下、标签不伸到右端按钮下、`Alt+←/→`、版本信息在“设置 › 更新”、悬停卡片从标题栏之下开始）；`workspace-menu` 改为核对菜单里的命令从现在的位置都能用（标签条的布局菜单、标签键、侧栏的新对话与新项目、搜索、三个开关、设置的快捷键页与版本），分屏与上下文的观察改用标签条的布局菜单 |
+| 对话页选模型（没有 DeepSeek 模型可选）、思考强度与上下文窗口 | `workspace/model-choice.tsx`：选择器列出对话模型与提供者目录里可加入的模型，选中即加入；`AgentChatSettingsSchema` 存在 `settings.agent.chat`；`commands/agent.ts` 选连接（项目的模型优先、选定的不在时退回第一个）并把选择冻结进运行快照，`agent-context.ts` 的 `withChoice` 改窗口、最大输出与思考档，`agent-run.ts` 重试沿用 | `tests/agent/chat-model-choice.test.ts`（假 DeepSeek 上的请求体、预算、重试、退回）、`tests/shell/chat-model-picker.test.tsx` |
+| 真实对话返回 400 | 原因：DeepSeek 只接受 `^[a-zA-Z0-9_-]+$` 的函数名，命令名带点（`library.find`）。`packages/model-protocol/src/tool-names.ts` 在发出前换成合规且不重复的线上名、回来时换回，`pi-ai.ts` 三条路径都经过它；`http.ts` 的 4xx 错误带上提供者的原因（去掉请求号与密钥形状的内容）；假服务按真实规则拒绝 | `tests/agent/deepseek-thinking.test.ts`、`acceptance-regressions`（脱敏）；真实对话见下 |
+| 本周测试发布失败（定时 Release 在 `check` 失败） | 原因：`settings-view-ui.test.tsx` 偶发失败，暴露真实竞态：工作区控制器在保存的外壳偏好读到之前就改了图标栏，保存还在路上时读到的偏好被跳过，保存的设置页、隐藏的图标与顺序在界面上丢掉。`App.tsx` 改为记下每个还在保存的改动，读到保存的偏好后把它们叠上去 | 新增的回归测试先在旧代码上失败、修复后通过；修复要合并进 `main` 后才对发布生效（ACT-24 第 4 步） |
+| 托盘图标常驻；最小化不进托盘；关闭按钮进托盘，设置可改为退出 | `apps/desktop/src/main/tray.ts`：启动即建图标、不随还原销毁，新增 `hideToTray()`；`main/index.ts`：关闭时读外壳偏好 `window.closeToTray`（默认真），收进托盘或照原流程保存后退出，`before-quit` 与系统结束会话时一律退出；`settings/general-page.tsx`：“窗口 › 关闭按钮”（只在有托盘图标时显示）；A-135 的 `--background` 不变 | `tests/runtime/tray.test.ts`（13 项）、`tests/shell/close-button-setting.test.tsx`、`tests/library/sidebar-lists.test.ts`（偏好的默认、修改与旧记录）；窗口观察 `window-minimize-tray` 改为核对常驻图标、最小化与关闭进托盘再带回；`workspace-restart` 的真实关闭先选“退出 MANGA” |
+
+**真实 API（ACT-23）：** 先用 1 个请求复现 400（带点的函数名，“does not match pattern”），修复后在 `MangaProductApp` 里带全部 Agent 工具各做一次 Flash 默认、Pro 最高思考 128K、Flash 关闭思考的对话，三次都成功。本阶段累计 ≤ 119 个请求、估算不到 0.36 美元，在 300 个与 2 美元之内；输出与证据里没有密钥。
+
+**验证：** `node scripts/verify.mjs` 通过（全量 vitest 262 个文件、3147 项通过，15 项跳过；根与桌面类型检查）。快速门禁（`quick-gate --phases window-walk,update,workspace-restart,workspace-closed`）的打包观察：`window-walk` 与 `update` 全部通过；`workspace-restart`、`workspace-closed` 在随后单跑（`window-walk,workspace-restart,workspace-closed`）中通过。门禁里查出并修好的问题：窄窗时标签伸到右端按钮下（改为单独一行）；隐藏视图的标签条拖动区可能吞掉可见标签上的点击；走查的点击助手会点到隐藏视图或还在布局中的标签（改为只找屏幕上的视图、位置稳定后再点）。`workspace-restart` 重启后注入的点击在这台机器上按旧的缩放落点（发往 835 的点击到了 669，只影响注入的输入），这时走查在页面里按下标签并在证据里记下 `injectedClickMissed`。本机开发版用 `stage install-dev` 更新到 `0.1.2-dev.202611191320`（提交 `e5be8ed` 的源码，在托盘打开）；这次起 `install-dev` 在没有当前安装包时自己打包、做安装包，不先跑门禁（2026-11-19 用户要求）。整套 `stage gate` 没有重跑；产品验收保持 not-run：人工检查 [H-121](../../USER-ACTIONS.md#h-121)—[H-123](../../USER-ACTIONS.md#h-123) 未执行。
+
+<a id="pre-merge-cleanup-2026-11-21"></a>
+## 14. 合并前全仓审查重构、无用代码与文档清理及依赖刷新（2026-11-21）
+
+合并前按用户授权，将全仓多领域代码审查重构、无用代码与文档清理，以及远端 Dependabot PR 依赖刷新一并收敛至当前阶段分支 `feat/m13-deepseek-plugin` 的单一 DCO 提交：
+
+1. **全仓审查与质量重构（7 个领域并行核验）：** 修复基础契约/存储/网络与协议、应用核心/Agent/插件/提供者、媒介/视频/漫画/弹幕/元数据/扫描/创作工作区、语音与听写、桌面渲染层外壳/设置/阅读器/聊天，以及 Electron 主进程/预加载/轻量窗口/门禁与烟测脚本中的安全、并发、资源释放与边界缺陷；主进程 `apps/desktop/src/main/index.ts` 拆分为 `ipc-handlers.ts`、`quit-for-update.ts`、`detached-installer.ts`、`window-assets.ts`，门禁脚本抽取 `scripts/stage/win-process.mjs` 并登记进 `scripts/stage/gate.json`；`apps/desktop/tsconfig.json` 打开 `erasableSyntaxOnly: true`；生产与烟测代码清零显式 `any` 与 `eslint-disable`，补齐 25 个定向回归测试文件，全量测试期间 React 与应用侧 stderr 警告清零。另将 `tests/voice/vad-worker.test.ts` 与 `tests/voice/timeline-30min.test.ts` 对合成 30 分钟录音句数的断言改为相对 `truth.json` 实际生成句数（`>= 100` 且漏检 `<= 1`），避免本机 Windows SAPI 语音包语速差异导致固定句数误报。
+2. **无用代码、文档与工作区残留清理（遵循[文档治理第 8.4 节](../governance/documentation-policy.md#stage-cleanup)）：**
+   - 确认全部 70 份受控 Markdown 均有效登记且无过期文件；修正 `docs/modules/metadata.md` 失效测试路径（改为 `tests/metadata/bangumi-matching.test.ts`）、[ADR-0007](../decisions/0007-technology-stack.md) 已替代脚本注记、[`docs/README.md`](../README.md)、[`docs/delivery/status.md`](status.md)、[`docs/dev-rules/repo-map.md`](../dev-rules/repo-map.md) 与 [`USER-ACTIONS.md`](../../USER-ACTIONS.md)（`ACT-08`、`ACT-24`）。当前阶段计划、报告与 `docs/evidence/gate/` 按规则保留至合并后。
+   - 删除死文件与死导出：`apps/desktop/vite.parse-worker.config.ts`、`scripts/inventory-deps.mjs`、`packages/contracts/src/report.ts`；清理 `packages/contracts/src/{ids,location}.ts`、`packages/model-protocol/src/deepseek-services.ts`、`packages/app-core/src/domain/note-document.ts`、`scripts/desktop-paths.ts`、`scripts/samples/pdf-embedded-font.ts`、`scripts/tools/{fetch-ffmpeg,fetch-speech-asr}.mjs` 中的零引用符号；移除无引用的 `@electron-forge/plugin-fuses` 及其 `knip.json` 忽略项。
+   - 删除 3 份安全可弃的本机临时残留（`tsconfig.tsbuildinfo` 31.7 KB、`dist/a-review-gate.log` 766.6 KB、`dist/a-review-install-dev.log` 1.5 KB，合计 ~800 KB）；严格保留 `.env.local`、`.local/`、开发 Profile、随包工具、合成样本与当前门禁运行目录。
+3. **远端 Dependabot PR 与合并前依赖刷新（A-132，严格遵守 7 天 `minimumReleaseAge: 10080`）：**
+   - **PR `#23`**：并入 `actions/setup-node` `7.0.0 → 7.1.0`（完整 SHA `949feb2413d6458794dcd2491c4babbbce0c15c1`），`scripts/check-workflows.mjs` 通过。
+   - **PR `#26`**：`@types/node 26.6.6` 已在 2026-11-14 盘点并入本分支，合并后关闭。
+   - **PR `#27`**：并入全部 17 项满 7 天同主版本更新（含 `@napi-rs/canvas 1.0.13 → 1.1.1` 复试通过、原例外关闭，以及 `dockview-react 8.8.3 → 8.9.0` 并移除 `pnpm-workspace.yaml` 临时覆盖）；其中 4 项未满 7 天的候选按发行龄规则采用已满龄版本（`user-event 14.6.10`、`better-sqlite3 13.1.1`、`electron 45.3.2`、`lucide-react 1.72.0`）。
+   - **PR `#25`（`jsdom 30.1.3 → 31.0.1`）**：单独试用后因 `tests/voice/record-ui.test.tsx:171` 脱离文档节点 `pointerUp` 冒泡行为变化失败，回退至 `30.1.3` 并记录复查条件于 [ADR-0007](../decisions/0007-technology-stack.md)。
+   - `node scripts/deps.mjs --audit` 通过（0 条未处理漏洞，3 条已登记例外均未过期）。详细版本记录见 [ADR-0007](../decisions/0007-technology-stack.md)。
+4. **验证：** 为 `tests/library/unassigned-recover.test.ts` 与 `tests/shell/roughcut-ui.test.tsx` 的临时目录清理补齐 Windows `EPERM` 重试参数（`maxRetries: 10, retryDelay: 100`，与 `tests/helpers/global-temp.ts` 一致），消除并行 Vitest 卸载时的句柄偶发抖动；合并前最终 `node scripts/verify.mjs` 覆盖全量门禁（语法、70 份文档与 1130 处本地链接、49 项脚本反例、公开内容、工作流与随包工具锁、依赖方向与轻量/语音闭包、根与桌面 `tsc --noEmit`、`knip` 零提示、Vitest 287 个文件通过 / 9 个按条件跳过、3,305 项用例通过 / 15 项跳过、0 项失败、0 条 React/应用侧 stderr 警告、`git diff --check`）。产品验收与人工检查 [H-112](../../USER-ACTIONS.md#h-112)—[H-123](../../USER-ACTIONS.md#h-123) 保持 not-run（A-53）。

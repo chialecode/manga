@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Ban, Check, Pencil, Trash2 } from "lucide-react";
 import {
   DICTIONARY_CATEGORIES,
@@ -7,6 +7,7 @@ import {
   type DictionarySuggestionItem,
 } from "@manga/contracts";
 import type { MessageKey, Translator } from "@manga/i18n";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../../lib/api.ts";
 import { WorkPicker } from "../../components/work-picker.tsx";
 import { SettingsEmpty } from "./rows.tsx";
@@ -85,6 +86,11 @@ export function DictionaryEditor(props: {
   const [removed, setRemoved] = useState<Array<{ workId: string; title: string; terms: number }>>([]);
   const ready = scope === "global" || Boolean(workId);
   const { onWork } = props;
+  const termsGuard = useAsyncGuard();
+  const suggestionsGuard = useAsyncGuard();
+  const removedGuard = useAsyncGuard();
+  const callbacksRef = useRef({ onChanged: props.onChanged, onError: props.onError, onNotice: props.onNotice });
+  callbacksRef.current = { onChanged: props.onChanged, onError: props.onError, onNotice: props.onNotice };
 
   useEffect(() => {
     onWork?.(scope === "work" ? workId : null);
@@ -92,36 +98,40 @@ export function DictionaryEditor(props: {
 
   useEffect(() => {
     if (scope !== "work") return;
-    let live = true;
+    const token = removedGuard.next();
     void attempt<{ works: Array<{ workId: string; title: string; terms: number }> }>("dictionary.removedWorks", {}).then((result) => {
-      if (live && result.ok) setRemoved(asArray(result.value.works));
+      if (removedGuard.isCurrent(token) && result.ok) setRemoved(asArray(result.value.works));
     });
-    return () => { live = false; };
-  }, [scope, terms?.length]);
+  }, [scope, terms?.length, removedGuard]);
 
   const loadSuggestions = useCallback(async () => {
+    const token = suggestionsGuard.next();
     const result = await attempt<{ suggestions?: DictionarySuggestionItem[]; items?: DictionarySuggestionItem[] } | DictionarySuggestionItem[]>(
       "dictionary.suggestions.list",
       scope === "work" && workId ? { workId, status: "pending" } : { status: "pending" },
     );
+    if (!suggestionsGuard.isCurrent(token)) return;
     if (result.ok) {
       const list = Array.isArray(result.value) ? result.value : (result.value.suggestions ?? result.value.items);
       setSuggestions(asArray<DictionarySuggestionItem>(list));
     }
-  }, [scope, workId]);
+  }, [scope, workId, suggestionsGuard]);
 
   const load = useCallback(async () => {
     if (!ready) {
+      termsGuard.invalidate();
+      suggestionsGuard.invalidate();
       setTerms([]);
       setSuggestions([]);
       return;
     }
+    const token = termsGuard.next();
     const result = await attempt<{ terms: DictionaryTerm[] }>("dictionary.list", scope === "global" ? { scope } : { scope, workId: workId! });
+    if (!termsGuard.isCurrent(token)) return;
     if (result.ok) setTerms(asArray<DictionaryTerm>(result.value.terms));
-    else props.onError(result.error.message);
+    else callbacksRef.current.onError(result.error.message);
     void loadSuggestions();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, workId, ready, loadSuggestions]);
+  }, [scope, workId, ready, loadSuggestions, termsGuard, suggestionsGuard]);
 
   useEffect(() => {
     setTerms(null);
@@ -147,16 +157,21 @@ export function DictionaryEditor(props: {
   }, [load, workId]);
 
   async function run(commandId: string, input: Record<string, unknown>): Promise<boolean> {
+    if (busy) return false;
     setBusy(true);
-    const result = await attempt(commandId, input);
-    setBusy(false);
-    if (!result.ok) {
-      props.onError(result.error.message);
-      return false;
+    try {
+      const result = await attempt(commandId, input);
+      if (!termsGuard.isAlive()) return false;
+      if (!result.ok) {
+        callbacksRef.current.onError(result.error.message);
+        return false;
+      }
+      await load();
+      callbacksRef.current.onChanged?.();
+      return true;
+    } finally {
+      if (termsGuard.isAlive()) setBusy(false);
     }
-    await load();
-    props.onChanged?.();
-    return true;
   }
 
   async function add() {
@@ -250,13 +265,20 @@ export function DictionaryEditor(props: {
   }
 
   async function decideSuggestion(suggestionId: string, action: "accept" | "ignore") {
-    const result = await attempt("dictionary.suggestions.decide", { suggestionId, action });
-    if (!result.ok) {
-      props.onError(result.error.message);
-      return;
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await attempt("dictionary.suggestions.decide", { suggestionId, action });
+      if (!termsGuard.isAlive()) return;
+      if (!result.ok) {
+        callbacksRef.current.onError(result.error.message);
+        return;
+      }
+      await load();
+      callbacksRef.current.onChanged?.();
+    } finally {
+      if (termsGuard.isAlive()) setBusy(false);
     }
-    await load();
-    props.onChanged?.();
   }
 
   return (
@@ -281,8 +303,8 @@ export function DictionaryEditor(props: {
               <li key={item.id} className="msettings-row" data-testid={`dictionary-suggestion-${item.id}`}>
                 <span>{t("voice.dictionary.suggestionRow", { heard: item.heard, term: item.term })}</span>
                 <span className="msettings-actions">
-                  <button type="button" className="secondary-button" data-testid={`dictionary-suggestion-accept-${item.id}`} onClick={() => void decideSuggestion(item.id, "accept")}>{t("voice.dictionary.suggestionAccept")}</button>
-                  <button type="button" className="link-button" data-testid={`dictionary-suggestion-ignore-${item.id}`} onClick={() => void decideSuggestion(item.id, "ignore")}>{t("voice.dictionary.suggestionIgnore")}</button>
+                  <button type="button" className="secondary-button" data-testid={`dictionary-suggestion-accept-${item.id}`} disabled={busy} onClick={() => void decideSuggestion(item.id, "accept")}>{t("voice.dictionary.suggestionAccept")}</button>
+                  <button type="button" className="link-button" data-testid={`dictionary-suggestion-ignore-${item.id}`} disabled={busy} onClick={() => void decideSuggestion(item.id, "ignore")}>{t("voice.dictionary.suggestionIgnore")}</button>
                 </span>
               </li>
             ))}

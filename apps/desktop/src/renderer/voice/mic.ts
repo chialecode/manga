@@ -1,4 +1,5 @@
 import workletUrl from "./pcm-worklet.ts?worker&url";
+import { readAloud } from "./read-aloud.ts";
 import type { MicHandle } from "./recorder.ts";
 
 const SAMPLE_RATE = 16_000;
@@ -61,6 +62,8 @@ function errorName(error: unknown): string {
  * when unsupported. Applied `track.getSettings()` are recorded for the debug panel.
  */
 export async function openMicrophone(deviceId: string | null, options?: MicCaptureOptions): Promise<MicHandle> {
+  // Dictation and recording pause a reading aloud; it waits to be continued by hand (计划 4.7).
+  readAloud.pauseForCapture();
   const baseEcho = options?.echoCancellation ?? true;
   const wantedEcho: boolean | "all" = options?.systemLoopbackAec ? "all" : baseEcho;
   const noiseSuppression = options?.browserNoiseSuppression ?? false;
@@ -78,15 +81,16 @@ export async function openMicrophone(deviceId: string | null, options?: MicCaptu
   });
 
   let systemAecFallback = false;
-  const acquire = async (exact: string | null): Promise<MediaStream> => {
+  const acquireWithEchoFallback = async (exact: string | null): Promise<MediaStream> => {
     try {
       return await navigator.mediaDevices.getUserMedia(constraints(exact, wantedEcho));
     } catch (error) {
       const name = errorName(error);
       if (wantedEcho === "all" && (name === "OverconstrainedError" || name === "TypeError")) {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints(exact, baseEcho));
         systemAecFallback = true;
         options?.onSystemAecFallback?.();
-        return await navigator.mediaDevices.getUserMedia(constraints(exact, baseEcho));
+        return stream;
       }
       throw error;
     }
@@ -94,12 +98,24 @@ export async function openMicrophone(deviceId: string | null, options?: MicCaptu
 
   let stream: MediaStream;
   try {
-    stream = await acquire(deviceId);
+    stream = await navigator.mediaDevices.getUserMedia(constraints(deviceId, wantedEcho));
   } catch (error) {
-    // The chosen device is not there any more: use whatever the system offers rather than refusing to record.
     const name = errorName(error);
-    if (deviceId && (name === "OverconstrainedError" || name === "NotFoundError")) stream = await acquire(null);
-    else throw error;
+    if (deviceId && (name === "OverconstrainedError" || name === "NotFoundError")) {
+      // Fall back to system default device first so an unplugged device is not misreported as system AEC fallback.
+      try {
+        stream = await acquireWithEchoFallback(null);
+      } catch (defaultErr) {
+        // If even default failed with wantedEcho and deviceId actually existed, surface the error cleanly.
+        throw defaultErr;
+      }
+    } else if (wantedEcho === "all" && (name === "OverconstrainedError" || name === "TypeError")) {
+      stream = await navigator.mediaDevices.getUserMedia(constraints(deviceId, baseEcho));
+      systemAecFallback = true;
+      options?.onSystemAecFallback?.();
+    } else {
+      throw error;
+    }
   }
 
   const track = stream.getAudioTracks()[0];
@@ -124,20 +140,26 @@ export async function openMicrophone(deviceId: string | null, options?: MicCaptu
   });
 
   const context = new AudioContext({ sampleRate: SAMPLE_RATE });
+  let source: MediaStreamAudioSourceNode;
+  let node: AudioWorkletNode;
+  let silent: GainNode;
   try {
     await context.audioWorklet.addModule(workletUrl);
+    if (context.state === "suspended" && typeof context.resume === "function") {
+      await context.resume();
+    }
+    source = context.createMediaStreamSource(stream);
+    node = new AudioWorkletNode(context, "manga-pcm", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    silent = context.createGain();
+    silent.gain.value = 0;
+    source.connect(node);
+    node.connect(silent);
+    silent.connect(context.destination);
   } catch (error) {
     stream.getTracks().forEach((item) => item.stop());
     void context.close();
     throw error;
   }
-  const source = context.createMediaStreamSource(stream);
-  const node = new AudioWorkletNode(context, "manga-pcm", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
-  const silent = context.createGain();
-  silent.gain.value = 0;
-  source.connect(node);
-  node.connect(silent);
-  silent.connect(context.destination);
   let onChunk: (pcm: Int16Array, level: number) => void = () => undefined;
   let onEnded: () => void = () => undefined;
   let stopped = false;
@@ -152,7 +174,8 @@ export async function openMicrophone(deviceId: string | null, options?: MicCaptu
     stop() {
       if (stopped) return;
       stopped = true;
-      try { source.disconnect(); node.disconnect(); } catch { /* already torn down */ }
+      node.port.onmessage = null;
+      try { source.disconnect(); node.disconnect(); silent.disconnect(); } catch { /* already torn down */ }
       stream.getTracks().forEach((item) => item.stop());
       void context.close();
     },

@@ -18,6 +18,9 @@
 .research-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .research-pages li { display: flex; align-items: center; gap: 4px; border: 1px solid var(--color-border); border-radius: 10px; }
 .research-pages li.is-current { border-color: var(--color-accent); }
+/* A web result: title, then site and date, then the snippet and the actions, each on its own line. */
+.research-web-result { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; min-width: 0; }
+.research-web-result p { margin: 0; }
 .research-page-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 10px; text-align: left; border: 0; background: transparent; }
 .research-page-open span { overflow-wrap: anywhere; }
 .research-page-open small { color: var(--color-subtle); overflow-wrap: anywhere; }

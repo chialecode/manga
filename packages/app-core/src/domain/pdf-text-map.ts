@@ -22,32 +22,36 @@ export type CanonicalMap = {
   spans: CanonicalSpan[];
 };
 
-/** Map ordered text pieces onto one normalized string. An EOL is a single LF code point after that piece. */
+/** Map ordered text pieces onto one normalized string in O(N) for NFC/LF-stable pages. An EOL is a single LF code point after that piece. */
 export function mapCanonicalPieces(pieces: CanonicalPiece[]): CanonicalMap {
   const spans: CanonicalSpan[] = [];
+  const rawParts: string[] = [];
+  const normParts: string[] = [];
+  let cursor = 0;
+  for (const piece of pieces) {
+    const normPiece = normalizeText(piece.text).normalized;
+    const len = codePointLength(normPiece);
+    spans.push({ start: cursor, end: cursor + len, eol: piece.eol });
+    cursor += len + (piece.eol ? 1 : 0);
+    rawParts.push(piece.text, piece.eol ? "\n" : "");
+    normParts.push(normPiece, piece.eol ? "\n" : "");
+  }
+  const raw = rawParts.join("");
+  const joinedNorm = normParts.join("");
+  const normalized = normalizeText(raw).normalized;
+  if (joinedNorm === normalized) {
+    return { normalized, stable: true, spans };
+  }
+  // Rare cross-boundary NFC/CRLF merge (e.g. combining mark split across TextItems): mark unstable and compute exact cumulative spans.
+  const exactSpans: CanonicalSpan[] = [];
   let prefix = "";
-  let stable = true;
   for (const piece of pieces) {
     const start = codePointLength(normalizeText(prefix).normalized);
-    const withText = normalizeText(prefix + piece.text).normalized;
-    const end = codePointLength(withText);
-    const pieceLength = codePointLength(normalizeText(piece.text).normalized);
-    if (end - start !== pieceLength) stable = false;
-    if (piece.eol) {
-      const withEol = codePointLength(normalizeText(`${prefix}${piece.text}\n`).normalized);
-      if (withEol !== end + 1) stable = false;
-    }
-    spans.push({ start, end, eol: piece.eol });
+    const end = codePointLength(normalizeText(prefix + piece.text).normalized);
+    exactSpans.push({ start, end, eol: piece.eol });
     prefix += piece.text + (piece.eol ? "\n" : "");
   }
-  const normalized = normalizeText(prefix).normalized;
-  let cursor = 0;
-  for (const span of spans) {
-    if (span.start !== cursor || span.end < span.start) stable = false;
-    cursor = span.end + (span.eol ? 1 : 0);
-  }
-  if (cursor !== codePointLength(normalized)) stable = false;
-  return { normalized, stable, spans };
+  return { normalized, stable: false, spans: exactSpans };
 }
 
 function snapUtf16(text: string, offset: number): number {

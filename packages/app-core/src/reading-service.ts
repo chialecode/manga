@@ -44,6 +44,7 @@ export function writeShell(store: DrizzleStore, current: ShellPreference, patch:
   dock?: { visible?: boolean; width?: number };
   lastContext?: string | null;
   rail?: RailPatch;
+  window?: Partial<ShellPreference["window"]>;
   reading?: Partial<ShellPreference["reading"]>;
 }, envelope: CommandEnvelope): ShellPreference {
   const rail = patch.rail;
@@ -54,6 +55,7 @@ export function writeShell(store: DrizzleStore, current: ShellPreference, patch:
     dock: { ...current.dock, ...patch.dock },
     lastContext: patch.lastContext === undefined ? current.lastContext : patch.lastContext,
     rail: applyRailPatch(current.rail, rail),
+    window: { ...current.window, ...patch.window },
     reading: { ...current.reading, ...patch.reading },
   });
   const row = store.sqlite.prepare("SELECT revision FROM config WHERE key = 'shell.layout'").get() as { revision: number } | undefined;
@@ -650,6 +652,16 @@ function loadNote(store: DrizzleStore, objectId: string): { revision: number; ti
   return { revision: row.revision, title: row.title, payload: row.payload_json, schemaVersion: row.schemaVersion };
 }
 
+/** The resource a note belongs to (anchored resource first, else scope_json.resourceId, else legacy text_fragments). */
+export function noteResourceId(store: DrizzleStore, objectId: string): string | undefined {
+  const anchored = store.sqlite.prepare("SELECT a.resource_id AS rid FROM refs r JOIN anchors a ON a.id = r.to_id WHERE r.from_object_id = ? AND r.to_kind = 'anchor' ORDER BY r.id LIMIT 1").get(objectId) as { rid: string } | undefined;
+  if (anchored?.rid) return anchored.rid;
+  const scoped = store.sqlite.prepare("SELECT json_extract(scope_json, '$.resourceId') AS rid FROM content_objects WHERE id = ?").get(objectId) as { rid: string | null } | undefined;
+  if (typeof scoped?.rid === "string" && scoped.rid) return scoped.rid;
+  const frag = store.sqlite.prepare("SELECT resource_id AS rid FROM text_fragments WHERE object_id = ? AND resource_id IS NOT NULL LIMIT 1").get(objectId) as { rid: string } | undefined;
+  return frag?.rid;
+}
+
 /**
  * Keep `refs` in step with the note's blocks. A block that no longer exists must not keep a live
  * source link, and a block restored by a revision rollback must not lose the anchor it still names.
@@ -699,7 +711,7 @@ export function commitNoteOp(store: DrizzleStore, input: {
   const tags = input.tags
     ? [...new Set(input.tags.map((tag) => tag.trim()).filter(Boolean))].slice(0, NOTE_TAG_MAX)
     : document.tags ?? (existingTags?.tags_json ? JSON.parse(existingTags.tags_json) as string[] : []);
-  const previous = store.sqlite.prepare("SELECT resource_id FROM text_fragments WHERE object_id = ? AND resource_id IS NOT NULL LIMIT 1").get(input.objectId) as { resource_id: string } | undefined;
+  const resourceId = noteResourceId(store, input.objectId);
   const mutations: Mutation[] = [
     { sql: "UPDATE content_objects SET revision = ?, schema_version = 2, title = ?, payload_json = ?, tags_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, input.title ?? row.title, JSON.stringify(document), JSON.stringify(tags), JSON.stringify({ text: fullText.slice(0, 80) }), now, input.objectId] },
     { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [input.objectId, next, JSON.stringify(document), now] },
@@ -710,7 +722,7 @@ export function commitNoteOp(store: DrizzleStore, input: {
   for (const block of document.blocks) {
     mutations.push(...store.indexTextChunks({
       objectId: input.objectId,
-      resourceId: previous?.resource_id,
+      resourceId,
       partId: block.id,
       representationId: input.objectId,
       kind: "note",
@@ -770,12 +782,18 @@ export function listNotes(store: DrizzleStore, input: { text?: string; tag?: str
   }>;
   const refs = store.sqlite.prepare(`SELECT r.from_object_id AS objectId, r.from_block_id AS blockId, r.to_id AS anchorId, a.resource_id AS resourceId, a.resource_revision_id AS revisionId
     FROM refs r JOIN anchors a ON a.id = r.to_id WHERE r.to_kind = 'anchor'`).all() as Array<{ objectId: string; blockId: string | null; anchorId: string; resourceId: string; revisionId: string }>;
-  const needle = input.text?.trim() ? [...input.text.trim()] : undefined;
+  const refsByObject = new Map<string, typeof refs>();
+  for (const ref of refs) {
+    const list = refsByObject.get(ref.objectId);
+    if (list) list.push(ref);
+    else refsByObject.set(ref.objectId, [ref]);
+  }
+  const needle = input.text?.trim() || undefined;
   const results: Array<Record<string, unknown>> = [];
   for (const row of rows) {
     const tags = row.tags_json ? JSON.parse(row.tags_json) as string[] : [];
     if (input.tag && !tags.includes(input.tag)) continue;
-    const own = refs.filter((ref) => ref.objectId === row.id);
+    const own = refsByObject.get(row.id) ?? [];
     const resourceId = own[0]?.resourceId ?? (JSON.parse(row.scope_json) as { resourceId?: string | null }).resourceId ?? null;
     if (input.resourceId && resourceId !== input.resourceId) continue;
     const preview = (JSON.parse(row.preview_json) as { text?: string }).text ?? "";
@@ -783,7 +801,7 @@ export function listNotes(store: DrizzleStore, input: { text?: string; tag?: str
       // Search the full block text, not just the truncated preview, so a match deep in a note is found.
       const blocks = store.sqlite.prepare("SELECT payload_json FROM content_objects WHERE id = ?").get(row.id) as { payload_json: string } | undefined;
       const haystack = `${row.title}\n${tags.join(" ")}\n${notePlainText(coerceNoteDocument(JSON.parse(blocks?.payload_json ?? "{}")))}`;
-      if (!containsSequence(haystack, needle)) continue;
+      if (!haystack.includes(needle)) continue;
     }
     results.push({
       objectId: row.id,
@@ -799,19 +817,6 @@ export function listNotes(store: DrizzleStore, input: { text?: string; tag?: str
     if (results.length >= limit) break;
   }
   return results;
-}
-
-function containsSequence(haystack: string, needle: string[]): boolean {
-  const hay = [...haystack];
-  if (!needle.length) return true;
-  for (let i = 0; i <= hay.length - needle.length; i += 1) {
-    let ok = true;
-    for (let j = 0; j < needle.length; j += 1) {
-      if (hay[i + j] !== needle[j]) { ok = false; break; }
-    }
-    if (ok) return true;
-  }
-  return false;
 }
 
 export function noteHistory(store: DrizzleStore, objectId: string, limit = 50): Array<Record<string, unknown>> {
@@ -851,13 +856,27 @@ export function restoreNoteRevision(store: DrizzleStore, input: { objectId: stri
   const document = coerceNoteDocument(JSON.parse(previous.payload_json));
   const next = row.revision + 1;
   const now = new Date().toISOString();
+  const resourceId = noteResourceId(store, input.objectId);
+  const mutations: Mutation[] = [
+    { sql: "UPDATE content_objects SET revision = ?, schema_version = 2, payload_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, JSON.stringify(document), JSON.stringify({ text: notePlainText(document).slice(0, 80) }), now, input.objectId] },
+    { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [input.objectId, next, JSON.stringify(document), now] },
+    { sql: "DELETE FROM search_idx WHERE fragment_id IN (SELECT id FROM text_fragments WHERE object_id = ?)", params: [input.objectId] },
+    { sql: "DELETE FROM text_fragments WHERE object_id = ?", params: [input.objectId] },
+    // A restored block that still names an anchor must get its source link back.
+    ...noteRefMutations(store, input.objectId, document.blocks),
+  ];
+  for (const block of document.blocks) {
+    mutations.push(...store.indexTextChunks({
+      objectId: input.objectId,
+      resourceId,
+      partId: block.id,
+      representationId: input.objectId,
+      kind: "note",
+      text: block.text,
+    }));
+  }
   store.commit({
-    mutations: [
-      { sql: "UPDATE content_objects SET revision = ?, schema_version = 2, payload_json = ?, preview_json = ?, updated_at = ? WHERE id = ?", params: [next, JSON.stringify(document), JSON.stringify({ text: notePlainText(document).slice(0, 80) }), now, input.objectId] },
-      { sql: "INSERT INTO object_revisions(object_id, revision, payload_json, created_at) VALUES (?,?,?,?)", params: [input.objectId, next, JSON.stringify(document), now] },
-      // A restored block that still names an anchor must get its source link back.
-      ...noteRefMutations(store, input.objectId, document.blocks),
-    ],
+    mutations,
     events: [{ type: "note.restored", payload: { objectId: input.objectId, revision: next, restoredFrom: input.revision } }],
     idempotencyKey: input.idempotencyKey,
     commandId: input.commandId,

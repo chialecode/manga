@@ -66,8 +66,20 @@ export function ReaderSidePanel(props: {
           if (!drag.current) return;
           const next = clamp(drag.current.width + event.clientX - drag.current.x);
           drag.current = null;
+          try { event.currentTarget.releasePointerCapture?.(event.pointerId); } catch { /* not captured */ }
           setWidth(next);
           if (next !== props.width) props.onWidth(next);
+        }}
+        onPointerCancel={(event) => {
+          if (!drag.current) return;
+          drag.current = null;
+          try { event.currentTarget.releasePointerCapture?.(event.pointerId); } catch { /* not captured */ }
+          setWidth(props.width);
+        }}
+        onLostPointerCapture={() => {
+          if (!drag.current) return;
+          drag.current = null;
+          setWidth(props.width);
         }}
         onKeyDown={(event) => {
           const step = event.key === "ArrowLeft" ? -16 : event.key === "ArrowRight" ? 16 : 0;

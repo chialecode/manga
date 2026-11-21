@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { MangaError, createId } from "@manga/contracts";
 import { placeNoReplace, TargetTaken } from "../acquisition/files.ts";
+import { errorMessage } from "../shared/utils.ts";
 
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
@@ -22,9 +23,15 @@ export type ExportFileHooks = {
 
 /** A name that is safe on every file system: no separators or control characters, no reserved device names, not empty, not endless. */
 export function safeFileName(title: string, fallback: string): string {
-  // eslint-disable-next-line no-control-regex
-  const cleaned = title.replace(/[\u0000-\u001f<>:"/\\|?*]/g, " ").replace(/\s+/g, " ").replace(/[. ]+$/g, "").trim().slice(0, 80);
-  if (!cleaned || WINDOWS_RESERVED.test(cleaned)) return fallback;
+  const cleaned = title
+    .replace(/[\x00-\x1f<>:"/\\|?*]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80)
+    .replace(/[. ]+$/g, "")
+    .trim();
+  const stem = cleaned.split(".")[0]?.trim() ?? "";
+  if (!cleaned || WINDOWS_RESERVED.test(cleaned) || WINDOWS_RESERVED.test(stem)) return fallback;
   return cleaned;
 }
 
@@ -64,6 +71,6 @@ export function writeExportFile(dir: string, title: string, extension: string, d
   } catch (error) {
     if (temporaryCreated) try { fs.rmSync(temporary, { force: true }); } catch { /* nothing to clean */ }
     if (error instanceof MangaError) throw error;
-    throw new MangaError("LOCATION_UNAVAILABLE", `the export could not be written: ${error instanceof Error ? error.message : String(error)}`);
+    throw new MangaError("LOCATION_UNAVAILABLE", `the export could not be written: ${errorMessage(error)}`);
   }
 }

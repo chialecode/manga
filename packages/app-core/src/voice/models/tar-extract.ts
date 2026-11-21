@@ -30,8 +30,29 @@ const WINDOWS_RESERVED_NAMES = new Set([
   "LPT9",
 ]);
 
-const TAR_MODE_RE = /^[-d][rwxstST-]{9}\s/;
+const TAR_MODE_RE = /^[-d][rwxstST-]{9}[+.@]?\s/;
+const GNU_TAR_SIZE_RE = /^[-d][rwxstST-]{9}[+.@]?\s+\S+\/\S+\s+(\d+)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\b/;
+const BSD_TAR_SIZE_RE = /^[-d][rwxstST-]{9}[+.@]?\s+\d+\s+.+?\s+(\d+)\s+\S+\s+\S+\s+(?:\d{1,2}:\d{2}|\d{4})\s/;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
+
+function parseTarVerboseSize(line: string): number | null {
+  const gnu = GNU_TAR_SIZE_RE.exec(line);
+  if (gnu) {
+    const n = Number(gnu[1]);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  const bsd = BSD_TAR_SIZE_RE.exec(line);
+  if (bsd) {
+    const n = Number(bsd[1]);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  const cols = line.trim().split(/\s+/);
+  if (/^\d+$/.test(cols[4] ?? "")) {
+    const n = Number(cols[4]);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  return null;
+}
 const MAX_TAR_STDOUT_BYTES = 16 * 1024 * 1024;
 const DEFAULT_TAR_TIMEOUT_MS = 5 * 60_000;
 
@@ -326,9 +347,8 @@ export async function inspectTarArchive(
     if (line.includes(" -> ") || line.includes(" link to ")) {
       throw new MangaError("PATH_ESCAPE", "模型压缩包含链接指向条目，已拒绝解压");
     }
-    const cols = line.trim().split(/\s+/);
-    const declaredSize = Number(cols[4]);
-    if (!Number.isFinite(declaredSize) || declaredSize < 0) {
+    const declaredSize = parseTarVerboseSize(line);
+    if (declaredSize === null) {
       throw new MangaError("UNSUPPORTED_FORMAT", "无法解析模型压缩包条目大小");
     }
     totalUncompressedBytes += declaredSize;
@@ -488,7 +508,11 @@ export function atomicReplaceDirectory(stagedSourceDir: string, finalTargetDir: 
     }
     fs.renameSync(stagedSourceDir, finalTargetDir);
     if (movedOld) {
-      fs.rmSync(backupDir, { recursive: true, force: true });
+      try {
+        fs.rmSync(backupDir, { recursive: true, force: true });
+      } catch {
+        // Best-effort cleanup: finalTargetDir is already atomically swapped into place.
+      }
     }
   } catch (error) {
     if (movedOld && !fs.existsSync(finalTargetDir) && fs.existsSync(backupDir)) {
@@ -515,6 +539,7 @@ export type ExtractModelArchiveOptions = {
   tarExe?: string;
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  onBeforeReplace?: () => Promise<void> | void;
 };
 
 /**
@@ -575,6 +600,7 @@ export async function extractAndVerifyModelArchive(
       options.signal,
     );
 
+    await options.onBeforeReplace?.();
     if (extractedRoot === extractDir) {
       const innerMoveDir = path.join(
         options.stagingDir,

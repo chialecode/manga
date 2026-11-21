@@ -188,7 +188,7 @@ export async function runLocationsSmoke(input: Input & { samples: string | undef
       const imported = await call("library.importDocument", { title: "旧的漫画", kind: "comic", pathHandle: appService.registerPath("file", file) });
       if (imported.status !== "ok") problems.push(`the comic was not imported: ${JSON.stringify(imported.error ?? null).slice(0, 200)}`);
       const resourceId = imported.status === "ok" ? (imported.value as { resourceId: string }).resourceId : "";
-      const png = await view.webContents.capturePage({ x: 0, y: 0, width: 64, height: 48 });
+      const png = await view.webContents.capturePage({ x: 0, y: 0, width: 64, height: 48 }, { stayAwake: true });
       const shot = await call("screenshot.save", { resourceId, data: png.toPNG().toString("base64"), comic: { pageId: "p001.png", pageLabel: "第 1 页", pageIndex: 0 } });
       if (shot.status !== "ok") problems.push(`the screenshot was not saved: ${JSON.stringify(shot.error ?? null).slice(0, 200)}`);
       else locations.screenshot = appService.screenshots.pathOf((shot.value as { screenshot: { id: string } }).screenshot.id);

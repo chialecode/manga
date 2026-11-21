@@ -19,14 +19,14 @@ const FIELD_ORDER: FieldName[] = ["label", "baseUrl", "modelId", "secret", "time
 const MAX_TIMEOUT_SECONDS = 300;
 
 export const protocolName = (t: T, protocol: string) => (protocol === "openai-responses" ? t("models.protocol.openai-responses") : t("models.protocol.openai-chat-completions"));
-const PURPOSE_KEY = { text: "settings.purposeText", vision: "settings.purposeVision", transcription: "settings.purposeTranscription", embedding: "settings.purposeEmbedding" } as const;
+const PURPOSE_KEY = { text: "settings.purposeText", vision: "settings.purposeVision", transcription: "settings.purposeTranscription", embedding: "settings.purposeEmbedding", speech: "settings.purposeSpeech", search: "settings.purposeSearch" } as const;
 export const purposeName = (t: T, purpose: string) => t(PURPOSE_KEY[purpose as keyof typeof PURPOSE_KEY] ?? PURPOSE_KEY.text);
 export const runtimeName = (t: T, runtime: string) => (runtime === "pi" ? t("settings.runtimePi") : t("settings.runtimeNative"));
 
 /** What is wrong with the form, field by field, before anything is sent. A connection without a stored secret cannot be used, so one is asked for. */
 export function validateConnection(t: T, form: ConnectionForm, timeoutText: string, profileApplies: boolean, secretStored: boolean): Errors {
   const errors: Errors = {};
-  if (!secretStored && !form.secret.trim()) errors.secret = t("models.error.secretEmpty");
+  if (!secretStored && !form.provider && !form.secret.trim()) errors.secret = t("models.error.secretEmpty");
   if (form.label.trim().length > 120) errors.label = t("models.error.labelLong");
   const address = form.baseUrl.trim();
   if (!address) errors.baseUrl = t("models.error.baseUrlEmpty");
@@ -161,7 +161,7 @@ export function ConnectionDialog(props: {
     setPlain(null);
     try {
       if (profileApplies) await props.onProbe(savedId);
-      else setPlain(await props.onTest(savedId, form.purpose === "transcription" ? "transcription" : "embedding"));
+      else setPlain(await props.onTest(savedId, form.purpose));
     } finally { setTesting(false); }
   }
 
@@ -169,6 +169,9 @@ export function ConnectionDialog(props: {
   const field = (name: FieldName) => ({ "data-field": name, "aria-invalid": errors[name] ? true : undefined, "aria-describedby": errors[name] ? `field-error-${name}` : undefined });
   const problem = (name: FieldName) => (errors[name] ? <span className="field-error" id={`field-error-${name}`} role="alert" data-testid={`field-error-${name}`}>{errors[name]}</span> : null);
   const profile = form.profile;
+  /** A connection from a provider plugin: what comes with the provider is shown, not changed. */
+  const locked = Boolean(form.provider);
+  const declared = profile?.reasoningLevels.length ? profile.reasoningLevels : null;
 
   return (
     <>
@@ -192,6 +195,7 @@ export function ConnectionDialog(props: {
             {failure ? <p className="review-error" role="alert" data-testid="connection-dialog-error">{failure}</p> : null}
             <fieldset className="connection-group" data-testid="connection-group-connection">
               <legend>{t("models.dialog.groupConnection")}</legend>
+              {locked ? <p className="detail-muted" data-testid="connection-provider-locked">{t("provider.connectionLocked", { name: form.provider ?? "" })}</p> : null}
               <label className="msettings-field">
                 <span>{t("models.dialog.label")}</span>
                 <input {...field("label")} data-testid="connection-label" value={form.label} placeholder={t("models.dialog.labelPlaceholder")} onChange={(event) => change({ label: event.target.value }, ["label"])} />
@@ -199,30 +203,30 @@ export function ConnectionDialog(props: {
               </label>
               <label className="msettings-field">
                 <span>{t("settings.baseUrl")}</span>
-                <input {...field("baseUrl")} data-testid="connection-base-url" inputMode="url" autoComplete="off" value={form.baseUrl} placeholder="https://api.example.com/v1" onChange={(event) => change({ baseUrl: event.target.value }, ["baseUrl"])} />
+                <input {...field("baseUrl")} data-testid="connection-base-url" disabled={locked} inputMode="url" autoComplete="off" value={form.baseUrl} placeholder="https://api.example.com/v1" onChange={(event) => change({ baseUrl: event.target.value }, ["baseUrl"])} />
                 {problem("baseUrl")}
               </label>
               <label className="msettings-field">
                 <span>{t("models.dialog.modelId")}</span>
-                <input {...field("modelId")} data-testid="connection-model-id" autoComplete="off" value={form.modelId} onChange={(event) => change({ modelId: event.target.value }, ["modelId"])} />
+                <input {...field("modelId")} data-testid="connection-model-id" disabled={locked} autoComplete="off" value={form.modelId} onChange={(event) => change({ modelId: event.target.value }, ["modelId"])} />
                 {problem("modelId")}
               </label>
-              <label className="msettings-field">
+              {locked ? null : <label className="msettings-field">
                 <span>{t("settings.apiKey")}</span>
                 <input {...field("secret")} data-testid="connection-secret" type="password" autoComplete="off" value={form.secret} placeholder={secretKept ? t("models.dialog.secretKept") : ""} onChange={(event) => change({ secret: event.target.value }, ["secret"])} />
                 <span className="detail-muted" data-testid="connection-secret-hint">{secretKept ? t("models.dialog.secretHintEdit") : t("models.dialog.secretHintNew")}</span>
                 {problem("secret")}
-              </label>
+              </label>}
               <label className="msettings-field">
                 <span>{t("settings.protocol")}</span>
-                <select data-testid="connection-protocol" value={form.protocol} onChange={(event) => change({ protocol: event.target.value })}>
+                <select data-testid="connection-protocol" disabled={locked} value={form.protocol} onChange={(event) => change({ protocol: event.target.value })}>
                   <option value="openai-chat-completions">{protocolName(t, "openai-chat-completions")}</option>
                   <option value="openai-responses">{protocolName(t, "openai-responses")}</option>
                 </select>
               </label>
               <label className="msettings-field">
                 <span>{t("settings.purpose")}</span>
-                <select data-testid="connection-purpose" value={form.purpose} onChange={(event) => { change({ purpose: event.target.value }); setPlain(null); }}>
+                <select data-testid="connection-purpose" disabled={locked} value={form.purpose} onChange={(event) => { change({ purpose: event.target.value }); setPlain(null); }}>
                   {(["text", "vision", "transcription", "embedding"] as const).map((purpose) => <option key={purpose} value={purpose}>{purposeName(t, purpose)}</option>)}
                 </select>
                 <span className="detail-muted">{t(`models.purposeHint.${form.purpose}` as MessageKey)}</span>
@@ -314,12 +318,20 @@ export function ConnectionDialog(props: {
                   </span>
                 </div>
                 <p className="detail-muted">{t("models.capsHint")}</p>
-                <label className="msettings-field" title={t("models.effortHint")}>
+                <label className="msettings-field" title={declared ? t("models.effortDeclared") : t("models.effortHint")}>
                   <span>{t("models.effort")}</span>
-                  <select data-testid="profile-effort" aria-label={t("models.effort")} value={profile.reasoningEffort} disabled={!profile.capabilities.includes("reasoning")} onChange={(event) => changeProfile({ ...profile, reasoningEffort: event.target.value })}>
-                    <option value="">{t("models.effort.none")}</option>
-                    {REASONING_EFFORTS.map((item) => <option key={item} value={item}>{t(`models.effort.${item}` as MessageKey)}</option>)}
-                  </select>
+                  {declared ? (
+                    // The levels the provider declares, and turning thinking off (计划 4.2: DeepSeek shows 低、高、最高 and 关闭思考).
+                    <select data-testid="profile-effort" aria-label={t("models.effort")} value={profile.reasoningEffort} onChange={(event) => changeProfile({ ...profile, reasoningEffort: event.target.value })}>
+                      {declared.map((item) => <option key={item} value={item}>{t(`models.effort.${item}` as MessageKey)}</option>)}
+                      <option value="">{t("models.effort.off")}</option>
+                    </select>
+                  ) : (
+                    <select data-testid="profile-effort" aria-label={t("models.effort")} value={profile.reasoningEffort} disabled={!profile.capabilities.includes("reasoning")} onChange={(event) => changeProfile({ ...profile, reasoningEffort: event.target.value })}>
+                      <option value="">{t("models.effort.none")}</option>
+                      {REASONING_EFFORTS.filter((item) => item !== "max").map((item) => <option key={item} value={item}>{t(`models.effort.${item}` as MessageKey)}</option>)}
+                    </select>
+                  )}
                 </label>
               </fieldset>
             ) : null}

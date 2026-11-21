@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { renderCreativeTab } from "../../pages/projects/creative-tabs.tsx";
 import { ProjectPage, type ProjectTab } from "../../pages/projects/project-page.tsx";
 import { ProjectsPage } from "../../pages/projects/projects-page.tsx";
@@ -37,13 +37,15 @@ function ProjectHome({ env, projectId }: { env: TabEnv; projectId: string }) {
   const saved = str(env.model?.view.tab);
   const [tab, setTabState] = useState<ProjectTab>((saved || "materials") as ProjectTab);
   const [focus, setFocus] = useState<Focus | null>(null);
+  const envRef = useRef(env);
+  envRef.current = env;
   // A request to show a tab of the project, or one of its objects: from a material, an embed, a search hit.
   useEffect(() => {
-    const launch = env.takeLaunch();
+    const currentEnv = envRef.current;
+    const launch = currentEnv.takeLaunch();
     if (!launch) return;
-    if (typeof launch.tab === "string") { setTabState(launch.tab as ProjectTab); env.controller.setView(env.tabId, { tab: launch.tab }); }
+    if (typeof launch.tab === "string") { setTabState(launch.tab as ProjectTab); currentEnv.controller.setView(currentEnv.tabId, { tab: launch.tab }); }
     if (launch.focus) setFocus(launch.focus as Focus);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [env.launchN]);
   const onLoaded = useCallback((project: { id: string; name: string }) => env.controller.retitle(env.tabId, project.name), [env.controller, env.tabId]);
   return (

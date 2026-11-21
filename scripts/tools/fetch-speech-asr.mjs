@@ -26,10 +26,6 @@ function sha256File(file) {
   return hash.digest("hex");
 }
 
-export function speechAsrInstallDir() {
-  return installDir;
-}
-
 function verifyInstalled() {
   for (const [relative, expected] of Object.entries(lock.files)) {
     const file = path.join(installDir, relative);

@@ -4,6 +4,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tip
 import { ExternalLink, Trash2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
+import { formatClockMs } from "../lib/format.ts";
 import { Modal } from "../components/modal.tsx";
 import { ScreenshotThumb } from "../components/screenshot-thumb.tsx";
 
@@ -14,14 +15,6 @@ export type ScreenshotHost = { t: T; onOpen: (screenshotId: string) => void; onR
 export const ScreenshotHostContext = createContext<ScreenshotHost | null>(null);
 
 type Info = { title: string; mediaKind: "video" | "comic"; positionMs: number | null; pageLabel: string | null; subtitleText: string | null; width: number; height: number; available: boolean };
-
-const clock = (ms: number): string => {
-  const total = Math.floor(ms / 1000);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
-};
 
 /** One screenshot of a note: an atom saved as a block of type `screenshot` that holds only the id; the picture stays in the folder of its work. */
 export const MangaScreenshot = Node.create({
@@ -51,7 +44,7 @@ function ScreenshotNodeView(props: NodeViewProps) {
     return () => { live = false; };
   }, [screenshotId]);
   const gone = info === "gone" || (info !== null && !info.available);
-  const place = info && info !== "gone" ? (info.mediaKind === "video" && info.positionMs !== null ? clock(info.positionMs) : info.pageLabel ? `P${info.pageLabel}` : "") : "";
+  const place = info && info !== "gone" ? (info.mediaKind === "video" && info.positionMs !== null ? formatClockMs(info.positionMs) : info.pageLabel ? `P${info.pageLabel}` : "") : "";
   return (
     <NodeViewWrapper className="embed-block screenshot-block" data-testid={`block-${blockId}`} data-block-id={blockId} contentEditable={false}>
       <figure className="screenshot-card" data-testid={`screenshot-${blockId}`} data-state={gone ? "gone" : "valid"} data-selected={props.selected ? "true" : "false"}>

@@ -28,9 +28,10 @@ export function DictationPill(props: {
   onDecideSuggestion: (suggestionId: string, action: "accept" | "ignore") => void;
   onDismiss: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expandedForId, setExpandedForId] = useState<string | null>(null);
   const { t, pill } = props;
   if (!pill) return null;
+  const expanded = expandedForId === pill.id;
 
   const hasRevertOrTerms = pill.canRevert || pill.replacements.length > 0;
   if (!hasRevertOrTerms && !pill.suggestion) return null;
@@ -75,7 +76,7 @@ export function DictationPill(props: {
               data-testid="dictation-pill-terms-toggle"
               aria-expanded={expanded}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => setExpanded((current) => !current)}
+              onClick={() => setExpandedForId((current) => (current === pill.id ? null : pill.id))}
             >
               {t("dictation.pill.replacements", { count: pill.replacements.length })}
               {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}

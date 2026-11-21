@@ -27,6 +27,7 @@ const SCROLLER = `${DOCK}?.querySelector('[data-testid="chat-log"]')?.firstEleme
 
 /** A stand-in Chat Completions service that writes its answer a piece at a time for `ms`, so a reply grows in the window while it streams. */
 async function streamingModel(ms: number): Promise<{ url: string; close: () => Promise<void> }> {
+  const timers = new Set<ReturnType<typeof setTimeout>>();
   const server = http.createServer((req, res) => {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
@@ -35,7 +36,19 @@ async function streamingModel(ms: number): Promise<{ url: string; close: () => P
       res.writeHead(200, { "content-type": "text/event-stream" });
       const started = Date.now();
       let n = 0;
+      let activeTimer: ReturnType<typeof setTimeout> | null = null;
+      const stop = () => {
+        if (activeTimer) {
+          clearTimeout(activeTimer);
+          timers.delete(activeTimer);
+          activeTimer = null;
+        }
+      };
+      req.on("close", stop);
+      res.on("close", stop);
       const tick = () => {
+        activeTimer = null;
+        if (res.destroyed || res.writableEnded) return;
         if (Date.now() - started >= ms) {
           res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: n } })}\n\n`);
           res.end("data: [DONE]\n\n");
@@ -43,14 +56,26 @@ async function streamingModel(ms: number): Promise<{ url: string; close: () => P
         }
         n += 1;
         res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: `第${n}句回答，内容在一点一点变长。\n\n` } }] })}\n\n`);
-        setTimeout(tick, 120);
+        activeTimer = setTimeout(() => {
+          if (activeTimer) timers.delete(activeTimer);
+          tick();
+        }, 120);
+        timers.add(activeTimer);
       };
       tick();
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as { port: number }).port;
-  return { url: `http://127.0.0.1:${port}/v1`, close: () => new Promise((resolve) => server.close(() => resolve())) };
+  return {
+    url: `http://127.0.0.1:${port}/v1`,
+    close: () => new Promise((resolve) => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      server.closeAllConnections();
+      server.close(() => resolve());
+    }),
+  };
 }
 
 /** The message at the top of the right pane's viewport and how far its top is from the viewport's top, by the page's layout. */

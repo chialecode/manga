@@ -32,8 +32,10 @@ export function DownloadsPage(props: {
   const [busy, setBusy] = useState<string | null>(null);
   const alive = useRef(true);
   const known = useRef<DownloadList | null>(null);
-  const changed = useRef(props.onLibraryChanged);
-  changed.current = props.onLibraryChanged;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const callbacksRef = useRef({ onError: props.onError, onNotice: props.onNotice, onLibraryChanged: props.onLibraryChanged, t });
+  callbacksRef.current = { onError: props.onError, onNotice: props.onNotice, onLibraryChanged: props.onLibraryChanged, t };
   useEffect(() => () => { alive.current = false; }, []);
 
   const failure = useCallback((error: CommandError): string => {
@@ -63,20 +65,19 @@ export function DownloadsPage(props: {
   const load = useCallback(async () => {
     const [downloads, library] = await Promise.all([attempt<DownloadList>("acquisition.list", {}), attempt<{ paths: LibraryPathOption[] }>("library.paths.list", {})]);
     if (!alive.current) return;
-    if (!downloads.ok) { props.onError(failure(downloads.error)); return; }
+    if (!downloads.ok) { callbacksRef.current.onError(failure(downloads.error)); return; }
     put({ engine: downloads.value.engine, jobs: asArray<DownloadJob>(downloads.value.jobs) });
     if (library.ok) setPaths(asArray<LibraryPathOption>(library.value.paths));
     for (const job of asArray<DownloadJob>(downloads.value.jobs)) if (job.state === "choosing") void refreshJob(job.id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [failure, put, refreshJob]);
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     const off = window.manga.onNotice?.((notice) => {
-      const payload = notice.payload as { jobId?: string; job?: DownloadJob; removed?: boolean; name?: string };
+      const payload = notice.payload as { jobId?: string; job?: DownloadJob; removed?: boolean; name?: string; reason?: string };
       if (notice.topic === "plugin.changed") { void load(); return; }
-      if (notice.topic === "acquisition.done") { props.onNotice(t("downloads.notice.done", { name: payload.name ?? "" })); changed.current?.(); return; }
-      if (notice.topic === "acquisition.seedStopped") { props.onNotice(t((payload as { reason?: string }).reason === "error" ? "downloads.notice.seedFailed" : "downloads.notice.seedStopped", { name: "" })); void load(); return; }
+      if (notice.topic === "acquisition.done") { callbacksRef.current.onNotice(callbacksRef.current.t("downloads.notice.done", { name: payload.name ?? "" })); callbacksRef.current.onLibraryChanged?.(); return; }
+      if (notice.topic === "acquisition.seedStopped") { callbacksRef.current.onNotice(callbacksRef.current.t(payload.reason === "error" ? "downloads.notice.seedFailed" : "downloads.notice.seedStopped", { name: payload.name ?? "" })); void load(); return; }
       if (notice.topic !== "acquisition.changed" || !payload.jobId) return;
       if (payload.removed) { put((current) => (current ? { ...current, jobs: current.jobs.filter((job) => job.id !== payload.jobId) } : current)); return; }
       const job = payload.job;
@@ -84,18 +85,17 @@ export function DownloadsPage(props: {
       const before = known.current?.jobs.find((item) => item.id === job.id);
       put((current) => (current ? { ...current, jobs: mergeJob(current.jobs, job) } : current));
       // The files of a job are fetched when the page first needs them: when it has to choose, finishes, or stops with something to show.
-      const needsFiles = job.state === "choosing" || job.state === "done" || job.state === "failed" || open.has(job.id);
+      const needsFiles = job.state === "choosing" || job.state === "done" || job.state === "failed" || openRef.current.has(job.id);
       if (needsFiles && (before?.state !== job.state || !before?.entries)) void refreshJob(job.id);
     });
     return () => { off?.(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, open]);
+  }, [load, put, refreshJob]);
 
   /** The default download folder as a library path of one medium (A-69): made on first use, found again after. Returns its id. */
   async function ensureDefault(mediaKind: string): Promise<string | null> {
     const result = await attempt<{ path: LibraryPathOption; created: boolean }>("library.paths.ensureDownloads", { mediaKind });
     if (!alive.current) return null;
-    if (!result.ok) { props.onError(failure(result.error)); return null; }
+    if (!result.ok) { callbacksRef.current.onError(failure(result.error)); return null; }
     const library = await attempt<{ paths: LibraryPathOption[] }>("library.paths.list", {});
     if (alive.current && library.ok) setPaths(asArray<LibraryPathOption>(library.value.paths));
     return result.value.path.id;
@@ -107,14 +107,21 @@ export function DownloadsPage(props: {
     const result = await attempt<R>(commandId, { jobId, ...input });
     if (!alive.current) return { ok: false };
     setBusy(null);
-    if (!result.ok) { props.onError(failure(result.error)); void refreshJob(jobId); return { ok: false }; }
+    if (!result.ok) { callbacksRef.current.onError(failure(result.error)); void refreshJob(jobId); return { ok: false }; }
     const value = result.value as { job?: DownloadJob };
     if (value.job) put((current) => (current ? { ...current, jobs: mergeJob(current.jobs, value.job!) } : current));
     return { ok: true, value: result.value };
   }
 
   const toggle = (jobId: string) => {
-    setOpen((current) => { const next = new Set(current); if (next.has(jobId)) next.delete(jobId); else { next.add(jobId); void refreshJob(jobId); } return next; });
+    const opening = !openRef.current.has(jobId);
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+    if (opening) void refreshJob(jobId);
   };
 
   const jobs = list?.jobs ?? [];

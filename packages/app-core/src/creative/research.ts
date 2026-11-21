@@ -3,6 +3,7 @@ import { MangaError, createId, EXCERPT_TEXT_LIMIT, RESEARCH_SCOPES, type Researc
 import { matchQuery, ngramsFor, type DrizzleStore } from "@manga/storage-drizzle";
 import type { NetworkBroker } from "../net/broker.ts";
 import { listNotes } from "../reading-service.ts";
+import { escapeLike } from "../shared/utils.ts";
 import { extractPage } from "./extract.ts";
 
 type PageRow = { id: string; url: string; title: string; fetched_at: string; content_hash: string; body_text: string; version: number; previous_id: string | null; created_at: string };
@@ -31,7 +32,35 @@ const SNIPPET_BEFORE = 40;
 const SNIPPET_AFTER = 120;
 
 const hashOf = (text: string) => createHash("sha256").update(text).digest("hex");
-const like = (needle: string) => `%${needle.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+const like = (needle: string) => `%${escapeLike(needle)}%`;
+
+/** Finds `needle` inside `haystack` treating any run of whitespace as a single space, in O(N) time without dynamic RegExp backtracking. */
+function findNormalizedWhitespace(haystack: string, needle: string): { start: number; length: number } | null {
+  const query = needle.trim().replace(/\s+/g, " ");
+  if (!query) return null;
+  let norm = "";
+  const offsets: number[] = [];
+  let inSpace = false;
+  for (let i = 0; i < haystack.length; i += 1) {
+    const ch = haystack[i]!;
+    if (/\s/.test(ch)) {
+      if (norm.length > 0 && !inSpace) {
+        norm += " ";
+        offsets.push(i);
+        inSpace = true;
+      }
+    } else {
+      norm += ch;
+      offsets.push(i);
+      inSpace = false;
+    }
+  }
+  const hit = norm.indexOf(query);
+  if (hit < 0) return null;
+  const start = offsets[hit]!;
+  const endChar = offsets[hit + query.length - 1]!;
+  return { start, length: endChar - start + 1 };
+}
 
 /** The address a page is kept under: the one the person gave, without the part after `#`, which only picks a place inside the page. */
 export function pageKey(raw: string): string {
@@ -103,7 +132,7 @@ export class ResearchService {
       this.store.sqlite.prepare("INSERT INTO excerpt_pages(id, url, title, fetched_at, content_hash, body_text, version, previous_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)")
         .run(id, url, title, now, hash, text, (last?.version ?? 0) + 1, last?.id ?? null, now);
       this.indexPage(id, text);
-      this.prune(url);
+      this.prune(url, id);
     })();
     return { page: this.summary(this.page(id)), created: !last, changed: Boolean(last), previousId: last?.id ?? null };
   }
@@ -126,11 +155,20 @@ export class ResearchService {
     return id;
   }
 
-  /** The oldest versions of an address go when there are too many, except any an excerpt still points into. */
-  private prune(url: string): void {
-    const rows = this.store.sqlite.prepare("SELECT id FROM excerpt_pages WHERE url = ? AND id NOT IN (SELECT page_id FROM excerpts) ORDER BY version DESC").all(url) as Array<{ id: string }>;
+  /** The oldest versions of an address go when there are too many, except the newest version and any an excerpt still points into. */
+  private prune(url: string, keepId?: string): void {
+    const latestId = this.latest(url)?.id;
     const total = (this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM excerpt_pages WHERE url = ?").get(url) as { n: number }).n;
-    for (const old of rows.slice(Math.max(0, rows.length - Math.max(0, total - MAX_VERSIONS_PER_URL)))) this.dropPage(old.id);
+    const excess = total - MAX_VERSIONS_PER_URL;
+    if (excess <= 0) return;
+    const rows = this.store.sqlite.prepare("SELECT id FROM excerpt_pages WHERE url = ? AND id NOT IN (SELECT page_id FROM excerpts) ORDER BY version ASC, id ASC").all(url) as Array<{ id: string }>;
+    let dropped = 0;
+    for (const old of rows) {
+      if (dropped >= excess) break;
+      if (old.id === keepId || old.id === latestId) continue;
+      this.dropPage(old.id);
+      dropped += 1;
+    }
   }
 
   private dropPage(pageId: string): void {
@@ -202,7 +240,9 @@ export class ResearchService {
   create(input: { pageId: string; start: number; end: number; title?: string; note?: string; projectId?: string }): ExcerptView {
     const page = this.page(input.pageId);
     if (input.projectId && !this.store.sqlite.prepare("SELECT 1 FROM projects WHERE id = ?").get(input.projectId)) throw new MangaError("NOT_FOUND", "the project does not exist");
-    if (input.end > page.body_text.length) throw new MangaError("VALIDATION_ERROR", "the excerpt reaches past the end of the page", { details: { reason: "range" } });
+    if (!Number.isInteger(input.start) || !Number.isInteger(input.end) || input.start < 0 || input.start >= input.end || input.end > page.body_text.length) {
+      throw new MangaError("VALIDATION_ERROR", "the excerpt range is outside the page", { details: { reason: "range" } });
+    }
     const text = page.body_text.slice(input.start, input.end);
     if (!text.trim()) throw new MangaError("VALIDATION_ERROR", "the excerpt is empty", { details: { reason: "empty" } });
     if (text.length > EXCERPT_TEXT_LIMIT) throw new MangaError("VALIDATION_ERROR", "the excerpt is too long", { details: { reason: "tooLong", limit: EXCERPT_TEXT_LIMIT } });
@@ -265,10 +305,9 @@ export class ResearchService {
     let at = newest.body_text.indexOf(row.text);
     let length = row.text.length;
     if (at < 0) {
-      // The page may have moved its line breaks; look for the same words with any whitespace between them.
-      const words = row.text.trim().split(/\s+/).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-      const found = words.length ? new RegExp(words.join("\\s+")).exec(newest.body_text) : null;
-      if (found) { at = found.index; length = found[0].length; }
+      // The page may have moved its line breaks; look for the same words with any whitespace between them in linear time.
+      const found = findNormalizedWhitespace(newest.body_text, row.text);
+      if (found) { at = found.start; length = found.length; }
     }
     if (at < 0) return { status: "missing" };
     const made = this.create({ pageId: newest.id, start: at, end: at + length, title: row.title, note: row.note, ...(row.project_id ? { projectId: row.project_id } : {}) });
@@ -307,7 +346,8 @@ export class ResearchService {
         seen.add(key);
         add({
           kind: "work", id: resource.workId ?? resource.id, title: resource.workTitle ?? resource.title, snippet: hit.kind === "title" ? resource.title : snippetAround(hit.text, text), at: null,
-          inProject: this.inProject(resource.workId ? "work" : "resource", resource.workId ?? resource.id, input.projectId), resourceId: resource.id, mediaKind: resource.mediaKind, ...(resource.workId ? { workId: resource.workId } : {}),
+          inProject: (resource.workId ? this.inProject("work", resource.workId, input.projectId) : false) || this.inProject("resource", resource.id, input.projectId),
+          resourceId: resource.id, mediaKind: resource.mediaKind, ...(resource.workId ? { workId: resource.workId } : {}),
         });
         if (seen.size >= limit) break;
       }

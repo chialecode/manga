@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { MangaError } from "@manga/contracts";
+import { sha256File } from "../shared/utils.ts";
+
+const HASH_CHUNK_BYTES = 1024 * 1024;
 
 export function comparablePath(file: string): string {
   const resolved = path.resolve(file);
@@ -20,7 +23,7 @@ export function pathsOverlap(left: string, right: string): boolean {
 export function ownedFileFingerprint(file: string): string {
   const stat = fs.lstatSync(file, { bigint: true });
   if (!stat.isFile() || stat.isSymbolicLink()) throw new MangaError("VALIDATION_ERROR", "owned output is no longer a regular file");
-  return JSON.stringify({ dev: String(stat.dev), ino: String(stat.ino), birthtimeNs: String(stat.birthtimeNs), hash: createHash("sha256").update(fs.readFileSync(file)).digest("hex") });
+  return JSON.stringify({ dev: String(stat.dev), ino: String(stat.ino), birthtimeNs: String(stat.birthtimeNs), hash: sha256File(file) });
 }
 
 /** Host-local files that must never travel with a partition copy. */
@@ -58,6 +61,7 @@ export function copyOwnedFile(sourceFile: string, targetFile: string): string {
 
 export function fingerprintTree(dir: string): { bytes: number; hash: string } {
   const hash = createHash("sha256");
+  const buffer = Buffer.allocUnsafe(HASH_CHUNK_BYTES);
   let bytes = 0;
   const visit = (relative: string) => {
     const file = path.join(dir, relative);
@@ -68,7 +72,16 @@ export function fingerprintTree(dir: string): { bytes: number; hash: string } {
       }
     } else {
       hash.update(relative.replaceAll("\\", "/"));
-      hash.update(fs.readFileSync(file));
+      const fd = fs.openSync(file, "r");
+      try {
+        for (;;) {
+          const read = fs.readSync(fd, buffer, 0, buffer.length, null);
+          if (read === 0) break;
+          hash.update(buffer.subarray(0, read));
+        }
+      } finally {
+        fs.closeSync(fd);
+      }
       bytes += stat.size;
     }
   };

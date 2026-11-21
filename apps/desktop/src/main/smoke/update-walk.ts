@@ -19,7 +19,7 @@ import {
   writeBuildInfo,
 } from "@manga/app-core";
 import { createConfiguredNsisUpdater, invokeNsisVerifySignature } from "../updater.ts";
-import { DRAWN, clickTestId, ensureSidebar, pressChord, waitFrames, waitUntil } from "./driver.ts";
+import { DRAWN, clickTestId, ensureSidebar, waitFrames, waitUntil } from "./driver.ts";
 import { caller, capturePage, js, leaveSettings, openSettingsPage, toRail, type FlowResult } from "./common.ts";
 
 export type UpdateObservation = { name: string; status: "passed" | "failed"; detail: unknown };
@@ -79,7 +79,10 @@ async function startLoopbackReleaseServer(): Promise<LoopbackReleaseServer> {
     baseUrl: `http://127.0.0.1:${address.port}`,
     files,
     requests,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () => new Promise<void>((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    }),
   };
 }
 
@@ -143,7 +146,8 @@ async function switchBuildState(
  * - `update-rejected`
  * - `update-offline`
  * Also captures the 5 required sanitized screenshots (`ui-update-banner-light.png`, `ui-update-banner-dark.png`,
- * `ui-settings-update.png`, `ui-settings-update-dark.png`, `ui-about-dialog.png`).
+ * `ui-settings-update.png`, `ui-settings-update-dark.png`, `ui-update-version.png`). The about box is gone with the menus (A-136): what it said is
+ * on Settings › Update, and `version-about` reads it there.
  */
 export async function runUpdateSmoke(input: {
   appService: MangaProductApp;
@@ -215,63 +219,47 @@ export async function runUpdateSmoke(input: {
         });
         await leaveSettings(view);
 
-        const helpOpenedRel = await clickTestId(view, "menu-help", 3000);
-        const hasMenuCheckRel = helpOpenedRel && await waitUntil(view, `Boolean(document.querySelector('[data-testid="menu-help-check-update"]'))`, 3000);
-        const aboutOpenedRel = helpOpenedRel && await clickTestId(view, "menu-help-about", 3000)
-          && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="about-dialog"]'))`, 4000);
-
-        const relFacts = await js<{
-          name: string;
-          version: string;
-          channel: string;
-          commit: string;
-          builtAt: string;
-          license: string;
-          devHint: boolean;
-          checkBtn: boolean;
-        }>(view, `({
-          name: document.querySelector('[data-testid="about-name"]')?.textContent ?? "",
-          version: document.querySelector('[data-testid="about-version"]')?.textContent ?? "",
-          channel: document.querySelector('[data-testid="about-channel"]')?.textContent ?? "",
-          commit: document.querySelector('[data-testid="about-commit"]')?.textContent ?? "",
-          builtAt: document.querySelector('[data-testid="about-built-at"]')?.textContent ?? "",
-          license: document.querySelector('[data-testid="about-license"]')?.textContent ?? "",
-          devHint: Boolean(document.querySelector('[data-testid="about-dev-hint"]')),
-          checkBtn: Boolean(document.querySelector('[data-testid="about-check-update"]')),
+        // No help menu and no about box in the title bar (A-136); the version, the channel, the commit, the build and the license are on Settings › Update.
+        const noMenus = await js<string[]>(view, `["menu-help", "menubar", "about-dialog"].filter((id) => document.querySelector('[data-testid="' + id + '"]'))`);
+        const readFacts = () => js<{ version: string; channel: string; commit: string; builtAt: string; license: string; devMode: string; checkBtn: boolean }>(view, `({
+          version: document.querySelector('[data-testid="update-current-version"]')?.textContent ?? "",
+          channel: document.querySelector('[data-testid="update-current-channel"]')?.textContent ?? "",
+          commit: document.querySelector('[data-testid="update-current-commit"]')?.textContent ?? "",
+          builtAt: document.querySelector('[data-testid="update-built-at"]')?.textContent ?? "",
+          license: document.querySelector('[data-testid="update-license"]')?.textContent ?? "",
+          devMode: document.querySelector('[data-testid="update-dev-mode"]')?.textContent ?? "",
+          checkBtn: Boolean(document.querySelector('[data-testid="update-check-now"]')),
         })`);
-
-        // Capture required screenshot `ui-about-dialog.png`
-        await captureUpdateShot(view, evidenceDir, "ui-about-dialog.png", "about-dialog");
-
-        // Spy on navigator.clipboard.writeText and click "复制版本信息"
-        await js(view, `(() => {
-          window.__copiedAboutText = "";
-          Object.defineProperty(navigator, "clipboard", {
-            configurable: true,
-            value: { writeText: async (text) => { window.__copiedAboutText = String(text); } },
-          });
-          return true;
-        })()`);
-        await clickTestId(view, "about-copy", 3000);
-        await waitUntil(view, `typeof window.__copiedAboutText === "string" && window.__copiedAboutText.length > 0`, 3000);
-        const relCopied = await js<string>(view, `window.__copiedAboutText ?? ""`);
+        const copyFacts = async () => {
+          await js(view, `(() => {
+            window.__copiedAboutText = "";
+            Object.defineProperty(navigator, "clipboard", {
+              configurable: true,
+              value: { writeText: async (text) => { window.__copiedAboutText = String(text); } },
+            });
+            return true;
+          })()`);
+          await clickTestId(view, "update-copy", 3000);
+          await waitUntil(view, `typeof window.__copiedAboutText === "string" && window.__copiedAboutText.length > 0`, 3000);
+          return js<string>(view, `window.__copiedAboutText ?? ""`);
+        };
+        const openedRel = await openSettingsPage(view, "update");
+        const relFacts = await readFacts();
+        await captureUpdateShot(view, evidenceDir, "ui-update-version.png", "settings-page-update");
+        const relCopied = await copyFacts();
         const relHasLocalPath = /(^|[^A-Za-z])[A-Za-z]:[\\/]/.test(relCopied);
+        await leaveSettings(view);
 
-        detail.release = { helpOpenedRel, hasMenuCheckRel, aboutOpenedRel, ...relFacts, copiedLength: relCopied.length, hasLocalPath: relHasLocalPath };
-        if (!aboutOpenedRel) problems.push("release About dialog did not open");
-        if (!hasMenuCheckRel) problems.push("release Help menu missing check-update item");
-        if (relFacts.name !== "MANGA" || relFacts.version !== "0.1.1" || relFacts.channel !== "正式版" || relFacts.license !== "Apache-2.0") {
-          problems.push(`release About facts mismatch: ${JSON.stringify(relFacts)}`);
+        detail.release = { noMenus, openedRel, ...relFacts, copiedLength: relCopied.length, hasLocalPath: relHasLocalPath };
+        if (noMenus.length) problems.push(`the title bar still has ${noMenus.join(", ")}`);
+        if (!openedRel) problems.push("release Settings › Update did not open");
+        if (relFacts.version !== "0.1.1" || relFacts.channel !== "正式版" || relFacts.commit !== commit || relFacts.license !== "Apache-2.0" || !relFacts.builtAt || relFacts.builtAt === "—") {
+          problems.push(`release version facts mismatch: ${JSON.stringify(relFacts)}`);
         }
-        if (relFacts.devHint || !relFacts.checkBtn) {
-          problems.push("release About dialog should show check-update button and no dev hint");
-        }
-        if (!relCopied.includes("MANGA 0.1.1") || !relCopied.includes("正式版") || !relCopied.includes(commit) || relHasLocalPath) {
+        if (relFacts.devMode || !relFacts.checkBtn) problems.push("release Settings › Update should offer the check and no dev-mode notice");
+        if (!relCopied.includes("MANGA 0.1.1") || !relCopied.includes("正式版") || !relCopied.includes(commit) || !relCopied.includes("Apache-2.0") || relHasLocalPath) {
           problems.push("release copied version text invalid or contained local path");
         }
-
-        await pressChord(view, "Escape", []);
-        await waitUntil(view, `!document.querySelector('[data-testid="about-dialog"]')`, 3000);
 
         // 1B. Development mode (`0.1.2-dev.202611081530`, `channel: "development"`)
         const devVersionStr = "0.1.2-dev.202611081530";
@@ -284,68 +272,21 @@ export async function runUpdateSmoke(input: {
         });
         await leaveSettings(view);
 
-        const helpOpenedDev = await clickTestId(view, "menu-help", 3000);
-        await waitUntil(view, `Boolean(document.querySelector('[data-testid="menu-help-about"]'))`, 3000);
-        const hasMenuCheckDev = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="menu-help-check-update"]'))`);
-        const aboutOpenedDev = helpOpenedDev && await clickTestId(view, "menu-help-about", 3000)
-          && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="about-dialog"]'))`, 4000);
-
-        const devFacts = await js<{
-          version: string;
-          channel: string;
-          devHint: string;
-          checkBtn: boolean;
-        }>(view, `({
-          version: document.querySelector('[data-testid="about-version"]')?.textContent ?? "",
-          channel: document.querySelector('[data-testid="about-channel"]')?.textContent ?? "",
-          devHint: document.querySelector('[data-testid="about-dev-hint"]')?.textContent ?? "",
-          checkBtn: Boolean(document.querySelector('[data-testid="about-check-update"]')),
-        })`);
-
-        await js(view, `(() => {
-          window.__copiedAboutText = "";
-          Object.defineProperty(navigator, "clipboard", {
-            configurable: true,
-            value: { writeText: async (text) => { window.__copiedAboutText = String(text); } },
-          });
-          return true;
-        })()`);
-        await clickTestId(view, "about-copy", 3000);
-        await waitUntil(view, `typeof window.__copiedAboutText === "string" && window.__copiedAboutText.length > 0`, 3000);
-        const devCopied = await js<string>(view, `window.__copiedAboutText ?? ""`);
-        const devHasLocalPath = /(^|[^A-Za-z])[A-Za-z]:[\\/]/.test(devCopied);
-
-        await pressChord(view, "Escape", []);
-        await waitUntil(view, `!document.querySelector('[data-testid="about-dialog"]')`, 3000);
-
-        // Also check "设置 › 更新" in development mode
         const openedDevUpdatePage = await openSettingsPage(view, "update");
-        const devUpdatePageFacts = await js<{ devModeText: string; hasCheckBtn: boolean }>(view, `({
-          devModeText: document.querySelector('[data-testid="update-dev-mode"]')?.textContent ?? "",
-          hasCheckBtn: Boolean(document.querySelector('[data-testid="update-check-now"]')),
-        })`);
+        const devFacts = await readFacts();
+        const devCopied = await copyFacts();
+        const devHasLocalPath = /(^|[^A-Za-z])[A-Za-z]:[\\/]/.test(devCopied);
         await leaveSettings(view);
 
-        detail.development = {
-          hasMenuCheckDev,
-          aboutOpenedDev,
-          ...devFacts,
-          copiedLength: devCopied.length,
-          hasLocalPath: devHasLocalPath,
-          updatePage: { openedDevUpdatePage, ...devUpdatePageFacts },
-        };
-        if (hasMenuCheckDev) problems.push("development Help menu should not show check-update item");
-        if (!aboutOpenedDev || devFacts.version !== devVersionStr || devFacts.channel !== "开发版") {
-          problems.push(`development About facts mismatch: ${JSON.stringify(devFacts)}`);
+        detail.development = { openedDevUpdatePage, ...devFacts, copiedLength: devCopied.length, hasLocalPath: devHasLocalPath };
+        if (!openedDevUpdatePage || devFacts.version !== devVersionStr || devFacts.channel !== "开发版") {
+          problems.push(`development version facts mismatch: ${JSON.stringify(devFacts)}`);
         }
-        if (devFacts.devHint !== "开发版：由本机构建自动更新" || devFacts.checkBtn) {
-          problems.push("development About dialog missing devHint or showed check-update button");
+        if (devFacts.devMode !== "开发版：由本机构建自动更新" || devFacts.checkBtn) {
+          problems.push("development Settings › Update page did not show dev-mode notice or showed check button");
         }
         if (!devCopied.includes(devVersionStr) || !devCopied.includes("开发版") || devHasLocalPath) {
           problems.push("development copied version text invalid or contained local path");
-        }
-        if (!openedDevUpdatePage || devUpdatePageFacts.devModeText !== "开发版：由本机构建自动更新" || devUpdatePageFacts.hasCheckBtn) {
-          problems.push("development Settings › Update page did not show dev-mode notice or showed check button");
         }
       } catch (error) {
         problems.push(`version-about stopped: ${error instanceof Error ? error.message : String(error)}`);

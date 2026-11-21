@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { Menu } from "../components/menu.tsx";
+import { useAsyncGuard } from "../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../lib/api.ts";
 import type { WorkMediaKind } from "../lib/works.ts";
 import { KIND_ICON } from "./work-card.tsx";
@@ -13,6 +14,9 @@ export type UnassignedItem = { resourceId: string; kind: string; title: string; 
 
 const FIRST = 24;
 const asKind = (kind: string): WorkMediaKind => (kind === "comic" || kind === "video" ? kind : "novel");
+const isUnassignedItem = (item: unknown): item is UnassignedItem => (
+  Boolean(item) && typeof item === "object" && typeof (item as { resourceId?: unknown }).resourceId === "string" && (item as { resourceId: string }).resourceId.length > 0
+);
 
 /**
  * The resources that are in no work (LIB-02, A-87): the ones whose entry was deleted, and the ones taken out of a work, in a library path (A-113).
@@ -38,27 +42,48 @@ export function UnassignedGroup(props: {
   const [all, setAll] = useState(false);
   const [moving, setMoving] = useState<UnassignedItem | null>(null);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<{ items: UnassignedItem[]; total: number }>("works.unassigned", { ...(props.kind ? { kind: props.kind } : {}), ...(props.query ? { query: props.query } : {}), limit: 200 });
-    if (result.ok) setState({ items: asArray<UnassignedItem>(result.value.items), total: typeof result.value.total === "number" ? result.value.total : asArray(result.value.items).length });
-  }, [props.kind, props.query]);
+    if (!guard.isCurrent(token) || !result.ok) return;
+    const raw = asArray<unknown>(result.value.items);
+    const items = raw.filter(isUnassignedItem);
+    const total = items.length === raw.length && typeof result.value.total === "number" ? result.value.total : items.length;
+    setState({ items, total });
+  }, [props.kind, props.query, guard]);
   useEffect(() => { void load(); }, [load, props.refreshKey]);
 
   async function match(item: UnassignedItem) {
-    const result = await attempt<{ workId: string }>("works.moveResource", { resourceId: item.resourceId, newWorkTitle: item.title });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onChanged();
-    props.onMatch(result.value.workId, asKind(item.kind));
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await attempt<{ workId: string }>("works.moveResource", { resourceId: item.resourceId, newWorkTitle: item.title });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      props.onChanged();
+      props.onMatch(result.value.workId, asKind(item.kind));
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
 
   async function reidentify(resourceIds: string[]) {
-    const result = await attempt<{ results: unknown[] }>("works.reidentify", { resourceIds });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    setPicked(new Set());
-    props.onNotice(t("unassigned.reidentified", { count: asArray(result.value.results).length }));
-    props.onChanged();
-    void load();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await attempt<{ results: unknown[] }>("works.reidentify", { resourceIds });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      setPicked(new Set());
+      props.onNotice(t("unassigned.reidentified", { count: asArray(result.value.results).length }));
+      props.onChanged();
+      void load();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
   const toggle = (resourceId: string) => setPicked((current) => {
     const next = new Set(current);

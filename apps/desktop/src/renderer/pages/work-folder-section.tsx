@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderOpen, Pencil, Upload } from "lucide-react";
 import type { Translator } from "@manga/i18n";
+import { useAsyncGuard } from "../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../lib/api.ts";
+import { formatBytes } from "../lib/format.ts";
 import { ScreenshotThumb } from "../components/screenshot-thumb.tsx";
 
 type T = Translator["t"];
@@ -10,8 +12,6 @@ type Folder = { id: string; title: string; relDir: string; mediaKind: string; ow
 type FileRow = { id: string; kind: string; fileName: string; subDir: string; bytes: number; createdAt: string; refKind: string | null; refId: string | null };
 type Group = { folder: Folder; files: FileRow[] };
 const SHOWN = 12;
-
-const sizeText = (bytes: number): string => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 /**
  * Where the work's own content is kept (DATA-05, A-88): the folder of its entry, or one folder per file under 未分类, and what each holds. The
@@ -33,11 +33,14 @@ export function WorkFolderSection(props: {
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [all, setAll] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<{ groups: Group[] }>("workFolders.forWork", { workId: props.workId });
+    if (!guard.isCurrent(token)) return;
     setGroups(result.ok ? asArray<Group>(result.value.groups).map((group) => ({ folder: group.folder, files: asArray<FileRow>(group.files) })) : []);
-  }, [props.workId]);
+  }, [props.workId, guard]);
   useEffect(() => { setGroups(null); setAll(null); void load(); }, [load, props.version]);
 
   async function open(folder: Folder) {
@@ -45,22 +48,34 @@ export function WorkFolderSection(props: {
     if (result.status === "error") props.onError(result.error?.message ?? "");
   }
   async function rename(folder: Folder) {
-    const result = await attempt<{ folder: Folder }>("workFolders.rename", { folderId: folder.id });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onNotice(t("workfolder.renamed", { name: result.value.folder.relDir.split("/").pop() ?? result.value.folder.title }));
-    await load();
-    props.onChanged();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await attempt<{ folder: Folder }>("workFolders.rename", { folderId: folder.id });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      props.onNotice(t("workfolder.renamed", { name: result.value.folder.relDir.split("/").pop() ?? result.value.folder.title }));
+      await load();
+      props.onChanged();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
   async function importAudio() {
+    if (busy) return;
     const handle = await window.manga.chooseAudio();
-    if (!handle) return;
+    if (!handle || !guard.isAlive()) return;
     setBusy(true);
-    const result = await attempt("library.transcribeAudio", { pathHandle: handle, workId: props.workId });
-    setBusy(false);
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onNotice(t("workfolder.importDone"));
-    await load();
-    props.onChanged();
+    try {
+      const result = await attempt("library.transcribeAudio", { pathHandle: handle, workId: props.workId });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { props.onError(result.error.message); return; }
+      props.onNotice(t("workfolder.importDone"));
+      await load();
+      props.onChanged();
+    } finally {
+      if (guard.isAlive()) setBusy(false);
+    }
   }
 
   return (
@@ -80,7 +95,7 @@ export function WorkFolderSection(props: {
             <div className="work-folder-actions">
               <p className="detail-muted" data-testid="work-folder-path">{folder.relDir} · {t("workfolder.files", { count: files.length })}</p>
               <button type="button" className="secondary-button" data-testid="work-folder-open" onClick={() => void open(folder)}><FolderOpen size={14} aria-hidden="true" /> {t("workfolder.open")}</button>
-              {folder.ownerKind !== "resource" ? <button type="button" className="secondary-button" data-testid="work-folder-rename" onClick={() => void rename(folder)}><Pencil size={14} aria-hidden="true" /> {t("workfolder.rename")}</button> : null}
+              {folder.ownerKind !== "resource" ? <button type="button" className="secondary-button" data-testid="work-folder-rename" disabled={busy} onClick={() => void rename(folder)}><Pencil size={14} aria-hidden="true" /> {t("workfolder.rename")}</button> : null}
             </div>
             {files.length === 0 ? <p className="detail-muted" data-testid="work-folder-empty">{t("workfolder.empty")}</p> : (
               <ul className="folder-files" data-testid="work-folder-files">
@@ -89,7 +104,7 @@ export function WorkFolderSection(props: {
                     {file.kind === "screenshot" && file.refId ? <ScreenshotThumb screenshotId={file.refId} alt={t("screenshot.thumb")} /> : null}
                     <span className="chip">{t(`workfolder.kind.${file.kind}` as never)}</span>
                     <span className="folder-file-name">{file.fileName}</span>
-                    <span className="detail-muted">{sizeText(file.bytes)} · {props.formatDate(file.createdAt)}</span>
+                    <span className="detail-muted">{formatBytes(file.bytes)} · {props.formatDate(file.createdAt)}</span>
                   </li>
                 ))}
               </ul>

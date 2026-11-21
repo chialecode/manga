@@ -36,12 +36,25 @@ export type StreamVoice = {
   resourceId: string | null;
 };
 export type StreamUser = { kind: "user"; id: string; at: string; runId: string; text: string; quickTask: { id: string | null; name: string } | null };
-export type StreamAgent = { kind: "agent"; id: string; at: string; runId: string; status: string; text: string; error: { code: string; message: string } | null; proposals?: ProposalCard[] };
+export type StreamAgent = {
+  kind: "agent"; id: string; at: string; runId: string; status: string; text: string; error: { code: string; message: string } | null; proposals?: ProposalCard[];
+  /** The model's thinking, shown folded above the answer (计划 4.3); never in notes, materials or project packages. */
+  reasoning?: string;
+  /** The searches the service ran and the pages it read (计划 4.4), and the sources the answer cites. */
+  search?: AgentSearchStep[];
+  citations?: Array<{ url: string; title: string; start?: number; end?: number }>;
+  /** "联网搜索" needed thinking, so this run thought at the low level. */
+  thinkingRaised?: boolean;
+};
+export type AgentSearchStep =
+  | { kind: "search"; callId: string; queries: string[] }
+  | { kind: "open"; callId: string; url: string }
+  | { kind: "done"; callId: string; sources: Array<{ url: string; title: string; site?: string; publishedAt?: string; snippet?: string }>; page?: { url: string; title: string; site?: string } };
 export type StreamItem = StreamNote | StreamVoice | StreamUser | StreamAgent;
 
 /** The slice of the capture service the message stream reads; kept narrow so the stream stays a plain query. */
 export type VoiceSessionLike = {
-  list(input: { resourceId?: string; workId?: string; limit?: number }): {
+  list(input: { resourceId?: string; workId?: string; before?: string; limit?: number }): {
     sessions: Array<{
       id: string; stage: string; audioState: string; playable: boolean; durationMs: number; createdAt: string; resourceId: string | null;
       segments: { total: number; done: number; failed: number; pending: number };

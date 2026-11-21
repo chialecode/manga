@@ -34,6 +34,7 @@ type Plan = {
 };
 
 const POLL_MS = 1000;
+const MEDIA_ERR_DECODE = 3;
 
 /**
  * Chooses how a video plays and keeps that choice honest: the plan comes from the file and what this machine decodes,
@@ -106,9 +107,11 @@ export function useVideoSource(target: { resourceId: string; revisionId: string 
   const createCopy = useCallback(async (force = false) => {
     const current = targetRef.current;
     if (!current) return;
-    const mine = epoch.current;
+    const mine = ++epoch.current;
+    const currentState = stateRef.current;
     const hardware = await detectHardwareHevc();
-    const reason = state.phase === "needs_copy" ? state.reason : "unsupported_video";
+    if (epoch.current !== mine) return;
+    const reason = currentState.phase === "needs_copy" ? currentState.reason : "unsupported_video";
     const result = await attempt<{ copy: CopySummary }>("video.playCopy", {
       action: "create", resourceId: current.resourceId, revisionId: current.revisionId, hardwareHevc: hardware,
       ...(audioRef.current !== undefined ? { audioStreamIndex: audioRef.current } : {}),
@@ -121,19 +124,23 @@ export function useVideoSource(target: { resourceId: string; revisionId: string 
     }
     setState(result.value.copy.state === "ready" ? { phase: "loading" } : { phase: "building", copy: result.value.copy });
     if (result.value.copy.state === "ready") await openHandle(mine, "play_copy", result.value.copy.id);
-  }, [openHandle, state]);
+  }, [openHandle]);
 
   const cancelCopy = useCallback(async () => {
     const current = targetRef.current;
     if (!current) return;
+    const mine = ++epoch.current;
     await attempt("video.playCopy", { action: "cancel", resourceId: current.resourceId, revisionId: current.revisionId });
+    if (epoch.current !== mine) return;
     await resolve();
   }, [resolve]);
 
   const removeCopy = useCallback(async () => {
     const current = targetRef.current;
     if (!current) return;
+    const mine = ++epoch.current;
     await attempt("video.playCopy", { action: "remove", resourceId: current.resourceId, revisionId: current.revisionId });
+    if (epoch.current !== mine) return;
     await resolve();
   }, [resolve]);
 
@@ -161,17 +168,19 @@ export function useVideoSource(target: { resourceId: string; revisionId: string 
 
   /** The media element reported an error. A decode failure on the original moves the file to the copy path. */
   const reportMediaError = useCallback((code: number | null, message: string) => {
-    const current = state;
+    const current = stateRef.current;
     if (current.phase !== "ready") return;
-    decodeFailures.current += 1;
-    if (current.via === "original" && decodeFailures.current === 1) {
-      // The browser said it could decode this and then could not: stop trusting that and plan again.
-      markHardwareHevcFailed();
-      void resolve();
-      return;
+    if (current.via === "original" && code === MEDIA_ERR_DECODE) {
+      decodeFailures.current += 1;
+      if (decodeFailures.current === 1) {
+        // The browser said it could decode this and then could not: stop trusting hardware HEVC and plan again.
+        markHardwareHevcFailed();
+        void resolve();
+        return;
+      }
     }
     setState({ phase: "failed", message, code: code === null ? undefined : `MEDIA_ERR_${code}`, canForceCopy: current.via === "original" });
-  }, [state, resolve]);
+  }, [resolve]);
 
   return { state, resolve, createCopy, cancelCopy, removeCopy, reportMediaError };
 }

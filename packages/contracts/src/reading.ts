@@ -41,6 +41,13 @@ export const ReadingPreferenceSchema = z.object({
   panelPx: z.number().int().min(READER_PANEL_WIDTH.min).max(READER_PANEL_WIDTH.max).default(READER_PANEL_WIDTH.initial),
 }).strict();
 
+/** What the window does (A-136): its close button puts it into the tray, or closes MANGA. */
+export const WindowPreferenceSchema = z.object({
+  closeToTray: z.boolean(),
+}).strict();
+
+export type WindowPreference = z.infer<typeof WindowPreferenceSchema>;
+
 /**
  * The shell preference (A-94). One workspace, so one set of widths: the sidebar (projects and conversations) and the dock (the conversation on the right).
  * `lastContext` is where the person was working when the application was left: a project id, or null for "最近".
@@ -53,6 +60,8 @@ export const ShellPreferenceSchema = z.object({
   lastContext: z.string().min(1).max(256).nullable(),
   /** The icon rail and the settings page last visited (A-99, A-101). Version 2 was not released before these were added, so a saved record without them reads with their defaults. */
   rail: RailPreferenceSchema.default(() => structuredClone(DEFAULT_RAIL_PREFERENCE)),
+  /** The window's close button (A-136); a record saved before it reads with the default, into the tray. */
+  window: WindowPreferenceSchema.default(() => ({ closeToTray: true })),
   reading: ReadingPreferenceSchema,
 }).strict();
 
@@ -82,6 +91,7 @@ export function shellFromV1(old: ShellPreferenceV1, lastContext: string | null):
     dock: { visible: columns.right.visible, width: Math.min(DOCK_WIDTH.max, Math.max(DOCK_WIDTH.min, columns.right.width)) },
     lastContext,
     rail: structuredClone(DEFAULT_RAIL_PREFERENCE),
+    window: { closeToTray: true },
     reading: old.reading,
   };
 }
@@ -172,6 +182,7 @@ export const DEFAULT_SHELL_PREFERENCE: ShellPreference = {
   dock: { visible: true, width: DOCK_WIDTH.initial },
   lastContext: null,
   rail: structuredClone(DEFAULT_RAIL_PREFERENCE),
+  window: { closeToTray: true },
   reading: { measurePx: 680, fontSizePx: 18, fontFamily: "sans", lineHeight: 1.7, marginPx: 24, paragraphSpacingPx: 0, theme: "white", pageMode: "single", pageRatio: "book", flow: "paged", panelPx: READER_PANEL_WIDTH.initial },
 };
 
@@ -205,7 +216,7 @@ export const PARSER_CANDIDATES = [
     accepted: false,
   },
   {
-    id: "pdfjs-dist@6.4.299",
+    id: "pdfjs-dist@6.5.438",
     format: "pdf",
     license: "Apache-2.0",
     offline: true,

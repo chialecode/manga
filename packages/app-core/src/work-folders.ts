@@ -548,8 +548,7 @@ export class WorkFolders {
     if (empty(dir)) {
       fs.rmSync(dir, { recursive: true, force: true });
       this.store.sqlite.prepare("DELETE FROM work_folders WHERE id = ?").run(folderId);
-      const medium = path.dirname(dir);
-      if (medium !== this.root && fs.existsSync(medium) && !fs.readdirSync(medium).length) fs.rmdirSync(medium);
+      this.removeEmptyParent(dir);
     }
   }
 
@@ -590,10 +589,12 @@ export class WorkFolders {
     }
   }
 
-  /** The folder of a medium that a folder left is removed when it is empty. */
+  /** The folder of a medium that a folder left is removed when it is empty (best-effort on locked Windows dirs). */
   private removeEmptyParent(dir: string): void {
-    const parent = path.dirname(dir);
-    if (path.resolve(parent) !== path.resolve(this.root) && fs.existsSync(parent) && !fs.readdirSync(parent).length) fs.rmdirSync(parent);
+    try {
+      const parent = path.dirname(dir);
+      if (path.resolve(parent) !== path.resolve(this.root) && fs.existsSync(parent) && !fs.readdirSync(parent).length) fs.rmdirSync(parent);
+    } catch { /* best-effort empty parent cleanup */ }
   }
 
   /** Writes a journal row for a file to remove later and returns its id; `resumeMoves` finishes it if the process stops first. */

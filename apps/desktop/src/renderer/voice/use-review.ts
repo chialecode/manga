@@ -51,11 +51,12 @@ export function useRecordings(scope: { resourceId?: string; workId?: string }, e
   const [status, setStatus] = useState<"loading" | "ready" | "error" | "off">("loading");
   const [error, setError] = useState("");
   const token = useRef(0);
-  const key = `${scope.resourceId ?? ""}:${scope.workId ?? ""}`;
+  const resourceId = scope.resourceId;
+  const workId = scope.workId;
   const reload = useCallback(async () => {
     if (!enabled) { setStatus("off"); return; }
     const mine = ++token.current;
-    const result = await attempt<{ sessions: SessionSummary[] }>("capture.list", { ...(scope.resourceId ? { resourceId: scope.resourceId } : {}), ...(scope.workId ? { workId: scope.workId } : {}), limit: 50 });
+    const result = await attempt<{ sessions: SessionSummary[] }>("capture.list", { ...(resourceId ? { resourceId } : {}), ...(workId ? { workId } : {}), limit: 50 });
     if (mine !== token.current) return;
     if (!result.ok) {
       setStatus(result.error.code === "CAPABILITY_UNAVAILABLE" || result.error.code === "COMMAND_UNAVAILABLE" || result.error.code === "UNKNOWN_COMMAND" ? "off" : "error");
@@ -64,8 +65,7 @@ export function useRecordings(scope: { resourceId?: string; workId?: string }, e
     }
     setSessions(asArray<SessionSummary>(result.value.sessions));
     setStatus("ready");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, enabled]);
+  }, [resourceId, workId, enabled]);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
     const off = window.manga.onNotice?.((notice) => { if (notice.topic === "capture.changed") void reload(); });
@@ -115,5 +115,5 @@ export function useReview(sessionId: string) {
     }
   }, [reload]);
 
-  return { review, status, error, busy, reload, act };
+  return { review, status, error, busy, reload, act, reportError: setError };
 }

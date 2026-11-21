@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink, Search } from "lucide-react";
-import type { Translator } from "@manga/i18n";
+import { classifySearchInput } from "@manga/contracts/bangumi-ref";
+import type { MessageKey, Translator } from "@manga/i18n";
 import { Modal } from "../components/modal.tsx";
+import { useAsyncGuard } from "../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../lib/api.ts";
 import type { WorkDetail } from "../lib/works.ts";
-import { classifySearchInput, REF_FAILURE_MESSAGES } from "../../../../../packages/app-core/src/metadata/ref.ts";
 
 type T = Translator["t"];
 
@@ -71,8 +72,16 @@ type Resolved = {
   alreadyLinked: boolean;
 };
 
-const PROVIDER_NAME: Record<string, string> = { bangumi: "Bangumi", "local-file": "local-file" };
-export const providerName = (id: string): string => PROVIDER_NAME[id] ?? id;
+const COVER_SOURCES = new Set(["file", "bangumi", "user"]);
+const coverSourceLabel = (t: T, source: string): string => (
+  COVER_SOURCES.has(source) ? t(`detail.coverSource.${source}` as MessageKey) : t("detail.coverSource.other")
+);
+
+export const providerName = (id: string, t?: T): string => {
+  if (id === "bangumi") return "Bangumi";
+  if (id === "local-file") return t ? t("match.provider.localFile") : id;
+  return id;
+};
 
 const show = (value: Value | undefined): string => (Array.isArray(value) ? value.join("、") : value === null || value === undefined ? "" : String(value));
 
@@ -120,10 +129,9 @@ export function MatchDialog(props: {
   const [busy, setBusy] = useState(false);
   const [candidateId, setCandidateId] = useState<string | undefined>();
   const composing = useRef(false);
-  const alive = useRef(true);
-  const token = useRef(0);
-
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onError: props.onError, onApplied: props.onApplied });
+  callbacksRef.current = { onError: props.onError, onApplied: props.onApplied };
 
   // Candidates kept from an earlier "find missing" run are shown before the user searches.
   useEffect(() => {
@@ -137,30 +145,31 @@ export function MatchDialog(props: {
     return () => { cancelled = true; };
   }, [detail.id, linked, props.refresh]);
 
-  async function showPreview(providerId: string, externalId: string, candidate?: string) {
+  const showPreview = useCallback(async (providerId: string, externalId: string, candidate?: string) => {
     setPreviewing(true);
     setCandidateId(candidate);
     const result = await attempt<Preview>("metadata.preview", { workId: detail.id, providerId: providerId as "bangumi", externalId });
-    if (!alive.current) return;
+    if (!guard.isAlive()) return;
     setPreviewing(false);
-    if (!result.ok) { props.onError(refFailureText(t, result.error)); return; }
+    if (!result.ok) { callbacksRef.current.onError(refFailureText(t, result.error)); return; }
     setPreview(result.value);
     // Fields the user already owns, and ones the source left out, start as kept: the dialog never offers to overwrite them silently.
     setKeep(new Set(result.value.fields.filter((field) => field.keepByDefault).map((field) => field.key)));
     setKeepCover(result.value.cover.protected);
-  }
+  }, [detail.id, guard, t]);
 
+  const startedRefresh = useRef(false);
   useEffect(() => {
-    if (props.refresh && linked) void showPreview(linked.providerId, linked.externalId);
-    // The preview for a refresh is requested once, when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (startedRefresh.current || !props.refresh || !linked) return;
+    startedRefresh.current = true;
+    void showPreview(linked.providerId, linked.externalId);
+  }, [props.refresh, linked, showPreview]);
 
   /** The entry with this number, looked up directly. A failure here never hides the name search that runs beside it. */
   async function lookupEntry(text: string, externalId: string, mine: number) {
     setDirect({ state: "looking", externalId });
     const result = await attempt<Resolved>("metadata.resolveRef", { ref: text, workId: detail.id });
-    if (!alive.current || mine !== token.current) return;
+    if (!guard.isCurrent(mine)) return;
     setDirect(result.ok ? { state: "found", externalId, value: result.value } : { state: "failed", externalId, error: refFailureText(t, result.error) });
   }
 
@@ -169,7 +178,7 @@ export function MatchDialog(props: {
     setFailure(null);
     setSearchedName(text);
     const result = await attempt<Outcome>("metadata.search", { workId: detail.id, query: text, kind: detail.mediaKind === "novel" || detail.mediaKind === "comic" || detail.mediaKind === "video" ? detail.mediaKind : undefined, mode, limit: 12 });
-    if (!alive.current || mine !== token.current) return;
+    if (!guard.isCurrent(mine)) return;
     if (!result.ok) {
       // A failure is not an empty result: the user is told which, and the cached data stays on screen.
       setState("failed");
@@ -185,13 +194,13 @@ export function MatchDialog(props: {
     if (composing.current) return;
     const intent = classifySearchInput(query);
     if (intent.type === "empty") return;
-    const mine = ++token.current;
+    const mine = guard.next();
     setDirect(null);
     if (intent.type === "refused") {
       setSearchedName(null);
       setState("idle");
       setOutcome(null);
-      setDirect({ state: "failed", externalId: "", error: REF_FAILURE_MESSAGES[intent.reason] });
+      setDirect({ state: "failed", externalId: "", error: t(`match.ref.reason.${intent.reason}` as MessageKey) });
       return;
     }
     if (intent.type === "entry") {
@@ -206,16 +215,16 @@ export function MatchDialog(props: {
   }
 
   async function apply() {
-    if (!preview) return;
+    if (!preview || busy) return;
     setBusy(true);
     const common = { workId: detail.id, providerId: preview.providerId as "bangumi", keepFields: [...keep] as never[], ...(keepCover ? { keepCover: true } : {}) };
     const result = preview.mode === "refresh"
       ? await attempt("metadata.refresh", common)
       : await attempt("metadata.link", { ...common, externalId: preview.externalId, ...(candidateId ? { candidateId } : {}) });
-    if (!alive.current) return;
+    if (!guard.isAlive()) return;
     setBusy(false);
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onApplied(preview.mode === "refresh" ? t("match.refreshed") : t("match.linkedDone", { title: preview.entry.title ?? preview.externalId }));
+    if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
+    callbacksRef.current.onApplied(preview.mode === "refresh" ? t("match.refreshed") : t("match.linkedDone", { title: preview.entry.title ?? preview.externalId }));
   }
 
   const toggle = (key: string, checked: boolean) => setKeep((current) => { const next = new Set(current); if (checked) next.add(key); else next.delete(key); return next; });
@@ -225,7 +234,7 @@ export function MatchDialog(props: {
       {preview ? (
         <section className="match-preview" data-testid="match-preview" data-mode={preview.mode}>
           <p><strong>{preview.entry.title ?? preview.externalId}</strong>{preview.entry.titleOriginal && preview.entry.titleOriginal !== preview.entry.title ? <span className="detail-muted"> · {preview.entry.titleOriginal}</span> : null}</p>
-          <p className="detail-muted">{t("match.preview.intro", { provider: providerName(preview.providerId) })}</p>
+          <p className="detail-muted">{t("match.preview.intro", { provider: providerName(preview.providerId, t) })}</p>
           {preview.kindMismatch ? <p role="status" className="match-warn" data-testid="match-kind-mismatch">{t("match.kindMismatch")}</p> : null}
           {preview.linkedElsewhere ? <p role="status" className="match-warn" data-testid="match-elsewhere">{t("match.confirmElsewhere")}</p> : null}
           {preview.replacesLink ? <p role="status" className="match-warn" data-testid="match-replaces">{t("match.replacesLink")}</p> : null}
@@ -249,7 +258,7 @@ export function MatchDialog(props: {
                 ))}
                 <tr data-testid="match-field-cover" data-protected={preview.cover.protected ? "true" : "false"}>
                   <th scope="row">{t("card.cover")}</th>
-                  <td>{preview.cover.current ? t("match.cover.current", { source: preview.cover.current.source }) : t("detail.fieldEmpty")}{preview.cover.protected ? <span className="chip chip-muted">{t("match.protected")}</span> : null}</td>
+                  <td>{preview.cover.current ? t("match.cover.current", { source: coverSourceLabel(t, preview.cover.current.source) }) : t("detail.fieldEmpty")}{preview.cover.protected ? <span className="chip chip-muted">{t("match.protected")}</span> : null}</td>
                   <td>{preview.cover.incoming ? <img className="match-cover" src={preview.cover.incoming.url} alt="" width={48} /> : <span className="detail-muted">{t("match.remoteMissing")}</span>}</td>
                   <td>
                     <label className="rp-check">
@@ -293,7 +302,7 @@ export function MatchDialog(props: {
                 <span className="chip chip-muted" data-testid="match-direct-tag">{t("match.direct.tag", { id: direct.value.externalId })}</span>
                 <strong>{direct.value.entry.title}</strong>
                 {direct.value.entry.titleOriginal && direct.value.entry.titleOriginal !== direct.value.entry.title ? <span className="detail-muted"> · {direct.value.entry.titleOriginal}</span> : null}
-                <span className="detail-muted">{[direct.value.entry.date, direct.value.entry.platform, providerName(direct.value.providerId)].filter(Boolean).join(" · ")}</span>
+                <span className="detail-muted">{[direct.value.entry.date, direct.value.entry.platform, providerName(direct.value.providerId, t)].filter(Boolean).join(" · ")}</span>
                 {direct.value.kindMismatch ? <span className="match-warn" data-testid="match-direct-mismatch">{t("match.kindMismatch")}</span> : null}
                 {direct.value.alreadyLinked ? <span className="chip chip-muted">{t("match.alreadyLinked")}</span> : null}
                 {direct.value.linkedElsewhere ? <span className="chip chip-muted">{t("match.linkedElsewhere")}</span> : null}
@@ -307,7 +316,7 @@ export function MatchDialog(props: {
 
           {state === "searching" ? <p role="status" data-testid="match-searching">{t("match.searching")}</p> : null}
           {state === "failed" && failure ? <p role="alert" className="shelf-error" data-testid="match-failed">{failure}{linked ? ` ${t("match.cachedKept")}` : ""}</p> : null}
-          {outcome && outcome.failures.length ? <p role="status" className="detail-muted" data-testid="match-partial">{t("match.partial", { sources: outcome.failures.map((item) => `${providerName(item.providerId)}（${item.message}）`).join("、") })}</p> : null}
+          {outcome && outcome.failures.length ? <p role="status" className="detail-muted" data-testid="match-partial">{t("match.partial", { sources: outcome.failures.map((item) => `${providerName(item.providerId, t)}（${item.message}）`).join("、") })}</p> : null}
           {outcome && outcome.results.length === 0 && state === "done" && outcome.failures.length === 0 ? <p data-testid="match-empty">{t("match.empty")}</p> : null}
           {direct && searchedName !== null && outcome && outcome.results.length ? <h4 className="match-by-name" data-testid="match-by-name">{t("match.byName", { query: searchedName })}</h4> : null}
           {outcome && outcome.results.length ? (
@@ -318,7 +327,7 @@ export function MatchDialog(props: {
                   <span className="match-text">
                     <strong>{candidate.title}</strong>
                     {candidate.titleOriginal && candidate.titleOriginal !== candidate.title ? <span className="detail-muted"> · {candidate.titleOriginal}</span> : null}
-                    <span className="detail-muted">{[candidate.date, candidate.platform, providerName(candidate.providerId)].filter(Boolean).join(" · ")}</span>
+                    <span className="detail-muted">{[candidate.date, candidate.platform, providerName(candidate.providerId, t)].filter(Boolean).join(" · ")}</span>
                     {candidate.summary ? <span className="match-summary">{candidate.summary}</span> : null}
                     {candidate.linkedElsewhere ? <span className="chip chip-muted">{t("match.linkedElsewhere")}</span> : null}
                   </span>
@@ -350,17 +359,17 @@ export function MatchHost(props: {
   onError: (message: string) => void;
 }) {
   const [detail, setDetail] = useState<WorkDetail | null>(null);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onClose: props.onClose, onError: props.onError });
+  callbacksRef.current = { onClose: props.onClose, onError: props.onError };
   useEffect(() => {
-    let cancelled = false;
+    const token = guard.next();
     void attempt<WorkDetail>("works.get", { workId: props.workId }).then((result) => {
-      if (cancelled) return;
+      if (!guard.isCurrent(token)) return;
       if (result.ok) setDetail(result.value);
-      else { props.onError(result.error.message); props.onClose(); }
+      else { callbacksRef.current.onError(result.error.message); callbacksRef.current.onClose(); }
     });
-    return () => { cancelled = true; };
-    // The record is loaded once for the work the dialog was opened for.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.workId]);
+  }, [props.workId, guard]);
   if (!detail) return null;
   return <MatchDialog t={props.t} detail={detail} formatDate={props.formatDate} onClose={props.onClose} onApplied={props.onApplied} onOpenExternal={props.onOpenExternal} onError={props.onError} />;
 }

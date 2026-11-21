@@ -11,7 +11,7 @@ import type { Measure } from "./subtitle-check.ts";
  * place is. The picture's ink is the pixels that differ between the shot with the track and the shot without it.
  */
 
-export type TakenShot = { id: string; file: string; width: number; height: number; bitmap: Uint8Array; text: Record<string, any> | null };
+export type TakenShot = { id: string; file: string; width: number; height: number; bitmap: Uint8Array; text: Record<string, unknown> | null };
 
 /** The player's button is pressed, and the picture the app saved for it is read back from its file. Null when nothing was saved in time. */
 export async function takeShot(view: BrowserWindow, appService: MangaProductApp): Promise<TakenShot | null> {
@@ -30,8 +30,8 @@ export async function takeShot(view: BrowserWindow, appService: MangaProductApp)
   const bytes = fs.readFileSync(file);
   const image = nativeImage.createFromBuffer(bytes);
   const size = image.getSize();
-  let text: Record<string, any> | null = null;
-  try { const raw = readPngText(bytes)["manga.screenshot"]; text = raw ? JSON.parse(raw) as Record<string, any> : null; } catch { /* reported as a missing record */ }
+  let text: Record<string, unknown> | null = null;
+  try { const raw = readPngText(bytes)["manga.screenshot"]; text = raw ? JSON.parse(raw) as Record<string, unknown> : null; } catch { /* reported as a missing record */ }
   return { id: found.id, file, width: size.width, height: size.height, bitmap: image.toBitmap(), text };
 }
 

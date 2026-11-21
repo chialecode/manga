@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Translator } from "@manga/i18n";
+import { CAPTURE_STAGES } from "@manga/contracts/media";
+import type { MessageKey, Translator } from "@manga/i18n";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../../lib/api.ts";
-import { formatClock } from "../../readers/video-model.ts";
+import { dayBounds, formatClockMs } from "../../lib/format.ts";
 import { TraceDialog } from "../../components/trace-dialog.tsx";
 import { Pager, SettingsPage, SettingsSection } from "./rows.tsx";
 
 type T = Translator["t"];
 export type UsageRow = {
-  kind: "run" | "transcription";
+  kind: "run" | "transcription" | "service";
   id: string;
   at: string;
   status: string;
@@ -20,13 +22,16 @@ export type UsageRow = {
   audioMs: number | null;
   sessionId: string | null;
   errorCode: string | null;
+  estimated?: boolean;
+  pricesCheckedAt?: string | null;
+  problem?: "billing" | "busy" | null;
+  service?: { name: string; task: string; unit: string; quantity: number };
 };
 export type UsageSummary = { key: string; runs: number; inputTokens: number; outputTokens: number; costUsd: number; durationMs: number; audioMs: number };
 type Found = { rows: UsageRow[]; total: number; byDay: UsageSummary[]; byModel: UsageSummary[]; models: string[] };
 
 const PAGE = 30;
-const dayStart = (value: string) => { const [y, m, d] = value.split("-").map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1).toISOString(); };
-const dayEnd = (value: string) => { const [y, m, d] = value.split("-").map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1, 23, 59, 59, 999).toISOString(); };
+const RUN_STATUSES = new Set(["succeeded", "completed", "running", "queued", "waiting_input", "failed", "cancelled", "interrupted"]);
 
 /** A figure the service may not have given: "not provided" for a run that was recorded without it, "not recorded" for one saved before the field existed. */
 function figure(t: T, row: UsageRow, value: number | null, format: (value: number) => string): string {
@@ -34,7 +39,42 @@ function figure(t: T, row: UsageRow, value: number | null, format: (value: numbe
   return row.recorded ? t("usage.notProvided") : t("usage.notRecorded");
 }
 
-const cost = (value: number) => `$${value < 0.01 && value > 0 ? value.toFixed(4) : value.toFixed(2)}`;
+const cost = (value: number) => `${value < 0.01 && value > 0 ? value.toFixed(4) : value.toFixed(2)}`;
+
+/** A cost from the provider's price list is an estimate (计划 4.9): it says so, and when its prices were checked. */
+function costCell(t: T, row: UsageRow): string {
+  if (row.costUsd === null) return figure(t, row, null, cost);
+  return row.estimated ? t("usage.estimate", { cost: cost(row.costUsd) }) : cost(row.costUsd);
+}
+
+/** What a service use counted: seconds of audio, billed characters, or searches. */
+function quantityOf(t: T, row: UsageRow, formatNumber: (value: number) => string): string {
+  const use = row.service!;
+  if (use.unit === "second") return t("usage.unit.seconds", { value: formatNumber(Math.round(use.quantity * 10) / 10) });
+  if (use.unit === "char") return t("usage.unit.chars", { value: formatNumber(use.quantity) });
+  return t("usage.unit.searches", { value: formatNumber(use.quantity) });
+}
+
+const SERVICE_KIND: Record<string, "usage.kindSpeech" | "usage.kindRecognition" | "usage.kindSearch"> = { speech: "usage.kindSpeech", transcription: "usage.kindRecognition", search: "usage.kindSearch", "chat-search": "usage.kindSearch" };
+
+function statusLabel(t: T, row: UsageRow): string {
+  if (row.kind === "service") return row.status === "ok" ? t("usage.serviceOk") : t("usage.serviceError");
+  if (row.kind === "transcription") {
+    return (CAPTURE_STAGES as readonly string[]).includes(row.status)
+      ? t(`review.stage.${row.status}` as MessageKey)
+      : t("usage.status.other");
+  }
+  return RUN_STATUSES.has(row.status)
+    ? t(`usage.status.${row.status}` as MessageKey)
+    : t("usage.status.other");
+}
+
+function resultOf(t: T, row: UsageRow): string {
+  if (row.problem === "billing") return t("usage.problem.billing");
+  if (row.problem === "busy") return t("usage.problem.busy");
+  const status = statusLabel(t, row);
+  return row.errorCode ? `${status} · ${row.errorCode}` : status;
+}
 const seconds = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 function SummaryTable(props: { t: T; title: string; rows: UsageSummary[]; testId: string; label: (key: string) => string; formatNumber: (value: number) => string }) {
@@ -54,7 +94,7 @@ function SummaryTable(props: { t: T; title: string; rows: UsageSummary[]; testId
                 <td>{props.formatNumber(row.outputTokens)}</td>
                 <td>{cost(row.costUsd)}</td>
                 <td>{seconds(row.durationMs)}</td>
-                <td>{row.audioMs ? formatClock(row.audioMs) : "—"}</td>
+                <td>{row.audioMs ? formatClockMs(row.audioMs) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -77,23 +117,26 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
   const [found, setFound] = useState<Found | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [traceRun, setTraceRun] = useState<string | null>(null);
-  const latest = useRef(0);
+  const guard = useAsyncGuard();
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
   const load = useCallback(async () => {
-    const request = ++latest.current;
+    const request = guard.next();
+    const fromIso = from ? dayBounds(from).from : undefined;
+    const toIso = to ? dayBounds(to).to : undefined;
     const result = await attempt<Found>("usage.query", {
       ...(model ? { modelId: model } : {}),
-      ...(from ? { from: dayStart(from) } : {}),
-      ...(to ? { to: dayEnd(to) } : {}),
+      ...(fromIso ? { from: fromIso } : {}),
+      ...(toIso ? { to: toIso } : {}),
       limit: PAGE,
       offset,
     });
-    if (request !== latest.current) return;
-    if (!result.ok) { setStatus("error"); props.onError(result.error.message); return; }
+    if (!guard.isCurrent(request)) return;
+    if (!result.ok) { setStatus("error"); onErrorRef.current(result.error.message); return; }
     setFound({ rows: asArray<UsageRow>(result.value.rows), total: Number(result.value.total ?? 0), byDay: asArray<UsageSummary>(result.value.byDay), byModel: asArray<UsageSummary>(result.value.byModel), models: asArray<string>(result.value.models) });
     setStatus("ready");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, from, to, offset]);
+  }, [model, from, to, offset, guard]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -112,7 +155,8 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
       </div>
       {status === "loading" && !found ? <p role="status" className="detail-muted">{t("status.loading")}</p> : null}
       {found && found.rows.length === 0 && offset === 0 ? <p className="detail-muted settings-empty" data-testid="usage-empty">{t("usage.empty")}</p> : null}
-      {found ? <SummaryTable t={t} title={t("usage.byModel")} rows={found.byModel} testId="usage-by-model" label={(key) => key || t("usage.noModel")} formatNumber={number} /> : null}
+      {found?.rows.some((row) => row.estimated) ? <p className="detail-muted" data-testid="usage-estimate-note">{t("usage.estimateNote", { date: found.rows.find((row) => row.pricesCheckedAt)?.pricesCheckedAt ?? "—" })}</p> : null}
+      {found ? <SummaryTable t={t} title={t("usage.byModel")} rows={found.byModel} testId="usage-by-model" label={(key) => (key.startsWith("service:") ? t(SERVICE_KIND[key.slice(8)] ?? "usage.kindSearch") : key || t("usage.noModel"))} formatNumber={number} /> : null}
       {found ? <SummaryTable t={t} title={t("usage.byDay")} rows={found.byDay} testId="usage-by-day" label={(key) => key} formatNumber={number} /> : null}
       {found && found.rows.length ? (
         <SettingsSection title={t("usage.details")} testId="usage-details">
@@ -121,15 +165,15 @@ export function UsagePage(props: { t: T; formatDate: (value: string) => string; 
               <thead><tr><th scope="col">{t("usage.time")}</th><th scope="col">{t("usage.kind")}</th><th scope="col">{t("usage.model")}</th><th scope="col">{t("usage.input")}</th><th scope="col">{t("usage.output")}</th><th scope="col">{t("usage.cost")}</th><th scope="col">{t("usage.duration")}</th><th scope="col">{t("usage.result")}</th><th scope="col"><span className="sr-only">{t("usage.trace")}</span></th></tr></thead>
               <tbody>
                 {found.rows.map((row) => (
-                  <tr key={`${row.kind}:${row.id}`} data-testid={`usage-row-${row.id}`} data-recorded={row.recorded ? "true" : "false"}>
+                  <tr key={`${row.kind}:${row.id}`} data-testid={`usage-row-${row.id}`} data-recorded={row.recorded ? "true" : "false"} data-kind={row.kind} data-problem={row.problem ?? undefined}>
                     <td>{props.formatDate(row.at)}</td>
-                    <td>{row.kind === "run" ? t("usage.kindRun") : t("usage.kindTranscription")}</td>
-                    <td>{row.modelId ?? (row.recorded ? t("usage.notProvided") : t("usage.notRecorded"))}</td>
-                    <td>{figure(t, row, row.inputTokens, number)}</td>
-                    <td>{figure(t, row, row.outputTokens, number)}</td>
-                    <td>{figure(t, row, row.costUsd, cost)}</td>
-                    <td>{row.kind === "transcription" && row.audioMs !== null ? t("usage.audioLength", { time: formatClock(row.audioMs) }) : figure(t, row, row.durationMs, seconds)}</td>
-                    <td>{row.errorCode ? `${row.status} · ${row.errorCode}` : row.status}</td>
+                    <td>{row.kind === "run" ? t("usage.kindRun") : row.kind === "service" ? t(SERVICE_KIND[row.service!.name] ?? "usage.kindSearch") : t("usage.kindTranscription")}</td>
+                    <td>{row.kind === "service" ? quantityOf(t, row, number) : row.modelId ?? (row.recorded ? t("usage.notProvided") : t("usage.notRecorded"))}</td>
+                    <td>{row.kind === "service" ? "—" : figure(t, row, row.inputTokens, number)}</td>
+                    <td>{row.kind === "service" ? "—" : figure(t, row, row.outputTokens, number)}</td>
+                    <td title={row.estimated && row.pricesCheckedAt ? t("usage.estimateTitle", { date: row.pricesCheckedAt }) : undefined} data-testid={`usage-cost-${row.id}`}>{costCell(t, row)}</td>
+                    <td>{row.kind === "service" ? "—" : row.kind === "transcription" && row.audioMs !== null ? t("usage.audioLength", { time: formatClockMs(row.audioMs) }) : figure(t, row, row.durationMs, seconds)}</td>
+                    <td>{resultOf(t, row)}</td>
                     <td>{row.kind === "run" ? <button type="button" className="link-button" data-testid={`usage-trace-${row.id}`} onClick={() => setTraceRun(row.id)}>{t("usage.trace")}</button> : null}</td>
                   </tr>
                 ))}

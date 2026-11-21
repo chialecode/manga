@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, FolderKanban, Plus, Trash2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../../lib/api.ts";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import { Modal } from "../../components/modal.tsx";
 import { ImportProjectPackage } from "./project-package.tsx";
 
@@ -25,21 +26,23 @@ export function NewProjectDialog(props: {
   const { t } = props;
   const [draft, setDraft] = useState({ name: "", goal: "" });
   const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
 
   async function create() {
     const name = draft.name.trim();
-    if (!name) return;
+    if (!name || busy) return;
     setBusy(true);
     const result = await attempt<ProjectSummary>("project.create", { name, ...(draft.goal.trim() ? { goal: draft.goal.trim() } : {}) });
+    if (!guard.isAlive()) return;
     setBusy(false);
     if (!result.ok) { props.onError(result.error.code === "VALIDATION_ERROR" ? t("projects.limit") : result.error.message); return; }
     props.onCreated(result.value);
   }
 
   return (
-    <Modal testId="project-create" title={t("projects.new")} closeLabel={t("common.close")} onClose={props.onClose}
+    <Modal testId="project-create" title={t("projects.new")} closeLabel={t("common.close")} onClose={() => { if (!busy) props.onClose(); }}
       footer={<>
-        <button type="button" className="secondary-button" onClick={props.onClose}>{t("projects.cancel")}</button>
+        <button type="button" className="secondary-button" disabled={busy} onClick={props.onClose}>{t("projects.cancel")}</button>
         <button type="submit" form="project-create-form" className="primary-button" data-testid="project-create-submit" disabled={busy || !draft.name.trim()}>{t("projects.create")}</button>
       </>}>
       <form id="project-create-form" className="project-form" onSubmit={(event) => { event.preventDefault(); void create(); }}>
@@ -70,13 +73,17 @@ export function ProjectsPage(props: {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<ProjectSummary | null>(null);
   const [busy, setBusy] = useState(false);
+  const guard = useAsyncGuard();
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<{ projects: ProjectSummary[] }>("project.list", { status: archived ? "archived" : "active" });
+    if (!guard.isCurrent(token)) return;
     if (result.ok) setProjects(asArray<ProjectSummary>(result.value.projects));
-    else props.onError(result.error.message);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [archived]);
+    else onErrorRef.current(result.error.message);
+  }, [archived, guard]);
   useEffect(() => { void load(); }, [load, props.version]);
 
   function created(project: ProjectSummary) {
@@ -87,21 +94,27 @@ export function ProjectsPage(props: {
   }
 
   async function setStatus(project: ProjectSummary, status: "active" | "archived") {
+    if (busy) return;
+    setBusy(true);
     const result = await attempt("project.update", { projectId: project.id, status });
+    if (!guard.isAlive()) return;
+    setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     await load();
-    props.onChanged();
+    if (guard.isAlive()) props.onChanged();
   }
 
   async function remove(project: ProjectSummary) {
+    if (busy) return;
     setBusy(true);
     const result = await attempt("project.delete", { projectId: project.id });
+    if (!guard.isAlive()) return;
     setBusy(false);
     setDeleting(null);
     if (!result.ok) { props.onError(result.error.message); return; }
     props.onNotice(t("projects.deleted", { name: project.name }));
     await load();
-    props.onChanged();
+    if (guard.isAlive()) props.onChanged();
   }
 
   return (
@@ -131,10 +144,10 @@ export function ProjectsPage(props: {
                 </span>
               </button>
               <span className="project-actions">
-                <button type="button" className="icon-button" data-testid={`project-archive-${project.id}`} aria-label={project.status === "active" ? t("projects.archive") : t("projects.unarchive")} title={project.status === "active" ? t("projects.archive") : t("projects.unarchive")} onClick={() => void setStatus(project, project.status === "active" ? "archived" : "active")}>
+                <button type="button" className="icon-button" data-testid={`project-archive-${project.id}`} disabled={busy} aria-label={project.status === "active" ? t("projects.archive") : t("projects.unarchive")} title={project.status === "active" ? t("projects.archive") : t("projects.unarchive")} onClick={() => void setStatus(project, project.status === "active" ? "archived" : "active")}>
                   {project.status === "active" ? <Archive size={16} /> : <ArchiveRestore size={16} />}
                 </button>
-                <button type="button" className="icon-button" data-testid={`project-delete-${project.id}`} aria-label={t("projects.delete")} title={t("projects.delete")} onClick={() => setDeleting(project)}><Trash2 size={16} /></button>
+                <button type="button" className="icon-button" data-testid={`project-delete-${project.id}`} disabled={busy} aria-label={t("projects.delete")} title={t("projects.delete")} onClick={() => setDeleting(project)}><Trash2 size={16} /></button>
               </span>
             </li>
           ))}
@@ -144,9 +157,9 @@ export function ProjectsPage(props: {
       {creating ? <NewProjectDialog t={t} onClose={() => setCreating(false)} onError={props.onError} onCreated={created} /> : null}
 
       {deleting ? (
-        <Modal testId="project-delete-confirm" title={t("projects.delete")} closeLabel={t("common.close")} onClose={() => setDeleting(null)}
+        <Modal testId="project-delete-confirm" title={t("projects.delete")} closeLabel={t("common.close")} onClose={() => { if (!busy) setDeleting(null); }}
           footer={<>
-            <button type="button" className="secondary-button" data-testid="project-delete-cancel" onClick={() => setDeleting(null)}>{t("projects.cancel")}</button>
+            <button type="button" className="secondary-button" data-testid="project-delete-cancel" disabled={busy} onClick={() => setDeleting(null)}>{t("projects.cancel")}</button>
             <button type="button" className="primary-button danger-button" data-testid="project-delete-do" disabled={busy} onClick={() => void remove(deleting)}>{t("projects.deleteDo")}</button>
           </>}>
           <p data-testid="project-delete-text">{t("projects.deleteConfirm", { name: deleting.name, objects: ownedObjects(deleting.counts) })}</p>

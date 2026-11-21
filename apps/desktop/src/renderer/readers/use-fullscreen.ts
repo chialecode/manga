@@ -1,4 +1,5 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useCallback, useEffect, useState, type RefObject } from "react";
+export { isTypingTarget } from "../lib/ime.ts";
 
 /** Full screen for one element. The state follows the browser, so leaving with Esc updates the button too. */
 export function useFullscreen(target: RefObject<HTMLElement | null>) {
@@ -8,19 +9,11 @@ export function useFullscreen(target: RefObject<HTMLElement | null>) {
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, [target]);
-  const toggle = () => {
-    if (document.fullscreenElement) void document.exitFullscreen?.();
+  const toggle = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen?.()?.catch(() => undefined);
     else void target.current?.requestFullscreen?.()?.catch(() => setFullscreen(false));
-  };
+  }, [target]);
   return { fullscreen, toggle };
-}
-
-/** Keys typed into a field belong to the field, never to a reader shortcut. */
-export function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 export function usePrefersReducedMotion(): boolean {

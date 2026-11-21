@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
-import { MangaError, PLUGIN_PERMISSIONS, PluginManifestSchema, PluginSignatureSchema, type PluginFacet, type PluginManifest, type PluginPermission, type PluginSlot, type PluginTrust } from "@manga/contracts";
+import { MangaError, parseProviderFile, type ProviderFile, PLUGIN_PERMISSIONS, PluginManifestSchema, PluginSignatureSchema, type PluginFacet, type PluginManifest, type PluginPermission, type PluginSlot, type PluginTrust } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { writeExportFile } from "../creative/export-file.ts";
 import { PLUGIN_LIMITS, compareVersions, fileHashes, fingerprintOf, rawPublicKey, readPluginPackage, refuse, safePayloadName, signatureHolds, type PluginParts } from "./package.ts";
@@ -79,6 +79,8 @@ const ZIP_NAME = /^[A-Za-z0-9._-]{1,120}$/;
 
 export class PluginService {
   private readonly o: PluginOptions;
+  /** Provider files read from verified installed copies, by `<id>@<version>`. */
+  private readonly providerFiles = new Map<string, ProviderFile>();
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(options: PluginOptions) {
@@ -186,7 +188,7 @@ export class PluginService {
     else state = row.last_error ? "failed" : "stopped";
     return {
       id: row.id, name: manifest.name, version: row.version, description: manifest.description, publisher: manifest.publisher, keyId: version.key_id, trust: key?.trust ?? "unknown",
-      executable, permissions: manifest.permissions, granted: JSON.parse(row.granted_json) as PluginPermission[], provides: manifest.provides, facets: manifest.facets,
+      executable, permissions: manifest.permissions, granted: (JSON.parse(row.granted_json) as PluginPermission[]).filter((permission) => manifest.permissions.includes(permission)), provides: manifest.provides, facets: manifest.facets,
       enabled: Boolean(row.enabled), state, error, previousVersion: row.previous_version, installedAt: row.installed_at, signedAt: version.signed_at, dataBytes: this.dirBytes(this.dataPath(row.id)),
     };
   }
@@ -272,8 +274,15 @@ export class PluginService {
       if (enable || wasRunning) {
         try { await this.enableNow(manifest.id); enabled = true; } catch (failure) {
           error = failure instanceof Error ? failure.message : String(failure);
-          // An upgrade that cannot start puts the version that worked back, so a bad release does not leave a person without the plugin.
-          if (existing) { try { await this.rollbackNow(manifest.id, wasRunning); rolledBack = true; enabled = wasRunning; } catch { /* the plugin stays installed, stopped, with the reason */ } }
+          // An upgrade that cannot start puts the version that worked back (along with its previously confirmed permissions), so a bad release does not leave a person without the plugin.
+          if (existing) {
+            try {
+              this.sqlite.prepare("UPDATE plugins SET granted_json = ?, updated_at = ? WHERE id = ?").run(existing.granted_json, new Date().toISOString(), manifest.id);
+              await this.rollbackNow(manifest.id, wasRunning);
+              rolledBack = true;
+              enabled = wasRunning;
+            } catch { /* the plugin stays installed, stopped, with the reason */ }
+          }
         }
       }
       this.o.notify("plugin.changed", { pluginId: manifest.id, change: action });
@@ -342,10 +351,14 @@ export class PluginService {
     const granted = JSON.parse(row.granted_json) as PluginPermission[];
     const missing = parts.manifest.permissions.filter((permission) => !granted.includes(permission));
     if (missing.length) throw refuse("permissions", "the plugin has permissions that were not confirmed", { missing }, "FORBIDDEN");
-    if (parts.manifest.entry === null) return;
+    if (parts.manifest.entry === null) {
+      this.cacheProvider(id, row.version, parts);
+      return;
+    }
     fs.mkdirSync(this.dataPath(id), { recursive: true });
     const root = path.join(this.versionDir(id, row.version), "payload");
-    await this.o.runtime.start({ pluginId: id, entry: path.join(root, ...parts.manifest.entry.split("/")), cwd: root, dataDir: this.dataPath(id), granted });
+    const effective = granted.filter((permission) => parts.manifest.permissions.includes(permission));
+    await this.o.runtime.start({ pluginId: id, entry: path.join(root, ...parts.manifest.entry.split("/")), cwd: root, dataDir: this.dataPath(id), granted: effective });
   }
 
   private async enableNow(id: string): Promise<void> {
@@ -396,8 +409,9 @@ export class PluginService {
     const granted = JSON.parse(row.granted_json) as PluginPermission[];
     const missing = manifest.permissions.filter((permission) => !granted.includes(permission));
     if (missing.length) throw refuse("permissions", "the earlier version needs permissions that were not confirmed", { missing }, "FORBIDDEN");
+    const effective = granted.filter((permission) => manifest.permissions.includes(permission));
     await this.o.runtime.stop(id);
-    this.sqlite.prepare("UPDATE plugins SET version = ?, previous_version = ?, enabled = 0, last_error = NULL, updated_at = ? WHERE id = ?").run(row.previous_version, row.version, new Date().toISOString(), id);
+    this.sqlite.prepare("UPDATE plugins SET version = ?, previous_version = ?, enabled = 0, granted_json = ?, last_error = NULL, updated_at = ? WHERE id = ?").run(row.previous_version, row.version, JSON.stringify(effective), new Date().toISOString(), id);
     if (restart) await this.enableNow(id);
   }
 
@@ -414,6 +428,7 @@ export class PluginService {
         this.sqlite.prepare("DELETE FROM plugin_versions WHERE plugin_id = ?").run(id);
       })();
       fs.rmSync(path.join(this.o.pluginsDir, id), { recursive: true, force: true });
+      for (const key of [...this.providerFiles.keys()]) if (key.startsWith(`${id}@`)) this.providerFiles.delete(key);
       const hasData = fs.existsSync(this.dataPath(id)) && this.dirBytes(this.dataPath(id)) > 0;
       if (deleteData || !hasData) fs.rmSync(this.dataPath(id), { recursive: true, force: true });
       else this.sqlite.prepare("INSERT OR REPLACE INTO plugin_leftovers(plugin_id, name, uninstalled_at) VALUES (?,?,?)").run(id, name, new Date().toISOString());
@@ -516,6 +531,8 @@ export class PluginService {
   /** Starts what the person had enabled, when the application starts. A plugin that cannot start stays recorded with the reason and does not stop the rest. */
   restore(): Promise<void> {
     return this.serialize(async () => {
+      // Declarative provider files are warmed first so model providers are ready without waiting on executable worker startup.
+      this.providerFilesEnabled();
       for (const row of this.sqlite.prepare("SELECT * FROM plugins WHERE enabled = 1").all() as Row[]) {
         try { await this.startProcess(row.id); this.sqlite.prepare("UPDATE plugins SET last_error = NULL WHERE id = ?").run(row.id); } catch (error) {
           this.sqlite.prepare("UPDATE plugins SET last_error = ?, updated_at = ? WHERE id = ?").run(error instanceof Error ? error.message.slice(0, 500) : String(error), new Date().toISOString(), row.id);
@@ -534,6 +551,40 @@ export class PluginService {
       const manifest = PluginManifestSchema.parse(JSON.parse(version.manifest_json));
       if (!this.hostCompatible(manifest)) continue;
       for (const item of manifest.provides) if (item.slot === slot) found.push({ pluginId: row.id, id: item.id, running: this.o.runtime.isRunning(row.id), enabled: row.enabled === 1 });
+    }
+    return found;
+  }
+
+  private cacheProvider(id: string, version: string, parts: PluginParts): ProviderFile | undefined {
+    if (!parts.manifest.provider) return undefined;
+    const bytes = parts.files.get(parts.manifest.provider);
+    const parsed = bytes ? parseProviderFile(bytes) : undefined;
+    if (!parsed?.ok) throw refuse("provider", "the provider file is not valid");
+    this.providerFiles.set(`${id}@${version}`, parsed.file);
+    return parsed.file;
+  }
+
+  /**
+   * The provider files of the enabled, trusted, compatible plugins that fill `model.provider` (计划 4.1). Each is read from the installed copy after its
+   * signature is checked again; a plugin that is off, whose key was removed or whose files changed gives none, so nothing is sent on its behalf.
+   */
+  providerFilesEnabled(): Array<{ pluginId: string; version: string; file: ProviderFile }> {
+    const found: Array<{ pluginId: string; version: string; file: ProviderFile }> = [];
+    for (const item of this.providers("model.provider")) {
+      const row = this.row(item.pluginId);
+      const key = `${row.id}@${row.version}`;
+      let file = this.providerFiles.get(key);
+      if (!file) {
+        try {
+          const version = this.versionRow(row.id, row.version);
+          file = this.cacheProvider(row.id, row.version, this.loadFrom(this.versionDir(row.id, row.version), version.key_id).parts);
+          if (row.last_error) this.sqlite.prepare("UPDATE plugins SET last_error = NULL WHERE id = ?").run(row.id);
+        } catch (error) {
+          this.sqlite.prepare("UPDATE plugins SET last_error = ?, updated_at = ? WHERE id = ?").run(error instanceof Error ? error.message.slice(0, 500) : String(error), new Date().toISOString(), row.id);
+          continue;
+        }
+      }
+      if (file && file.id === item.id) found.push({ pluginId: row.id, version: row.version, file });
     }
     return found;
   }

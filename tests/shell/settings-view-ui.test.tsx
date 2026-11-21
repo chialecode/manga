@@ -29,9 +29,19 @@ const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(w
 const pageOf = () => screen.getByTestId("settings-area").getAttribute("data-page");
 const pagesListed = () => [...screen.getByTestId("settings-nav").querySelectorAll("[data-testid^='settings-nav-']")].map((node) => node.getAttribute("data-testid")!.replace("settings-nav-", ""));
 
+/**
+ * The workspace has been read: tabs are up, and so is the comic icon, which only a workspace with the comic module draws (the page shows the default modules
+ * before). The page the settings open on comes with the workspace, so the settings are opened only after this (a release run on a busy runner clicked first).
+ */
+async function workspaceKnown() {
+  await waitFor(() => expect(tabTitles().length).toBeGreaterThan(0));
+  await screen.findByTestId("nav-comic");
+}
+
 async function inSettings(options: Parameters<typeof installHost>[0] = {}) {
   const host = installHost({ facets: FACETS, ...options });
   render(<App />);
+  await workspaceKnown();
   fireEvent.click(await screen.findByTestId("nav-settings"));
   await screen.findByTestId("settings-nav");
   return host;
@@ -100,25 +110,25 @@ describe("AT-122 the settings view over the workspace", () => {
     await inSettings();
     const first = pageOf()!;
     expect(first).toBe("general");
-    expect((screen.getByTestId("nav-back") as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId("nav-forward") as HTMLButtonElement).disabled).toBe(true);
+    // Nothing ahead yet: forward stays on the page.
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    expect(pageOf()).toBe(first);
     fireEvent.click(screen.getByTestId("settings-nav-models"));
     fireEvent.click(screen.getByTestId("settings-nav-logs"));
     await waitFor(() => expect(pageOf()).toBe("logs"));
     expect(screen.getByTestId("settings-nav-logs").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("settings-nav-models").getAttribute("aria-current")).toBeNull();
-    fireEvent.click(screen.getByTestId("nav-back"));
-    await waitFor(() => expect(pageOf()).toBe("models"));
-    expect((screen.getByTestId("nav-forward") as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(screen.getByTestId("nav-forward"));
-    await waitFor(() => expect(pageOf()).toBe("logs"));
-    // The keyboard and the mouse's side buttons walk them too.
+    // Alt + ← and → walk them (the title bar has no buttons for it, A-136); so do the mouse's side buttons.
     fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+    await waitFor(() => expect(pageOf()).toBe("models"));
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await waitFor(() => expect(pageOf()).toBe("logs"));
+    fireEvent.mouseUp(window, { button: 3 });
     await waitFor(() => expect(pageOf()).toBe("models"));
     fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
     await waitFor(() => expect(pageOf()).toBe(first));
     expect(screen.getByTestId("settings-area")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("nav-back"));
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
     await waitFor(() => expect(screen.queryByTestId("settings-area")).toBeNull());
     expect(screen.getByTestId("shell-root").getAttribute("data-settings")).toBe("false");
     // The page that was last on is the one the settings come back to.
@@ -160,6 +170,7 @@ describe("AT-122 the settings view over the workspace", () => {
     const host = installHost({ facets: FACETS });
     host.state.rail.settingsPage = "models";
     render(<App />);
+    await workspaceKnown();
     fireEvent.click(await screen.findByTestId("nav-settings"));
     await screen.findByTestId("settings-nav");
     expect(pageOf()).toBe("models");
@@ -168,10 +179,40 @@ describe("AT-122 the settings view over the workspace", () => {
     const gone = installHost({ facets: ["library", "settings", "comic"] });
     gone.state.rail.settingsPage = "models";
     render(<App />);
+    await workspaceKnown();
     fireEvent.click(await screen.findByTestId("nav-settings"));
     await screen.findByTestId("settings-nav");
     expect(pageOf()).toBe("general");
     expect(pagesListed()).not.toContain("models");
+  });
+
+  it("keeps the saved page and icons when the rail changes before the saved copy is read and its save is still on the way", async () => {
+    const host = installHost({ facets: FACETS });
+    host.state.rail.settingsPage = "models";
+    host.state.rail.hidden = ["video"];
+    const manga = (window as unknown as { manga: { command: (payload: { commandId: string }) => Promise<unknown> } }).manga;
+    const command = manga.command.bind(manga);
+    let readWorkspace!: () => void;
+    let finishSave!: () => void;
+    const workspaceRead = new Promise<void>((resolve) => { readWorkspace = resolve; });
+    const saveDone = new Promise<void>((resolve) => { finishSave = resolve; });
+    manga.command = async (payload) => {
+      if (payload.commandId === "workspace.get") await workspaceRead;
+      if (payload.commandId === "settings.setShell") await saveDone;
+      return command(payload);
+    };
+    render(<App />);
+    // A change of the rail before the workspace (with the saved rail) has been read, as the workspace moving to a view while it starts makes one.
+    fireEvent.click(await screen.findByTestId("nav-conversation"));
+    readWorkspace();
+    // The conversation view holds no tab; the comic icon says the workspace has been read.
+    await screen.findByTestId("nav-comic");
+    expect(screen.getByTestId("nav-conversation").getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByTestId("nav-video")).toBeNull();
+    fireEvent.click(await screen.findByTestId("nav-settings"));
+    await screen.findByTestId("settings-nav");
+    expect(pageOf()).toBe("models");
+    finishSave();
   });
 
   it("leaves the settings from an icon of the rail and shows that view, and from anything that opens in the workspace", async () => {
@@ -201,9 +242,6 @@ describe("AT-122 the settings view over the workspace", () => {
     for (const init of [{ ctrlKey: true, key: "w" }, { ctrlKey: true, key: "Tab" }, { ctrlKey: true, key: "1" }]) fireEvent.keyDown(window, init);
     expect(tabTitles()).toEqual(tabs);
     expect(focusedTitle()).toBe(front);
-    // The command that closes a tab is off in the menu too.
-    fireEvent.click(screen.getByTestId("menu-file"));
-    expect((screen.getByRole("menuitem", { name: /关闭标签/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows the directory as the card of the sidebar's switch in a window too narrow for the sidebar, and a choice closes it", async () => {

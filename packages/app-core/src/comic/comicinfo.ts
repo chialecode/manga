@@ -1,8 +1,8 @@
 import type { ComicManifest } from "@manga/contracts";
 
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
-function decodeEntities(text: string): string {
+export function decodeXmlEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, name: string) => {
     if (name[0] === "#") {
       const code = name[1]!.toLowerCase() === "x" ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
@@ -15,7 +15,7 @@ function decodeEntities(text: string): string {
 function tag(xml: string, name: string): string | undefined {
   const match = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i").exec(xml);
   if (!match) return undefined;
-  const value = decodeEntities(match[1]!.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")).trim();
+  const value = decodeXmlEntities(match[1]!.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")).trim();
   return value || undefined;
 }
 
@@ -64,7 +64,7 @@ export function parseComicInfo(source: Uint8Array | string): ComicInfo | null {
   if (manga && /^YesAndRightToLeft$/i.test(manga)) info.direction = "rtl";
   else if (manga && /^(Yes|No)$/i.test(manga)) info.direction = "ltr";
   for (const match of xml.matchAll(/<Page\b([^>]*?)\/?>/gi)) {
-    const attrs = Object.fromEntries([...match[1]!.matchAll(/(\w+)\s*=\s*"([^"]*)"/g)].map((item) => [item[1]!.toLowerCase(), decodeEntities(item[2]!)]));
+    const attrs = Object.fromEntries([...match[1]!.matchAll(/(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)].map((item) => [item[1]!.toLowerCase(), decodeXmlEntities(item[2] ?? item[3] ?? "")]));
     const image = Number(attrs.image);
     if (!Number.isInteger(image) || image < 0 || image > 100_000) continue;
     info.pages.push({

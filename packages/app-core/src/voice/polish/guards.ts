@@ -183,10 +183,16 @@ export function validatePolishOutput(input: {
     }
   }
 
-  // 3. Check unprompted dictionary terms introduced by the LLM
-  if (input.dictionaryTerms && input.dictionaryTerms.length > 0) {
-    for (const rawTerm of input.dictionaryTerms) {
-      const term = rawTerm.trim();
+  // 3. Check unprompted dictionary terms introduced by the LLM (2-char prefix pre-filter keeps 10k-term checks O(outLen))
+  if (input.dictionaryTerms && input.dictionaryTerms.length > 0 && outLower.length >= 2) {
+    const outBigrams = new Set<string>();
+    for (let i = 0; i + 1 < outLower.length; i += 1) {
+      outBigrams.add(outLower.slice(i, i + 2));
+    }
+    for (let i = 0; i < input.dictionaryTerms.length; i += 1) {
+      const term = input.dictionaryTerms[i]!.trim();
+      if (term.length < 2) continue;
+      if (!outBigrams.has(term.slice(0, 2).toLowerCase())) continue;
       if (codePointLen(term) < 2) continue;
       if (!containsWholeTerm(outTrimmed, outLower, term)) continue;
       if (!containsWholeTerm(allowedJoined, allowedLower, term)) {

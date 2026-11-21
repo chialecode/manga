@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { OBJECT_KINDS, type ObjectListKind, type ObjectRow } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
+import { InlineRename } from "../../components/inline-rename.tsx";
 import { Modal } from "../../components/modal.tsx";
+import { useDebouncedSearch } from "../../hooks/use-async-guard.ts";
 import { attempt } from "../../lib/api.ts";
 import { OBJECT_SPEC } from "../../lib/object-kinds.ts";
 import { Pager, SettingsPage } from "../../pages/settings/rows.tsx";
@@ -21,8 +23,8 @@ export function ObjectsTab() {
   const { t } = s;
   const asked = str(env.model?.target.kind);
   const kind = (OBJECT_KINDS as readonly string[]).includes(asked) ? (asked as ObjectListKind) : null;
-  const [text, setText] = useState("");
-  const [q, setQ] = useState("");
+  const search = useDebouncedSearch("", 250);
+  const q = search.query;
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<ObjectRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -31,23 +33,20 @@ export function ObjectsTab() {
   const [asking, setAsking] = useState<ObjectRow | null>(null);
   const [busy, setBusy] = useState(false);
   const latest = useRef(0);
+  const setErrorRef = useRef(s.setError);
+  setErrorRef.current = s.setError;
 
-  // Typing waits a moment so each keystroke is not a query.
-  useEffect(() => {
-    const timer = window.setTimeout(() => { setQ((current) => (current === text.trim() ? current : text.trim())); setOffset(0); }, 250);
-    return () => window.clearTimeout(timer);
-  }, [text]);
+  useEffect(() => { setOffset(0); }, [q]);
 
   const load = useCallback(async () => {
     if (!kind) return;
     const mine = ++latest.current;
     const result = await attempt<{ items: ObjectRow[]; total: number }>("workspace.objects", { kind, ...(q ? { q } : {}), limit: PAGE, offset });
     if (mine !== latest.current) return;
-    if (!result.ok) { setStatus("error"); s.setError(result.error.message); return; }
+    if (!result.ok) { setStatus("error"); setErrorRef.current(result.error.message); return; }
     setItems(result.value.items);
     setTotal(result.value.total);
     setStatus("ready");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, q, offset]);
   useEffect(() => { void load(); }, [load, s.projectsVersion, s.shelfKey, s.listsVersion]);
 
@@ -58,13 +57,8 @@ export function ObjectsTab() {
   const spec = OBJECT_SPEC[kind];
   const name = (key: string) => t(`objects.${key}` as MessageKey);
 
-  async function commitRename(event: FormEvent) {
-    event.preventDefault();
-    if (!renaming) return;
-    const title = renaming.text.replace(/\s+/g, " ").trim();
-    const id = renaming.id;
+  async function commitRename(id: string, title: string) {
     setRenaming(null);
-    if (!title) return;
     const result = await attempt(spec.rename, { [spec.idField]: id, title });
     if (!result.ok) { s.setError(result.error.message); return; }
     s.changedProjects();
@@ -85,7 +79,7 @@ export function ObjectsTab() {
       <div className="settings-view" data-testid="page-objects">
         <SettingsPage id="objects" title={t(`sidebar.manage.${kind}` as MessageKey)} hint={name("hint")} wide>
           <div className="records-filters" role="search" data-testid="objects-filters">
-            <input type="search" aria-label={name("search")} placeholder={name("search")} data-testid="objects-search" value={text} onChange={(event) => setText(event.target.value)} />
+            <input type="search" aria-label={name("search")} placeholder={name("search")} data-testid="objects-search" {...search.inputProps} />
           </div>
           {status === "loading" && !items.length ? <p role="status" className="detail-muted" data-testid="objects-loading">{t("status.loading")}</p> : null}
           {status === "ready" && items.length === 0 ? <p className="detail-muted settings-empty" data-testid="objects-empty">{q ? name("emptyFound") : name("empty")}</p> : null}
@@ -94,9 +88,7 @@ export function ObjectsTab() {
               <li key={item.id} className="record-row" data-testid={`object-${item.id}`} data-archived={item.projectArchived ? "true" : "false"}>
                 <div className="record-main">
                   {renaming?.id === item.id ? (
-                    <form onSubmit={(event) => void commitRename(event)}>
-                      <input autoFocus aria-label={name("name")} data-testid="object-rename" value={renaming.text} maxLength={200} onChange={(event) => setRenaming({ id: item.id, text: event.target.value })} onBlur={() => setRenaming(null)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setRenaming(null); } }} />
-                    </form>
+                    <InlineRename initialValue={renaming.text} ariaLabel={name("name")} testId="object-rename" onCommit={(title) => commitRename(item.id, title)} onCancel={() => setRenaming(null)} />
                   ) : <strong className="record-title">{item.title}</strong>}
                   <span className="detail-muted record-meta">{[item.projectName, item.projectArchived ? name("archived") : null, s.i18n.formatDate(item.updatedAt)].filter(Boolean).join(" · ")}</span>
                 </div>

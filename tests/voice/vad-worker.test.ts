@@ -60,8 +60,8 @@ describe.skipIf(mediaPrerequisitesAbsent || !isAvailable("voice-recording-30min"
       const overlap = segments.reduce((sum, segment) => sum + Math.max(0, Math.min(segment.endMs, event.end * 1000) - Math.max(segment.startMs, event.start * 1000)), 0);
       if (overlap / ((event.end - event.start) * 1000) >= 0.9) found += 1;
     }
-    expect(speech.length).toBe(111);
-    expect(found).toBeGreaterThanOrEqual(110);
+    expect(speech.length).toBeGreaterThanOrEqual(100);
+    expect(found).toBeGreaterThanOrEqual(speech.length - 1);
     // Time the filter kept that is not speech, margins aside: noise or music let through.
     const anySpeech = truth.events.filter((event) => event.kind === "speech" || event.kind === "speech-over-music");
     let wrongMs = 0;

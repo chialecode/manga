@@ -15,6 +15,7 @@ import { useScan } from "./hooks/use-scan.ts";
 import { useScreenshots, type RichNotice } from "./hooks/use-screenshots.tsx";
 import { useUpdate } from "./hooks/use-update.ts";
 import { asArray, attempt, type HostState } from "./lib/api.ts";
+import { createPatchQueue, type PatchQueue } from "./lib/patch-queue.ts";
 import { WorksCacheContext, type WorksCache } from "./lib/use-works.ts";
 import { useKeyBindings } from "./hooks/use-key-bindings.ts";
 import { onListsChanged } from "./lib/lists-changed.ts";
@@ -94,11 +95,13 @@ export function App() {
   const bump = useCallback(() => setShelfKey((key) => key + 1), []);
   const conversationsChanged = useCallback(() => setConversationVersion((value) => value + 1), []);
   // A result is told for a few seconds and goes away; a new one restarts the time.
+  const noticeId = notice?.n;
+  const noticeRich = Boolean(notice?.rich);
   useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNoticeState(undefined), notice.rich ? RICH_NOTICE_MS : NOTICE_MS);
+    if (noticeId === undefined) return;
+    const timer = window.setTimeout(() => setNoticeState(undefined), noticeRich ? RICH_NOTICE_MS : NOTICE_MS);
     return () => window.clearTimeout(timer);
-  }, [notice?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [noticeId, noticeRich]);
 
   // ---- the workspace: the tabs and layouts of every context ------------------------------------------------------------------
   const latest = useRef<{ t: typeof t; setNotice: typeof setNotice; setError: typeof setError; changeRail?: (patch: RailPatch) => void }>({ t, setNotice, setError });
@@ -121,27 +124,36 @@ export function App() {
   const [rail, setRail] = useState<RailPreference>(() => structuredClone(DEFAULT_RAIL_PREFERENCE));
   const railRef = useRef(rail);
   railRef.current = rail;
-  const railSaves = useRef({ queue: Promise.resolve(), pending: 0 });
-  const changeRail = useCallback((patch: RailPatch) => {
-    const next = applyRailPatch(railRef.current, patch);
-    railRef.current = next;
-    setRail(next);
-    const saves = railSaves.current;
-    saves.pending += 1;
-    saves.queue = saves.queue.then(async () => {
-      const saved = await attempt("settings.setShell", { rail: patch });
-      saves.pending -= 1;
-      if (!saved.ok) latest.current.setError(saved.error.message);
+  const railQueueRef = useRef<PatchQueue<RailPreference, RailPatch> | null>(null);
+  if (!railQueueRef.current) {
+    railQueueRef.current = createPatchQueue<RailPreference, RailPatch>({
+      initial: structuredClone(DEFAULT_RAIL_PREFERENCE),
+      apply: applyRailPatch,
+      send: async (patch) => {
+        const saved = await attempt("settings.setShell", { rail: patch });
+        return saved.ok ? { ok: true } : { ok: false, error: saved.error.message };
+      },
+      onState: (next) => {
+        railRef.current = next;
+        setRail(next);
+      },
+      onError: (message) => { if (message) latest.current.setError(message); },
     });
+  }
+  const changeRail = useCallback((patch: RailPatch) => {
+    void railQueueRef.current!.enqueue(patch);
   }, []);
   const [sidebarCache] = useState(createSidebarCache);
   const changeRailRef = useRef(changeRail);
   changeRailRef.current = changeRail;
   latest.current.changeRail = changeRail;
   const hiddenPagesRef = useRef<ReadonlySet<string>>(new Set());
+  const savedRailRef = useRef<RailPreference | undefined>(undefined);
   const shellStore = useMemo(() => new ShellState({
     lastPage: () => {
-      const page = railRef.current.settingsPage;
+      const page = railQueueRef.current?.hasPending()
+        ? railRef.current.settingsPage
+        : (railRef.current.settingsPage ?? savedRailRef.current?.settingsPage ?? null);
       return page && (SETTINGS_PAGES as readonly string[]).includes(page) && !hiddenPagesRef.current.has(page) ? (page as SettingsPageId) : null;
     },
     // The workspace stays mounted behind the settings; its contents are told they are out of sight, and back in sight when the settings are left.
@@ -199,44 +211,35 @@ export function App() {
   }, [refresh]);
 
   const facetList = (workspace?.uiFacets as string[] | undefined) ?? ["agent", "library", "settings"];
-  const facets = useMemo(() => new Set(facetList), [facetList.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const facetKey = facetList.join("|");
+  const facets = useMemo(() => new Set(facetKey ? facetKey.split("|") : []), [facetKey]);
   const voiceOn = facets.has("voice");
   const shell = (workspace?.shell as ShellPreference | undefined) ?? (settings?.shell as ShellPreference | undefined) ?? DEFAULT_SHELL_PREFERENCE;
+  savedRailRef.current = shell.rail;
   const savedRail = JSON.stringify(shell.rail ?? DEFAULT_RAIL_PREFERENCE);
+  // The saved copy, with what is still on its way laid over it: a change made before the saved copy was first read (the workspace moving to a view while it
+  // starts) must neither be undone by it nor take the place of the rest of it (the page the settings open on, the icons taken out, their order).
   useEffect(() => {
-    if (railSaves.current.pending > 0) return;
-    setRail(shell.rail ?? structuredClone(DEFAULT_RAIL_PREFERENCE));
-  }, [savedRail]); // eslint-disable-line react-hooks/exhaustive-deps
+    railQueueRef.current?.hydrate(savedRailRef.current ?? structuredClone(DEFAULT_RAIL_PREFERENCE));
+  }, [savedRail]);
   hiddenPagesRef.current = useMemo(() => new Set<string>([
     ...(facets.has("voice") ? [] : ["recording"]), ...(facets.has("metadata") ? [] : ["sources"]), ...(facets.has("danmaku") ? [] : ["danmaku"]),
     ...(facets.has("semantic") ? [] : ["semantic"]), ...(facets.has("plugins") ? [] : ["plugins"]),
     ...(facets.has("agent") ? [] : ["models", "quick", "usage"]),
   ]), [facets]);
 
-  // The first time the workspace is known, the person is back where they were; a library with nothing in it starts on the page that adds the first folder.
+  // What was changed is saved a moment later; leaving the window saves dirty state now.
   useEffect(() => {
-    if (!host?.writable || !workspace || started.current) return;
-    started.current = true;
-    const last = (workspace.shell as ShellPreference | undefined)?.lastContext ?? null;
-    void (async () => {
-      await switchContext(last);
-      const probe = await attempt<{ total?: number; items?: unknown[] }>("works.list", { limit: 1 });
-      if (!probe.ok) return;
-      const total = typeof probe.value.total === "number" ? probe.value.total : asArray(probe.value.items).length;
-      if (total === 0) openers.settings("library");
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [host?.writable, workspace]);
-
-  // What was changed is saved a moment later; leaving the window saves it now.
-  useEffect(() => {
-    const save = () => { void controller.flushAll(); };
+    const save = () => { void controller.flushAll({ onlyDirty: true }); };
     const onVisibility = () => { if (document.visibilityState === "hidden") save(); };
     window.addEventListener("pagehide", save);
     window.addEventListener("beforeunload", save);
     document.addEventListener("visibilitychange", onVisibility);
     // The window is about to close (LOOP-23): the main process waits for this answer, at most a moment, before it lets the window go.
-    const stopSaveNow = window.manga?.onSaveNow?.(() => controller.flushAll());
+    const stopSaveNow = window.manga?.onSaveNow?.(() => Promise.all([
+      controller.flushAll({ onlyDirty: true }),
+      railQueueRef.current?.flush() ?? Promise.resolve(),
+    ]));
     return () => {
       stopSaveNow?.();
       window.removeEventListener("pagehide", save);
@@ -341,6 +344,20 @@ export function App() {
   };
   const openers = useMemo(() => createOpeners(() => depsRef.current), []);
 
+  // The first time the workspace is known, the person is back where they were; a library with nothing in it starts on the page that adds the first folder.
+  useEffect(() => {
+    if (!host?.writable || !workspace || started.current) return;
+    started.current = true;
+    const last = (workspace.shell as ShellPreference | undefined)?.lastContext ?? null;
+    void (async () => {
+      await switchContext(last);
+      const probe = await attempt<{ total?: number; items?: unknown[] }>("works.list", { limit: 1 });
+      if (!probe.ok) return;
+      const total = typeof probe.value.total === "number" ? probe.value.total : asArray(probe.value.items).length;
+      if (total === 0) openers.settings("library");
+    })();
+  }, [host?.writable, workspace, switchContext, openers]);
+
   const saveReadingStyle = useCallback(async (patch: ReadingStylePatch) => {
     const saved = await attempt("settings.setShell", { reading: patch });
     if (!saved.ok) { setError(saved.error.message); return; }
@@ -349,7 +366,7 @@ export function App() {
 
   const rails = useMemo(() => ({ rail, change: changeRail, cache: sidebarCache }), [rail, changeRail, sidebarCache]);
 
-  const services: Services = {
+  const services = useMemo<Services>(() => ({
     i18n,
     t,
     host: host as HostState,
@@ -381,7 +398,13 @@ export function App() {
     conversationsChanged,
     listsVersion,
     open: openers,
-  };
+  }), [
+    i18n, t, host, facets, shell, context, settings, workspace,
+    setNotice, refresh, shelfKey, bump, projectsVersion, changedProjects,
+    scan, pkg, update, recorder, dictation, voiceOn, keyBindings, shots.port,
+    matchVersion, saveReadingStyle, conversationVersion, conversationsChanged,
+    listsVersion, openers,
+  ]);
 
   if (!host) {
     return <main className="p-6">{t("status.loading")}</main>;

@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, sign, verify, type KeyObject } from "node:crypto";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { MangaError, PLUGIN_FORMAT, PLUGIN_SIGNATURE_FORMAT, PluginManifestSchema, PluginSignatureSchema, type PluginManifest, type PluginRefusal, type PluginSignature } from "@manga/contracts";
+import { MangaError, parseProviderFile, PLUGIN_FORMAT, PLUGIN_SIGNATURE_FORMAT, PluginManifestSchema, PluginSignatureSchema, type PluginManifest, type PluginRefusal, type PluginSignature } from "@manga/contracts";
 
 /**
  * The plugin package (PLUG-04): a zip of `manifest.json`, `signature.json` and a `payload/` of files. The signature covers the manifest bytes and
@@ -64,6 +64,7 @@ export function buildPluginPackage(input: { manifest: unknown; files: Record<str
   const manifestBytes = strToU8(`${JSON.stringify(manifest, null, 2)}\n`);
   const files = new Map<string, Uint8Array>(Object.entries(input.files).map(([name, data]) => [name, typeof data === "string" ? strToU8(data) : data]));
   if (manifest.entry !== null && !files.has(manifest.entry)) throw refuse("entry", "the entry is not in the payload");
+  checkProvider(manifest, files);
   const privateKey = createPrivateKey(input.privateKeyPem);
   const publicKey = createPublicKey(privateKey);
   const raw = rawPublicKey(publicKey);
@@ -125,7 +126,23 @@ export function readPluginPackage(data: Uint8Array): PluginParts {
   const payload = new Map<string, Uint8Array>();
   for (const [name, bytes] of Object.entries(files)) if (name.startsWith("payload/")) payload.set(name.slice("payload/".length), bytes);
   if (manifest.entry !== null && !payload.has(manifest.entry)) throw refuse("entry", "the entry is not in the payload");
+  checkProvider(manifest, payload);
   return { manifest, manifestBytes, files: payload, signature };
+}
+
+/**
+ * A provider package's file (计划 4.1): present, within its size, valid, naming only the host's adapters and https addresses on the hosts it declares.
+ * The host never runs anything for it; this is everything there is to check.
+ */
+export function checkProvider(manifest: PluginManifest, files: ReadonlyMap<string, Uint8Array>): void {
+  if (!manifest.provider) return;
+  const bytes = files.get(manifest.provider);
+  if (!bytes) throw refuse("provider", "the provider file is not in the payload");
+  const parsed = parseProviderFile(bytes);
+  if (!parsed.ok) throw refuse("provider", "the provider file is not valid", { problem: parsed.problem });
+  const declared = manifest.provides.find((item) => item.slot === "model.provider");
+  if (declared && declared.id !== parsed.file.id) throw refuse("provider", "the provider file is not the provider the manifest names", { problem: `${declared.id} ≠ ${parsed.file.id}` });
+  if (!manifest.permissions.includes("network")) throw refuse("provider", "a provider package declares the network permission", { problem: "network" });
 }
 
 /** Whether the signature is a signature of exactly these bytes by this key. */

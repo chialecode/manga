@@ -49,8 +49,16 @@ function CandidateList(props: { t: T; candidates: DanmakuCandidate[]; busy: bool
 function Chooser(props: { t: T; view: DanmakuView }) {
   const { t, view } = props;
   const choice = view.choice;
-  const [query, setQuery] = useState(choice?.suggestedQuery ?? view.suggestedQuery);
-  const [episode, setEpisode] = useState(choice?.episodeNumber !== null && choice?.episodeNumber !== undefined ? String(choice.episodeNumber) : view.episodeNumber !== null ? String(view.episodeNumber) : "");
+  const suggestedQuery = choice?.suggestedQuery ?? view.suggestedQuery;
+  const suggestedEpisode = choice?.episodeNumber !== null && choice?.episodeNumber !== undefined
+    ? String(choice.episodeNumber)
+    : view.episodeNumber !== null ? String(view.episodeNumber) : "";
+  const [query, setQuery] = useState(suggestedQuery);
+  const [episode, setEpisode] = useState(suggestedEpisode);
+  useEffect(() => {
+    setQuery(suggestedQuery);
+    setEpisode(suggestedEpisode);
+  }, [suggestedQuery, suggestedEpisode]);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const text = query.trim();
@@ -185,20 +193,24 @@ export function DanmakuControl(props: {
   settings: DanmakuSettings;
   shown: number;
   open: boolean;
+  /** Whether the hosting player tab is visible; background tabs must not auto-open top-layer popups. */
+  active?: boolean;
   onOpen: (open: boolean) => void;
   onToggle: () => void;
   onOpenSettings?: () => void;
 }) {
   const { t, view, settings } = props;
+  const active = props.active !== false;
   const wrap = useRef<HTMLSpanElement>(null);
   const caret = useRef<HTMLButtonElement>(null);
   // A question that needs an answer opens the panel by itself, once, so the person is not left wondering why nothing shows.
   const asked = useRef<string | null>(null);
   const { onOpen } = props;
   useEffect(() => {
+    if (!active) return;
     if ((view.phase === "consent" || view.phase === "choose") && asked.current !== view.phase) { asked.current = view.phase; onOpen(true); }
     if (view.phase === "ready" || view.phase === "off") asked.current = null;
-  }, [view.phase, onOpen]);
+  }, [active, view.phase, onOpen]);
   const label = settings.enabled ? t("danmaku.toggleOff") : t("danmaku.toggleOn");
   return (
     <span ref={wrap} className="danmaku-control" data-testid="danmaku-control">

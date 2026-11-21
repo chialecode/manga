@@ -1,5 +1,9 @@
+import { useEffect, useRef } from "react";
 import { Bug, Loader2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
+import { isImeEvent } from "../lib/ime.ts";
+import { useKeyTable } from "../lib/key-table.tsx";
+import { Popup } from "./popup.tsx";
 import { RecordIndicator } from "../voice/record-control.tsx";
 import type { RecorderState } from "../voice/recorder.ts";
 import type { ScanJob } from "../hooks/use-scan.ts";
@@ -22,10 +26,28 @@ export function TitleActions(props: {
   update?: UpdateHandle;
 }) {
   const { t, update } = props;
+  const keyTable = useKeyTable();
+  const notesAnchor = useRef<HTMLButtonElement>(null);
   const status = update?.status ?? null;
   const readyVersion = status?.state === "ready" && !update?.snoozed ? status.availableVersion : null;
   const justUpdated = status?.justUpdated ?? null;
   const notesText = status?.releaseNotes || justUpdated?.releaseNotes || t("update.notesEmpty");
+  const notesShown = Boolean(update?.notesOpen && (readyVersion || justUpdated));
+  const debugChord = keyTable["global.debug"]?.[0];
+  const debugTitle = debugChord ? `${t("debug.open")} (${debugChord})` : t("debug.open");
+
+  useEffect(() => {
+    if (!notesShown) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isImeEvent(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        update?.setNotesOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [notesShown, update]);
 
   return (
     <>
@@ -33,9 +55,11 @@ export function TitleActions(props: {
         <div className="scan-indicator flex items-center gap-1.5" data-testid="update-just-updated" role="status">
           <span>{t("update.justUpdated", { version: justUpdated.version })}</span>
           <button
+            ref={notesAnchor}
             type="button"
             className="underline text-xs"
             data-testid="update-just-updated-notes"
+            aria-expanded={Boolean(update?.notesOpen)}
             onClick={() => update?.setNotesOpen(!update.notesOpen)}
           >
             {t("update.notes")}
@@ -65,6 +89,7 @@ export function TitleActions(props: {
           </button>
           <span aria-hidden="true">·</span>
           <button
+            ref={notesAnchor}
             type="button"
             className="underline text-xs"
             data-testid="update-notes-button"
@@ -84,19 +109,23 @@ export function TitleActions(props: {
           </button>
         </div>
       ) : null}
-      {update?.notesOpen && (readyVersion || justUpdated) ? (
-        <div
+      {notesShown ? (
+        <Popup
+          anchor={notesAnchor}
+          onClose={() => update?.setNotesOpen(false)}
+          placement="below"
+          align="end"
           role="region"
-          aria-label={t("update.notes")}
-          data-testid="update-notes-popover"
-          className="fixed top-10 right-4 z-50 max-w-sm rounded border border-[var(--color-border)] bg-[var(--color-surface,white)] p-3 text-xs shadow-md"
+          label={t("update.notes")}
+          testId="update-notes-popover"
+          className="max-w-sm rounded border border-[var(--color-border)] bg-[var(--color-surface,white)] p-3 text-xs shadow-md"
         >
           <div className="flex items-center justify-between font-medium mb-1">
             <span>{t("update.notes")}</span>
             <button
               type="button"
               aria-label={t("common.close")}
-              onClick={() => update.setNotesOpen(false)}
+              onClick={() => update?.setNotesOpen(false)}
             >
               ×
             </button>
@@ -107,7 +136,7 @@ export function TitleActions(props: {
             </p>
           ) : null}
           <p className="whitespace-pre-wrap">{notesText}</p>
-        </div>
+        </Popup>
       ) : null}
       {props.recorder && props.recorder.phase !== "idle" ? <RecordIndicator t={t} state={props.recorder} onStop={props.onStopRecording} compact /> : null}
       {props.scan ? (
@@ -116,7 +145,7 @@ export function TitleActions(props: {
           <span>{props.scan.total > 0 ? t("scan.indicator.count", { done: props.scan.processed, total: props.scan.total }) : t("scan.indicator")}</span>
         </button>
       ) : null}
-      <button type="button" className="shell-icon" data-testid="debug-toggle" aria-pressed={props.debugOpen} aria-label={t("debug.open")} title={`${t("debug.open")} (Ctrl+Shift+D)`} onClick={props.onDebug}><Bug size={17} /></button>
+      <button type="button" className="shell-icon" data-testid="debug-toggle" aria-pressed={props.debugOpen} aria-label={t("debug.open")} title={debugTitle} onClick={props.onDebug}><Bug size={17} /></button>
     </>
   );
 }

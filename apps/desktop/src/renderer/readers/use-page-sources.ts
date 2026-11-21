@@ -53,6 +53,16 @@ export function usePageSources(target: { resourceId: string; revisionId: string;
     setSources({});
   }, [key]);
 
+  // Close the shared PDF document and ignore in-flight handle replies when the reader unmounts.
+  useEffect(() => () => {
+    epoch.current += 1;
+    inflight.current.clear();
+    if (documentUrl.current) {
+      closePdfDocument(documentUrl.current);
+      documentUrl.current = null;
+    }
+  }, []);
+
   const commit = (next: Record<string, PageSource>) => {
     sourcesRef.current = next;
     setSources(next);

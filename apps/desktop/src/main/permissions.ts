@@ -69,14 +69,30 @@ export function permissionAllowed(facts: PermissionFacts): boolean {
   return false;
 }
 
-/** Pages the app opens in the system browser: the metadata source's own subject pages, over https, and nothing else. */
+/** The metadata source's hosts: on them, only the subject, character and person pages open. */
 const EXTERNAL_HOSTS = new Set(["bgm.tv", "bangumi.tv", "chii.in"]);
+/** Names that never lead to a public web page: this machine, a home or office network, or names reserved for tests and examples. */
+const PRIVATE_SUFFIXES = ["localhost", "local", "lan", "home", "internal", "intranet", "corp", "test", "invalid", "example", "arpa"];
 
+/**
+ * Pages the app opens in the system browser, and nothing else: the metadata source's own subject pages, and ordinary web pages the app shows as links
+ * (the sources of a web search, the results in the material search, a provider's key page, 计划 4.2/4.4/4.5). A web page is http or https on the default
+ * port, without a user name or password, at a public host name: not an address, not this machine, not a single-label or reserved name.
+ */
 export function externalUrlAllowed(value: unknown): boolean {
   if (typeof value !== "string" || value.length > 2048) return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password && (url.port === "" || url.port === "443") && EXTERNAL_HOSTS.has(url.hostname.toLowerCase()) && /^\/(subject|character|person)\/\d+\/?$/.test(url.pathname);
+    if (url.username || url.password) return false;
+    const host = url.hostname.toLowerCase();
+    if (EXTERNAL_HOSTS.has(host)) return url.protocol === "https:" && (url.port === "" || url.port === "443") && /^\/(subject|character|person)\/\d+\/?$/.test(url.pathname);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+    if (url.port !== "") return false;
+    const labels = host.split(".");
+    const tld = labels.at(-1) ?? "";
+    // An IPv6 literal has brackets and an IPv4 one ends in digits; both are refused, as is a host without a dot.
+    if (labels.length < 2 || !/^(xn--[a-z0-9-]+|[a-z]{2,63})$/.test(tld) || host.includes("[")) return false;
+    return !PRIVATE_SUFFIXES.includes(tld);
   } catch {
     return false;
   }

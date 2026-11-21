@@ -51,8 +51,8 @@ afterEach(() => {
 
 describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-180, AT-182)", () => {
   it("synchronizes PRODUCT_SCHEMA_VERSION and BUILD_SCHEMA_VERSION at 16", () => {
-    expect(PRODUCT_SCHEMA_VERSION).toBe(16);
-    expect(BUILD_SCHEMA_VERSION).toBe(16);
+    expect(PRODUCT_SCHEMA_VERSION).toBe(17);
+    expect(BUILD_SCHEMA_VERSION).toBe(17);
   });
 
   it("backs up v15 (stripping agent_requests), backfills dictionary categories & heard aliases without losing a row, and is idempotent", () => {
@@ -61,8 +61,8 @@ describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-
 
     const store = new DrizzleStore({ profileDir: dir, hostId: "open-v16" });
     try {
-      expect(store.migration).toMatchObject({ from: 15, to: 16 });
-      expect(store.getMeta("schemaVersion")).toBe("16");
+      expect(store.migration).toMatchObject({ from: 15, to: 17 });
+      expect(store.getMeta("schemaVersion")).toBe("17");
 
       // Backup exists, remains untouched v15, and stripped `agent_requests`
       const backupPath = path.join(dir, "manga.sqlite.premigrate-v15");
@@ -160,7 +160,7 @@ describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-
     const reopened = new DrizzleStore({ profileDir: dir, hostId: "reopen-v16" });
     try {
       expect(reopened.migration).toBeNull();
-      expect(reopened.getMeta("schemaVersion")).toBe("16");
+      expect(reopened.getMeta("schemaVersion")).toBe("17");
       expect(reopened.sqlite.prepare("SELECT COUNT(*) AS n FROM dictionary_aliases").get()).toEqual({ n: 3 });
     } finally {
       reopened.close();
@@ -187,8 +187,8 @@ describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-
 
     const recovered = new DrizzleStore({ profileDir: dir, hostId: "recover-v16" });
     try {
-      expect(recovered.migration).toMatchObject({ from: 15, to: 16 });
-      expect(recovered.getMeta("schemaVersion")).toBe("16");
+      expect(recovered.migration).toMatchObject({ from: 15, to: 17 });
+      expect(recovered.getMeta("schemaVersion")).toBe("17");
       expect(recovered.sqlite.prepare("SELECT COUNT(*) AS n FROM dictionary_terms").get()).toEqual({ n: 6 });
       expect(recovered.sqlite.prepare("SELECT COUNT(*) AS n FROM dictionary_aliases").get()).toEqual({ n: 3 });
     } finally {
@@ -196,14 +196,14 @@ describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-
     }
   });
 
-  it("rolls back on write error inside the migration transaction, matches fresh DB shape, and rejects v17 with API_INCOMPATIBLE", () => {
+  it("rolls back on write error inside the migration transaction, matches fresh DB shape, and rejects v18 with API_INCOMPATIBLE", () => {
     const dir = tempDir("v16-rollback");
     seedV15(dir);
 
     const blocker = new Database(path.join(dir, "manga.sqlite"));
     blocker.exec(`
       CREATE TRIGGER fail_v16_version BEFORE UPDATE ON schema_meta
-      WHEN NEW.key = 'schemaVersion' AND NEW.value = '16'
+      WHEN NEW.key = 'schemaVersion' AND NEW.value = '17'
       BEGIN
         SELECT RAISE(ABORT, 'simulated disk error during v16');
       END;
@@ -223,8 +223,8 @@ describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-
     const freshDir = tempDir("v16-fresh");
     const fresh = new DrizzleStore({ profileDir: freshDir, hostId: "fresh-v16" });
     try {
-      expect(migrated.getMeta("schemaVersion")).toBe("16");
-      expect(fresh.getMeta("schemaVersion")).toBe("16");
+      expect(migrated.getMeta("schemaVersion")).toBe("17");
+      expect(fresh.getMeta("schemaVersion")).toBe("17");
       expect(tablesOf(fresh.sqlite)).toEqual(tablesOf(migrated.sqlite));
       expect([...columnsOf(fresh.sqlite, "dictionary_terms")].sort()).toEqual(
         [...columnsOf(migrated.sqlite, "dictionary_terms")].sort(),
@@ -234,14 +234,14 @@ describe("schema v16 migration & dictation backup/export isolation (X1 + H1, AT-
       fresh.close();
     }
 
-    // Newer schema v17 must be rejected with MangaError("API_INCOMPATIBLE")
+    // Newer schema v18 must be rejected with MangaError("API_INCOMPATIBLE")
     const future = new Database(path.join(dir, "manga.sqlite"));
-    future.prepare("UPDATE schema_meta SET value = '17' WHERE key = 'schemaVersion'").run();
+    future.prepare("UPDATE schema_meta SET value = '18' WHERE key = 'schemaVersion'").run();
     future.close();
 
     try {
-      new DrizzleStore({ profileDir: dir, hostId: "future-v17" });
-      expect.unreachable("expected v17 schema to throw API_INCOMPATIBLE");
+      new DrizzleStore({ profileDir: dir, hostId: "future-v18" });
+      expect.unreachable("expected v18 schema to throw API_INCOMPATIBLE");
     } catch (err) {
       expect(err).toBeInstanceOf(MangaError);
       expect((err as MangaError).code).toBe("API_INCOMPATIBLE");

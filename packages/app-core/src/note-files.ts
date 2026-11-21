@@ -19,7 +19,7 @@ import { safeName, type FileTarget, type WorkFolders } from "./work-folders.ts";
 type Tree = Parameters<typeof toMarkdown>[0];
 type Node = Extract<Tree, { type: "root" }>["children"][number];
 
-type NoteRow = { id: string; title: string; payload_json: string; scope_json: string; work_id: string | null; deleted_at: string | null };
+type NoteRow = { id: string; title: string; payload_json: string; tags_json?: string | null; scope_json: string; work_id: string | null; deleted_at: string | null };
 type RecordRow = { id: string; folder_id: string; file_name: string; bytes: number };
 
 const NOTICE = "由 MANGA 生成，在这里修改不会写回应用。";
@@ -121,7 +121,7 @@ export class NoteFiles {
 
   /** The file of a note: written, renamed, or removed so that it says what the database says. */
   sync(objectId: string): "written" | "unchanged" | "removed" | "skipped" {
-    const row = this.store.sqlite.prepare("SELECT id, title, payload_json, scope_json, work_id, deleted_at FROM content_objects WHERE id = ? AND type = 'notes.document'").get(objectId) as NoteRow | undefined;
+    const row = this.store.sqlite.prepare("SELECT id, title, payload_json, tags_json, scope_json, work_id, deleted_at FROM content_objects WHERE id = ? AND type = 'notes.document'").get(objectId) as NoteRow | undefined;
     const records = this.recordsOf(objectId);
     if (!row || row.deleted_at) {
       for (const record of records) this.drop(record.id);
@@ -275,7 +275,15 @@ export class NoteFiles {
     const source = this.source(row, target);
     const position = this.position(document.blocks);
     if (position) source.push(`位置：${position}`);
-    if (document.tags?.length) source.push(`标签：${document.tags.join("、")}`);
+    let storedTags: string[] = [];
+    if (row.tags_json) {
+      try {
+        const parsed = JSON.parse(row.tags_json) as unknown;
+        if (Array.isArray(parsed)) storedTags = parsed.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0);
+      } catch { /* malformed tags_json */ }
+    }
+    const tags = storedTags.length ? storedTags : (document.tags ?? []);
+    if (tags.length) source.push(`标签：${tags.join("、")}`);
     children.push({ type: "blockquote", children: [paragraph(text(NOTICE)), ...source.map((line) => paragraph(text(line)))] } as Node);
     let list: { ordered: boolean; items: Node[] } | null = null;
     const closeList = () => {

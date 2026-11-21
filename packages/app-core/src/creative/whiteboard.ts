@@ -295,6 +295,7 @@ export class WhiteboardService {
         let data: Record<string, unknown> = action.data ?? {};
         if (action.kind === "ref") data = this.checkRef(data);
         if (action.parentId) {
+          if (action.kind === "group") throw bad("a group cannot be put into a group", "nested");
           if (draft.node(action.parentId).kind !== "group") throw bad("a card can only be put into a group", "parent");
         }
         draft.nodes.set(id, {

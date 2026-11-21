@@ -178,8 +178,12 @@ export class DandanClient {
       throw new MangaError("PROVIDER_UNAVAILABLE", `the danmaku service answered ${response.status}`, { retryable: response.status >= 500, details: { reason: "bad_response", status: response.status } });
     }
     const limit = this.options.maxBytes ?? 32 * 1024 * 1024;
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > limit) throw new MangaError("PROVIDER_UNAVAILABLE", "the danmaku service sent too much", { details: { reason: "bad_response" } });
+    const declared = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > limit) {
+      void response.body?.cancel().catch(() => undefined);
+      throw new MangaError("PROVIDER_UNAVAILABLE", "the danmaku service sent too much", { details: { reason: "bad_response" } });
+    }
+    const bytes = await this.readBody(response, limit, signal, timeout);
     let json: unknown;
     try { json = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new MangaError("PROVIDER_UNAVAILABLE", "the danmaku service sent something that is not JSON", { details: { reason: "bad_response" } }); }
     const parsed = schema.safeParse(json);
@@ -187,6 +191,53 @@ export class DandanClient {
     const answer = parsed.data as { success?: boolean; errorMessage?: string | null };
     if (answer.success === false) throw new MangaError("PROVIDER_UNAVAILABLE", answer.errorMessage?.trim().slice(0, 200) || "the danmaku service could not answer", { details: { reason: "rejected" } });
     return parsed.data;
+  }
+
+  private async readBody(response: Response, limit: number, signal?: AbortSignal, timeout?: AbortSignal): Promise<Uint8Array> {
+    const reader = response.body?.getReader();
+    if (!reader) return new Uint8Array(0);
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    const onAbort = () => { void reader.cancel().catch(() => undefined); };
+    if (signal?.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new MangaError("CANCELLED", "the request was cancelled");
+    }
+    if (timeout?.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new MangaError("PROVIDER_UNAVAILABLE", "the danmaku service did not answer in time", { retryable: true, details: { reason: "network" } });
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    timeout?.addEventListener("abort", onAbort, { once: true });
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
+        if (timeout?.aborted) throw new MangaError("PROVIDER_UNAVAILABLE", "the danmaku service did not answer in time", { retryable: true, details: { reason: "network" } });
+        if (done) break;
+        total += value.byteLength;
+        if (total > limit) {
+          void reader.cancel().catch(() => undefined);
+          throw new MangaError("PROVIDER_UNAVAILABLE", "the danmaku service sent too much", { details: { reason: "bad_response" } });
+        }
+        chunks.push(value);
+      }
+    } catch (error) {
+      if (error instanceof MangaError) throw error;
+      if (signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
+      const timedOut = Boolean(timeout?.aborted);
+      throw new MangaError("PROVIDER_UNAVAILABLE", timedOut ? "the danmaku service did not answer in time" : "the danmaku service could not be reached", { retryable: true, details: { reason: "network" }, cause: error });
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+      timeout?.removeEventListener("abort", onAbort);
+    }
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out;
   }
 
   /** Match a file by its name and fingerprint: `fileHash` is the MD5 of the first 16 MiB, `videoDuration` is in seconds. */

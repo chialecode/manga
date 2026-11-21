@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { CommandError, asArray, attempt } from "../../../lib/api.ts";
+import { formatClockMs } from "../../../lib/format.ts";
+import { useAsyncGuard } from "../../../hooks/use-async-guard.ts";
 import { Modal } from "../../../components/modal.tsx";
-import { formatClockMs } from "../../../readers/video-model.ts";
 import type { Material } from "../project-parts.tsx";
 import { RESEARCH_SCOPES, fetchReason, hostOf, type FetchOutcome, type PageSummary, type ResearchScope, type ResultItem } from "./research-model.ts";
 
@@ -31,13 +32,17 @@ export function SearchPanel(props: {
   const [scopes, setScopes] = useState<ReadonlySet<ResearchScope>>(new Set(RESEARCH_SCOPES));
   const [searched, setSearched] = useState<{ text: string; results: ResultItem[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [addingKey, setAddingKey] = useState<string | null>(null);
+  const guard = useAsyncGuard();
 
   async function search(event?: { preventDefault: () => void }) {
     event?.preventDefault();
     const query = text.trim();
     if (!query || !scopes.size || busy) return;
+    const token = guard.next();
     setBusy(true);
     const result = await attempt<{ results: ResultItem[] }>("research.search", { text: query, projectId: props.projectId, ...(scopes.size < RESEARCH_SCOPES.length ? { scopes: RESEARCH_SCOPES.filter((scope) => scopes.has(scope)) } : {}) });
+    if (!guard.isCurrent(token)) return;
     setBusy(false);
     if (!result.ok) { props.onError(result.error.message); return; }
     setSearched({ text: query, results: asArray<ResultItem>(result.value.results) });
@@ -53,8 +58,12 @@ export function SearchPanel(props: {
 
   async function add(result: ResultItem) {
     const kind = materialKindOf(result);
-    if (!kind) return;
+    const key = `${result.kind}:${result.id}:${result.startMs ?? result.start ?? 0}`;
+    if (!kind || addingKey !== null) return;
+    setAddingKey(key);
     const added = await attempt("project.addMaterial", { projectId: props.projectId, kind, targetId: kind === "resource" ? (result.resourceId ?? result.id) : result.id });
+    if (!guard.isAlive()) return;
+    setAddingKey(null);
     if (!added.ok) { props.onError(added.error.message); return; }
     props.onNotice(t("research.result.added"));
     setSearched((current) => current ? { ...current, results: current.results.map((item) => item === result ? { ...item, inProject: true } : item) } : current);
@@ -97,14 +106,14 @@ export function SearchPanel(props: {
                   <div className="research-result-head">
                     <span className="chip">{t(`research.scope.${result.kind}` as MessageKey)}</span>
                     <strong>{result.title}</strong>
-                    {result.startMs !== undefined ? <span className="detail-muted">{t("research.result.at", { time: formatClockMs(result.startMs).replace(/\.\d+$/, "") })}</span> : null}
+                    {result.startMs !== undefined ? <span className="detail-muted">{t("research.result.at", { time: formatClockMs(result.startMs) })}</span> : null}
                   </div>
                   <p className="research-snippet">{result.snippet}</p>
                   <div className="research-result-actions">
                     <button type="button" className="link-button" data-testid="research-result-open" onClick={() => open(result)}>{t("research.result.open")}</button>
                     {materialKindOf(result) ? (result.inProject
                       ? <span className="detail-muted" data-testid="research-result-in">{t("research.result.inProject")}</span>
-                      : <button type="button" className="link-button" data-testid="research-result-add" onClick={() => void add(result)}>{t("research.result.add")}</button>) : null}
+                      : <button type="button" className="link-button" data-testid="research-result-add" disabled={addingKey !== null} onClick={() => void add(result)}>{t("research.result.add")}</button>) : null}
                   </div>
                 </li>
               ))}
@@ -134,16 +143,18 @@ export function PagesPanel(props: {
   const [problem, setProblem] = useState<string | null>(null);
   const [pages, setPages] = useState<PageSummary[] | null>(null);
   const [confirming, setConfirming] = useState<PageSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const listGuard = useAsyncGuard();
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
   useEffect(() => {
-    let live = true;
+    const token = listGuard.next();
     void attempt<{ pages: PageSummary[] }>("webpage.list", {}).then((result) => {
-      if (!live) return;
-      if (result.ok) setPages(asArray<PageSummary>(result.value.pages)); else { setPages([]); props.onError(result.error.message); }
+      if (!listGuard.isCurrent(token)) return;
+      if (result.ok) setPages(asArray<PageSummary>(result.value.pages)); else { setPages([]); onErrorRef.current(result.error.message); }
     });
-    return () => { live = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.version]);
+  }, [props.version, listGuard]);
 
   async function fetchIt(event?: { preventDefault: () => void }) {
     event?.preventDefault();
@@ -152,6 +163,7 @@ export function PagesPanel(props: {
     setBusy(true);
     setProblem(null);
     const result = await attempt<FetchOutcome>("webpage.fetch", { url: address });
+    if (!listGuard.isAlive()) return;
     setBusy(false);
     if (!result.ok) {
       const reason = fetchReason(result.error);
@@ -165,8 +177,12 @@ export function PagesPanel(props: {
   }
 
   async function remove(page: PageSummary) {
-    setConfirming(null);
+    if (deleting) return;
+    setDeleting(true);
     const result = await attempt("webpage.delete", { pageId: page.id });
+    if (!listGuard.isAlive()) return;
+    setDeleting(false);
+    setConfirming(null);
     if (!result.ok) {
       const details = (result.error instanceof CommandError ? result.error.details : undefined) as { reason?: string; excerpts?: number } | undefined;
       props.onError(details?.reason === "inUse" ? t("research.pages.inUse", { n: details.excerpts ?? 0 }) : result.error.message);
@@ -198,11 +214,112 @@ export function PagesPanel(props: {
         ))}
       </ul>
       {confirming ? (
-        <Modal title={t("research.pages.delete")} closeLabel={t("whiteboard.cancel")} onClose={() => setConfirming(null)} testId="research-page-delete-dialog"
-          footer={<><button type="button" onClick={() => setConfirming(null)}>{t("whiteboard.cancel")}</button><button type="button" className="danger-button" data-testid="research-page-delete-confirm" onClick={() => void remove(confirming)}>{t("whiteboard.deleteDo")}</button></>}>
+        <Modal title={t("research.pages.delete")} closeLabel={t("whiteboard.cancel")} onClose={() => { if (!deleting) setConfirming(null); }} testId="research-page-delete-dialog"
+          footer={<><button type="button" disabled={deleting} onClick={() => setConfirming(null)}>{t("whiteboard.cancel")}</button><button type="button" className="danger-button" data-testid="research-page-delete-confirm" disabled={deleting} onClick={() => void remove(confirming)}>{t("whiteboard.deleteDo")}</button></>}>
           <p>{t("research.pages.deleteConfirm", { name: confirming.title || hostOf(confirming.url) })}</p>
         </Modal>
       ) : null}
     </section>
   );
+}
+
+type WebResult = { title: string; url: string; site: string | null; publishedAt: string | null; snippet: string | null; summary: string | null };
+
+/**
+ * Searching the web through the provider's search service (计划 4.5): the results with their site, date and summary; each can be fetched and saved as a page
+ * of the project (the usual `webpage.fetch`) or opened in the browser. Without a search service the panel says how to add one.
+ */
+export function WebSearchPanel(props: {
+  t: T;
+  /** A search service is configured. */
+  available: boolean;
+  onOpenSettings?: () => void;
+  onFetched: (outcome: FetchOutcome) => void;
+  onNotice: (message: string) => void;
+}) {
+  const { t } = props;
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<{ query: string; truncated: boolean; results: WebResult[] } | null>(null);
+  const [fetching, setFetching] = useState<string | null>(null);
+  const guard = useAsyncGuard();
+
+  async function search(event?: { preventDefault: () => void }) {
+    event?.preventDefault();
+    const words = query.trim();
+    if (!words || busy) return;
+    const token = guard.next();
+    setBusy(true);
+    setProblem(null);
+    const result = await attempt<{ query: string; truncated: boolean; results: WebResult[] }>("web.search", { query: words });
+    if (!guard.isCurrent(token)) return;
+    setBusy(false);
+    if (!result.ok) { setProblem(webSearchProblem(t, result.error)); setAnswer(null); return; }
+    setAnswer({ query: result.value.query, truncated: result.value.truncated, results: asArray<WebResult>(result.value.results) });
+  }
+
+  async function save(item: WebResult) {
+    if (fetching !== null) return;
+    setFetching(item.url);
+    const result = await attempt<FetchOutcome>("webpage.fetch", { url: item.url });
+    if (!guard.isAlive()) return;
+    setFetching(null);
+    if (!result.ok) {
+      const reason = fetchReason(result.error);
+      setProblem(reason ? t(reason.key as MessageKey, reason.params) : result.error.message || t("research.fetch.failed"));
+      return;
+    }
+    props.onNotice(t("research.fetch.created", { title: result.value.page.title || hostOf(result.value.page.url) }));
+    props.onFetched(result.value);
+  }
+
+  return (
+    <section className="research-panel" data-testid="research-web" aria-labelledby="research-web-title">
+      <h3 id="research-web-title">{t("research.web.title")}</h3>
+      {!props.available ? (
+        <p className="detail-muted" data-testid="research-web-missing">
+          {t("research.web.missing")}{" "}
+          {props.onOpenSettings ? <button type="button" className="link-button" data-testid="research-web-settings" onClick={props.onOpenSettings}>{t("research.web.settings")}</button> : null}
+        </p>
+      ) : (
+        <>
+          <form className="research-form" onSubmit={(event) => void search(event)}>
+            <input type="search" data-testid="research-web-query" aria-label={t("research.web.label")} value={query} maxLength={2000} onChange={(event) => setQuery(event.target.value)} />
+            <button type="submit" className="primary-button" data-testid="research-web-go" disabled={busy || !query.trim()}>{busy ? t("research.web.busy") : t("research.web.go")}</button>
+          </form>
+          {problem ? <p className="draft-warn-text" role="alert" data-testid="research-web-error">{problem}</p> : null}
+          {answer?.truncated ? <p className="detail-muted" data-testid="research-web-truncated">{t("research.web.truncated", { query: answer.query })}</p> : null}
+          {answer && !answer.results.length ? <p className="detail-muted" data-testid="research-web-empty">{t("research.web.empty")}</p> : null}
+          <ul className="research-pages" data-testid="research-web-results">
+            {(answer?.results ?? []).map((item) => (
+              <li key={item.url} data-testid="research-web-result">
+                <div className="research-web-result">
+                  <strong>{item.title || hostOf(item.url)}</strong>
+                  <small>{[item.site ?? hostOf(item.url), item.publishedAt?.slice(0, 10)].filter(Boolean).join(" · ")}</small>
+                  {item.snippet || item.summary ? <p className="detail-muted">{item.snippet ?? item.summary}</p> : null}
+                  <span className="msettings-actions">
+                    <button type="button" className="secondary-button" data-testid="research-web-save" disabled={fetching !== null} onClick={() => void save(item)}>{fetching === item.url ? t("research.fetch.busy") : t("research.web.save")}</button>
+                    <button type="button" className="link-button" data-testid="research-web-open" onClick={() => { void window.manga.openExternal?.(item.url); }}>{t("research.web.open")}</button>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** What a failed search says, by kind (计划 4.5): the key, the balance, the rate limit, the service, the time. */
+function webSearchProblem(t: T, error: { code: string; message: string; details?: unknown }): string {
+  const details = (error.details ?? {}) as { status?: number; kind?: string; reason?: string };
+  if (details.reason === "plugin_disabled") return t("models.plain.reason.provider");
+  if (error.code === "AUTHENTICATION_FAILED" || details.status === 401 || details.status === 403) return t("models.plain.reason.auth");
+  if (details.kind === "billing" || details.status === 402) return t("models.plain.reason.billing");
+  if (error.code === "RATE_LIMITED" || details.status === 429) return t("research.web.rateLimited");
+  if (details.kind === "timeout") return t("research.web.timeout");
+  if (details.kind === "busy" || (details.status ?? 0) >= 500) return t("models.plain.reason.busy");
+  return error.message;
 }

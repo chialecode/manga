@@ -20,6 +20,7 @@ import {
   describeReading,
   toPhonemes,
 } from "./correct/index.ts";
+import { isHintEcho } from "./engine/prompt-builder.ts";
 
 export const MAX_HOTWORDS = 50;
 export const BANGUMI_DETAIL_REQUEST_BUDGET = 60;
@@ -420,21 +421,50 @@ export class DictionaryService {
   }
 
   private syncCorrectorTerm(termId: string): void {
+    this.syncCorrectorTerms([termId]);
+  }
+
+  private syncCorrectorTerms(termIds: ReadonlyArray<string>, removedIds: ReadonlyArray<string> = []): void {
     if (!this.correctorInstance) return;
-    const row = this.store.sqlite.prepare("SELECT * FROM dictionary_terms WHERE id = ?").get(termId) as TermRow | undefined;
-    if (!row) {
-      this.correctorInstance.removeTerm(termId);
-    } else {
-      const hydrated = this.hydrateRows([row])[0]!;
-      this.correctorInstance.upsertTerm(this.toCorrectorEntry(hydrated));
+    if (termIds.length === 0 && removedIds.length === 0) return;
+    for (const id of removedIds) {
+      this.correctorInstance.removeTerm(id);
+    }
+    if (termIds.length > 0) {
+      const uniqueIds = [...new Set(termIds)];
+      const rows: TermRow[] = [];
+      const chunkSize = 400;
+      for (let offset = 0; offset < uniqueIds.length; offset += chunkSize) {
+        const slice = uniqueIds.slice(offset, offset + chunkSize);
+        const placeholders = slice.map(() => "?").join(",");
+        rows.push(
+          ...(this.store.sqlite
+            .prepare(`SELECT * FROM dictionary_terms WHERE id IN (${placeholders})`)
+            .all(...slice) as TermRow[]),
+        );
+      }
+      const foundIds = new Set(rows.map((r) => r.id));
+      for (const id of uniqueIds) {
+        if (!foundIds.has(id)) this.correctorInstance.removeTerm(id);
+      }
+      if (rows.length > 0) {
+        const hydrated = this.hydrateRows(rows);
+        const workIds = [...new Set(hydrated.map((t) => t.workId).filter((w): w is string => Boolean(w)))];
+        const titleByWorkId = new Map<string, string | null>();
+        for (const workId of workIds) {
+          titleByWorkId.set(workId, this.workTitleFor(workId));
+        }
+        for (const term of hydrated) {
+          const title = term.workId ? (titleByWorkId.get(term.workId) ?? null) : null;
+          this.correctorInstance.upsertTerm(this.toCorrectorEntry(term, title));
+        }
+      }
     }
     this.correctorWatermark = this.computeWatermark();
   }
 
   private removeCorrectorTerm(termId: string): void {
-    if (!this.correctorInstance) return;
-    this.correctorInstance.removeTerm(termId);
-    this.correctorWatermark = this.computeWatermark();
+    this.syncCorrectorTerms([], [termId]);
   }
 
   /** Computes Mandarin/Japanese/Latin phonetic tokens and human-readable reading in memory. */
@@ -850,9 +880,7 @@ export class DictionaryService {
       }
     })();
 
-    for (const id of addedIds) {
-      this.syncCorrectorTerm(id);
-    }
+    this.syncCorrectorTerms(addedIds);
     const hydrated = addedIds.length
       ? this.hydrateRows(
           addedIds.map((id) => this.row(id)),
@@ -949,8 +977,7 @@ export class DictionaryService {
       }
     })();
 
-    for (const id of removedIds) this.removeCorrectorTerm(id);
-    for (const id of upsertedIds) this.syncCorrectorTerm(id);
+    this.syncCorrectorTerms(upsertedIds, removedIds);
     return result;
   }
 
@@ -1234,13 +1261,29 @@ export class DictionaryService {
     return out;
   }
 
+  /** Lightweight ordered term strings without hydrating aliases (used by prompt building and organizer glossary). */
+  private orderedTermStrings(workId: string | null): string[] {
+    const rows = workId
+      ? (this.store.sqlite
+          .prepare(
+            `SELECT term FROM dictionary_terms
+             WHERE disabled = 0 AND (scope = 'global' OR (scope = 'work' AND work_id = ?))
+             ORDER BY CASE WHEN scope = 'work' AND source = 'manual' THEN 0 WHEN scope = 'work' THEN 1 ELSE 2 END, created_at, rowid`,
+          )
+          .all(workId) as Array<{ term: string }>)
+      : (this.store.sqlite
+          .prepare("SELECT term FROM dictionary_terms WHERE disabled = 0 AND scope = 'global' ORDER BY (source = 'manual') DESC, created_at, rowid")
+          .all() as Array<{ term: string }>);
+    return rows.map((row) => row.term);
+  }
+
   /** Every term a work may be heard with, without caring about the hint's length: what the organizer is given as its glossary. */
   glossaryFor(workId: string | null): string[] {
-    return [...new Set(this.ordered(workId).map((item) => item.term))];
+    return [...new Set(this.orderedTermStrings(workId))];
   }
 
   prompt(workId: string | null, limit: number): PromptBuild {
-    return buildPrompt(this.ordered(workId).map((item) => item.term), limit);
+    return buildPrompt(this.orderedTermStrings(workId), limit);
   }
 
   /** Legacy shape for the older term commands: the work's own terms with how each was heard. */
@@ -1279,45 +1322,10 @@ export function buildPrompt(terms: string[], limit: number = PROMPT_LIMIT_DEFAUL
   return { text, included, total: unique.length, cut: unique.length - included.length, limit };
 }
 
-const SEPARATORS = /[\s,，、;；.。:：!！?？"'“”‘’「」『』()（）\-—~·…]+/gu;
-const normalize = (value: string) => value.replace(SEPARATORS, "").toLowerCase();
-
 /**
- * Whether a transcript only repeats the hint it was given. A dictionary makes this more likely, since a model with little audio to go on
- * (silence, music) tends to give the hint back. The text is taken apart into dictionary terms from the left; it counts as an echo when
- * almost all of it is terms and they either run in the order of the hint (three or more in a row), or one term is repeated three times
- * or more, or the text is the hint itself.
+ * Whether a transcript only repeats the hint it was given. Delegates to `isHintEcho` so dictionary/capture and
+ * dictation share one consistent, linear-time echo detector.
  */
 export function isPromptEcho(transcript: string, hint: string[]): boolean {
-  const text = normalize(transcript);
-  if (!text || hint.length === 0) return false;
-  const terms = hint.map((term) => ({ term, key: normalize(term) })).filter((item) => item.key.length > 0);
-  if (terms.length === 0) return false;
-  // Longest term first so "魔王城" is taken before "魔王".
-  const byLength = [...terms].sort((a, b) => b.key.length - a.key.length);
-  let position = 0;
-  let matched = 0;
-  const run: number[] = [];
-  while (position < text.length) {
-    const hit = byLength.find((item) => text.startsWith(item.key, position));
-    if (hit) {
-      matched += hit.key.length;
-      run.push(terms.indexOf(terms.find((item) => item.key === hit.key)!));
-      position += hit.key.length;
-    } else {
-      position += 1;
-    }
-  }
-  if (matched / text.length < 0.8) return false;
-  const counts = new Map<number, number>();
-  for (const index of run) counts.set(index, (counts.get(index) ?? 0) + 1);
-  const repeated = [...counts.values()].some((count) => count >= 3);
-  let longest = 1;
-  let current = 1;
-  for (let i = 1; i < run.length; i += 1) {
-    current = run[i]! === run[i - 1]! + 1 ? current + 1 : 1;
-    if (current > longest) longest = current;
-  }
-  const whole = normalize(hint.join(""));
-  return repeated || longest >= 3 || (whole.length >= 6 && text === whole);
+  return isHintEcho(transcript, hint);
 }

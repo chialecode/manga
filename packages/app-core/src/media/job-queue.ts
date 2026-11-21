@@ -1,4 +1,5 @@
 import { MangaError } from "@manga/contracts";
+import { errorMessage } from "../shared/utils.ts";
 import { Lane } from "./process-runner.ts";
 
 export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
@@ -32,7 +33,7 @@ export type JobSubmit<T> = {
   run: (context: JobContext) => Promise<T>;
 };
 
-type Record_ = JobSnapshot & { controller: AbortController; promise: Promise<unknown>; lastEmit: number };
+type Record_ = JobSnapshot & { controller: AbortController; promise: Promise<unknown>; lastEmit: number; subscribers: number };
 
 /**
  * In-process background work with a fixed concurrency per lane, so transcoding, thumbnailing and voice filtering never
@@ -78,8 +79,23 @@ export class JobQueue {
   }
 
   private snapshot(record: Record_): JobSnapshot {
-    const { controller: _c, promise: _p, lastEmit: _l, ...rest } = record;
+    const { controller: _c, promise: _p, lastEmit: _l, subscribers: _s, ...rest } = record;
     return { ...rest, error: record.error ? { ...record.error } : null };
+  }
+
+  private subscribe<T>(record: Record_): { id: string; promise: Promise<T>; cancel: () => void } {
+    record.subscribers += 1;
+    let released = false;
+    return {
+      id: record.id,
+      promise: record.promise as Promise<T>,
+      cancel: () => {
+        if (released) return;
+        released = true;
+        record.subscribers -= 1;
+        if (record.subscribers <= 0) record.controller.abort();
+      },
+    };
   }
 
   submit<T>(spec: JobSubmit<T>): { id: string; promise: Promise<T>; cancel: () => void } {
@@ -87,7 +103,7 @@ export class JobQueue {
       const existing = this.byKey.get(spec.key);
       const record = existing ? this.jobs.get(existing) : undefined;
       if (record && (record.state === "queued" || record.state === "running")) {
-        return { id: record.id, promise: record.promise as Promise<T>, cancel: () => record.controller.abort() };
+        return this.subscribe<T>(record);
       }
     }
     this.seq += 1;
@@ -96,7 +112,7 @@ export class JobQueue {
     const record: Record_ = {
       id, lane: spec.lane, kind: spec.kind, key: spec.key ?? null, owner: spec.owner ?? null,
       state: "queued", progress: 0, error: null, startedAt: null, finishedAt: null,
-      controller, promise: Promise.resolve(), lastEmit: 0,
+      controller, promise: Promise.resolve(), lastEmit: 0, subscribers: 0,
     };
     this.jobs.set(id, record);
     if (spec.key) this.byKey.set(spec.key, id);
@@ -126,7 +142,7 @@ export class JobQueue {
       record.state = cancelled ? "cancelled" : "failed";
       record.error = error instanceof MangaError
         ? { code: error.code, message: error.message }
-        : { code: "INTERNAL", message: error instanceof Error ? error.message : String(error) };
+        : { code: "INTERNAL", message: errorMessage(error) };
       throw error;
     }).finally(() => {
       record.finishedAt = this.now();
@@ -137,7 +153,7 @@ export class JobQueue {
     // The caller decides whether to await; an ignored failure must not become an unhandled rejection.
     promise.catch(() => undefined);
     record.promise = promise;
-    return { id, promise, cancel: () => controller.abort() };
+    return this.subscribe<T>(record);
   }
 
   get(id: string): JobSnapshot | undefined {

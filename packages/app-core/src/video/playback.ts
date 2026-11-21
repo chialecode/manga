@@ -1,4 +1,5 @@
 import type { PlaybackDecision, VideoProbe, VideoStreamInfo } from "@manga/contracts";
+import { primaryVideoStream } from "./extract-media.ts";
 
 /** What the renderer found out about this machine, plus what the owner forced. Everything else is decided from the file. */
 export type PlaybackCaps = {
@@ -59,9 +60,7 @@ function audioPlayable(stream: VideoStreamInfo, caps: PlaybackCaps): boolean {
  * copy. Copies never change what the user's notes point at: all times stay on the original timeline.
  */
 export function decidePlayback(probe: VideoProbe, caps: PlaybackCaps, options: { audioStreamIndex?: number } = {}): PlaybackPlan {
-  const videos = probe.streams.filter((stream) => stream.type === "video");
-  // Cover art and still images ride along as "video" streams in some files; the film is the one with a frame rate or the most pixels.
-  const video = [...videos].sort((a, b) => (b.fps ? 1 : 0) - (a.fps ? 1 : 0) || (b.width ?? 0) * (b.height ?? 0) - (a.width ?? 0) * (a.height ?? 0))[0];
+  const video = primaryVideoStream(probe);
   const audios = probe.streams.filter((stream) => stream.type === "audio");
   const mediaType = mediaTypeFor(probe);
   if (!video) return { decision: "unsupported", reasons: ["unsupported_video"], videoStreamIndex: null, audioStreamIndex: null, mediaType, detail: "the file has no video stream" };

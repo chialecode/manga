@@ -74,6 +74,13 @@ export function useComic(deps: ComicDeps) {
   const progressChain = useRef<Promise<void>>(Promise.resolve());
   /** The last page the reader recorded: a reader mounted again starts there, not at the page the book was opened at. */
   const reached = useRef<{ resourceId: string; pageId: string } | null>(null);
+  const pendingSettings = useRef<Partial<ComicSettings>>({});
+  const settingsChain = useRef<Promise<unknown>>(Promise.resolve());
+
+  useEffect(() => {
+    const stop = window.manga?.onSaveNow?.(() => Promise.all([progressChain.current, settingsChain.current]));
+    return () => { stop?.(); };
+  }, []);
 
   async function open(resourceId: string, options: OpenOptions = {}) {
     const request = ++viewRequest.current;
@@ -104,7 +111,7 @@ export function useComic(deps: ComicDeps) {
       attempt<{ workId: string | null }>("works.open", { resourceId, contextId }),
     ]);
     if (request !== viewRequest.current) return;
-    if (saved.ok && saved.value.comic) setSettings({ ...DEFAULT_COMIC_SETTINGS, ...saved.value.comic });
+    if (saved.ok && saved.value.comic) setSettings({ ...DEFAULT_COMIC_SETTINGS, ...saved.value.comic, ...pendingSettings.current });
     // A finished book starts again from its first page; an unfinished one resumes where it was left.
     const locator = progress.ok ? progress.value.locator : null;
     const last = loaded.pages[loaded.pages.length - 1]?.id;
@@ -167,7 +174,7 @@ export function useComic(deps: ComicDeps) {
     if (!current) return;
     const outcome = await relinkResource(current.resourceId);
     if (outcome.kind === "cancelled") return;
-    const shown = relinkNotice(i18n.t, outcome, () => void repair());
+    const shown = relinkNotice(i18n.t, outcome, () => void repair(), setError);
     if (shown.error) { setError(shown.error); return; }
     setNotice(shown.notice, shown.action);
     // A folder that is no library path yet: nothing was changed, and the notice offers adding it.
@@ -179,7 +186,16 @@ export function useComic(deps: ComicDeps) {
   function changeSettings(patch: Partial<ComicSettings>) {
     setSettings((current) => ({ ...current, ...patch }));
     mediaPrefs.publish("comic", patch);
-    void attempt("settings.setMedia", { comic: patch }).then((result) => { if (!result.ok) setError(result.error.message); });
+    pendingSettings.current = { ...pendingSettings.current, ...patch };
+    settingsChain.current = settingsChain.current.then(async () => {
+      const result = await attempt("settings.setMedia", { comic: patch });
+      for (const [key, value] of Object.entries(patch)) {
+        if ((pendingSettings.current as Record<string, unknown>)[key] === value) {
+          delete (pendingSettings.current as Record<string, unknown>)[key];
+        }
+      }
+      if (!result.ok) setError(result.error.message);
+    });
   }
 
   /** The pages now on screen count as read. Writes go one after another so the last page wins as the saved position. */

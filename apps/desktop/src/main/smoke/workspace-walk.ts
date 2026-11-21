@@ -7,8 +7,8 @@ import {
 import { js, leaveSettings, toRail, type caller } from "./common.ts";
 
 /**
- * The workspace in the real window (UI-01, UI-06 — UI-10, AT-110 — AT-118): where the top row, the icon rail, the sidebar, the tabbed main area and the
- * dock are at three window sizes; the four menus, item by item; tabs opened from the library and brought back; the four layouts of the split; a video moved between
+ * The workspace in the real window (UI-01, UI-06 — UI-10, AT-110 — AT-118): where the title bar, the icon rail, the sidebar, the tabbed main area and the
+ * dock are at three window sizes; the commands the menus held, from where they now are (A-136); tabs opened from the library and brought back; the four layouts of the split; a video moved between
  * columns without stopping; the keys going to the focused column only; the contexts (two projects and "最近") each with its own tabs and layout; the same
  * file in three contexts with three positions; and the dock following the tab in front. Each observation is named; the package stage requires every one.
  */
@@ -199,47 +199,50 @@ async function walkFrame(env: WorkspaceEnv): Promise<void> {
     await resize(size);
     await openLibrary(view, 6000);
     await waitFrames(view);
-    const ids = ["shell-top", "shell-rail", "shell-sidebar", "shell-main", "shell-dock", "shell-resize-sidebar", "shell-resize-dock", "shell-sidebar-toggle", "shell-dock-toggle", "nav-back", "nav-forward", "menubar", "menu-file", "menu-edit", "menu-view", "menu-help", ...RAIL_ICONS, "nav-settings", "window-controls", "window-close"];
+    const ids = ["shell-top", "shell-rail", "shell-sidebar", "shell-main", "shell-dock", "shell-resize-sidebar", "shell-resize-dock", "shell-sidebar-toggle", "shell-dock-toggle", "title-end", ...RAIL_ICONS, "nav-settings", "window-controls", "window-close"];
     const got = await rectsOf(view, ids);
-    const hit = await reaches(view, [...RAIL_ICONS, "nav-settings", "shell-sidebar-toggle", "nav-back", "nav-forward", "menu-file", "menu-edit", "menu-view", "menu-help", "window-minimize", "window-maximize", "window-close", "shell-main"]);
-    const facts = await js<{ w: number; h: number; docOverflow: number; topOverflow: number; gone: string[]; sidebar: string | null; dock: string | null; dockDrawn: boolean; sidebarDrawn: boolean; chipReach: boolean | null; tops: number }>(view, `(() => {
-      const gone = ["mode-switch", "shell-title", "shell-left", "shell-right", "column-top-main", "column-top-left", "column-top-right", "nav-agent", "nav-library", "nav-projects", "nav-search", "nav-records"].filter((id) => document.querySelector('[data-testid="' + id + '"]'));
-      const top = document.querySelector('[data-testid="shell-top"]');
+    const hit = await reaches(view, [...RAIL_ICONS, "nav-settings", "shell-sidebar-toggle", "window-minimize", "window-maximize", "window-close", "shell-main"]);
+    const facts = await js<{ w: number; h: number; docOverflow: number; topOverflow: number; gone: string[]; sidebar: string | null; dock: string | null; dockDrawn: boolean; sidebarDrawn: boolean; chipReach: boolean | null; chipTop: number | null; tops: number; ownRow: boolean }>(view, `(() => {
+      // The old frame's parts, and the history buttons and menus the title bar no longer has (A-136).
+      const gone = ["mode-switch", "shell-title", "shell-left", "shell-right", "column-top-main", "column-top-left", "column-top-right", "nav-agent", "nav-library", "nav-projects", "nav-search", "nav-records", "nav-back", "nav-forward", "menubar", "menu-file", "menu-help"].filter((id) => document.querySelector('[data-testid="' + id + '"]'));
+      const top = document.querySelector('[data-testid="title-end"]');
       const chip = ${HOST}?.querySelector('[data-testid="tab"]');
-      let chipReach = null;
-      if (chip) { const b = chip.getBoundingClientRect(); const at = document.elementFromPoint(b.x + Math.min(30, b.width / 2), b.y + b.height / 2); chipReach = Boolean(at && (at === chip || chip.contains(at))); }
+      let chipReach = null, chipTop = null;
+      if (chip) { const b = chip.getBoundingClientRect(); chipTop = b.top; const at = document.elementFromPoint(b.x + Math.min(30, b.width / 2), b.y + b.height / 2); chipReach = Boolean(at && (at === chip || chip.contains(at))); }
       const drawn = ${DRAWN};
       return {
-        w: window.innerWidth, h: window.innerHeight, docOverflow: document.documentElement.scrollWidth - window.innerWidth, topOverflow: top ? top.scrollWidth - top.clientWidth : 0, gone,
+        w: window.innerWidth, h: window.innerHeight, docOverflow: document.documentElement.scrollWidth - window.innerWidth, topOverflow: top ? top.scrollWidth - top.clientWidth : 0, gone, chipTop,
         sidebar: document.querySelector('[data-testid="shell-sidebar"]')?.getAttribute("data-shell-state") ?? null,
         dock: document.querySelector('[data-testid="shell-dock"]')?.getAttribute("data-shell-state") ?? null,
         sidebarDrawn: drawn(document.querySelector('[data-testid="shell-sidebar"]')), dockDrawn: drawn(document.querySelector('[data-testid="shell-dock"]')), chipReach,
         tops: document.querySelectorAll('[data-testid="shell-top"]').length,
+        ownRow: document.querySelector('[data-testid="shell-main"]')?.getAttribute("data-title-row") === "own",
       };
     })()`);
     const here: string[] = [];
     const g = got as Record<string, Rect>;
     if (facts.gone.length) here.push(`parts of the old frame are still there: ${facts.gone.join(", ")}`);
-    if (facts.tops !== 1) here.push(`${facts.tops} top rows`);
-    // Below 640 px the menus are left to the keys and the tab strip's own buttons, and below 480 forward is too (the stylesheet says so).
-    const menusShown = facts.w >= 640, forwardShown = facts.w >= 480;
-    const shownIds = (list: string[]) => list.filter((id) => (menusShown || !id.startsWith("menu")) && (forwardShown || id !== "nav-forward"));
-    for (const id of shownIds(["shell-top", "shell-rail", "shell-main", "shell-sidebar-toggle", "nav-back", "nav-forward", "menubar", "menu-file", "menu-edit", "menu-view", "menu-help", ...RAIL_ICONS, "nav-settings", "window-controls"])) if (!got[id]) here.push(`${id} is missing`);
-    if (!menusShown && got["menu-file"] && got["menu-file"]!.w > 0) here.push("the menus are on screen in a window narrower than 640 px");
+    // One top of the frame's own while the window is ordinary: the rail's (A-136); the others are the columns' tops.
+    if (facts.tops !== 1) here.push(`${facts.tops} tops of the rail`);
+    for (const id of ["shell-top", "shell-rail", "shell-main", "shell-sidebar-toggle", "title-end", ...RAIL_ICONS, "nav-settings", "window-controls"]) if (!got[id]) here.push(`${id} is missing`);
     if (here.length === 0) {
       const top = g["shell-top"]!, rail = g["shell-rail"]!, main = g["shell-main"]!;
-      if (!near(top.y, 0, 1) || !near(top.h, 36, 2) || !near(top.w, facts.w, 1)) here.push(`the top row is ${Math.round(top.w)}x${Math.round(top.h)} at ${Math.round(top.y)}, not one 36 px row across the window`);
-      if (!near(rail.x, 0, 1) || !near(rail.w, 48, 1) || !near(rail.y, top.b, 1.5) || rail.b < facts.h - 2) here.push(`the icon rail is ${Math.round(rail.w)} wide at ${Math.round(rail.x)}, from ${Math.round(rail.y)} to ${Math.round(rail.b)}`);
+      // The rail's top, with the sidebar's switch, is the rail's first 36 px; the rail and the main area run from the window's top edge to its bottom.
+      if (!near(top.y, 0, 1) || !near(top.h, 36, 2) || !near(top.x, 0, 1) || !near(top.w, 48, 1)) here.push(`the rail's top is ${Math.round(top.w)}x${Math.round(top.h)} at ${Math.round(top.x)},${Math.round(top.y)}, not the rail's first 36 px`);
+      if (!near(rail.x, 0, 1) || !near(rail.w, 48, 1) || !near(rail.y, 0, 1) || rail.b < facts.h - 2) here.push(`the icon rail is ${Math.round(rail.w)} wide at ${Math.round(rail.x)}, from ${Math.round(rail.y)} to ${Math.round(rail.b)}`);
       if (g["window-controls"]!.r < facts.w - 1.5 || !near(g["window-controls"]!.y, 0, 1)) here.push("the window's own buttons are not in the top right corner");
-      // The top row's own buttons are all inside the window and in order, and the row does not overflow.
-      const order = shownIds(["shell-sidebar-toggle", "nav-back", "nav-forward", "menu-file", "menu-edit", "menu-view", "menu-help"]).map((id) => g[id]!.x);
-      if (order.some((x, index) => index > 0 && x <= order[index - 1]!)) here.push("the top row's buttons are out of order");
-      for (const id of shownIds(["shell-sidebar-toggle", "nav-back", "nav-forward", "menu-help", "shell-dock-toggle"])) if (got[id] && got[id]!.w > 0 && (got[id]!.r > facts.w + 1 || got[id]!.x < -1 || got[id]!.r > (g["window-controls"]!.x + 1))) here.push(`${id} is under the window's own buttons or outside the window`);
-      if (facts.topOverflow > 1) here.push(`the top row overflows by ${facts.topOverflow}px`);
+      // The title bar's buttons are inside the window and left of the window's own; the end of the title bar does not overflow.
+      for (const id of ["shell-sidebar-toggle", "shell-dock-toggle"]) if (got[id] && got[id]!.w > 0 && (got[id]!.r > facts.w + 1 || got[id]!.x < -1 || got[id]!.r > (g["window-controls"]!.x + 1))) here.push(`${id} is under the window's own buttons or outside the window`);
+      if (facts.topOverflow > 1) here.push(`the end of the title bar overflows by ${facts.topOverflow}px`);
       if (facts.docOverflow > 1) here.push(`the window scrolls sideways by ${facts.docOverflow}px`);
-      if (main.b < facts.h - 2 || !near(main.y, top.b, 1.5)) here.push("the main area does not run from the top row to the window's bottom");
+      if (main.b < facts.h - 2 || !near(main.y, 0, 1)) here.push("the main area does not run from the window's top edge to its bottom");
+      // The tabs are in the title bar: the first tab strip is along the window's top edge. A phone-shaped window has no room for them beside the end of the
+      // title bar, which then takes a row of its own, and the tabs start under it.
+      const tabsAt = facts.ownRow ? 36 : 0;
+      if (facts.chipTop !== null && !near(facts.chipTop, tabsAt, 2)) here.push(`the tabs start ${Math.round(facts.chipTop)}px below the window's top, not at ${tabsAt}`);
+      if (facts.ownRow !== (size === "narrow")) here.push(facts.ownRow ? "the title bar took a row of its own where the tabs fit beside it" : "the tabs share the title bar with its end in a phone-shaped window");
       if (got["nav-settings"] && got["nav-settings"]!.b > facts.h + 1) here.push("the rail's settings button is outside the window");
-      for (const [id, reached] of Object.entries(hit)) if (reached === false && shownIds([id]).length > 0) here.push(`something is drawn over ${id}`);
+      for (const [id, reached] of Object.entries(hit)) if (reached === false) here.push(`something is drawn over ${id}`);
       if (facts.chipReach === false) here.push("a tab's title is covered");
       if (size === "wide") {
         const sidebar = g["shell-sidebar"], dock = g["shell-dock"];
@@ -255,7 +258,7 @@ async function walkFrame(env: WorkspaceEnv): Promise<void> {
         }
         for (const divider of ["shell-resize-sidebar", "shell-resize-dock"]) {
           const d = got[divider];
-          if (!d || !near(d.y, top.b, 1.5) || d.h < facts.h - top.b - 2) here.push(`${divider} does not run from the top row to the bottom`);
+          if (!d || !near(d.y, 0, 1.5) || d.h < facts.h - 2) here.push(`${divider} does not run from the window's top edge to the bottom`);
         }
       } else if (size === "narrow") {
         if (facts.sidebarDrawn || facts.dockDrawn) here.push("a narrow window keeps a docked column");
@@ -289,115 +292,95 @@ async function walkFrame(env: WorkspaceEnv): Promise<void> {
   observe("workspace-frame", problems.length === 0, { problems, sizes });
 }
 
-// ---------------------------------------------------------------------------------------------------------------------- 2. the menus
+// -------------------------------------------------------------------------------------------- 2. the commands, now that the title bar has no menus
 
+/**
+ * The title bar has no menus and no history buttons (A-136): what the menus held is reached from where it now is. The tab strip's layout menu (the four
+ * layouts, the one in use checked), the tab keys, the sidebar's new conversation and new project, the search from the sidebar, the switches of the sidebar,
+ * the dock and the debug panel in the title bar, the settings' pages, and the history keys.
+ */
 async function walkMenus(env: WorkspaceEnv): Promise<void> {
   const { view, observe, shot } = env;
   const problems: string[] = [];
   const detail: Record<string, unknown> = {};
   await freshLibrary(view);
-  const wanted: Record<string, string[]> = {
-    file: ["new-project", "new-conversation", "new-tab", "reopen-tab", "close-tab", "import-package", "export-package", "scan", "quit"],
-    edit: ["undo", "redo", "cut", "copy", "paste", "select-all", "find"],
-    view: ["layout-single", "layout-two", "layout-three", "layout-quad", "sidebar", "dock", "window-fullscreen", "screen-fullscreen", "debug"],
-    help: ["shortcuts", "logs", "about"],
-  };
-  const items: Record<string, Array<{ testId: string; disabled: boolean; checked: string | null }>> = {};
-  for (const [menu, list] of Object.entries(wanted)) {
-    items[menu] = await menuItemsOf(view, `menu-${menu}`);
-    const have = items[menu]!.map((item) => item.testId);
-    const missing = list.filter((id) => !have.includes(`menu-${menu}-${id}`));
-    if (missing.length) problems.push(`the ${menu} menu lacks ${missing.join(", ")}`);
-    if (have.length !== list.length) problems.push(`the ${menu} menu has ${have.length} items, not ${list.length}`);
-    if (menu === "view" && itemOf(items.view!, "menu-view-layout-single")?.checked !== "true") problems.push("the layout in use is not checked in the view menu");
-    // Whether "reopen" is on depends on what was closed before this walk; it is checked below, by closing a tab and reopening it.
-    if (menu === "file" && !itemOf(items.file!, "menu-file-reopen-tab")) problems.push("the file menu has no reopen item");
-    if (menu === "view" && itemOf(items.view!, "menu-view-window-fullscreen")?.disabled !== true) problems.push("window full screen is on where no reader is in front");
-    await shot(`workspace-menu-${menu}`);
-    await closeMenu(view);
-  }
-  detail.items = Object.fromEntries(Object.entries(items).map(([menu, list]) => [menu, list.map((item) => `${item.testId.replace(`menu-${menu}-`, "")}${item.disabled ? "(off)" : ""}`)]));
+  const left = await js<string[]>(view, `["menubar", "menu-file", "menu-edit", "menu-view", "menu-help", "nav-back", "nav-forward", "about-dialog"].filter((id) => document.querySelector('[data-testid="' + id + '"]'))`);
+  detail.left = left;
+  if (left.length) problems.push(`the title bar still has ${left.join(", ")}`);
 
-  // File: a new tab, close it, reopen it, a new conversation, a new project's dialog, the scan.
+  // The layout menu of the tab strip.
+  const layouts = await menuItemsOf(view, "layout-menu");
+  const have = layouts.map((item) => item.testId);
+  detail.layouts = have;
+  const missing = ["single", "two", "three", "quad"].filter((id) => !have.includes(`layout-${id}`));
+  if (missing.length) problems.push(`the layout menu lacks ${missing.join(", ")}`);
+  if (itemOf(layouts, "layout-single")?.checked !== "true") problems.push("the layout in use is not checked in the layout menu");
+  await shot("workspace-menu-layout");
+  await closeMenu(view);
+
+  // The tab keys: a new tab, close it, reopen it.
   const count = async () => (await tabsOf(view)).length;
   const start = await count();
-  const newTab = await chooseMenu(view, "menu-file", "menu-file-new-tab");
-  const afterNew = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 1}`, 4000);
-  if (!newTab || !afterNew) problems.push("File > New tab did not add a tab");
-  const closed = await chooseMenu(view, "menu-file", "menu-file-close-tab");
-  if (!closed || !(await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start}`, 4000))) problems.push("File > Close tab did not close the tab in front");
-  const reopened = await chooseMenu(view, "menu-file", "menu-file-reopen-tab");
-  if (!reopened || !(await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 1}`, 4000))) problems.push("File > Reopen tab did not bring the closed tab back");
-  // The same three from the keyboard.
   await pressChord(view, "T", ["control"]);
-  const keyNew = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 2}`, 3000);
+  const keyNew = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 1}`, 3000);
   await pressChord(view, "W", ["control"]);
-  const keyClose = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 1}`, 3000);
+  const keyClose = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start}`, 3000);
   await pressChord(view, "T", ["control", "shift"]);
-  const keyReopen = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 2}`, 3000);
+  const keyReopen = await waitUntil(view, `${HOST}.querySelectorAll('[data-testid="tab"]').length === ${start + 1}`, 3000);
   detail.keys = { keyNew, keyClose, keyReopen };
-  if (!keyNew || !keyClose || !keyReopen) problems.push(`the tab keys do not do what the menu does (new ${keyNew}, close ${keyClose}, reopen ${keyReopen})`);
+  if (!keyNew || !keyClose || !keyReopen) problems.push(`the tab keys do not work (new ${keyNew}, close ${keyClose}, reopen ${keyReopen})`);
   await closeTabs(view, "all");
   await openLibrary(view, 6000);
 
-  const conversation = await chooseMenu(view, "menu-file", "menu-file-new-conversation");
-  const conversationTab = conversation && await waitUntil(view, `${HOST}.querySelector('[data-testid="tab"][data-kind="conversation"]')`, 5000);
-  detail.newConversation = conversationTab;
-  if (!conversationTab) problems.push("File > New conversation opened no conversation");
+  // A new conversation from the conversation view's sidebar, a new project from the "+" of the projects' title.
+  const conversation = await viaSidebar(view, "conversation", "sidebar-new-conversation", 6000)
+    && await waitUntil(view, `${HOST}.querySelector('[data-testid="tab"][data-kind="conversation"]')`, 5000);
+  detail.newConversation = conversation;
+  if (!conversation) problems.push("the sidebar's new conversation opened no conversation");
   await closeTabs(view, ["conversation"]);
-
-  const project = await chooseMenu(view, "menu-file", "menu-file-new-project");
-  const dialog = project && await waitUntil(view, `document.querySelector('[data-testid="project-name"]')`, 3000);
-  if (!dialog) problems.push("File > New project opened no dialog");
+  const project = await viaSidebar(view, "home", "sidebar-new-project", 6000) && await waitUntil(view, `document.querySelector('[data-testid="project-name"]')`, 3000);
+  if (!project) problems.push("the sidebar's new project opened no dialog");
   else await pressKey(view, "Escape");
   await waitUntil(view, `!document.querySelector('[data-testid="project-name"]')`, 2000);
 
-  const scan = await chooseMenu(view, "menu-file", "menu-file-scan");
-  await waitFrames(view);
-  const scanErr = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="toast-error"]'))`);
-  detail.scan = { scan, error: scanErr };
-  if (!scan || scanErr) problems.push("File > Scan the library failed");
-  await waitUntil(view, `!document.querySelector('[data-testid="scan-indicator"]')`, 20_000);
-
-  // Edit: find brings up the search box over the window, not a tab; the rest are clicked in the page (nothing is selected, so nothing changes).
-  for (const id of ["undo", "redo", "cut", "copy", "select-all"]) if (!(await chooseMenu(view, "menu-edit", `menu-edit-${id}`))) problems.push(`Edit > ${id} cannot be chosen`);
-  const found = await chooseMenu(view, "menu-edit", "menu-edit-find");
-  if (!found || !(await waitDrawn(view, "search-input", 4000))) problems.push("Edit > Find brought up no search box");
-  if (await js<boolean>(view, `Boolean(${HOST}.querySelector('[data-testid="tab"][data-kind="search"]'))`)) problems.push("Edit > Find opened a search tab");
+  // The search from the sidebar: a box over the window, not a tab; Esc closes it.
+  const found = await viaSidebar(view, "home", "sidebar-search", 6000) && await waitDrawn(view, "search-input", 4000);
+  if (!found) problems.push("the sidebar's search brought up no search box");
+  if (await js<boolean>(view, `Boolean(${HOST}.querySelector('[data-testid="tab"][data-kind="search"]'))`)) problems.push("the search opened a search tab");
   await pressKey(view, "Escape");
   if (!(await waitUntil(view, `!document.querySelector('[data-testid="search-box"]')`, 3000))) problems.push("Esc did not close the search box");
 
-  // View: the four layouts, the sidebar and the dock, the debug panel.
+  // The four layouts from the strip's menu.
   for (const [layout, columns] of [["two", 2], ["three", 3], ["quad", 4], ["single", 1]] as const) {
-    const ok = await chooseMenu(view, "menu-view", `menu-view-layout-${layout}`);
+    const ok = await chooseMenu(view, "layout-menu", `layout-${layout}`);
     const done = ok && await waitUntil(view, `${HOST}.getAttribute("data-columns") === "${columns}"`, 4000);
-    if (!done) problems.push(`View > ${layout} did not make ${columns} column(s)`);
+    if (!done) problems.push(`the layout menu's ${layout} did not make ${columns} column(s)`);
   }
-  const sidebarWas = await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]'))`);
-  const toggled = await chooseMenu(view, "menu-view", "menu-view-sidebar") && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]')) === ${!sidebarWas}`, 3000);
-  const restoredSide = await chooseMenu(view, "menu-view", "menu-view-sidebar") && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-sidebar"]')) === ${sidebarWas}`, 3000);
-  if (!toggled || !restoredSide) problems.push("View > Sidebar does not fold and bring back the sidebar");
-  const dockWas = await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="shell-dock"]'))`);
-  const dockToggled = await chooseMenu(view, "menu-view", "menu-view-dock") && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-dock"]')) === ${!dockWas}`, 3000);
-  const dockBack = await chooseMenu(view, "menu-view", "menu-view-dock") && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="shell-dock"]')) === ${dockWas}`, 3000);
-  if (!dockToggled || !dockBack) problems.push("View > Dock does not fold and bring back the dock");
-  const debugOn = await chooseMenu(view, "menu-view", "menu-view-debug") && await waitUntil(view, `document.querySelector('[data-testid="debug-panel"]')`, 3000);
-  const debugOff = await chooseMenu(view, "menu-view", "menu-view-debug") && await waitUntil(view, `!document.querySelector('[data-testid="debug-panel"]')`, 3000);
-  if (!debugOn || !debugOff) problems.push("View > Debug does not open and close the debug panel");
 
-  // Help: shortcuts and logs are pages of the settings view (no tab opens), about is a dialog with the version.
-  const keys = await chooseMenu(view, "menu-help", "menu-help-shortcuts");
-  if (!keys || !(await waitDrawn(view, "settings-page-shortcuts", 4000))) problems.push("Help > Shortcuts did not show the shortcuts page of the settings");
-  const logs = await chooseMenu(view, "menu-help", "menu-help-logs");
-  if (!logs || !(await waitDrawn(view, "settings-page-logs", 5000))) problems.push("Help > Logs did not show the logs page");
-  if (await js<boolean>(view, `Boolean(${HOST}.querySelector('[data-testid="tab"][data-kind="keys"], [data-testid="tab"][data-kind="settings"]'))`)) problems.push("Help opened a tab for the shortcuts or the settings");
-  const about = await chooseMenu(view, "menu-help", "menu-help-about");
-  const aboutShown = about && await waitUntil(view, `document.querySelector('[data-testid="about-dialog"]')`, 3000);
-  const version = aboutShown ? await js<string>(view, `document.querySelector('[data-testid="about-version"]')?.textContent ?? ""`) : "";
-  if (!aboutShown || !version || version === "-") problems.push("Help > About shows no version");
-  await clickTestId(view, "about-dialog-close");
-  await waitUntil(view, `!document.querySelector('[data-testid="about-dialog"]')`, 3000);
-  if (!(await leaveSettings(view))) problems.push("the settings did not close with the back arrow");
+  // The switches of the sidebar, the dock and the debug panel, in the title bar.
+  const flip = async (button: string, target: string) => {
+    const was = await js<boolean>(view, `${DRAWN}(document.querySelector('[data-testid="${target}"]'))`);
+    const there = await clickTestId(view, button, 2000) && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="${target}"]')) === ${!was}`, 3000);
+    const back = await clickTestId(view, button, 2000) && await waitUntil(view, `${DRAWN}(document.querySelector('[data-testid="${target}"]')) === ${was}`, 3000);
+    if (!there || !back) problems.push(`${button} does not fold and bring back ${target}`);
+  };
+  await flip("shell-sidebar-toggle", "shell-sidebar");
+  await flip("shell-dock-toggle", "shell-dock");
+  const debugOn = await clickTestId(view, "debug-toggle", 2000) && await waitUntil(view, `document.querySelector('[data-testid="debug-panel"]')`, 3000);
+  const debugOff = await clickTestId(view, "debug-toggle", 2000) && await waitUntil(view, `!document.querySelector('[data-testid="debug-panel"]')`, 3000);
+  if (!debugOn || !debugOff) problems.push("the debug switch does not open and close the debug panel");
+
+  // The settings' pages that the help menu led to (no tab opens), and the version where the about dialog was.
+  const inSettings = await clickTestId(view, "nav-settings", 4000) && await waitDrawn(view, "settings-area", 6000);
+  const keys = inSettings && await clickTestId(view, "settings-nav-shortcuts", 3000) && await waitDrawn(view, "settings-page-shortcuts", 4000);
+  if (!keys) problems.push("the settings have no shortcuts page");
+  const update = inSettings && await clickTestId(view, "settings-nav-update", 3000) && await waitDrawn(view, "settings-page-update", 4000);
+  const version = update ? await js<string>(view, `document.querySelector('[data-testid="update-current-version"]')?.textContent ?? ""`) : "";
+  detail.version = version;
+  if (!update || !version || version === "-") problems.push("the settings' update page shows no version");
+  if (await js<boolean>(view, `Boolean(${HOST}?.querySelector('[data-testid="tab"][data-kind="keys"], [data-testid="tab"][data-kind="settings"]'))`)) problems.push("a settings page opened as a tab");
+  // Alt+Left goes back between the settings' pages, then out of the settings.
+  if (!(await leaveSettings(view))) problems.push("Alt+Left did not leave the settings");
   observe("workspace-menu", problems.length === 0, { problems, ...detail });
   await closeTabs(view, "all");
 }
@@ -546,7 +529,7 @@ async function walkPresets(env: WorkspaceEnv): Promise<void> {
   if (!baseline || baseline.ids.length < 4) { observe("split-presets", false, { problems: [`only ${baseline?.ids.length ?? 0} tabs to lay out`] }); return; }
   const want: Array<[string, number]> = [["two", 2], ["three", 3], ["quad", 4], ["single", 1]];
   for (const [name, columns] of want) {
-    const chosen = await chooseMenu(view, "menu-view", `menu-view-layout-${name}`);
+    const chosen = await chooseMenu(view, "layout-menu", `layout-${name}`);
     const done = chosen && await waitUntil(view, `${HOST}.getAttribute("data-columns") === "${columns}" && [...${HOST}.querySelectorAll('.dv-groupview')].filter((group) => group.getClientRects().length > 0).length === ${columns}`, 5000);
     await waitFrames(view);
     const facts = await hostFacts(view);
@@ -566,9 +549,8 @@ async function walkPresets(env: WorkspaceEnv): Promise<void> {
     if (shown < Math.min(columns, baseline.ids.length)) problems.push(`${name}: ${shown} tabs are drawn for ${columns} columns`);
     await shot(`workspace-layout-${name}`);
   }
-  // The layout button on the strip makes the same layouts.
   const viaStrip = await chooseMenu(view, "layout-menu", "layout-two") && await waitUntil(view, `${HOST}.getAttribute("data-columns") === "2"`, 4000);
-  if (!viaStrip) problems.push("the layout button on the tab strip did not make two columns");
+  if (!viaStrip) problems.push("the layout menu did not make two columns again");
   // A window too narrow for the columns shows one of them and a way to choose; the saved layout stays.
   await resize("narrow");
   const squeezed = await waitUntil(view, `document.querySelector('[data-testid="column-switcher"]')`, 4000);
@@ -579,7 +561,7 @@ async function walkPresets(env: WorkspaceEnv): Promise<void> {
   if (!squeezed || !shownSecond || columnsKept !== 2) problems.push(`a narrow window with two columns: switcher ${squeezed}, second column ${shownSecond}, layout kept ${columnsKept}`);
   await shot("workspace-layout-narrow");
   await resize("wide");
-  await chooseMenu(view, "menu-view", "menu-view-layout-single");
+  await chooseMenu(view, "layout-menu", "layout-single");
   await waitUntil(view, `${HOST}.getAttribute("data-columns") === "1"`, 4000);
   observe("split-presets", problems.length === 0, { problems, rows });
 }
@@ -594,7 +576,7 @@ async function walkMoveVideo(env: WorkspaceEnv, opened: Opened): Promise<void> {
   const detail: Record<string, unknown> = {};
   const video = opened.video;
   if (!video) { observe("split-move-video", false, { problems: ["there was no video tab"] }); return; }
-  await chooseMenu(view, "menu-view", "menu-view-layout-two");
+  await chooseMenu(view, "layout-menu", "layout-two");
   await waitUntil(view, `${HOST}.getAttribute("data-columns") === "2"`, 4000);
   await showTab(view, { id: video.id });
   await waitUntil(view, `(() => { const el = ${VIDEO}; return el && el.readyState >= 2; })()`, 25_000);
@@ -652,7 +634,7 @@ async function walkKeys(env: WorkspaceEnv, opened: Opened): Promise<void> {
   const detail: Record<string, unknown> = {};
   const comic = opened.comic, video = opened.video;
   if (!comic || !video) { observe("split-focus-keys", false, { problems: ["the comic and the video were not both open"] }); return; }
-  await chooseMenu(view, "menu-view", "menu-view-layout-two");
+  await chooseMenu(view, "layout-menu", "layout-two");
   await waitUntil(view, `${HOST}.getAttribute("data-columns") === "2"`, 4000);
   // The comic in one column and the video in the other.
   const comicColumn = await columnOf(view, comic.id);
@@ -780,7 +762,7 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
   await clickTestId(view, "context-open-recent");
   await waitContext(view, "");
   // 最近 is laid out in four, with the tabs it has; a draft is left in its dock.
-  await chooseMenu(view, "menu-view", "menu-view-layout-quad");
+  await chooseMenu(view, "layout-menu", "layout-quad");
   await waitUntil(view, `${HOST}.getAttribute("data-columns") === "4"`, 5000);
   const recent = await settledHost(view);
   await showTab(view, { kind: "library" });
@@ -804,7 +786,7 @@ async function walkContexts(env: WorkspaceEnv, opened: Opened): Promise<void> {
   if (inTwo && opened.comic && inTwo.ids.includes(opened.comic.id)) problems.push("the new project shows a tab of 最近");
   const draftInTwo = await js<string>(view, `document.querySelector('[data-testid="shell-dock"] [data-testid="agent-composer"]')?.value ?? ""`);
   if (draftInTwo.includes("最近的草稿")) problems.push("the new project's dock holds the draft of 最近");
-  await chooseMenu(view, "menu-view", "menu-view-layout-two");
+  await chooseMenu(view, "layout-menu", "layout-two");
   await waitUntil(view, `${HOST}.getAttribute("data-columns") === "2"`, 4000);
   // A tab only this project has: the projects page (the settings are not a tab any more). And another layout of its own.
   await openProjectsPage(view);
@@ -1105,7 +1087,7 @@ export async function runWorkspaceWalk(env: WorkspaceEnv): Promise<void> {
 
 /** The walk leaves the window with a library tab and nothing else, in 最近 and one column. */
 async function forgetTabs(view: BrowserWindow): Promise<void> {
-  await chooseMenu(view, "menu-view", "menu-view-layout-single");
+  await chooseMenu(view, "layout-menu", "layout-single");
   await closeTabs(view, "all");
   await waitForTestId(view, "nav-home");
 }

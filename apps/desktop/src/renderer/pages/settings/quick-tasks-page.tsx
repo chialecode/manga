@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { QUICK_NAME_MAX, QUICK_PAGES, QUICK_PLACEHOLDERS, QUICK_TEMPLATE_MAX, unknownPlaceholders, type QuickPage, type QuickTask } from "@manga/contracts/quick-tasks";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../../lib/api.ts";
 import { Modal } from "../../components/modal.tsx";
 import { SettingsPage, SettingsSection } from "./rows.tsx";
@@ -96,53 +97,82 @@ export function QuickTasksPage(props: { t: T; onChanged: () => void; onError: (m
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onChanged: props.onChanged, onError: props.onError, onNotice: props.onNotice });
+  callbacksRef.current = { onChanged: props.onChanged, onError: props.onError, onNotice: props.onNotice };
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<{ tasks: QuickTask[] }>("quickTasks.list", { includeDisabled: true });
+    if (!guard.isCurrent(token)) return;
     if (result.ok) setTasks(asArray<QuickTask>(result.value.tasks));
-    else props.onError(result.error.message);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    else callbacksRef.current.onError(result.error.message);
+  }, [guard]);
   useEffect(() => { void load(); }, [load]);
 
   async function save(next: Draft, done?: string) {
+    if (saving) return false;
     setSaving(true);
-    const result = await attempt("quickTasks.save", { ...(next.id ? { id: next.id } : {}), name: next.name.trim(), template: next.template.trim(), pages: next.pages, includeFrame: next.includeFrame, sendMode: next.sendMode, enabled: next.enabled });
-    setSaving(false);
-    if (!result.ok) { props.onError(result.error.message); return false; }
-    if (done) props.onNotice(done);
-    await load();
-    props.onChanged();
-    return true;
+    try {
+      const result = await attempt("quickTasks.save", { ...(next.id ? { id: next.id } : {}), name: next.name.trim(), template: next.template.trim(), pages: next.pages, includeFrame: next.includeFrame, sendMode: next.sendMode, enabled: next.enabled });
+      if (!guard.isAlive()) return false;
+      if (!result.ok) { callbacksRef.current.onError(result.error.message); return false; }
+      if (done) callbacksRef.current.onNotice(done);
+      await load();
+      callbacksRef.current.onChanged();
+      return true;
+    } finally {
+      if (guard.isAlive()) setSaving(false);
+    }
   }
 
   async function move(index: number, by: -1 | 1) {
-    if (!tasks) return;
+    if (!tasks || saving) return;
     const target = index + by;
     if (target < 0 || target >= tasks.length) return;
     const ids = tasks.map((task) => task.id);
     [ids[index], ids[target]] = [ids[target]!, ids[index]!];
-    const result = await attempt<{ tasks: QuickTask[] }>("quickTasks.reorder", { ids });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    setTasks(asArray<QuickTask>(result.value.tasks));
-    props.onChanged();
+    setSaving(true);
+    try {
+      const result = await attempt<{ tasks: QuickTask[] }>("quickTasks.reorder", { ids });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
+      setTasks(asArray<QuickTask>(result.value.tasks));
+      callbacksRef.current.onChanged();
+    } finally {
+      if (guard.isAlive()) setSaving(false);
+    }
   }
 
   async function remove(task: QuickTask) {
+    if (saving) return;
     setRemoving(null);
-    const result = await attempt("quickTasks.delete", { id: task.id });
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onNotice(t("quick.deleted"));
-    await load();
-    props.onChanged();
+    setSaving(true);
+    try {
+      const result = await attempt("quickTasks.delete", { id: task.id });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
+      callbacksRef.current.onNotice(t("quick.deleted"));
+      await load();
+      callbacksRef.current.onChanged();
+    } finally {
+      if (guard.isAlive()) setSaving(false);
+    }
   }
 
   async function restore() {
-    const result = await attempt<{ restored?: string[] }>("quickTasks.restore", {});
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onNotice(t("quick.restored", { count: asArray<string>(result.value.restored).length }));
-    await load();
-    props.onChanged();
+    if (saving) return;
+    setSaving(true);
+    try {
+      const result = await attempt<{ restored?: string[] }>("quickTasks.restore", {});
+      if (!guard.isAlive()) return;
+      if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
+      callbacksRef.current.onNotice(t("quick.restored", { count: asArray<string>(result.value.restored).length }));
+      await load();
+      callbacksRef.current.onChanged();
+    } finally {
+      if (guard.isAlive()) setSaving(false);
+    }
   }
 
   return (
@@ -151,8 +181,8 @@ export function QuickTasksPage(props: { t: T; onChanged: () => void; onError: (m
         testId="quick-list"
         actions={
           <>
-            <button type="button" className="primary-button" data-testid="quick-new" onClick={() => setDraft(blank())}><Plus size={16} aria-hidden="true" />{t("quick.new")}</button>
-            <button type="button" className="secondary-button" data-testid="quick-restore" onClick={() => void restore()}><RotateCcw size={14} aria-hidden="true" />{t("quick.restore")}</button>
+            <button type="button" className="primary-button" data-testid="quick-new" disabled={saving} onClick={() => setDraft(blank())}><Plus size={16} aria-hidden="true" />{t("quick.new")}</button>
+            <button type="button" className="secondary-button" data-testid="quick-restore" disabled={saving} onClick={() => void restore()}><RotateCcw size={14} aria-hidden="true" />{t("quick.restore")}</button>
           </>
         }
       >
@@ -171,18 +201,18 @@ export function QuickTasksPage(props: { t: T; onChanged: () => void; onError: (m
                 </span>
               </div>
               <div className="quick-task-actions">
-                <label className="msettings-check"><input type="checkbox" role="switch" aria-label={t("quick.enabled", { name: task.name })} data-testid={`quick-enabled-${task.builtinKey ?? task.id}`} checked={task.enabled} onChange={(event) => void save({ ...draftOf(task), enabled: event.target.checked })} />{t("quick.enabledShort")}</label>
-                <button type="button" className="icon-button" aria-label={t("quick.up", { name: task.name })} data-testid={`quick-up-${task.builtinKey ?? task.id}`} disabled={index === 0} onClick={() => void move(index, -1)}><ArrowUp size={15} /></button>
-                <button type="button" className="icon-button" aria-label={t("quick.down", { name: task.name })} data-testid={`quick-down-${task.builtinKey ?? task.id}`} disabled={index === tasks!.length - 1} onClick={() => void move(index, 1)}><ArrowDown size={15} /></button>
-                <button type="button" className="icon-button" aria-label={t("quick.edit")} title={t("quick.edit")} data-testid={`quick-edit-${task.builtinKey ?? task.id}`} onClick={() => setDraft(draftOf(task))}><Pencil size={15} /></button>
-                <button type="button" className="icon-button" aria-label={t("quick.copy")} title={t("quick.copy")} data-testid={`quick-copy-${task.builtinKey ?? task.id}`} onClick={() => { const { id: _id, ...rest } = draftOf(task); void _id; void save({ ...rest, name: `${task.name} ${t("quick.copySuffix")}`.slice(0, QUICK_NAME_MAX) }, t("quick.copied")); }}><Copy size={15} /></button>
+                <label className="msettings-check"><input type="checkbox" role="switch" aria-label={t("quick.enabled", { name: task.name })} data-testid={`quick-enabled-${task.builtinKey ?? task.id}`} disabled={saving} checked={task.enabled} onChange={(event) => void save({ ...draftOf(task), enabled: event.target.checked })} />{t("quick.enabledShort")}</label>
+                <button type="button" className="icon-button" aria-label={t("quick.up", { name: task.name })} data-testid={`quick-up-${task.builtinKey ?? task.id}`} disabled={saving || index === 0} onClick={() => void move(index, -1)}><ArrowUp size={15} /></button>
+                <button type="button" className="icon-button" aria-label={t("quick.down", { name: task.name })} data-testid={`quick-down-${task.builtinKey ?? task.id}`} disabled={saving || index === tasks!.length - 1} onClick={() => void move(index, 1)}><ArrowDown size={15} /></button>
+                <button type="button" className="icon-button" aria-label={t("quick.edit")} title={t("quick.edit")} data-testid={`quick-edit-${task.builtinKey ?? task.id}`} disabled={saving} onClick={() => setDraft(draftOf(task))}><Pencil size={15} /></button>
+                <button type="button" className="icon-button" aria-label={t("quick.copy")} title={t("quick.copy")} data-testid={`quick-copy-${task.builtinKey ?? task.id}`} disabled={saving} onClick={() => { const { id: _id, ...rest } = draftOf(task); void _id; void save({ ...rest, name: `${task.name} ${t("quick.copySuffix")}`.slice(0, QUICK_NAME_MAX) }, t("quick.copied")); }}><Copy size={15} /></button>
                 {removing === task.id ? (
                   <span role="group" aria-label={t("quick.deleteConfirm", { name: task.name })} className="library-path-confirm">
-                    <button type="button" className="danger-button" data-testid={`quick-delete-confirm-${task.builtinKey ?? task.id}`} onClick={() => void remove(task)}>{t("quick.delete")}</button>
-                    <button type="button" className="link-button" onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
+                    <button type="button" className="danger-button" data-testid={`quick-delete-confirm-${task.builtinKey ?? task.id}`} disabled={saving} onClick={() => void remove(task)}>{t("quick.delete")}</button>
+                    <button type="button" className="link-button" disabled={saving} onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
                   </span>
                 ) : (
-                  <button type="button" className="icon-button" aria-label={t("quick.delete")} title={t("quick.delete")} data-testid={`quick-delete-${task.builtinKey ?? task.id}`} onClick={() => setRemoving(task.id)}><Trash2 size={15} /></button>
+                  <button type="button" className="icon-button" aria-label={t("quick.delete")} title={t("quick.delete")} data-testid={`quick-delete-${task.builtinKey ?? task.id}`} disabled={saving} onClick={() => setRemoving(task.id)}><Trash2 size={15} /></button>
                 )}
               </div>
             </li>
@@ -190,7 +220,7 @@ export function QuickTasksPage(props: { t: T; onChanged: () => void; onError: (m
         </ul>
       </SettingsSection>
       {draft ? (
-        <Editor t={t} draft={draft} saving={saving} onChange={setDraft} onClose={() => setDraft(null)} onSave={() => void save(draft, t("quick.saved")).then((ok) => { if (ok) setDraft(null); })} />
+        <Editor t={t} draft={draft} saving={saving} onChange={setDraft} onClose={() => { if (!saving) setDraft(null); }} onSave={() => void save(draft, t("quick.saved")).then((ok) => { if (ok) setDraft(null); })} />
       ) : null}
     </SettingsPage>
   );

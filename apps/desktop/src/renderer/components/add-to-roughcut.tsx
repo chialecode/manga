@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Scissors } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { asArray, attempt } from "../lib/api.ts";
@@ -43,10 +43,13 @@ export function AddToRoughcut(props: {
   const [outText, setOutText] = useState("");
   const [fromMarks, setFromMarks] = useState(false);
   const [problem, setProblem] = useState<"time" | "range" | null>(null);
+  const cutsSeq = useRef(0);
 
   async function loadCuts(id: string) {
+    const mine = ++cutsSeq.current;
     if (id === NEW) { setCuts([]); setCutId(NEW); return; }
     const result = await attempt<{ cuts: Sequence[] }>("roughcut.list", { projectId: id });
+    if (mine !== cutsSeq.current) return;
     const list = result.ok ? asArray<Sequence>(result.value.cuts) : [];
     setCuts(list);
     setCutId(list[0]?.id ?? NEW);
@@ -72,6 +75,7 @@ export function AddToRoughcut(props: {
   }
 
   async function add() {
+    if (busy) return;
     const range = readRange(inText, outText, parseClock, props.durationMs);
     if (typeof range === "string") { setProblem(range); return; }
     setProblem(null);

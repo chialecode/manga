@@ -9,12 +9,15 @@ export type PagerCallbacks = {
   /** Open a chapter at an offset (it becomes the reading position). */
   onPart: (partId: string, start: number) => void;
   /** Load a window of a chapter from an offset without moving the saved position: the pager places the page itself. */
-  onWindow: (partId: string, from: number) => void;
+  onWindow: (partId: string, from: number) => void | Promise<unknown>;
   /** Append the next window of the chapter. */
-  onExtend: () => void;
+  onExtend: () => void | Promise<unknown>;
   /** The range of the page on screen, for the progress, a bookmark and the conversation. */
   onPosition?: (partId: string, start: number, end: number) => void;
 };
+
+/** Fallback timeout so a void/no-op load callback never permanently wedges paging. */
+const LOAD_TIMEOUT_MS = 4000;
 
 /** The space the pages have: the reading area less its padding. Unknown (no layout engine) reads as a common window. */
 function useArea(node: RefObject<HTMLElement | null>, active: boolean) {
@@ -81,10 +84,58 @@ export function usePager(input: {
   /** The windows the pager asked for: any other slice came from outside (a chapter, a bookmark, a search hit) and is placed by its own start. */
   const asked = useRef<string | null>(null);
   const loading = useRef(false);
+  const loadSeq = useRef(0);
+  const loadTimer = useRef<number | null>(null);
   const restoredUsed = useRef<string | null>(null);
   /** The chapter and start of the slice laid out last: the same ones with more text are an appended window. */
   const shown = useRef<string | null>(null);
   const placedMark = useRef<string | null>(null);
+
+  const clearLoading = (resetPending = false) => {
+    loading.current = false;
+    if (loadTimer.current !== null) {
+      window.clearTimeout(loadTimer.current);
+      loadTimer.current = null;
+    }
+    if (resetPending) {
+      asked.current = null;
+      pending.current = null;
+    }
+  };
+
+  useEffect(() => () => {
+    loadSeq.current += 1;
+    clearLoading();
+  }, []);
+
+  const beginLoad = (work: () => void | Promise<unknown>) => {
+    const seq = ++loadSeq.current;
+    loading.current = true;
+    if (loadTimer.current !== null) window.clearTimeout(loadTimer.current);
+    loadTimer.current = window.setTimeout(() => {
+      if (loadSeq.current === seq) clearLoading(true);
+    }, LOAD_TIMEOUT_MS);
+    try {
+      const result = work();
+      if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+        void Promise.resolve(result).then(
+          () => {
+            if (loadSeq.current !== seq) return;
+            if (loadTimer.current !== null) window.clearTimeout(loadTimer.current);
+            // Allow a synchronous React commit for the new slice before treating an unchanged slice as a no-op.
+            loadTimer.current = window.setTimeout(() => {
+              if (loadSeq.current === seq) clearLoading(true);
+            }, 0);
+          },
+          () => {
+            if (loadSeq.current === seq) clearLoading(true);
+          },
+        );
+      }
+    } catch {
+      if (loadSeq.current === seq) clearLoading(true);
+    }
+  };
 
   const sliceKey = slice ? `${slice.partId}:${slice.start}:${slice.end}` : "";
   const partIndex = slice ? parts.findIndex((part) => part.id === slice.partId) : -1;
@@ -92,7 +143,8 @@ export function usePager(input: {
 
   // A slice from outside that starts inside its chapter is replaced by the window around the place it shows, so pages read on before it.
   useLayoutEffect(() => {
-    loading.current = false;
+    loadSeq.current += 1;
+    clearLoading();
     if (!active || !slice) return;
     const key = `${slice.partId}:${slice.start}`;
     const appended = shown.current === key;
@@ -107,8 +159,7 @@ export function usePager(input: {
     pending.current = { partId: slice.partId, anchor: place };
     if (slice.start > 0 && from !== slice.start) {
       asked.current = `${slice.partId}:${from}`;
-      loading.current = true;
-      calls.current.onWindow(slice.partId, from);
+      beginLoad(() => calls.current.onWindow(slice.partId, from));
     }
   }, [active, sliceKey]);
 
@@ -149,10 +200,9 @@ export function usePager(input: {
     setRange({ start: first, end: Math.max(first, next) });
     calls.current.onPosition?.(slice.partId, first, Math.max(first, next));
     if (screen >= screens - 1 - PREFETCH_SCREENS && slice.end < partLength) {
-      loading.current = true;
-      calls.current.onExtend();
+      beginLoad(() => calls.current.onExtend());
     }
-  }, [active, sliceKey, screen, screens, laidOut]);
+  }, [active, sliceKey, screen, screens, laidOut, frame.textWidth, frame.height, frame.columns, frame.gap, style.fontSizePx, style.lineHeight, style.fontFamily, style.paragraphSpacingPx]);
 
   const go = (direction: 1 | -1) => {
     if (!slice) return;
@@ -163,13 +213,11 @@ export function usePager(input: {
     else if (step.kind === "extend") {
       // The page after the last one loaded is the first one of the appended text.
       pending.current = { partId: slice.partId, anchor: slice.end };
-      loading.current = true;
-      calls.current.onExtend();
+      beginLoad(() => calls.current.onExtend());
     } else if (step.kind === "window") {
       pending.current = { partId: slice.partId, anchor: step.anchor };
       asked.current = `${slice.partId}:${step.from}`;
-      loading.current = true;
-      calls.current.onWindow(slice.partId, step.from);
+      beginLoad(() => calls.current.onWindow(slice.partId, step.from));
     } else if (step.kind === "part" && step.at === "start") {
       pending.current = { partId: step.partId, anchor: 0 };
       calls.current.onPart(step.partId, 0);
@@ -177,8 +225,7 @@ export function usePager(input: {
       const from = lastWindowFrom(previous?.length ?? 0);
       pending.current = { partId: step.partId, last: true };
       asked.current = `${step.partId}:${from}`;
-      loading.current = true;
-      calls.current.onWindow(step.partId, from);
+      beginLoad(() => calls.current.onWindow(step.partId, from));
     }
   };
 

@@ -1,4 +1,5 @@
 import type { DrizzleStore } from "@manga/storage-drizzle";
+import { escapeLike } from "../shared/utils.ts";
 
 /**
  * The operation log (A-49): what the user, the Agent and the system did that changed something. It is written by the one place
@@ -64,6 +65,7 @@ export const LOGGED_COMMANDS: Readonly<Record<string, string>> = {
   "settings.setModule": "settings", "settings.setRuntime": "settings", "settings.setRecording": "settings", "settings.setMedia": "settings", "settings.skipAi": "settings",
   "quickTasks.save": "settings", "quickTasks.delete": "settings", "quickTasks.reorder": "settings", "quickTasks.restore": "settings",
   "connections.upsert": "connections", "connections.delete": "connections", "connections.test": "connections", "connections.setProfile": "connections", "connections.probe": "connections",
+  "providers.add": "connections", "providers.setKey": "connections", "providers.deleteAccount": "connections",
   "settings.setAgent": "settings", "agent.trace.clear": "settings",
   "library.exportPackage": "backup", "library.importPackage": "backup", "package.importResolved": "backup",
   "settings.proposeLocations": "backup", "settings.applyLocations": "backup", "settings.setLayout": "backup", "settings.cleanLegacyLocation": "backup", "settings.recoverJobs": "backup",
@@ -143,10 +145,10 @@ export class OperationLog {
     if (filter.outcome) { where.push("outcome = ?"); params.push(filter.outcome); }
     if (filter.from) { where.push("at >= ?"); params.push(filter.from); }
     if (filter.to) { where.push("at <= ?"); params.push(filter.to); }
-    if (filter.q) { where.push("(object_label LIKE ? ESCAPE '\\' OR action LIKE ? ESCAPE '\\' OR object_id = ?)"); const like = `%${filter.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`; params.push(like, like, filter.q); }
+    if (filter.q) { where.push("(object_label LIKE ? ESCAPE '\\' OR action LIKE ? ESCAPE '\\' OR object_id = ?)"); const like = `%${escapeLike(filter.q)}%`; params.push(like, like, filter.q); }
     const base = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const total = (this.store.sqlite.prepare(`SELECT COUNT(*) AS n FROM operation_log ${base}`).get(...params) as { n: number }).n;
-    const limit = Math.min(200, filter.limit ?? 50);
+    const limit = Math.max(1, Math.min(200, Math.floor(filter.limit ?? 50)));
     const paged = filter.before ? `${base ? `${base} AND` : "WHERE"} id < ?` : base;
     const rows = this.store.sqlite.prepare(`SELECT * FROM operation_log ${paged} ORDER BY id DESC LIMIT ?`).all(...params, ...(filter.before ? [filter.before] : []), limit + 1) as Row[];
     const entries = rows.slice(0, limit).map(entryOf);
@@ -169,16 +171,29 @@ export class OperationLog {
 }
 
 /** The thing a command acted on, found from its input (and result), with a display name read from the library. */
-export function describeObject(store: DrizzleStore, input: unknown, value: unknown): { kind: string; id: string; label: string | null } | null {
+export function describeObject(store: DrizzleStore, input: unknown, value: unknown, action?: string): { kind: string; id: string; label: string | null } | null {
   const source = { ...(typeof value === "object" && value ? value as Record<string, unknown> : {}), ...(typeof input === "object" && input ? input as Record<string, unknown> : {}) };
   const pick = (key: string): string | null => (typeof source[key] === "string" && source[key] ? String(source[key]) : null);
   const label = (sql: string, id: string): string | null => {
     try { return (store.sqlite.prepare(sql).get(id) as { label?: string } | undefined)?.label ?? null; } catch { return null; }
   };
+  const exists = (sql: string, id: string): boolean => {
+    try { return Boolean(store.sqlite.prepare(sql).get(id)); } catch { return false; }
+  };
   // A created draft comes back as `{ draft }`, and it, not the project it was made in, is what the entry is about.
   const created = source.draft && typeof source.draft === "object" && typeof (source.draft as { id?: unknown }).id === "string" ? String((source.draft as { id: string }).id) : null;
   const draftId = pick("draftId") ?? created;
-  if (draftId) return { kind: "draft", id: draftId, label: label("SELECT title AS label FROM drafts WHERE id = ?", draftId) };
+  if (draftId) {
+    if (action === "capture.acceptDraft") return { kind: "recording", id: draftId, label: null };
+    const draftLabel = label("SELECT title AS label FROM drafts WHERE id = ?", draftId);
+    if (draftLabel !== null || exists("SELECT 1 FROM drafts WHERE id = ?", draftId)) {
+      return { kind: "draft", id: draftId, label: draftLabel };
+    }
+    if (exists("SELECT 1 FROM capture_drafts WHERE id = ?", draftId)) {
+      return { kind: "recording", id: draftId, label: null };
+    }
+    return { kind: "draft", id: draftId, label: null };
+  }
   const nested = (key: string): string | null => (source[key] && typeof source[key] === "object" && typeof (source[key] as { id?: unknown }).id === "string" ? String((source[key] as { id: string }).id) : null);
   const excerptId = pick("excerptId") ?? nested("excerpt");
   if (excerptId) return { kind: "excerpt", id: excerptId, label: label("SELECT title AS label FROM excerpts WHERE id = ?", excerptId) };
@@ -220,11 +235,21 @@ export function describeObject(store: DrizzleStore, input: unknown, value: unkno
   if (connectionId && (pick("connectionId") || pick("baseUrl"))) return { kind: "connection", id: connectionId, label: label("SELECT label FROM provider_connections WHERE id = ?", connectionId) };
   const featureId = pick("featureId");
   if (featureId) return { kind: "module", id: featureId, label: featureId };
+  const captureId = pick("captureId");
+  if (captureId) return { kind: "recording", id: captureId, label: null };
   const sessionId = pick("sessionId");
-  if (sessionId) return { kind: "session", id: sessionId, label: label("SELECT title AS label FROM agent_sessions WHERE id = ?", sessionId) };
+  if (sessionId) {
+    if (action?.startsWith("capture.")) return { kind: "recording", id: sessionId, label: null };
+    const sessionLabel = label("SELECT title AS label FROM agent_sessions WHERE id = ?", sessionId);
+    if (sessionLabel !== null || exists("SELECT 1 FROM agent_sessions WHERE id = ?", sessionId)) {
+      return { kind: "session", id: sessionId, label: sessionLabel };
+    }
+    if (exists("SELECT 1 FROM capture_sessions WHERE id = ?", sessionId)) {
+      return { kind: "recording", id: sessionId, label: null };
+    }
+    return { kind: "session", id: sessionId, label: null };
+  }
   const runId = pick("runId");
   if (runId) return { kind: "run", id: runId, label: null };
-  const captureId = pick("captureId") ?? pick("sessionId");
-  if (captureId) return { kind: "recording", id: captureId, label: null };
   return null;
 }

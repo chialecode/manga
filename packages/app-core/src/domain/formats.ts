@@ -79,9 +79,17 @@ function assertSafePath(name: string): void {
   }
 }
 
+function safeDecodeUri(value: string): string {
+  try { return decodeURIComponent(value); } catch { return value; }
+}
+
+function hasPartId(joined: string, partId: string): boolean {
+  return joined.split(",").includes(partId);
+}
+
 /** Resolve a relative archive reference without letting `..` leave the archive root. */
 export function resolveArchiveReference(directory: string, reference: string): string | undefined {
-  const clean = decodeURIComponent((reference.split("#")[0] ?? "").trim()).replaceAll("\\", "/");
+  const clean = safeDecodeUri((reference.split("#")[0] ?? "").trim()).replaceAll("\\", "/");
   if (!clean || /^(https?:|data:|mailto:)/i.test(clean)) return undefined;
   const combined = clean.startsWith("/") ? clean.slice(1) : `${directory.replaceAll("\\", "/")}${clean}`;
   const segments: string[] = [];
@@ -141,6 +149,9 @@ export function readZip(bytes: Uint8Array, limits = { maxEntry: ZIP_ENTRY, maxTo
     const nameLen = view.getUint16(entry.localOffset + 26, true);
     const extraLen = view.getUint16(entry.localOffset + 28, true);
     const dataStart = entry.localOffset + 30 + nameLen + extraLen;
+    if (dataStart > bytes.length || dataStart + entry.compSize > bytes.length) {
+      throw new MangaError("UNSUPPORTED_FORMAT", "zip entry data is truncated");
+    }
     const compressed = bytes.subarray(dataStart, dataStart + entry.compSize);
     let data: Uint8Array;
     if (entry.method === 0) data = compressed;
@@ -522,7 +533,7 @@ export function parseEpubBytes(bytes: Uint8Array): ParsedDocument {
     if (!data) return undefined;
     const existing = assetsByName.get(resolved);
     if (existing) {
-      if (!existing.partId.includes(partId)) existing.partId = `${existing.partId},${partId}`;
+      if (!hasPartId(existing.partId, partId)) existing.partId = `${existing.partId},${partId}`;
       return existing;
     }
     const asset: ParsedAsset = {
@@ -544,7 +555,7 @@ export function parseEpubBytes(bytes: Uint8Array): ParsedDocument {
   for (const [spineIndex, id] of spine.entries()) {
     const item = manifest.find((entry) => entry.id === id);
     if (!item || !item.mediaType.includes("html")) throw new MangaError("UNSUPPORTED_FORMAT", "unsupported or missing spine item");
-    const href = `${base}${decodeURIComponent(item.href)}`.replace(/^\.\//, "");
+    const href = `${base}${safeDecodeUri(item.href)}`.replace(/^\.\//, "");
     assertSafePath(href);
     const file = files.get(href);
     if (!file) throw new MangaError("UNSUPPORTED_FORMAT", "missing spine document");
@@ -725,7 +736,7 @@ export function buildEpubFixture(input: {
   return buildZip(files);
 }
 
-export function palmdocDecompress(bytes: Uint8Array): Uint8Array {
+export function palmdocDecompress(bytes: Uint8Array, maxOutput = ZIP_TOTAL): Uint8Array {
   const out: number[] = [];
   let i = 0;
   while (i < bytes.length) {
@@ -745,6 +756,7 @@ export function palmdocDecompress(bytes: Uint8Array): Uint8Array {
       if (distance <= 0 || distance > out.length) throw new MangaError("UNSUPPORTED_FORMAT", "invalid palmdoc backreference");
       for (let n = 0; n < length; n += 1) out.push(out[out.length - distance] ?? 0);
     }
+    if (out.length > maxOutput) throw new MangaError("UNSUPPORTED_FORMAT", "palmdoc stream exceeded size budget");
   }
   return Uint8Array.from(out);
 }
@@ -761,6 +773,7 @@ export function parseMobiBytes(bytes: Uint8Array): ParsedDocument {
   for (let i = 0; i < records; i += 1) offsets.push(view.getUint32(78 + i * 8, false));
   offsets.push(bytes.length);
   const record0 = offsets[0] ?? 0;
+  if (record0 + 16 > bytes.length) throw new MangaError("UNSUPPORTED_FORMAT", "mobi record 0 is truncated");
   const compression = view.getUint16(record0, false);
   const textLength = view.getUint32(record0 + 4, false);
   const textRecords = view.getUint16(record0 + 8, false);
@@ -770,11 +783,13 @@ export function parseMobiBytes(bytes: Uint8Array): ParsedDocument {
   let title = "untitled";
   let firstImageIndex: number | undefined;
   let textEncoding = 65001;
-  if (latin(bytes.subarray(record0 + 16, record0 + 20)) === "MOBI") {
-    const nameOffset = view.getUint32(record0 + 16 + 84, false);
-    const nameLength = view.getUint32(record0 + 16 + 88, false);
-    if (nameLength > 0 && nameLength < 1024 && record0 + nameOffset + nameLength <= bytes.length) {
-      title = new TextDecoder().decode(bytes.subarray(record0 + nameOffset, record0 + nameOffset + nameLength)).replaceAll("\u0000", "") || title;
+  if (record0 + 20 <= bytes.length && latin(bytes.subarray(record0 + 16, record0 + 20)) === "MOBI") {
+    if (record0 + 16 + 92 <= bytes.length) {
+      const nameOffset = view.getUint32(record0 + 16 + 84, false);
+      const nameLength = view.getUint32(record0 + 16 + 88, false);
+      if (nameLength > 0 && nameLength < 1024 && record0 + nameOffset + nameLength <= bytes.length) {
+        title = new TextDecoder().decode(bytes.subarray(record0 + nameOffset, record0 + nameOffset + nameLength)).replaceAll("\u0000", "") || title;
+      }
     }
     if (record0 + 16 + 0x6c + 4 <= bytes.length) {
       const candidate = view.getUint32(record0 + 16 + 0x6c, false);
@@ -786,11 +801,17 @@ export function parseMobiBytes(bytes: Uint8Array): ParsedDocument {
     }
   }
   const chunks: Uint8Array[] = [];
+  let totalDecompressed = 0;
   for (let i = 1; i <= textRecords && i < offsets.length - 1; i += 1) {
     const start = offsets[i] ?? 0;
     const end = offsets[i + 1] ?? start;
+    if (start > end || end > bytes.length) throw new MangaError("UNSUPPORTED_FORMAT", "mobi record offsets are out of bounds");
     const record = bytes.subarray(start, end);
-    chunks.push(compression === 2 ? palmdocDecompress(record) : record);
+    const remaining = Math.max(0, ZIP_TOTAL - totalDecompressed);
+    const chunk = compression === 2 ? palmdocDecompress(record, remaining) : record;
+    totalDecompressed += chunk.length;
+    if (totalDecompressed > ZIP_TOTAL) throw new MangaError("UNSUPPORTED_FORMAT", "mobi text exceeded size budget");
+    chunks.push(chunk);
   }
   const joined = new Uint8Array(chunks.reduce((sum, item) => sum + item.length, 0));
   let cursor = 0;
@@ -821,7 +842,7 @@ export function parseMobiBytes(bytes: Uint8Array): ParsedDocument {
     if (!Number.isFinite(recindex) || recindex < 1) return null;
     const cached = assetCache.get(recindex);
     if (cached !== undefined) {
-      if (cached && !cached.partId.includes(partId)) cached.partId = `${cached.partId},${partId}`;
+      if (cached && !hasPartId(cached.partId, partId)) cached.partId = `${cached.partId},${partId}`;
       return cached;
     }
     const recordNumber = imageStart + recindex - 1;

@@ -1,24 +1,16 @@
 import path from "node:path";
 import type { ComicManifest, MetadataFieldKey, VideoProbe } from "@manga/contracts";
+import { decodeXmlEntities } from "../comic/comicinfo.ts";
 import { fileReader } from "../comic/scan.ts";
+import { resolveArchiveReference } from "../domain/formats.ts";
 import type { ZipPool } from "../media/zip-pool.ts";
 
 /** What a file says about itself, in the shape the field projection takes. */
 export type LocalFields = Partial<Record<MetadataFieldKey, string | number | string[]>>;
 
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+export { decodeXmlEntities as decodeXml };
 
-export function decodeXml(text: string): string {
-  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, name: string) => {
-    if (name[0] === "#") {
-      const code = name[1]!.toLowerCase() === "x" ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
-      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
-    }
-    return ENTITIES[name.toLowerCase()] ?? match;
-  });
-}
-
-const plain = (value: string) => decodeXml(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")).replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
+const plain = (value: string) => decodeXmlEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")).replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
 
 function allTags(xml: string, name: string): string[] {
   const found: string[] = [];
@@ -32,7 +24,7 @@ function allTags(xml: string, name: string): string[] {
 
 function attributes(tagText: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const match of tagText.matchAll(/([A-Za-z_:][\w:.-]*)\s*=\s*("([^"]*)"|'([^']*)')/g)) out[match[1]!.toLowerCase()] = decodeXml(match[3] ?? match[4] ?? "");
+  for (const match of tagText.matchAll(/([A-Za-z_:][\w:.-]*)\s*=\s*("([^"]*)"|'([^']*)')/g)) out[match[1]!.toLowerCase()] = decodeXmlEntities(match[3] ?? match[4] ?? "");
   return out;
 }
 
@@ -76,10 +68,6 @@ export function parseOpf(opf: string, opfPath: string): OpfInfo {
   return { fields, coverHref: cover?.href, opfDir };
 }
 
-function safeDecode(href: string): string {
-  try { return decodeURIComponent(href); } catch { return href; }
-}
-
 /** Metadata and cover of an EPUB, read straight from the archive. A broken package gives whatever could be read. */
 export async function readEpub(zips: ZipPool, file: string, signal?: AbortSignal): Promise<{ fields: LocalFields; cover: () => Promise<Buffer | null> }> {
   const none = { fields: {}, cover: async () => null };
@@ -94,7 +82,8 @@ export async function readEpub(zips: ZipPool, file: string, signal?: AbortSignal
       fields: info.fields,
       cover: async () => {
         if (!info.coverHref) return null;
-        const target = path.posix.normalize(`${info.opfDir}${safeDecode(info.coverHref)}`);
+        const target = resolveArchiveReference(info.opfDir, info.coverHref);
+        if (!target) return null;
         try { return await zips.read(file, target, { maxBytes: 32 * 1024 * 1024, signal }); } catch { return null; }
       },
     };

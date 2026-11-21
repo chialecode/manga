@@ -42,7 +42,7 @@ function mount(connections: Array<Record<string, unknown>>, handlers: { onSaveCo
 describe("the profile of a model in the form", () => {
   it("starts from the profile as stored, and a patch holds only what was changed", () => {
     const before = profileForm(found);
-    expect(before).toEqual({ contextWindow: "32768", maxOutput: "8192", inputTypes: ["text"], capabilities: ["tools"], reasoningEffort: "", fileMiB: "20", videoMiB: "5", videoSeconds: "60", transcriptionInterface: "audio_transcriptions" });
+    expect(before).toEqual({ contextWindow: "32768", maxOutput: "8192", inputTypes: ["text"], capabilities: ["tools"], reasoningEffort: "", fileMiB: "20", videoMiB: "5", videoSeconds: "60", transcriptionInterface: "audio_transcriptions", reasoningLevels: [] });
     expect(profilePatch(before, before)).toEqual({});
     expect(profilePatch(before, { ...before, contextWindow: "65536" })).toEqual({ contextWindow: 65_536 });
     expect(profilePatch(before, { ...before, inputTypes: ["text", "image"], capabilities: ["tools", "reasoning"], reasoningEffort: "high" })).toEqual({ inputTypes: ["text", "image"], capabilities: ["tools", "reasoning"], reasoningEffort: "high" });
@@ -68,7 +68,7 @@ describe("the profile of a model in the form", () => {
   it("shows the numbers of a connection with where each came from, and has one button to test it", () => {
     mount([connection()]);
     expect(screen.getByTestId("connection-profile-conn_1").textContent).toContain("窗口 32,768");
-    expect(screen.getByTestId("connection-profile-conn_1").textContent).toContain("测试读到 / 默认值");
+    expect(screen.getByTestId("connection-profile-conn_1").textContent).toContain("自动读到 / 默认值");
     expect(screen.getByTestId("connection-test-conn_1").getAttribute("data-state")).toBe("never");
     expect(screen.getByTestId("connection-probe-conn_1")).toBeTruthy();
     // The four separate buttons are gone.

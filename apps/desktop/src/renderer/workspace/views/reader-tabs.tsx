@@ -3,7 +3,7 @@ import { readingLabels } from "../../lib/labels.ts";
 import { DEFAULT_SHELL_PREFERENCE, type ReadingStylePatch } from "@manga/contracts/reading";
 import { AddToRoughcut } from "../../components/add-to-roughcut.tsx";
 import { useComic } from "../../hooks/use-comic.ts";
-import { readerHeading, useNovel } from "../../hooks/use-novel.ts";
+import { useNovel } from "../../hooks/use-novel.ts";
 import { useVideo } from "../../hooks/use-video.ts";
 import { useWorkLinked } from "../../lib/use-work-linked.ts";
 import { ReadingPane } from "../../reading.tsx";
@@ -15,6 +15,7 @@ import type { Elsewhere } from "../elsewhere.ts";
 import { useServices } from "../services.tsx";
 import { useTabEnv, type TabEnv } from "../tab-env.tsx";
 import { useWorkspaceValue } from "../context.tsx";
+import { speechAvailable } from "../agent.tsx";
 
 type Locator = { kind?: string; pageId?: string; region?: unknown; startMs?: number; endMs?: number; partId?: string; range?: { start: number; end: number } };
 type Launched = {
@@ -55,9 +56,12 @@ function NovelBody({ env }: { env: TabEnv }) {
   const novel = useNovel({ i18n, setError: s.setError, setNotice: s.setNotice, contextId: env.contextId, tabId: env.tabId, openNote: s.open.note, refresh: s.refresh, onFacts: useFacts(env) });
   const novelRef = useRef(novel);
   novelRef.current = novel;
+  const envRef = useRef(env);
+  envRef.current = env;
   const loadedFor = useRef<string | null>(null);
   useEffect(() => {
-    const launch = env.takeLaunch() as (Launched & { n: number }) | undefined;
+    let cancelled = false;
+    const launch = envRef.current.takeLaunch() as (Launched & { n: number }) | undefined;
     void (async () => {
       const book = novelRef.current;
       if (launch?.fromNote) {
@@ -66,10 +70,11 @@ function NovelBody({ env }: { env: TabEnv }) {
         return;
       }
       if (loadedFor.current !== resourceId) { loadedFor.current = resourceId; await book.openResource(resourceId); }
+      if (cancelled) return;
       const locator = launch?.anchor?.locator;
       if (locator?.partId) await novelRef.current.openSlice(locator.partId, Math.max(0, (locator.range?.start ?? 0) - 100), { highlight: locator.range ?? null, revisionId: launch?.anchor?.resourceRevisionId ?? undefined });
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
   }, [resourceId, env.launchN]);
 
   const linked = useWorkLinked(novel.workId, s.facets.has("metadata"), s.matchVersion);
@@ -85,6 +90,7 @@ function NovelBody({ env }: { env: TabEnv }) {
     <div className="tab-reader" data-testid="tab-reader-novel">
       {elsewhere ? <ElsewhereBar t={t} elsewhere={elsewhere} onJump={() => { dismissed(); void jumpTo(s, resourceId, elsewhere.locator); }} onDismiss={dismissed} /> : null}
       <ReadingPane
+        key={`${reading.resourceId}:${reading.revisionId}`}
         document={{ ...reading, authorStyle } as never}
         style={{ ...s.shell.reading }}
         hits={novel.hits}
@@ -117,6 +123,13 @@ function NovelBody({ env }: { env: TabEnv }) {
         onBookmark={() => void novel.addBookmark()}
         onRemoveBookmark={(bookmarkId) => void novel.removeBookmark(bookmarkId)}
         onOpenBookmark={(bookmark) => void novel.openBookmark(bookmark as never)}
+        readAloud={{
+          available: speechAvailable((s.settings?.connections as Array<Record<string, unknown>> | undefined) ?? []),
+          costHint: s.recorder.settings.novelCostHint !== false,
+          voice: s.recorder.settings.speechVoice,
+          ...(s.recorder.settings.speechConnectionId ? { connectionId: s.recorder.settings.speechConnectionId } : {}),
+          onCostHintOff: () => void s.recorder.saveSettings({ novelCostHint: false }),
+        }}
       />
     </div>
   );
@@ -130,9 +143,13 @@ function ComicBody({ env }: { env: TabEnv }) {
   const comic = useComic({ i18n, setError: s.setError, setNotice: s.setNotice, contextId: env.contextId, tabId: env.tabId, openNote: s.open.note, refresh: s.refresh, onFacts: useFacts(env) });
   const comicRef = useRef(comic);
   comicRef.current = comic;
+  const envRef = useRef(env);
+  envRef.current = env;
+  const workIdRef = useRef(workId);
+  workIdRef.current = workId;
   const loadedFor = useRef<string | null>(null);
   useEffect(() => {
-    const launch = env.takeLaunch() as (Launched & { n: number }) | undefined;
+    const launch = envRef.current.takeLaunch() as (Launched & { n: number }) | undefined;
     void (async () => {
       const book = comicRef.current;
       if (launch?.fromNote) {
@@ -146,9 +163,8 @@ function ComicBody({ env }: { env: TabEnv }) {
         await book.open(resourceId, { revisionId: launch?.anchor?.resourceRevisionId ?? undefined, focus: { pageId: at.pageId, ...(at.region ? { region: at.region as never } : {}) } });
         return;
       }
-      if (loadedFor.current !== resourceId) { loadedFor.current = resourceId; await book.open(resourceId, { workId }); }
+      if (loadedFor.current !== resourceId) { loadedFor.current = resourceId; await book.open(resourceId, { workId: workIdRef.current }); }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, env.launchN]);
 
   const doc = comic.doc;
@@ -188,9 +204,13 @@ function VideoBody({ env }: { env: TabEnv }) {
   const video = useVideo({ i18n, setError: s.setError, setNotice: s.setNotice, contextId: env.contextId, tabId: env.tabId, openNote: s.open.note, refresh: s.refresh, onFacts: useFacts(env) });
   const videoRef = useRef(video);
   videoRef.current = video;
+  const envRef = useRef(env);
+  envRef.current = env;
+  const workIdRef = useRef(workId);
+  workIdRef.current = workId;
   const loadedFor = useRef<string | null>(null);
   useEffect(() => {
-    const launch = env.takeLaunch() as (Launched & { n: number }) | undefined;
+    const launch = envRef.current.takeLaunch() as (Launched & { n: number }) | undefined;
     void (async () => {
       const player = videoRef.current;
       if (launch?.fromNote) {
@@ -204,9 +224,8 @@ function VideoBody({ env }: { env: TabEnv }) {
         await player.open(resourceId, { revisionId: launch?.anchor?.resourceRevisionId ?? undefined, focus: { startMs: at.startMs, ...(at.endMs !== undefined ? { endMs: at.endMs } : {}) } });
         return;
       }
-      if (loadedFor.current !== resourceId) { loadedFor.current = resourceId; await player.open(resourceId, { workId }); }
+      if (loadedFor.current !== resourceId) { loadedFor.current = resourceId; await player.open(resourceId, { workId: workIdRef.current }); }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, env.launchN]);
 
   const doc = video.doc;

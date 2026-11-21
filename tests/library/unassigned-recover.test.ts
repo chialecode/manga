@@ -16,7 +16,7 @@ const ok = <T = Record<string, any>>(result: Result): T => {
 };
 
 const scratch: string[] = [];
-afterAll(() => { for (const dir of scratch) fs.rmSync(dir, { recursive: true, force: true }); });
+afterAll(() => { for (const dir of scratch) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
 const tmp = (name: string) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), `manga-ur-${name}-`)); scratch.push(dir); return dir; };
 const text = (title: string) => `${title}\n\n${"这是用于未归入作品测试的一段合成文字。".repeat(20)}\n`;
 

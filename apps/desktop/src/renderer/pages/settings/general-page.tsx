@@ -1,16 +1,59 @@
-import type { Translator } from "@manga/i18n";
-import type { HostState } from "../../lib/api.ts";
+import type { MessageKey, Translator } from "@manga/i18n";
+import { attempt, type HostState } from "../../lib/api.ts";
 import type { SettingsPageId } from "../../lib/shell-model.ts";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
 import { LocationGroups } from "./location-groups.tsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Job = { id: string; kind: string; stage: string; status: string };
 export type MigrationPlan = { handle: string; checkpointId: string; copies: Array<{ partition: string; bytes: number; target: string }> };
 
+const KNOWN_PARTITIONS = new Set(["data", "backups", "logs", "cache", "runtime", "works", "projects", "attachments", "resources", "exports", "downloads"]);
+const RECOVERY_KINDS = new Set(["location-migrate", "package-import"]);
+const RECOVERY_STAGES = new Set(["planned", "copy", "verify", "switch", "done"]);
+const RECOVERY_STATUSES = new Set(["planned", "running", "interrupted", "failed", "needs-review", "succeeded", "rolled-back"]);
+
+const partitionLabel = (t: Translator["t"], partition: string) => (
+  KNOWN_PARTITIONS.has(partition) ? t(`general.partition.${partition}` as MessageKey) : t("general.partition.other")
+);
+const recoveryKindLabel = (t: Translator["t"], kind: string) => (
+  RECOVERY_KINDS.has(kind) ? t(`general.recovery.kind.${kind}` as MessageKey) : t("general.recovery.kind.other")
+);
+const recoveryStageLabel = (t: Translator["t"], stage: string) => (
+  RECOVERY_STAGES.has(stage) ? t(`general.recovery.stage.${stage}` as MessageKey) : t("general.recovery.stage.other")
+);
+const recoveryStatusLabel = (t: Translator["t"], status: string) => (
+  RECOVERY_STATUSES.has(status) ? t(`general.recovery.status.${status}` as MessageKey) : t("general.recovery.status.other")
+);
+
+/** What the window's close button does (A-136), where the window has a tray icon: into the tray (the default), or out of MANGA. */
+function CloseButtonRow(props: { t: Translator["t"] }) {
+  const { t } = props;
+  const [toTray, setToTray] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    void attempt<{ window?: { closeToTray?: boolean } }>("settings.getShell").then((result) => { if (live) setToTray(result.ok ? result.value.window?.closeToTray ?? true : true); });
+    return () => { live = false; };
+  }, []);
+  const choose = async (next: boolean) => {
+    const before = toTray;
+    setToTray(next);
+    const result = await attempt("settings.setShell", { window: { closeToTray: next } });
+    if (!result.ok) setToTray(before);
+  };
+  return (
+    <SettingsRow label={t("general.closeButton")} hint={t("general.closeButtonHint")} htmlFor="general-close-button">
+      <select id="general-close-button" data-testid="general-close-button" value={toTray === false ? "quit" : "tray"} disabled={toTray === null} onChange={(event) => void choose(event.target.value === "tray")}>
+        <option value="tray">{t("general.closeToTray")}</option>
+        <option value="quit">{t("general.closeQuits")}</option>
+      </select>
+    </SettingsRow>
+  );
+}
+
 /**
- * General: where the data lives (and moving it, with the plan shown first), the jobs a crash left to recover, the language, and a pointer
- * to where start-up scanning is set. Moving data copies, then switches; nothing is deleted from the old place.
+ * General: where the data lives (and moving it, with the plan shown first), the jobs a crash left to recover, the language, what the window's close
+ * button does, and a pointer to where start-up scanning is set. Moving data copies, then switches; nothing is deleted from the old place.
  */
 export function GeneralPage(props: {
   i18n: Translator;
@@ -68,7 +111,7 @@ export function GeneralPage(props: {
             <h4>{t("settings.migrationPlan")}</h4>
             <p>{t("settings.migrationSummary", { count: migration.copies.length, bytes: i18n.formatNumber(migration.copies.reduce((sum, copy) => sum + copy.bytes, 0)) })}</p>
             <ul className="detail-muted">
-              {migration.copies.map((copy) => <li key={copy.partition}>{copy.partition} · {copy.target} · {t("library.bytes", { value: copy.bytes })}</li>)}
+              {migration.copies.map((copy) => <li key={copy.partition}>{partitionLabel(t, copy.partition)} · {copy.target} · {t("library.bytes", { value: copy.bytes })}</li>)}
             </ul>
             <div className="msettings-actions">
               <button type="button" className="primary-button" onClick={props.onApplyMigration}>{t("settings.migrationApply")}</button>
@@ -82,7 +125,7 @@ export function GeneralPage(props: {
         {jobs.length === 0 ? <p className="detail-muted settings-empty">{t("settings.recoveryNone")}</p> : (
           <>
             <ul>
-              {jobs.map((job) => <li key={job.id}>{job.kind} · {job.stage} · {job.status}</li>)}
+              {jobs.map((job) => <li key={job.id}>{recoveryKindLabel(t, job.kind)} · {recoveryStageLabel(t, job.stage)} · {recoveryStatusLabel(t, job.status)}</li>)}
             </ul>
             <div className="msettings-actions">
               <button type="button" className="secondary-button" onClick={props.onRecoverJobs}>{t("settings.recoveryResume")}</button>
@@ -91,6 +134,12 @@ export function GeneralPage(props: {
           </>
         )}
       </SettingsSection>
+
+      {host.tray ? (
+        <SettingsSection title={t("general.window")} testId="general-window">
+          <CloseButtonRow t={t} />
+        </SettingsSection>
+      ) : null}
 
       <SettingsSection title={t("general.startup")} testId="general-startup">
         <SettingsRow label={t("general.startupScan")} hint={t("general.startupScanHint")}>

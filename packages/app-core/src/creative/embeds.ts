@@ -131,18 +131,20 @@ export class EmbedService {
     for (const [slot, row] of have) {
       if (!want.has(slot)) { sqlite.prepare("DELETE FROM embeds WHERE id = ?").run(row.id); removed += 1; }
     }
-    for (const item of wanted) {
+    for (const item of want.values()) {
       const locator = JSON.stringify(item.locator ?? {});
       const mode = item.mode ?? "live";
       const row = have.get(item.slot);
       if (row && row.target_kind === item.targetKind && row.target_id === item.targetId && row.locator_json === locator && row.mode === mode) continue;
       // A board or a map refuses a loop at the edit. A note is free text the user already saved, so its loop is recorded and shown as a loop.
       if (options.strictCycles !== false && this.wouldCycle(sourceKind, sourceId, item.targetKind, item.targetId)) throw new MangaError("VALIDATION_ERROR", "that would put an object inside itself", { details: { reason: "cycle" } });
-      const snapshot = mode === "snapshot" ? JSON.stringify(this.snapshotOf(item.targetKind, item.targetId, item.locator ?? {})) : null;
+      const snap = mode === "snapshot" ? this.snapshotOf(item.targetKind, item.targetId, item.locator ?? {}) : null;
+      const snapshotJson = snap ? JSON.stringify(snap) : null;
+      const snapshotVersion = snap ? snap.version : null;
       if (row) {
-        sqlite.prepare("UPDATE embeds SET target_kind = ?, target_id = ?, locator_json = ?, mode = ?, snapshot_json = ?, snapshot_version = ?, updated_at = ? WHERE id = ?").run(item.targetKind, item.targetId, locator, mode, snapshot, snapshot ? (JSON.parse(snapshot) as Snapshot).version : null, now, row.id);
+        sqlite.prepare("UPDATE embeds SET target_kind = ?, target_id = ?, locator_json = ?, mode = ?, snapshot_json = ?, snapshot_version = ?, updated_at = ? WHERE id = ?").run(item.targetKind, item.targetId, locator, mode, snapshotJson, snapshotVersion, now, row.id);
       } else {
-        sqlite.prepare("INSERT INTO embeds(id, source_kind, source_id, slot, target_kind, target_id, locator_json, mode, snapshot_json, snapshot_version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").run(createId("emb"), sourceKind, sourceId, item.slot, item.targetKind, item.targetId, locator, mode, snapshot, snapshot ? (JSON.parse(snapshot) as Snapshot).version : null, now, now);
+        sqlite.prepare("INSERT INTO embeds(id, source_kind, source_id, slot, target_kind, target_id, locator_json, mode, snapshot_json, snapshot_version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").run(createId("emb"), sourceKind, sourceId, item.slot, item.targetKind, item.targetId, locator, mode, snapshotJson, snapshotVersion, now, now);
         added += 1;
       }
     }

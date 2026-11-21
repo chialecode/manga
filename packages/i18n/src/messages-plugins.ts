@@ -130,6 +130,7 @@ export const zhCNPlugins = {
   "plugins.reason.size": "插件包太大，或文件太多。",
   "plugins.reason.unsafe": "插件包里有不允许的文件名，已拒绝。",
   "plugins.reason.manifest": "插件包的清单不合规范。",
+  "plugins.reason.provider": "插件里的模型提供者配置不合规范。",
   "plugins.reason.entry": "清单里的入口文件不在插件包里。",
   "plugins.reason.unsigned": "插件包没有签名。",
   "plugins.reason.signature": "签名和插件包的内容对不上，可能被改动过。",

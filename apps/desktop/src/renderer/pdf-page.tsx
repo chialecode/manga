@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { alignPdfSelection, mapCanonicalPieces, pdfHighlightRange, selectionOffsets, type CanonicalPiece, type PiecePoint } from "@manga/app-core/pdf-text-map";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+import { EXPECTED_VERSION } from "./readers/pdf-doc.ts";
 
 // Electron's Chromium may not ship Uint8Array.prototype.toHex yet. PDF.js 6 calls it while building the text layer.
 const bytesPrototype = Uint8Array.prototype as Uint8Array & { toHex?: () => string };
@@ -22,11 +23,13 @@ type PdfPage = {
   getTextContent: () => Promise<{ items: unknown[] }>;
   cleanup: () => void;
 };
-type PdfTask = { promise: Promise<{ numPages: number; getPage: (index: number) => Promise<PdfPage> }>; destroy: () => Promise<void> };
+type PdfDoc = { numPages: number; getPage: (index: number) => Promise<PdfPage> };
+type PdfTask = { promise: Promise<PdfDoc>; destroy: () => Promise<void> };
 /** How long the page width has to hold still before the page is painted again at the new width. */
 const WIDTH_SETTLE_MS = 150;
 
 type TextLayerBuilder = { div: HTMLDivElement; render: (options: { viewport: Viewport; textContentParams: Record<string, unknown> }) => Promise<void>; cancel: () => void };
+type TextLayerBuilderCtor = new (options: { pdfPage: PdfPage; onAppend: (div: HTMLDivElement) => void; abortSignal: AbortSignal }) => TextLayerBuilder;
 
 export type PdfSelection = { quote: string; start: number; end: number };
 
@@ -108,13 +111,19 @@ function textEdge(span: HTMLElement, end: boolean): { node: Node; offset: number
  * end of the nearest line. Off the glyphs Chromium may return a caret in some other line, so that hit is not trusted.
  */
 export function caretNear(root: HTMLElement, x: number, y: number): { node: Node; offset: number } | null {
-  const spans = [...root.querySelectorAll<HTMLElement>("span")].filter((span) => !span.classList.contains("markedContent") && span.textContent);
-  const boxes = spans.map((span) => ({ span, box: span.getBoundingClientRect() }));
   const hit = document.caretPositionFromPoint?.(x, y);
-  const under = hit && boxes.find(({ span }) => span.contains(hit.offsetNode));
-  if (hit && under && x >= under.box.left && x <= under.box.right && y >= under.box.top && y <= under.box.bottom) {
-    return { node: hit.offsetNode, offset: hit.offset };
+  if (hit) {
+    const targetSpan = (hit.offsetNode instanceof Element ? hit.offsetNode : hit.offsetNode.parentElement)?.closest<HTMLElement>("span");
+    if (targetSpan && root.contains(targetSpan) && !targetSpan.classList.contains("markedContent") && targetSpan.textContent) {
+      const box = targetSpan.getBoundingClientRect();
+      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
+        return { node: hit.offsetNode, offset: hit.offset };
+      }
+    }
   }
+  const spans = [...root.querySelectorAll<HTMLElement>("span")].filter((span) => !span.classList.contains("markedContent") && span.textContent);
+  if (spans.length === 0) return null;
+  const boxes = spans.map((span) => ({ span, box: span.getBoundingClientRect() }));
   const away = ({ box }: { box: DOMRect }) => (y < box.top ? box.top - y : y > box.bottom ? y - box.bottom : 0);
   const nearest = Math.min(...boxes.map(away));
   const line = boxes.filter((item) => away(item) === nearest);
@@ -153,6 +162,7 @@ function bindTextDrag(wrapper: HTMLElement, signal: AbortSignal): void {
     const drag = new AbortController();
     const options = { signal: AbortSignal.any([signal, drag.signal]) };
     document.addEventListener("mousemove", (move) => {
+      if ((move.buttons & 1) === 0) { drag.abort(); return; }
       const view = scroller === document.documentElement ? { top: 0, bottom: window.innerHeight } : scroller.getBoundingClientRect();
       const edge = 24;
       if (move.clientY < view.top + edge) scroller.scrollTop -= edge;
@@ -161,6 +171,7 @@ function bindTextDrag(wrapper: HTMLElement, signal: AbortSignal): void {
       if (focus) window.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
     }, options);
     document.addEventListener("mouseup", () => drag.abort(), options);
+    window.addEventListener("blur", () => drag.abort(), options);
   }, { signal });
 }
 
@@ -241,6 +252,8 @@ export function PdfPageView(props: {
   const [selectionReview, setSelectionReview] = useState(false);
   const [emptyText, setEmptyText] = useState(false);
   const [epoch, setEpoch] = useState(0);
+  const [docState, setDocState] = useState<{ bytes: Uint8Array; doc: PdfDoc; TextLayerBuilder: TextLayerBuilderCtor } | null>(null);
+  const mappedRef = useRef<{ pieces: DomPiece[]; normalized: string; stable: boolean } | null>(null);
   const onSelection = useRef(props.onSelection);
   onSelection.current = props.onSelection;
   const highlightReviewRef = useRef(false);
@@ -266,18 +279,12 @@ export function PdfPageView(props: {
     return () => { window.clearTimeout(timer); observer.disconnect(); };
   }, []);
 
+  // 1. Parse the PDF bytes once per document and destroy the worker task only when bytes change or unmount.
   useEffect(() => {
-    const canvasNode = canvas.current;
-    const layerNode = layer.current;
-    const box = pageBox.current;
-    if (!canvasNode || !layerNode || !box || width <= 0) return;
     let dead = false;
     let task: PdfTask | undefined;
-    let renderTask: { promise: Promise<void>; cancel: () => void } | undefined;
-    let textLayer: TextLayerBuilder | undefined;
-    const listeners = new AbortController();
     setError(null);
-    setHighlightReview(false);
+    setDocState(null);
     (async () => {
       const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs") as unknown as {
         version: string;
@@ -285,10 +292,10 @@ export function PdfPageView(props: {
         getDocument: (src: Record<string, unknown>) => PdfTask;
       };
       if (dead) return;
-      if (pdfjs.version !== "6.4.299") throw new Error(`pdf.js ${pdfjs.version} does not match 6.4.299`);
+      if (pdfjs.version !== EXPECTED_VERSION) throw new Error(`pdf.js ${pdfjs.version} does not match ${EXPECTED_VERSION}`);
       // The viewer module reads globalThis.pdfjsLib, which the build module above has just defined.
       const viewer = await import("pdfjs-dist/legacy/web/pdf_viewer.mjs") as unknown as {
-        TextLayerBuilder: new (options: { pdfPage: PdfPage; onAppend: (div: HTMLDivElement) => void; abortSignal: AbortSignal }) => TextLayerBuilder;
+        TextLayerBuilder: TextLayerBuilderCtor;
       };
       if (dead) return;
       pdfjs.GlobalWorkerOptions.workerSrc = new URL(workerUrl, window.location.href).toString();
@@ -306,12 +313,37 @@ export function PdfPageView(props: {
       });
       const doc = await task.promise;
       if (dead) return;
-      const page = await doc.getPage(Math.min(Math.max(props.pageNumber, 1), doc.numPages));
+      setDocState({ bytes: props.bytes, doc, TextLayerBuilder: viewer.TextLayerBuilder });
+    })().catch((caught: unknown) => {
+      if (dead) return;
+      setError(caught instanceof Error ? caught.message : String(caught));
+    });
+    return () => {
+      dead = true;
+      setDocState(null);
+      void task?.destroy().catch(() => undefined);
+    };
+  }, [props.bytes]);
+
+  // 2. Render canvas + official text layer only when the parsed document, page, settled width, or zoom changes.
+  useEffect(() => {
+    const canvasNode = canvas.current;
+    const layerNode = layer.current;
+    const box = pageBox.current;
+    if (!docState || docState.bytes !== props.bytes || !canvasNode || !layerNode || !box || width <= 0) return;
+    let dead = false;
+    let renderTask: { promise: Promise<void>; cancel: () => void } | undefined;
+    let textLayer: TextLayerBuilder | undefined;
+    const listeners = new AbortController();
+    setError(null);
+    mappedRef.current = null;
+    (async () => {
+      const page = await docState.doc.getPage(Math.min(Math.max(props.pageNumber, 1), docState.doc.numPages));
       if (dead) return;
       const unscaled = page.getViewport({ scale: 1 });
       const scale = Math.max(0.2, (width / unscaled.width) * zoom);
       const viewport = page.getViewport({ scale });
-      // PDF.js 6.4.299 sizes the text layer from these variables. The span font-size and scaleX consume them.
+      // PDF.js 6.x sizes the text layer from these variables. The span font-size and scaleX consume them.
       box.style.setProperty("--scale-factor", String(viewport.scale));
       box.style.setProperty("--user-unit", String(page.userUnit || 1));
       box.style.setProperty("--total-scale-factor", "calc(var(--scale-factor) * var(--user-unit))");
@@ -324,7 +356,7 @@ export function PdfPageView(props: {
       if (dead) return;
       // The official viewer builder keeps a drag over blank page area on the text (its endOfContent handling).
       // Empty text-content params match the parser's getTextContent() defaults, so stored offsets still line up.
-      textLayer = new viewer.TextLayerBuilder({
+      textLayer = new docState.TextLayerBuilder({
         pdfPage: page,
         abortSignal: listeners.signal,
         onAppend: (div) => { if (!dead) layerNode.replaceChildren(div); },
@@ -332,17 +364,8 @@ export function PdfPageView(props: {
       await textLayer.render({ viewport, textContentParams: {} });
       if (dead) return;
       const mapped = applyPieceMap(textLayer.div);
+      mappedRef.current = mapped;
       setEmptyText(!mapped.normalized.trim());
-      const highlighted = pdfHighlightRange({
-        pageText: mapped.normalized,
-        stable: mapped.stable,
-        storedText: props.storedText,
-        sliceStart: props.sliceStart,
-        highlight: props.highlight,
-        quote: props.highlightQuote ?? null,
-      });
-      setHighlightReview(highlighted === "review");
-      markSpans(mapped.pieces, highlighted && highlighted !== "review" ? highlighted : null);
       setEpoch((value) => value + 1);
       page.cleanup();
     })().catch((caught: unknown) => {
@@ -351,13 +374,29 @@ export function PdfPageView(props: {
     });
     return () => {
       dead = true;
+      mappedRef.current = null;
       renderTask?.cancel();
       textLayer?.cancel();
       listeners.abort();
-      void task?.destroy().catch(() => undefined);
       layerNode.replaceChildren();
     };
-  }, [props.bytes, props.pageNumber, props.storedText, props.sliceStart, props.highlight, props.highlightQuote, width, zoom]);
+  }, [docState, props.bytes, props.pageNumber, width, zoom]);
+
+  // 3. Apply or clear highlight marks cheaply over the existing text layer without repainting or clearing selection.
+  useEffect(() => {
+    const mapped = mappedRef.current;
+    if (!mapped) { setHighlightReview(false); return; }
+    const highlighted = pdfHighlightRange({
+      pageText: mapped.normalized,
+      stable: mapped.stable,
+      storedText: props.storedText,
+      sliceStart: props.sliceStart,
+      highlight: props.highlight,
+      quote: props.highlightQuote ?? null,
+    });
+    setHighlightReview(highlighted === "review");
+    markSpans(mapped.pieces, highlighted && highlighted !== "review" ? highlighted : null);
+  }, [epoch, props.storedText, props.sliceStart, props.highlight, props.highlightQuote]);
 
   useEffect(() => {
     const node = layer.current;
@@ -399,7 +438,7 @@ export function PdfPageView(props: {
   );
 }
 
-// Official PDF.js 6.4.299 text-layer rules (pdf_viewer.css). Span size comes from --font-height, --scale-x and --total-scale-factor.
+// Official PDF.js 6.x text-layer rules (pdf_viewer.css). Span size comes from --font-height, --scale-x and --total-scale-factor.
 const TEXT_LAYER_CSS = `
 .pdf-page { --user-unit: 1; --scale-round-x: 1px; --scale-round-y: 1px; --total-scale-factor: calc(var(--scale-factor) * var(--user-unit)); }
 .textLayer {

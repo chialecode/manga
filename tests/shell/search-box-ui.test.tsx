@@ -251,6 +251,7 @@ describe("AT-121 choosing in the search box", () => {
 
   it("opens behind the tab in front with Ctrl and Enter, and leaves the box closed and the tab in front as it was", async () => {
     await openBox(start());
+    await waitFor(() => expect(tabTitles().length).toBeGreaterThan(0), LATE);
     const front = focusedTitle();
     const tabs = tabTitles();
     type("合成的另一本");

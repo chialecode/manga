@@ -5,7 +5,9 @@ import { METADATA_FIELD_KEYS, MangaError, createId, type CommandEnvelope, type M
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import { parseProjection, projectionMutation, readOverride, type SnapshotPatch } from "../works-service.ts";
 import { projectedValue, type FieldOverride, type ProjectedField, type ProjectionSourceId } from "../domain/metadata-projection.ts";
+import { Lane } from "../media/process-runner.ts";
 import type { MediaServices } from "../media/services.ts";
+import { writeFileAtomic } from "../shared/utils.ts";
 import type { CoverService } from "./covers.ts";
 import type { Credits, EpisodeItem, OnlineProvider, RelatedItem, SearchHit, SubjectDetail } from "./provider.ts";
 import { REF_FAILURE_MESSAGES, parseBangumiRef } from "./ref.ts";
@@ -21,6 +23,15 @@ export const MAX_AVATARS = 20;
 const MAX_CREDIT_ROWS = 100;
 const MAX_AVATAR_BYTES = 1024 * 1024;
 const AVATAR_PARALLEL = 4;
+const CANDIDATE_THUMB_LIMIT = 500;
+const CANDIDATE_PRUNE_EVERY = 64;
+const CANDIDATE_EXTS = [
+  ["jpg", "image/jpeg"],
+  ["png", "image/png"],
+  ["webp", "image/webp"],
+  ["gif", "image/gif"],
+  ["avif", "image/avif"],
+] as const;
 /** An entry fetched for a preview is kept this long, so applying exactly what the user looked at does not ask the source again. */
 const PREVIEW_TTL_MS = 2 * 60_000;
 
@@ -85,6 +96,7 @@ function snapshotOf(detail: SubjectDetail): StoredSnapshot {
 export class MetadataService {
   private readonly deps: MetadataDeps;
   private readonly previews = new Map<string, { detail: SubjectDetail; at: number }>();
+  private candidateWrites = 0;
 
   constructor(deps: MetadataDeps) {
     this.deps = deps;
@@ -151,19 +163,44 @@ export class MetadataService {
     return this.deps.media.dir("metadata", "thumbs");
   }
 
+  private pruneCandidateThumbs(dir: string): void {
+    try {
+      const files: Array<{ full: string; mtimeMs: number }> = [];
+      for (const name of fs.readdirSync(dir)) {
+        if (name.endsWith(".tmp")) continue;
+        const full = path.join(dir, name);
+        try {
+          const stat = fs.statSync(full);
+          if (stat.isFile()) files.push({ full, mtimeMs: stat.mtimeMs });
+        } catch { /* deleted concurrently */ }
+      }
+      if (files.length <= CANDIDATE_THUMB_LIMIT) return;
+      files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+      for (const entry of files.slice(0, files.length - CANDIDATE_THUMB_LIMIT)) {
+        try { fs.rmSync(entry.full, { force: true }); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+  }
+
   /** A candidate's small picture, downloaded by the main process and kept in the cache. The renderer never fetches remote pictures itself. */
   private async candidateImage(provider: OnlineProvider, url: string | undefined, signal?: AbortSignal): Promise<{ name: string; mediaType: string } | null> {
     if (!url) return null;
+    const dir = this.thumbDir();
     const key = createHash("sha1").update(`${provider.id}|${url}`).digest("hex");
-    const known = fs.readdirSync(this.thumbDir()).find((name) => name.startsWith(`${key}.`));
-    if (known) return { name: known, mediaType: known.endsWith(".png") ? "image/png" : known.endsWith(".webp") ? "image/webp" : known.endsWith(".gif") ? "image/gif" : "image/jpeg" };
+    for (const [ext, mediaType] of CANDIDATE_EXTS) {
+      const name = `${key}.${ext}`;
+      if (fs.existsSync(path.join(dir, name))) return { name, mediaType };
+    }
     try {
       const image = await provider.image(url, signal);
-      const ext = image.mediaType === "image/png" ? "png" : image.mediaType === "image/webp" ? "webp" : image.mediaType === "image/gif" ? "gif" : "jpg";
+      const ext = image.mediaType === "image/png" ? "png" : image.mediaType === "image/webp" ? "webp" : image.mediaType === "image/gif" ? "gif" : image.mediaType === "image/avif" ? "avif" : "jpg";
       const name = `${key}.${ext}`;
-      const target = path.join(this.thumbDir(), name);
-      fs.writeFileSync(`${target}.tmp`, image.bytes);
-      fs.renameSync(`${target}.tmp`, target);
+      writeFileAtomic(path.join(dir, name), image.bytes);
+      this.candidateWrites += 1;
+      if (this.candidateWrites >= CANDIDATE_PRUNE_EVERY) {
+        this.candidateWrites = 0;
+        this.pruneCandidateThumbs(dir);
+      }
       return { name, mediaType: image.mediaType };
     } catch (error) {
       if (signal?.aborted) throw new MangaError("CANCELLED", "the search was cancelled");
@@ -224,17 +261,19 @@ export class MetadataService {
     // Candidates of an earlier search for the same work stay open until one is chosen; a new search replaces them.
     if (input.workId) mutations.push({ sql: "DELETE FROM metadata_candidates WHERE work_id = ? AND state = 'open'", params: [input.workId] });
     const ordered = enabled.flatMap((provider) => gathered.filter((entry) => entry.provider.id === provider.id));
-    for (const { provider, hits } of ordered) {
-      for (const hit of hits) {
-        const image = await this.candidateImage(provider, hit.imageUrl, signal);
-        const candidateId = createId("cand");
-        results.push({ ...publicHit(hit), id: candidateId, searchId, state: "open", image: this.imageHandle(image, sessionId), linkedElsewhere: this.linkedElsewhere(provider.id, hit.externalId, input.workId) });
-        if (input.workId) {
-          mutations.push({
-            sql: "INSERT INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)",
-            params: [candidateId, input.workId, provider.id, JSON.stringify({ hit, image }), hit.externalId, searchId, "open", now],
-          });
-        }
+    const flatHits = ordered.flatMap(({ provider, hits }) => hits.map((hit) => ({ provider, hit })));
+    const imageLane = new Lane(AVATAR_PARALLEL);
+    const images = await Promise.all(flatHits.map(({ provider, hit }) => imageLane.run(() => this.candidateImage(provider, hit.imageUrl, signal), signal)));
+    for (let i = 0; i < flatHits.length; i += 1) {
+      const { provider, hit } = flatHits[i]!;
+      const image = images[i] ?? null;
+      const candidateId = createId("cand");
+      results.push({ ...publicHit(hit), id: candidateId, searchId, state: "open", image: this.imageHandle(image, sessionId), linkedElsewhere: this.linkedElsewhere(provider.id, hit.externalId, input.workId) });
+      if (input.workId) {
+        mutations.push({
+          sql: "INSERT INTO metadata_candidates(id, work_id, provider_id, payload_json, external_id, search_id, state, created_at) VALUES (?,?,?,?,?,?,?,?)",
+          params: [candidateId, input.workId, provider.id, JSON.stringify({ hit, image }), hit.externalId, searchId, "open", now],
+        });
       }
     }
     if (mutations.length) this.store.commit({ mutations, events: [] });
@@ -314,7 +353,7 @@ export class MetadataService {
 
   /** Download the entry's cover and make it the work's cover when the work's own choice allows it. Never fails the link. */
   private async fetchCover(workId: string, provider: OnlineProvider, detail: SubjectDetail, signal?: AbortSignal, keepCover = false): Promise<{ coverId?: string; selected?: boolean; warning?: string }> {
-    const url = detail.images.large || detail.images.common || detail.images.medium;
+    const url = detail.images.large || detail.images.common || detail.images.medium || detail.images.small;
     if (!url) return { warning: "the entry has no cover picture" };
     try {
       const image = await provider.image(url, signal);
@@ -390,17 +429,25 @@ export class MetadataService {
           events: [{ type: "work.refreshed", payload: { workId: input.workId, providerId: provider.id } }],
         });
         // A better remote cover may be added; the work's cover only moves while it is still automatic.
-        await this.fetchCover(input.workId, provider, detail, signal, input.keepCover);
+        const cover = await this.fetchCover(input.workId, provider, detail, signal, input.keepCover);
         const credits = await this.saveCredits(input.workId, provider, detail.externalId, signal);
-        refreshed.push({ providerId: provider.id, externalId: link.external_id, fetchedAt: now, changed, warnings: [...detail.warnings, ...credits.warnings], credits });
+        refreshed.push({
+          providerId: provider.id,
+          externalId: link.external_id,
+          fetchedAt: now,
+          changed,
+          warnings: [...detail.warnings, ...(cover.warning ? [cover.warning] : []), ...credits.warnings],
+          credits,
+        });
       } catch (error) {
         if (signal?.aborted) throw new MangaError("CANCELLED", "the refresh was cancelled");
         stale.push({ providerId: link.provider_id, externalId: link.external_id, fetchedAt: stored?.fetched_at ?? null, error: failureOf(link.provider_id, error) });
       }
     }
-    void envelope;
+    const result = { workId: input.workId, refreshed, stale };
+    this.store.commit({ mutations: [], events: [], idempotencyKey: envelope.idempotencyKey, commandId: envelope.commandId, result });
     this.deps.notify("work.updated", { workId: input.workId, reason: "refreshed" });
-    return { workId: input.workId, refreshed, stale };
+    return result;
   }
 
   // ------------------------------------------------------------------ pasted number or link, preview
@@ -469,12 +516,13 @@ export class MetadataService {
       fields.push({ key, current, incoming: has ? incoming : null, status, protected: owned, keepByDefault: owned || status === "remote-missing" });
     }
 
-    const currentCover = work.cover_id ? this.store.sqlite.prepare("SELECT id, source FROM covers WHERE id = ?").get(work.cover_id) as { id: string; source: string } | undefined : undefined;
+    const currentCover = work.cover_id ? this.store.sqlite.prepare("SELECT id, source, provider_id, external_id FROM covers WHERE id = ?").get(work.cover_id) as { id: string; source: string; provider_id: string | null; external_id: string | null } | undefined : undefined;
     const incomingUrl = detail.images.common || detail.images.medium || detail.images.large || detail.images.small;
     const incomingImage = incomingUrl ? await this.candidateImage(provider, incomingUrl, signal) : null;
-    // The cover moves only while the work's cover is automatic and the source ranks above the current one; a user's or locked cover stays.
+    // The cover moves while the work's cover is automatic and a better or re-matched online picture arrives; a user's or locked cover stays.
     const ownedCover = work.cover_state === "user" || work.cover_state === "locked";
-    const willReplace = Boolean(incomingUrl) && !ownedCover && (!currentCover || currentCover.source === "file");
+    const sameEntryCover = Boolean(currentCover && currentCover.source === "bangumi" && currentCover.provider_id === provider.id && currentCover.external_id === detail.externalId && linked?.external_id === detail.externalId);
+    const willReplace = Boolean(incomingUrl) && !ownedCover && (!currentCover || currentCover.source === "file" || (currentCover.source === "bangumi" && !sameEntryCover));
 
     return {
       workId: input.workId, mode: linked?.external_id === detail.externalId ? "refresh" : "link", providerId: provider.id, externalId: detail.externalId,
@@ -516,32 +564,34 @@ export class MetadataService {
     for (const row of this.store.sqlite.prepare("SELECT character_id AS id, image_hash AS hash FROM subject_characters WHERE work_id = ? AND provider_id = ? AND subject_id = ? AND image_hash IS NOT NULL").all(workId, provider.id, externalId) as Array<{ id: string; hash: string }>) known.set(`c:${row.id}`, row.hash);
     for (const row of this.store.sqlite.prepare("SELECT person_id AS id, image_hash AS hash FROM subject_persons WHERE work_id = ? AND provider_id = ? AND subject_id = ? AND image_hash IS NOT NULL").all(workId, provider.id, externalId) as Array<{ id: string; hash: string }>) known.set(`p:${row.id}`, row.hash);
 
-    // The first MAX_AVATARS entries that have a picture get one; a picture saved by an earlier link is reused without asking again.
-    const wanted = [...(characters ?? []).map((item) => ({ key: `c:${item.externalId}`, url: item.imageUrl })), ...(persons ?? []).map((item) => ({ key: `p:${item.externalId}`, url: item.imageUrl }))].filter((item) => item.url).slice(0, MAX_AVATARS);
+    // The first MAX_AVATARS unique entries that have a picture get one; a picture saved by an earlier link is reused without asking again.
+    const seenWanted = new Set<string>();
+    const wanted: Array<{ key: string; url: string }> = [];
+    for (const item of [...(characters ?? []).map((entry) => ({ key: `c:${entry.externalId}`, url: entry.imageUrl })), ...(persons ?? []).map((entry) => ({ key: `p:${entry.externalId}`, url: entry.imageUrl }))]) {
+      if (!item.url || seenWanted.has(item.key)) continue;
+      seenWanted.add(item.key);
+      wanted.push({ key: item.key, url: item.url });
+      if (wanted.length >= MAX_AVATARS) break;
+    }
     const hashes = new Map<string, string>();
     const stored: Mutation[] = [];
-    let next = 0;
-    const worker = async () => {
-      for (;;) {
-        signal?.throwIfAborted();
-        const item = wanted[next++];
-        if (!item) return;
-        const before = known.get(item.key);
-        if (before && images.has(before)) { hashes.set(item.key, before); summary.avatars.reused += 1; continue; }
-        try {
-          const picture = await provider.image(item.url!, signal);
-          if (picture.bytes.length > MAX_AVATAR_BYTES) throw new MangaError("UNSUPPORTED_FORMAT", "the picture is larger than an avatar may be");
-          const described = await images.inspect(picture.bytes);
-          stored.push(images.insertSql(described, picture.bytes, { url: item.url, fetchedAt: now }));
-          hashes.set(item.key, described.hash);
-          summary.avatars.saved += 1;
-        } catch {
-          if (signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
-          summary.avatars.failed += 1;
-        }
+    const avatarLane = new Lane(AVATAR_PARALLEL);
+    await Promise.all(wanted.map((item) => avatarLane.run(async () => {
+      signal?.throwIfAborted();
+      const before = known.get(item.key);
+      if (before && images.has(before)) { hashes.set(item.key, before); summary.avatars.reused += 1; return; }
+      try {
+        const picture = await provider.image(item.url, signal);
+        if (picture.bytes.length > MAX_AVATAR_BYTES) throw new MangaError("UNSUPPORTED_FORMAT", "the picture is larger than an avatar may be");
+        const described = await images.inspect(picture.bytes);
+        stored.push(images.insertSql(described, picture.bytes, { url: item.url, fetchedAt: now }));
+        hashes.set(item.key, described.hash);
+        summary.avatars.saved += 1;
+      } catch {
+        if (signal?.aborted) throw new MangaError("CANCELLED", "the request was cancelled");
+        summary.avatars.failed += 1;
       }
-    };
-    await Promise.all(Array.from({ length: Math.min(AVATAR_PARALLEL, wanted.length) }, worker));
+    }, signal)));
 
     const mutations: Mutation[] = [...stored];
     if (characters) {
@@ -607,14 +657,14 @@ export class MetadataService {
       const inLibrary = this.store.sqlite.prepare("SELECT work_id FROM work_links WHERE provider_id = ? AND external_id = ? AND link_state = 'linked' LIMIT 1").get(linked!.providerId, item.externalId) as { work_id: string } | undefined;
       return { ...item, providerId: linked!.providerId, inLibraryWorkId: inLibrary?.work_id ?? null, sourceUrl: linked!.sourceUrl ? linked!.sourceUrl.replace(/\/subject\/[^/]+$/, `/subject/${encodeURIComponent(item.externalId)}`) : null };
     });
-    const projection = JSON.parse(work.projection_json || "{}") as Parameters<typeof projectedValue>[0];
+    const projection = parseProjection(work.projection_json);
     const tags = (projectedValue(projection, "tags") as string[] | null) ?? [];
     const similar: Array<{ workId: string; title: string; mediaKind: string; sharedTags: string[]; score: number }> = [];
     if (tags.length) {
       const mine = new Set(tags);
       const rows = this.store.sqlite.prepare("SELECT id, title, media_kind, projection_json FROM works WHERE id <> ? AND projection_json LIKE '%\"tags\"%'").all(workId) as Array<{ id: string; title: string; media_kind: string; projection_json: string }>;
       for (const row of rows) {
-        const other = JSON.parse(row.projection_json || "{}") as Parameters<typeof projectedValue>[0];
+        const other = parseProjection(row.projection_json);
         const theirs = (projectedValue(other, "tags") as string[] | null) ?? [];
         const shared = theirs.filter((tag) => mine.has(tag));
         if (shared.length < 2) continue;

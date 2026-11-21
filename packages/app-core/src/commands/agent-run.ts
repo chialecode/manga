@@ -1,25 +1,27 @@
 /** One agent run: the model calls, the tool calls and the run's history. */
 import { createHash } from "node:crypto";
 import { commandInputJsonSchema, MangaError, createId, type CommandEnvelope, type CommandResult, type ScopeGrant } from "@manga/contracts";
-import { completeText, streamText, type AiRuntimeId, type ChatMessage, type FilePart, type ImagePart, type StreamEvent, type VideoPart, type TextRequest, type ToolDefinition } from "@manga/model-protocol";
-import { budgetOfConnection, calibrate, COMPACTION_PROMPT, contextTokens, fitContext, tailToTokens, toolsTokens, truncateToTokens } from "../agent-context.ts";
+import { completeText, streamText, type AiRuntimeId, type ChatMessage, type Citation, type FilePart, type ImagePart, type ServerToolEvent, type StreamEvent, type VideoPart, type TextRequest, type ToolDefinition } from "@manga/model-protocol";
+import { budgetOf, budgetOfConnection, withChoice, type ChatChoice, calibrate, COMPACTION_PROMPT, contextTokens, fitContext, tailToTokens, toolsTokens, truncateToTokens } from "../agent-context.ts";
 import { readAgentSettings } from "../agent-settings.ts";
 import { requestLimits } from "../model-probe.ts";
+import { connectionAccess } from "../providers/access.ts";
+import { estimateChatCost, providerFileOf, recordServiceUse } from "../providers/usage.ts";
+import { endLiveExtras, liveRunExtras, startLiveExtras } from "../ops/live-extras.ts";
 import { withEmptyScopeNote } from "../agent-scope.ts";
 import { AGENT_PROJECT_COMMANDS, agentToolSchema, takesContext, takesProject } from "../creative/agent-access.ts";
 import { recordedRequest, type DeliveryNote } from "../agent-trace.ts";
 import { AGENT_COMMANDS, AGENT_OPT_IN_COMMANDS } from "../commands/access.ts";
 import { publicMedia, renderImages, type FrozenImage, type FrozenMedia } from "../agent-materials.ts";
-import type { MangaProductApp } from "../product-app.ts";
 import { VISION_READING_MARK, TOOL_DESCRIPTIONS, toolInputSummary, toolParameters, type AgentLoopBudget, contextShares, clipMaterial, refusedByService, isContextOverflow, type ConnectionRow, redactSnapshot, safeJsonValue } from "../product-helpers.ts";
 import { visionRoute } from "./connections.ts";
-import { readCredential } from "../credentials.ts";
 import { latestRevision, runMedia, sourceStamp } from "../agent-media.ts";
 import { DELIVERY_REASONS, readFrozenFile } from "../agent-native-input.ts";
 import { loadRunMessages, materialContextMessage, startRunLoop } from "./agent.ts";
+import type { AgentCommandHost } from "./shared.ts";
 
 /** What these commands use of the application. */
-export type AgentRunHost = Pick<MangaProductApp, "agentAccess" | "assertWritable" | "builtinDanmakuCredentials" | "call" | "closed" | "comics" | "conversations" | "covers" | "danmaku" | "debugContext" | "extras" | "followFiles" | "grantOf" | "grants" | "interruptRuns" | "issueAgentGrant" | "layout" | "listModules" | "log" | "materials" | "media" | "metadata" | "notify" | "parseGeneration" | "parseWorker" | "pendingRecoveryJobs" | "projects" | "proposals" | "publicLayout" | "queryLog" | "quickTasks" | "requireModule" | "resolvePath" | "resolvePathFor" | "runAbort" | "runtime" | "scanAbort" | "screenshots" | "sealed" | "secrets" | "setModule" | "store" | "suggestedQuery" | "trace" | "uiFacets" | "vault" | "videos" | "voice" | "workFolders">;
+export type AgentRunHost = AgentCommandHost;
 
 /**
  * Every request an agent run makes to a model goes through here, and every tool it calls through `toolCall`, so the trace of the run sees all of them (A-83).
@@ -92,16 +94,26 @@ export async function toolCall(app: AgentRunHost, runId: string, step: number, g
   }
 }
 
-export function persistRunMessage(app: AgentRunHost, runId: string, message: ChatMessage) {
+/** What an answer brought besides its words (计划 4.3/4.4): the thinking, the searches the service ran and the sources the answer cites. */
+export type AnswerExtras = { search?: ServerToolEvent[]; citations?: Citation[] };
+
+export function persistRunMessage(app: AgentRunHost, runId: string, message: ChatMessage, extras: AnswerExtras = {}) {
   app.store.sqlite.prepare("INSERT INTO agent_messages(id, run_id, role, text, payload_json, created_at) VALUES (?,?,?,?,?,?)").run(
     createId("msg"),
     runId,
     message.role,
     message.content,
-    JSON.stringify({ toolCalls: message.toolCalls, toolCallId: message.toolCallId }),
+    JSON.stringify({
+      toolCalls: message.toolCalls, toolCallId: message.toolCallId,
+      ...(message.reasoning !== undefined ? { reasoning: message.reasoning } : {}),
+      ...(message.serverToolCalls?.length ? { serverToolCalls: message.serverToolCalls } : {}),
+      ...(extras.search?.length ? { search: extras.search } : {}),
+      ...(extras.citations?.length ? { citations: extras.citations } : {}),
+    }),
     new Date().toISOString(),
   );
 }
+
 
 /**
  * Give a task its pictures. A text model that was verified to see them gets them with the question; otherwise a vision
@@ -196,18 +208,25 @@ export async function attachImages(app: AgentRunHost, runId: string, textConnect
   let reading = at >= 0 ? messages.splice(at, 1)[0] : undefined;
   if (!reading) {
     const sight = route.connection;
-    const sightKey = sight.credential_ref ? await readCredential(app, sight.credential_ref) : undefined;
-    if (sightKey === undefined) throw new MangaError("AUTHENTICATION_FAILED", "vision connection is missing credentials");
-    const result = await modelComplete(app, { runId, step: 0, kind: "model", name: "vision-reading", delivery, connection: sight, apiKey: sightKey, protocol: sight.protocol, runtime: sight.runtime === "pi" ? "pi" : "native", request: {
-      model: sight.model_id,
-      messages: [{
-        role: "user",
-        content: `${renderImages(images)}\n\n请逐张按编号说明：1) 客观描述画面里与下面问题有关的内容；2) 画面中的文字逐字抄录，认不准的字标出；3) 看不清或无法判断的地方写“无法确认”，不要猜测，也不要补充画面之外的剧情。\n\n用户的问题（只用来判断关注点）：${question}`,
-        images: parts,
-      }],
-      signal,
-      timeoutMs: sight.timeout_ms,
-    } });
+    // A vision connection added from a provider is behind the same gate as the run's own: with its plugin off, no request is made (计划 4.1).
+    const access = await connectionAccess(app, sight, signal);
+    const sightKey = access.apiKey;
+    let result: Awaited<ReturnType<typeof modelComplete>>;
+    try {
+      if (sightKey === undefined) throw new MangaError("AUTHENTICATION_FAILED", "vision connection is missing credentials");
+      result = await modelComplete(app, { runId, step: 0, kind: "model", name: "vision-reading", delivery, connection: sight, apiKey: sightKey, protocol: sight.protocol, runtime: sight.runtime === "pi" ? "pi" : "native", request: {
+        model: sight.model_id,
+        messages: [{
+          role: "user",
+          content: `${renderImages(images)}\n\n请逐张按编号说明：1) 客观描述画面里与下面问题有关的内容；2) 画面中的文字逐字抄录，认不准的字标出；3) 看不清或无法判断的地方写“无法确认”，不要猜测，也不要补充画面之外的剧情。\n\n用户的问题（只用来判断关注点）：${question}`,
+          images: parts,
+        }],
+        signal: access.signal ?? signal,
+        timeoutMs: sight.timeout_ms,
+      } });
+    } finally {
+      access.release();
+    }
     reading = { role: "system", content: `${VISION_READING_MARK}以下是视觉模型对附上的图像的识别结果，不是原图，其中的“无法确认”处没有读到。\n\n${result.text}` };
     persistRunMessage(app, runId, reading);
   }
@@ -215,10 +234,22 @@ export async function attachImages(app: AgentRunHost, runId: string, textConnect
 }
 
 export async function runAgentLoop(app: AgentRunHost, runId: string, grant: ScopeGrant, text: string, signal: AbortSignal, budget: AgentLoopBudget, runtime: AiRuntimeId) {
+  // A connection from a provider plugin is tracked for the length of the run, so turning the plugin off cancels it (计划 4.1).
+  const releases: Array<() => void> = [];
+  try {
+    return await agentLoop(app, runId, grant, text, signal, budget, runtime, releases);
+  } finally {
+    for (const release of releases) release();
+    endLiveExtras(runId);
+  }
+}
+
+async function agentLoop(app: AgentRunHost, runId: string, grant: ScopeGrant, text: string, signal: AbortSignal, budget: AgentLoopBudget, runtime: AiRuntimeId, releases: Array<() => void>) {
   const runRow = app.store.sqlite.prepare("SELECT snapshot_json, usage_json, checkpoint_json, created_at FROM agent_runs WHERE id = ?").get(runId) as { snapshot_json: string | null; usage_json: string | null; checkpoint_json: string | null; created_at: string } | undefined;
   const snapshot = runRow?.snapshot_json ? safeJsonValue(runRow.snapshot_json) as {
     history?: ChatMessage[];
     connectionId?: string | null;
+    choice?: ChatChoice;
     materials?: Array<{ resourceId: string; revisionId: string; title: string }>;
     selection?: { resourceId?: string; partId?: string; quote?: string; range?: { start: number; end: number } } | { blocked?: string };
     notes?: Array<{ objectId: string; revision: number; title: string; text?: string }>;
@@ -228,7 +259,7 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
   const connection = snapshot.connectionId
     ? app.store.sqlite.prepare("SELECT * FROM provider_connections WHERE id = ?").get(snapshot.connectionId) as ConnectionRow | undefined
     : app.store.sqlite.prepare("SELECT * FROM provider_connections WHERE purpose = 'text' LIMIT 1").get() as ConnectionRow | undefined;
-  const tools: ToolDefinition[] = [...AGENT_COMMANDS, ...AGENT_PROJECT_COMMANDS, ...AGENT_OPT_IN_COMMANDS].filter((commandId) => grant.allowedCommands.includes(commandId) && app.runtime.gateway.has(commandId)).map((commandId) => ({
+  const tools: ToolDefinition[] = [...AGENT_COMMANDS, ...AGENT_PROJECT_COMMANDS, ...AGENT_OPT_IN_COMMANDS].filter((commandId) => grant.allowedCommands.includes(commandId) && app.runtime.gateway.has(commandId) && (commandId !== "web.search" || hasSearchService(app))).map((commandId) => ({
     name: commandId,
     description: TOOL_DESCRIPTIONS[commandId] ?? commandId,
     parameters: agentToolSchema(commandId, toolParameters(commandId)),
@@ -242,13 +273,23 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
   }
   if (connection.purpose !== "text") throw new MangaError("MODEL_CAPABILITY_MISSING", "agent runs require a text connection");
   app.store.sqlite.prepare("UPDATE agent_runs SET model_id = ? WHERE id = ?").run(connection.model_id, runId);
-  const apiKey = connection.credential_ref ? await readCredential(app, connection.credential_ref) : undefined;
+  const access = await connectionAccess(app, connection, signal);
+  releases.push(access.release);
+  if (access.signal) signal = access.signal;
+  const apiKey = access.apiKey;
   if (apiKey === undefined) throw new MangaError("AUTHENTICATION_FAILED", "text connection is missing credentials");
   const protocol = connection.protocol as "openai-responses" | "openai-chat-completions";
   const frozenRuntime = (runtime === "pi" ? "pi" : "native") as AiRuntimeId;
   // The model's profile is read as the loop starts, so a window or an answer length changed in the settings applies to a retry as well (A-82).
-  const { profile, budget: model } = budgetOfConnection(connection);
-  const extras = requestLimits(profile);
+  // With the conversation's choice of thinking and window, as it was when the message was sent (A-137).
+  const profile = withChoice(budgetOfConnection(connection).profile, snapshot.choice);
+  const model = budgetOf(profile);
+  const extras = requestLimits(profile, connection.base_url);
+  // "联网搜索" (计划 4.4): a DeepSeek model that searches by itself does so (the tool is not offered beside it); it searches only while thinking, so a run
+  // with thinking off thinks at the low level, and says so.
+  const nativeSearch = grant.allowedCommands.includes("web.search") && extras.dialect === "deepseek" && profile.capabilities.includes("web_search");
+  const thinkingRaised = nativeSearch && !extras.reasoningEffort;
+  if (thinkingRaised) extras.reasoningEffort = "low";
   const shares = contextShares(model.contextTokens, text);
   const clipped = truncateToTokens(text, Math.floor(model.contextTokens * 0.6)).text;
   const history = snapshot.history ?? sessionHistory(app, runId, shares.history);
@@ -290,9 +331,15 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
   let calibration = 1;
   // A model that does not call tools is talked to without them; the profile says which it is.
   // The descriptions of the tools are a cost every request pays. A window too small to hold them beside a conversation runs the task as a plain conversation, and the run says so.
-  const toolsFit = toolsTokens(tools) <= Math.floor(model.contextTokens * 0.5);
-  const offered = profile.capabilities.includes("tools") && toolsFit ? tools : [];
-  const toolsOmitted = profile.capabilities.includes("tools") && !toolsFit && tools.length > 0;
+  const ownTools = nativeSearch ? tools.filter((tool) => tool.name !== "web.search") : tools;
+  const toolsFit = toolsTokens(ownTools) <= Math.floor(model.contextTokens * 0.5);
+  const offered = profile.capabilities.includes("tools") && toolsFit ? ownTools : [];
+  const toolsOmitted = profile.capabilities.includes("tools") && !toolsFit && ownTools.length > 0;
+  // What the run's record says besides the numbers: tools left out for want of room, thinking turned on for the search.
+  const flags: { toolsOmitted?: boolean; thinkingRaised?: boolean; costEstimated?: boolean; pricesCheckedAt?: string } = { ...(toolsOmitted ? { toolsOmitted } : {}), ...(thinkingRaised ? { thinkingRaised } : {}) };
+  // A provider that states no cost is estimated from its file's price list, and the record says so with the date the prices were checked (计划 4.9).
+  const priceFile = providerFileOf(app, connection.id);
+  if (thinkingRaised) app.store.sqlite.prepare("UPDATE agent_runs SET usage_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify({ ...usage, ...flags }), new Date().toISOString(), runId);
   let stepsUsed = typeof checkpoint.step === "number" ? checkpoint.step : messages.filter((message) => message.role === "assistant" && message.toolCalls?.length).length;
   const summarize = async (transcript: string, attempt: number, started: number): Promise<string> => {
     // Each attempt gives the model less to read: the end of the conversation, which the rest of the task leans on most.
@@ -306,6 +353,7 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
       maxOutputTokens: profile.capabilities.includes("reasoning") ? 2_048 : 1_024,
       maxTokensField: extras.maxTokensField,
       ...(extras.reasoningEffort ? { reasoningEffort: extras.reasoningEffort } : {}),
+      ...(extras.dialect ? { dialect: extras.dialect } : {}),
       contextWindow: model.contextWindow,
     };
     const done = await modelComplete(app, { runId, step: started, kind: "compaction", name: `compaction#${attempt}`, connection, apiKey, protocol, request, runtime: frozenRuntime });
@@ -321,6 +369,10 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
     let completed = false;
     let finishReason = "";
     let assistant = "";
+    let reasoning: string | undefined;
+    let search: ServerToolEvent[] = [];
+    let serverToolCalls: unknown[] | undefined;
+    let citations: Citation[] | undefined;
     while (true) {
       const fitted = await fitContext({
         messages,
@@ -341,18 +393,31 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
         messages = fitted.messages;
         if (fitted.compacted) {
           compactions += 1;
-          app.store.sqlite.prepare("UPDATE agent_runs SET usage_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify({ costUsd, steps: step, compactions, ...(toolsOmitted ? { toolsOmitted } : {}) }), new Date().toISOString(), runId);
+          app.store.sqlite.prepare("UPDATE agent_runs SET usage_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify({ costUsd, steps: step, compactions, ...flags }), new Date().toISOString(), runId);
         }
       }
       accumulated.clear();
       completed = false;
       finishReason = "";
       assistant = "";
+      reasoning = undefined;
+      search = [];
+      serverToolCalls = undefined;
+      citations = undefined;
+      const live = startLiveExtras(runId);
       try {
         for await (const event of modelStream(app, {
           runId, step, connection, apiKey, protocol, runtime: frozenRuntime, delivery,
-          request: { model: connection.model_id, messages: fitted.messages, tools: offered.length ? offered : undefined, signal, timeoutMs: connection.timeout_ms, ...extras },
+          request: { model: connection.model_id, messages: fitted.messages, tools: offered.length ? offered : undefined, signal, timeoutMs: connection.timeout_ms, ...extras, ...(nativeSearch ? { nativeWebSearch: true } : {}) },
         })) {
+          if (event.type === "reasoning-delta") {
+            reasoning = (reasoning ?? "") + event.text;
+            live.reasoning = reasoning;
+          }
+          if (event.type === "server-tool") {
+            search = [...search, event.event];
+            live.search = search;
+          }
           if (event.type === "text-delta") {
             assistant += event.text;
             app.store.sqlite.prepare("UPDATE agent_runs SET live_text = ?, updated_at = ? WHERE id = ?").run(assistant, new Date().toISOString(), runId);
@@ -368,8 +433,19 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
           if (event.type === "completed") {
             completed = true;
             finishReason = event.finishReason;
+            if (event.serverToolCalls?.length) serverToolCalls = event.serverToolCalls;
+            if (event.citations?.length) citations = event.citations;
+            // The searches the service ran are billed apart from the tokens (计划 4.4, 4.8).
+            if (event.usage?.searches) recordServiceUse(app, { connectionId: connection.id, modelId: connection.model_id, service: "search", task: "agent", unit: "search", quantity: event.usage.searches, status: "ok", runId });
             if (event.usage && "costUsd" in event.usage && typeof event.usage.costUsd === "number") {
               costUsd = (costUsd ?? 0) + event.usage.costUsd;
+            } else if (event.usage && priceFile) {
+              const estimate = estimateChatCost(priceFile, (connection as { provider_model?: string | null }).provider_model ?? connection.model_id, event.usage);
+              if (estimate !== undefined) {
+                costUsd = (costUsd ?? 0) + estimate;
+                flags.costEstimated = true;
+                flags.pricesCheckedAt = priceFile.pricesCheckedAt;
+              }
             }
             // Tokens are added up over the steps of a run; a service that does not state them leaves the columns empty.
             if (event.usage && (typeof event.usage.inputTokens === "number" || typeof event.usage.outputTokens === "number")) {
@@ -402,10 +478,11 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
           ? "模型还没写出回答就用完了最大输出。可以在模型设置里调大“最大输出”后重试。"
           : "模型这次没有给出回答。可以重试；多次如此时，可以在设置里换一个模型。", { retryable: true, details: { reason: "empty_answer", finishReason: finishReason || null } });
       }
-      persistRunMessage(app, runId, { role: "assistant", content: assistant });
-      return { text: assistant, tools: toolResults, completed, costUsd, steps: step + 1, compactions, toolsOmitted };
+      persistRunMessage(app, runId, { role: "assistant", content: assistant, ...(reasoning !== undefined ? { reasoning } : {}), ...(serverToolCalls ? { serverToolCalls } : {}) }, { search, ...(citations ? { citations } : {}) });
+      return { text: assistant, tools: toolResults, completed, costUsd, steps: step + 1, compactions, toolsOmitted, ...(thinkingRaised ? { thinkingRaised } : {}), ...(flags.costEstimated ? { costEstimated: true, pricesCheckedAt: flags.pricesCheckedAt } : {}) };
     }
     if (!completed) throw new MangaError("PROVIDER_UNAVAILABLE", "stream ended before the provider completed the tool call", { retryable: true });
+    let firstOfStep = true;
     for (const [callId, call] of accumulated) {
       // A call that takes nothing may come with no arguments at all, not even "{}". That is the empty object, and it is kept as one, so the conversation sent back
       // reads the same to a service that parses it.
@@ -446,22 +523,28 @@ export async function runAgentLoop(app: AgentRunHost, runId: string, grant: Scop
         ranHere.add(prior.id);
         result = safeJsonValue(prior.result_summary) as CommandResult;
       } else {
-        result = await toolCall(app, runId, step, grant, { commandId, idempotencyKey: `${runId}:${commandId}:${inputHash}`, input: parsed });
+        result = await toolCall(app, runId, step, grant, { commandId, idempotencyKey: `${runId}:${step}:${callId}:${commandId}:${inputHash}`, input: parsed });
         const eventId = createId("tool");
         ranHere.add(eventId);
         app.store.sqlite.prepare("INSERT INTO agent_tool_events(id, run_id, command_id, status, input_summary, result_summary, created_at) VALUES (?,?,?,?,?,?,?)").run(
-          eventId, runId, commandId, result.status === "ok" ? "executed" : "failed", summary, JSON.stringify(result).slice(0, 8000), new Date().toISOString(),
+          eventId, runId, commandId, result.status === "ok" ? "executed" : "failed", summary, summarizeToolResult(result), new Date().toISOString(),
         );
       }
       toolResults.push({ commandId, result });
-      const assistantCall: ChatMessage = { role: "assistant", content: "", toolCalls: [{ id: callId, name: commandId, arguments: call.arguments }] };
+      // The step's thinking and the searches the service ran go with its first call; the others carry the field empty, as DeepSeek expects it in the turn (计划 4.3).
+      const assistantCall: ChatMessage = {
+        role: "assistant", content: "", toolCalls: [{ id: callId, name: commandId, arguments: call.arguments }],
+        ...(reasoning !== undefined ? { reasoning: firstOfStep ? reasoning : "" } : {}),
+        ...(firstOfStep && serverToolCalls ? { serverToolCalls } : {}),
+      };
       const toolMessage: ChatMessage = { role: "tool", toolCallId: callId, content: JSON.stringify(result) };
-      persistRunMessage(app, runId, assistantCall);
+      persistRunMessage(app, runId, assistantCall, firstOfStep ? { search } : {});
+      firstOfStep = false;
       persistRunMessage(app, runId, toolMessage);
       messages.push(assistantCall, toolMessage);
     }
     app.store.sqlite.prepare("UPDATE agent_runs SET usage_json = ?, checkpoint_json = ?, updated_at = ? WHERE id = ?").run(
-      JSON.stringify({ costUsd, steps: step + 1, compactions, ...(toolsOmitted ? { toolsOmitted } : {}) }),
+      JSON.stringify({ costUsd, steps: step + 1, compactions, ...flags }),
       JSON.stringify({ step: step + 1, costUsd, at: new Date().toISOString() }),
       new Date().toISOString(),
       runId,
@@ -476,14 +559,21 @@ export function sessionHistoryForNewRun(app: AgentRunHost, sessionId: string, ma
   const history: ChatMessage[] = [];
   let used = 0;
   for (const run of earlier) {
-    const reply = (app.store.sqlite.prepare("SELECT text FROM agent_messages WHERE run_id = ? AND role = 'assistant' ORDER BY created_at").all(run.id) as Array<{ text: string }>).map((row) => row.text).filter(Boolean).join("\n");
-    const turn: ChatMessage[] = [{ role: "user", content: run.input_text }, ...(reply ? [{ role: "assistant" as const, content: reply }] : [])];
+    const rows = app.store.sqlite.prepare("SELECT text, payload_json FROM agent_messages WHERE run_id = ? AND role = 'assistant' ORDER BY created_at").all(run.id) as Array<{ text: string; payload_json: string | null }>;
+    const reply = rows.map((row) => row.text).filter(Boolean).join("\n");
+    // The searches the service ran for an earlier answer go back with it, as they were given (计划 4.4); only a DeepSeek request sends them.
+    const serverToolCalls = rows.flatMap((row) => {
+      const payload = row.payload_json ? safeJsonValue(row.payload_json) as { serverToolCalls?: unknown } | null : null;
+      return Array.isArray(payload?.serverToolCalls) ? payload.serverToolCalls as unknown[] : [];
+    });
+    const answer = (content: string): ChatMessage => ({ role: "assistant", content, ...(serverToolCalls.length ? { serverToolCalls } : {}) });
+    const turn: ChatMessage[] = [{ role: "user", content: run.input_text }, ...(reply ? [answer(reply)] : [])];
     const size = contextTokens(turn);
     if (used + size > maxTokens) {
       // The newest exchange is the one the next question most likely leans on: when only it is too long, its answer is cut to fit and the cut is said.
       if (!history.length && reply) {
         const room = maxTokens - contextTokens([turn[0]!]) - 16;
-        if (room > 64) history.unshift(turn[0]!, { role: "assistant", content: `${truncateToTokens(reply, room).text}\n（上一次的回答较长，这里只带入了前面的部分。）` });
+        if (room > 64) history.unshift(turn[0]!, answer(`${truncateToTokens(reply, room).text}\n（上一次的回答较长，这里只带入了前面的部分。）`));
       }
       break;
     }
@@ -525,14 +615,14 @@ export function retryRun(app: AgentRunHost, envelope: CommandEnvelope) {
     runtime: string | null;
   } | undefined;
   if (!run) throw new MangaError("NOT_FOUND", "run missing");
-  if (run.status === "running" || run.status === "queued" || run.status === "waiting_input") {
+  if (run.status === "running" || run.status === "queued" || run.status === "waiting_input" || app.runAbort.has(run.id)) {
     throw new MangaError("VALIDATION_ERROR", "run is still in progress");
   }
   if (run.status === "succeeded") {
     return { runId: run.id, sessionId: run.session_id, grantHandle: run.grant_handle, status: "succeeded" };
   }
   const grant = app.grants.get(run.grant_handle);
-  if (!grant) throw new MangaError("FORBIDDEN", "original run authorization is no longer available");
+  if (!grant || grant.revoked) throw new MangaError("FORBIDDEN", "original run authorization is no longer available");
   // A retry takes the step limit as the settings are now, so a task that stopped at its steps can go on after the person raised them. The time is the run's own: its
   // deadline was set when it began and a retry does not extend it.
   const budget: AgentLoopBudget = { ...(JSON.parse(run.budget_json) as AgentLoopBudget), maxSteps: readAgentSettings(app.store).limits.maxSteps };
@@ -571,6 +661,15 @@ export function getRun(app: AgentRunHost, envelope: CommandEnvelope) {
   }));
   const assistantText = messages.filter((item) => item.role === "assistant").map((item) => item.text).filter(Boolean).join("\n");
   const text = assistantText || row.live_text || "";
+  const rawSnapshot = row.snapshot_json ? safeJsonValue(row.snapshot_json) : undefined;
+  const snapshotObj = (rawSnapshot && typeof rawSnapshot === "object" ? rawSnapshot : {}) as {
+    materials?: unknown[];
+    selection?: unknown;
+    contextText?: string | null;
+    media?: FrozenMedia;
+    capturedAt?: string;
+    notes?: Array<{ objectId: string; revision: number; title: string; text?: string; blockCount?: number; truncated?: boolean }>;
+  };
   return {
     runId: row.id,
     sessionId: row.session_id,
@@ -581,12 +680,14 @@ export function getRun(app: AgentRunHost, envelope: CommandEnvelope) {
     error: row.error_json ? safeJsonValue(row.error_json) : undefined,
     budget: safeJsonValue(row.budget_json),
     usage: row.usage_json ? safeJsonValue(row.usage_json) : undefined,
-    snapshot: row.snapshot_json ? redactSnapshot(safeJsonValue(row.snapshot_json)) : undefined,
+    snapshot: rawSnapshot !== undefined ? redactSnapshot(rawSnapshot) : undefined,
     readResourceIds: row.read_resource_ids_json ? safeJsonValue(row.read_resource_ids_json) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deadlineAt: row.deadline_at,
     liveText: row.live_text,
+    // The thinking and the searches of the step under way (计划 4.3/4.4); what is done is in the messages.
+    live: liveRunExtras(row.id) ?? null,
     run: {
       id: row.id,
       sessionId: row.session_id,
@@ -600,13 +701,13 @@ export function getRun(app: AgentRunHost, envelope: CommandEnvelope) {
     messages,
     text,
     // The visible material receipt: exactly what was frozen for app run, with revisions.
-    materials: (safeJsonValue(row.snapshot_json ?? "{}") as { materials?: unknown[] }).materials ?? [],
-    selection: (safeJsonValue(row.snapshot_json ?? "{}") as { selection?: unknown }).selection,
+    materials: snapshotObj.materials ?? [],
+    selection: snapshotObj.selection,
     // The frozen system message, so the model request can be checked against what the user was shown.
-    contextText: (safeJsonValue(row.snapshot_json ?? "{}") as { contextText?: string | null }).contextText ?? null,
-    media: publicMedia((safeJsonValue(row.snapshot_json ?? "{}") as { media?: FrozenMedia }).media),
-    capturedAt: (safeJsonValue(row.snapshot_json ?? "{}") as { capturedAt?: string }).capturedAt ?? null,
-    noteMaterials: ((safeJsonValue(row.snapshot_json ?? "{}") as { notes?: Array<{ objectId: string; revision: number; title: string; text?: string; blockCount?: number; truncated?: boolean }> }).notes ?? []).map((note) => ({
+    contextText: snapshotObj.contextText ?? null,
+    media: publicMedia(snapshotObj.media),
+    capturedAt: snapshotObj.capturedAt ?? null,
+    noteMaterials: (snapshotObj.notes ?? []).map((note) => ({
       objectId: note.objectId,
       revision: note.revision,
       title: note.title,
@@ -616,4 +717,26 @@ export function getRun(app: AgentRunHost, envelope: CommandEnvelope) {
       preview: [...(note.text ?? "")].slice(0, 120).join(""),
     })),
   };
+}
+
+/** Keeps `result_summary` valid JSON even for large tool outputs so crash-resume replay always restores a `CommandResult`. */
+function summarizeToolResult(result: CommandResult): string {
+  const serialized = JSON.stringify(result);
+  if (serialized.length <= 8000) return serialized;
+  if (result.status === "ok") {
+    return JSON.stringify({ status: "ok", value: { _truncated: true, originalChars: serialized.length, preview: serialized.slice(0, 7200) } });
+  }
+  return JSON.stringify({
+    status: "error",
+    error: {
+      code: result.error?.code ?? "INTERNAL_ERROR",
+      message: (result.error?.message ?? "").slice(0, 2000),
+      retryable: Boolean(result.error?.retryable),
+    },
+  });
+}
+
+/** The `web.search` tool is offered only when a search service is configured (计划 4.5); without one, "联网搜索" is the model's own or nothing. */
+function hasSearchService(app: AgentRunHost): boolean {
+  return Boolean(app.store.sqlite.prepare("SELECT 1 FROM provider_connections WHERE purpose = 'search' LIMIT 1").get());
 }

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { MangaError } from "@manga/contracts";
 import type { VideoProbe, VideoStreamInfo } from "@manga/contracts";
+import { findWorkspaceRoot } from "../shared/utils.ts";
 import { Lane, runTool, type ToolRun, type ToolRunOptions } from "./process-runner.ts";
 
 export type FfmpegTools = { binDir: string; ffmpeg: string; ffprobe: string };
@@ -12,18 +13,6 @@ function toolsAt(binDir: string): FfmpegTools | null {
   const ffmpeg = path.join(binDir, `ffmpeg${EXE}`);
   const ffprobe = path.join(binDir, `ffprobe${EXE}`);
   return fs.existsSync(ffmpeg) && fs.existsSync(ffprobe) ? { binDir, ffmpeg, ffprobe } : null;
-}
-
-/** Walk up from a start directory until the workspace root, which is where the development copy of FFmpeg lives. */
-function workspaceRoot(from: string): string | null {
-  let dir = path.resolve(from);
-  for (let depth = 0; depth < 12; depth += 1) {
-    if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-  return null;
 }
 
 /**
@@ -37,7 +26,7 @@ export function locateFfmpeg(options: { env?: NodeJS.ProcessEnv; resourcesPath?:
   if (env.MANGA_FFMPEG_DIR) candidates.push(env.MANGA_FFMPEG_DIR, path.join(env.MANGA_FFMPEG_DIR, "bin"));
   const resources = options.resourcesPath ?? (process as unknown as { resourcesPath?: string }).resourcesPath;
   if (resources) candidates.push(path.join(resources, "ffmpeg", "bin"), path.join(resources, "ffmpeg"));
-  const root = workspaceRoot(options.cwd ?? process.cwd()) ?? workspaceRoot(import.meta.dirname ?? ".");
+  const root = findWorkspaceRoot(options.cwd ?? process.cwd()) ?? findWorkspaceRoot(import.meta.dirname ?? ".");
   if (root) {
     const base = path.join(root, "dist", "tools", "ffmpeg");
     if (fs.existsSync(base)) {
@@ -74,19 +63,27 @@ const seconds = (value: unknown): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+type FfprobeRecord = Record<string, unknown>;
 type FfprobeJson = {
-  format?: Record<string, any>;
-  streams?: Array<Record<string, any>>;
-  chapters?: Array<Record<string, any>>;
+  format?: FfprobeRecord;
+  streams?: FfprobeRecord[];
+  chapters?: FfprobeRecord[];
 };
+
+function asRecord(value: unknown): FfprobeRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as FfprobeRecord) : {};
+}
 
 /** Translate ffprobe's JSON into the stored probe. Everything optional stays optional: a stream with no language has none. */
 export function probeFromJson(json: FfprobeJson, tool: { name: string; version: string }): Omit<VideoProbe, "keyframesMs" | "keyframesTruncated" | "variableFrameRate" | "externalSubtitles"> {
   const format = json.format ?? {};
   const streams: VideoStreamInfo[] = (json.streams ?? []).map((raw) => {
-    const type = (["video", "audio", "subtitle", "attachment", "data"].includes(raw.codec_type) ? raw.codec_type : "data") as VideoStreamInfo["type"];
-    const tags = (raw.tags ?? {}) as Record<string, string>;
-    const lower = Object.fromEntries(Object.entries(tags).map(([key, value]) => [key.toLowerCase(), value]));
+    const rawType = typeof raw.codec_type === "string" ? raw.codec_type : "";
+    const type = (["video", "audio", "subtitle", "attachment", "data"].includes(rawType) ? rawType : "data") as VideoStreamInfo["type"];
+    const tags = asRecord(raw.tags);
+    const lower: Record<string, string> = {};
+    for (const [key, value] of Object.entries(tags)) if (typeof value === "string") lower[key.toLowerCase()] = value;
+    const disposition = asRecord(raw.disposition);
     const stream: VideoStreamInfo = {
       index: Number(raw.index),
       type,
@@ -94,7 +91,7 @@ export function probeFromJson(json: FfprobeJson, tool: { name: string; version: 
       ...(raw.profile ? { profile: String(raw.profile) } : {}),
       ...(lower.language && lower.language !== "und" ? { language: lower.language } : {}),
       ...(lower.title ? { title: lower.title } : {}),
-      ...(raw.disposition?.default === 1 ? { default: true } : {}),
+      ...(disposition.default === 1 ? { default: true } : {}),
     };
     if (type === "video") {
       Object.assign(stream, {
@@ -116,7 +113,7 @@ export function probeFromJson(json: FfprobeJson, tool: { name: string; version: 
   });
   const names = String(format.format_name ?? "").split(",").filter(Boolean);
   // Container tags (title, artist, date...): a few short ones, lower-cased, for the local-file metadata source.
-  const rawTags = (format.tags ?? {}) as Record<string, unknown>;
+  const rawTags = asRecord(format.tags);
   const tagEntries = Object.entries(rawTags).filter(([, value]) => typeof value === "string" && value.trim() !== "").slice(0, 24).map(([key, value]) => [key.toLowerCase().slice(0, 48), String(value).slice(0, 512)] as const);
   const statedMs = Math.round((seconds(format.duration) ?? 0) * 1000);
   const startMs = Math.round((seconds(format.start_time) ?? 0) * 1000);
@@ -130,11 +127,14 @@ export function probeFromJson(json: FfprobeJson, tool: { name: string; version: 
     ...(seconds(format.bit_rate) ? { bitRate: Number(format.bit_rate) } : {}),
     ...(tagEntries.length ? { tags: Object.fromEntries(tagEntries) } : {}),
     streams,
-    chapters: (json.chapters ?? []).map((chapter) => ({
-      startMs: Math.round((seconds(chapter.start_time) ?? 0) * 1000),
-      endMs: Math.round((seconds(chapter.end_time) ?? 0) * 1000),
-      ...(chapter.tags?.title ? { title: String(chapter.tags.title) } : {}),
-    })),
+    chapters: (json.chapters ?? []).map((chapter) => {
+      const chapterTags = asRecord(chapter.tags);
+      return {
+        startMs: Math.round((seconds(chapter.start_time) ?? 0) * 1000),
+        endMs: Math.round((seconds(chapter.end_time) ?? 0) * 1000),
+        ...(chapterTags.title ? { title: String(chapterTags.title) } : {}),
+      };
+    }),
     tool,
   };
 }
@@ -166,10 +166,10 @@ export function timelineFromPackets(lines: string[], startMs: number): PacketTim
   if (pts.length > 8) {
     const deltas: number[] = [];
     for (let i = 1; i < pts.length; i += 1) deltas.push(pts[i]! - pts[i - 1]!);
-    const sorted = [...deltas].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)]!;
-    const p5 = sorted[Math.floor(sorted.length * 0.05)]!;
-    const p95 = sorted[Math.floor(sorted.length * 0.95)]!;
+    deltas.sort((a, b) => a - b);
+    const median = deltas[Math.floor(deltas.length / 2)]!;
+    const p5 = deltas[Math.floor(deltas.length * 0.05)]!;
+    const p95 = deltas[Math.floor(deltas.length * 0.95)]!;
     variable = median > 0 && (p95 - p5) / median > 0.1;
   }
   return { ptsMs: pts, keyframesMs: keys, variableFrameRate: variable };
@@ -251,14 +251,22 @@ export class FfmpegService {
     return timelineFromPackets(run.stdout.toString("utf8").split(/\r?\n/), startMs);
   }
 
-  /** One decoded frame near `timeMs` (container timeline), scaled so its long edge fits `maxEdge`. */
+  /** One decoded frame near `timeSec` (relative to container start), scaled so its long edge fits `maxEdge`. */
   async frameJpeg(file: string, containerTimeSec: number, maxEdge: number, options: BackgroundOption = {}): Promise<Buffer> {
+    if (!Number.isFinite(containerTimeSec)) throw new MangaError("VALIDATION_ERROR", "frame time must be a finite number");
+    const safeTimeSec = Math.max(0, containerTimeSec);
     const scale = `scale='if(gt(iw,ih),min(${maxEdge},iw),-2)':'if(gt(iw,ih),-2,min(${maxEdge},ih))'`;
-    const run = await this.run("ffmpeg", ["-v", "error", "-nostdin", "-ss", containerTimeSec.toFixed(3), "-i", file, "-frames:v", "1", "-vf", scale, "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"], {
+    const run = await this.run("ffmpeg", ["-v", "error", "-nostdin", "-ss", safeTimeSec.toFixed(3), "-i", file, "-frames:v", "1", "-vf", scale, "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"], {
       signal: options.signal, timeoutMs: 60_000, maxStdoutBytes: 32 * 1024 * 1024, redactPaths: [file, path.dirname(file)], allowFailure: true, lowPriority: options.background,
     });
-    // A time past the end decodes nothing; that is an absent frame, not a broken file.
-    if (!run.stdout.length) throw new MangaError("NOT_FOUND", "no frame at that time");
+    if (!run.stdout.length) {
+      const detail = run.stderr.trim();
+      if (run.code !== 0 && detail && !/output file is empty|nothing was encoded|nothing was written into output file|received no packets/i.test(detail)) {
+        throw new MangaError("UNSUPPORTED_FORMAT", `media tool failed (exit ${run.code ?? run.signal}): ${detail.split(/\r?\n/).slice(-3).join(" | ")}`);
+      }
+      // A time past the end decodes nothing; that is an absent frame, not a broken file.
+      throw new MangaError("NOT_FOUND", "no frame at that time");
+    }
     return run.stdout;
   }
 

@@ -66,7 +66,7 @@ describe("Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner &
     expect(basic.pages.slice(0, 2)).toEqual(["general", "update"]);
   });
 
-  it("renders '关于 MANGA' in release vs development channels and copies version summary without local paths (AT-157, AT-159)", async () => {
+  it("gives what the about box gave on '设置 › 更新': the version, channel, commit, build time and license, and copies them without local paths (AT-157, AT-159, A-136)", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -74,7 +74,7 @@ describe("Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner &
     });
 
     // 1. Release channel
-    const releaseHost = installHost({
+    installHost({
       facets: FACETS,
       channel: "release",
       appVersion: "0.1.3",
@@ -88,36 +88,29 @@ describe("Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner &
     });
     render(<App />);
     await screen.findByTestId("sidebar");
+    // No help menu and no about box: the title bar has no menus (A-136).
+    expect(screen.queryByTestId("menu-help")).toBeNull();
+    fireEvent.click(screen.getByTestId("nav-settings"));
+    fireEvent.click(await screen.findByTestId("settings-nav-update"));
 
-    fireEvent.click(screen.getByTestId("menu-help"));
-    expect(await screen.findByTestId("menu-help-check-update")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("menu-help-about"));
+    expect(await screen.findByTestId("update-current-version")).toBeTruthy();
+    expect(screen.getByTestId("update-current-version").textContent).toBe("0.1.3");
+    expect(screen.getByTestId("update-current-channel").textContent).toBe("正式版");
+    expect(screen.getByTestId("update-current-commit").textContent).toBe("c79f49a");
+    expect(screen.getByTestId("update-built-at").textContent).toContain("2026");
+    expect(screen.getByTestId("update-license").textContent).toBe("Apache-2.0");
+    expect(screen.queryByTestId("update-dev-mode")).toBeNull();
+    expect(screen.getByTestId("update-check-now")).toBeTruthy();
 
-    const dialog = await screen.findByTestId("about-dialog");
-    expect(dialog).toBeTruthy();
-    expect(screen.getByTestId("about-name").textContent).toBe("MANGA");
-    expect(screen.getByTestId("about-version").textContent).toBe("0.1.3");
-    expect(screen.getByTestId("about-channel").textContent).toBe("正式版");
-    expect(screen.getByTestId("about-commit").textContent).toBe("c79f49a");
-    expect(screen.getByTestId("about-built-at").textContent).toContain("2026");
-    expect(screen.getByTestId("about-license").textContent).toBe("Apache-2.0");
-    expect(screen.queryByTestId("about-dev-hint")).toBeNull();
-    expect(screen.getByTestId("about-check-update")).toBeTruthy();
-
-    fireEvent.click(screen.getByTestId("about-copy"));
+    fireEvent.click(screen.getByTestId("update-copy"));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(await screen.findByTestId("update-copied")).toBeTruthy();
     const copied = String(writeText.mock.calls[0]![0]);
     expect(copied).toContain("MANGA 0.1.3");
     expect(copied).toContain("正式版");
     expect(copied).toContain("c79f49a");
     expect(copied).toContain("Apache-2.0");
     expect(copied).not.toMatch(/[A-Za-z]:\\|\/Users\/|AppData/);
-
-    // Clicking "检查更新…" in About opens "设置 › 更新" and triggers update.check
-    fireEvent.click(screen.getByTestId("about-check-update"));
-    await waitFor(() => expect(screen.queryByTestId("about-dialog")).toBeNull());
-    expect(await screen.findByTestId("settings-page-update")).toBeTruthy();
-    expect(releaseHost.of("update.check").length).toBeGreaterThanOrEqual(1);
 
     cleanup();
 
@@ -136,17 +129,13 @@ describe("Section 6 UI: About MANGA, Settings › Update, Top-Bar Ready Banner &
     });
     render(<App />);
     await screen.findByTestId("sidebar");
+    fireEvent.click(screen.getByTestId("nav-settings"));
+    fireEvent.click(await screen.findByTestId("settings-nav-update"));
 
-    fireEvent.click(screen.getByTestId("menu-help"));
-    await screen.findByTestId("menu-help-about");
-    expect(screen.queryByTestId("menu-help-check-update")).toBeNull();
-    fireEvent.click(screen.getByTestId("menu-help-about"));
-
-    await screen.findByTestId("about-dialog");
-    expect(screen.getByTestId("about-version").textContent).toBe("0.1.4-dev.202611081530");
-    expect(screen.getByTestId("about-channel").textContent).toBe("开发版");
-    expect(screen.getByTestId("about-dev-hint").textContent).toBe("开发版：由本机构建自动更新");
-    expect(screen.queryByTestId("about-check-update")).toBeNull();
+    expect((await screen.findByTestId("update-current-version")).textContent).toBe("0.1.4-dev.202611081530");
+    expect(screen.getByTestId("update-current-channel").textContent).toBe("开发版");
+    expect(screen.getByTestId("update-dev-mode")).toBeTruthy();
+    expect(screen.queryByTestId("update-check-now")).toBeNull();
   });
 
   it("renders '设置 › 更新' in release vs development channels, toggles autoCheck/autoDownload, and shows verification errors (AT-159, AT-160)", async () => {

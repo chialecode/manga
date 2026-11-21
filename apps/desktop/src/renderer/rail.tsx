@@ -118,7 +118,12 @@ export function Rail(props: {
       if (!drag) { try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* the pointer is gone */ } }
       // Leaving the rail sideways gives up the move.
       const box = group.current?.getBoundingClientRect();
-      if (box && (event.clientX < box.left - DRAG_LEAVE_PX || event.clientX > box.right + DRAG_LEAVE_PX)) { cancel(); dragged.current = true; return; }
+      if (box && (event.clientX < box.left - DRAG_LEAVE_PX || event.clientX > box.right + DRAG_LEAVE_PX)) {
+        cancel();
+        dragged.current = true;
+        window.addEventListener("pointerup", () => { window.setTimeout(() => { dragged.current = false; }, 0); }, { once: true });
+        return;
+      }
       const others = now.slots.filter((slot) => slot.view !== now.view);
       const to = others.filter((slot) => slot.mid < event.clientY).length;
       setDrag({ view: now.view, dy, to });
@@ -173,9 +178,14 @@ export function Rail(props: {
         onPointerCancel={cancel}
         onLostPointerCapture={() => { if (press.current) cancel(); }}
         onClick={(event) => {
+          if (event.detail === 0) {
+            dragged.current = false;
+            props.onSelect(view, "key");
+            return;
+          }
           // A drag is not a click: the view stays.
           if (dragged.current) { dragged.current = false; return; }
-          props.onSelect(view, event.detail === 0 ? "key" : "pointer");
+          props.onSelect(view, "pointer");
         }}
         onMouseEnter={(event) => { if (!drag) props.onHover?.enter(view, event.currentTarget); }}
         onMouseLeave={(event) => props.onHover?.leave(view, event)}

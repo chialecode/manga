@@ -10,6 +10,7 @@ import {
   createId,
 } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
+import { writeFileAtomic } from "../../shared/utils.ts";
 import { decodePcm16MonoWav, encodePcm16MonoWav } from "./wav.ts";
 
 export const DICTATION_HISTORY_RETENTION_DAYS = 30;
@@ -240,42 +241,44 @@ export class DictationHistoryService {
     let audioExpiresAt: string | null = null;
 
     if (input.retainAudio24h && input.pcm16le && input.pcm16le.byteLength >= 2) {
-      fs.mkdirSync(this.audioDir, { recursive: true });
       const fileName = `${id}.wav`;
       const targetPath = path.join(this.audioDir, fileName);
-      const tmpPath = `${targetPath}.tmp`;
       const wavBytes = encodePcm16MonoWav(input.pcm16le);
-      fs.writeFileSync(tmpPath, wavBytes);
-      fs.renameSync(tmpPath, targetPath);
+      writeFileAtomic(targetPath, wavBytes);
       audioRelPath = fileName;
       audioExpiresAt = new Date(createdDate.getTime() + DICTATION_AUDIO_RETENTION_MS).toISOString();
     }
 
-    this.store.sqlite
-      .prepare(
-        `INSERT INTO dictation_history (
-          id, work_id, engine_kind, engine_id, model_id, polish_mode,
-          raw_text, corrected_text, final_text, fallback_reason,
-          timings_json, replacements_json, audio_rel_path, audio_expires_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        validWorkId,
-        input.engineKind,
-        input.engineId,
-        input.modelId,
-        input.polishMode,
-        input.rawText,
-        input.correctedText,
-        input.finalText,
-        input.fallbackReason ?? null,
-        JSON.stringify(input.timings ?? {}),
-        JSON.stringify(input.replacements ?? []),
-        audioRelPath,
-        audioExpiresAt,
-        createdIso,
-      );
+    try {
+      this.store.sqlite
+        .prepare(
+          `INSERT INTO dictation_history (
+            id, work_id, engine_kind, engine_id, model_id, polish_mode,
+            raw_text, corrected_text, final_text, fallback_reason,
+            timings_json, replacements_json, audio_rel_path, audio_expires_at, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          validWorkId,
+          input.engineKind,
+          input.engineId,
+          input.modelId,
+          input.polishMode,
+          input.rawText,
+          input.correctedText,
+          input.finalText,
+          input.fallbackReason ?? null,
+          JSON.stringify(input.timings ?? {}),
+          JSON.stringify(input.replacements ?? []),
+          audioRelPath,
+          audioExpiresAt,
+          createdIso,
+        );
+    } catch (error) {
+      this.unlinkAudioSafe(audioRelPath);
+      throw error;
+    }
 
     return this.get(id);
   }

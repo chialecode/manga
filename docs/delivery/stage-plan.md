@@ -1,10 +1,10 @@
-# 当前阶段计划（M12）：类 Typeless 的听写
+# 当前阶段计划（M13）：DeepSeek 插件
 
-日期：2026-11-13。角色：A 规划；B 连续实施与自检；A 集中审查。本文是整个阶段的唯一计划，兼作跨模块变更提案（A-46）。B 的执行 prompt 在[第 11 节](#prompt)，不另建 prompt 文件。路径固定、不带阶段名；下一阶段开始时由 A 按[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)改写。上一阶段的计划与报告在合并提交里：[计划归档](https://github.com/chialecode/manga/blob/f9aea92/docs/delivery/stage-plan.md)、[报告归档](https://github.com/chialecode/manga/blob/f9aea92/docs/delivery/stage-report.md)。
+日期：2026-11-14。角色：A 规划；B 连续实施与自检；A 集中审查。本文是整个阶段的唯一计划，兼作跨模块变更提案（A-46）。B 的执行 prompt 在[第 11 节](#prompt)，不另建 prompt 文件。路径固定、不带阶段名；下一阶段开始时由 A 按[文档治理第 8 节](../governance/documentation-policy.md#stage-cleanup)改写。上一阶段的计划与报告在合并提交里：[计划归档](https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-plan.md)、[报告归档](https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-report.md)。
 
-用户 2026-11-12 要求下一阶段细化语音功能，做类似 Typeless 的体验：对语音降噪、去除静默，交给 ASR 模型得到文本，再按文本与词库优化内容。词库可以预先准备，也可以是看动画时从 Bangumi 等处取得的专有名词（主角名、CV 名等）。同时要提供本地模型下载，并以标准的公共 API 形式接入外部模型。2026-11-13 用户提供了选型调研并要求继续。
+用户 2026-11-14 要求：下一阶段把 DeepSeek API 作为一个插件接入。DeepSeek 于 2026-11-13 开放了一整套应用 API，包括网页搜索、语音合成、语音识别，以及 DeepSeek 自己的大语言模型，正适合本项目。新增的 DeepSeek 插件启动后，模型列表里就能加入对应的模型。用户把真实 API 密钥放在 `.local/` 下，并授权做真实 API 测试。
 
-范围记为 **A-130**，管线与选型记为 **A-131**。A 没说到的细节先定了默认值，登记为[用户待办的 Q-40](../../USER-ACTIONS.md#q-40)，B 按默认实现，用户以后可以改。待答的 Q-23 由这次要求答复：采用第 1—6 项。需求是 VOICE-10—VOICE-17（新增），验收是 [AT-174—AT-183](roadmap-and-acceptance.md#at-dictation)。
+范围记为 **A-133**，插件的形态与各项能力的接法记为 **A-134**。A 没说到的细节先定了默认值，登记为[用户待办的 Q-41](../../USER-ACTIONS.md#q-41)，B 按默认实现，用户以后可以改。真实 API 测试的授权范围登记为 [ACT-23](../../USER-ACTIONS.md#act-23)。新增需求 PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03，验收为 [AT-184—AT-193](roadmap-and-acceptance.md#at-deepseek)。
 
 本计划一次列出本阶段的全部交付、退出条件和收尾流程。B 连续完成全部工作包后一次交付，A 一次集中审查。人工检查与待决问题按 A-53 记在用户待办，不阻塞开发。
 
@@ -12,158 +12,175 @@
 
 | 项目 | 约定 |
 | --- | --- |
-| 阶段 | 应用内听写的会话、入口与插入（U1）；采集前端（A1）；去除静默（S1）；识别引擎的能力描述与外部接口（E1）；本地推理进程（N1）；模型目录、下载与导入（M1）；词库扩展、schema v16 与 Bangumi 补全（X1）；音近召回与确定性替换（R1）；润色、防过度纠错与简繁（P1）；听写记录与从修改中学词（H1）；评测集与基准（Q1）；测试与走查（T1）；文档（W1）；阶段开始的整理（C0）；依赖盘点与新增依赖（D1） |
-| 代码基线 | `main @ 3b9d498`（上一阶段的 [PR #11](https://github.com/chialecode/manga/pull/11) 于 2026-11-12 squash 合并为 `f9aea92`，#12—#20 是发布流水线的追加修复，同日发布 v0.1.1）；没有未合并的前置分支 |
-| 工作分支 | `feat/m12-voice-dictation`，A 已从基线创建。本计划所在的提交是阶段提交的起点；B 的实施、A 的审查修复与人工反馈修复全部 amend 进同一提交 |
-| 关联需求 | 新增 VOICE-10—VOICE-17；受影响的既有行为：VOICE-03、VOICE-06 的转写可以改用本地引擎（块的切法与位置映射不变）；VOICE-09 的词典扩展为别名与读音；VOICE-01 的采集约束改为浏览器降噪默认关（录音笔记与听写共用）；资料库结构升到 v16 |
-| 关联验收 | 新增 AT-174—AT-183；既有的全部窗口观察、`installer` 步骤与基准照常重跑 |
-| 可连续执行 | 本地实现；新增第 3 节列出的依赖；下载钉住版本与哈希的模型与工具到 `dist/tools/`；合成样本、测试、打包、基准、文档同步；第 5.1 节的整理；阶段提交与 amend |
-| 外部操作 | 未授权：push、PR、合并、触发 workflow；真实服务的契约（[ACT-21](../../USER-ACTIONS.md#act-21)，可选）。A 审查收敛后在用户待办登记一项授权请求（push、PR、合并）。测试只用本地的假服务 |
+| 阶段 | 阶段开始的整理（C0）；依赖盘点（D1）；声明式提供者插件与 `model.provider` 位置（P1）；从提供者加入模型、提供者账户与 schema v17（M1）；DeepSeek 对话模型的思考模式与工具循环（L1）；原生联网搜索（N1）；网页搜索工具与材料搜寻（G1）；DeepSeek 语音识别接入识别引擎（A1）；语音合成与回答朗读（R1）；小说朗读（R2）；服务的测试、用量与费用估算（U1）；真实 API 契约（X1）；测试、走查与基准（T1）；文档（W1） |
+| 代码基线 | `main @ 2726b0e`（上一阶段的 [PR #21](https://github.com/chialecode/manga/pull/21) 于 2026-11-14 squash 合并为 `92d1b0b`，#22 只改文档）；没有未合并的前置分支 |
+| 工作分支 | `feat/m13-deepseek-plugin`，A 已从基线创建。本计划所在的提交是阶段提交的起点；B 的实施、A 的审查修复与人工反馈修复全部 amend 进同一提交 |
+| 关联需求 | 新增 PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03。受影响的既有行为：MODEL-01、MODEL-02 新增“语音合成”与“网页搜索”两种用途；MODEL-05 的推理等级加上 `max`（只对声明了它的模型显示），“原生联网搜索”第一次有实际接法；VOICE-13 的外部引擎加上 DeepSeek 语音识别；AGENT-04 按任务加上的外部调用加上“联网搜索”；资料库结构升到 v17 |
+| 关联验收 | 新增 AT-184—AT-193；既有的全部窗口观察、`installer` 步骤与基准照常重跑 |
+| 可连续执行 | 本地实现；合成样本与本机假服务；测试、打包（含用开发机上的第一方私钥签名新插件）、基准、文档同步；第 5.1 节的整理；阶段提交与 amend；**在 ACT-23 的额度内调用真实的 DeepSeek API** |
+| 外部操作 | 未授权：push、PR、合并、触发 workflow。A 审查收敛后在用户待办登记一项授权请求（push、PR、合并）。真实 API 只按 ACT-23 调用；其余测试只用本机的假服务 |
 
 **退出条件与覆盖**
 
 | 条件 | 做法 | 工作包 | 验收证据 |
 | --- | --- | --- | --- |
-| 在 MANGA 里任何能打字的地方听写 | 按住快捷键说话、松开插入光标处；锁定免提；取消；焦点变化与输入法组合的处理；对话栏“问 Agent”的麦克风是听写；Agent 没有入口 | U1 | AT-174 |
-| 声音前端不伤识别 | 回声消除开、浏览器降噪关；可选系统回声消除与 GTCRN 回混降噪；媒体压低；音量过低与削波提示 | A1 | AT-175 |
-| 只送有声音的部分 | 首尾静音裁掉、长停顿压短、两侧留余量；整段无声不送；复述热词按无效 | S1 | AT-176 |
-| 本地与外部引擎同一套用法 | 能力描述决定送热词、提示还是上下文；OpenAI 兼容转录与对话接口的音频输入；听写与录音笔记各选引擎；不自动换服务 | E1 | AT-177 |
-| 本地模型可下载、可信、可删 | 用户确认后下载；Range 续传；固定 SHA-256；越界条目拒绝；本地导入；删除；不进安装包 | M1 | AT-178 |
-| 本地推理稳定 | `utilityProcess` 里的 sherpa-onnx；崩溃隔离与重启；闲置释放；完整应用与轻量入口不加载它 | N1 | AT-179 |
-| 词库认得作品里的人名 | 别名、误写、读音、类别、停用、批量导入；Bangumi 补全中文名、别名、假名与罗马字；当前作品的热词；v16 迁移 | X1 | AT-180 |
-| 纠错准而不乱改 | 音近召回与确定性替换；润色档位与可改的提示词；四道防过度纠错；简繁 | R1、P1 | AT-181 |
-| 改得回来、学得会 | 恢复原文与 Ctrl+Z；听写记录；从修改中学词 | U1、H1 | AT-182 |
-| 效果与速度可衡量 | 合成评测集与评测脚本；纠错样本集的门槛；两项新基准门槛与记录项 | Q1 | AT-183；`bench.json` |
+| DeepSeek 是一个可装、可停、可卸的插件 | 第一方签名的声明式插件 `manga.provider-deepseek` 随应用提供；不起进程；只能引用宿主已有的接法；停用或卸载后它的连接保留但不可用，零网络请求 | P1 | AT-184 |
+| 插件启用后，模型列表里能加入 DeepSeek 的模型 | “设置 › 模型”出现“从 DeepSeek 加入”；填一次密钥，按 `GET /models` 列出模型（离线时用插件里的目录），连同语音识别、语音合成、网页搜索一起勾选加入；模型配置自动填好；同一账户共用一把密钥；schema v17 | M1 | AT-185 |
+| DeepSeek 对话模型能带工具干活 | 两个运行时都能正确开关思考、设推理等级（含 `max`），工具循环里回传 `reasoning_content`；后台小任务关思考；对话里可展开思考过程 | L1 | AT-186 |
+| 联网搜索可用、来源可见 | 按任务勾选“联网搜索”：DeepSeek 对话模型用内置搜索（自动开思考），显示搜索进度与引用来源，下一轮原样回传；其他模型用网页搜索工具 | N1、G1 | AT-187、AT-188 |
+| 网页搜索是一种服务 | 网页搜索工具 `web.search` 按任务开放给 Agent；项目的材料搜寻可以搜网页，再抓取保存 | G1 | AT-188 |
+| DeepSeek 语音识别能听写、能转录 | 作为外部转录引擎；不送热词与提示；按上限分块；失败不换服务 | A1 | AT-189 |
+| 能把文字读出来 | 语音合成是一种用途；回答的“朗读”边合成边播放；小说从当前位置朗读、高亮当前段、翻页跟随 | R1、R2 | AT-190、AT-191 |
+| 服务能测试、用量能看到 | 识别、合成、搜索各有“测试”；使用记录记识别秒数、合成计费字数、搜索次数与估算费用；错误分类（密钥、余额、限流、繁忙） | U1 | AT-192 |
+| 真实服务上走通 | 在 ACT-23 的额度内，用合成内容在最终源码上跑一次真实契约，只记聚合结果 | X1 | AT-193 |
 | 阶段开始的整理 | 上一阶段的报告提炼后删除；去掉以前阶段的标签；按内容整理文件 | C0 | 文档检查；报告的整理记录 |
-| 依赖盘点 | 按 A-35 与 ADR-0007 的复查条件逐项处理；新增依赖按第 3 节 | D1 | ADR-0007 版本表；完整回归 |
+| 依赖盘点 | 先处理开着的 Dependabot PR，再按 `node scripts/deps.mjs` 升级满 7 天的版本（A-35、A-132） | D1 | ADR-0007 版本表；完整回归 |
 
-**阶段完成的判定。** 以下依次满足后，Agent 侧完成，可以请求用户授权 push、PR 与合并（A-24、A-53）：（1）B 自检的必需用例与门禁全部通过；（2）A 集中审查收敛。人工检查、ACT-21 的契约与待答复问题记在用户待办，不是合并的前提；`productAcceptance` 保持 not-run。
-
-**阶段完成后，用户可以：**
-
-- 在对话栏、笔记、文稿、白板、导图和搜索框里按住右 Alt 说话，松开就得到加好标点、去掉口水词、人名写对的文字；不满意可以一步回到原文；
-- 在“设置 › 语音转录”里一键下载本地模型，离线、免费地听写，也可以继续用自己的转录服务，或者接入阿里云百炼这类用对话接口识别音频的服务；
-- 看哪部作品，就自动用那部作品的角色名与声优名帮助识别；名字被写错后改一次，确认后下次就对了；
-- 外放看番时听写，MANGA 自己的视频声音不会被识别进去；
-- 录音笔记也可以改用本地模型转写。
+**阶段完成的判定。** 以下依次满足后，Agent 侧完成，可以请求用户授权 push、PR 与合并（A-24、A-53）：（1）B 自检的必需用例与门禁全部通过，X1 在最终源码上跑过；（2）A 集中审查收敛。人工检查与待答复问题记在用户待办，不是合并的前提；`productAcceptance` 保持 not-run。
 
 ## 2. A 已核对的现场
 
-- **采集**（`apps/desktop/src/renderer/voice/mic.ts:13`）：`getUserMedia` 的约束是 `{ channelCount: 1, echoCancellation: true, noiseSuppression: true }`，没写 `autoGainControl`（Chromium 默认开）。`pcm-worklet.ts` 转 16 kHz 单声道 16 位 PCM，经 `capture.append` 分块交给主进程。录音笔记与对话栏麦克风共用这条链路。
-- **静默与转写**（`packages/app-core/src/voice/`）：`vad-client.ts` 在 `worker_threads` 里用 onnxruntime-web 跑 Silero VAD；`vad-segmenter.ts` 两侧各留 300 ms、1.5 s 内合并；`chunks.ts` 单块不超过 30 s；`transcribe.ts` 每块带词典提示（`dictionary.prompt(workId, limit)`），识别结果只复述提示时记为 `prompt-echo` 并在重试时不带提示。
-- **端口**（`voice/ports.ts`）：`AsrPort` 只有 `resolve` 与 `transcribe(connection, { fileName, bytes, mimeType, prompt, language, timestamps, signal })`，由 `product-app.ts` 的 `asrPort(this)` 实现为 OpenAI 格式的 multipart 转录；`LlmPort.complete` 只收 `system` 与 `user`，没有温度等选项。注释写明：音频只经所选的一个转录连接离开本机，不回退到别的服务，不送给文本模型。
-- **词典**（`voice/dictionary.ts`）：表 `dictionary_terms`（`scope`、`work_id`、`term`、`heard`、`source`，上限 5000 条）；`termsFromMetadata` 从作品已缓存的 Bangumi 快照取作品名、别名、角色名（`subject_characters.name`，即 `/v0/subjects/{id}/characters` 返回的日文原名）与声优名；手写词条优先，刷新只增删自动词条。
-- **Bangumi**（`metadata/bangumi.ts`、`metadata/bangumi-openapi.ts`）：客户端已有 `characters(subjectId)`；OpenAPI 类型里有 `/v0/characters/{id}` 与 `/v0/persons/{id}`，但客户端还没调用它们。
-- **子进程与打包**：`apps/desktop/src/main/plugin-process.ts` 用 `utilityProcess.fork` 运行插件，可作为推理进程的样板；`apps/desktop/vite.main.config.ts` 的 `NATIVE` 列表（`better-sqlite3`、`sharp`、`@napi-rs/canvas`、`electron-updater`）不打进包，`bundleWorker` 把独立运行的 worker 打成单个 CJS 文件；轻量打开有 `checkLightClosure` 与打包的 `light-boundary` 两道检查。
-- **可输入文字的地方**：对话栏 `components/chat/composer.tsx` 与收起时的 `capsule.tsx`（textarea）、笔记 `note-editor.tsx` 与文稿 `pages/projects/copy/draft-editor.tsx`（Tiptap 与 CodeMirror 共用块状态和输入法屏障）、白板 `canvas/whiteboard-nodes.tsx` 与导图 `canvas/mindmap-tab.tsx`（textarea）、搜索框 `search-box.tsx`。键位在单一键位表里，“设置 › 键盘快捷键”是 `pages/settings/shortcuts-page.tsx`；录音的 `holdKey`（F9）与 `toggleKey`（F8）只在应用内有效。
-- **资料库**：`packages/storage-drizzle/src/sql.ts` 的 `PRODUCT_SCHEMA_VERSION = 15`；迁移的备份、可中断重做与旧版拒绝打开都有现成机制。
-- **合成语音**：`scripts/samples/generate-media-samples.mjs` 已用 Windows 自带的 `System.Speech` 合成 16 kHz 单声道语音；打包烟测的 voice 阶段用 Chromium 的假采集设备播放它。
-- **系统工具**：Windows 自带 `%SystemRoot%\System32\tar.exe`，本机为 bsdtar 3.8.9（libarchive，含 bz2lib 1.0.8）。
-
-## 3. 开源查证（2026-11-12、2026-11-13）
-
-依据是用户 2026-11-13 提供的选型调研（查询日期 2026-11-12，各项附官方链接），A 在 2026-11-13 复核了下表中的版本、许可与模型哈希：npm 注册表，以及 sherpa-onnx `asr-models` 与 `speech-enhancement-models` 两个 Release 的 `checksum.txt`。调研中标为“未证实”的项目，由 B 在本机实测补齐（见表中的“B 实测”）。
-
-| 需要 | 候选与依据 | 判断 |
+| 项目 | 现状（2026-11-14 核对） | 对本阶段的影响 |
 | --- | --- | --- |
-| 本地推理运行时 | [`sherpa-onnx-node`](https://www.npmjs.com/package/sherpa-onnx-node) 2.0.1 与 `sherpa-onnx-win-x64` 2.0.1（Apache-2.0，2026-10-26 发布，已满 14 天）；Node-API 插件，win-x64 解压约 23 MB（含 onnxruntime 1.28.2）；npm 包只有 CPU；Electron ≥ 21 的 V8 内存笼要求返回音频的接口传 `enableExternalBuffer: false` | **采用**，在 `utilityProcess` 里运行。**B 实测**：打包后的 Electron 45 能否在 `utilityProcess` 里载入并识别。证明不了就停下来报告 A，不改用别的猜测方案 |
-| 本地 ASR 模型 | sherpa-onnx 的 [Qwen3-ASR](https://k2-fsa.github.io/sherpa/onnx/qwen3-asr/index.html)、[Fun-ASR-Nano](https://k2-fsa.github.io/sherpa/onnx/funasr-nano/index.html) 文档；权重许可：Qwen3-ASR-0.6B 与 Fun-ASR-Nano-2512 都是 Apache-2.0；公开评测见 Qwen3-ASR 技术报告（arXiv:2601.21337）与 Fun-ASR-Nano 模型卡。`checksum.txt`（2026-11-13 复核）：`sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2` `393f8a14e2f5fb96746aaab342997a40641001fbd5bf9592a080a8329178ee96`；`sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2` `257936ea9a64cbe33200274e6367fc26d373ff6ca58b996b15108ffd6b9f6148`；`sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2` `eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b` | **目录收这三个**：Qwen3-ASR-0.6B int8（推荐，热词经 `stream.setOption("hotwords", …)`）；sense-voice-funasr-nano int8（极速，CTC，无热词）；Fun-ASR-Nano int8（热词与提示）。**不收**：2024 版 SenseVoice-Small 与 Paraformer（权重为 FunASR `MODEL_LICENSE v1.1`，含“仅供参考与学习”的条款）、FireRedASR（不支持日语）、Whisper（sherpa-onnx 的 C 接口不能传 `initial_prompt`）。**B 实测**：三个模型在本机 CPU 上的载入时间、内存、10 s 语音的用时，以及 Node 接口的配置键名与每次识别时设置热词的方法 |
-| 模型分发 | sherpa-onnx [GitHub Releases `asr-models`](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models)（覆盖全部三个模型与 `checksum.txt`；国内不稳定）；ModelScope `csukuangfj/asr-models`（国内直连，调研称含 funasr-nano-int8、不含 qwen3-asr，API 返回 SHA-256，支持 Range）；Hugging Face 的部分新仓库匿名访问返回 401 | **GitHub 是每个模型的基准来源**，哈希以它的 `checksum.txt` 为准；ModelScope 上的文件只有在 SHA-256 与 GitHub 完全相同时才列为另一个来源（**B 实测**后写进目录）；不用 Hugging Face。不自建镜像（需要额外的发布授权） |
-| 解压 `.tar.bz2` | Windows 10 1803 起自带的 `tar.exe`（bsdtar，libarchive，本机 3.8.9 含 bz2）；npm 上的 bz2 解压库较旧 | **用系统的 `tar.exe`**，按绝对路径调用；先 `-tvf` 列出条目，拒绝绝对路径、盘符、`..` 与链接，再解压。没有 `tar.exe` 时说明原因，并提示改为导入解压好的文件夹 |
-| 降噪 | [GTCRN](https://github.com/Xiaobin-Rong/gtcrn)（模型 MIT，`gtcrn_simple.onnx` 536 KB，16 kHz，sherpa-onnx 内置 `OfflineSpeechDenoiser`；`speech-enhancement-models` 的 `checksum.txt` 中哈希为 `e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534`）；RNNoise（固定 48 kHz）；DeepFilterNet（官方 2023 年后未再发版、无官方 npm 包）。公开实验（arXiv:2501.02452、arXiv:2512.17562、arXiv:2607.11157）显示全强度单通道降噪会让现代 ASR 变差，与原声混合可以挽回 | **GTCRN 作为可选项，默认关**，在推理进程里运行，输出按 75% 降噪与 25% 原声混合；随安装包附带（536 KB，附许可声明）。不采用 RNNoise 与 DeepFilterNet |
-| 浏览器音频处理 | Chromium 的 `echoCancellation: true` 以本应用的音频输出为参考信号（覆盖 MANGA 自己播放的视频）；`echoCancellation: "all"` 自 M141 起在 Windows 上可用（系统回环为参考，源码固定增加 170 ms 延迟）；`noiseSuppression: true` 在源码里固定为 `kHigh`，没有强度可调；`voiceIsolation` 依赖硬件，不可靠 | 回声消除默认 `true`；“消除其他应用的声音”打开时用 `"all"`；**降噪默认关**；不用 `voiceIsolation`。**B 实测**：Electron 45 里 `"all"` 被接受（`getSettings()` 的回显），以及类型声明的补充 |
-| 中文读音 | [`pinyin-pro`](https://github.com/zh-lx/pinyin-pro) 3.29.5（MIT，2026-10-10；官方基准的多音字准确率 99.846%，可拆声母、韵母与声调） | **采用** |
-| 日文读音 | [`wanakana`](https://github.com/WaniKani/WanaKana) 5.3.1（MIT，2023-11-20 之后没有新版本，但功能单一且稳定：假名与罗马音互转）；日文汉字注音的 `lindera-wasm-nodejs-ipadic` 2.0.0（MIT，gzip 约 4 MB）；`kuroshiro` 加 `kuromoji`（多年未维护，载入后内存很大） | **采用 `wanakana`**。汉字注音本阶段不做（Bangumi 的“纯假名”“罗马字”别名已能覆盖多数角色），登记为 LOOP-39；不采用 kuromoji |
-| 音近召回 | [`HaujetZhao/asr-hotword`](https://github.com/HaujetZhao/asr-hotword)（MIT，Python，最近提交 2026-06）：声母、韵母、声调的模糊匹配（平翘舌、前后鼻音），音节 2-gram 倒排粗筛，加权编辑距离局部对齐，黑名单。npm 上没有宽松许可的同类 JS 库 | **把算法移植为 TypeScript**，文件头与第三方声明里保留 MIT 许可与来源（含所依据的提交）。编辑距离与多模式匹配自己写在移植里，不另加库 |
-| 简繁 | [`opencc-js`](https://github.com/nk2028/opencc-js) 1.4.2（代码 MIT、词典 Apache-2.0，2026-08-22） | **采用** |
-| 外部接口 | OpenAI `/v1/audio/transcriptions`（`prompt` 有效；Groq、硅基流动、whisper.cpp 服务兼容，后两者不支持或不用 `prompt`）；阿里云百炼兼容模式**没有** `/audio/transcriptions`，`qwen3-asr-flash` 走 `/chat/completions` 的 `input_audio`，热词与背景写在 system 消息里；火山引擎是私有的 WebSocket 协议 | **支持两种标准形态**：已有的转录接口，新增对话接口的 `input_audio`。私有协议与流式识别登记为 LOOP-37 |
-| 润色与防过度纠错 | HyPoradise（arXiv:2309.15701）、SoftCorrect（arXiv:2212.01039）、RobustGER：只把可疑位置交给模型、高置信的字照抄，能减少误改 | **润色走已有的文本连接**，加四道防线（4.9）。本地 LLM（`node-llama-cpp` 3.22.3，MIT）不在本阶段（LOOP-38） |
-| 全量 ACG 词库 | [`bangumi/Archive`](https://github.com/bangumi/Archive)（每周构建，压缩约 330 MB；维基数据 CC BY-SA，要求署名并开放派生数据） | 本阶段不做（LOOP-39）。只在用户的作品上用 API 补全 |
+| 插件 | `packages/contracts/src/plugin.ts`：位置只有 `acquisition.engine`，界面部分只有 `acquisition`；`entry: null` 的包不能填位置。宿主开放给插件的请求只有 `log`。打包脚本 `scripts/pack-plugin.mjs` 打包并签名 `plugins/` 下的每个插件，私钥取 `MANGA_PLUGIN_SIGNING_KEY` 或开发机上的 `%APPDATA%\manga-release\plugin-signing.key`；随包插件列在 `apps/desktop/src/main/bundled-assets.ts` | 新增声明式位置 `model.provider`，允许无 `entry` 的包填它（4.1） |
+| 模型连接 | 契约 `packages/contracts/src/model.ts`（用途 `text`、`transcription`、`embedding`、`vision`）与 `inputs-models.ts`（模型配置：窗口、输出、输入类型、能力、推理等级 `minimal`—`high`、转录接口）；命令 `packages/app-core/src/commands/connections.ts`；表 `provider_connections` 每行一个模型、各自一把密钥；界面 `apps/desktop/src/renderer/pages/settings/models-page.tsx`、`connection-dialog.tsx`；测试连接时已会读 `/models`（`packages/app-core/src/model-probe.ts`） | 加提供者账户与两种用途；DeepSeek 的推理等级与思考开关（4.2、4.3） |
+| 自研运行时 | `packages/model-protocol/src/openai-http.ts` 只发 `reasoning_effort`，不发 `thinking`，也不读不回传 `reasoning_content` | DeepSeek 默认开思考：带工具的第二次请求会返回 400，必须修（4.3） |
+| pi 运行时 | `@earendil-works/pi-ai` 1.4.0 已按地址识别 DeepSeek（`thinkingFormat: "deepseek"`、`requiresReasoningContentOnAssistantMessages`、`max_tokens`）。1.5.0 已满 7 天，按 D1 升级 | 升级后重新核对；B 核实 MANGA 自己转成 pi 上下文时没有丢掉思考块（4.3） |
+| 原生联网搜索 | `inputs-models.ts` 的能力里有 `web_search`（界面叫“联网搜索”），但没有任何代码用它 | 本阶段第一次接上（4.4） |
+| 按任务加上的外部调用 | `AGENT_OPT_IN_COMMANDS` 为 `metadata.search`、`semantic.search`、`webpage.fetch`（`packages/app-core/src/commands/access.ts`；输入 `packages/contracts/src/inputs.ts` 最多 3 项；界面 `apps/desktop/src/renderer/workspace/agent.tsx`） | 加“联网搜索”（4.4、4.5） |
+| 识别引擎 | `packages/app-core/src/voice/engine/asr-engine.ts` 的能力描述决定送热词、提示还是上下文；外部接口为 `audio_transcriptions` 与 `chat_input_audio` | 加 DeepSeek 语音识别的接法（4.6） |
+| 语音合成 | 产品里没有任何语音合成或朗读 | 新功能（4.7、4.8） |
+| 资料库 | `PRODUCT_SCHEMA_VERSION = 16`（`packages/storage-drizzle/src/sql.ts`） | 升到 v17（4.2） |
+| 本地参考索引 | 找到。按“插件化、模块化设计”与“Agent 的 BYOK”两个条目看过：提供者插件带一份“建议的模型目录”，再用 `GET /models` 的实时列表覆盖；密钥按提供者账户保存。A 另在索引的建议文件里追加了一条（搜索过程、引用来源与朗读的界面，P-07，见用户待办的本地参考建议） | 4.1、4.2 采用“目录 + 实时列表”和“账户共用密钥” |
+
+## 3. 官方接口与真实探测（2026-11-14）
+
+**官方文档**（查询日期 2026-11-14）：[构建聊天应用](https://api-docs.deepseek.com/guides/build_a_chatbot)、[更新日志](https://api-docs.deepseek.com/updates)（2026-11-13“发布全套应用 API”）、[模型与价格](https://api-docs.deepseek.com/quick_start/pricing)、[思考模式](https://api-docs.deepseek.com/guides/thinking_mode)、[联网工具](https://api-docs.deepseek.com/guides/web_tools)、[搜索与抓取](https://api-docs.deepseek.com/guides/search)、[语音识别](https://api-docs.deepseek.com/guides/asr)、[语音合成](https://api-docs.deepseek.com/guides/tts)、[OCR](https://api-docs.deepseek.com/guides/ocr)。
+
+| 能力 | 接口与限制（官方文档） | 本阶段 |
+| --- | --- | --- |
+| 对话模型 | `POST https://api.deepseek.com/chat/completions`（另有 Responses 与 Anthropic 格式）；`deepseek-flash`（V4.1 Flash，文本与图片）与 `deepseek-v4-pro`（只收文本）；上下文 1M；思考默认开、默认等级 `high`，开关为 `thinking: {type}`，等级 `reasoning_effort` 为 `low`/`high`/`max`；带工具时之后的每次请求都要原样回传 `reasoning_content`，否则 400；思考模式下 `temperature` 等无效 | 用 Chat Completions；两种模型都进目录 |
+| 内置联网工具 | `tools` 里加 `{"type":"deepseek_web_search"}`、`{"type":"deepseek_read_url"}`；回答带 `annotations`（`url_citation`）与 `server_tool_calls`，流式时进度在 `server_tool_event`；多轮时要把 `server_tool_calls` 原样带回；`tool_choice` 不能点名联网工具 | 用作“原生联网搜索” |
+| 网页搜索 | `POST /v1/tools/search`：`query` 1—128 字符，`count` 1—50；结果有标题、链接、摘要、日期、权威度；按成功的请求计费，每千次 0.75 美元；每账户 100 QPS | 用作网页搜索服务 |
+| 网页抓取 | `POST /v1/tools/fetch`：返回 Markdown | 不在本阶段（LOOP-44） |
+| 语音识别 | `POST /v1/tools/asr`，`multipart/form-data` 的 `file`；16 位 PCM WAV 或 Ogg Opus；≤ 8 MiB、≤ 120 s；自动识别 21 种语言，没有语言、热词或提示参数；不支持流式；返回 `text` 与 `duration_ms`；按秒计费，每小时 0.116 美元（限时半价） | 外部转录引擎 |
+| 语音合成 | `POST /v1/tools/tts`：`text`（≤ 10,000 计费字符、请求体 ≤ 64 KiB，汉字算 2 个）、`voice_id`（`stella` 女声默认、`tide` 男声）、`format`（`wav` 默认、`pcm` 为 24 kHz 16 位单声道）、`filter_markdown`（默认开）；边合成边返回；中途失败时响应被截断，提前结束按失败处理；不能调语速；另有 WebSocket 流式接口；每万计费字符 0.45 美元（限时半价） | 用 HTTP 接口；WebSocket 不在本阶段（LOOP-45） |
+| OCR | `POST /v1/tools/ocr`：PDF、Word、PowerPoint 与图片；≤ 100 MiB、≤ 1000 页 | 不在本阶段（LOOP-43） |
+
+**A 用真实密钥做的探测**（ACT-23 授权内，共 7 个请求，只用合成内容，密钥与返回内容不进仓库）：
+
+1. `GET /models` 返回 200：`deepseek-flash` 与 `deepseek-v4-pro`，都有 `context_window: 1048576`、`max_output_tokens: 393216`、`effort.supported_levels: ["low","high","max"]`、`default_level: "high"`；`input_modalities` 前者为文本与图片、后者只有文本。**模型目录可以完全由这个接口填出。**
+2. 关思考时把 `deepseek_web_search` 与一个函数工具放在一起：400，原因是“函数工具只有在思考模式下才能与 `deepseek_web_search`、`deepseek_read_url`、`safety_check`、`title` 同时使用”。
+3. 开思考（`low`）时同样的组合：200，模型调用了函数工具，回答带 `reasoning_content`。**结论：原生联网搜索可以和 MANGA 的工具同用，但必须开思考。**
+4. 语音合成一句 13 个汉字：200，`audio/wav`，24 kHz、单声道、16 位。（为排查一个本机路径问题多发了 1 次。）
+5. 把这段合成语音送语音识别：200，文字与原句逐字相同，`duration_ms: 3280`。
+6. 网页搜索 1 次（`count: 2`）：200，结果字段与文档一致。
+
+**选型与开源查证（A-40）。** 本阶段不新增第三方依赖：
+- 对话：继续用仓内的自研运行时与 pi-ai（1.4.0 已识别 DeepSeek，按 D1 升到 1.5.0 后重新核对）。DeepSeek 没有官方的 JavaScript SDK，官方示例用 OpenAI 兼容接口；不为此引入 `openai` 包。
+- 语音合成的播放：用 Chromium 的 Web Audio（`AudioWorklet`），仓内已有 `apps/desktop/src/renderer/voice/pcm-worklet.ts` 可以参照。npm 上的 PCM 播放小库多年未维护，平台接口足够。
+- 分句：用 `Intl.Segmenter`。
+- 界面：按第 4、6 节的行为说明实现。本地参考索引里有一条对应功能领域（搜索过程与引用来源的显示、边合成边朗读）的新建议 P-07 待用户确认，确认前 B 不看。
 
 ## 4. 设计
 
-### 4.1 听写会话、入口与插入（U1）
+<a id="design-plugin"></a>
+### 4.1 声明式提供者插件（P1）
 
-- **与录音笔记分开。** 新增 `packages/app-core/src/voice/dictation/` 与命令 `dictation.start`、`dictation.append`、`dictation.stop`、`dictation.cancel`、`dictation.status`；不写 `capture_sessions`，没有位置事件。属于模块 `manga.voice`（Facet `service`/`ui`），模块停用时听写不可用，迟到的结果按代次丢弃。这些命令只给界面用，Agent 的工具与命令访问里都没有，由用例证明。
-- **阶段：** recording → trimming → recognizing → correcting → polishing → done，另有 no_speech、failed、cancelled；每步通过 `dictation.changed` 通知界面，带原文、替换后的文字、最终文字与退回原因。音频留在内存里，单次最长 5 分钟，到时自动结束并说明。
-- **按键：** 在单一键位表里新增“按住听写”（默认右 Alt）、“锁定听写”（快速按两下）与“取消”（Esc，只在听写时生效）。B 先实测右 Alt：单独按下不能触发菜单、不能打断输入法、按住时不能反复触发；做不到时默认改为 F7，并在 Q-40 第 2 项写明。录音笔记的 F8、F9 不变。
-- **插入目标：** 按下听写键时，记下获得焦点的可编辑元素与选区。界面新增一个插入适配层：textarea 与 input 用 `setRangeText` 并派发 `input` 事件，让 React 状态跟上；Tiptap 与 CodeMirror 用各自的事务。每个插入都返回一个句柄，可以整段替换（原文换成润色结果，或恢复原文），每次替换是一个撤销步骤。结束时元素还在，就插回记下的选区（那里的文字被改过时，插到当前光标处）；元素已经不在（标签关了），就在提示里显示结果并提供“复制”。输入法正在组合时，等组合结束才开始录音。
-- **对话栏：** `composer.tsx` 与 `capsule.tsx` 的麦克风在“问 Agent”时是听写，文字填进输入框、不发送；在“笔记”时仍是现在的录音笔记。
-- **出字：** 默认先插入识别的原文，再原地换成最终文字；设置里可以改为等最终文字再插入。插入后 10 s 内，出字处有一个小提示：“已润色 · 恢复原文”（有替换时还可以展开，看每处替换依据的词条）。
-- **指示：** 获得焦点的面板底部中间显示一个小胶囊：录音时是随音量变化的麦克风图案与时长，之后依次是“识别中”“润色中”；锁定时多一个“结束”按钮。录音悬浮框（VOICE-05）只属于录音笔记，听写不用它。
+- **新位置 `model.provider`。** `PLUGIN_SLOTS` 加 `model.provider`。它是声明式的：`entry: null` 的包可以填它（其他位置仍要求 `entry`）。清单加一个可选字段 `provider`：载荷里的提供者文件名（例如 `provider.json`），只在填了 `model.provider` 时允许、并且必填。提供者文件和其他载荷文件一样受签名覆盖。
+- **提供者文件（`manga-provider-v1`，Zod 校验，≤ 64 KiB）：** `id`、名称、`baseUrl`（必须是 https）、`hosts`（允许访问的主机，`baseUrl` 的主机必须在里面）、密钥申请页的链接、`discovery`（`openai-models`：用 `GET /models` 列模型）、`models`（建议目录：模型编号、名称、说明、窗口、最大输出、输入类型、能力、推理等级列表与默认、可选的价格）、`services`（语音识别、语音合成、网页搜索各一项：接法编号、名称、限制、可选的价格）、价格的查询日期。
+- **只能引用宿主已有的接法。** 接法编号是宿主里的一张白名单：`openai-chat-completions`（加方言 `deepseek`）、`deepseek-asr@1`、`deepseek-tts@1`、`deepseek-search@1`。引用不认识的接法、`baseUrl` 不是 https、主机不在 `hosts` 里的包，`plugin.inspect` 以新的拒绝原因 `provider` 拒绝，不能安装。
+- **不起进程，密钥不离开主进程。** 请求都由 MANGA 自己按接法发出，只发往 `hosts` 里的主机，走已有的网络规则（不发往私网、重定向只在允许的主机之间）。插件声明权限 `network`，安装界面写明“由 MANGA 代它访问 api.deepseek.com”。
+- **插件包。** `plugins/provider-deepseek/`：`plugin.json`（`id: "manga.provider-deepseek"`、`entry: null`、`provides: [{slot: "model.provider", id: "deepseek"}]`、`permissions: ["network"]`、`facets: []`）与 `provider.json`。目录里的数字取自第 3 节的 `GET /models` 与价格页，写明查询日期。由 `pack-plugin.mjs` 签名，加进随包插件，与 BitTorrent 一样“只提供，不自动安装”（Q-41 第 1 项）。
+- **启停的效果。** 启用后提供者立即出现在“设置 › 模型”（`settings.changed` 通知，不用重启）；停用、卸载或信任被移除时，这个提供者的连接保留（含密钥），标为“插件已停用”，所有调用在发请求前以新的错误 `PROVIDER_UNAVAILABLE` 拒绝，网络请求为 0；正在进行的请求取消；重新启用后恢复。卸载时不删连接，用户可以自己删除。
+- **插件页。** 声明式插件显示“声明式（不运行代码）”，没有进程占用一栏；其余与现有插件相同。
 
-### 4.2 采集前端（A1）
+<a id="design-models"></a>
+### 4.2 从提供者加入模型、提供者账户与 schema v17（M1）
 
-- `mic.ts` 的约束改为：`echoCancellation` 取设置（默认 `true`，“消除其他应用的声音”打开时为 `"all"`）、`noiseSuppression: false`、`autoGainControl: true`、`channelCount: 1`。补 `MediaTrackConstraints` 的类型声明。录音笔记与听写共用，开始采集后用 `getSettings()` 记下实际生效的值，写进调试面板。
-- 环境降噪（GTCRN）默认关，打开后在推理进程里处理裁剪后的音频，输出为 `0.75 × 降噪 + 0.25 × 原声`，混合比是一个有单元用例的常量。外部引擎也先经过这一步（推理进程要先启动）。
-- 听写与录音笔记期间，压低或暂停 MANGA 里正在播放的视频，沿用现有的 `duckPlayback`。
-- 音量提示：整段人声的峰值低于 −30 dBFS 时提示“声音很小”，超过 1% 的样本到达满幅时提示“声音过大”。提示不阻止识别。
-- 评测（4.11）比较浏览器降噪开与关、自动增益开与关、环境降噪开与关，结果写进报告。评测显示默认值不合适时，交给 A 决定是否改，B 不自行改。
+- **提供者账户。** 新表 `provider_accounts`（编号、提供者引用 `插件编号/提供者编号`、名称、`credential_ref`、创建时间）。从提供者加入的连接带 `account_id` 与 `provider_model`（目录里的编号），密钥存在账户上：改一次密钥，这个账户下的所有连接都用新密钥；删除连接不删账户；删除账户要先删它的连接，删除时一起删除凭据。手动添加的连接不变。
+- **两种新用途。** 用途加 `speech`（语音合成）与 `search`（网页搜索）。转录接口加 `deepseek_asr`。连接的 `adapter_id` 记录接法编号（现有连接迁移为 `openai-http`）。
+- **schema v17 迁移。** 新表与新列；迁移前备份、失败回滚、中断后可以重来、较新的库由旧版本拒绝打开；已有连接、密钥与模型配置一条不少。备份与资料包对凭据的处理与现在相同。
+- **加入流程。** “设置 › 模型”的“添加模型”变成菜单：“手动添加…”（现在的弹窗）与每个已启用的提供者一项“从 DeepSeek 加入…”。没有安装提供者插件时，列表上方提示“安装 DeepSeek 插件后可以直接加入 DeepSeek 的模型”，并链到插件页。加入弹窗：
+  1. 选已有账户，或填一把新密钥（密钥框不回显；链到密钥申请页）；
+  2. 点“读取模型列表”：用这把密钥请求 `GET /models`，按返回的窗口、最大输出、输入类型与推理等级显示模型；请求失败时按错误分类说明，并可以“按插件里的目录继续”（标注“未联网核对”）；
+  3. 勾选要加入的：对话模型逐个列出，另有“语音识别”“语音合成”“网页搜索”三项服务；默认勾选见 Q-41 第 3 项；
+  4. 确认后一次创建账户与各连接（一个事务），模型配置按实时列表填好，来源记为 `detected`；`deepseek-flash` 同时可以用于“视觉”。
+- **模型配置。** 推理等级的枚举加上 `max`，只对目录里声明了它的模型显示；DeepSeek 的模型显示“低、高、最高”与“关闭思考”。窗口与最大输出按实时列表；预算计算不变（可用 = 窗口 − 最大输出 − 余量），B 核实 1M 窗口下的压缩与预算用例。
+- **默认用途。** 新加入的连接只在该用途还没有选定时成为它的默认，不改用户已有的选择（Q-41 第 4 项）。
+- **列表。** 连接按账户分组，组头显示提供者、账户名与插件状态；停用时整组标“插件已停用”，编辑与测试不可用，删除可用。
 
-### 4.3 去除静默（S1）
+<a id="design-thinking"></a>
+### 4.3 DeepSeek 对话模型的思考模式与工具循环（L1）
 
-- 结束后用现有的 Silero VAD 对整段音频做一次筛选，复用 `vad-segmenter` 的参数：两侧各留 300 ms，长于 1 s 的停顿压成 400 ms 的静音，拼成一段送识别。
-- 没有任何人声段：不送识别，提示“没有听到声音”，记为 no_speech。
-- 识别结果只复述热词、提示或词条（沿用 `prompt-echo` 的判断，推广到热词列表）时按无效处理：不插入，提示“没有听清，请再说一次”。
-- 锁定免提时不会因为停顿自动结束，只有单次 5 分钟的上限。
+- **方言。** 连接的方言来自提供者目录（`deepseek`）；手动添加且地址在 `api.deepseek.com` 的连接也按 `deepseek` 处理，与 pi-ai 的识别一致。方言只在两个运行时的请求构造与回答解析里起作用，不进领域协议。
+- **思考开关与等级。** `deepseek` 方言下总是显式发送 `thinking: {type: "enabled" | "disabled"}`：推理等级为“关闭”时发 `disabled`（因为服务默认开），否则发 `enabled` 并发 `reasoning_effort`（`low`/`high`/`max`；`minimal` 映射为 `low`，`medium` 映射为 `high`）。思考开着时不发 `temperature`。
+- **回传 `reasoning_content`。** 自研运行时解析流式与非流式回答里的 `reasoning_content`，存进运行记录里那条助手消息；之后的请求按 DeepSeek 的规则原样带回。规则以真实契约为准：B 先用真实 API 确认“跨用户轮次是否也必须带回”（X1 的第 3 项），再定实现，结论写进报告。pi 运行时：核实 MANGA 转成 pi 上下文时保留了思考块，pi-ai 能带回；不能时在转换层补上。假服务对缺少 `reasoning_content` 的请求返回与真实服务相同的 400，两个运行时都要在假服务上走完 3 步以上的工具循环。
+- **后台小任务关思考。** 听写润色、录音整理、对话命名、压缩摘要等不需要推理的调用，对 `deepseek` 方言发 `disabled`（Q-41 第 5 项），保证延迟；润色的四道防线与 5 s 超时不变。
+- **显示思考过程。** 对话里的回答上方有默认折叠的“思考过程”，展开后显示文字；不进笔记、材料与项目包；调用记录按现有规则记录（可只记大小）。上下文压缩时，旧轮次的思考内容按 DeepSeek 允许的范围最先被丢弃。
+- **错误。** `content_filter` 显示为“内容被服务拒绝”；流式中途的 `error` 块按失败处理，可以重试；402（余额不足）归为新的失败分类 `billing`，说明“账户余额不足”。
 
-### 4.4 识别引擎的能力描述与外部接口（E1）
+<a id="design-native-search"></a>
+### 4.4 原生联网搜索（N1）
 
-- 新增 `AsrEngine`，统一本地引擎与外部连接。每个引擎有一份能力描述：`hotwords`（最多几个，0 为不支持）、`promptChars`（提示的上限，0 为不支持）、`context`（能否在 system 消息里写背景）、`language`、`timestamps`、`maxUploadBytes`、`maxSeconds`。
-- 按能力生成词库提示：热词（本地的 Qwen3-ASR 与 Fun-ASR-Nano，用逗号分隔，最多 50 个）；提示（OpenAI 兼容转录，沿用现有按模型限制截取的提示）；背景（对话接口，system 消息写“可能出现的专有名词：…”，最多 50 个）。都不支持的引擎不送任何提示。
-- 外部连接：转录连接新增一个“接口形态”选项。“转录接口”是现有的 multipart `/audio/transcriptions`；“对话接口的音频输入”是 `/chat/completions`，消息里带 `input_audio`（WAV 的 base64），取回复的文本。连接测试对两种形态都用一段合成语音。
-- 现有的 `AsrPort` 改为基于 `AsrEngine`：录音笔记也可以选本地引擎，块仍不超过 30 s，位置映射不变。
-- 设置分别选“听写用的引擎”与“录音笔记用的引擎”，可选项是已装的本地模型与已配置的转录连接。所选引擎不可用（没配置、连接失败、模型没装或载入失败）时说明原因并给出设置入口，不换到另一个服务。
+- **入口。** “本次任务”菜单加“联网搜索”，与“抓取网页”等一样按次勾选、重试沿用、下一轮清除。所选对话连接的模型配置勾了能力 `web_search`、方言是 `deepseek` 时走原生搜索；否则配置了网页搜索服务时走 4.5 的工具；两样都没有时菜单项不可用并说明原因。DeepSeek 的目录给 `deepseek-flash` 与 `deepseek-v4-pro` 勾上 `web_search`。
+- **请求。** 在函数工具之外加 `{"type": "deepseek_web_search"}`；推理等级为“关闭”时这次任务改为“低”，并在任务开始时说明“联网搜索需要开启思考”。不加 `deepseek_read_url`（抓取用户给的网址仍走 `webpage.fetch`，按项目保存）。
+- **显示。** 流式的 `server_tool_event` 显示为回答上方的进度（“正在搜索：关键词”“正在阅读：网站名”）；结束后回答下方列出引用来源（标题、网站、日期），正文里引用的位置可以点开对应来源；来源链接用系统浏览器打开。
+- **多轮。** 助手消息原样保存 `server_tool_calls` 与 `annotations`，下一轮按官方规则带回；压缩时与思考内容一同处理。
+- **记录。** 调用记录写搜索的次数与关键词（与发送内容同等的脱敏规则）；使用记录写计费的搜索次数（`usage.server_tool_use`）。
+- **范围。** 联网搜索不放宽资料范围；不把用户资料库里的文件名、路径或正文自动放进搜索词，搜索词由模型根据对话生成，这一点在菜单项的说明里写明。
 
-### 4.5 本地推理进程（N1）
+<a id="design-web-search"></a>
+### 4.5 网页搜索工具与材料搜寻（G1）
 
-- 新入口 `apps/desktop/src/main/asr-host.ts`，由 `bundleWorker` 打成 `asr-host.cjs`。第一次需要时用 `utilityProcess.fork` 启动（`serviceName: "MANGA speech"`），经 MessagePort 通信。`sherpa-onnx-node` 加进 `NATIVE`，打包时 `sherpa-onnx-node` 与 `sherpa-onnx-win-x64` 两个包都放在 asar 之外。
-- 请求：`load(modelId, kind, files)`、`recognize(samples, { hotwords, language })`、`denoise(samples)`、`unload`、`ping`。一次一个请求，排队处理。取消听写只丢弃结果；正在识别时退出应用，就结束这个进程。
-- 每种模型的 `OfflineRecognizer` 配置与“每次识别设置热词”的方法，由 B 按 sherpa-onnx 2.0.1 的源码与示例核实后写进报告。所有返回音频的接口都传 `enableExternalBuffer: false`。
-- 闲置 10 分钟（可设置）后卸载模型，进程随之退出。进程崩溃时这次听写失败并说明原因，下一次重新启动进程；同一个模型 1 分钟内崩溃两次，就标为“载入失败”，在设置里说明。
-- 边界：完整应用的主进程包与轻量打开的闭包都不得包含 `sherpa-onnx-node`，由 `check-deps.mjs` 与打包产物检查共同保证。推理进程不访问资料库与网络。
+- **服务。** `deepseek-search@1`：`query` 去掉首尾空白后 1—128 个字符（超长时截断并在结果里注明），`count` 默认 8、最大 10，`need_content: false`；返回标题、链接、网站、日期、摘要（`snippet`）与较长的摘要（`summary`）。只发往服务的主机。
+- **Agent 工具 `web.search`。** 加进 `AGENT_OPT_IN_COMMANDS`（输入契约的上限从 3 改为 4）。只有用户在“本次任务”勾了“联网搜索”、所选模型不走原生搜索、并且配置了搜索服务时才出现在工具清单里；模块或插件停用时命令层拒绝。结果只返回给模型，不自动保存；在项目里，模型可以接着用 `webpage.fetch` 抓取并保存某个结果。
+- **材料搜寻面板。** 项目的“材料搜寻”加“搜索网页”：输入关键词，列出结果（标题、网站、日期、摘要），每条可以“抓取并保存”（走现有的 `webpage.fetch`）或在浏览器打开。没有搜索服务时显示怎样配置。
+- **错误。** 401、402、429、5xx 与超时分别说明；408、429 与 5xx 按服务端建议有限重试（最多 2 次），其他 4xx 不重试。空结果显示“没有找到”，不算失败。
 
-### 4.6 模型目录、下载与导入（M1）
+<a id="design-asr"></a>
+### 4.6 DeepSeek 语音识别（A1）
 
-- 目录写在代码里（`packages/app-core/src/voice/models/catalog.ts`）。每个模型记：编号、名称、类型（`qwen3Asr`、`funasrNano`、`senseVoice` 等，以 sherpa-onnx 的配置键为准）、语言、热词能力、许可与链接、压缩包名、大小、SHA-256、各来源的地址，以及解压后每个必需文件的相对路径、大小与 SHA-256。B 先按第 3 节的哈希从 GitHub 下载并校验压缩包，再计算各文件的哈希，写明查询日期。
-- 下载：在主进程里用现有的网络层（跟随系统代理），只允许目录里写明的主机。先写到 `<应用数据根>\models\.staging\<编号>.part`，旁边的状态文件记已下载的字节数与 ETag。按 Range 续传；续传前先重算已有部分的哈希，校验通过才继续。可以暂停与取消，进度走现有的任务机制（新任务类型 `model-download`）。用户在确认框里看过大小、许可与来源，点了下载才发请求。默认先试 ModelScope 来源（有时），失败或没有时用 GitHub；可以手动选。
-- 校验与解压：大小与 SHA-256 都相符后，用 `%SystemRoot%\System32\tar.exe` 先列出条目、拒绝越界，再解压到暂存目录；逐个核对必需文件的大小与哈希；全部通过后整体改名为 `<应用数据根>\models\asr\<编号>\`，原子地更新 `models\installed.json`。任何一步失败都清空这个模型的暂存，不启用。
-- 导入：可以导入一个压缩包（与下载同样校验），或一个解压好的文件夹（逐个核对必需文件的哈希）。
-- 删除：模型正在载入或使用时先让推理进程卸载它，再删目录、更新清单，显示释放的空间。
-- 数据位置：`<应用数据根>\models\` 不进备份与资料包；卸载时按现有应用数据的规则处理（B 核对并写进数据与安全）。
-- 门禁用的模型：极速模型（sense-voice-funasr-nano int8）与 `gtcrn_simple.onnx` 记进工具锁文件（固定的 Release 资产名加 SHA-256），由现有的工具下载脚本放到 `dist/tools/`；`check-tool-links.mjs --pins` 扩展规则，接受“固定资产名加哈希”的形态。GTCRN 随安装包附带并附许可声明；ASR 模型不随安装包。
+- **接法。** `deepseek-asr@1`：`multipart/form-data` 只有 `file` 一个字段，送 16 kHz 单声道 16 位 PCM WAV（与现在送外部转录的格式相同）；读 `text` 与 `duration_ms`。
+- **能力描述。** 不收热词、提示、语言与上下文（全部为 0）；上传上限 8 MiB、时长上限 120 s。所以当前作品的词条只用于识别之后的确定性替换与润色，设置页的引擎说明写明“不支持热词”。
+- **分块。** 听写：去除静默后超过 110 s 的，按静默处切成不超过 110 s 的几段依次识别再拼接（听写本身最长 5 分钟）。录音笔记：块长不超过 60 s（Q-41 第 10 项），位置映射与现在相同。
+- **失败。** 400（格式）、413、408、504 不重试；429、503 有限重试（最多 2 次，退避）；都失败时保留临时音频供同次重试，不换引擎、不回退到别的服务（VOICE-13 的规则不变），其他服务收到的请求为 0。
+- **选择。** 加入后出现在听写与录音笔记的引擎列表里；默认选择按 Q-41 第 9 项。
 
-### 4.7 词库扩展、schema v16 与 Bangumi 补全（X1）
+<a id="design-tts"></a>
+### 4.7 语音合成与回答朗读（R1）
 
-- **schema v16**：`dictionary_terms` 加 `category`（character、actor、work、term、other，从来源推出初值）与 `disabled`；新表 `dictionary_aliases`（词条、文字、种类：alias、heard、kana、romaji、english，来源）。现有的 `heard` 迁移为 heard 种类的别名；B 决定保留还是重建去掉这一列，但不得丢任何数据。另有新表 `dictionary_suggestions`（建议词）、`dictation_history`（听写记录）、`bangumi_details`（角色与人物详情的缓存，键为种类与编号）。迁移沿用现有机制：迁移前备份、中断后重做、较新版本的资料不被旧版本打开。
-- **读音**：载入词库时在内存里生成，不入库。汉字用 `pinyin-pro` 按整个词条取读音（多音字按词处理）；假名用 `wanakana` 转罗马音；拉丁字母转小写。
-- **Bangumi 补全**：客户端新增 `character(id)` 与 `person(id)`。“从 Bangumi 资料加入”与“刷新”时，按主角、配角、他们的声优的顺序读取详情，每部作品最多 60 个请求，一个接一个发，沿用现有的 User-Agent、限流与退避；作为可取消的任务，显示进度；结果存入 `bangumi_details`。解析 `infobox` 时：同名键（“简体中文名”“别名”）可能出现多次，要全部遍历；“别名”的值里有的项没有 `k`；`infobox` 可能是 null，此时回退到顶层的 `name`。映射：有简体中文名时，它成为自动词条的正式写法，日文原名降为别名；“纯假名”为 kana，“罗马字”为 romaji，“英文名”为 english，其余为 alias。手写词条不受影响。
-- **当前作品与热词**：当前作品取自获得焦点的标签所属的作品（没有时只用全局词典）。热词顺序为手写的、主角、配角、声优、其他；去掉停用的；最多 50 个。
-- **批量导入**：一行一条，或用逗号、顿号分隔；`词条 | 别名1, 别名2` 写法可选；跳过重复与空行，报告新增与跳过的数量。
-- **界面**：词典列表增加别名、类别、停用与来源的显示和编辑。
+- **服务。** `deepseek-tts@1`：主进程发请求（`format: "pcm"`，`filter_markdown: true`，所选声音），读响应体的同时把 PCM 块经 `MessagePort` 交给页面；页面用 `AudioWorklet` 按 24 kHz 播放，收到第一块就开始播。响应提前结束或读流出错按失败处理，已经播出的部分保留，提示“朗读中断，可以重试”。一次请求不超过 10,000 计费字符（汉字算 2 个），超长的按句切成几次请求依次播放。
+- **朗读控制器。** 一个应用级的朗读队列：同一时间只朗读一处；开始新的朗读会停掉旧的；有“暂停、继续、停止”；关闭对应的标签或停用插件时停止。听写或录音开始时暂停朗读，结束后不自动继续（Q-41 第 14 项）。朗读时 MANGA 里正在播放的视频不自动暂停。
+- **回答朗读。** 对话里每条已完成的回答有“朗读”按钮（只读正文，不读思考过程与来源列表），再点停止；不自动朗读（Q-41 第 12 项）。
+- **声音。** “设置 › 语音转录”加“朗读”一节：选语音合成连接、声音（`stella` 女声默认、`tide` 男声）、试听。没有语音合成连接时，朗读按钮不出现，设置里说明怎样加入。
+- **缓存。** 合成的音频不写盘；同一段文字在 10 分钟内重复朗读时用内存里的结果（每段上限 8 MiB，总计 64 MiB，最近最少使用淘汰）。
 
-### 4.8 音近召回与确定性替换（R1）
+<a id="design-read-aloud"></a>
+### 4.8 小说朗读（R2）
 
-- 把 asr-hotword 的核心移植到 `packages/app-core/src/voice/correct/`：音素表示（声母、韵母、声调；罗马音；拉丁字母），模糊规则（z/zh、c/ch、s/sh、n/l、an/ang、en/eng、in/ing，声调不同的代价较低），音节 2-gram 倒排粗筛，加权编辑距离的局部对齐精排，黑名单（每个词条可以写“不要替换的写法”）。
-- 输出：每处候选的起止位置、原文、词条、得分（0—1）。规则：与词条或别名完全相同的直接替换；得分 ≥ 0.9、且词条属于当前作品或是手写的，直接替换；0.75—0.9 的作为候选交给润色（最多 15 个）；更低的忽略。阈值是有单元用例的常量，由 B 在纠错样本集上调好，写进报告。
-- 索引在词库变化时增量更新。1 万条词条时，替换一句话的 p95 ≤ 30 ms（基准 `dictationCorrectionMs`）。
+- **范围。** TXT、EPUB、MOBI 的小说阅读器（翻页与滚动两种排版）。PDF 与漫画不朗读（LOOP-46）。
+- **入口。** 阅读器底栏加“朗读”按钮（窄窗收进“…”），快捷键在单一键位表里加一项（默认不绑定，Q-41 第 13 项）。从当前页第一段开始；有选区时从选区所在段开始。
+- **分段与预取。** 按阅读器的段落切分，超过上限的段落用 `Intl.Segmenter` 按句再切；正在读第 n 段时预取第 n+1 段，段与段之间不留可感知的停顿（基准 `readAloudGapMs`）。
+- **跟随。** 当前段高亮（用阅读器现有的高亮层，不改正文、不建笔记）；读到当前页之外时自动翻页或滚动；跨章继续；读到书末停止。用户手动翻页时朗读继续，底栏出现“回到朗读位置”。
+- **位置。** 朗读不改阅读进度，停止时问一次“把阅读位置移到这里？”（默认是）；不在后台标签继续朗读：标签不可见时暂停，回来时点继续。
+- **费用提示。** 第一次在一本书上开始朗读时提示“按字数计费，汉字算 2 个字”，并显示这一章的估算费用；可以勾“不再提示”。
 
-### 4.9 润色、防过度纠错与简繁（P1）
+<a id="design-usage"></a>
+### 4.9 服务的测试、用量与费用估算（U1）
 
-- **档位**：原文（不请求文本模型）；轻度（加标点、去口水词、句中改口时只留改后的说法、按候选纠正专名，不改意思、不扩写）；书面（再整理成书面语）。默认轻度；没有文本连接时按原文处理。提示词在“设置 › 语音转录”里可以查看、修改、恢复默认，默认值放在代码里。
-- **四道防线**：（1）原文档，或轻度档下没有候选、也没有口水词与改口的迹象时，跳过模型；（2）提示只带召回的候选（“正式写法 | 读音或原名 | 类别与作品”，最多 15 个），并写明“没有读音相近的片段时不得套用候选、不得改变语气”；（3）低温度（`LlmPort.complete` 增加可选的 `temperature`，连接不支持时忽略）；（4）检查结果：长度与替换后文字之比超出 0.4—1.4，出现了替换后文字与候选里都没有的词典词条或拉丁字母、片假名词，失败，或超过 5 s，都退回替换后的文字并记下原因。
-- **简繁**：最后用 `opencc-js` 统一成简体（可选繁体或不转）。与词条完全相同的片段在转换前后保持词条的写法。
+- **测试。** 识别、合成、搜索连接的“测试”：识别送一段内置的合成 WAV（已有的 `syntheticWav`），合成读一句固定的短句并试播，搜索查一个固定的词（取 1 条）；都只在用户点击时发生，结果与对话连接一样分类显示并保存。
+- **用量。** 使用记录按任务与服务列出：对话的 Token（含 DeepSeek 的缓存命中数）、识别的秒数、合成的计费字符、搜索次数；费用按提供者文件里的价格估算，标“估算”与价格的查询日期，不区分高峰与低谷时段（说明里写明）；服务没给的数值显示“未提供”。
+- **错误分类。** 连接失败的分类加 `billing`（402）；503 与 429 区分为“服务繁忙”与“请求太多”。
 
-### 4.10 听写记录与从修改中学词（H1）
+<a id="design-live"></a>
+### 4.10 真实 API 契约（X1）
 
-- **记录**：每次听写在 `dictation_history` 里记时间、引擎与模型、原文、替换后的文字、最终文字、档位、退回原因、各步用时、当前作品。保留 30 天，在启动时与之后每天清理一次。“设置 › 语音转录 › 听写记录”可以复制原文或结果、删除一条、清空。不进备份与资料包，Agent 读不到。打开“保留最近的听写音频 24 小时”后，音频以 WAV 存在 `<应用数据根>\dictation-audio\`，过期删除；有音频的记录可以换一个引擎“重新识别”。
-- **学词**：插入后的 60 s 内，插入适配层跟踪这段文字的范围（textarea 按输入事件调整偏移，Tiptap 与 CodeMirror 用各自的位置映射；跟踪不了就放弃）。失焦或到时后，比较插入的文字与现在的文字。被改的片段是 2—16 个字、新写法不是已有的词条或别名、旧写法与新写法的读音得分 ≥ 0.6 时，生成一条建议：“把「新写法」加入词典？（识别成了「旧写法」）”。出字处的小提示与设置里的“建议词”都能看到。确认后：新写法已是词条，就把旧写法加为它的 heard 别名；否则新建手写词条（当前作品，没有作品时全局），旧写法为 heard 别名。忽略后，同一组写法不再提示。
-
-### 4.11 评测集与基准（Q1）
-
-- **评测集**：`scripts/voice-eval/` 生成约 80 句合成语音，全部用 Windows 自带的语音合成；没有中文语音时脚本说明原因、记为 not-run。人名与作品名全部虚构，不用真实的人名。句子分三组：40 句含专名（中文音译的日式人名、作品名、少量英文词）；20 句含口水词与句中改口；20 句不含专名、但有和词条读音相近的普通词（用来量误改）。每句有三个版本：干净的、加 10 dB 合成风扇噪声的、加 10 dB 另一个合成人声的（模拟外放对白）。
-- **评测脚本**：对每个已下载的模型，分别跑只识别、加替换、加润色（润色只在本地环境文件配置了文本连接时跑）三步，输出字错率、专名召回率、误改率与各步用时，写进基准的记录项。另外跑 4.2 的开关对比。只在开发机运行，CI 不跑。
-- **纠错样本集**：`tests/fixtures/voice-correction.json`，至少 200 对“识别文字 → 期望文字”，每对写明来源（某个模型在评测集上的实际输出，或手写的混淆）。单元用例的门槛：确定性替换加候选的专名召回率 ≥ 0.85，不含专名的句子误改率 ≤ 1%。B 先测出基线；达不到时先改进，仍达不到就写进报告交 A 决定，不自行放宽。
+- 契约测试放在 `tests/real/deepseek-contract.test.ts`（与现有的 `tests/real/*-contract.test.ts` 同一做法），只有设置了 `MANGA_LIVE_DEEPSEEK_KEY_FILE` 时运行；B 运行时指向 `.local/deepseek.key`。密钥只从文件读，不打印、不写进日志、证据、快照与报告；所有输出过一遍把密钥替换为 `<key>` 的过滤。
+- 只用合成内容：合成的短句、合成图片、虚构的人名；不发送资源库里的任何东西。
+- 用例（每次完整运行不超过 40 个请求）：（1）`GET /models` 与目录核对；（2）关思考的普通对话；（3）开思考的 3 步工具循环，两个运行时各一次，并核对跨用户轮次是否必须回传 `reasoning_content`；（4）`deepseek-flash` 看一张合成图片；（5）原生联网搜索加一个函数工具，核对进度事件、引用与下一轮回传；（6）`max` 等级一次；（7）语音合成一句并识别回来（往返相似度）；（8）合成约 2,000 计费字符的一段，核对流式首块时间与提前结束的检测；（9）识别一段约 100 s 的合成语音（分块前的上限附近）；（10）网页搜索 2 次；（11）错误：错误的密钥 401、不存在的模型、空文字合成 400。
+- 结果写进报告与执行状态的“真实服务”一节：只记状态码、接口形状、延迟、计费单位与相似度，不记回答全文。
+- 额度见 ACT-23：整个阶段（含 A 规划时的 7 个与 A 审查）不超过 300 个请求、估算费用不超过 2 美元；B 在报告里列出实际用量。
 
 ## 5. 工作包与顺序
 
@@ -173,131 +190,136 @@
 
 **A 已做（在本计划所在的提交里）：**
 
-- 上一阶段的报告提炼后删除：仍有效的内容（门禁与发布演练的结果、三个主进程文件的分工、悬浮框位置的根因、v15 迁移的结果）已在执行状态与各正本里。入链改为归档链接 `https://github.com/chialecode/manga/blob/f9aea92/docs/delivery/stage-report.md#<锚点>`（`f9aea92` 已确认在 `origin/main` 的历史里）；`README.md`、`docs/README.md` 与 `docs/SUMMARY.md` 去掉报告（B 新建后加回）。
-- 登记表 `currentStage` 改为 `m12`，本计划的 `retireAfter` 改为 `m12`，报告的条目去掉。
-- 改为 `m12` 后文档检查报出的上一阶段标签（确认记录、执行状态、文档导航与用户待办里的“M11”和旧分支名）已去掉；文档检查通过。
-- 新增 A-130、A-131；需求 VOICE-10—VOICE-17；验收 AT-174—AT-183 与追踪矩阵；交付路线 2.2 改为本阶段；执行状态的当前阶段与分支；用户待办新增 Q-40 与 ACT-21，Q-23 移入“最近处理完的”；后续 loop 新增 LOOP-36—LOOP-40。
+- 上一阶段的报告提炼后删除：仍有效的内容（门禁与评测结果、本地推理的分工、纠错门槛）已在执行状态与各正本里。入链改为归档链接 `https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-report.md#<锚点>`（`92d1b0b` 已确认在 `origin/main` 的历史里）；`README.md`、`docs/README.md` 与 `docs/SUMMARY.md` 去掉报告（B 新建后加回）。
+- 登记表 `currentStage` 改为 `m13`，本计划的 `retireAfter` 改为 `m13`，报告的条目去掉。
+- 文档检查报出的上一阶段标签已去掉：执行状态与文档导航里的旧分支名；代码里的四处注释与一个测试名（`dictation-walk.ts`、`commands/voice.ts`、`dictation-integration.test.ts`、`scripts/voice-eval/audio-dsp.mjs`），以及 `scripts/stage/gate.json` 里引用那个测试名的五个用例匹配式（只删去标签，匹配的用例不变）。
+- 新增 A-133、A-134；需求 PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03；验收 AT-184—AT-193 与追踪矩阵；交付路线 2.2 改为本阶段，上一阶段移入 2.1；执行状态的当前阶段、分支与下一步；用户待办新增 Q-41 与 ACT-23；后续 loop 新增 LOOP-43—LOOP-46。
 
 **B 执行时再核对一遍：**
 
-| 位置 | 内容判断 | 处理 |
-| --- | --- | --- |
-| `.env.local` | 开发者的本地配置与凭据，必需 | 保留；不读取与任务无关的值。ACT-21 需要的连接变量由用户自己加，B 只在报告里写变量名 |
-| `dist/design-refs/`、`dist/samples/` | 用户提供的界面参考、合成样本 | 原样保留；评测集生成到 `dist/samples/voice-eval/` |
-| `dist/tools/` | 固定版本的工具 | 保留；按 4.6 加入极速模型与 GTCRN |
-| `dist/desktop/`、`dist/plugins/` | 上一阶段最后的打包产物与安装包 | 阶段末重新打包时覆盖 |
-| `dist/release/v0.1.1/` | 上一阶段的本地发布演练产物；v0.1.1 已在 GitHub 上发布 | 删除；本阶段不做发布演练 |
-| `dist/gate-review.log`、`dist/release-review.log` | 上一阶段审查时的日志，结论已在归档报告里 | 删除 |
-| `dist/evidence-runs/` | `current/`（上一阶段最后一次门禁）、按日期命名的 `pre-push-*.log`、`l1-combining-marks/`（上一阶段的排查目录） | `current/` 在本阶段第一次门禁时覆盖；先看 `l1-combining-marks/` 的内容，仍有用的结论提炼进执行状态或对应的 LOOP，然后删除；日志删除 |
-| `%APPDATA%\manga-release\` | 两把签名私钥（ACT-08） | 原样保留，不读不输出私钥，不得重新生成 |
-| 系统临时目录里的 `manga-*`（A 盘点时有 2 个） | 以前失败运行留下的现场 | 确认没有正在运行的门禁后删除，只记数量 |
-| `apps/desktop/.vite/`、`tsconfig.tsbuildinfo` | 构建缓存 | 保留，打包时重建 |
-| `docs/evidence/gate/` | 上一阶段最后一次门禁的证据 | 本阶段最后一次门禁时整体替换 |
+| 位置 | 是否入库 | 内容判断 | 处理 |
+| --- | --- | --- | --- |
+| `.env.local` | 否 | 开发者的本地配置与凭据，必需 | 保留；不读取与任务无关的值 |
+| `.local/deepseek.key` | 否 | 用户放的真实密钥（ACT-23） | 保留；只由契约测试按 4.10 读取，不复制、不输出 |
+| `.local/gate-run.log`、`.local/loop-phase.log` | 否 | 以前门禁与循环的运行日志 | 看过没有未提炼的结论后删除 |
+| `dist/a-review-dict-*.log`、`dist/a-review-gate*.log` | 否 | 上一阶段 A 审查的日志，结论已在归档报告与执行状态里 | 删除 |
+| `dist/design-refs/`、`dist/samples/` | 否 | 用户提供的界面参考、合成样本与评测集 | 原样保留 |
+| `dist/tools/` | 否 | 固定版本的工具与本地语音模型 | 保留 |
+| `dist/desktop/`、`dist/plugins/` | 否 | 上一阶段最后的打包产物 | 阶段末重新打包时覆盖 |
+| `dist/evidence-runs/` | 否 | 上一阶段门禁的运行目录 | 本阶段第一次门禁时覆盖；其中的旧日志删除 |
+| `%APPDATA%\manga-release\` | 否 | 两把签名私钥（ACT-08） | 原样保留，不读不输出私钥，不得重新生成；新插件用其中的插件私钥签名 |
+| 系统临时目录里的 `manga-*` | 否 | 以前失败运行留下的现场 | 确认没有正在运行的门禁后删除，只记数量 |
+| `apps/desktop/.vite/`、`tsconfig.tsbuildinfo` | 否 | 构建缓存 | 保留，打包时重建 |
+| `docs/evidence/gate/` | 是 | 上一阶段最后一次门禁的证据 | 本阶段最后一次门禁时整体替换 |
 
-**去掉以前阶段的标签（A-57）。** A 已运行文档检查；B 交付前再运行一次。`docs/evidence/gate/` 里的 `stage` 字段随本阶段最后一次门禁整体替换。Git 提交信息与固定归档链接里的路径不改。
+**去掉以前阶段的标签（A-57）。** A 已运行文档检查；B 交付前再运行一次。Git 提交信息与固定归档链接里的路径不改。
 
-### 5.2 D1 依赖盘点与新增依赖
+### 5.2 D1 依赖盘点（A-35、A-132）
 
-B 在实施开始与门禁之前各跑一次 `pnpm outdated -r`，按“满 14 天的最新版本”处理；主版本或行为变化的升级先单独做并跑对应的回归，失败时回退，并在 ADR-0007 的例外表写明尝试的版本、失败的命令、上游限制与复查条件。最小发行龄策略不绕过。
+按[开发流程 2.6](../dev-rules/development-workflow.md#dependency-inventory)执行：
 
-新增依赖只限第 3 节判定为采用的：`sherpa-onnx-node` 与 `sherpa-onnx-win-x64`（只在推理进程）、`pinyin-pro`、`wanakana`、`opencc-js`，精确版本写进 manifest 与锁文件，并登记进 ADR-0007 的版本表与第三方许可声明。确实需要别的依赖时，先在报告里写明理由与同样的查证，再加。
+1. **还开着的 Dependabot PR。** A 2026-11-14 用 `gh pr list` 核对：没有开着的 PR。B 开始时再看一次，有的逐个处理（内容并入本阶段提交、PR 关闭，或写明原因关闭）。
+2. **盘点。** A 2026-11-14 运行 `node scripts/deps.mjs`：直接依赖里有 26 项满 7 天的更新，其中 24 项是同主版本（例如 Electron 45.1.0 → 45.2.3、pi-ai 1.4.0 → 1.5.0、Vitest 5.0.5 → 5.1.0、pdfjs-dist 6.4.299 → 6.5.438、Tiptap 3.32.1 → 3.33.0），两项是主版本（`@types/node` 26、jsdom 31）。B 实施开始时重跑一次：同主版本默认全部升级并跑完整回归；pi-ai 升级后重新核对第 2 节所说的 DeepSeek 识别（思考格式、`reasoning_content` 回传、`max_tokens`）；两个主版本单独升级并跑相关回归，失败回退并在 ADR-0007 登记例外。最小发行龄不绕过。
+3. **漏洞。** `node scripts/deps.mjs --audit`；有修复版本的先升级，不能修的登记到 `scripts/deps-exceptions.json`（写明原因与复查日期）并写进报告。
+4. **门禁前复跑**盘点；结果记入报告与 ADR-0007 的版本记录。
+
+本阶段不新增第三方依赖；确实需要时，先在报告里写明理由与同样的查证。
 
 ### 5.3 工作包
 
 | 包 | 内容 | 关键失败路径 | 验收 |
 | --- | --- | --- | --- |
-| U1 听写会话、入口与插入 | 4.1 | 右 Alt 触发菜单或打断输入法；识别中标签被关；插入处的文字在识别时被改过；输入法组合中按键；Esc；锁定后切换应用；模块停用时结果迟到；Agent 试图调用 | AT-174、AT-182 |
-| A1 采集前端 | 4.2 | `"all"` 不被接受时说明并退回 `true`；没有麦克风；设备在听写中断开；视频在听写中被关 | AT-175 |
-| S1 去除静默 | 4.3 | 整段静音；只有呼吸与键盘声；开头就是话；5 分钟上限；复述热词 | AT-176 |
-| E1 识别引擎 | 4.4 | 能力为 0 的引擎不收任何提示；连接认证失败、超时、超过上传上限；所选引擎不可用时其他服务收到 0 个请求；本地引擎转写 3 分钟的录音笔记 | AT-177 |
-| N1 本地推理进程 | 4.5 | 打包后载入失败（停下报告）；识别中进程被结束；1 分钟内两次崩溃；闲置卸载后再用；应用退出时进程退出；闭包检查 | AT-179 |
-| M1 模型目录、下载与导入 | 4.6 | 下载到一半断网与重启应用后续传；ETag 变化时从头下载；哈希不符；越界条目与链接；磁盘空间不够；没有 `tar.exe`；文件夹导入缺文件；删除正在用的模型 | AT-178 |
-| X1 词库、v16 与 Bangumi 补全 | 4.7 | v15 资料迁移、中断、旧版本打开；`infobox` 的三种边界；超过请求预算；403 或 429；手写词条与自动词条重名；停用的词条不进热词 | AT-180 |
-| R1 音近召回与替换 | 4.8 | 不含专名的句子里读音相近的普通词；词条是另一个词条的一部分；拉丁字母与罗马音；黑名单；1 万条词条的速度 | AT-181、AT-183 |
-| P1 润色、防线与简繁 | 4.9 | 过长、新专名、超时、错误；原文档不请求；改过的提示词与恢复默认；繁体输入；词条写法在简繁转换中不变 | AT-181 |
-| H1 记录与学词 | 4.10 | 30 天过期；音频 24 小时过期；备份与资料包不含记录；跟踪不了的范围；同一组写法忽略后不再提示；建议的新写法已是词条 | AT-182 |
-| Q1 评测与基准 | 4.11 | 没有中文语音时评测记为 not-run；没有模型时只跑能跑的；纠错样本集的门槛 | AT-183 |
+| P1 声明式提供者插件 | 4.1 | 提供者文件被改一个字节（签名失败）；引用不认识的接法；`baseUrl` 为 http 或主机不在 `hosts`；`entry` 不为空却填 `model.provider`；停用时有正在进行的对话与朗读；卸载后再装；信任被移除 | AT-184 |
+| M1 加入模型与 v17 | 4.2 | v16 资料迁移、中断、旧版本打开；`GET /models` 401、超时、返回目录里没有的模型、少了某个字段；同一把密钥加两次；改密钥后各连接都用新的；删除最后一个连接后删账户；用户已有对话默认时不被改 | AT-185 |
+| L1 思考与工具循环 | 4.3 | 关闭思考时服务仍收到 `disabled`；缺 `reasoning_content` 的 400；流式中途 `error`；`content_filter`；402；后台小任务关思考；压缩时丢弃顺序；两个运行时结果一致 | AT-186 |
+| N1 原生联网搜索 | 4.4 | 推理等级为关闭时自动改为低并说明；非 DeepSeek 连接不走原生；`server_tool_calls` 下一轮带回；没有引用时不显示来源区；重试沿用勾选；下一轮清除 | AT-187 |
+| G1 网页搜索工具与材料搜寻 | 4.5 | 没勾选时工具不在清单、服务收到 0 个请求；超长关键词；空结果；402、429；插件停用时拒绝；从结果抓取保存 | AT-188 |
+| A1 DeepSeek 语音识别 | 4.6 | 不送热词与提示；超过 110 s 的听写分段；录音笔记 60 s 一块且位置映射不变；413、429、503；失败时其他服务收到 0 个请求 | AT-189 |
+| R1 合成与回答朗读 | 4.7 | 响应提前结束；400 内容风险；超长文字分次；同时点两处朗读；听写开始时暂停；关标签与停插件时停止；内存缓存上限 | AT-190 |
+| R2 小说朗读 | 4.8 | 跨页、跨章、书末；手动翻页；标签不可见时暂停；停止时移动阅读位置的询问；滚动排版；选区起读；只有标点的段落跳过 | AT-191 |
+| U1 测试、用量与费用 | 4.9 | 三种服务的测试成功与失败；用量里的“未提供”；费用标“估算”；`billing` 分类 | AT-192 |
+| X1 真实契约 | 4.10 | 没有密钥文件时记为 not-run；输出里没有密钥；请求数超过上限时停止 | AT-193 |
 | T1 测试、走查与基准 | 第 7 节 | — | 第 7 节 |
-| W1 文档 | 需求 VOICE-10—VOICE-17 按实现改为“已实现”，VOICE-01、VOICE-09 补充；领域模型（v16 的表与关系、听写的阶段）；语音模块规格（听写、引擎、模型、词库与纠错，按模块规格模板补全）；交互设计（听写胶囊、出字处的提示、“设置 › 语音转录”的新分区、快捷键）；总体架构（推理进程与边界）；数据与安全（模型与听写音频的位置、下载的主机允许列表、哈希校验、不进备份、卸载）；Agent 与插件（听写不对 Agent 开放）；质量门禁（新的观察、评测与基准）；仓库地图（新目录与脚本）；第三方许可声明（asr-hotword 的移植、GTCRN、新依赖）；执行状态；README 的听写一节 | — | 文档检查 |
+| W1 文档 | 需求 PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03 按实现改为“已实现”，MODEL-01、MODEL-02、MODEL-05、VOICE-13、AGENT-04 补充；领域模型（v17 的表与关系、两种用途）；插件模块规格（`model.provider` 位置、提供者文件、拒绝原因、启停效果）；新的模块规格“提供者”或在 Agent 模块规格里补一节（按模块规格模板）；语音模块规格（DeepSeek 引擎、朗读）；Agent 协议（联网搜索、`web.search`、思考内容的保存与回传）；外部扩展设计（提供者插件）；交互设计（加入模型的弹窗、思考过程、来源、朗读控件）；数据与安全（提供者账户与凭据、只访问声明的主机、朗读音频不写盘）；质量门禁（新的观察、契约与基准）；仓库地图（新插件目录）；执行状态；README 的模型与插件一节 | — | 文档检查 |
 
 ### 5.4 顺序
 
-1. C0；D1 的第一次盘点与新增依赖。
-2. N1 的最小验证：打包后的 `utilityProcess` 能载入 `sherpa-onnx-node` 并用极速模型识别一段合成语音。这一步决定后面的本地路线，最先做；证明不了就停下来报告 A，其余不依赖本地推理的工作包继续做。
-3. M1 → E1 → S1、A1（引擎与模型就绪后，打通录音到文字的路径）。
-4. X1 → R1 → P1（词库、替换与润色）。
-5. U1 → H1（界面、插入、恢复与学词）。
-6. Q1；T1、W1；最后一次 `pnpm outdated -r`；`stage gate`；报告与整理记录。
+1. C0；D1 的第一次盘点。
+2. L1 的最小验证：在假服务与真实 API 上各让自研运行时走通一次“开思考 + 3 步工具循环”，确认 `reasoning_content` 的回传规则（X1 第 3 项）。这一步决定对话的数据结构，最先做；结论写进报告。
+3. P1 → M1（插件、目录、账户、加入流程，打通“启用插件 → 模型列表加入模型”）。
+4. L1 其余部分 → N1 → G1（对话、联网搜索与网页搜索）。
+5. A1 → R1 → R2（识别、合成与朗读）。
+6. U1；X1 在最终源码上完整运行一次；T1、W1；门禁前的 `node scripts/deps.mjs` 复跑；`stage gate`；`stage install-dev`；报告与整理记录。
 
 可以按依赖调整顺序，但不得跳过任何一个工作包。
 
 ## 6. 界面要点
 
-- “设置 › 语音转录”分为：听写（快捷键、出字方式、档位、提示词）、识别引擎（听写与录音笔记各自的选择；本地模型列表，含语言、热词、许可、大小、来源、下载进度、暂停、删除、导入；外部连接的接口形态）、声音（回声消除、消除其他应用的声音并注明延迟、环境降噪、录音时视频的声音）、词典（别名、类别、停用、批量导入、从 Bangumi 资料加入与刷新、建议词）、听写记录（保留音频的开关）。沿用现有设置页的控件与布局。
-- 听写胶囊与出字处的提示用现有的主题变量；不显示设备名；系统开启“减少动态效果”时，音量图案改为有声与无声两档。
-- 所有新控件有可访问名称，可以用键盘操作；听写的状态变化对读屏软件可见（`aria-live`）。
-- 文案用中文，说清原因与下一步，例如“没有听到声音”“本地模型还没下载：去下载”“润色超时，已保留原文”。
+- “设置 › 模型”：“添加模型”菜单；按账户分组的列表；“从 DeepSeek 加入”弹窗（账户或密钥、读取模型列表、勾选模型与服务、按实时列表显示的窗口与输入类型）；连接的用途、接法、插件状态显示中文名称。沿用现有弹窗与列表的控件。
+- 对话：回答上方折叠的“思考过程”与联网搜索的进度；回答下方的来源列表；每条回答的“朗读”按钮；“本次任务”菜单的“联网搜索”（不可用时说明原因）。
+- 阅读器：底栏的“朗读”按钮与朗读中的“暂停、停止、回到朗读位置”；当前段的高亮用主题变量，在深浅主题下都可读。
+- 材料搜寻：“搜索网页”与结果列表。
+- 所有新控件有可访问名称，可以用键盘操作；朗读状态对读屏软件可见（`aria-live`）；系统开启“减少动态效果”时，朗读的进度提示不做动画。
+- 文案用中文，说清原因与下一步，例如“插件已停用：去插件页启用”“账户余额不足”“联网搜索需要开启思考，这次任务已改为低”“朗读中断，可以重试”。
 
 ## 7. 样本、门禁与基准
 
-**样本。** 全部合成：评测集与观察用的语音由 Windows 自带的语音合成生成；人名与作品名虚构；假转录服务、假对话接口、假模型下载服务（提供一个小的合成模型包，用于下载、续传、篡改与越界的用例）与假 Bangumi（加入 `/v0/characters/{id}` 与 `/v0/persons/{id}`）都在本机。
+**样本。** 全部合成：虚构的人名与作品名；合成图片；语音由 Windows 自带的语音合成或假服务生成。**假 DeepSeek 服务**在 `packages/model-protocol/src/mock-server.ts`（或同目录新文件）里实现：`GET /models`；`/chat/completions` 的思考、`reasoning_content` 回传检查（缺少时 400，文字与真实服务一致）、`server_tool_event`、`server_tool_calls`、`annotations`、流式中途 `error`、`content_filter`；`/v1/tools/asr`、`/v1/tools/tts`（可配置为中途截断）、`/v1/tools/search`；可配置的 401、402、429、503。测试与打包走查通过测试专用的覆盖把提供者的 `baseUrl` 指到假服务（沿用现有假 Bangumi 的做法，产品构建里不生效）。
 
-**单元与集成用例（新增，必需）：** 能力描述与提示生成；对话接口的请求格式；去除静默的长度计算；下载的续传、哈希、越界与清理；目录的完整性（每个模型的哈希与必需文件都有）；v16 迁移（备份、中断、旧版拒绝）；`infobox` 解析；热词顺序；音近召回的规则与阈值；纠错样本集的门槛；四道防线；简繁与词条保护；听写记录的保留与导出排除；学词的比较规则；命令访问里 Agent 看不到听写命令。
+**单元与集成用例（新增，必需）：** 提供者文件的校验与拒绝原因；`model.provider` 的启停效果与零网络；v17 迁移（备份、中断、旧版拒绝、连接与密钥一条不少）；账户与凭据的引用与删除；`GET /models` 的映射；两个运行时的思考开关、等级映射与 `reasoning_content` 回传；后台任务关思考；原生联网搜索的请求、解析与回传；`web.search` 的可见性与命令层拒绝；ASR 的请求格式、分块与失败不换服务；TTS 的分次、提前结束检测与内存缓存；朗读队列的互斥、暂停与停止；小说朗读的分段、跟随与位置询问；用量与费用估算；契约测试在没有密钥文件时跳过、输出过滤掉密钥。
 
-**窗口与安装观察（新增，必需）：**
+**窗口与安装观察（新增，必需；新的走查文件加进 `scripts/stage/gate.json` 的走查分组）：**
 
 | 观察 | 内容 |
 | --- | --- |
-| `dictation-insert` | AT-174：五处输入的听写（假转录服务）、锁定、Esc、切换标签、输入法组合、对话栏两种模式的麦克风 |
-| `dictation-local` | AT-179：打包应用用 `dist/tools/` 里的极速模型做一次真实的本地听写；结束推理进程后再听写；闲置卸载（测试里把闲置时间设短） |
-| `dictation-revert` | AT-182：恢复原文、Ctrl+Z、出字处的提示、改一个人名后出现建议并确认 |
-| `dictation-settings` | 本地模型的下载（假下载服务：进度、暂停、续传、校验失败）、词典的别名与建议词、听写记录；截图（浅色与深色） |
-| `dictation-boundary` | 打包产物：`sherpa-onnx-node` 只在 `asr-host.cjs` 里；轻量打开的闭包检查通过；安装包里没有 ASR 模型 |
-| `voice` 阶段（已有）扩展 | 采集约束的实际值；录音笔记改用本地引擎转写一段合成录音 |
+| `deepseek-plugin` | AT-184：插件页里随包提供而未安装；安装对话框写明声明式与网络权限；安装启用后“设置 › 模型”不重启就出现“从 DeepSeek 加入”；停用后连接标“插件已停用”、对话里选它时拒绝且假服务收到 0 个请求；再启用恢复 |
+| `deepseek-models` | AT-185：用假服务加入两个模型与三项服务，模型配置按 `/models` 填好；改密钥；按账户分组的列表；截图（浅色与深色） |
+| `deepseek-chat` | AT-186、AT-187：一次 3 步工具循环（假服务检查回传）；展开思考过程；勾“联网搜索”后的进度、来源与下一轮回传 |
+| `web-search` | AT-188：材料搜寻里搜索网页并抓取保存一条；Agent 的 `web.search` 在勾选时出现、不勾时不在 |
+| `read-aloud` | AT-190、AT-191：回答朗读（假服务的 PCM，检查播放开始与停止）；小说朗读跨页跟随、听写开始时暂停 |
+| `dictation` 阶段（已有）扩展 | AT-189：用假 DeepSeek 识别听写一次，热词与提示没有发送 |
 
-上一阶段全部的窗口观察保留。截图只留关键状态：听写胶囊（录音、识别中）、出字处的提示、本地模型列表（下载中与已装）、词典的别名、听写记录。截图不含本机路径与设备名。
+上一阶段全部的窗口观察保留。截图只留关键状态，不含本机路径与密钥。
 
-**基准（新增门槛）**：`dictationLocalReleaseToTextMs`：打包应用里极速模型已载入，假采集设备播放约 4 s 的合成语音，从松开到文字插入，5 次的 p95 ≤ 1500 ms；`dictationCorrectionMs`：1 万条词条时替换一句话，p95 ≤ 30 ms。**记录项**：各模型的载入时间与推理进程的内存（推荐模型在开发机上下载了时才记）；评测脚本的字错率、专名召回率、误改率与各步用时；4.2 的开关对比。B 先测出基线；门槛达不到时先优化，仍达不到就在报告里写明原因交 A 决定，B 不自行放宽。
+**基准（新增门槛，用假服务，排除网络）：** `ttsFirstAudioMs`：回答朗读从点击到第一块音频进入播放，p95 ≤ 300 ms；`readAloudGapMs`：小说朗读段与段之间的静默，p95 ≤ 150 ms。**记录项：** X1 里真实服务的首块时间、识别用时与搜索用时（不设门槛）。B 先测出基线；门槛达不到时先优化，仍达不到就在报告里写明原因交 A 决定，B 不自行放宽。
 
-**门禁。** 修复先用子集确认（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`、单个测试文件）；只改走查时只重跑 package。最后在最终源码上跑一次 `node scripts/stage.mjs gate`。跑前确认机器空闲、启动它的应用在前台、不锁屏，跑的过程中不改工作树；门禁会打开窗口，开跑前先在聊天里告诉用户。证据整体替换 `docs/evidence/gate/`，总量不超过 5 MiB，复制前先看过新截图，不含本机路径。本阶段不做本地发布演练（没有改安装与更新）；如果改到了安装包的内容（GTCRN 与新的原生模块），`installer` 步骤照常运行。
+**门禁（两级，[质量门禁](../dev-rules/quality-gates.md#gate-tiers)）。** 阶段内的修改只跑快速门禁 `node scripts/quick-gate.mjs [--phases …]`，修复先用子集确认（`MANGA_PACKAGE_PHASES` 与 `MANGA_PACKAGE_REUSE_BUILD`、单个测试文件）。B 把整个阶段交给 A 时，在最终源码上跑一次 `node scripts/stage.mjs gate`：跑前确认机器空闲、启动它的应用在前台、不锁屏，并先在聊天里告诉用户（门禁会打开窗口）；跑的过程中不改工作树。证据整体替换 `docs/evidence/gate/`，总量不超过 5 MiB，复制前先看过新截图。安装包的内容变了（新随包插件），`installer` 步骤照常运行；不做本地发布演练。门禁通过后执行 `node scripts/stage.mjs install-dev`，把装好的版本写进报告。
 
 ## 8. 人工检查
 
-B 在用户待办里新增人工检查（编号从 H-104 起），写到用户能直接照做：用真实的麦克风在五处输入里听写；右 Alt 在用户的键盘与输入法下是否好用；在“设置 › 语音转录”里真实下载推荐模型与极速模型（看速度、暂停、续传）；用自己资料库里一部关联了 Bangumi 的作品，说出角色名与声优名，比较本地模型与自己的转录连接；外放播放 MANGA 里的视频时听写（回声消除），以及用别的播放器外放时打开“消除其他应用的声音”；改错一个名字后确认建议，再说一次；恢复原文；听写记录。真实的鼠标、键盘与麦克风只在人工检查里用，自动观察不移动用户的鼠标、不抢焦点。人工检查保持 not-run，不由脚本代填。
+B 在用户待办里新增人工检查（编号从 H-112 起），写到用户能直接照做：用自己的 DeepSeek 密钥在插件页安装启用插件、在“设置 › 模型”加入模型（看读取模型列表与默认勾选）；用 DeepSeek 对话模型做一次带工具的任务并展开思考过程；勾“联网搜索”问一个最近的事，看进度与来源；在材料搜寻里搜索网页并保存一条；用 DeepSeek 语音识别听写几句（含作品里的角色名，与本地模型比较）；朗读一条回答、换另一个声音；朗读一本小说几页（听停顿、看跟随与翻页、开始听写时是否暂停）；停用插件后看连接与对话的表现，再启用；在使用记录里看用量与估算费用。真实的鼠标、键盘与麦克风只在人工检查里用，自动观察不移动用户的鼠标、不抢焦点。人工检查保持 not-run，不由脚本代填。
 
 ## 9. B 交付与 A 审查
 
-- B 新建本阶段报告 `docs/delivery/stage-report.md`（并加回登记表、`README.md`、`docs/README.md` 与 `docs/SUMMARY.md`）：按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射；写明 N1 的最小验证结果（含 `enableExternalBuffer` 的处理）；三个模型的配置键名、热词的设置方法与本机实测（载入时间、内存、用时）；目录里每个模型的来源、哈希与查询日期；右 Alt 的实测结论；v16 迁移的结果；音近召回的阈值与纠错样本集的结果；评测脚本的结果与 4.2 的开关对比；基准数值与门禁各步用时；依赖盘点结果；整理记录与源码指纹。
-- B 交付前自检：第 1 节的退出条件逐条有证据；`stage gate` 通过；文档检查通过；暂存内容核对过（不含模型文件与本机路径）；一个带 DCO 签名的阶段提交（amend 本计划所在的提交，消息按最终结果重写）。
-- A 审查时重点看：音频只发往所选的一个引擎，失败时不换服务，Agent 碰不到听写；下载只在用户确认后发生、只访问目录里的主机，哈希不符与越界条目一定被拒、暂存清空；推理进程不进完整应用主进程与轻量闭包，崩溃不影响应用；去除静默不切掉字头字尾；纠错的门槛与样本来源是真实的、没有为通过而挑样本；四道防线确实生效，退回时保留了原文；v16 迁移有备份、可重来、旧版拒绝，旧词条一条不少；听写记录不进备份与资料包；基准的门槛与测量方法没有被改动；录音笔记的既有行为与全部既有观察不变（除了降噪默认关）。
+- B 新建本阶段报告 `docs/delivery/stage-report.md`（并加回登记表、`README.md`、`docs/README.md` 与 `docs/SUMMARY.md`）：按“工作包 / 需求 / 验收 → 实现位置 → 验证证据 → 状态与限制”映射；写明 L1 最小验证的结论（`reasoning_content` 跨轮回传的规则）；提供者文件的结构与接法白名单；v17 迁移的结果；X1 的结果与实际请求数、估算费用；基准数值与门禁各步用时；依赖盘点结果；整理记录与源码指纹；装到本机的开发版版本。
+- B 交付前自检：第 1 节的退出条件逐条有证据；`stage gate` 通过；文档检查通过；暂存内容核对过（不含密钥、本机路径与真实回答全文）；一个带 DCO 签名的阶段提交（amend 本计划所在的提交，消息按最终结果重写）。
+- A 审查时重点看：插件停用、卸载或信任移除时零网络请求；提供者只能引用白名单里的接法、只访问声明的主机，密钥不离开主进程、不进日志与证据；v17 迁移有备份、可重来、旧版拒绝，已有连接与密钥一条不少；两个运行时在真实服务上都能走完工具循环；联网搜索不把资料库的内容自动放进搜索词，`web.search` 没勾选时不可用；音频只发往所选的一个引擎；朗读不写盘、听写时暂停；费用标为估算；基准的门槛与测量方法没有被改动；既有观察全部保留。
 
 ## 10. 待处理事项入口
 
-- 需要用户的：[Q-40](../../USER-ACTIONS.md#q-40)（本阶段先用的默认值）；[ACT-21](../../USER-ACTIONS.md#act-21)（可选的真实契约）；仍待答复的 [Q-39](../../USER-ACTIONS.md#q-39)、[Q-38](../../USER-ACTIONS.md#q-38)、[Q-37](../../USER-ACTIONS.md#q-37)；[ACT-08](../../USER-ACTIONS.md#act-08)（备份两把私钥）；[ACT-18](../../USER-ACTIONS.md#act-18)。都不阻塞本阶段。
-- 新增的后续项：全局听写（LOOP-36）、流式与私有协议（LOOP-37）、本地润色模型（LOOP-38）、全量离线词库与日文汉字注音（LOOP-39）、语音改写选区（LOOP-40）。留在[执行状态的后续 loop](status.md#followup-loops)。
-- 顺延的 Agent 侧后续项保持不变（LOOP-10、11、12、14、15、16、18、21、30、31、35）。
+- 需要用户的：[Q-41](../../USER-ACTIONS.md#q-41)（本阶段先用的默认值）；[ACT-23](../../USER-ACTIONS.md#act-23)（已授权的真实 API 测试的范围）；本地参考建议 P-07；仍待答复的 [Q-40](../../USER-ACTIONS.md#q-40)、[Q-39](../../USER-ACTIONS.md#q-39)、[Q-38](../../USER-ACTIONS.md#q-38)；[ACT-08](../../USER-ACTIONS.md#act-08)（备份两把私钥）；[ACT-18](../../USER-ACTIONS.md#act-18)。都不阻塞本阶段。
+- 新增的后续项：DeepSeek OCR（LOOP-43）、DeepSeek 网页抓取与文件解析（LOOP-44）、边生成边朗读的流式合成（LOOP-45）、PDF 朗读与更多提供者插件（LOOP-46）。留在[执行状态的后续 loop](status.md#followup-loops)。
+- 顺延的 Agent 侧后续项保持不变。
 
 <a id="prompt"></a>
 ## 11. 交给 B 的执行 prompt
 
 ```text
-你是 Agent B，在本仓库的分支 feat/m12-voice-dictation 上连续完成当前阶段（类 Typeless 的听写）。
+你是 Agent B，在本仓库的分支 feat/m13-deepseek-plugin 上连续完成当前阶段（DeepSeek 插件）。
 
-依据：AGENTS.md；docs/delivery/stage-plan.md（本阶段唯一计划，全部工作包 C0、D1、U1、A1、S1、E1、N1、M1、X1、R1、P1、H1、Q1、T1、W1，设计 4.1—4.11）；确认记录 A-130、A-131；需求 VOICE-10—VOICE-17；验收 AT-174—AT-183；用户待办 Q-40（按其中的默认实现；用户答复后以答复为准）。
+依据：AGENTS.md；docs/delivery/stage-plan.md（本阶段唯一计划，全部工作包 C0、D1、P1、M1、L1、N1、G1、A1、R1、R2、U1、X1、T1、W1，设计 4.1—4.10）；确认记录 A-133、A-134；需求 PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03；验收 AT-184—AT-193；用户待办 Q-41（按其中的默认实现；用户答复后以答复为准）与 ACT-23（真实 API 的授权范围）。
 
 要求：
-1. 先核对现场（git status、分支基于 main@3b9d498、计划所在的提交），再按计划第 5.4 节的顺序连续实施，不逐工作包询问。
-2. 新增依赖只限第 3 节判定采用的（sherpa-onnx-node 与 sherpa-onnx-win-x64、pinyin-pro、wanakana、opencc-js），精确版本，登记 ADR-0007 与第三方许可声明；依赖盘点按 5.2。asr-hotword 的移植保留 MIT 许可与来源提交。
-3. 先做 N1 的最小验证：打包后的 Electron 45 在 utilityProcess 里载入 sherpa-onnx-node，并用极速模型识别一段合成语音。证明不了就停下来报告 A（写明错误与尝试过的做法），只继续不依赖本地推理的工作包。
-4. 音频只发往用户所选的一个引擎，不自动换服务；听写命令不对 Agent 开放；推理进程不进完整应用主进程与轻量闭包（check-deps 与打包产物双重检查）。
-5. 模型下载按 4.6：用户确认后才发请求；只访问目录里的主机；Range 续传并重算已有部分的哈希；压缩包与每个必需文件都核对 SHA-256；用系统 tar.exe 前先列出条目并拒绝越界与链接；失败时清空暂存；安装包不含 ASR 模型。目录里的哈希以 sherpa-onnx GitHub Release 的 checksum.txt 为准，ModelScope 只在哈希相同时列为来源。
-6. 采集按 4.2（降噪默认关、回声消除默认开）；开关对比的结果写进报告，不自行改默认值。
-7. 词库按 4.7：schema v16 迁移有备份、可重来、旧版本拒绝打开，旧词条与“手写优先”一条不少；Bangumi 补全每部作品最多 60 个请求，测试只用假 Bangumi。
-8. 纠错与润色按 4.8、4.9：阈值与门槛写成有用例的常量；纠错样本集每对写明来源，不为通过而挑样本；四道防线退回时保留原文；门槛达不到先改进，仍达不到写进报告交 A 决定，不自行放宽。
-9. 听写记录与学词按 4.10：不进备份与资料包，Agent 读不到；学词经用户确认才加入。
-10. 基准按第 7 节：两个新门槛先测基线；不改任何既有门槛、样本数与测量方法。
-11. 只用合成样本与虚构的人名；测试只用本地的假服务；ACT-21 没有授权时真实契约记为 not-run。自动观察不移动用户的鼠标、不抢焦点；真实输入的检查写进用户待办。
-12. 改写测试与走查时断言不减，删除的断言在迁移映射里写明由什么替代。修复先用子集确认；最后在最终源码上跑一次 node scripts/stage.mjs gate（跑前确认机器空闲、启动它的应用在前台，不锁屏，并先在聊天里告诉用户；跑的过程中不改工作树）；证据替换 docs/evidence/gate/（≤ 5 MiB，截图不含本机路径与设备名，复制前先看过新截图）。
-13. 新建本阶段报告 docs/delivery/stage-report.md（计划第 9 节，并加回登记表、README.md、docs/README.md 与 docs/SUMMARY.md），更新用户待办的人工检查（计划第 8 节，从 H-104 起）、执行状态与各正本；把全部改动 amend 进本阶段唯一的 DCO 签名提交，消息按最终结果写。不 push、不触发 workflow。
-14. 结束时按开发流程 2.4 给出首选下一步：推荐交给 A 集中审查，并附审查 prompt。
+1. 先核对现场（git status、分支基于 main@2726b0e、计划所在的提交），再按计划第 5.4 节的顺序连续实施，不逐工作包询问。
+2. 先做 L1 的最小验证：自研运行时在假服务与真实 API 上走通“开思考 + 3 步工具循环”，用真实 API 确认 reasoning_content 跨用户轮次的回传规则，结论写进报告后再定数据结构。
+3. 插件按 4.1：声明式、不起进程；只能引用宿主白名单里的接法、只访问提供者文件声明的 https 主机；密钥只在主进程；停用、卸载或信任移除后连接保留但所有调用零网络请求。新插件由 scripts/pack-plugin.mjs 用开发机上的第一方私钥签名，不读不输出私钥。
+4. schema v17 按 4.2：迁移前备份、失败回滚、中断可重来、旧版本拒绝打开，已有连接、密钥与模型配置一条不少。
+5. 不新增第三方依赖；依赖盘点按 5.2（先看开着的 Dependabot PR，再跑 node scripts/deps.mjs 与 --audit），最小发行龄不绕过。
+6. 真实 API 只按 ACT-23 与计划 4.10：密钥只从 .local/deepseek.key 读（经 MANGA_LIVE_DEEPSEEK_KEY_FILE），不打印、不进日志、证据与报告；只用合成内容；整个阶段的请求数与估算费用不超过 ACT-23 的上限（A 规划时已用 7 个），报告里列实际用量。其余测试只用本机的假 DeepSeek 服务。
+7. 联网搜索不放宽资料范围，不把资料库的内容自动放进搜索词；web.search 只在用户为这次任务勾选“联网搜索”时出现。音频只发往所选的一个引擎，失败不换服务。朗读音频不写盘，听写或录音开始时暂停朗读。
+8. 基准按第 7 节：两个新门槛先测基线；不改任何既有门槛、样本数与测量方法。
+9. 自动观察不移动用户的鼠标、不抢焦点；真实输入与真实账户的检查写进用户待办（计划第 8 节，从 H-112 起）。
+10. 改写测试与走查时断言不减，删除的断言在迁移映射里写明由什么替代；新的走查文件加进 scripts/stage/gate.json 的走查分组。阶段内只跑快速门禁 node scripts/quick-gate.mjs；交付前在最终源码上跑一次 node scripts/stage.mjs gate（跑前确认机器空闲、启动它的应用在前台、不锁屏，并先在聊天里告诉用户；跑的过程中不改工作树），通过后执行 node scripts/stage.mjs install-dev；证据替换 docs/evidence/gate/（≤ 5 MiB，截图不含本机路径与密钥，复制前先看过新截图）。
+11. 新建本阶段报告 docs/delivery/stage-report.md（计划第 9 节，并加回登记表、README.md、docs/README.md 与 docs/SUMMARY.md），更新用户待办、执行状态与各正本；把全部改动 amend 进本阶段唯一的 DCO 签名提交，消息按最终结果写。不 push、不触发 workflow。
+12. 结束时按开发流程 2.4 给出首选下一步：推荐交给 A 集中审查，并附审查 prompt。
 ```

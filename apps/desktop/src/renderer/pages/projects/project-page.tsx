@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { attempt } from "../../lib/api.ts";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import type { SemanticHitView } from "../../lib/semantic-model.ts";
 import { MaterialsTab, ProjectSettingsTab, TermsTab, type Material, type ProjectDetail } from "./project-parts.tsx";
 
@@ -40,7 +41,9 @@ export type ProjectTabContext = {
   /** A passage the semantic search found, opened at its place: the book at the locator, the note at its block, the recording at its review. */
   onOpenHit?: (hit: SemanticHitView) => void;
   /** The settings page of the module, for a tab that finds it is not set up yet. */
-  onOpenSettings?: (page: "semantic") => void;
+  onOpenSettings?: (page: "semantic" | "models") => void;
+  /** A web search service is configured (计划 4.5): the material search offers "搜索网页". */
+  webSearch?: boolean;
 };
 
 /**
@@ -66,7 +69,7 @@ export function ProjectPage(props: {
   onChanged: () => void;
   onOpenMaterial: (material: Pick<Material, "kind" | "targetId" | "label" | "opens">) => void;
   onOpenHit?: (hit: SemanticHitView) => void;
-  onOpenSettings?: (page: "semantic") => void;
+  onOpenSettings?: (page: "semantic" | "models") => void;
   /** Told once the project is read, so the title bar and the conversation can name it. */
   onLoaded?: (project: { id: string; name: string }) => void;
   onError: (message: string) => void;
@@ -77,18 +80,25 @@ export function ProjectPage(props: {
   const { t } = props;
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [missing, setMissing] = useState(false);
+  const guard = useAsyncGuard();
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<ProjectDetail>("project.get", { projectId: props.projectId });
-    if (result.ok) { setDetail(result.value); setMissing(false); }
-    else if (result.error.code === "NOT_FOUND") setMissing(true);
-    else props.onError(result.error.message);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.projectId]);
+    if (!guard.isCurrent(token)) return;
+    if (result.ok) {
+      if (result.value?.project?.id) { setDetail(result.value); setMissing(false); }
+    } else if (result.error.code === "NOT_FOUND") setMissing(true);
+    else onErrorRef.current(result.error.message);
+  }, [props.projectId, guard]);
   useEffect(() => { void load(); }, [load, props.version]);
 
   const { onLoaded } = props;
-  useEffect(() => { if (detail) onLoaded?.({ id: detail.project.id, name: detail.project.name }); }, [detail?.project.id, detail?.project.name, onLoaded]);
+  const loadedId = detail?.project?.id;
+  const loadedName = detail?.project?.name;
+  useEffect(() => { if (loadedId && loadedName !== undefined) onLoaded?.({ id: loadedId, name: loadedName }); }, [loadedId, loadedName, onLoaded]);
   const reload = () => { void load(); props.onChanged(); };
   const tabs = PROJECT_TABS.filter((item) => !item.facet || props.facets.has(item.facet));
   const tab = props.only ?? (tabs.some((item) => item.id === props.tab) ? props.tab : "materials");
@@ -107,6 +117,7 @@ export function ProjectPage(props: {
     t, formatDate: props.formatDate, detail, reload, onError: props.onError, onNotice: props.onNotice,
     focus: props.focus, onFocus: props.onFocus, onTab: props.onTab, onOpenMaterial: props.onOpenMaterial,
     facets: props.facets, onOpenHit: props.onOpenHit, onOpenSettings: props.onOpenSettings,
+    webSearch: props.connections.some((connection) => connection.purpose === "search"),
   };
   const body = tab === "materials"
     ? <MaterialsTab t={t} projectId={detail.project.id} materials={detail.materials} onChanged={reload} onOpen={props.onOpenMaterial} onError={props.onError} onNotice={props.onNotice} />

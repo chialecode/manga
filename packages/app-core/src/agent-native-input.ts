@@ -68,8 +68,8 @@ function pdfFile(store: DrizzleStore, revisionId: string): string | null {
 
 /** Whether the person has read the whole book: with the spoiler guard on, a PDF goes whole only then (otherwise it would show pages not yet reached). */
 function readToTheEnd(store: DrizzleStore, resourceId: string, revisionId: string): boolean {
-  const row = store.sqlite.prepare("SELECT completion_state, percent FROM progress_latest WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revisionId) as { completion_state: string; percent: number } | undefined;
-  return Boolean(row && (row.completion_state === "completed" || row.percent >= 100));
+  const row = store.sqlite.prepare("SELECT completion_state, percent FROM progress_furthest WHERE resource_id = ? AND resource_revision_id = ?").get(resourceId, revisionId) as { completion_state: string; percent: number } | undefined;
+  return Boolean(row && (row.completion_state === "completed" || row.percent >= 1));
 }
 
 /**

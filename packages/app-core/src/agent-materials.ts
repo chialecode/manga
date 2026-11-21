@@ -456,7 +456,7 @@ export class AgentMaterials {
   freezeLibrary(works: Array<{ id: string; title: string; author: string | null; mediaKind: string; shelf: string; progress: number; resourceCount: number; linked: boolean }>, total: number): { total: number; works: FrozenLibraryWork[] } {
     return {
       total,
-      works: works.slice(0, WORKS_BUDGET.maxWorks).map((work) => ({ workId: work.id, title: work.title, author: work.author, mediaKind: work.mediaKind, shelf: work.shelf, progress: Math.round(work.progress), resourceCount: work.resourceCount, linked: work.linked })),
+      works: works.slice(0, WORKS_BUDGET.maxWorks).map((work) => ({ workId: work.id, title: work.title, author: work.author, mediaKind: work.mediaKind, shelf: work.shelf, progress: Math.round(Math.min(1, Math.max(0, work.progress)) * 100), resourceCount: work.resourceCount, linked: work.linked })),
     };
   }
 

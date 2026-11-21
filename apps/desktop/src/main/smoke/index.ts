@@ -58,7 +58,9 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
     markerRestored = flow.ok;
     Object.assign(reportExtras, flow);
   };
-  if (appService && ownerGrant) {
+  let exitCode = 1;
+  try {
+    if (appService && ownerGrant) {
     if (phaseName === "initial") {
       await appService.call(actor, { commandId: "notes.create", idempotencyKey: "smoke-marker", input: { title: "smoke-marker", text: "written before restart" } }, ownerGrant);
     } else if (phaseName === "restart") {
@@ -120,6 +122,14 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
     } else if (phaseName === "update") {
       const { runUpdateSmoke } = await import("./update-walk.ts");
       merge(await runUpdateSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "deepseek") {
+      const { runDeepSeekSmoke } = await import("./deepseek-walk.ts");
+      merge(await runDeepSeekSmoke({ appService, grant: ownerGrant, view: window, evidenceDir, logsDir: layout.partitions.logs }));
+    } else if (phaseName === "bench-read-aloud") {
+      const { runReadAloudBench } = await import("./bench-read-aloud.ts");
+      const ok = await runReadAloudBench(appService, ownerGrant, window, layout.partitions.logs);
+      reportExtras.readAloudOk = ok;
+      markerRestored = ok;
     } else if (phaseName === "plugins") {
       merge(await runPluginsSmoke({ appService, grant: ownerGrant, view: window, logsDir: layout.partitions.logs }));
     } else if (phaseName === "bench-scale") {
@@ -237,7 +247,14 @@ export async function runSmoke(input: { appService: MangaProductApp | undefined;
   }
   // The restart phase ends by really closing its window, after a change of the layout the next phase looks for (AT-128); its report is written already.
   if (phaseName === "workspace-restart" && report.status === "passed" && appService && ownerGrant) await closeForReal({ view: window, call: caller(appService, ownerGrant), logsDir: layout.partitions.logs });
-  appService?.close();
-  appService = undefined;
-  app.exit(report.status === "passed" ? 0 : 1);
+  exitCode = report.status === "passed" ? 0 : 1;
+  } catch (error) {
+    console.error(`smoke ${phaseName} failed:`, error);
+    exitCode = 1;
+  } finally {
+    powerThrottling();
+    appService?.close();
+    appService = undefined;
+  }
+  app.exit(exitCode);
 }

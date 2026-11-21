@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { MangaProductApp, TestVault } from "../../packages/app-core/src/index.ts";
-import { p95 } from "./lib.mjs";
+import { p95, repoRoot } from "./lib.mjs";
 
 // Service-level benchmarks of the creative workspace: they need no window. The windowed ones (whiteboard, mind map) are measured by the
 // desktop smoke runs and handed to bench.mjs through the same evidence files.
@@ -98,7 +98,7 @@ export async function runSemanticBench({ segments, runs, vec }) {
   }
 }
 
-const SAMPLE_DIR = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "../../dist/samples/media/video/roughcut");
+const SAMPLE_DIR = path.join(repoRoot, "dist", "samples", "media", "video", "roughcut");
 
 /**
  * A rough cut of `clips` clips from two real videos, checked and exported with the media tool, `runs` times. The figure is what the application
@@ -428,18 +428,21 @@ export async function runProposalBench({ objects = 500, proposeRuns = 30, applyR
     const v13DataDir = path.join(v13Root, "data");
     fs.mkdirSync(v13DataDir, { recursive: true });
     const seedStore = new DrizzleStore({ profileDir: v13DataDir, hostId: "bench-v13-seed" });
-    seedStore.sqlite.exec("BEGIN");
-    for (let p = 0; p < 10; p += 1) {
-      seedStore.sqlite.prepare("INSERT INTO projects(id, name, goal, status, created_at, updated_at) VALUES (?, ?, '', 'active', ?, ?)").run(`proj_${p}`, `项目${p}`, now, now);
-      seedStore.sqlite.prepare("INSERT INTO agent_sessions(id, title, kind, target_id, project_id, grant_handle, created_at, updated_at) VALUES (?, ?, 'project', ?, ?, 'g', ?, ?)").run(`ses_${p}`, `对话${p}`, `proj_${p}`, `proj_${p}`, now, now);
-      for (let r = 0; r < 10; r += 1) {
-        seedStore.sqlite.prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, live_text, created_at, updated_at) VALUES (?, ?, 'succeeded', 'g', '{}', '问题', '回答', ?, ?)").run(`run_${p}_${r}`, `ses_${p}`, now, now);
+    try {
+      seedStore.sqlite.exec("BEGIN");
+      for (let p = 0; p < 10; p += 1) {
+        seedStore.sqlite.prepare("INSERT INTO projects(id, name, goal, status, created_at, updated_at) VALUES (?, ?, '', 'active', ?, ?)").run(`proj_${p}`, `项目${p}`, now, now);
+        seedStore.sqlite.prepare("INSERT INTO agent_sessions(id, title, kind, target_id, project_id, grant_handle, created_at, updated_at) VALUES (?, ?, 'project', ?, ?, 'g', ?, ?)").run(`ses_${p}`, `对话${p}`, `proj_${p}`, `proj_${p}`, now, now);
+        for (let r = 0; r < 10; r += 1) {
+          seedStore.sqlite.prepare("INSERT INTO agent_runs(id, session_id, status, grant_handle, budget_json, input_text, live_text, created_at, updated_at) VALUES (?, ?, 'succeeded', 'g', '{}', '问题', '回答', ?, ?)").run(`run_${p}_${r}`, `ses_${p}`, now, now);
+        }
       }
+      seedStore.sqlite.exec("COMMIT");
+      seedStore.sqlite.exec("DROP TABLE IF EXISTS agent_proposals");
+      seedStore.sqlite.prepare("UPDATE schema_meta SET value = '13' WHERE key = 'schemaVersion'").run();
+    } finally {
+      seedStore.close();
     }
-    seedStore.sqlite.exec("COMMIT");
-    seedStore.sqlite.exec("DROP TABLE IF EXISTS agent_proposals");
-    seedStore.sqlite.prepare("UPDATE schema_meta SET value = '13' WHERE key = 'schemaVersion'").run();
-    seedStore.close();
 
     const migStart = performance.now();
     const migApp = new MangaProductApp({
@@ -450,11 +453,17 @@ export async function runProposalBench({ objects = 500, proposeRuns = 30, applyR
       hostId: "bench-v14-mig",
       vault: new TestVault("bench-v14-mig"),
     });
-    await migApp.start();
-    const migrateV14Ms = Math.round((performance.now() - migStart) * 100) / 100;
-    const migInfo = migApp.store.migration;
-    const backupExists = fs.existsSync(path.join(v13DataDir, "manga.sqlite.premigrate-v13"));
-    migApp.close();
+    let migrateV14Ms;
+    let migInfo;
+    let backupExists;
+    try {
+      await migApp.start();
+      migrateV14Ms = Math.round((performance.now() - migStart) * 100) / 100;
+      migInfo = migApp.store.migration;
+      backupExists = fs.existsSync(path.join(v13DataDir, "manga.sqlite.premigrate-v13"));
+    } finally {
+      migApp.close();
+    }
     if (migInfo?.from !== 13 || (migInfo?.to ?? 0) < 14 || !backupExists) {
       throw new Error(`v13 -> v14+ migration benchmark check failed: ${JSON.stringify({ migInfo, backupExists })}`);
     }

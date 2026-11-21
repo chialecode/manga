@@ -1,5 +1,5 @@
 import { MangaError } from "@manga/contracts";
-import { effectiveProfile, type ModelProfile } from "@manga/contracts/models";
+import { effectiveProfile, type AgentChatSettings, type ModelProfile } from "@manga/contracts/models";
 import type { ChatMessage, ToolDefinition } from "@manga/model-protocol";
 
 /**
@@ -31,6 +31,8 @@ export const VIDEO_SECOND_TOKENS = 300;
 
 export function messageTokens(message: ChatMessage): number {
   let sum = MESSAGE_OVERHEAD + estimateTokens(message.content);
+  // The thinking of the turn under way goes back to DeepSeek with its message (计划 4.3), and costs what it says.
+  if (message.reasoning) sum += estimateTokens(message.reasoning);
   for (const call of message.toolCalls ?? []) sum += estimateTokens(call.name) + estimateTokens(call.arguments) + MESSAGE_OVERHEAD;
   sum += (message.images?.length ?? 0) * IMAGE_TOKENS;
   // A file or a clip cannot be counted before it is sent; a page and a second are taken at a cautious size (计划 4.5).
@@ -50,17 +52,18 @@ export function contextTokens(messages: readonly ChatMessage[], tools?: readonly
 /** The first part of a text that fits in a number of tokens, cut at a character and not in the middle of one. */
 export function truncateToTokens(text: string, tokens: number): { text: string; cut: boolean } {
   if (tokens <= 0) return { text: "", cut: text.length > 0 };
-  if (estimateTokens(text) <= tokens) return { text, cut: false };
-  const chars = [...text];
-  // The estimate is monotonic, so a bisection finds the longest prefix that fits.
-  let low = 0;
-  let high = chars.length;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if (estimateTokens(chars.slice(0, mid).join("")) <= tokens) low = mid;
-    else high = mid - 1;
+  let narrow = 0;
+  let wide = 0;
+  let end = 0;
+  for (const char of text) {
+    if ((char.codePointAt(0) ?? 0) < 128) narrow += 1;
+    else wide += 1;
+    if (Math.ceil(narrow / 3.5 + wide) > tokens) {
+      return { text: text.slice(0, end), cut: true };
+    }
+    end += char.length;
   }
-  return { text: chars.slice(0, low).join(""), cut: true };
+  return { text, cut: false };
 }
 
 /** The last part of a text that fits in a number of tokens; what a summary of a conversation reads when the whole of it is too long. */
@@ -68,14 +71,16 @@ export function tailToTokens(text: string, tokens: number): string {
   if (tokens <= 0) return "";
   if (estimateTokens(text) <= tokens) return text;
   const chars = [...text];
-  let low = 0;
-  let high = chars.length;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if (estimateTokens(chars.slice(chars.length - mid).join("")) <= tokens) low = mid;
-    else high = mid - 1;
+  let narrow = 0;
+  let wide = 0;
+  let keep = 0;
+  for (let i = chars.length - 1; i >= 0; i -= 1) {
+    if ((chars[i]!.codePointAt(0) ?? 0) < 128) narrow += 1;
+    else wide += 1;
+    if (Math.ceil(narrow / 3.5 + wide) > tokens) break;
+    keep += 1;
   }
-  return `（更早的部分已省略）\n${chars.slice(chars.length - low).join("")}`;
+  return `（更早的部分已省略）\n${chars.slice(chars.length - keep).join("")}`;
 }
 
 export type Budget = {
@@ -103,6 +108,29 @@ export const budgetOfConnection = (row: { profile_json?: string | null; verified
   const profile = effectiveProfile(row.profile_json, verified);
   return { profile, budget: budgetOf(profile) };
 };
+
+/** What a conversation asked of its model (A-137): frozen with a run, so a retry thinks as hard and fills as much as the first try. */
+export type ChatChoice = { reasoningEffort?: AgentChatSettings["reasoningEffort"]; contextWindow?: number | null };
+
+/**
+ * The profile a run works with: the connection's, with the conversation's choice laid over it. A smaller window keeps the answer to a quarter of it (so the
+ * material keeps most of the room); a larger one than the model has is the model's. "off" switches thinking off; a level the model does not declare, or any
+ * level for a model that does not reason, changes nothing.
+ */
+export function withChoice(profile: ModelProfile, choice: ChatChoice | null | undefined): ModelProfile {
+  if (!choice) return profile;
+  let next = profile;
+  if (choice.contextWindow && choice.contextWindow < profile.contextWindow) {
+    const contextWindow = choice.contextWindow;
+    next = { ...next, contextWindow, maxOutput: Math.min(next.maxOutput, Math.floor(contextWindow / 4)) };
+  }
+  const effort = choice.reasoningEffort;
+  if (effort && profile.capabilities.includes("reasoning")) {
+    if (effort === "off") next = { ...next, reasoningEffort: null };
+    else if (!profile.reasoningLevels?.length || profile.reasoningLevels.includes(effort)) next = { ...next, reasoningEffort: effort };
+  }
+  return next;
+}
 
 /** What the person is told when a task cannot be made to fit; the way out is in the sentence. */
 export const advice = "可以换一个上下文窗口更大的模型、开一个新对话，或者减少附带的材料。";
@@ -146,7 +174,7 @@ function trimmed(messages: readonly ChatMessage[], keep: number, chars: number):
   return { messages: out, count };
 }
 
-/** The messages a summary may replace: everything but the system messages, the task itself (the last user message) and the newest exchange of tool calls. */
+/** The messages a summary may replace: everything except non-summary system messages, the task itself (the last user message), and the newest exchange of tool calls. */
 function compressible(messages: readonly ChatMessage[]): number[] {
   const lastUser = messages.map((message) => message.role).lastIndexOf("user");
   let tail = messages.length;
@@ -156,14 +184,19 @@ function compressible(messages: readonly ChatMessage[]): number[] {
     if (message.role !== "tool") { tail = index; break; }
     tail = index;
   }
-  return messages.flatMap((message, index) => (message.role !== "system" && index !== lastUser && index < tail ? [index] : []));
+  return messages.flatMap((message, index) => {
+    const isPriorSummary = message.role === "system" && message.content.startsWith(SUMMARY_MARK);
+    return ((message.role !== "system" || isPriorSummary) && index !== lastUser && index < tail) ? [index] : [];
+  });
 }
 
 /** The conversation as plain text, for the model to summarize. Tool results are cut again here so the request itself fits. */
 export function transcriptOf(messages: readonly ChatMessage[], maxChars = 24_000): string {
   const lines: string[] = [];
   for (const message of messages) {
-    if (message.role === "user") lines.push(`用户：${message.content}`);
+    if (message.role === "system" && message.content.startsWith(SUMMARY_MARK)) {
+      lines.push(`先前的摘要：${message.content.slice(SUMMARY_MARK.length).trim()}`);
+    } else if (message.role === "user") lines.push(`用户：${message.content}`);
     else if (message.role === "assistant") {
       if (message.content) lines.push(`助手：${message.content}`);
       for (const call of message.toolCalls ?? []) lines.push(`助手调用工具 ${call.name}：${[...call.arguments].slice(0, 400).join("")}`);
@@ -211,6 +244,11 @@ export async function fitContext(input: {
 
   let messages = input.messages;
   let trimmedCount = 0;
+  // 0. The thinking that goes back with the turn's messages is dropped first (计划 4.3); the field stays, empty, as the service expects it.
+  if (messages.some((message) => message.reasoning)) {
+    messages = messages.map((message) => (message.reasoning ? { ...message, reasoning: "" } : message));
+    if (size(messages) <= limit) return { messages, tokensBefore: before, tokensAfter: size(messages), trimmed: 0, compacted: null };
+  }
   // 1. The old tool results, a little at a time.
   for (const level of TRIM_LEVELS) {
     const next = trimmed(messages, level.keep, level.chars);
@@ -249,10 +287,12 @@ export async function fitContext(input: {
 
   // 3. What is left is the task, the newest results and the material. The biggest of the results and the material is cut, and only by what is missing, with the cut said
   // in the text, until it fits. The question and the summary are never cut: a task whose question and what must stay do not fit is stopped with the reason.
+  const cutIndexes = new Set<number>();
   for (let round = 0; round < 64 && size(messages) > limit; round += 1) {
     let target = -1;
     let targetTokens = MIN_KEEP_TOKENS;
     messages.forEach((message, index) => {
+      if (cutIndexes.has(index)) return;
       const cuttable = message.role === "tool" || (message.role === "system" && !message.content.startsWith(SUMMARY_MARK));
       const tokens = estimateTokens(message.content);
       if (cuttable && tokens > targetTokens) { target = index; targetTokens = tokens; }
@@ -260,7 +300,11 @@ export async function fitContext(input: {
     if (target < 0) break;
     const cut = messages[target]!;
     const note = cut.role === "tool" ? NOTE([...cut.content].length) : CUT_NOTE;
-    const keep = Math.max(MIN_KEEP_TOKENS, targetTokens - (size(messages) - limit) - estimateTokens(note) - 8);
+    const noteTokens = estimateTokens(note);
+    const rawExcess = Math.ceil((size(messages) - limit) / calibration);
+    const minKeep = Math.max(1, MIN_KEEP_TOKENS - noteTokens);
+    const keep = Math.max(minKeep, targetTokens - rawExcess - noteTokens - 8);
+    cutIndexes.add(target);
     messages = messages.map((message, index) => (index === target ? { ...message, content: `${truncateToTokens(message.content, keep).text}${note}` } : message));
     trimmedCount += 1;
   }

@@ -149,14 +149,15 @@ export class MangaRuntime {
     const plan = planComposition(this.getManifests(), profile);
     const previous = this.profile;
     const oldPlan = previous ? planComposition(this.getManifests(), previous) : undefined;
-    const bindingsFor = (bindings: typeof plan.bindings, capability: string) => bindings.filter(item => item.capabilityId === capability).map(item => item.providerModuleId).sort().join("|");
-    const changed = new Set(plan.bindings.concat(oldPlan?.bindings ?? []).map(item => item.capabilityId).filter(capability => bindingsFor(plan.bindings, capability) !== bindingsFor(oldPlan?.bindings ?? [], capability)));
+    const bindingsFor = (bindings: typeof plan.bindings, capability: string) =>
+      [...new Set(bindings.filter((item) => item.capabilityId === capability).map((item) => item.providerModuleId))].sort().join("|");
+    const changed = new Set(plan.bindings.concat(oldPlan?.bindings ?? []).map((item) => item.capabilityId).filter((capability) => bindingsFor(plan.bindings, capability) !== bindingsFor(oldPlan?.bindings ?? [], capability)));
     const rebound = new Set<string>();
     let expanded = true;
     while (expanded) {
       expanded = false;
       for (const [id, slot] of this.slots) {
-        if (!rebound.has(id) && (slot.module.manifest.needs ?? []).some(need => changed.has(need.capabilityId))) {
+        if (!rebound.has(id) && (slot.module.manifest.needs ?? []).some((need) => changed.has(need.capabilityId))) {
           rebound.add(id); expanded = true;
           for (const cap of slot.module.manifest.contributes) changed.add(cap.capabilityId);
         }
@@ -167,7 +168,7 @@ export class MangaRuntime {
       .filter(([, slot]) => slot.state === "active" || slot.state === "activating")
       .map(([id]) => id);
     const stopOrder = currentActive.filter((id) => !wanted.has(id) || rebound.has(id));
-    const oldOrder = this.profile ? planComposition(this.getManifests(), this.profile).activationOrder : currentActive;
+    const oldOrder = oldPlan?.activationOrder ?? currentActive;
     stopOrder.sort((a, b) => oldOrder.indexOf(b) - oldOrder.indexOf(a));
     for (const id of stopOrder) await this.deactivate(id);
     for (const id of rebound) this.must(id).bindingEpoch += 1;
@@ -201,7 +202,9 @@ export class MangaRuntime {
 
   async activate(moduleId: string): Promise<void> {
     const slot = this.must(moduleId);
-    if (slot.state === "failed" && slot.scope.size > 0) throw new MangaError("RESTART_REQUIRED","failed cleanup left resources; restart required");
+    if (slot.state === "failed" && (slot.scope.size > 0 || slot.commands.length > 0)) {
+      throw new MangaError("RESTART_REQUIRED", "failed cleanup left resources; restart required");
+    }
     if (slot.stopping) await slot.stopping;
     if (slot.state === "active") return;
     if (slot.activating) return slot.activating;
@@ -288,7 +291,9 @@ export class MangaRuntime {
         && this.must(slot.module.manifest.moduleId).bindingEpoch === bindingEpoch
         && this.must(slot.module.manifest.moduleId).state === "active",
       register: (handle: ResourceHandle) => {
-        if (slot.epoch !== epoch || !["activating", "active"].includes(slot.state)) throw new Error("stale activation scope");
+        if (slot.epoch !== epoch || slot.bindingEpoch !== bindingEpoch || !["activating", "active"].includes(slot.state)) {
+          throw new Error("stale activation scope");
+        }
         return scope.register(handle);
       },
     };
@@ -317,7 +322,10 @@ export class MangaRuntime {
     if (!slot || slot.state !== "active") {
       throw new MangaError("CAPABILITY_UNAVAILABLE", "module is not active");
     }
-    if (envelope.moduleEpoch !== undefined && envelope.moduleEpoch !== slot.epoch) {
+    if (
+      (envelope.moduleEpoch !== undefined && envelope.moduleEpoch !== slot.epoch)
+      || (envelope.bindingEpoch !== undefined && envelope.bindingEpoch !== slot.bindingEpoch)
+    ) {
       throw new MangaError("EPOCH_MISMATCH", "lease refused for stale epoch");
     }
     const id = envelope.requestId || createId("lease");

@@ -82,16 +82,23 @@ describe("permissions of the app window", () => {
 });
 
 describe("pages opened outside the app", () => {
-  it("opens only the metadata source's own https subject pages", () => {
+  it("opens the metadata source's own https subject pages", () => {
     for (const url of ["https://bgm.tv/subject/12", "https://bangumi.tv/subject/12/", "https://chii.in/subject/5", "https://bgm.tv/character/3", "https://bgm.tv/person/9"]) {
       expect(externalUrlAllowed(url), url).toBe(true);
     }
   });
 
-  it("refuses everything else: other hosts, other schemes, credentials, odd ports, other paths, non-strings", () => {
+  it("opens the ordinary web pages the app links to: search results, cited sources, a provider's key page", () => {
+    for (const url of ["https://api-docs.deepseek.com/zh-cn/", "https://platform.deepseek.com/api_keys", "http://news.example.com.cn/2026/11/a.html", "https://www.example.org/a?b=1#c", "https://xn--fiqs8s.xn--fiqz9s/"]) {
+      expect(externalUrlAllowed(url), url).toBe(true);
+    }
+  });
+
+  it("refuses everything else: other schemes, credentials, odd ports, addresses, this machine and private names, other metadata paths, non-strings", () => {
     for (const url of [
-      "http://bgm.tv/subject/12", "https://evil.test/subject/12", "https://bgm.tv.evil.test/subject/12", ["https://user", ":pw@bgm.tv/subject/12"].join(""), "https://bgm.tv:8443/subject/12",
-      "https://bgm.tv/", "https://bgm.tv/subject/abc", "https://bgm.tv/subject/12/../../login", `file:///${DRIVE}/Windows/System32/calc.exe`, "javascript:alert(1)", "ms-msdt:/id", "",
+      "http://bgm.tv/subject/12", ["https://user", ":pw@bgm.tv/subject/12"].join(""), "https://bgm.tv:8443/subject/12", "https://bgm.tv/", "https://bgm.tv/subject/abc", "https://bgm.tv/subject/12/../../login",
+      ["https://user", ":pw@example.com/"].join(""), "https://example.com:8443/", "http://127.0.0.1/", "http://192.168.1.1/", "http://[::1]/", "http://localhost/", "http://intranet/", "https://printer.local/", "https://router.lan/",
+      "https://bgm.tv.evil.test/subject/12", "https://host.internal/", `file:///${DRIVE}/Windows/System32/calc.exe`, "javascript:alert(1)", "ms-msdt:/id", "ftp://example.com/", "",
     ]) expect(externalUrlAllowed(url), url).toBe(false);
     for (const value of [undefined, null, 5, {}, [], "x".repeat(3000)]) expect(externalUrlAllowed(value)).toBe(false);
   });

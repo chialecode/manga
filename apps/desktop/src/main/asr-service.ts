@@ -254,7 +254,10 @@ export const nodeForkAsrSpawner: AsrSpawner = (spec) => {
       return child.pid;
     },
     send(message) {
-      if (child.connected) child.send(message);
+      if (!child.connected) {
+        throw new Error("ASR worker IPC channel is disconnected");
+      }
+      child.send(message);
     },
     onMessage(listener) {
       child.on("message", (msg) => listener(msg as AsrHostMessage));
@@ -394,18 +397,25 @@ export class AsrService {
       const key = JSON.stringify({ modelId, kind, files: plainFiles, numThreads: options.numThreads ?? null });
       const desired: DesiredModel = { modelId, kind, files: plainFiles, numThreads: options.numThreads, key };
       this.desiredModel = desired;
-      const result = (await this.callHost(
-        {
-          t: "call",
-          id: this.seq++,
-          method: "load",
-          params: { modelId, kind, files: plainFiles, ...(options.numThreads ? { numThreads: options.numThreads } : {}) },
-        },
-        modelId,
-      )) as AsrLoadResult;
-      this.remoteLoadedKey = key;
-      this.remoteLoadedModelId = modelId;
-      return result;
+      try {
+        const result = (await this.callHost(
+          {
+            t: "call",
+            id: this.seq++,
+            method: "load",
+            params: { modelId, kind, files: plainFiles, ...(options.numThreads ? { numThreads: options.numThreads } : {}) },
+          },
+          modelId,
+        )) as AsrLoadResult;
+        this.remoteLoadedKey = key;
+        this.remoteLoadedModelId = modelId;
+        return result;
+      } catch (error) {
+        // `asr-host.ts` drops the previous recognizer before attempting to load the new one.
+        this.remoteLoadedKey = null;
+        this.remoteLoadedModelId = null;
+        throw error;
+      }
     });
   }
 
@@ -641,6 +651,7 @@ export class AsrService {
     channel.onExit((code, signal) => {
       clearTimeout(startupTimer);
       resolveExit();
+      const prevLoadedModelId = this.session === session ? this.remoteLoadedModelId : null;
       if (this.session === session) {
         this.session = null;
         this.remoteLoadedKey = null;
@@ -660,7 +671,7 @@ export class AsrService {
       }
 
       const firstWaiter = pending.values().next().value;
-      const crashModelId = firstWaiter?.modelId ?? this.remoteLoadedModelId ?? attributedModelId ?? this.desiredModel?.modelId ?? null;
+      const crashModelId = firstWaiter?.modelId ?? prevLoadedModelId ?? attributedModelId ?? this.desiredModel?.modelId ?? null;
       const crashError = this.recordCrash(crashModelId, code, signal, channel.stderrTail());
       if (!readySettled) {
         readySettled = true;

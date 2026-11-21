@@ -121,20 +121,20 @@ export async function walkSettingsRoundTrip(view: BrowserWindow, observe: Observ
   observe("settings-round-trip", problems.length === 0, { before, inSettings, after, rateAdded, offered, popupItems: popup?.items.length ?? 0, problems });
 }
 
-type Saved = { id: string; workId: string | null; resourceId: string; width: number; height: number; kind: string; text: Record<string, any> | null; fileOk: boolean };
+type Saved = { id: string; workId: string | null; resourceId: string; width: number; height: number; kind: string; text: Record<string, unknown> | null; fileOk: boolean };
 
 /** The newest screenshot the app holds that was not there before, read back from the database and from the file's own PNG text. */
 function newestSince(appService: MangaProductApp, known: Set<string>): Saved | null {
   const view = appService.screenshots.list({ limit: 200 }).items.find((item) => !known.has(item.id));
   if (!view) return null;
-  let text: Record<string, any> | null = null;
+  let text: Record<string, unknown> | null = null;
   let fileOk = false;
   try {
     const file = appService.screenshots.pathOf(view.id);
     const bytes = fs.readFileSync(file);
     fileOk = bytes.subarray(1, 4).toString("latin1") === "PNG";
     const raw = readPngText(bytes)["manga.screenshot"];
-    text = raw ? JSON.parse(raw) as Record<string, any> : null;
+    text = raw ? JSON.parse(raw) as Record<string, unknown> : null;
   } catch { /* reported by the caller as a missing file */ }
   return { id: view.id, workId: view.workId, resourceId: view.resourceId, width: view.width, height: view.height, kind: view.mediaKind, text, fileOk };
 }

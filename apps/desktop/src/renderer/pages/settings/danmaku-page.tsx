@@ -26,15 +26,16 @@ function Slider(props: { id: string; label: string; min: number; max: number; st
 
 /** A list the person types, one entry to a line; it is kept when the field is left, and a line that cannot be kept stops the save with its number. */
 function ListField(props: { id: string; label: string; value: readonly string[]; check?: (line: string) => boolean; invalid?: (line: number, text: string) => string; onSave: (value: string[]) => void }) {
-  const [draft, setDraft] = useState(props.value.join("\n"));
+  const serialized = props.value.join("\n");
+  const [draft, setDraft] = useState(serialized);
   const [problem, setProblem] = useState("");
-  useEffect(() => { setDraft(props.value.join("\n")); }, [props.value]);
+  useEffect(() => { setDraft(serialized); }, [serialized]);
   const commit = () => {
     const next = lines(draft);
     const bad = props.check ? next.findIndex((line) => !props.check!(line)) : -1;
     if (bad >= 0) { setProblem(props.invalid!(bad + 1, next[bad]!)); return; }
     setProblem("");
-    if (JSON.stringify(next) !== JSON.stringify(props.value)) props.onSave(next);
+    if (next.join("\n") !== serialized) props.onSave(next);
   };
   return (
     <>

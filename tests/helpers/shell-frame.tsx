@@ -2,13 +2,13 @@ import { vi } from "vitest";
 import { act, fireEvent, render } from "@testing-library/react";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts";
 import type { RailView } from "@manga/contracts";
-import { ShellFrame, type ShellRail, type SidebarContent, type TopMenu } from "../../apps/desktop/src/renderer/shell.tsx";
+import { ShellFrame, type ShellRail, type SidebarContent } from "../../apps/desktop/src/renderer/shell.tsx";
 
-/** The window frame on its own: the labels, a rail, four menus and a stand-in for each column, drawn at a given window size. */
+/** The window frame on its own: the labels, a rail and a stand-in for each column, drawn at a given window size. */
 
 export const labels = {
   exitImmersive: "退出窗口全屏", showSidebar: "显示侧栏", hideSidebar: "隐藏侧栏", showDock: "显示对话栏", hideDock: "隐藏对话栏", stop: "停止任务",
-  back: "后退", forward: "前进", menubar: "菜单栏", rail: "图标栏", sidebar: "侧栏", dock: "对话栏", resizeSidebar: "调整侧栏宽度", resizeDock: "调整对话栏宽度",
+  rail: "图标栏", sidebar: "侧栏", dock: "对话栏", resizeSidebar: "调整侧栏宽度", resizeDock: "调整对话栏宽度",
   window: { group: "窗口控制", minimize: "最小化", maximize: "最大化", restore: "还原", close: "关闭窗口" },
 };
 
@@ -43,13 +43,6 @@ export const sidebarSlot: SidebarContent = (view, options) => (
   </div>
 );
 
-export const menus = (pick: (id: string) => void = () => undefined): TopMenu[] => [
-  { id: "file", label: "文件", items: [{ id: "new-tab", label: "新标签页", onSelect: () => pick("new-tab") }, { id: "quit", label: "退出", danger: true, onSelect: () => pick("quit") }] },
-  { id: "edit", label: "编辑", items: [{ id: "copy", label: "复制", onSelect: () => pick("copy") }] },
-  { id: "view", label: "视图", items: [{ id: "layout-two", label: "左右两栏", onSelect: () => pick("layout-two") }] },
-  { id: "help", label: "帮助", items: [{ id: "about", label: "关于", onSelect: () => pick("about") }] },
-];
-
 export function frameProps(width: number, height: number, extra: Partial<Parameters<typeof ShellFrame>[0]> = {}): Parameters<typeof ShellFrame>[0] {
   return {
     viewport: { width, height },
@@ -59,10 +52,8 @@ export function frameProps(width: number, height: number, extra: Partial<Paramet
     onExitImmersive: () => undefined,
     running: false,
     labels,
-    menus: menus(),
     settings: false,
     rail: shellRail(),
-    history: { canBack: false, canForward: false, onBack: () => undefined, onForward: () => undefined },
     onHide: () => undefined,
     onShow: () => undefined,
     onResize: () => undefined,

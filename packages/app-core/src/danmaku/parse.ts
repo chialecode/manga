@@ -22,9 +22,12 @@ export function parseComments(raw: DandanComments): DanmakuItem[] {
   const items: DanmakuItem[] = [];
   for (const comment of raw.comments) {
     const parts = comment.p.split(",");
-    const seconds = Number(parts[0]);
-    const mode = MODES[Number(parts[1])];
-    const color = Number(parts[2]);
+    const rawSeconds = parts[0]?.trim() ?? "";
+    const rawMode = parts[1]?.trim() ?? "";
+    const rawColor = parts[2]?.trim() ?? "";
+    const seconds = rawSeconds ? Number(rawSeconds) : Number.NaN;
+    const mode = rawMode ? MODES[Number(rawMode)] : undefined;
+    const color = rawColor ? Number(rawColor) : Number.NaN;
     if (!Number.isFinite(seconds) || seconds < 0 || !mode) continue;
     const text = comment.m.replace(/[\r\n\t]+/g, " ").trim().slice(0, MAX_TEXT);
     if (!text) continue;

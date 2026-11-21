@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { desktopOutput, latestDesktopPackage } from "../desktop-paths.ts";
+import { desktopOutput, devBuildRecord, latestDesktopPackage } from "../desktop-paths.ts";
 import {
   CHANNEL_INSTALL,
   TEST_CHANNEL_INSTALL,
@@ -14,19 +14,88 @@ import {
 } from "./installer-lib.mjs";
 import { currentStage, loadGate, packagedFingerprintKeys, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
 import { readBuildInfoIfPresent } from "./version-lib.mjs";
+import { isProcessAlive, readUninstallRegistryEntries } from "./win-process.mjs";
 import { askLightToQuit, LIGHT_QUIT_WAIT_MS } from "../../apps/desktop/src/main/light-runtime.ts";
 
-const UNINSTALL_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+export { isProcessAlive };
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function isProcessAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error && typeof error === "object" && error.code === "EPERM";
+/** The flag that starts the full app straight into the tray, with no window shown (A-135). */
+export const BACKGROUND_FLAG = "--background";
+
+/** Arguments for the app started after an install: the caller's, plus `--background` once when starting in the tray. */
+export function launchArgsAfterInstall(args, background) {
+  const list = [...(args ?? [])];
+  if (background && !list.includes(BACKGROUND_FLAG)) list.push(BACKGROUND_FLAG);
+  return list;
+}
+
+/** Quotes one argument for a Windows command line (CommandLineToArgvW rules). */
+export function quoteWindowsArg(arg) {
+  const text = String(arg);
+  if (text !== "" && !/[\s"]/.test(text)) return text;
+  let out = "\"";
+  let slashes = 0;
+  for (const ch of text) {
+    if (ch === "\\") { slashes += 1; continue; }
+    if (ch === "\"") { out += "\\".repeat(slashes * 2 + 1) + "\""; slashes = 0; continue; }
+    out += "\\".repeat(slashes) + ch;
+    slashes = 0;
   }
+  return `${out}${"\\".repeat(slashes * 2)}"`;
+}
+
+// Node cannot ask for CREATE_BREAKAWAY_FROM_JOB, so a short PowerShell helper calls CreateProcessW. Inside an agent's command sandbox (a job
+// object that ends its processes when the command returns) the started app leaves the job when the job allows it; a job that forbids breaking
+// away gets the app started inside it, reported as `inJob` (A-135). The environment is inherited from this helper, which inherits `env`.
+const LAUNCH_OUTSIDE_JOB_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "$exe = $env:MANGA_LAUNCH_EXE; $line = $env:MANGA_LAUNCH_LINE; $dir = $env:MANGA_LAUNCH_DIR",
+  "Remove-Item Env:MANGA_LAUNCH_EXE, Env:MANGA_LAUNCH_LINE, Env:MANGA_LAUNCH_DIR",
+  "Add-Type -TypeDefinition @'",
+  "using System; using System.Runtime.InteropServices; using System.Text;",
+  "public static class MangaLaunchOutsideJob {",
+  "  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct StartupInfo { public int cb; public string reserved, desktop, title;",
+  "    public int x, y, xSize, ySize, xChars, yChars, fill, flags; public short show, reserved2Size; public IntPtr reserved2, stdIn, stdOut, stdErr; }",
+  "  [StructLayout(LayoutKind.Sequential)] struct ProcessInformation { public IntPtr process, thread; public int processId, threadId; }",
+  "  [DllImport(\"kernel32.dll\", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcessW(string app, StringBuilder line,",
+  "    IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string dir, ref StartupInfo info, out ProcessInformation pi);",
+  "  [DllImport(\"kernel32.dll\", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);",
+  "  [DllImport(\"kernel32.dll\")] static extern bool CloseHandle(IntPtr handle);",
+  "  static bool Create(string exe, string line, string dir, uint flags, out ProcessInformation pi) {",
+  "    var info = new StartupInfo(); info.cb = Marshal.SizeOf(typeof(StartupInfo));",
+  "    return CreateProcessW(exe, new StringBuilder(line), IntPtr.Zero, IntPtr.Zero, false, flags, IntPtr.Zero, dir, ref info, out pi); }",
+  "  public static string Start(string exe, string line, string dir) {",
+  "    const uint Detached = 0x8, NewGroup = 0x200, Breakaway = 0x01000000; ProcessInformation pi;",
+  "    if (!Create(exe, line, dir, Detached | NewGroup | Breakaway, out pi)) {",
+  "      int error = Marshal.GetLastWin32Error(); if (error != 5) throw new System.ComponentModel.Win32Exception(error);",
+  "      if (!Create(exe, line, dir, Detached | NewGroup, out pi)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()); }",
+  "    bool inJob; if (!IsProcessInJob(pi.process, IntPtr.Zero, out inJob)) inJob = false;",
+  "    CloseHandle(pi.thread); CloseHandle(pi.process);",
+  "    return \"{\\\"pid\\\":\" + pi.processId + \",\\\"inJob\\\":\" + (inJob ? \"true\" : \"false\") + \"}\"; } }",
+  "'@",
+  "[Console]::Out.Write([MangaLaunchOutsideJob]::Start($exe, $line, $dir))",
+].join("\n");
+
+/**
+ * Starts `exe args` detached and, when allowed, outside the job object this command runs in, so the app keeps running after the command ends.
+ * Returns `{ pid, inJob }`; `inJob: true` means the job forbade breaking away and the app may end with the command (A-135).
+ */
+export function launchOutsideJob(exe, args, env) {
+  if (process.platform !== "win32") throw new Error("launching outside the job is Windows only");
+  const line = [exe, ...args].map(quoteWindowsArg).join(" ");
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", LAUNCH_OUTSIDE_JOB_SCRIPT], {
+    env: { ...env, MANGA_LAUNCH_EXE: exe, MANGA_LAUNCH_LINE: line, MANGA_LAUNCH_DIR: path.dirname(exe) },
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 60_000,
+  });
+  const parsed = (() => { try { return JSON.parse(String(result.stdout ?? "").trim()); } catch { return null; } })();
+  if (result.status !== 0 || !Number.isInteger(parsed?.pid)) {
+    throw new Error(`could not start the development app (${String(result.stderr ?? "").trim().split("\n")[0] || `exit ${String(result.status)}`})`);
+  }
+  return { pid: parsed.pid, inJob: parsed.inJob === true };
 }
 
 export function readRunningInstance(runtimeDir) {
@@ -40,37 +109,13 @@ export function readRunningInstance(runtimeDir) {
 }
 
 function readUninstallEntries() {
-  if (process.platform !== "win32") return [];
-  const cmd = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ChildItem '${UNINSTALL_KEY}' -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p -and $p.DisplayName) { [pscustomobject]@{ Key = $_.PSChildName; DisplayName = [string]$p.DisplayName; DisplayVersion = [string]$p.DisplayVersion; InstallLocation = [string]$p.InstallLocation; UninstallString = [string]$p.UninstallString } } } | ConvertTo-Json -Compress`;
-  const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], {
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 20_000,
-  });
-  const text = (res.stdout ?? "").trim();
-  if (!text) return [];
-  try {
-    const parsed = JSON.parse(text);
-    return (Array.isArray(parsed) ? parsed : [parsed]).map((entry) => {
-      const command = String(entry.UninstallString ?? "").replace(/^"([^"]+)".*$/, "$1");
-      const installLocation = entry.InstallLocation ? String(entry.InstallLocation) : command ? path.dirname(command) : "";
-      return {
-        Key: String(entry.Key ?? ""),
-        DisplayName: String(entry.DisplayName ?? ""),
-        DisplayVersion: String(entry.DisplayVersion ?? ""),
-        InstallLocation: installLocation,
-        UninstallString: String(entry.UninstallString ?? ""),
-      };
-    });
-  } catch {
-    return [];
-  }
+  return readUninstallRegistryEntries({ timeoutMs: 20_000 });
 }
 
 /** The packaged directory the latest `stage package` made (`latest-package.json` `target`), or null. */
-function defaultPackagedAppDir() {
+function defaultPackagedAppDir(recordFile = latestDesktopPackage) {
   try {
-    const target = JSON.parse(fs.readFileSync(latestDesktopPackage, "utf8")).target;
+    const target = JSON.parse(fs.readFileSync(recordFile, "utf8")).target;
     const dir = typeof target === "string" ? path.resolve(repoRoot, target) : "";
     return dir && fs.existsSync(path.join(dir, "resources")) ? dir : null;
   } catch { return null; }
@@ -83,7 +128,20 @@ export function sameApplicationArchive(installedResources, packagedResources) {
   return Boolean(installed) && installed === digest(path.join(packagedResources, "app.asar"));
 }
 
-export function findDefaultDevInstaller({ testIdentity = false, fingerprints, latestFile = latestDesktopPackage, desktopRoot = desktopOutput, workspaceRoot = repoRoot } = {}) {
+/**
+ * The development installer made from the current inputs: the one the last full package run made (`latest-package.json`), or else the one
+ * `install-dev` built for itself (`dev-build.json`, see `buildDevInstaller`). Answers the file, its hash and the record it was found in.
+ */
+export function findDefaultDevInstaller({ testIdentity = false, fingerprints, latestFile = latestDesktopPackage, devFile = devBuildRecord, desktopRoot = desktopOutput, workspaceRoot = repoRoot } = {}) {
+  for (const recordFile of [latestFile, devFile]) {
+    if (!recordFile) continue;
+    const found = devInstallerIn(recordFile, { testIdentity, fingerprints, desktopRoot, workspaceRoot });
+    if (found) return { ...found, recordFile };
+  }
+  return null;
+}
+
+function devInstallerIn(latestFile, { testIdentity, fingerprints, desktopRoot, workspaceRoot }) {
   const suffix = testIdentity ? "development-test" : "development";
   const outDir = path.join(desktopRoot, "installer", `out-${suffix}`);
   try {
@@ -160,7 +218,9 @@ function compareIsolatedRelease(before, after) {
  * - If the development channel is running, requests graceful save-and-exit via `--quit-for-update` and waits up to `quitTimeoutMs` (default 30s).
  *   If it does not exit within `quitTimeoutMs`, aborts without force-killing (`taskkill` is never used).
  * - Silently installs the new development installer (`/S`) into the existing installation directory, verifies the installed version,
- *   and relaunches the development app if it was running before.
+ *   and then starts the development app in the tray (`--background`) whether it was running or not, outside this command's job object when
+ *   the job allows it (A-135: the person keeps the development build running). `background: false` (the default for the test identity the
+ *   gate's rehearsals use) keeps the older rule: reopen it only if it was running, with the caller's arguments.
  */
 export async function runInstallDev(options = {}) {
   const startedMs = Date.now();
@@ -171,6 +231,7 @@ export async function runInstallDev(options = {}) {
   const places = options.places ?? null;
   const quitTimeoutMs = options.quitTimeoutMs ?? 30_000;
   const relaunchReadyTimeoutMs = options.relaunchReadyTimeoutMs ?? 30_000;
+  const background = options.background ?? !testIdentity;
 
   let stage = "unknown";
   let fingerprints = {};
@@ -214,6 +275,8 @@ export async function runInstallDev(options = {}) {
       installed: Boolean(payload.installed),
       wasRunning: Boolean(payload.wasRunning),
       relaunched: Boolean(payload.relaunched),
+      background,
+      ...(payload.inJob !== undefined ? { inJob: Boolean(payload.inJob) } : {}),
       previousVersion: payload.previousVersion ?? null,
       newVersion: payload.newVersion ?? expectedNewVersion ?? null,
       seconds: Number(((Date.now() - startedMs) / 1000).toFixed(2)),
@@ -291,7 +354,7 @@ export async function runInstallDev(options = {}) {
       relaunched: false,
       previousVersion,
       newVersion: expectedNewVersion,
-      reason: "current development installer is missing or stale; run stage package first",
+      reason: "current development installer is missing or stale and could not be built",
     });
   }
   const devPattern = /^0\.1\.(\d+)-dev\.(\d{12})$/;
@@ -303,7 +366,7 @@ export async function runInstallDev(options = {}) {
   // The installed build is already this one (same version and the same application archive as the packaged directory the installer was made
   // from): nothing to install, and the running development app is not asked to quit for nothing. The packaged directory is known for the installer
   // install-dev finds itself (the latest package); a caller that names another installer names its directory too, or nothing is skipped.
-  const packagedAppDir = options.packagedAppDir !== undefined ? options.packagedAppDir : options.installerPath ? null : defaultPackagedAppDir();
+  const packagedAppDir = options.packagedAppDir !== undefined ? options.packagedAppDir : options.installerPath ? null : defaultPackagedAppDir(defaultInstaller?.recordFile);
   if (previousVersion === expectedNewVersion && packagedAppDir && sameApplicationArchive(path.join(candidateInstallDir, "resources"), path.join(packagedAppDir, "resources"))) {
     return finalize({ status: "skipped", previousVersion, newVersion: expectedNewVersion, skipReason: "this build is already installed" });
   }
@@ -356,8 +419,13 @@ export async function runInstallDev(options = {}) {
   try {
     fs.mkdirSync(devRuntimeDir, { recursive: true });
     if (fs.existsSync(lockFile)) {
-      const prior = JSON.parse(fs.readFileSync(lockFile, "utf8"));
-      if (isProcessAlive(prior.pid)) return finalize({ status: "aborted", wasRunning, previousVersion, reason: "another development installation is already in progress" });
+      let prior = null;
+      try {
+        prior = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+      } catch {
+        // Corrupt or truncated lock file from an aborted run: treat as stale and replace it.
+      }
+      if (isProcessAlive(prior?.pid)) return finalize({ status: "aborted", wasRunning, previousVersion, reason: "another development installation is already in progress" });
       fs.rmSync(lockFile, { force: true });
     }
     fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, requestId }), { flag: "wx" });
@@ -369,6 +437,8 @@ export async function runInstallDev(options = {}) {
     let relaunched = false;
     let relaunchedPid = null;
     let draftPreserved;
+    let inJob;
+    const launchArgs = launchArgsAfterInstall(options.relaunchArgs, background);
     for (const signalFile of ["quit-for-update.json", "quit-for-update-ack.json", "running-instance.json"]) {
       try { fs.rmSync(path.join(devRuntimeDir, signalFile), { force: true }); } catch { /* ignore */ }
     }
@@ -378,15 +448,26 @@ export async function runInstallDev(options = {}) {
     if (options.relaunchFn) {
       const custom = await options.relaunchFn({
         exePath: installedDevExe,
-        args: options.relaunchArgs ?? [],
+        args: launchArgs,
         env: relaunchEnv,
         runtimeDir: devRuntimeDir,
+        background,
       });
       relaunched = custom?.relaunched === true;
       relaunchedPid = custom?.pid ?? null;
       draftPreserved = custom?.draftPreserved;
+      if (background) inJob = custom?.inJob === true;
+    } else if (background) {
+      let launched;
+      try {
+        launched = (options.launchOutsideJobFn ?? launchOutsideJob)(installedDevExe, launchArgs, relaunchEnv);
+      } catch {
+        return { relaunched: false, relaunchedPid: null };
+      }
+      relaunchedPid = launched.pid;
+      inJob = launched.inJob;
     } else {
-      const child = spawn(installedDevExe, options.relaunchArgs ?? [], {
+      const child = spawn(installedDevExe, launchArgs, {
         env: relaunchEnv,
         detached: true,
         stdio: "ignore",
@@ -399,7 +480,9 @@ export async function runInstallDev(options = {}) {
       child.unref();
       if (!started) return { relaunched: false, relaunchedPid: null };
       relaunchedPid = child.pid ?? null;
-
+    }
+    if (!options.relaunchFn) {
+      // Ready means the new build wrote its running-instance record; in the tray it has no window to show.
       const relaunchDeadline = Date.now() + relaunchReadyTimeoutMs;
       while (Date.now() < relaunchDeadline) {
         const info = readRunningInstance(devRuntimeDir);
@@ -417,7 +500,7 @@ export async function runInstallDev(options = {}) {
         await sleep(150);
       }
     }
-    return { relaunched, relaunchedPid, draftPreserved };
+    return { relaunched, relaunchedPid, draftPreserved, inJob };
   };
   const failAndRecover = async (payload) => {
     withdrawRequest();
@@ -535,18 +618,20 @@ export async function runInstallDev(options = {}) {
       });
     }
 
-    const { relaunched, relaunchedPid, draftPreserved } = wasRunning
+    const startAfter = wasRunning || background;
+    const { relaunched, relaunchedPid, draftPreserved, inJob } = startAfter
       ? await relaunchDevelopment(installedVersion) : { relaunched: false, relaunchedPid: null };
 
     return finalize(
       {
-        status: wasRunning && !relaunched ? "failed" : "passed",
+        status: startAfter && !relaunched ? "failed" : "passed",
         installed: true,
         wasRunning,
         relaunched,
+        inJob,
         previousVersion,
         newVersion: installedVersion,
-        ...(wasRunning && !relaunched ? { reason: "updated development instance did not become ready" } : {}),
+        ...(startAfter && !relaunched ? { reason: "updated development instance did not become ready" } : {}),
         ...(draftPreserved !== undefined ? { draftPreserved } : {}),
       },
       { relaunchedPid },
@@ -563,10 +648,30 @@ export async function runInstallDev(options = {}) {
   }
 }
 
+/**
+ * Builds the development installer from the current source when there is none yet (`stage package` with `MANGA_PACKAGE_BUILD_ONLY=1`): the package
+ * (reused when its inputs are unchanged) and the installer, with no walks and no gate. Installing for the person's manual check does not wait for a gate
+ * (development-workflow); the gate checks the same source on its own. Answers whether a build ran and whether it worked.
+ */
+export function buildDevInstaller({ env = process.env } = {}) {
+  if (env.MANGA_DEV_AUTO_INSTALL === "0" || env.CI === "true" || env.GITHUB_ACTIONS === "true") return { built: false, ok: true };
+  let fingerprints = {};
+  try { fingerprints = stageFingerprints(repoRoot, loadGate()); } catch { return { built: false, ok: true }; }
+  if (findDefaultDevInstaller({ fingerprints })) return { built: false, ok: true };
+  console.log("[install-dev] no development installer for the current source yet: building the package and the installer (no walks)");
+  const result = spawnSync(process.execPath, ["scripts/stage/package.mjs"], { cwd: repoRoot, stdio: "inherit", env: { ...env, MANGA_PACKAGE_BUILD_ONLY: "1", MANGA_PACKAGE_PHASES: "" } });
+  return { built: true, ok: result.status === 0 };
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const build = buildDevInstaller();
+  if (!build.ok) console.log("[install-dev] building the development installer failed; see the output above");
   const result = await runInstallDev();
   const { relaunchedPid: _pid, abortedPidStillAlive: _alive, ...publicSummary } = result;
   console.log(JSON.stringify({ check: "stage-install-dev", ...publicSummary }));
+  if (result.inJob) {
+    console.log(`[install-dev] ${result.productName} ${String(result.newVersion)} started inside this command's job object and may end with the command; open it once from the Start menu`);
+  }
   if (result.status === "failed" || result.status === "aborted") {
     process.exitCode = 1;
   }

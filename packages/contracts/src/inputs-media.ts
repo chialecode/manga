@@ -7,6 +7,7 @@ import {
   PolishPromptsSchema,
 } from "./dictation.ts";
 import { SourceLocatorSchema } from "./location.ts";
+import { KeyActionIdSchema } from "./key-bindings.ts";
 import { PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } from "./inputs-creative.ts";
 import { ContextIdSchema } from "./workspace-state.ts";
 import {
@@ -259,6 +260,9 @@ export const MediaCommandInputs = {
     captureEngine: AsrEngineSelectionSchema.nullable().optional(),
     localIdleMinutes: z.number().int().min(1).max(120).optional(),
     retainDictationAudio24h: z.boolean().optional(),
+    speechConnectionId: id.nullable().optional(),
+    speechVoice: z.enum(["stella", "tide"]).optional(),
+    novelCostHint: z.boolean().optional(),
   }).strict(),
   "settings.getModules": z.object({}).strict(),
   "settings.setModule": z.object({ featureId: z.string().min(1).max(64), enabled: z.boolean() }).strict(),
@@ -292,7 +296,7 @@ export const MediaCommandInputs = {
       shotSubtitles: z.boolean().optional(),
     }).strict().optional(),
     /** The keys of the readers and the window, by action (see `@manga/contracts/keys`); `null` puts the default back. The service checks the whole table for conflicts. */
-    keys: z.record(z.string().regex(/^[a-z]+\.[A-Za-z]+$/).max(48), z.array(z.string().max(40)).max(4).nullable()).refine((value) => Object.keys(value).length <= 64, "too many actions").optional(),
+    keys: z.record(KeyActionIdSchema, z.array(z.string().max(40)).max(4).nullable()).refine((value) => Object.keys(value).length <= 64, "too many actions").optional(),
   }).strict(),
 
   "capture.start": z.object({

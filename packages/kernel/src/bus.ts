@@ -4,6 +4,12 @@ import type { DomainEvent } from "@manga/contracts";
 export class SequencedBus extends EventEmitter {
   private seq = 0;
   private readonly buffer: DomainEvent[] = [];
+  private readonly maxBuffer: number;
+
+  constructor(maxBuffer = 2_000) {
+    super();
+    this.maxBuffer = Math.max(1, Math.trunc(maxBuffer));
+  }
 
   nextSeq(): number {
     return this.seq + 1;
@@ -19,6 +25,9 @@ export class SequencedBus extends EventEmitter {
       createdAt,
     };
     this.buffer.push(event);
+    if (this.buffer.length > this.maxBuffer) {
+      this.buffer.splice(0, this.buffer.length - this.maxBuffer);
+    }
     this.emit("event", event);
     return event;
   }

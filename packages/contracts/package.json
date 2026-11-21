@@ -22,7 +22,9 @@
     "./plugin": "./src/plugin.ts",
     "./keys": "./src/key-bindings.ts",
     "./danmaku": "./src/inputs-danmaku.ts",
-    "./models": "./src/inputs-models.ts"
+    "./models": "./src/inputs-models.ts",
+    "./recording": "./src/recording.ts",
+    "./bangumi-ref": "./src/bangumi-ref.ts"
   },
   "dependencies": {
     "zod": "4.6.7"

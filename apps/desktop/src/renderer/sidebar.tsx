@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Clock, Folder, FolderKanban, FolderOpen, LayoutGrid, Library, List, MessageSquarePlus, Plus, Search, SquareStack } from "lucide-react";
 import {
-  contextKey, isCoverView, itemTypeOfView, type ContextId, type ObjectListKind, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType, type SidebarSection,
+  contextKey, isCoverView, itemTypeOfView, type ContextId, type ObjectListKind, type RailView, type SidebarGroup, type SidebarItem, type SidebarItemType, type SidebarSection, type WorkspaceView,
 } from "@manga/contracts";
 import type { WorkspaceTab } from "@manga/contracts/workspace-state";
 import type { WorkMediaKind } from "./lib/works.ts";
 import type { MessageKey } from "@manga/i18n";
+import { InlineRename } from "./components/inline-rename.tsx";
 import { Modal } from "./components/modal.tsx";
 import { attempt } from "./lib/api.ts";
-import { useCovers } from "./lib/covers.ts";
+import { portraitCoverRatio, useCovers } from "./lib/covers.ts";
 import { OBJECT_SPEC } from "./lib/object-kinds.ts";
 import { CoverImage } from "./pages/work-card.tsx";
 import { sectionKey, shownOf, useRail, useSidebarData, openKeysOf } from "./sidebar-data.ts";
 import { ContextMenu, type ContextItem } from "./workspace/context-menu.tsx";
 import { useWorkspaceValue } from "./workspace/context.tsx";
-import { useServices } from "./workspace/services.tsx";
+import { useServices, type Openers } from "./workspace/services.tsx";
+
+/** The management entry of a feature view (the sidebar's entry and the empty view's button): the shelf of a medium, the records, the objects, the downloads. */
+export function manageAction(view: WorkspaceView, open: Openers): (() => void) | null {
+  if (view === "conversation") return () => open.records({ type: "conversation" });
+  if (view === "note") return () => open.records({ type: "note" });
+  if (view === "novel" || view === "comic" || view === "video") return () => open.library(view);
+  if (view === "whiteboard" || view === "mindmap" || view === "draft" || view === "roughcut") return () => open.objects(view);
+  if (view === "downloads") return () => open.downloads();
+  return null;
+}
 
 /** The words for a kind of thing and for a view (the rail's own labels). */
 export const VIEW_LABEL: Record<RailView, MessageKey> = {
@@ -82,6 +93,8 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
   const shows = (item: SidebarItem) => tabShows(focusedTab, item);
   const coverIds = display === "cover" ? (data?.groups ?? []).flatMap((group) => group.sections.flatMap((section) => shownOf(section, more[sectionKey(view, group.contextId, section.type)]).items.map((item) => item.coverId))) : [];
   const cover = useCovers(coverIds, "grid");
+  const coverRatio = display === "cover" ? portraitCoverRatio(coverIds, "grid", 4 / 3) : 4 / 3;
+  const coverStyle = coverRatio !== 4 / 3 ? { aspectRatio: `1 / ${coverRatio}` } : undefined;
   const current = s.currentContext;
   const currentKey = contextKey(current);
   const own = itemTypeOfView(view);
@@ -114,7 +127,7 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
   const entries: Entry[] = [];
   const entry = (id: string, testId: string, label: string, icon: ReactNode, run: Entry["run"]) => entries.push({ id, testId, label, icon, run });
   const newConversation = () => { done(); void s.open.newConversation(); };
-  // The home has no "新对话" (A-110): the conversation view, the file menu and Ctrl+N make one; a project is made from the "+" of the projects' title.
+  // The home has no "新对话" (A-110): the conversation view and Ctrl+N make one; a project is made from the "+" of the projects' title.
   if (view === "conversation") {
     if (s.facets.has("agent")) entry("new-conversation", "sidebar-new-conversation", t("sidebar.newConversation"), <MessageSquarePlus size={16} aria-hidden="true" />, newConversation);
   }
@@ -125,14 +138,7 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
     if (isObjectView(view)) {
       entry("new-object", "sidebar-new-object", t(`sidebar.new.${view}` as MessageKey), <Plus size={16} aria-hidden="true" />, (event) => void createObject(view, event.currentTarget));
     }
-    const manage = (() => {
-      if (view === "conversation") return () => s.open.records({ type: "conversation" });
-      if (view === "note") return () => s.open.records({ type: "note" });
-      if (view === "novel" || view === "comic" || view === "video") return () => s.open.library(view);
-      if (isObjectView(view)) return () => s.open.objects(view);
-      if (view === "downloads") return () => s.open.downloads();
-      return null;
-    })();
+    const manage = manageAction(view, s.open);
     if (manage) entry("manage", "sidebar-manage", t(`sidebar.manage.${view}` as MessageKey), <SquareStack size={16} aria-hidden="true" />, () => { done(); manage(); });
   }
 
@@ -147,13 +153,8 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
   // ------------------------------------------------------------------------------------------------------------------------- changes
   const projects = (data?.groups ?? []).filter((group) => group.kind === "project");
 
-  async function commitRename(event: FormEvent) {
-    event.preventDefault();
-    if (!renaming) return;
-    const text = renaming.text.replace(/\s+/g, " ").trim();
-    const done = renaming;
+  async function commitRename(done: Renaming, text: string) {
     setRenaming(null);
-    if (!text) return;
     const result = done.type === "project"
       ? await attempt("project.update", { projectId: done.id, name: text })
       : done.type === "conversation"
@@ -313,9 +314,15 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
     return (
       <li key={item.key}>
         {isRenaming ? (
-          <form className="sidebar-rename" onSubmit={(event) => void commitRename(event)}>
-            <input autoFocus aria-label={t(item.type === "conversation" ? "sidebar.rename.conversation" : "objects.name")} data-testid="sidebar-rename" value={renaming.text} maxLength={200} onChange={(event) => setRenaming({ ...renaming, text: event.target.value })} onBlur={() => setRenaming(null)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setRenaming(null); } }} />
-          </form>
+          <InlineRename
+            initialValue={renaming.text}
+            formClassName="sidebar-rename"
+            ariaLabel={t(item.type === "conversation" ? "sidebar.rename.conversation" : "objects.name")}
+            testId="sidebar-rename"
+            maxLength={200}
+            onCommit={(text) => commitRename(renaming, text)}
+            onCancel={() => setRenaming(null)}
+          />
         ) : (
           <button type="button" className="sidebar-row" {...rowProps(item)}>
             <span className="truncate">{item.title}</span>
@@ -335,8 +342,8 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
     return (
       <li key={item.key}>
         <button type="button" className="sidebar-cover" aria-label={`${item.title}，${progress}`} {...rowProps(item)}>
-          <span className="sidebar-cover-image" data-landscape={item.type === "video" ? "true" : undefined}>
-            <CoverImage url={cover(item.coverId)} coverId={item.coverId} kind={item.type as "novel" | "comic" | "video"} title={item.title} landscape={item.type === "video"} />
+          <span className="sidebar-cover-image" style={coverStyle}>
+            <CoverImage url={cover(item.coverId)} coverId={item.coverId} kind={item.type as "novel" | "comic" | "video"} title={item.title} />
           </span>
           <span className="sidebar-cover-title">{item.title}</span>
           <span className="sidebar-cover-note">{progress}</span>
@@ -391,9 +398,15 @@ export function Sidebar(props: { view: RailView; variant: "dock" | "card"; onDon
             <Icon size={15} aria-hidden="true" />
           </button>
           {renaming?.type === "project" && renaming.id === group.contextId ? (
-            <form className="sidebar-rename" onSubmit={(event) => void commitRename(event)}>
-              <input autoFocus aria-label={t("sidebar.rename.project")} data-testid="sidebar-rename" value={renaming.text} maxLength={120} onChange={(event) => setRenaming({ ...renaming, text: event.target.value })} onBlur={() => setRenaming(null)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setRenaming(null); } }} />
-            </form>
+            <InlineRename
+              initialValue={renaming.text}
+              formClassName="sidebar-rename"
+              ariaLabel={t("sidebar.rename.project")}
+              testId="sidebar-rename"
+              maxLength={120}
+              onCommit={(text) => commitRename(renaming, text)}
+              onCancel={() => setRenaming(null)}
+            />
           ) : (
             <button type="button" className="sidebar-context-name" data-testid={`context-open-${name}`} aria-current={isCurrent ? "true" : undefined} title={label} onClick={() => { done(); void s.open.switchContext(group.contextId); }}>
               <span className="truncate">{label}</span>

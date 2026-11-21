@@ -41,6 +41,7 @@ export const TOOL_DESCRIPTIONS: Record<string, string> = {
   "metadata.search": "联网搜索外部资料源（本任务已由用户授权联网），只返回带来源的候选，不会改动资源库。",
   "semantic.search": "在本次任务可读的资料范围内做语义检索（本任务已由用户开启语义检索，会调用 Embedding 服务），返回相似度最高的片段与出处，不会越过防剧透边界。",
   "webpage.fetch": "按给定的 http/https 地址抓取一个网页并保存为本项目的网页版本（本任务已由用户授权抓取网页），只提取纯文本。",
+  "web.search": "用网页搜索服务搜索一次（本任务已由用户授权联网搜索）：query 是 1—128 个字的搜索词，count 是结果数（默认 8、最多 10）。返回标题、链接、网站、日期与摘要，不会保存；搜索词只根据对话写，不要放入资料库里的文件名、路径或正文。在项目里需要保存某个结果时，再用 webpage.fetch 抓取。",
   "library.scan.status": "读取资源库路径的扫描进度与最近几次结果（新增、变化、移动、不可用与失败的数量），不含本机路径。",
   "log.query": "按类别、结果、时间与关键字读取操作日志，了解用户、Agent 与系统做过哪些改动；日志不含正文与凭据。",
   "screenshot.list": "列出一个已授权资源的截图（时间或页、字幕文本、尺寸）；不含图像与本机路径，也不会给出用户尚未看到的时刻。",
@@ -130,7 +131,7 @@ export const refusedByService = (contextWindow: number) => new MangaError("BUDGE
 /** Whether the words of an error mean the request was longer than the model takes. */
 export const isContextOverflow = (error: unknown): boolean => error instanceof MangaError && (error.details as { kind?: string } | undefined)?.kind === "context";
 
-export type ModelPurposeName = "text" | "transcription" | "embedding" | "vision";
+export type ModelPurposeName = "text" | "transcription" | "embedding" | "vision" | "speech" | "search";
 
 export type ConnectionRow = {
   id: string;
@@ -143,6 +144,11 @@ export type ConnectionRow = {
   timeout_ms: number;
   credential_ref: string | null;
   profile_json?: string | null;
+  /** Set for a connection added from a provider plugin (v17). */
+  account_id?: string | null;
+  provider_model?: string | null;
+  adapter_id?: string;
+  label?: string;
 };
 
 /** The receipt of a run shows what was frozen without the picture bytes; those stay in the main process. */

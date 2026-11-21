@@ -50,7 +50,7 @@ function installHost(state: { review: ReturnType<typeof makeReview>; sessions?: 
     },
     onNotice: (listener: (notice: { topic: string; payload: Record<string, unknown> }) => void) => { listeners.add(listener); return () => listeners.delete(listener); },
   };
-  return { calls, of: (id: string) => calls.filter((call) => call.commandId === id), notice: (topic: string, payload: Record<string, unknown> = {}) => act(() => { for (const listener of listeners) listener({ topic, payload }); }) };
+  return { calls, of: (id: string) => calls.filter((call) => call.commandId === id), notice: (topic: string, payload: Record<string, unknown> = {}) => act(async () => { for (const listener of listeners) listener({ topic, payload }); }) };
 }
 
 const noop = () => undefined;

@@ -600,4 +600,81 @@ describe("AT-130 each view has its own main area (A-107)", () => {
     controller.showView("home");
     expect(controller.focusedTabId()).toBe("b");
   });
+
+  it("does not seed or overwrite persisted state after a transient loadContext failure (US-02)", async () => {
+    const seed = vi.fn(() => [{ kind: "library", target: {}, title: "资源库" }]);
+    const { controller, env, saved, errors } = setup({}, seed);
+    const call = env.call;
+    env.call = async (commandId, input) => (commandId === "workspace.loadContext"
+      ? { ok: false, error: { message: "io busy" } }
+      : call(commandId, input));
+    expect(await controller.activate("prj_1")).toBe(true);
+    expect(errors).toHaveBeenCalledWith("io busy");
+    expect(seed).not.toHaveBeenCalled();
+    expect(controller.tabsOf()).toEqual([]);
+    await controller.flushAll();
+    expect(saved).toEqual([]);
+  });
+
+  it("updates a background mounted context's tab via retitle, retarget, and setView (US-03)", async () => {
+    const { controller } = setup();
+    await controller.activate("prj_1");
+    const tabId = controller.open({ kind: "reader", target: { resourceId: "a", title: "old" }, title: "旧名" })!;
+    await controller.activate(null);
+    expect(controller.activeContextId).toBeNull();
+    controller.retitle(tabId, "新名");
+    controller.retarget(tabId, { chapter: 2 });
+    controller.setView(tabId, { page: 5 });
+    const bgTab = controller.tab("prj_1", tabId)!;
+    expect(bgTab.title).toBe("新名");
+    expect(bgTab.target.chapter).toBe(2);
+    expect(bgTab.view.page).toBe(5);
+  });
+
+  it("keeps the latest context active when concurrent activate calls resolve out of order (US-04)", async () => {
+    const { controller, env } = setup();
+    const call = env.call;
+    let releaseSlow!: () => void;
+    const slow = new Promise<void>((resolve) => { releaseSlow = resolve; });
+    env.call = async (commandId, input) => {
+      if (commandId === "workspace.loadContext" && (input as { contextId?: string | null })?.contextId === "prj_1") {
+        await slow;
+      }
+      return call(commandId, input);
+    };
+    const first = controller.activate("prj_1");
+    const second = controller.activate("prj_2");
+    expect(await second).toBe(true);
+    expect(controller.activeContextId).toBe("prj_2");
+    releaseSlow();
+    expect(await first).toBe(true);
+    expect(controller.activeContextId).toBe("prj_2");
+  });
+
+  it("recovers from a rejected flush call and skips clean contexts on onlyDirty flushes (US-13)", async () => {
+    const { controller, env, saved, errors } = setup();
+    const call = env.call;
+    let failNext = true;
+    env.call = async (commandId, input) => {
+      if (commandId === "workspace.saveContext" && failNext) {
+        failNext = false;
+        throw new Error("transport reset");
+      }
+      return call(commandId, input);
+    };
+    await controller.activate(null);
+    // Clean freshly loaded context is skipped when onlyDirty is set.
+    await controller.flushAll({ onlyDirty: true });
+    expect(saved).toHaveLength(0);
+    controller.open({ kind: "reader", target: { resourceId: "a" } });
+    await controller.flushAll({ onlyDirty: true });
+    expect(errors).toHaveBeenCalledWith("transport reset");
+    expect(controller.pendingSaves()).toBe(true);
+    // Subsequent flush succeeds cleanly because inflight was decremented and dirty restored.
+    await controller.flushAll({ onlyDirty: true });
+    expect(saved).toHaveLength(1);
+    expect(controller.pendingSaves()).toBe(false);
+    await controller.flushAll({ onlyDirty: true });
+    expect(saved).toHaveLength(1);
+  });
 });

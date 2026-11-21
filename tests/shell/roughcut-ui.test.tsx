@@ -23,7 +23,7 @@ let counter = 0;
 const apps: App[] = [];
 const disposers: Array<() => void> = [];
 const dirs: string[] = [];
-afterEach(() => { cleanup(); while (disposers.length) disposers.pop()!(); while (apps.length) apps.pop()!.app.close(); for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { cleanup(); while (disposers.length) disposers.pop()!(); while (apps.length) apps.pop()!.app.close(); for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
 const tmp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-rc-ui-")); dirs.push(dir); return dir; };
 
 async function boot(extra: Record<string, unknown> = {}) {

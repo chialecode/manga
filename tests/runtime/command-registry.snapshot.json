@@ -2350,6 +2350,51 @@
       "noteContent": false
     },
     {
+      "commandId": "providers.add",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "providers.deleteAccount",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "providers.discover",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "providers.list",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "providers.setKey",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "quickTasks.delete",
       "moduleId": "manga.settings",
       "owner": true,
@@ -3022,6 +3067,15 @@
       "agent": false,
       "agentProject": false,
       "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "web.search",
+      "moduleId": "manga.research",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": true,
       "noteContent": false
     },
     {

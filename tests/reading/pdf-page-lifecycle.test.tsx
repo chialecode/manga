@@ -7,26 +7,30 @@ const fake = vi.hoisted(() => ({
   first: Promise.withResolvers<{ items: Array<{ str: string }> }>(),
   requested: vi.fn(),
   destroy: vi.fn(async () => undefined),
+  getDocument: vi.fn(),
 }));
 
 vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({
-  version: "6.4.299",
+  version: "6.5.438",
   GlobalWorkerOptions: {},
-  getDocument: () => ({
-    destroy: fake.destroy,
-    promise: Promise.resolve({
-      numPages: 2,
-      getPage: async (index: number) => ({
-        getViewport: ({ scale }: { scale: number }) => ({ width: 400 * scale, height: 400 * scale, scale }),
-        render: () => ({ promise: Promise.resolve(), cancel: () => undefined }),
-        getTextContent: () => {
-          fake.requested(index);
-          return index === 1 ? fake.first.promise : Promise.resolve({ items: [{ str: "PAGE TWO" }] });
-        },
-        cleanup: () => undefined,
+  getDocument: (source: unknown) => {
+    fake.getDocument(source);
+    return {
+      destroy: fake.destroy,
+      promise: Promise.resolve({
+        numPages: 2,
+        getPage: async (index: number) => ({
+          getViewport: ({ scale }: { scale: number }) => ({ width: 400 * scale, height: 400 * scale, scale }),
+          render: () => ({ promise: Promise.resolve(), cancel: () => undefined }),
+          getTextContent: () => {
+            fake.requested(index);
+            return index === 1 ? fake.first.promise : Promise.resolve({ items: [{ str: "PAGE TWO" }] });
+          },
+          cleanup: () => undefined,
+        }),
       }),
-    }),
-  }),
+    };
+  },
 }));
 
 // Like PDF.js's TextLayerBuilder, the text arrives asynchronously and the layer is handed over through onAppend.
@@ -48,19 +52,29 @@ vi.mock("pdfjs-dist/legacy/web/pdf_viewer.mjs", () => ({
   },
 }));
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it("discards late pdf text content after moving to another page", async () => {
+it("reuses the pdf document across page turns, discards late text, and destroys on bytes change or unmount", async () => {
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   const shared = { bytes: new Uint8Array([1]), sliceStart: 0, highlight: null, scanLabel: "scan", missingLabel: "review", zoomLabels: { out: "out", in: "in", fit: "fit" }, onSelection: vi.fn() };
   const view = render(<PdfPageView {...shared} pageNumber={1} storedText="FIRST LINE" />);
   await waitFor(() => expect(fake.requested).toHaveBeenCalledWith(1));
+  expect(fake.getDocument).toHaveBeenCalledTimes(1);
   view.rerender(<PdfPageView {...shared} pageNumber={2} storedText="PAGE TWO" />);
   await waitFor(() => expect(screen.getByTestId("reading-pdf-text").textContent).toBe("PAGE TWO"));
-  expect(fake.destroy).toHaveBeenCalled();
+  // Turning pages within the same PDF reuses the parsed document instead of tearing it down.
+  expect(fake.getDocument).toHaveBeenCalledTimes(1);
+  expect(fake.destroy).not.toHaveBeenCalled();
   await act(async () => { fake.first.resolve({ items: [{ str: "FIRST LINE" }] }); await fake.first.promise; });
   expect(screen.getByTestId("reading-pdf-text").textContent).toBe("PAGE TWO");
+  // Replacing the document bytes destroys the old document and parses the new one.
+  view.rerender(<PdfPageView {...shared} bytes={new Uint8Array([2])} pageNumber={2} storedText="PAGE TWO" />);
+  await waitFor(() => expect(fake.getDocument).toHaveBeenCalledTimes(2));
+  expect(fake.destroy).toHaveBeenCalledTimes(1);
+  // Unmounting destroys the active document task.
+  view.unmount();
+  expect(fake.destroy).toHaveBeenCalledTimes(2);
 });
 
 it("paints a page once at its opening width and again only after the width has held still (LOOP-06)", async () => {

@@ -1,6 +1,7 @@
 import { PLUGIN_PERMISSIONS, PLUGIN_REFUSALS, type PluginFacet, type PluginPermission, type PluginSlot } from "@manga/contracts/plugin";
 import type { MessageKey } from "@manga/i18n";
 import type { CommandError } from "./api.ts";
+import { formatBytes } from "./format.ts";
 
 export { PLUGIN_PERMISSIONS };
 export type { PluginFacet, PluginPermission, PluginSlot };
@@ -57,12 +58,7 @@ export function pluginReasonKey(error: CommandError | { details?: unknown }): Me
 }
 
 /** The size of what a plugin kept, as a person reads it. */
-export function bytesLabel(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
+export const bytesLabel = formatBytes;
 
 /** Whether the plugin can be turned on from the page: not while its publisher is untrusted or it does not fit this version. */
 export const canEnable = (plugin: PluginView): boolean => plugin.state !== "untrusted" && plugin.state !== "incompatible";

@@ -1,0 +1,17 @@
+{
+  "manifest": {
+    "format": "manga-plugin-v1",
+    "id": "manga.provider-deepseek",
+    "name": "DeepSeek",
+    "version": "1.0.0",
+    "publisher": { "id": "manga", "name": "MANGA" },
+    "description": "把 DeepSeek 的对话模型、语音识别、语音合成与网页搜索加入“设置 › 模型”。声明式插件，不运行代码：请求由 MANGA 代它发往 api.deepseek.com，密钥只保存在 MANGA 里。",
+    "host": { "min": "0.1.0" },
+    "permissions": ["network"],
+    "entry": null,
+    "provides": [{ "slot": "model.provider", "id": "deepseek" }],
+    "facets": [],
+    "provider": "provider.json"
+  },
+  "files": ["provider.json"]
+}

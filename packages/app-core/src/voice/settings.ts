@@ -1,79 +1,20 @@
 import {
   MangaError,
-  PROMPT_LIMIT_DEFAULT,
   PROMPT_LIMIT_MAX,
   PROMPT_LIMIT_MIN,
-  type AsrEngineSelection,
-  type ChineseVariant,
-  type DictationInsertMode,
-  type PolishMode,
   type PolishPrompts,
 } from "@manga/contracts";
+import {
+  DEFAULT_RECORDING_SETTINGS,
+  type RecordingOverlay,
+  type RecordingSettings,
+  type RecordingSettingsPatch,
+} from "@manga/contracts/recording";
 import { checkOverrides, findConflicts, resolveKeys, type KeyOverrides } from "@manga/contracts/keys";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 
-export type Overlay = { x?: number; y?: number };
-
-export type RecordingSettings = {
-  /** `null` is the system default microphone. */
-  deviceId: string | null;
-  /** In-app hold-to-record key (a `KeyboardEvent.code`, for example `F9`). Hold is never a global shortcut. */
-  holdKey: string;
-  toggleKey: string;
-  retention: "keep" | "discard";
-  duckPlayback: "none" | "lower" | "pause";
-  /** Kept on each side of detected speech, so the first and last syllables are not cut. */
-  boundaryMarginMs: number;
-  overlay: Overlay;
-  /** The language the recording is spoken in, as the provider names it ("zh", "ja", "en"); `null` lets the provider decide. */
-  language: string | null;
-  /** The longest dictionary hint sent with a block of audio, in characters. A model may take less than this, so a connection can have its own limit. */
-  promptChars: number;
-  promptCharsByConnection: Record<string, number>;
-  echoCancellation: boolean;
-  systemLoopbackAec: boolean;
-  browserNoiseSuppression: boolean;
-  autoGainControl: boolean;
-  gtcrnDenoise: boolean;
-  dictationHoldKey: string;
-  dictationInsertMode: DictationInsertMode;
-  polishMode: PolishMode;
-  polishPrompts: PolishPrompts;
-  polishConnectionId: string | null;
-  chineseVariant: ChineseVariant;
-  dictationEngine: AsrEngineSelection | null;
-  captureEngine: AsrEngineSelection | null;
-  localIdleMinutes: number;
-  retainDictationAudio24h: boolean;
-};
-
-export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
-  deviceId: null,
-  holdKey: "F9",
-  toggleKey: "F8",
-  retention: "keep",
-  duckPlayback: "lower",
-  boundaryMarginMs: 300,
-  overlay: {},
-  language: null,
-  promptChars: PROMPT_LIMIT_DEFAULT,
-  promptCharsByConnection: {},
-  echoCancellation: true,
-  systemLoopbackAec: false,
-  browserNoiseSuppression: false,
-  autoGainControl: true,
-  gtcrnDenoise: false,
-  dictationHoldKey: "RightAlt",
-  dictationInsertMode: "stream_replace",
-  polishMode: "light",
-  polishPrompts: {},
-  polishConnectionId: null,
-  chineseVariant: "simplified",
-  dictationEngine: null,
-  captureEngine: null,
-  localIdleMinutes: 10,
-  retainDictationAudio24h: false,
-};
+export type Overlay = RecordingOverlay;
+export { DEFAULT_RECORDING_SETTINGS, type RecordingSettings };
 
 export type MediaSettings = {
   /** The keys of the readers and the window the person changed (the others keep the defaults of `@manga/contracts/keys`). */
@@ -163,11 +104,7 @@ export function readRecordingSettings(store: DrizzleStore): RecordingSettings {
 
 export function writeRecordingSettings(
   store: DrizzleStore,
-  patch: Partial<Omit<RecordingSettings, "overlay" | "promptCharsByConnection" | "polishPrompts">> & {
-    overlay?: { x?: number | null; y?: number | null };
-    promptCharsByConnection?: Record<string, number | null>;
-    polishPrompts?: PolishPrompts;
-  },
+  patch: RecordingSettingsPatch,
 ): RecordingSettings {
   const current = readRecordingSettings(store);
   const byConnection = { ...current.promptCharsByConnection };
@@ -202,8 +139,11 @@ export function writeRecordingSettings(
   }
   // Two commands on one key would make one of them unreachable, and the user would not learn which until recording.
   if (next.holdKey === next.toggleKey) throw new MangaError("VALIDATION_ERROR", "hold and toggle recording need different keys");
+  if (next.dictationHoldKey === next.holdKey || next.dictationHoldKey === next.toggleKey) {
+    throw new MangaError("VALIDATION_ERROR", "dictation hold key cannot match recording hold or toggle key");
+  }
   const media = readMediaSettings(store);
-  const conflict = findConflicts(resolveKeys(media.keys), { holdKey: next.holdKey, toggleKey: next.toggleKey })[0];
+  const conflict = findConflicts(resolveKeys(media.keys), { holdKey: next.holdKey, toggleKey: next.toggleKey, dictationHoldKey: next.dictationHoldKey })[0];
   if (conflict) throw new MangaError("VALIDATION_ERROR", `${conflict.chord} is used by ${conflict.actions.join(" and ")}`);
   const limit = (value: number) => Number.isInteger(value) && value >= PROMPT_LIMIT_MIN && value <= PROMPT_LIMIT_MAX;
   if (!limit(next.promptChars) || Object.values(next.promptCharsByConnection).some((value) => !limit(value))) throw new MangaError("VALIDATION_ERROR", `the hint length must be between ${PROMPT_LIMIT_MIN} and ${PROMPT_LIMIT_MAX} characters`);
@@ -249,7 +189,7 @@ export function writeMediaSettings(
     if (chords === null) delete keys[id];
     else keys[id] = chords;
   }
-  const problem = checkOverrides(keys, { holdKey: rec.holdKey, toggleKey: rec.toggleKey });
+  const problem = checkOverrides(keys, { holdKey: rec.holdKey, toggleKey: rec.toggleKey, dictationHoldKey: rec.dictationHoldKey });
   if (problem) throw new MangaError("VALIDATION_ERROR", problem);
   const video = { ...current.video, ...(patch.video ?? {}), rates: patch.video?.rates ? normalizeRates(patch.video.rates) : current.video.rates };
   const next: MediaSettings = { keys, comic: { ...current.comic, ...(patch.comic ?? {}) }, video };

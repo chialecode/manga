@@ -4,6 +4,7 @@ import path from "node:path";
 import { checkLibraryIntegrity, checkpointClosedLibrary, peekSchemaMeta, pokeSchemaMeta } from "@manga/storage-drizzle";
 import { comparablePath, copyOwnedFile, fingerprintTree, listCopyFiles, pathsOverlap } from "./domain/file-ownership.ts";
 export { ownedFileFingerprint, pathsOverlap, copyOwnedFile, listCopyFiles, fingerprintTree } from "./domain/file-ownership.ts";
+import { writeFileAtomic } from "./shared/utils.ts";
 import {
   CHANNELS,
   LOCATION_PARTITIONS,
@@ -160,9 +161,8 @@ export function readRelocationMarker(root: string): string | undefined {
 }
 
 export function writeRelocationMarker(oldRoot: string, newRoot: string): void {
-  fs.mkdirSync(oldRoot, { recursive: true });
   const body = `${JSON.stringify({ relocatedRoot: path.resolve(newRoot), at: new Date().toISOString() }, null, 2)}\n`;
-  fs.writeFileSync(path.join(oldRoot, RELOCATION_MARKER), body);
+  writeFileAtomic(path.join(oldRoot, RELOCATION_MARKER), body);
 }
 
 function libraryExists(root: string): boolean {
@@ -189,10 +189,27 @@ export const UPGRADE_MARKER = "UPGRADE-IN-PROGRESS.json";
 
 export type LocationUpgradeResult = NonNullable<LocationLayout["upgrade"]>;
 
+const MAX_POINTER_HOPS = 16;
+
+function resolvePointerChain(file: string): { pointerPath: string; pointer: PointerBody | undefined } {
+  let currentPath = path.resolve(file);
+  const visited = new Set<string>([comparablePath(currentPath)]);
+  let current = readPointer(currentPath);
+  for (let hop = 0; hop < MAX_POINTER_HOPS && current?.redirectedTo; hop += 1) {
+    const nextPath = path.resolve(current.redirectedTo);
+    const nextKey = comparablePath(nextPath);
+    if (visited.has(nextKey) || !fs.existsSync(nextPath)) break;
+    const next = readPointer(nextPath);
+    if (!next) break;
+    visited.add(nextKey);
+    currentPath = nextPath;
+    current = next;
+  }
+  return { pointerPath: currentPath, pointer: current };
+}
+
 function followPointer(file: string): PointerBody | undefined {
-  const pointer = readPointer(file);
-  if (pointer?.redirectedTo && fs.existsSync(pointer.redirectedTo)) return readPointer(pointer.redirectedTo) ?? pointer;
-  return pointer;
+  return resolvePointerChain(file).pointer;
 }
 
 function nearestExisting(dir: string): string {
@@ -334,11 +351,9 @@ export function resolveLaunchLayout(request: LaunchRequest & { crashAt?: string 
     // A failed move keeps the old place working for this start, through its own pointer; the next start tries again.
     if (upgrade?.state === "failed") pointerPath = upgrade.legacyPointerPath;
   }
-  const pointer = readPointer(pointerPath);
-  if (pointer?.redirectedTo && fs.existsSync(pointer.redirectedTo)) {
-    pointerPath = path.resolve(pointer.redirectedTo);
-  }
-  const resolvedPointer = readPointer(pointerPath);
+  const followed = resolvePointerChain(pointerPath);
+  pointerPath = followed.pointerPath;
+  const resolvedPointer = followed.pointer;
   let defaultRoot = explicitRoot
     ?? (resolvedPointer?.profileRoot ? lowercaseMangaPath(resolvedPointer.profileRoot, bases) : upgrade?.state === "failed" ? upgrade.from : appRoot);
   const admitted = authoritativeRoot(defaultRoot);

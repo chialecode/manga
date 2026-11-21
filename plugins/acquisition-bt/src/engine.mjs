@@ -150,7 +150,7 @@ export class BtEngine {
   }
 
   /** Selects what the host chose and drops the rest; a file already complete from an earlier run counts at once. */
-  #apply(job) {
+  #apply(job, { deferFinish = false } = {}) {
     if (!job.torrent || job.torrent.destroyed) return;
     // Files share pieces at their edges, and deselecting one file trims the pieces its neighbour needs, so the whole selection is cleared and made again.
     job.torrent.deselect(0, job.torrent.pieces.length - 1);
@@ -164,17 +164,19 @@ export class BtEngine {
       }
     }
     job.state = "downloading";
-    this.#finished(job);
+    if (deferFinish) setImmediate(() => this.#finished(job));
+    else this.#finished(job);
   }
 
   async select({ jobId, indexes }) {
     const job = this.jobs.get(jobId);
     if (!job || !job.torrent) throw coded("UNKNOWN_JOB", "no such job");
     if (job.state === "metadata") throw coded("NOT_READY", "the torrent's files are not known yet");
+    if (job.settled || job.verifying || job.state === "verifying" || job.state === "verified") throw coded("INVALID", "the download is already verifying or finished");
     if (!Array.isArray(indexes) || indexes.some((index) => !Number.isInteger(index) || index < 0 || index >= job.files.length)) throw coded("INVALID", "a selected file is not in the torrent");
     if (!indexes.length) throw coded("INVALID", "select at least one file");
     job.selected = new Set(indexes);
-    this.#apply(job);
+    this.#apply(job, { deferFinish: true });
     return { ok: true };
   }
 
@@ -214,7 +216,12 @@ export class BtEngine {
     if (client.torrents.some((torrent) => torrent.infoHash === parsed.infoHash)) throw coded("DUPLICATE", "that torrent is already running");
     const job = { jobId, infoHash: parsed.infoHash, dir, stateDir, selected: null, torrent: null, files: [], watching: new Set(), state: "seeding", bad: new Map(), settled: false, verifying: false, seed: true, ratioLimit: Math.max(0, Number(ratio) || 0) };
     this.jobs.set(jobId, job);
-    job.torrent = client.add(parsed, { path: dir, deselect: true, destroyStoreOnDestroy: false });
+    try {
+      job.torrent = client.add(parsed, { path: dir, deselect: true, destroyStoreOnDestroy: false });
+    } catch (error) {
+      this.jobs.delete(jobId);
+      throw coded("ENGINE", String(error?.message ?? error));
+    }
     this.#watch(job);
     return { infoHash: parsed.infoHash };
   }

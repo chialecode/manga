@@ -4,7 +4,13 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const importRe = /(?:from|import)\s+["']([^"']+)["']/g;
+const ANY_IMPORT = /(?:from|import)\s+["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)|require\(\s*["']([^"']+)["']\s*\)/g;
+
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
 
 const rules = [
   {
@@ -41,8 +47,9 @@ const rules = [
     dir: "packages/app-core/src",
     // sharp, yauzl and anitomy serve the comic and media services; zod validates what the Bangumi client receives; readability and linkedom read a fetched
     // page as text; fflate writes and reads project packages; mdast-util-to-markdown writes a note's blocks as the Markdown file kept in its work's folder;
-    // pinyin-pro, wanakana and opencc-js normalize readings and script conversion for voice dictation. sherpa-onnx-node stays exclusively in asr-host.
-    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/, /^sharp$/, /^yauzl$/, /^anitomy$/, /^zod$/, /^@mozilla\/readability$/, /^linkedom$/, /^fflate$/, /^mdast-util-to-markdown$/, /^pinyin-pro$/, /^wanakana$/, /^opencc-js(\/[\w.-]+)?$/],
+    // @napi-rs/canvas renders PDF pages and sqlite-vec indexes semantic vectors; pinyin-pro, wanakana and opencc-js normalize readings and script conversion
+    // for voice dictation. sherpa-onnx-node stays exclusively in asr-host.
+    allow: [/^node:/, /^\.\//, /^@manga\/contracts(\/[\w.-]+)?$/, /^@manga\/plugin-sdk$/, /^@manga\/kernel$/, /^@manga\/storage-drizzle$/, /^@manga\/model-protocol$/, /^@manga\/i18n$/, /^sharp$/, /^yauzl$/, /^anitomy$/, /^zod$/, /^@mozilla\/readability$/, /^linkedom$/, /^fflate$/, /^mdast-util-to-markdown$/, /^@napi-rs\/canvas$/, /^sqlite-vec$/, /^pinyin-pro$/, /^wanakana$/, /^opencc-js(\/[\w.-]+)?$/],
     forbid: [/^electron$/, /^sherpa-onnx/],
   },
   {
@@ -51,14 +58,20 @@ const rules = [
     allow: [/^node:/, /^\.\//, /^webtorrent$/, /^parse-torrent$/],
     forbid: [/^@manga\//, /^electron$/],
   },
+  {
+    // A declarative first-party provider plugin ships JSON only and must never import product or Electron modules.
+    dir: "plugins/provider-deepseek",
+    allow: [/^node:/, /^\.\//],
+    forbid: [/^@manga\//, /^electron$/],
+  },
 ];
 
 function walk(dir, acc = []) {
   if (!fs.existsSync(dir)) return acc;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules") continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full, acc);
-    else if (entry.name === "node_modules") continue;
     else if (entry.name.endsWith(".ts") || entry.name.endsWith(".mjs")) acc.push(full);
   }
   return acc;
@@ -68,9 +81,9 @@ export function checkTree(base = root) {
   const errors = [];
   for (const rule of rules) {
     for (const file of walk(path.join(base, rule.dir))) {
-      const text = fs.readFileSync(file, "utf8");
-      for (const match of text.matchAll(importRe)) {
-        const spec = match[1];
+      const text = stripComments(fs.readFileSync(file, "utf8"));
+      for (const match of text.matchAll(ANY_IMPORT)) {
+        const spec = (match[1] ?? match[2] ?? match[3]).replace(/\?.*$/, "");
         // A relative import may go up into a sibling folder of the same package, but not out of it.
         if (spec.startsWith(".")) {
           const packageDir = path.join(base, rule.dir);
@@ -112,7 +125,6 @@ export const LIGHT_ENTRIES = [
   { entry: "apps/desktop/src/main/light/main.ts", packages: [/^node:/, /^electron$/, /^@manga\/contracts(\/[\w.-]+)?$/, /^yauzl$/] },
   { entry: "apps/desktop/src/light/main.tsx", packages: [/^react(-dom)?(\/[\w.-]+)?$/, /^lucide-react$/, /^@manga\/i18n$/, /^@manga\/contracts(\/[\w.-]+)?$/, /^clsx$/, /^tailwind-merge$/, /^jassub/, /^pdfjs-dist/, /^@radix-ui\//] },
 ];
-const ANY_IMPORT = /(?:from|import)\s+["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)|require\(\s*["']([^"']+)["']\s*\)/g;
 
 export function checkLightClosure(base = root, entries = LIGHT_ENTRIES) {
   const errors = [];
@@ -233,16 +245,20 @@ export function checkSyncSafeStorage(base = root) {
 function selfTest() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-dep-"));
   try {
-    fs.mkdirSync(path.join(dir, "packages/contracts/src"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "packages/contracts/src/node_modules/ignored"), { recursive: true });
     fs.mkdirSync(path.join(dir, "packages/app-core/src"), { recursive: true });
     fs.mkdirSync(path.join(dir, "plugins/acquisition-bt/src"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "plugins/provider-deepseek"), { recursive: true });
     const put = (file, lines) => fs.writeFileSync(path.join(dir, file), lines.join("\n") + "\n");
     put("packages/contracts/src/bad.ts", ['import electron from "electron";']);
+    put("packages/contracts/src/dyn.ts", ['const e = await import("electron");', 'const r = require("@manga/app-core");', '// import "forbidden-in-comment";']);
+    put("packages/contracts/src/node_modules/ignored/bad.ts", ['import electron from "electron";']);
     put("packages/contracts/src/up.ts", ['import { x } from "../../../other/outside.ts";']);
     put("packages/contracts/src/ok.ts", ['import { y } from "./bad.ts";']);
     put("packages/app-core/src/index.ts", ['import sherpa from "sherpa-onnx-node";', "export const v = sherpa;"]);
     put("plugins/acquisition-bt/src/reach.mjs", ['import { run } from "@manga/app-core";']);
     put("plugins/acquisition-bt/src/fine.mjs", ['import WebTorrent from "webtorrent";', 'import { connect } from "./link.mjs";']);
+    put("plugins/provider-deepseek/bad.mjs", ['import { app } from "electron";']);
     fs.mkdirSync(path.join(dir, "apps/desktop/src"), { recursive: true });
     put("apps/desktop/src/vault.ts", ["const ok = safeStorage.isEncryptionAvailable();"]);
     put("apps/desktop/src/async.ts", ["const ok = await safeStorage.isAsyncEncryptionAvailable(); const c = await safeStorage.encryptStringAsync(x);"]);
@@ -278,6 +294,18 @@ function selfTest() {
     }
     if (!errors.some((item) => item.includes("reach.mjs"))) {
       throw new Error("dependency gate self-test did not fail on a plugin that imports the product");
+    }
+    if (!errors.some((item) => item.includes("provider-deepseek") && item.includes("bad.mjs"))) {
+      throw new Error("dependency gate self-test did not check plugins/provider-deepseek");
+    }
+    if (!errors.some((item) => item.includes("dyn.ts") && item.includes("electron")) || !errors.some((item) => item.includes("dyn.ts") && item.includes("@manga/app-core"))) {
+      throw new Error("dependency gate self-test did not catch dynamic import()/require() in checkTree");
+    }
+    if (errors.some((item) => item.includes("forbidden-in-comment"))) {
+      throw new Error("dependency gate self-test matched a commented-out import");
+    }
+    if (errors.some((item) => item.includes("node_modules"))) {
+      throw new Error("dependency gate self-test walked into node_modules");
     }
     if (errors.some((item) => item.includes("fine.mjs"))) {
       throw new Error("dependency gate self-test rejected a plugin's own dependency");

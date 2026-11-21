@@ -46,6 +46,8 @@ export function retiredDocumentErrors(registry, exists) {
 // Only the current stage's name may appear. The optional letter still catches retired names such as m1b; the lookarounds keep
 // file formats (m4a, m4v), m3u8 and the like out of the match.
 const stageLabel = /(?<![A-Za-z0-9])[Mm](\d+)([a-z]?)(?![A-Za-z0-9])/g;
+// A GitHub advisory id (GHSA-xxxx-xxxx-xxxx) can hold a group like m249 that only looks like a stage label.
+const advisoryId = /GHSA(?:-[0-9a-z]{4}){3}/gi;
 const formatNames = new Set(['m4a', 'm4b', 'm4p', 'm4r', 'm4v']);
 // Fixed archive links (documentation policy 8.2) point at paths of files that only exist in history, so their paths may carry labels.
 const archiveLink = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:tree|blob)\/[0-9a-f]{7,40}\/[^\s)>\]]*/g;
@@ -55,7 +57,7 @@ export function stageLabels(text, currentStage) {
   const found = [];
   text.split(/\r?\n/).forEach((line, index) => {
     // SVG path data (d="M13 5H9...") starts with an M command that only looks like a stage label.
-    for (const match of line.replace(archiveLink, '').replace(/(?<![A-Za-z0-9])d="[^"]*"/g, '').matchAll(stageLabel)) {
+    for (const match of line.replace(archiveLink, '').replace(advisoryId, '').replace(/(?<![A-Za-z0-9])d="[^"]*"/g, '').matchAll(stageLabel)) {
       const label = match[0].toLowerCase();
       if (label === String(currentStage).toLowerCase() || formatNames.has(label)) continue;
       found.push({ label: match[0], line: index + 1 });
@@ -81,7 +83,7 @@ export function stageLabelErrors(registry, markdown) {
 }
 
 // The same rule for comments, test names, configuration and scripts. The checker and its counterexamples have to spell labels out.
-const codeRoots = ['apps', 'packages', 'tests', 'scripts', '.github', '.githooks'];
+const codeRoots = ['apps', 'packages', 'plugins', 'tests', 'scripts', '.github', '.githooks'];
 const codeFiles = /\.(?:ts|tsx|mjs|cjs|js|css|yml|yaml|json|py|sh)$/i;
 const codeIgnored = new Set(['node_modules', 'dist', 'out', '.vite', 'coverage']);
 const labelCheckers = new Set(['scripts/check-docs.mjs', 'scripts/check-docs.test.mjs']);

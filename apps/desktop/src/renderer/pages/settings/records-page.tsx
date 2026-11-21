@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, NotebookPen, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { CAPTURE_AUDIO_STATES, CAPTURE_STAGES } from "@manga/contracts/media";
+import { useAsyncGuard, useDebouncedSearch } from "../../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../../lib/api.ts";
-import { formatClock } from "../../readers/video-model.ts";
+import { formatClockMs } from "../../lib/format.ts";
 import { ConversationRecords } from "./conversation-records.tsx";
 import { Pager, SettingsPage } from "./rows.tsx";
 
@@ -53,19 +54,50 @@ export function RecordsPage(props: {
   onError: (message: string) => void;
   onNotice: (message: string) => void;
 }) {
-  const { t } = props;
-  const [filter, setFilter] = useState<Filter>({ type: props.scope === "conversation" ? "conversation" : "all", mediaKind: "", state: "", q: "", deleted: false, workId: props.initialWorkId ?? null });
-  const [text, setText] = useState("");
+  const { t, scope, initialWorkId } = props;
+  const [filter, setFilter] = useState<Filter>(() => ({
+    type: scope === "conversation" ? "conversation" : "all",
+    mediaKind: "",
+    state: "",
+    q: "",
+    deleted: false,
+    workId: initialWorkId ?? null,
+  }));
+  const search = useDebouncedSearch("", 250);
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<RecordItem[]>([]);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const latest = useRef(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onError: props.onError, onNotice: props.onNotice });
+  callbacksRef.current = { onError: props.onError, onNotice: props.onNotice };
 
-  const conversations = props.scope === "conversation";
+  // Keep filter aligned when the host switches scope or target work without remounting.
+  const prevPropsRef = useRef({ scope, initialWorkId: initialWorkId ?? null });
+  useEffect(() => {
+    const nextWorkId = initialWorkId ?? null;
+    if (prevPropsRef.current.scope === scope && prevPropsRef.current.initialWorkId === nextWorkId) return;
+    const scopeChanged = prevPropsRef.current.scope !== scope;
+    prevPropsRef.current = { scope, initialWorkId: nextWorkId };
+    setFilter((current) => ({
+      ...current,
+      ...(scopeChanged ? { type: scope === "conversation" ? "conversation" : "all", state: "", deleted: false } : {}),
+      workId: nextWorkId,
+    }));
+    setOffset(0);
+    setStatus("loading");
+  }, [scope, initialWorkId]);
+
+  useEffect(() => {
+    setFilter((current) => (current.q === search.query ? current : { ...current, q: search.query }));
+    setOffset(0);
+  }, [search.query]);
+
+  const conversations = scope === "conversation";
   const load = useCallback(async () => {
-    if (filter.type === "conversation") return;
-    const request = ++latest.current;
+    if (conversations || filter.type === "conversation") return;
+    const request = guard.next();
     const result = await attempt<{ items: RecordItem[]; total: number }>("records.list", {
       type: filter.type,
       ...(filter.mediaKind ? { mediaKind: filter.mediaKind } : {}),
@@ -76,29 +108,29 @@ export function RecordsPage(props: {
       limit: PAGE,
       offset,
     });
-    if (request !== latest.current) return;
-    if (!result.ok) { setStatus("error"); props.onError(result.error.message); return; }
+    if (!guard.isCurrent(request)) return;
+    if (!result.ok) { setStatus("error"); callbacksRef.current.onError(result.error.message); return; }
     setItems(asArray<RecordItem>(result.value.items));
     setTotal(Number(result.value.total ?? 0));
     setStatus("ready");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, offset]);
+  }, [conversations, filter, offset, guard]);
 
   useEffect(() => { void load(); }, [load]);
 
-  // Typing waits a moment so each keystroke is not a query.
-  useEffect(() => {
-    const timer = window.setTimeout(() => { setFilter((current) => (current.q === text.trim() ? current : { ...current, q: text.trim() })); setOffset(0); }, 250);
-    return () => window.clearTimeout(timer);
-  }, [text]);
-
   const patch = (next: Partial<Filter>) => { setFilter((current) => ({ ...current, ...next })); setOffset(0); };
 
-  async function act(commandId: string, input: unknown, done: string) {
-    const result = await attempt(commandId, input);
-    if (!result.ok) { props.onError(result.error.message); return; }
-    props.onNotice(done);
-    await load();
+  async function act(itemId: string, commandId: string, input: unknown, done: string) {
+    if (busyId !== null) return;
+    setBusyId(itemId);
+    try {
+      const result = await attempt(commandId, input);
+      if (!guard.isAlive()) return;
+      if (!result.ok) { callbacksRef.current.onError(result.error.message); return; }
+      callbacksRef.current.onNotice(done);
+      await load();
+    } finally {
+      if (guard.isAlive()) setBusyId(null);
+    }
   }
 
   const stateLabel = (state: string) => (CAPTURE_AUDIO_STATES as readonly string[]).includes(state) ? t(`review.audio.${state}` as MessageKey) : t(`review.stage.${state}` as MessageKey);
@@ -119,7 +151,7 @@ export function RecordsPage(props: {
           <option value="">{t("records.stateAll")}</option>
           {STATES.map((state) => <option key={state} value={state}>{stateLabel(state)}</option>)}
         </select>
-        <input type="search" aria-label={t("records.search")} placeholder={t("records.search")} data-testid="records-search" value={text} onChange={(event) => setText(event.target.value)} />
+        <input type="search" aria-label={t("records.search")} placeholder={t("records.search")} data-testid="records-search" {...search.inputProps} />
         <label className="msettings-check"><input type="checkbox" data-testid="records-deleted" checked={filter.deleted} onChange={(event) => patch({ deleted: event.target.checked, type: event.target.checked ? "note" : filter.type })} />{t("records.deleted")}</label>
         {filter.workId ? <button type="button" className="chip chip-button" data-testid="records-work-scope" onClick={() => patch({ workId: null })}>{t("records.workScope")} ×</button> : null}</>}
       </div>
@@ -140,7 +172,7 @@ export function RecordsPage(props: {
                 <strong className="record-title">{title}</strong>
                 {item.preview ? <span className="record-preview">{item.preview}</span> : null}
                 <span className="detail-muted record-meta">
-                  {[place, item.kind === "note" ? props.formatDate(item.at) : item.durationMs !== null ? formatClock(item.durationMs) : ""].filter(Boolean).join(" · ")}
+                  {[place, item.kind === "note" ? props.formatDate(item.at) : item.durationMs !== null ? formatClockMs(item.durationMs) : ""].filter(Boolean).join(" · ")}
                 </span>
                 {item.kind === "recording" ? (
                   <span className="record-chips">
@@ -152,19 +184,19 @@ export function RecordsPage(props: {
               <div className="record-actions">
                 {item.kind === "note" ? (
                   item.deleted ? (
-                    <button type="button" className="secondary-button" data-testid={`record-restore-${item.id}`} onClick={() => void act("notes.undelete", { objectId: item.id }, t("records.restored"))}><Undo2 size={14} aria-hidden="true" />{t("records.restore")}</button>
+                    <button type="button" className="secondary-button" data-testid={`record-restore-${item.id}`} disabled={busyId !== null} onClick={() => void act(item.id, "notes.undelete", { objectId: item.id }, t("records.restored"))}><Undo2 size={14} aria-hidden="true" />{t("records.restore")}</button>
                   ) : (
                     <>
                       <button type="button" className="secondary-button" data-testid={`record-open-${item.id}`} onClick={() => props.onOpenNote(item.id)}>{t("records.open")}</button>
                       {item.hasSource ? <button type="button" className="secondary-button" data-testid={`record-source-${item.id}`} onClick={() => props.onOpenNoteSource(item.id)}>{t("records.source")}</button> : null}
-                      <button type="button" className="link-button" data-testid={`record-delete-${item.id}`} onClick={() => void act("notes.delete", { objectId: item.id }, t("records.deletedDone"))}><Trash2 size={14} aria-hidden="true" />{t("records.delete")}</button>
+                      <button type="button" className="link-button" data-testid={`record-delete-${item.id}`} disabled={busyId !== null} onClick={() => void act(item.id, "notes.delete", { objectId: item.id }, t("records.deletedDone"))}><Trash2 size={14} aria-hidden="true" />{t("records.delete")}</button>
                     </>
                   )
                 ) : (
                   <>
                     <button type="button" className="secondary-button" data-testid={`record-review-${item.id}`} onClick={() => props.onOpenRecording(item.id, item.workId)}>{t("records.review")}</button>
-                    {item.stage && RETRYABLE.includes(item.stage) ? <button type="button" className="secondary-button" data-testid={`record-retry-${item.id}`} onClick={() => void act("capture.retry", { sessionId: item.id }, t("records.retried"))}><RotateCcw size={14} aria-hidden="true" />{t("records.retry")}</button> : null}
-                    {item.audioState === "staged" ? <button type="button" className="link-button" data-testid={`record-clean-${item.id}`} onClick={() => void act("capture.retain", { sessionId: item.id, action: "discard" }, t("records.cleaned"))}>{t("records.clean")}</button> : null}
+                    {item.stage && RETRYABLE.includes(item.stage) ? <button type="button" className="secondary-button" data-testid={`record-retry-${item.id}`} disabled={busyId !== null} onClick={() => void act(item.id, "capture.retry", { sessionId: item.id }, t("records.retried"))}><RotateCcw size={14} aria-hidden="true" />{t("records.retry")}</button> : null}
+                    {item.audioState === "staged" ? <button type="button" className="link-button" data-testid={`record-clean-${item.id}`} disabled={busyId !== null} onClick={() => void act(item.id, "capture.retain", { sessionId: item.id, action: "discard" }, t("records.cleaned"))}>{t("records.clean")}</button> : null}
                   </>
                 )}
               </div>

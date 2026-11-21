@@ -4,12 +4,12 @@
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.plugins` / 插件 / 开发者 |
 | 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；信任边界与手动流程见[用户待办](../../USER-ACTIONS.md#checks) |
-| 需求 / 设计依据 | PLUG-01—06、AT-34、AT-45、AT-47、AT-48；[Agent 与插件协议](../design/agent-and-plugins.md)、[外部扩展设计](../design/external-providers-and-acquisition.md)、[数据与安全](../dev-rules/data-and-security.md) |
+| 需求 / 设计依据 | PLUG-01—07、AT-34、AT-45、AT-47、AT-48；[Agent 与插件协议](../design/agent-and-plugins.md)、[外部扩展设计](../design/external-providers-and-acquisition.md)、[数据与安全](../dev-rules/data-and-security.md) |
 | 包与公开入口 | `packages/app-core/src/plugins/`（`package.ts` 包格式与签名、`trust.ts` 信任库、`service.ts` 安装与启停、`runtime.ts` 进程与消息、`spawn-node.ts`）；契约 `packages/contracts/src/plugin.ts`、`inputs-plugins.ts`；桌面端进程启动 `apps/desktop/src/main/plugin-process.ts`；命令 `plugin.list`、`bundled`、`inspect`、`install`、`enable`、`disable`、`rollback`、`uninstall`、`exportData`、`deleteData`、`trust.list`、`trust.add`、`trust.remove`；界面 `apps/desktop/src/renderer/pages/settings/plugins-page.tsx`、`plugin-dialogs.tsx` |
 
 ## 1. 责任与依赖
 
-拥有可安装的插件包：包格式、签名与信任、安装/升级/回退/卸载、各插件的启停与独立进程的运行。插件用来给应用的“位置”（slot）补上一个提供者，并在启用期间打开对应的界面部分（facet）。现在只有一个位置 `acquisition.engine` 和一个界面部分 `acquisition`（下载页）。不拥有插件提供的业务（下载的计划、发布与入库归[下载模块](acquisition.md)）。
+拥有可安装的插件包：包格式、签名与信任、安装/升级/回退/卸载、各插件的启停与独立进程的运行。插件用来给应用的“位置”（slot）补上一个提供者，并在启用期间打开对应的界面部分（facet）。现在有两个位置：`acquisition.engine`（可执行插件，界面部分 `acquisition` 即下载页）与 `model.provider`（声明式提供者插件，PLUG-07）。不拥有插件提供的业务（下载的计划、发布与入库归[下载模块](acquisition.md)）。
 
 Feature `plugins`；Facet `service`/`ui`；无硬依赖。关闭本功能会停掉所有插件进程，已安装的包与数据保留；重新打开与应用启动时，把用户启用过的重新启动（`restore`）。
 
@@ -27,6 +27,7 @@ Feature `plugins`；Facet `service`/`ui`；无硬依赖。关闭本功能会停�
 - 升级与回退：升级保留被替换的版本；升级后的新版本若无法启动，自动退回上一版本并说明原因；`plugin.rollback` 在用户需要时回到保留的上一版本。升级前在运行的插件升级后继续运行；新安装时可选“安装后启用”（界面默认勾选）。
 - 启停：`plugin.enable` 启动进程并等待它报告就绪（10 秒）；每 5 秒探测一次，连续 3 次无响应则结束；停止时给 3 秒优雅退出；调用默认等 30 秒；每秒超过 5000 条消息或单条超过 4 MiB 即被结束；自行退出的插件在 5 分钟内最多重启 3 次，间隔 0.5 秒起按倍数增长，用尽后标为 `failed` 并保留原因。每次启动都再按签名与信任校验一遍已安装的文件。停用后再启用，不需要重新安装。
 - 卸载（`plugin.uninstall`）：默认保留插件自己的数据，在列表里以“残留”显示，用户可以导出（`plugin.exportData`，写到所选目录，不覆盖已有文件）或删除（`plugin.deleteData`）；勾选删除数据时一并删除。再次安装同一插件会接回保留的数据。
+- 声明式提供者插件（PLUG-07，A-134）：清单的 `entry` 为 `null`，`provides` 只有一项 `model.provider`，`provider` 指向载荷里的提供者文件（`manga-provider-v1`，≤ 64 KiB，契约 `packages/contracts/src/provider.ts`），权限必须含 `network`。提供者文件写明名称、`baseUrl`（https）、允许的主机（≤ 8 个，地址必须在其中）、取得密钥的网址、模型列表接口（`openai-models`）、模型目录（窗口、输出、输入类型、能力、推理等级、默认勾选、价格）与服务（语音识别、语音合成、网页搜索：限制、声音、价格与价格的核对日期）。每个模型与服务只能引用宿主的接法：`openai-chat-completions`（方言 `deepseek`）、`deepseek-asr@1`、`deepseek-tts@1`、`deepseek-search@1`。引用未知接法、非 https 地址、未声明的主机、文件缺失或无效、文件声明的提供者与清单不符、缺少网络权限的包，`inspect` 以拒绝原因 `provider` 说明（文件问题），安装被拒。它不启动进程：启用与应用启动恢复（`restore`）时先加载声明式提供者文件并注册到提供者注册表（`packages/app-core/src/providers/registry.ts`），清除已恢复提供者连接上过期的 `"provider"` 测试错误，“设置 › 模型”无需重启即同步更新；停用、卸载或信任被移除时注册撤销，它加入的连接保留并标明清单中的提供者名称与“插件已停用”，所有调用在发请求之前以原因拒绝，进行中的请求被取消；连接测试按真实错误类型分类，不会把网络或鉴权失败误记为插件停用；重新启用即恢复。随应用带来的第一个是 `plugins/provider-deepseek/`（`manga.provider-deepseek`，只提供、不自动安装）。
 - 日志：安装、停用、卸载与删除数据记入操作日志（分类“插件”），按插件的名字记录，不含任何文件所在位置；包内容与密钥不进日志。
 
 ## 3. 界面与 Agent
@@ -41,6 +42,6 @@ Agent 不能安装、启用或信任插件：插件管理的命令是所有者�
 
 ## 5. 验证与未决
 
-自动：`tests/plugins/plugin-package.test.ts`（包格式、签名、解包限制、路径安全）、`plugin-service.test.ts`（信任、权限确认、升级回退、启停与进程、宿主请求的门、行为异常的插件、随应用的包、操作日志与半写的安装）、`tests/shell/plugins-ui.test.tsx`。窗口：`plugins`（打包应用里的 15 步：随包的插件被提供但没有自己装上、安装对话框在权限被确认之前不能确认、安装后启用并以第一方信任运行、下载页随引擎出现，接着对回环蜂群做一次下载，最后在设置页停用再启用；下载部分见[下载模块](acquisition.md)）。卸载保留数据、信任移除与升级回退由自动测试覆盖，窗口里没有走。
+自动：`tests/plugins/provider-plugin.test.ts`（提供者文件的校验与拒绝原因、声明式位置、启停与零网络、账户与密钥、卸载后再装）；`tests/plugins/plugin-package.test.ts`（包格式、签名、解包限制、路径安全）、`plugin-service.test.ts`（信任、权限确认、升级回退、启停与进程、宿主请求的门、行为异常的插件、随应用的包、操作日志与半写的安装）、`tests/shell/plugins-ui.test.tsx`。窗口：`plugins`（打包应用里的 15 步：随包的插件被提供但没有自己装上、安装对话框在权限被确认之前不能确认、安装后启用并以第一方信任运行、下载页随引擎出现，接着对回环蜂群做一次下载，最后在设置页停用再启用；下载部分见[下载模块](acquisition.md)）。卸载保留数据、信任移除与升级回退由自动测试覆盖，窗口里没有走。
 
-限制：进程不是沙箱，只收可信发布者；第一方签名私钥由构建者持有，不在仓库里，没有私钥无法生成可安装的随包插件（见[用户待办](../../USER-ACTIONS.md#checks)里的备份事项）；清单没有 `needs` 字段，插件之间与对应用模块的依赖不由清单表达；宿主开放的请求只有 `log`，`network`、`files`、`library-import` 的门还没有对应的宿主方法；只有 `acquisition.engine` 一个位置，新增位置要改契约；不支持从网络安装或自动更新，只从本机文件或随包安装。
+限制：进程不是沙箱，只收可信发布者；第一方签名私钥由构建者持有，不在仓库里，没有私钥无法生成可安装的随包插件（见[用户待办](../../USER-ACTIONS.md#checks)里的备份事项）；清单没有 `needs` 字段，插件之间与对应用模块的依赖不由清单表达；宿主开放的请求只有 `log`，`network`、`files`、`library-import` 的门还没有对应的宿主方法；只有 `acquisition.engine` 与声明式的 `model.provider` 两个位置，新增位置要改契约；不支持从网络安装或自动更新，只从本机文件或随包安装。

@@ -135,27 +135,36 @@ export function useDanmaku(input: { on: boolean; enabled: boolean; resourceId: s
     // The conversion setting changes the comments the network sends, so a change of it fetches this episode again.
   }, [input.on, input.enabled, begin, input.convert]);
 
+  const beginRef = useRef(begin);
+  beginRef.current = begin;
+
   const actions = useMemo<DanmakuActions>(() => ({
-    allow: (allowed) => { void begin(allowed); },
-    retry: () => { void begin(); },
+    allow: (allowed) => { void beginRef.current(allowed); },
+    retry: () => { void beginRef.current(); },
     search: (query, episode) => {
+      const mine = run.current;
       patch({ busy: true, warning: null });
       void attempt<{ candidates: DanmakuCandidate[]; hasMore: boolean }>("danmaku.search", { query, ...(episode !== undefined ? { episode } : {}) }).then((result) => {
+        if (mine !== run.current) return;
         if (!result.ok) { setState((current) => ({ ...current, busy: false, warning: problemOf(result.error) })); return; }
         patch({ busy: false, results: { query, candidates: result.value.candidates, hasMore: result.value.hasMore } });
       });
     },
     choose: (candidate) => {
+      const mine = run.current;
       patch({ busy: true });
       void attempt("danmaku.choose", { ...ids, episodeId: candidate.episodeId, animeId: candidate.animeId, animeTitle: candidate.animeTitle, episodeTitle: candidate.episodeTitle }).then((result) => {
+        if (mine !== run.current) return;
         if (!result.ok) { setState((current) => ({ ...current, busy: false, warning: problemOf(result.error) })); return; }
-        void begin();
+        void beginRef.current();
       });
     },
     confirm: () => {
       const match = latest.current.match;
       if (!match) return;
+      const mine = run.current;
       void attempt<{ match: DanmakuMatchInfo }>("danmaku.choose", { ...ids, episodeId: match.episodeId, animeId: match.animeId, animeTitle: match.animeTitle, episodeTitle: match.episodeTitle }).then((result) => {
+        if (mine !== run.current) return;
         if (result.ok) patch({ match: result.value.match });
       });
     },
@@ -164,8 +173,10 @@ export function useDanmaku(input: { on: boolean; enabled: boolean; resourceId: s
       patch({ phase: "choose", results: null, choice: { candidates: [], reason: "none", suggestedQuery, episodeNumber } });
     },
     refresh: () => {
+      const mine = run.current;
       patch({ busy: true, warning: null });
       void attempt<LoadReply>("danmaku.load", { ...ids, refresh: true }).then((result) => {
+        if (mine !== run.current) return;
         if (!result.ok) { setState((current) => ({ ...current, busy: false, warning: problemOf(result.error) })); return; }
         const value = result.value;
         if (value.state !== "ok") { patch({ busy: false }); return; }
@@ -173,12 +184,14 @@ export function useDanmaku(input: { on: boolean; enabled: boolean; resourceId: s
       });
     },
     setOffset: (offsetMs) => {
+      const mine = run.current;
       void attempt<{ match: DanmakuMatchInfo }>("danmaku.setOffset", { ...ids, offsetMs }).then((result) => {
+        if (mine !== run.current) return;
         if (result.ok) patch({ match: result.value.match });
         else patch({ warning: problemOf(result.error) });
       });
     },
-  }), [ids, begin, patch]);
+  }), [ids, patch]);
 
   return { ...state, actions };
 }

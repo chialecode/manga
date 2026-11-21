@@ -8,7 +8,7 @@ export const OWNER_COMMANDS = [
   "reading.bookmarks", "reading.setBookmark", "reading.removeBookmark",
   "inventory.overview", "inventory.scan", "inventory.cancelScan", "inventory.reveal", "inventory.repair", "settings.get", "settings.skipAi",
   "settings.proposeLocations", "settings.applyLocations", "settings.cleanLegacyLocation", "settings.recoverJobs", "settings.setRuntime", "settings.setLayout", "settings.getShell", "settings.setShell",
-  "connections.list", "connections.upsert", "connections.test", "connections.delete", "connections.setProfile", "connections.probe", "settings.getAgent", "settings.setAgent", "agent.trace.list", "agent.trace.get", "agent.trace.export", "agent.trace.stats", "agent.trace.clear",
+  "connections.list", "connections.upsert", "connections.test", "connections.delete", "connections.setProfile", "connections.probe", "providers.list", "providers.discover", "providers.add", "providers.setKey", "providers.deleteAccount", "web.search", "settings.getAgent", "settings.setAgent", "agent.trace.list", "agent.trace.get", "agent.trace.export", "agent.trace.stats", "agent.trace.clear",
   "agent.createSession", "agent.send", "agent.cancel", "agent.retry", "agent.getRun",
   "library.inspectFile", "works.importDirectory", "comic.pages", "comic.pageHandle", "comic.pageHandles",
   "video.probe", "video.subtitles", "video.audioTracks", "video.frameIndex", "video.keyframes", "video.cancelFrameIndex", "video.playbackPlan", "video.playCopy", "video.handle", "video.subtitleHandle", "video.fonts",
@@ -46,6 +46,6 @@ export const OWNER_COMMANDS = [
 
 /** Commands that change the blocks of a note, after which the note's embeds are reconciled with them. */
 export const NOTE_CONTENT_COMMANDS = new Set(["notes.create", "notes.update", "notes.undo", "notes.split", "notes.merge", "notes.move", "notes.copy", "notes.replace", "notes.insert", "notes.remove", "notes.setType", "notes.restore"]);
-/** Agent commands turned on by the user for one task only (`metadata.search`, `semantic.search`, `webpage.fetch`). */
-export const AGENT_OPT_IN_COMMANDS = ["metadata.search", "semantic.search", "webpage.fetch"];
+/** Agent commands turned on by the user for one task only (`metadata.search`, `semantic.search`, `webpage.fetch`, `web.search` for "联网搜索"). */
+export const AGENT_OPT_IN_COMMANDS = ["metadata.search", "semantic.search", "webpage.fetch", "web.search"];
 export const AGENT_COMMANDS = ["library.find", "library.list", "library.getResource", "library.read", "library.contextSnapshot", "source.card", "notes.create", "notes.update", "notes.get", "notes.list", "notes.undo", "inventory.overview", "works.list", "works.get", "progress.get", "comic.pages", "material.subtitleWindow", "library.scan.status", "log.query", "screenshot.list", "screenshot.get", "danmaku.around"];

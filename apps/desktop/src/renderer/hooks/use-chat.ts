@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import type { QuickTask } from "@manga/contracts/quick-tasks";
 import { asArray, attempt, call, messageOf } from "../lib/api.ts";
@@ -63,6 +63,7 @@ export function useChat(deps: ChatDeps) {
   const noteable = Boolean(target.resourceId || target.workId);
   const mode: ChatMode = noteable ? stored : "ask";
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [quickTasks, setQuickTasks] = useState<QuickTask[]>([]);
   const context = useReaderContext();
   const tags = useQuoteTags(target.resourceId);
@@ -85,11 +86,12 @@ export function useChat(deps: ChatDeps) {
 
   /** A note: the user's own text, anchored where the tag points, else where the reader is, else on the work. */
   async function sendNote(text: string): Promise<boolean> {
-    if (!noteable) return false;
+    if (sendingRef.current || !noteable) return false;
     const body = text.trim();
     const live = readerContext.get();
     const tag = tags[0];
     if (!body && !tag) return false;
+    sendingRef.current = true;
     setSending(true);
     try {
       if (!target.sessionId) await deps.ensureTargetSession();
@@ -113,17 +115,24 @@ export function useChat(deps: ChatDeps) {
       // The text stays in the input, so a failed note is not lost.
       deps.setError(messageOf(error));
       return false;
-    } finally { setSending(false); }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
   }
 
   async function sendAsk(text: string, extra: { attach?: "page" | "frame"; library?: boolean; quickTask?: { id: string | null; name: string } } = {}): Promise<boolean> {
-    if (!text.trim()) return false;
+    if (sendingRef.current || deps.running || !text.trim()) return false;
+    sendingRef.current = true;
     setSending(true);
     try {
       const sent = await deps.sendAgent({ text, ...extra, tags });
       if (sent) { for (const tag of tags) quoteTags.remove(tag.id); void stream.reload(); }
       return sent;
-    } finally { setSending(false); }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
   }
 
   const send = () => (mode === "note" ? sendNote(composer.draft) : sendAsk(composer.draft));

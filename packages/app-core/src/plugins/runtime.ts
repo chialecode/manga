@@ -68,6 +68,7 @@ type Running = {
   /** Ends when the process is gone, however it went. */
   exited: Promise<void>;
   markExited: () => void;
+  gen: number;
 };
 
 const failure = (code: "INTERRUPTED" | "PROVIDER_UNAVAILABLE" | "FORBIDDEN" | "CANCELLED", message: string, details: Record<string, unknown> = {}) => new MangaError(code, message, { details });
@@ -81,6 +82,7 @@ export class PluginRuntime {
   private readonly eventListeners = new Set<(pluginId: string, name: string, payload: unknown) => void>();
   private readonly stateListeners = new Set<(pluginId: string, info: PluginRunInfo) => void>();
   private readonly restartTimers = new Map<string, NodeJS.Timeout>();
+  private readonly generation = new Map<string, number>();
   private closed = false;
 
   constructor(options: { spawn: PluginSpawner; limits?: Partial<RuntimeLimits> }) {
@@ -123,23 +125,30 @@ export class PluginRuntime {
 
   // ---------------------------------------------------------------------------------------------------------- start / stop
 
+  private bump(pluginId: string): number {
+    const next = (this.generation.get(pluginId) ?? 0) + 1;
+    this.generation.set(pluginId, next);
+    return next;
+  }
+
   /** Starts the plugin's process and waits until it says it is ready. A plugin that does not start leaves nothing running. */
   async start(spec: PluginStartSpec): Promise<void> {
     if (this.closed) throw failure("INTERRUPTED", "the application is closing");
     const current = this.running.get(spec.pluginId);
     if (current && (current.state === "running" || current.state === "starting")) return current.readyPromise;
+    const gen = this.bump(spec.pluginId);
     this.clearRestart(spec.pluginId);
     this.failed.delete(spec.pluginId);
-    await this.launch(spec, []);
+    await this.launch(spec, [], gen);
   }
 
-  private async launch(spec: PluginStartSpec, restarts: number[]): Promise<void> {
+  private async launch(spec: PluginStartSpec, restarts: number[], gen: number): Promise<void> {
     const channel = this.spawner({ pluginId: spec.pluginId, entry: spec.entry, cwd: spec.cwd, env: { ...spec.env, MANGA_PLUGIN_ID: spec.pluginId, MANGA_PLUGIN_DATA: spec.dataDir } });
     let markExited = () => undefined as void;
     const exited = new Promise<void>((resolve) => { markExited = resolve; });
     const run: Running = {
       spec, channel, state: "starting", error: null, startedAt: null, restarts, pending: new Map(), nextId: 1, lastPong: Date.now(),
-      window: { at: Date.now(), count: 0 }, ready: null, readyPromise: Promise.resolve(), pingTimer: null, stopping: false, exited, markExited,
+      window: { at: Date.now(), count: 0 }, ready: null, readyPromise: Promise.resolve(), pingTimer: null, stopping: false, exited, markExited, gen,
     };
     this.running.set(spec.pluginId, run);
     this.publish(spec.pluginId);
@@ -157,6 +166,7 @@ export class PluginRuntime {
 
   /** Asks the plugin to stop, and ends it when it does not. Resolves when the process is gone. */
   async stop(pluginId: string): Promise<void> {
+    this.bump(pluginId);
     this.clearRestart(pluginId);
     const run = this.running.get(pluginId);
     this.failed.delete(pluginId);
@@ -175,21 +185,22 @@ export class PluginRuntime {
 
   async shutdown(): Promise<void> {
     this.closed = true;
-    for (const id of [...this.restartTimers.keys()]) this.clearRestart(id);
+    for (const id of [...this.restartTimers.keys()]) { this.bump(id); this.clearRestart(id); }
     await Promise.all([...this.running.keys()].map((id) => this.stop(id)));
   }
 
   /** Stops every plugin that is running and every restart that is waiting, and stays open: used when the plugin feature is switched off. */
   async stopAll(): Promise<void> {
-    for (const id of [...this.restartTimers.keys()]) this.clearRestart(id);
+    for (const id of [...this.restartTimers.keys()]) { this.bump(id); this.clearRestart(id); }
     await Promise.all([...this.running.keys()].map((id) => this.stop(id)));
   }
 
   /** Ends every plugin's process at once, without waiting: used when the application closes, where nothing can be waited for. */
   killAll(): void {
     this.closed = true;
-    for (const id of [...this.restartTimers.keys()]) this.clearRestart(id);
+    for (const id of [...this.restartTimers.keys()]) { this.bump(id); this.clearRestart(id); }
     for (const run of this.running.values()) {
+      this.bump(run.spec.pluginId);
       run.stopping = true;
       try { run.channel.kill(); } catch { /* already gone */ }
     }
@@ -219,11 +230,12 @@ export class PluginRuntime {
     if (planned && !run.error) { this.failed.delete(run.spec.pluginId); this.publish(run.spec.pluginId); return; }
     this.failed.set(run.spec.pluginId, reason ?? "the plugin stopped");
     this.publish(run.spec.pluginId);
-    if (wasState === "running" && !this.closed) this.scheduleRestart(run.spec, run.restarts);
+    if (wasState === "running" && !this.closed && !planned && this.generation.get(run.spec.pluginId) === run.gen) this.scheduleRestart(run.spec, run.restarts, run.gen);
   }
 
   /** A plugin that was running and ended by itself or was ended for misbehaving is started again, a few times with a growing wait, then left stopped with the reason. */
-  private scheduleRestart(spec: PluginStartSpec, history: number[]): void {
+  private scheduleRestart(spec: PluginStartSpec, history: number[], gen: number): void {
+    if (this.closed || this.generation.get(spec.pluginId) !== gen) return;
     const now = Date.now();
     const recent = history.filter((at) => now - at < this.limits.restartWindowMs);
     if (recent.length >= this.limits.maxRestarts) {
@@ -234,9 +246,12 @@ export class PluginRuntime {
     this.clearRestart(spec.pluginId);
     const timer = setTimeout(() => {
       this.restartTimers.delete(spec.pluginId);
-      if (this.closed || this.running.has(spec.pluginId)) return;
+      if (this.closed || this.running.has(spec.pluginId) || this.generation.get(spec.pluginId) !== gen) return;
       const next = [...recent, Date.now()];
-      this.launch(spec, next).catch(() => this.scheduleRestart(spec, next));
+      this.launch(spec, next, gen).catch(() => {
+        if (this.closed || this.generation.get(spec.pluginId) !== gen) return;
+        this.scheduleRestart(spec, next, gen);
+      });
     }, this.limits.restartBaseMs * 2 ** recent.length);
     timer.unref?.();
     this.restartTimers.set(spec.pluginId, timer);
@@ -257,6 +272,7 @@ export class PluginRuntime {
     if (size > this.limits.messageBytes) { this.end(run, "the plugin sent a message that is too large", run.state); return; }
     switch (body.t) {
       case "ready":
+        if (run.state !== "starting") break;
         run.state = "running";
         run.startedAt = new Date().toISOString();
         run.lastPong = Date.now();

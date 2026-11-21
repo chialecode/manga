@@ -5,7 +5,7 @@ import type { BrowserWindow } from "electron";
 import { loadVecExtension, type MangaProductApp } from "@manga/app-core";
 import { testHooks } from "../test-hooks.ts";
 import { clickTestId, closeTabs, openProjectsPage, openRecords, setField, showTab, sleep, waitDrawn, waitForTestId, waitFrames, waitUntil } from "./driver.ts";
-import { capturePage, caller, js, toRail, type FlowResult } from "./common.ts";
+import { callOk, capturePage, caller, js, makeObserver, requireSamplePath, toRail, type FlowResult } from "./common.ts";
 import { WINDOW_SIZES, type Observation } from "./window-walk.ts";
 
 /**
@@ -41,26 +41,12 @@ const sha = (file: string) => createHash("sha256").update(fs.readFileSync(file))
 export async function runCreativeSmoke(input: { appService: MangaProductApp; grant: string; view: BrowserWindow; evidenceDir: string | undefined; logsDir: string }): Promise<FlowResult & { observations: Observation[] }> {
   const { appService, grant, view, evidenceDir, logsDir } = input;
   const call = caller(appService, grant);
-  const observations: Observation[] = [];
-  const observe = (name: string, ok: boolean, detail: unknown) => {
-    observations.push({ name, status: ok ? "passed" : "failed", detail });
-    console.error(`creative-walk ${name}: ${ok ? "ok" : "FAILED"} ${JSON.stringify(detail ?? null).slice(0, 700)}`);
-    return ok;
-  };
-  const value = async <T>(commandId: string, body: Record<string, unknown>): Promise<T> => {
-    const result = await call(commandId, body);
-    if (result.status !== "ok") throw new Error(`${commandId}: ${result.error?.message ?? "failed"}`);
-    return result.value as T;
-  };
+  const { observations, observe } = makeObserver("creative-walk");
+  const value = <T>(commandId: string, body: Record<string, unknown>): Promise<T> => callOk<T>(call, commandId, body);
   const root = process.env.MANGA_SMOKE_SAMPLES;
   const manifestFile = root ? path.join(root, "manifest.json") : "";
   if (!root || !fs.existsSync(manifestFile)) return { ok: false, notRun: true, reason: "MANGA_SMOKE_SAMPLES does not point at the generated samples", observations };
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { samples: Array<{ id: string; path: string; status: string }> };
-  const sampleDir = (id: string) => {
-    const entry = manifest.samples.find((item) => item.id === id);
-    if (!entry || entry.status !== "generated") throw new Error(`sample ${id} is not available`);
-    return path.join(root, entry.path);
-  };
+  const sampleDir = (id: string) => requireSamplePath(root, id);
   const shot = (name: string, mark?: string) => capturePage(view, evidenceDir, `ui-creative-${name}.png`, mark);
   const dir = path.join(logsDir, "walk-creative");
   fs.rmSync(dir, { recursive: true, force: true });

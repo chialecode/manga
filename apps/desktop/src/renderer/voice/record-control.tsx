@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { Mic, Square } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { formatClock } from "../readers/video-model.ts";
@@ -46,7 +47,47 @@ export function RecordControl(props: {
   onStop: () => void;
   onReview?: () => void;
 }) {
-  const { t, state } = props;
+  const { t, state, onHoldEnd } = props;
+  const uiHoldActive = useRef(false);
+  const cleanupWindowHold = useRef<(() => void) | null>(null);
+  const onHoldEndRef = useRef(onHoldEnd);
+  onHoldEndRef.current = onHoldEnd;
+
+  const releaseHold = useCallback(() => {
+    if (!uiHoldActive.current) return;
+    uiHoldActive.current = false;
+    cleanupWindowHold.current?.();
+    cleanupWindowHold.current = null;
+    onHoldEndRef.current();
+  }, []);
+
+  const startHold = useCallback(() => {
+    if (uiHoldActive.current) return;
+    uiHoldActive.current = true;
+    // The hold button swaps to `<RecordIndicator />` as soon as `phase` leaves `"idle"`, so track release on `window` too.
+    const onPointerDone = () => releaseHold();
+    const onKeyUpWindow = (event: KeyboardEvent) => {
+      if (event.key === " " || event.key === "Enter") releaseHold();
+    };
+    window.addEventListener("pointerup", onPointerDone, true);
+    window.addEventListener("pointercancel", onPointerDone, true);
+    window.addEventListener("keyup", onKeyUpWindow, true);
+    window.addEventListener("blur", onPointerDone);
+    cleanupWindowHold.current = () => {
+      window.removeEventListener("pointerup", onPointerDone, true);
+      window.removeEventListener("pointercancel", onPointerDone, true);
+      window.removeEventListener("keyup", onKeyUpWindow, true);
+      window.removeEventListener("blur", onPointerDone);
+    };
+    props.onHoldStart();
+  }, [props, releaseHold]);
+
+  useEffect(() => () => {
+    cleanupWindowHold.current?.();
+    cleanupWindowHold.current = null;
+    uiHoldActive.current = false;
+  }, []);
+
   if (!props.enabled) return null;
   if (state.phase !== "idle") return <RecordIndicator t={t} state={state} onStop={props.onStop} />;
   return (
@@ -58,11 +99,11 @@ export function RecordControl(props: {
         data-testid="record-hold"
         onDragStart={(event) => event.preventDefault()}
         title={t("record.holdKey", { key: props.settings.holdKey })}
-        onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); props.onHoldStart(); }}
-        onPointerUp={props.onHoldEnd}
-        onPointerCancel={props.onHoldEnd}
-        onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); props.onHoldStart(); } }}
-        onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") props.onHoldEnd(); }}
+        onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); startHold(); }}
+        onPointerUp={releaseHold}
+        onPointerCancel={releaseHold}
+        onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); startHold(); } }}
+        onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") releaseHold(); }}
       >{t("record.hold")}</button>
       {state.lastStop && state.lastStop.durationMs > 0 && props.onReview ? (
         <button type="button" className="link-button" data-testid="record-review" onClick={props.onReview}>{t("record.saved", { time: formatClock(state.lastStop.durationMs) })} · {t("record.review")}</button>

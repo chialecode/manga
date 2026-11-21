@@ -14,6 +14,8 @@ import { ScreenshotService, type ScreenshotView } from "./screenshots.ts";
 import { displayTitle } from "./works-service.ts";
 import { assertLocatorFits } from "./domain/media-anchors.ts";
 import { PluginService } from "./plugins/service.ts";
+import { ProviderRegistry } from "./providers/registry.ts";
+import { SpeechService } from "./providers/speech.ts";
 import { PluginRuntime, type PluginSpawner, type RuntimeLimits } from "./plugins/runtime.ts";
 import { TrustStore } from "./plugins/trust.ts";
 import { nodeSpawner } from "./plugins/spawn-node.ts";
@@ -78,9 +80,10 @@ import { scanHost } from "./commands/library-io.ts";
 import { comicModule, videoModule, danmakuCredentials, danmakuCredentialSource, danmakuModule, metadataToken, metadataModule } from "./commands/media.ts";
 import { llmPort, embeddingPort, polishLlmClient, resolveExternalAsrConnection, resolveSyncExternalAsrConnection, voiceModule } from "./commands/voice.ts";
 import { notesModule } from "./commands/notes.ts";
+import { clearStaleProviderFailures } from "./commands/connections.ts";
 import { settingsModule, recoverJobs } from "./commands/settings.ts";
 import { inventoryModule } from "./commands/inventory.ts";
-import { agentModule } from "./commands/agent.ts";
+import { agentModule, chatConnection } from "./commands/agent.ts";
 import { projectsModule, canvasModules, semanticScope, semanticModule, pluginsModule, acquisitionModule, roughcutModule, researchModule } from "./commands/creative.ts";
 
 export type ProductAppOptions = LaunchRequest & {
@@ -138,6 +141,8 @@ export type ProductAppOptions = LaunchRequest & {
    * packages that come with the application, the keys of the first party, and the runtime's limits.
    */
   plugins?: { spawn?: PluginSpawner; bundledDir?: string; firstPartyKeys?: ReadonlyArray<{ publicKey: string; label: string }>; limits?: Partial<RuntimeLimits> };
+  /** Provider plugins (计划 4.1): for tests and the packaged walkthroughs only, the origin of the fake service every provider is served from. */
+  providers?: { testOrigin?: string; lookup?: (host: string) => Promise<string[]> };
   /**
    * Danmaku (DanDanPlay open API): the application credentials built into the release (injected into the main process at build time; they never reach the
    * renderer), the API origin, and for tests the transport switches. Without credentials of its own or built-in ones, danmaku says so and sends nothing.
@@ -198,6 +203,9 @@ export class MangaProductApp {
   readonly sidebar: SidebarService;
   readonly scan: ScanService;
   readonly plugins: PluginService;
+  readonly providers: ProviderRegistry;
+  /** Reading aloud through a provider's speech service (计划 4.7). */
+  readonly speech: SpeechService;
   readonly pluginRuntime: PluginRuntime;
   readonly acquisition: AcquisitionService;
   private readonly vadEngine: VadEngine;
@@ -207,6 +215,7 @@ export class MangaProductApp {
   private readonly lock;
   readonly vault: CredentialVault;
   private readonly pending = new Map<string, { actorId: string; actorKind: string; sessionId: string | null; runId: string | null; work: Promise<CommandResult> }>();
+  private commandRequestCounter = 0;
   parseWorker: ParseClient | undefined;
   readonly parseWorkerPath: string | undefined;
   readonly wantParseWorker: boolean;
@@ -312,6 +321,7 @@ export class MangaProductApp {
       llm: () => options.llm ?? llmPort(this), featureOn: (featureId) => this.featureEnabled(featureId), notify: (topic, payload) => this.notify(topic, payload),
       projectConnection: (projectId) => (this.store.sqlite.prepare("SELECT model_connection_id AS id FROM projects WHERE id = ?").get(projectId) as { id: string | null } | undefined)?.id ?? null,
     });
+    this.projects.setBeforeDeleteHook((projectId) => this.drafts.abortForProject(projectId));
     this.research = new ResearchService(this.store, {
       broker: new NetworkBroker({ fetch: options.netFetch, userAgent: `MANGA/${this.appVersion} (local reader)`, ...options.network }),
       featureOn: (featureId) => this.featureEnabled(featureId),
@@ -327,8 +337,19 @@ export class MangaProductApp {
     this.plugins = new PluginService({
       store: this.store, pluginsDir: path.join(this.layout.partitions.data, "plugins"), dataDir: path.join(this.layout.partitions.data, "plugin-data"),
       bundledDir: options.plugins?.bundledDir, appVersion: this.appVersion, trust: new TrustStore(this.store, options.plugins?.firstPartyKeys), runtime: this.pluginRuntime,
-      notify: (topic, payload) => this.notify(topic, payload),
+      notify: (topic, payload) => {
+        this.notify(topic, payload);
+        // A provider plugin turned off, removed or no longer trusted: what is under way on its behalf stops, and the model settings show it at once (计划 4.1).
+        if (topic === "plugin.changed") {
+          this.providers.cancelUnavailable();
+          clearStaleProviderFailures(this);
+          this.notify("settings.changed", {});
+        }
+      },
     });
+    this.providers = new ProviderRegistry({ plugins: this.plugins, ...(options.providers?.testOrigin ? { testOrigin: options.providers.testOrigin } : {}), ...(options.providers?.lookup ? { lookup: options.providers.lookup } : {}) });
+    // The application itself is the credential host, so a changed key is read afresh.
+    this.speech = new SpeechService(this, () => { const settings = readRecordingSettings(this.store); return { connectionId: settings.speechConnectionId, voice: settings.speechVoice }; });
     this.scan = new ScanService({ store: this.store, host: scanHost(this) });
     this.acquisition = new AcquisitionService({
       store: this.store, plugins: this.plugins, runtime: this.pluginRuntime, scan: this.scan, stagingRoot: path.join(this.layout.partitions.cache, "acquisition"), legacyStagingRoot: path.join(this.layout.partitions.downloads, "acquisition"),
@@ -502,6 +523,10 @@ export class MangaProductApp {
     const missing = [...MEDIA_FEATURES, ...CREATIVE_FEATURES].filter((id) => !profile.enabledFeatures.includes(id) && !profile.disabledFeatures.includes(id) && knownFeatures.has(id));
     if (missing.length) profile = { ...profile, revision: profile.revision + 1, enabledFeatures: [...profile.enabledFeatures, ...missing] };
     await this.runtime.applyProfile(profile);
+    if (this.featureEnabled("plugins")) {
+      this.plugins.providerFilesEnabled();
+      clearStaleProviderFailures(this);
+    }
     if (this.featureEnabled("semantic")) this.semantic.recover();
     this.store.setMeta("lastValidProfile", JSON.stringify(this.runtime.snapshot().lastValidProfile ?? profile));
     // No run loop survives a process boundary: anything still "running" in the database is stale.
@@ -510,6 +535,7 @@ export class MangaProductApp {
     this.store.replayUnpublished();
     this.noteFiles.attach();
     this.settleWorkFiles();
+    this.pruneCommandRequests();
     if (this.initialHoldWriteMs > 0) {
       void this.holdBlockingWrite(this.initialHoldWriteMs);
     }
@@ -972,14 +998,19 @@ export class MangaProductApp {
       return { loadingModel: status.status === "unloaded" };
     }
     const row = this.store.sqlite
-      .prepare("SELECT id, label, credential_ref FROM provider_connections WHERE id = ? AND purpose = 'transcription'")
-      .get(selection.connectionId) as { id: string; label: string; credential_ref: string | null } | undefined;
+      .prepare("SELECT id, label, credential_ref, account_id FROM provider_connections WHERE id = ? AND purpose = 'transcription'")
+      .get(selection.connectionId) as { id: string; label: string; credential_ref: string | null; account_id: string | null } | undefined;
     if (!row) {
       throw new MangaError(
         "CAPABILITY_UNAVAILABLE",
         "所选语音转录连接不存在或尚未配置，请前往「设置 › 语音转录」选择可用引擎",
         { retryable: false, details: { reason: "connection_unconfigured", engineKind: "connection", connectionId: selection.connectionId, setupHint: "settings.voice" } },
       );
+    }
+    if (row.account_id) {
+      const account = this.store.sqlite.prepare("SELECT provider_ref FROM provider_accounts WHERE id = ?").get(row.account_id) as { provider_ref: string } | undefined;
+      if (!account) throw new MangaError("NOT_FOUND", "the connection's account is missing");
+      this.providers.require(account.provider_ref);
     }
     if (!row.credential_ref) {
       throw new MangaError(
@@ -1015,7 +1046,7 @@ export class MangaProductApp {
     const category = LOGGED_COMMANDS[commandId] ?? (actor.kind === "agent" ? AGENT_LOGGED_COMMANDS[commandId] : undefined);
     if (!category || result.idempotentReplay) return;
     const grant = this.grants.get(grantHandle);
-    const subject = describeObject(this.store, raw.input, result.status === "ok" ? result.value : undefined);
+    const subject = describeObject(this.store, raw.input, result.status === "ok" ? result.value : undefined, commandId);
     const value = result.status === "ok" && result.value && typeof result.value === "object" ? result.value as Record<string, unknown> : {};
     const params: Record<string, number | string> = {};
     if (Array.isArray(value.resources)) params.count = value.resources.length;
@@ -1079,6 +1110,11 @@ export class MangaProductApp {
         grant.registryGeneration,
         this.grantFingerprint(grant),
       );
+      this.commandRequestCounter += 1;
+      if (this.commandRequestCounter >= 500) {
+        this.commandRequestCounter = 0;
+        this.pruneCommandRequests();
+      }
       if (existing) {
         const stored = this.store.sqlite.prepare("SELECT actor_kind, actor_id, session_id, run_id, grant_fingerprint FROM command_requests WHERE idempotency_key = ?").get(envelope.idempotencyKey) as {
           actor_kind: string | null;
@@ -1152,9 +1188,15 @@ export class MangaProductApp {
     const runs = this.store.sqlite.prepare("SELECT id, session_id AS sessionId, status, grant_handle AS grantHandle, input_text AS inputText, created_at AS createdAt, updated_at AS updatedAt FROM agent_runs ORDER BY created_at DESC LIMIT 50").all();
     const refs = this.store.sqlite.prepare(`SELECT r.from_object_id AS objectId, r.from_block_id AS blockId, r.to_id AS anchorId, a.resource_id AS resourceId
       FROM refs r JOIN anchors a ON a.id = r.to_id WHERE r.to_kind = 'anchor'`).all() as Array<{ objectId: string; blockId: string | null; anchorId: string; resourceId: string }>;
+    const refsByObject = new Map<string, typeof refs>();
+    for (const ref of refs) {
+      const list = refsByObject.get(ref.objectId);
+      if (list) list.push(ref);
+      else refsByObject.set(ref.objectId, [ref]);
+    }
     return {
       notes: notes.map((row) => {
-        const own = refs.filter((ref) => ref.objectId === row.id);
+        const own = refsByObject.get(row.id) ?? [];
         const payload = JSON.parse(row.payload_json) as { blocks?: unknown[] };
         return {
           id: row.id,
@@ -1313,7 +1355,10 @@ export class MangaProductApp {
       ? this.store.sqlite.prepare("SELECT id, status, input_text, snapshot_json, budget_json, runtime, model_id, input_tokens, output_tokens, created_at FROM agent_runs WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(session.id) as { id: string; status: string; input_text: string; snapshot_json: string | null; budget_json: string; runtime: string | null; model_id: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string } | undefined
       : undefined;
     const snapshot = run?.snapshot_json ? safeJsonValue(run.snapshot_json) as { materials?: unknown[]; selection?: unknown; notes?: Array<{ objectId: string; revision: number; title: string; text?: string; truncated?: boolean }>; media?: FrozenMedia; history?: ChatMessage[]; contextText?: string | null; capturedAt?: string; runtime?: string } : undefined;
-    const connection = this.store.sqlite.prepare("SELECT id, protocol, model_id, runtime, base_url, purpose FROM provider_connections WHERE purpose = 'text' LIMIT 1").get() as { id: string; protocol: string; model_id: string; runtime: string | null; base_url: string; purpose: string } | undefined;
+    const chosenConn = chatConnection(this, session?.contextId ? this.projects.modelConnectionOf(session.contextId) : null, readAgentSettings(this.store).chat.connectionId);
+    const connection = chosenConn
+      ? this.store.sqlite.prepare("SELECT id, protocol, model_id, runtime, base_url, purpose FROM provider_connections WHERE id = ?").get(chosenConn.id) as { id: string; protocol: string; model_id: string; runtime: string | null; base_url: string; purpose: string } | undefined
+      : undefined;
     const clip = (text: string, max: number) => ([...text].length > max ? `${[...text].slice(0, max).join("")}…` : text);
     const host = (() => { try { return new URL(connection?.base_url ?? "").host; } catch { return null; } })();
     const report = {
@@ -1363,6 +1408,17 @@ export class MangaProductApp {
     for (const listener of this.noticeListeners) {
       try { listener({ topic, payload }); } catch { /* a broken subscriber must not stop an import */ }
     }
+  }
+
+  /** Keeps `command_requests` bounded by trimming older non-receipt rows while preserving all `operations` receipts and active proposals. */
+  private pruneCommandRequests(): void {
+    if (this.closed || this.sealed || !this.layout.writable) return;
+    try {
+      this.store.sqlite.prepare(`DELETE FROM command_requests
+        WHERE idempotency_key NOT IN (SELECT idempotency_key FROM operations)
+          AND idempotency_key NOT IN (SELECT id FROM agent_proposals WHERE status = 'applying')
+          AND rowid NOT IN (SELECT rowid FROM command_requests ORDER BY rowid DESC LIMIT 2000)`).run();
+    } catch { /* best-effort maintenance */ }
   }
 
   recoverPackage(action: "recover" | "rollback") {

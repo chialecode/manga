@@ -32,7 +32,7 @@ export async function centreOf(view: BrowserWindow, testId: string): Promise<Poi
  * person sees, not what the styles say; the bitmap is in the platform's order (BGRA), turned into RGB here.
  */
 export async function pixelsOf(view: BrowserWindow, box: { x: number; y: number; w: number; h: number }): Promise<{ width: number; height: number; rgb: Rgb[] }> {
-  await js(view, "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))");
+  await waitFrames(view, 2);
   const image = await view.webContents.capturePage({ x: Math.round(box.x), y: Math.round(box.y), width: Math.max(1, Math.round(box.w)), height: Math.max(1, Math.round(box.h)) }, { stayAwake: true });
   const size = image.getSize();
   const bitmap = image.toBitmap();

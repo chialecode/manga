@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, PackagePlus, Puzzle } from "lucide-react";
 import type { MessageKey, Translator } from "@manga/i18n";
+import { useAsyncGuard } from "../../hooks/use-async-guard.ts";
 import { attempt, type CommandError } from "../../lib/api.ts";
 import {
   bytesLabel, canEnable, pluginReasonKey,
@@ -36,37 +37,32 @@ export function PluginsPage(props: {
   const [dropData, setDropData] = useState<PluginLeftoverView | null>(null);
   const [addKey, setAddKey] = useState(false);
   const [removeKey, setRemoveKey] = useState<TrustedKeyView | null>(null);
-  const alive = useRef(true);
-  const latest = useRef(0);
-  const changed = useRef(props.onModulesChanged);
-  changed.current = props.onModulesChanged;
-  useEffect(() => () => { alive.current = false; }, []);
+  const guard = useAsyncGuard();
+  const callbacksRef = useRef({ onModulesChanged: props.onModulesChanged, onError: props.onError, onNotice: props.onNotice });
+  callbacksRef.current = { onModulesChanged: props.onModulesChanged, onError: props.onError, onNotice: props.onNotice };
 
   const load = useCallback(async () => {
-    latest.current += 1;
-    const mine = latest.current;
+    const mine = guard.next();
     const [plugins, offered, trusted] = await Promise.all([
       attempt<PluginListView>("plugin.list", {}),
       attempt<{ bundled: BundledPluginView[] }>("plugin.bundled", {}),
       attempt<{ keys: TrustedKeyView[] }>("plugin.trust.list", {}),
     ]);
-    if (!alive.current || mine !== latest.current) return;
-    if (!plugins.ok) { props.onError(plugins.error.message); return; }
+    if (!guard.isCurrent(mine)) return;
+    if (!plugins.ok) { callbacksRef.current.onError(plugins.error.message); return; }
     setList(plugins.value);
     if (offered.ok) setBundled(offered.value.bundled);
     if (trusted.ok) setKeys(trusted.value.keys);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [guard]);
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     const off = window.manga.onNotice?.((notice) => {
       if (notice.topic !== "plugin.changed") return;
       void load();
-      void changed.current();
+      void callbacksRef.current.onModulesChanged();
     });
     return () => { off?.(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   const failure = (error: CommandError): string => {
@@ -78,27 +74,29 @@ export function PluginsPage(props: {
     if (busy) return { ok: false };
     setBusy(true);
     const result = await attempt<R>(commandId, input);
-    if (!alive.current) return { ok: false };
+    if (!guard.isAlive()) return { ok: false };
     setBusy(false);
-    if (!result.ok) { props.onError(failure(result.error)); await load(); return { ok: false }; }
+    if (!result.ok) { callbacksRef.current.onError(failure(result.error)); await load(); return { ok: false }; }
     await load();
-    await changed.current();
+    await callbacksRef.current.onModulesChanged();
     return { ok: true, value: result.value };
   }
 
   async function chooseFile() {
-    if (!window.manga.pick) { props.onError(t("plugins.unavailable")); return; }
+    if (busy) return;
+    if (!window.manga.pick) { callbacksRef.current.onError(t("plugins.unavailable")); return; }
     const picked = await window.manga.pick({ mode: "file", filter: "plugin" });
-    if (!picked) return;
+    if (!picked || !guard.isAlive()) return;
     await inspect({ pathHandle: picked.pathHandle });
   }
 
   async function inspect(source: Source) {
+    if (busy) return;
     setBusy(true);
     const result = await attempt<PluginInspectionView>("plugin.inspect", source);
-    if (!alive.current) return;
+    if (!guard.isAlive()) return;
     setBusy(false);
-    if (!result.ok) { props.onError(failure(result.error)); return; }
+    if (!result.ok) { callbacksRef.current.onError(failure(result.error)); return; }
     setInstall({ source, inspection: result.value });
   }
 
@@ -212,11 +210,11 @@ export function PluginsPage(props: {
         ))}
       </SettingsSection>
 
-      {install ? <InstallDialog t={t} inspection={install.inspection} busy={busy} onCancel={() => setInstall(null)} onInstall={(grant, enable) => void doInstall(grant, enable)} /> : null}
-      {uninstall ? <UninstallDialog t={t} plugin={uninstall} busy={busy} hasData={uninstall.dataBytes > 0} onCancel={() => setUninstall(null)} onUninstall={(drop) => void doUninstall(uninstall, drop)} /> : null}
-      {dropData ? <DeleteDataDialog t={t} name={dropData.name} busy={busy} onCancel={() => setDropData(null)} onDelete={() => void doDeleteData(dropData)} /> : null}
-      {addKey ? <AddKeyDialog t={t} busy={busy} onCancel={() => setAddKey(false)} onAdd={(publicKey, label) => void doAddKey(publicKey, label)} /> : null}
-      {removeKey ? <RemoveKeyDialog t={t} trusted={removeKey} busy={busy} onCancel={() => setRemoveKey(null)} onRemove={() => void doRemoveKey(removeKey)} /> : null}
+      {install ? <InstallDialog t={t} inspection={install.inspection} busy={busy} onCancel={() => { if (!busy) setInstall(null); }} onInstall={(grant, enable) => void doInstall(grant, enable)} /> : null}
+      {uninstall ? <UninstallDialog t={t} plugin={uninstall} busy={busy} hasData={uninstall.dataBytes > 0} onCancel={() => { if (!busy) setUninstall(null); }} onUninstall={(drop) => void doUninstall(uninstall, drop)} /> : null}
+      {dropData ? <DeleteDataDialog t={t} name={dropData.name} busy={busy} onCancel={() => { if (!busy) setDropData(null); }} onDelete={() => void doDeleteData(dropData)} /> : null}
+      {addKey ? <AddKeyDialog t={t} busy={busy} onCancel={() => { if (!busy) setAddKey(false); }} onAdd={(publicKey, label) => void doAddKey(publicKey, label)} /> : null}
+      {removeKey ? <RemoveKeyDialog t={t} trusted={removeKey} busy={busy} onCancel={() => { if (!busy) setRemoveKey(null); }} onRemove={() => void doRemoveKey(removeKey)} /> : null}
     </SettingsPage>
   );
 }

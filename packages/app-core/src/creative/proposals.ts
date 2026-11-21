@@ -9,10 +9,14 @@ import {
 import type { DrizzleStore, Mutation } from "@manga/storage-drizzle";
 import type { EmbedService } from "./embeds.ts";
 import { safeFileName, type ExportFileIntent } from "./export-file.ts";
-import { collectBundle } from "./bundle.ts";
 import type { OperationLog } from "../ops/operation-log.ts";
-import { buildProjectPackage, PROJECT_PACKAGE_EXTENSION } from "./project-package.ts";
+import { PROJECT_PACKAGE_EXTENSION } from "./project-package.ts";
 import type { ProjectService } from "./projects.ts";
+import {
+  KIND_LABELS, MODULE_CHECKS, SOURCE_KIND_LABELS, SYNC_OWNER_COMMANDS,
+  collectBacklinks, decisionFailureReason, findTargetState, formatBytes, formatDuration, idFieldOf, parseJsonObject, projectExportFingerprint, shortHash,
+} from "./proposal-state.ts";
+import { formatClock } from "./roughcut-plan.ts";
 import type { RoughcutService } from "./roughcut.ts";
 import { estimateTokens } from "../agent-context.ts";
 
@@ -54,100 +58,6 @@ export type ProposalDeps = {
   notify?: (topic: string, payload: Record<string, unknown>) => void;
 };
 
-const KIND_LABELS: Record<ProposalTargetKind, string> = {
-  whiteboard: "白板",
-  mindmap: "导图",
-  draft: "文稿",
-  roughcut: "粗剪",
-  project: "项目",
-};
-
-const SOURCE_KIND_LABELS: Record<string, string> = {
-  note: "笔记",
-  whiteboard: "白板",
-  mindmap: "导图",
-  draft: "文稿",
-  roughcut: "粗剪",
-  project: "项目",
-};
-
-const MODULE_CHECKS: Record<ProposalTargetKind, { commandId: string; label: string }> = {
-  whiteboard: { commandId: "whiteboard.list", label: "whiteboards" },
-  mindmap: { commandId: "mindmap.list", label: "mind maps" },
-  draft: { commandId: "draft.list", label: "drafts" },
-  roughcut: { commandId: "roughcut.list", label: "rough cuts" },
-  project: { commandId: "project.list", label: "projects" },
-};
-
-const SYNC_OWNER_COMMANDS = new Set([
-  "whiteboard.delete", "mindmap.delete", "draft.delete", "roughcut.delete",
-  "whiteboard.rename", "mindmap.rename", "draft.rename", "roughcut.rename", "project.update", "roughcut.edit",
-]);
-
-function formatClock(ms: number): string {
-  const safe = Math.max(0, Math.round(ms));
-  const totalSec = Math.floor(safe / 1000);
-  const min = String(Math.floor(totalSec / 60)).padStart(2, "0");
-  const sec = String(totalSec % 60).padStart(2, "0");
-  const tenths = Math.floor((safe % 1000) / 100);
-  return tenths > 0 ? `${min}:${sec}.${tenths}` : `${min}:${sec}`;
-}
-
-function formatDuration(ms: number): string {
-  const safe = Math.max(0, Math.round(ms));
-  const sec = (safe / 1000).toFixed(safe % 1000 === 0 ? 0 : 1);
-  return `${formatClock(safe)}（${sec} 秒）`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
-}
-
-function shortHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
-}
-
-function parseJsonObject(raw: string | null): Record<string, unknown> | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Owner diagnostics can contain host paths or arbitrary provider text; the model only needs a concise failure category. */
-function decisionFailureReason(error: { code?: string; details?: { reason?: string } } | undefined): string {
-  if (error?.details?.reason === "module-disabled") return "模块已关闭";
-  const reasons: Record<string, string> = {
-    CANCELLED: "用户取消了导出，需要时请重新提出",
-    INTERRUPTED: "应用退出中断了操作，需要时请重新提出",
-    LOCATION_UNAVAILABLE: "保存位置不可用，请用户检查后再提出",
-    DISK_FULL: "保存位置空间不足，请用户检查后再提出",
-    NOT_FOUND: "对象或所需文件已不存在，请先读取最新状态",
-    UNSUPPORTED_FORMAT: "导出格式或片段不兼容，请先检查导出计划",
-    VALIDATION_ERROR: "当前内容或操作参数不符合要求，请先读取最新状态",
-    CAPABILITY_UNAVAILABLE: "所需功能当前不可用，请用户检查应用设置",
-    FORBIDDEN: "当前操作不在授权范围内",
-    SCOPE_DENIED: "目标已不在本次操作范围内",
-    GRANT_REVOKED: "本次操作的授权已失效",
-    EPOCH_MISMATCH: "所需模块的状态已改变",
-  };
-  return reasons[error?.code ?? ""] ?? "命令未完成，请用户在应用中查看具体原因";
-}
-
-function idFieldOf(kind: Exclude<ProposalTargetKind, "project">): "boardId" | "mapId" | "draftId" | "cutId" {
-  switch (kind) {
-    case "whiteboard": return "boardId";
-    case "mindmap": return "mapId";
-    case "draft": return "draftId";
-    case "roughcut": return "cutId";
-  }
-}
-
 export class ProposalService {
   private readonly d: ProposalDeps;
 
@@ -179,76 +89,7 @@ export class ProposalService {
 
   /** Reads the current revision of a target object; returns `null` when it has been deleted or moved out of the project. */
   findTargetState(kind: ProposalTargetKind, targetId: string, projectId: string): ProposalTarget | null {
-    switch (kind) {
-      case "project": {
-        if (targetId !== projectId) return null;
-        const row = this.sqlite.prepare("SELECT id, name, goal, status, updated_at FROM projects WHERE id = ?").get(projectId) as {
-          id: string; name: string; goal: string; status: string; updated_at: string;
-        } | undefined;
-        if (!row) return null;
-        return {
-          kind: "project",
-          targetId: row.id,
-          title: row.name,
-          revision: `proj:${row.updated_at}:${shortHash(row)}`,
-        };
-      }
-      case "whiteboard": {
-        const row = this.sqlite.prepare("SELECT id, project_id, title, updated_at FROM whiteboards WHERE id = ?").get(targetId) as {
-          id: string; project_id: string | null; title: string; updated_at: string;
-        } | undefined;
-        if (!row || row.project_id !== projectId) return null;
-        const ops = this.sqlite.prepare("SELECT COUNT(*) AS total, COALESCE(MAX(id), 0) AS maxId, COALESCE(SUM(CASE WHEN undone = 0 THEN 1 ELSE 0 END), 0) AS active FROM creative_ops WHERE doc_kind = 'whiteboard' AND doc_id = ?").get(targetId) as { total: number; maxId: number; active: number };
-        const nodes = this.sqlite.prepare("SELECT id, kind, x, y, w, h, z, parent_id, data_json, updated_at FROM whiteboard_nodes WHERE board_id = ? ORDER BY id").all(targetId);
-        const edges = this.sqlite.prepare("SELECT id, source_id, target_id, label FROM whiteboard_edges WHERE board_id = ? ORDER BY id").all(targetId);
-        return {
-          kind: "whiteboard",
-          targetId: row.id,
-          title: row.title,
-          revision: `wb:op${ops.active}:${shortHash({ title: row.title, updatedAt: row.updated_at, ops, nodes, edges })}`,
-        };
-      }
-      case "mindmap": {
-        const row = this.sqlite.prepare("SELECT id, project_id, title, theme, updated_at FROM mindmaps WHERE id = ?").get(targetId) as {
-          id: string; project_id: string | null; title: string; theme: string; updated_at: string;
-        } | undefined;
-        if (!row || row.project_id !== projectId) return null;
-        const ops = this.sqlite.prepare("SELECT COUNT(*) AS total, COALESCE(MAX(id), 0) AS maxId, COALESCE(SUM(CASE WHEN undone = 0 THEN 1 ELSE 0 END), 0) AS active FROM creative_ops WHERE doc_kind = 'mindmap' AND doc_id = ?").get(targetId) as { total: number; maxId: number; active: number };
-        const nodes = this.sqlite.prepare("SELECT id, parent_id, sort_key, text, collapsed, refs_json, updated_at FROM mindmap_nodes WHERE map_id = ? ORDER BY id").all(targetId);
-        return {
-          kind: "mindmap",
-          targetId: row.id,
-          title: row.title,
-          revision: `mm:op${ops.active}:${shortHash({ title: row.title, theme: row.theme, updatedAt: row.updated_at, ops, nodes })}`,
-        };
-      }
-      case "draft": {
-        const row = this.sqlite.prepare("SELECT id, project_id, title, text, version, updated_at FROM drafts WHERE id = ?").get(targetId) as {
-          id: string; project_id: string | null; title: string; text: string; version: number; updated_at: string;
-        } | undefined;
-        if (!row || row.project_id !== projectId) return null;
-        return {
-          kind: "draft",
-          targetId: row.id,
-          title: row.title,
-          revision: `dr:v${row.version}:${shortHash({ title: row.title, version: row.version, updatedAt: row.updated_at, text: row.text })}`,
-        };
-      }
-      case "roughcut": {
-        const row = this.sqlite.prepare("SELECT id, project_id, title, updated_at FROM rough_cuts WHERE id = ?").get(targetId) as {
-          id: string; project_id: string | null; title: string; updated_at: string;
-        } | undefined;
-        if (!row || row.project_id !== projectId) return null;
-        const ops = this.sqlite.prepare("SELECT COUNT(*) AS total, COALESCE(MAX(id), 0) AS maxId, COALESCE(SUM(CASE WHEN undone = 0 THEN 1 ELSE 0 END), 0) AS active FROM creative_ops WHERE doc_kind = 'roughcut' AND doc_id = ?").get(targetId) as { total: number; maxId: number; active: number };
-        const clips = this.sqlite.prepare("SELECT id, resource_id, resource_revision_id, in_ms, out_ms, sort_key, label FROM rough_cut_clips WHERE cut_id = ? ORDER BY sort_key, id").all(targetId);
-        return {
-          kind: "roughcut",
-          targetId: row.id,
-          title: row.title,
-          revision: `rc:op${ops.active}:${shortHash({ title: row.title, updatedAt: row.updated_at, ops, clips })}`,
-        };
-      }
-    }
+    return findTargetState(this.sqlite, kind, targetId, projectId);
   }
 
   /** Asserts that the target object exists and belongs to `projectId`, and returns its current `ProposalTarget`. */
@@ -267,56 +108,7 @@ export class ProposalService {
   }
 
   private collectBacklinks(kind: Exclude<ProposalTargetKind, "project">, targetId: string): Array<{ sourceKind: string; sourceId: string; title: string }> {
-    const seen = new Map<string, { sourceKind: string; sourceId: string; title: string }>();
-    if (kind === "whiteboard" || kind === "mindmap") {
-      for (const item of this.d.embeds.backlinks(kind, targetId)) {
-        const key = `${item.sourceKind}:${item.sourceId}`;
-        if (!seen.has(key)) seen.set(key, { sourceKind: item.sourceKind, sourceId: item.sourceId, title: item.title || item.sourceId });
-      }
-    }
-    // Check whiteboard reference cards pointing to this object.
-    const wbRefs = this.sqlite.prepare(`
-      SELECT w.id AS boardId, w.title AS title, n.data_json AS dataJson
-      FROM whiteboard_nodes n JOIN whiteboards w ON w.id = n.board_id
-      WHERE n.kind = 'ref' AND instr(n.data_json, ?) > 0
-    `).all(targetId) as Array<{ boardId: string; title: string; dataJson: string }>;
-    for (const ref of wbRefs) {
-      if (kind === "whiteboard" && ref.boardId === targetId) continue;
-      const parsed = parseJsonObject(ref.dataJson);
-      const refKind = parsed?.refKind ?? parsed?.kind ?? (parsed?.ref as Record<string, unknown> | undefined)?.kind;
-      const refId = parsed?.refId ?? parsed?.targetId ?? parsed?.id ?? (parsed?.ref as Record<string, unknown> | undefined)?.id ?? (parsed?.ref as Record<string, unknown> | undefined)?.targetId;
-      if (refKind === kind && refId === targetId) {
-        const key = `whiteboard:${ref.boardId}`;
-        if (!seen.has(key)) seen.set(key, { sourceKind: "whiteboard", sourceId: ref.boardId, title: ref.title });
-      }
-    }
-    // Check mind map node references pointing to this object.
-    const mmRefs = this.sqlite.prepare(`
-      SELECT m.id AS mapId, m.title AS title, n.refs_json AS refsJson
-      FROM mindmap_nodes n JOIN mindmaps m ON m.id = n.map_id
-      WHERE n.refs_json <> '[]' AND instr(n.refs_json, ?) > 0
-    `).all(targetId) as Array<{ mapId: string; title: string; refsJson: string }>;
-    for (const ref of mmRefs) {
-      if (kind === "mindmap" && ref.mapId === targetId) continue;
-      try {
-        const items = JSON.parse(ref.refsJson) as Array<{ kind?: string; targetId?: string; id?: string }>;
-        if (Array.isArray(items) && items.some((item) => item.kind === kind && (item.targetId === targetId || item.id === targetId))) {
-          const key = `mindmap:${ref.mapId}`;
-          if (!seen.has(key)) seen.set(key, { sourceKind: "mindmap", sourceId: ref.mapId, title: ref.title });
-        }
-      } catch { /* ignore malformed json */ }
-    }
-    // A project that holds the object as a material points at it too; the row stays after deletion and shows as missing.
-    const materialRefs = this.sqlite.prepare(`
-      SELECT pm.project_id AS projectId, p.name AS title
-      FROM project_materials pm JOIN projects p ON p.id = pm.project_id
-      WHERE pm.kind = ? AND pm.target_id = ?
-    `).all(kind, targetId) as Array<{ projectId: string; title: string }>;
-    for (const ref of materialRefs) {
-      const key = `project:${ref.projectId}`;
-      if (!seen.has(key)) seen.set(key, { sourceKind: "project", sourceId: ref.projectId, title: ref.title });
-    }
-    return [...seen.values()];
+    return collectBacklinks(this.sqlite, this.d.embeds, kind, targetId);
   }
 
   /** A deletion also affects its references; a project export depends on all rows and snapshots that the package carries. */
@@ -326,13 +118,9 @@ export class ProposalService {
       return { ...target, revision: `${target.revision}:refs:${shortHash(backlinks)}` };
     }
     if (purpose === "exportProject") {
-      // The timestamp is fixed for the comparison; it is an export field, not part of the project's revision. View state that the
-      // package also carries (saved tabs and layout, reading progress, a board's viewport) changes whenever the user looks around the
-      // project, including while reading the proposal card, so it is left out: only content and snapshots make an export stale.
-      const bundle = collectBundle(this.d.store, projectId, "2000-01-01T00:00:00.000Z");
-      const { project_progress: _progress, project_workspace: _layout, whiteboards, ...tables } = bundle.tables;
-      const boards = whiteboards.map(({ viewport_json: _viewport, ...board }) => board);
-      return { ...target, revision: `${target.revision}:bundle:${shortHash({ project: bundle.project, tables: { ...tables, whiteboards: boards }, snapshots: bundle.snapshots })}` };
+      const fingerprint = projectExportFingerprint(this.d.store, projectId);
+      if (!fingerprint) return target;
+      return { ...target, revision: `${target.revision}:bundle:${fingerprint.digest}` };
     }
     return target;
   }
@@ -636,14 +424,16 @@ export class ProposalService {
   proposeExportProject(grant: ScopeGrant, projectId: string, input: { reason?: string }, requestKey?: string): ProposalCreated {
     const ctx = this.assertRunContext(grant, projectId);
     this.d.requireModule("project.exportPackage", "projects");
-    const target = this.withDependencies(this.targetState("project", ctx.projectId, ctx.projectId), ctx.projectId, "exportProject");
+    const baseTarget = this.targetState("project", ctx.projectId, ctx.projectId);
+    const fingerprint = projectExportFingerprint(this.d.store, ctx.projectId);
+    if (!fingerprint) throw new MangaError("NOT_FOUND", "the project does not exist");
+    const target: ProposalTarget = { ...baseTarget, revision: `${baseTarget.revision}:bundle:${fingerprint.digest}` };
     this.checkSessionLimit(ctx.sessionId);
 
     const detail = this.d.projects.get(ctx.projectId);
     const counts = detail.project.counts;
-    const pkg = buildProjectPackage(this.d.store, ctx.projectId);
-    const bytes = pkg.data.length;
-    const suggestedFileName = `${safeFileName(pkg.manifest.projectName, "project")}.${PROJECT_PACKAGE_EXTENSION}`;
+    const bytes = fingerprint.estimatedBytes;
+    const suggestedFileName = `${safeFileName(detail.project.name, "project")}.${PROJECT_PACKAGE_EXTENSION}`;
 
     const summary = `材料 ${counts.materials} 项 · 白板 ${counts.whiteboards} · 导图 ${counts.mindmaps} · 文稿 ${counts.drafts} · 摘录 ${counts.excerpts} · 粗剪 ${counts.roughCuts} · 词条 ${counts.terms} · 约 ${formatBytes(bytes)}`;
     const preview: ProposalPreview = {
@@ -1059,9 +849,23 @@ export class ProposalService {
               failed += 1;
               continue;
             }
+            if (!latest) {
+              const error = { code: "INTERRUPTED", message: "粗剪导出记录已不存在，请让 Agent 重新提出" };
+              this.sqlite.prepare("UPDATE agent_proposals SET status = 'failed', decided_at = COALESCE(decided_at, ?), result_json = ? WHERE id = ?")
+                .run(now, JSON.stringify({ output: op.value, error, recovered: true }), row.id);
+              this.d.notify?.("proposal.changed", { sessionId: row.session_id, runId: row.run_id, projectId: row.project_id, proposalId: row.id, status: "failed" });
+              failed += 1;
+              continue;
+            }
+            if (latest.state === "planned" || latest.state === "running") {
+              this.d.roughcuts.recover();
+              try { latest = this.d.roughcuts.exports.get(view.id); } catch { latest = undefined; }
+            }
             this.sqlite.prepare("UPDATE agent_proposals SET result_json = ? WHERE id = ?").run(JSON.stringify({ output: op.value, recovered: true }), row.id);
             if (latest) this.onRoughcutExport(latest);
-            applied += 1;
+            const settled = (this.sqlite.prepare("SELECT status FROM agent_proposals WHERE id = ?").get(row.id) as { status: ProposalStatus } | undefined)?.status;
+            if (settled === "applied") applied += 1;
+            else failed += 1;
             continue;
           }
         }

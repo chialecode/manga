@@ -81,55 +81,61 @@ function startLagSampler() {
 /** A 5000-file scan with the shelf's and the settings page's commands asked all the way through it. */
 export async function measureScan(dir, { withCovers = false } = {}) {
   const { app, actor, grant } = await openApp(dir, "bench-scan");
-  const tree = path.join(dir, "library");
-  fs.mkdirSync(tree, { recursive: true });
-  const files = await writeScanTree(tree);
-  const sampler = startLagSampler();
-  const interaction = [];
-  const kinds = { "works.list": 0, "library.scan.status": 0, "library.paths.list": 0 };
-  const probe = async (commandId, input) => {
+  let sampler = null;
+  try {
+    const tree = path.join(dir, "library");
+    fs.mkdirSync(tree, { recursive: true });
+    const files = await writeScanTree(tree);
+    sampler = startLagSampler();
+    const interaction = [];
+    const kinds = { "works.list": 0, "library.scan.status": 0, "library.paths.list": 0 };
+    const probe = async (commandId, input) => {
+      const started = performance.now();
+      await call(app, actor, grant, commandId, input);
+      interaction.push(round(performance.now() - started));
+      kinds[commandId] += 1;
+    };
     const started = performance.now();
-    await call(app, actor, grant, commandId, input);
-    interaction.push(round(performance.now() - started));
-    kinds[commandId] += 1;
-  };
-  const started = performance.now();
-  const added = await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", tree), mediaKind: "novel", autoScan: false });
-  let rounds = 0;
-  let finished = null;
-  for (;;) {
-    await probe("works.list", { limit: 60 });
-    await probe("library.scan.status", {});
-    if (rounds % 5 === 0) await probe("library.paths.list", {});
-    rounds += 1;
-    const status = await call(app, actor, grant, "library.scan.status", {});
-    // The scan is not over for the main process until the pictures and details it queued for the new works have been read as well.
-    if (!status.running && status.queued.length === 0 && app.media.jobs.list({ active: true }).length === 0) {
-      finished = status.recent.find((job) => job.pathId === added.path.id) ?? null;
-      if (finished) break;
+    const added = await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", tree), mediaKind: "novel", autoScan: false });
+    let rounds = 0;
+    let finished = null;
+    for (;;) {
+      await probe("works.list", { limit: 60 });
+      await probe("library.scan.status", {});
+      if (rounds % 5 === 0) await probe("library.paths.list", {});
+      rounds += 1;
+      const status = await call(app, actor, grant, "library.scan.status", {});
+      // The scan is not over for the main process until the pictures and details it queued for the new works have been read as well.
+      if (!status.running && status.queued.length === 0 && app.media.jobs.list({ active: true }).length === 0) {
+        finished = status.recent.find((job) => job.pathId === added.path.id) ?? null;
+        if (finished) break;
+      }
+      if (performance.now() - started > 20 * 60_000) throw new Error("the benchmark scan did not finish in 20 minutes");
+      await new Promise((resolve) => setTimeout(resolve, 40));
     }
-    if (performance.now() - started > 20 * 60_000) throw new Error("the benchmark scan did not finish in 20 minutes");
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    const durationMs = performance.now() - started;
+    const loopLag = sampler.stop();
+    sampler = null;
+    const works = app.store.sqlite.prepare("SELECT COUNT(*) AS n FROM works").get().n;
+    const result = {
+      ok: finished?.status === "succeeded" || finished?.status === "completed" || finished?.failed === 0,
+      files,
+      status: finished?.status ?? null,
+      added: finished?.added ?? 0,
+      failed: finished?.failed ?? 0,
+      works,
+      durationMs: Math.round(durationMs),
+      throughputFilesPerS: round(files / (durationMs / 1000)),
+      loopLag: { intervalMs: LAG_INTERVAL_MS, raw: loopLag, p99: p99(loopLag), max: Math.max(...loopLag) },
+      interaction: { raw: interaction, p95: p95(interaction), max: Math.max(...interaction), kinds },
+    };
+    // Covers are read on the library this scan made, so the works exist.
+    const covers = withCovers ? await measureCovers(app, actor, grant) : null;
+    return { scan: result, covers };
+  } finally {
+    sampler?.stop();
+    app.close();
   }
-  const durationMs = performance.now() - started;
-  const loopLag = sampler.stop();
-  const works = app.store.sqlite.prepare("SELECT COUNT(*) AS n FROM works").get().n;
-  const result = {
-    ok: finished?.status === "succeeded" || finished?.status === "completed" || finished?.failed === 0,
-    files,
-    status: finished?.status ?? null,
-    added: finished?.added ?? 0,
-    failed: finished?.failed ?? 0,
-    works,
-    durationMs: Math.round(durationMs),
-    throughputFilesPerS: round(files / (durationMs / 1000)),
-    loopLag: { intervalMs: LAG_INTERVAL_MS, raw: loopLag, p99: p99(loopLag), max: Math.max(...loopLag) },
-    interaction: { raw: interaction, p95: p95(interaction), max: Math.max(...interaction), kinds },
-  };
-  // Covers are read on the library this scan made, so the works exist.
-  const covers = withCovers ? await measureCovers(app, actor, grant) : null;
-  app.close();
-  return { scan: result, covers };
 }
 
 /** Cover pictures kept in the image table: the read itself, and the grid thumbnail's handle built cold and read again warm. */
@@ -178,27 +184,31 @@ async function measureCovers(app, actor, grant) {
 /** A resource with 1000 notes bound to it, opened in the real window; one window run takes all three 60-step scroll/input rounds (180 samples) without redundant process cold starts. */
 async function measurePane(dir, launch) {
   const { app, actor, grant, env } = await openApp(dir, "bench-pane");
-  // A file is read from a library path (A-80): the folder the book lies in is one.
-  const books = path.join(dir, "pane-books");
-  fs.mkdirSync(books, { recursive: true });
-  await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
-  await app.scan.whenIdle();
-  const book = path.join(books, "pane-book.txt");
-  fs.writeFileSync(book, `${"右栏消息基准正文。".repeat(300)}末尾`);
-  const imported = await call(app, actor, grant, "library.importDocument", { title: "右栏基准", pathHandle: app.registerPath("file", book), format: "txt" });
-  const resourceId = String(imported.resourceId);
-  const base = Date.now() - 24 * 3_600_000;
-  const update = app.store.sqlite.prepare("UPDATE content_objects SET created_at = ? WHERE id = ?");
-  const ids = [];
-  for (let index = 0; index < PANE_NOTES; index += 1) {
-    const created = await call(app, actor, grant, "notes.create", { title: `消息 ${index}`, text: `右栏消息 ${index}：一段用于滚动和输入基准的笔记文字。`, resourceId });
-    ids.push(String(created.objectId));
+  let resourceId;
+  try {
+    // A file is read from a library path (A-80): the folder the book lies in is one.
+    const books = path.join(dir, "pane-books");
+    fs.mkdirSync(books, { recursive: true });
+    await call(app, actor, grant, "library.paths.add", { pathHandle: app.registerPath("directory", books), mediaKind: "novel", autoScan: false });
+    await app.scan.whenIdle();
+    const book = path.join(books, "pane-book.txt");
+    fs.writeFileSync(book, `${"右栏消息基准正文。".repeat(300)}末尾`);
+    const imported = await call(app, actor, grant, "library.importDocument", { title: "右栏基准", pathHandle: app.registerPath("file", book), format: "txt" });
+    resourceId = String(imported.resourceId);
+    const base = Date.now() - 24 * 3_600_000;
+    const update = app.store.sqlite.prepare("UPDATE content_objects SET created_at = ? WHERE id = ?");
+    const ids = [];
+    for (let index = 0; index < PANE_NOTES; index += 1) {
+      const created = await call(app, actor, grant, "notes.create", { title: `消息 ${index}`, text: `右栏消息 ${index}：一段用于滚动和输入基准的笔记文字。`, resourceId });
+      ids.push(String(created.objectId));
+    }
+    // Each note gets its own time, so the stream's paging by time never meets two notes at one instant.
+    app.store.sqlite.exec("BEGIN");
+    ids.forEach((id, index) => update.run(new Date(base + index * 1000).toISOString(), id));
+    app.store.sqlite.exec("COMMIT");
+  } finally {
+    app.close();
   }
-  // Each note gets its own time, so the stream's paging by time never meets two notes at one instant.
-  app.store.sqlite.exec("BEGIN");
-  ids.forEach((id, index) => update.run(new Date(base + index * 1000).toISOString(), id));
-  app.store.sqlite.exec("COMMIT");
-  app.close();
   const specFile = path.join(dir, "pane-spec.json");
   fs.writeFileSync(specFile, JSON.stringify({ resourceId, notes: PANE_NOTES }));
   const launched = { ...process.env, MANGA_CHANNEL: "test", MANGA_PROFILE_ROOT: env.profileRoot, MANGA_DOCUMENTS_DIR: env.documentsDir, MANGA_POINTER_FILE: env.pointerPath, MANGA_SMOKE_PHASE: "bench-pane", MANGA_SMOKE_PANE_SPEC: specFile };

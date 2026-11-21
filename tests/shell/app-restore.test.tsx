@@ -97,7 +97,6 @@ function installHost(store: Store, extra: Record<string, (input: Record<string, 
       return { status: "ok" as const, value: {} };
     },
     async chooseDirectory() { return null; },
-    async chooseFile() { return null; },
     async chooseAudio() { return null; },
     async stashSecret() { return null; },
     async reveal() { return { status: "ok" as const, value: {} }; },

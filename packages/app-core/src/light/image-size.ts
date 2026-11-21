@@ -27,19 +27,51 @@ function bmp(view: DataView, bytes: Uint8Array): ImageSize | null {
   return { width: Math.abs(view.getInt32(18, true)), height: Math.abs(view.getInt32(22, true)) };
 }
 
+function exifOrientation(view: DataView, bytes: Uint8Array, start: number, end: number): number | null {
+  if (start + 14 > end || ascii(bytes, start, 6) !== "Exif\0\0") return null;
+  const tiff = start + 6;
+  const little = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
+  const big = bytes[tiff] === 0x4d && bytes[tiff + 1] === 0x4d;
+  if (!little && !big) return null;
+  if (view.getUint16(tiff + 2, little) !== 42) return null;
+  const ifd0 = tiff + view.getUint32(tiff + 4, little);
+  if (ifd0 < tiff || ifd0 + 2 > end) return null;
+  const count = view.getUint16(ifd0, little);
+  for (let i = 0; i < count; i += 1) {
+    const entry = ifd0 + 2 + i * 12;
+    if (entry + 12 > end) break;
+    if (view.getUint16(entry, little) === 0x0112) {
+      const type = view.getUint16(entry + 2, little);
+      const values = view.getUint32(entry + 4, little);
+      if (type === 3 && values >= 1) return view.getUint16(entry + 8, little);
+      return null;
+    }
+  }
+  return null;
+}
+
 function jpeg(view: DataView, bytes: Uint8Array): ImageSize | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
   let at = 2;
-  while (at + 9 < bytes.length) {
+  let orientation: number | null = null;
+  while (at + 4 <= bytes.length) {
     if (bytes[at] !== 0xff) return null;
     const marker = bytes[at + 1]!;
     if (marker === 0xff) { at += 1; continue; }
-    // Standalone markers have no length.
+    // Standalone markers have no length; SOS (DA) and EOI (D9) end the headers.
     if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { at += 2; continue; }
+    if (marker === 0xd9 || marker === 0xda) return null;
     const length = view.getUint16(at + 2);
+    if (length < 2) return null;
+    if (marker === 0xe1 && orientation === null) {
+      orientation = exifOrientation(view, bytes, at + 4, Math.min(at + 2 + length, bytes.length));
+    }
     // SOF0–SOF15, except DHT (C4), JPG (C8) and DAC (CC).
     if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return { height: view.getUint16(at + 5), width: view.getUint16(at + 7) };
+      if (at + 9 > bytes.length) return null;
+      const height = view.getUint16(at + 5);
+      const width = view.getUint16(at + 7);
+      return orientation !== null && orientation >= 5 && orientation <= 8 ? { width: height, height: width } : { width, height };
     }
     at += 2 + length;
   }

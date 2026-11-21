@@ -13,9 +13,10 @@ import {
   type PolishPrompts,
   createId,
 } from "@manga/contracts";
+import { errorMessage } from "../../shared/utils.ts";
 import { PCM_BYTES_PER_MS, pcmDurationMs } from "../audio-files.ts";
 import type { CorrectionOutput } from "../correct/index.ts";
-import { isPromptEcho } from "../dictionary.ts";
+import { isHintEcho } from "../engine/prompt-builder.ts";
 import { DictationPolisher, type PolishInput, type PolishLlmClient, type PolishResult } from "../polish/index.ts";
 import { MAX_DICTATION_DURATION_MS, trimSilence } from "../silence-trimmer.ts";
 import type { VadEngine } from "../vad-client.ts";
@@ -115,6 +116,7 @@ type ActiveDictationSession = {
   abortController: AbortController;
   maxDurationTimer: ReturnType<typeof setTimeout> | null;
   stopPromise: Promise<DictationSessionSnapshot> | null;
+  finalized: boolean;
 };
 
 const MAX_CHUNK_BYTES = 2 * 1024 * 1024;
@@ -253,6 +255,7 @@ export class DictationService {
     if (this.current) {
       this.cancel(this.current.snapshot.dictationId);
     }
+    this.generation += 1;
 
     const dictationId = createId("dic_ses");
     const workId = input.workId ?? null;
@@ -287,6 +290,7 @@ export class DictationService {
       abortController,
       maxDurationTimer: null,
       stopPromise: null,
+      finalized: false,
     };
 
     const timer = setTimeout(() => {
@@ -410,11 +414,9 @@ export class DictationService {
     session.abortController.abort(new MangaError("CANCELLED", "听写已取消"));
     session.snapshot.stage = "cancelled";
     session.snapshot.loadingModel = false;
-    const snap = this.emit(session);
-    this.lastCompleted = snap;
-    if (this.current === session) {
-      this.current = null;
-    }
+    const snap = this.finalizeSession(session);
+    // Bump generation after emitting so any async continuation of `runPipeline` for this session is treated as stale.
+    this.generation += 1;
     return snap;
   }
 
@@ -453,7 +455,7 @@ export class DictationService {
       });
       const recognizeMs = asrOut.recognizeMs ?? Math.max(0, this.now() - recStart);
 
-      if (asrOut.echoDetected || !asrOut.text.trim() || isPromptEcho(asrOut.text, vocabularyTerms)) {
+      if (asrOut.echoDetected || !asrOut.text.trim() || isHintEcho(asrOut.text, vocabularyTerms)) {
         throw new MangaError("VALIDATION_ERROR", "重新识别未检出有效语音内容", {
           details: { reason: "no_speech" },
         });
@@ -494,6 +496,15 @@ export class DictationService {
   }
 
   private finalizeSession(session: ActiveDictationSession): DictationSessionSnapshot {
+    if (session.finalized) {
+      return {
+        ...session.snapshot,
+        warnings: [...session.snapshot.warnings],
+        replacements: session.snapshot.replacements.map((r) => ({ ...r })),
+        ...(session.snapshot.timings ? { timings: { ...session.snapshot.timings } } : {}),
+      };
+    }
+    session.finalized = true;
     const snap = this.emit(session);
     if (!this.isSessionStale(session)) {
       this.lastCompleted = snap;
@@ -566,7 +577,8 @@ export class DictationService {
       if (asrOut.denoiseMs !== undefined) {
         timings.denoiseMs = Math.round(asrOut.denoiseMs);
       }
-      session.snapshot.loadingModel = Boolean(asrOut.loadingModel);
+      // Recognition (and any cold model load) is finished; clear `loadingModel` so subsequent stages render accurately.
+      session.snapshot.loadingModel = false;
 
       if (this.isSessionStale(session)) return { ...session.snapshot };
       if (signal.aborted) {
@@ -575,7 +587,7 @@ export class DictationService {
       }
 
       const trimmedTranscript = asrOut.text.trim();
-      if (asrOut.echoDetected || (trimmedTranscript && isPromptEcho(trimmedTranscript, vocabularyTerms))) {
+      if (asrOut.echoDetected || (trimmedTranscript && isHintEcho(trimmedTranscript, vocabularyTerms))) {
         timings.totalMs = Math.max(0, this.now() - pipelineStartMs);
         session.snapshot.stage = "no_speech";
         session.snapshot.errorMessage = "没有听清，请再说一次";
@@ -666,7 +678,7 @@ export class DictationService {
       timings.totalMs = Math.max(0, this.now() - pipelineStartMs);
       session.snapshot.stage = "failed";
       session.snapshot.errorCode = error instanceof MangaError ? error.code : "PROVIDER_UNAVAILABLE";
-      session.snapshot.errorMessage = error instanceof Error ? error.message : String(error);
+      session.snapshot.errorMessage = errorMessage(error);
       return this.finalizeSession(session);
     }
   }

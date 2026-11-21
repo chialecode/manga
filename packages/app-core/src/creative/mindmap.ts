@@ -2,7 +2,7 @@ import { EMBED_KINDS, MangaError, REF_KINDS, createId, type CanvasLocator, type 
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { EmbedService, referenceInfo } from "./embeds.ts";
 import { applyOps, diffRows, OpLog, type OpState, type RowOp } from "./ops.ts";
-import { KEY_LIMIT, evenKeys, keyBetween } from "./sort-key.ts";
+import { KEY_LIMIT, evenKeys, isValidSortKey, keyBetween } from "./sort-key.ts";
 
 type NodeRow = { id: string; map_id: string; parent_id: string | null; sort_key: string; text: string; collapsed: number; refs_json: string; created_at: string; updated_at: string };
 type MapRow = { id: string; project_id: string | null; title: string; theme: string; created_at: string; updated_at: string };
@@ -71,8 +71,13 @@ class Draft {
   keyAt(parentId: string, index: number | undefined, except?: string): string {
     const siblings = this.children(parentId, except);
     const at = index === undefined ? siblings.length : Math.min(index, siblings.length);
-    const key = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
-    if (key.length <= KEY_LIMIT) return key;
+    const before = siblings[at - 1]?.sort_key ?? null;
+    const after = siblings[at]?.sort_key ?? null;
+    const usable = (before === null || isValidSortKey(before)) && (after === null || isValidSortKey(after)) && (before === null || after === null || before < after);
+    if (usable) {
+      const key = keyBetween(before, after);
+      if (key.length <= KEY_LIMIT) return key;
+    }
     // Renumber the siblings evenly, leaving a gap at `at` for the new key.
     const fresh = evenKeys(siblings.length + 1);
     siblings.forEach((row, i) => { row.sort_key = fresh[i < at ? i : i + 1]!; row.updated_at = this.now; });

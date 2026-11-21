@@ -4,7 +4,7 @@ import { createId, MangaError } from "@manga/contracts";
 import { TRACE_PART_LIMIT_BYTES, type AgentTraceSettings, type TraceKind } from "@manga/contracts/models";
 import type { TextRequest } from "@manga/model-protocol";
 import type { DrizzleStore } from "@manga/storage-drizzle";
-import { REDACTED_SECRET, redactText } from "./ops/redact.ts";
+import { REDACTED_SECRET, redactDeep } from "./ops/redact.ts";
 
 /**
  * The record of what the agent sent and received (A-83): every request to a model, every tool it called and every compaction of its context, in order, with the
@@ -79,25 +79,9 @@ export type TraceHandle = {
   fail(error: unknown, status?: "error" | "cancelled", partial?: unknown): void;
 };
 
-/**
- * Fields named like a secret lose their value. The names of counts (`maxOutputTokens`, `inputTokens`) are not secrets and stay, which is why this is not the
- * redaction of the context panel, whose rule would blank every field with "token" in it.
- */
-const SECRET_KEY = /(?:api[-_]?key|secret|password|passwd|credential|authorization|cookie|ciphertext)|^(?:access|refresh|auth|bearer|session|id|api)?[-_]?token$/i;
-
 /** A copy of the value with the secrets, tokens and local paths taken out of every text and the secret-named fields blanked. */
-function scrub(value: unknown, depth = 0): unknown {
-  if (depth > 24) return "（嵌套过深，已省略）";
-  if (typeof value === "string") return redactText(value).text;
-  if (Array.isArray(value)) return value.map((item) => scrub(item, depth + 1));
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = SECRET_KEY.test(key) && child !== null && child !== undefined && child !== "" ? REDACTED_SECRET : scrub(child, depth + 1);
-    }
-    return out;
-  }
-  return value;
+function scrub(value: unknown): unknown {
+  return redactDeep(value, { maxDepth: 24, overflowMarker: "（嵌套过深，已省略）" }).value;
 }
 
 /** Width and height from the header of a PNG, JPEG or WebP picture; null when it is none of them or the header is cut. */
@@ -339,18 +323,20 @@ export class AgentTrace {
     const rows = this.store.sqlite.prepare("SELECT * FROM agent_requests WHERE run_id = ? ORDER BY started_at, rowid").all(runId) as Row[];
     let used = 0;
     let omitted = 0;
-    const parse = (blob: Buffer | null) => {
-      if (!blob) return undefined;
-      const text = zlib.inflateSync(blob).toString("utf8");
+    const parseBuffer = (buf: Buffer | null) => {
+      if (!buf) return undefined;
+      const text = buf.toString("utf8");
       try { return JSON.parse(text) as unknown; } catch { return text; }
     };
     const entries = rows.map((row) => {
       const meta = entryOf(row);
       if (!meta.hasContent) return meta;
-      const size = (row.request_z ? zlib.inflateSync(row.request_z).length : 0) + (row.response_z ? zlib.inflateSync(row.response_z).length : 0);
+      const reqBuf = row.request_z ? zlib.inflateSync(row.request_z) : null;
+      const resBuf = row.response_z ? zlib.inflateSync(row.response_z) : null;
+      const size = (reqBuf?.length ?? 0) + (resBuf?.length ?? 0);
       if (used + size > EXPORT_LIMIT_CHARS) { omitted += 1; return { ...meta, omitted: "the export is limited in size; open this entry in the application" }; }
       used += size;
-      return { ...meta, request: parse(row.request_z), response: parse(row.response_z) };
+      return { ...meta, request: parseBuffer(reqBuf), response: parseBuffer(resBuf) };
     });
     return {
       json: JSON.stringify({

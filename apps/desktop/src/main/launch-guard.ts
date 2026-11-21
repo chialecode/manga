@@ -55,6 +55,16 @@ const writeJson = (file: string, body: unknown): void => {
   fs.renameSync(staging, file);
 };
 
+export function isProcessAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 /** Whether this version reached the machine by an update (the installer helper's record of the last install names it). */
 export function cameByUpdate(paths: GuardPaths, version: string): boolean {
   const done = readJson<{ status?: string; version?: string; actualVersion?: string }>(path.join(paths.updaterCache, "last-installed.json"));
@@ -99,17 +109,34 @@ export type LaunchDecision =
   | { kind: "watched"; attempt: number }
   | { kind: "ask"; version: string; failures: number; previous: PreviousInstaller | null };
 
+export type BeginLaunchOptions = {
+  pid?: number;
+  isPidAlive?: (pid: number) => boolean;
+};
+
 /**
  * What this start is: ordinary, one of the watched starts of a new version (the marker is written), or the start that asks. A marker left by the
  * start before (it never reached its window) is a failure; no marker after a watched start means that start was fine and the count starts again.
+ * Concurrent/secondary starts (when another live PID is launching or already running) are treated as ordinary so double-clicks and tray restores
+ * neither count as crashes nor exhaust watched launches.
  */
-export function beginLaunch(paths: GuardPaths, version: string, now = new Date()): LaunchDecision {
+export function beginLaunch(paths: GuardPaths, version: string, now = new Date(), options?: BeginLaunchOptions): LaunchDecision {
   if (!cameByUpdate(paths, version)) return { kind: "ordinary" };
+  const currentPid = options?.pid ?? process.pid;
+  const alive = options?.isPidAlive ?? isProcessAlive;
   const historyFile = path.join(paths.runtime, LAUNCH_HISTORY_FILE);
   const attemptFile = path.join(paths.runtime, LAUNCH_ATTEMPT_FILE);
+  const runningFile = path.join(paths.runtime, "running-instance.json");
+  const left = readJson<LaunchAttempt>(attemptFile);
+  if (left && left.version === version && Number.isSafeInteger(left.pid) && left.pid > 0 && left.pid !== currentPid && alive(left.pid)) {
+    return { kind: "ordinary" };
+  }
+  const running = readJson<{ pid?: number }>(runningFile);
+  if (running && Number.isSafeInteger(running.pid) && (running.pid ?? 0) > 0 && running.pid !== currentPid && alive(running.pid!)) {
+    return { kind: "ordinary" };
+  }
   const saved = readJson<LaunchHistory>(historyFile);
   const history: LaunchHistory = saved && saved.version === version ? saved : { version, launches: 0, failures: 0 };
-  const left = readJson<LaunchAttempt>(attemptFile);
   if (left && left.version === version) history.failures += 1;
   else if (history.launches > 0) history.failures = 0;
   if (history.failures >= FAILURES_BEFORE_ASKING) {
@@ -123,7 +150,7 @@ export function beginLaunch(paths: GuardPaths, version: string, now = new Date()
   }
   history.launches += 1;
   writeJson(historyFile, history);
-  writeJson(attemptFile, { version, attempt: history.launches, pid: process.pid, at: now.toISOString() } satisfies LaunchAttempt);
+  writeJson(attemptFile, { version, attempt: history.launches, pid: currentPid, at: now.toISOString() } satisfies LaunchAttempt);
   return { kind: "watched", attempt: history.launches };
 }
 
@@ -184,14 +211,24 @@ export function prepareRollback(paths: GuardPaths, plan: RollbackPlan, now = new
   if (plan.database) {
     const { current, restoreFrom } = plan.database;
     keptAs = plan.database.keptAs;
-    // The library in use is kept whole (with its write-ahead log) under the new name before the backup is copied in.
-    if (fs.existsSync(current)) fs.renameSync(current, keptAs);
-    for (const suffix of ["-wal", "-shm"]) {
-      if (fs.existsSync(`${current}${suffix}`)) fs.renameSync(`${current}${suffix}`, `${keptAs}${suffix}`);
-    }
+    // Stage the backup copy BEFORE moving the live database aside, so ENOSPC or a vanished backup leaves the live DB intact.
     const staging = `${current}.restore.part`;
-    fs.copyFileSync(restoreFrom, staging);
-    fs.renameSync(staging, current);
+    try {
+      fs.copyFileSync(restoreFrom, staging);
+    } catch (error) {
+      try { fs.rmSync(staging, { force: true }); } catch { /* best effort */ }
+      throw error;
+    }
+    try {
+      if (fs.existsSync(current)) fs.renameSync(current, keptAs);
+      for (const suffix of ["-wal", "-shm"]) {
+        if (fs.existsSync(`${current}${suffix}`)) fs.renameSync(`${current}${suffix}`, `${keptAs}${suffix}`);
+      }
+      fs.renameSync(staging, current);
+    } catch (error) {
+      try { fs.rmSync(staging, { force: true }); } catch { /* best effort */ }
+      throw error;
+    }
     databaseRestored = true;
   }
   const dataDir = guardDataDir(paths, plan.previous);

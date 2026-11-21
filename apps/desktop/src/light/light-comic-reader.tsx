@@ -200,7 +200,6 @@ function LightComicView(props: { t: T; opened: ComicOpened; book: Book; startPag
       stage.current.scrollTop = stripBoxes.tops[pageIndex] ?? 0;
       setScrollTop(stage.current.scrollTop);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strip, stripWidth]);
   const onStripScroll = (event: { currentTarget: HTMLDivElement }) => {
     if (!stripBoxes) return;
@@ -298,7 +297,7 @@ function LightComicView(props: { t: T; opened: ComicOpened; book: Book; startPag
       {missingCount > 0 ? <p className="reader-notice" role="status" data-testid="comic-warning">{t("comic.warnPages", { count: missingCount })}</p> : null}
       <div ref={frame} className="comic-frame" data-testid="comic-frame">
         <div ref={stage} className="comic-stage" data-testid="comic-stage" onScroll={strip ? onStripScroll : undefined} onClick={(event) => {
-          if (strip || event.target instanceof HTMLButtonElement) return;
+          if (strip || (event.target instanceof Element && event.target.closest("button"))) return;
           const box = event.currentTarget.getBoundingClientRect();
           const action = tapAction(event.clientX - box.left, box.width, reading);
           if (action === "next") go(1); else if (action === "prev") go(-1);

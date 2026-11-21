@@ -56,6 +56,7 @@
 .reader-foot { bottom: 0; display: flex; flex-direction: column; padding: 8px 16px; border-top: 1px solid var(--color-border); box-shadow: 0 -4px 14px #30364714; font-size: 12px; }
 .reader-foot-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
 .reader-novel[data-controls="hidden"] .reader-foot { transform: translateY(100%); opacity: 0; pointer-events: none; }
+.reader-novel[data-controls="hidden"] .reader-foot * { pointer-events: none !important; }
 .reader-novel .reader-scroll { padding-top: var(--reader-top-room); padding-bottom: var(--reader-bottom-room); }
 .reader-position { color: var(--color-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .reader-chapter { max-width: 18em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-subtle); }
@@ -117,13 +118,12 @@ button.editable-number:hover:not(:disabled) { background: var(--color-muted); co
 }
 
 /* The window or the screen is filled with the reader: the bars float over the page as glass and take no room from it, so showing or hiding one never moves
-   the content. The comic's bar is seen when the pointer is on it (or focus is in it); the novel's own auto-hide stays. */
+   the content. Moving or dragging the pointer across the window reveals the bottom bar; while hidden it takes no pointer events at all. */
 .reader[data-immersive] { position: relative; }
 .reader[data-immersive] .reader-foot { background: var(--color-frame-glass); backdrop-filter: blur(14px); }
-.reader[data-immersive] .comic-footer { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; background: var(--color-frame-glass); backdrop-filter: blur(14px); border-top-color: transparent; opacity: 0; transition: opacity 160ms ease; }
-.reader[data-immersive] .comic-footer > * { pointer-events: none; }
-.reader[data-immersive] .comic-footer:hover, .reader[data-immersive] .comic-footer:focus-within { opacity: 1; }
-.reader[data-immersive] .comic-footer:hover > *, .reader[data-immersive] .comic-footer:focus-within > * { pointer-events: auto; }
+.reader[data-immersive] .comic-footer { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; background: var(--color-frame-glass); backdrop-filter: blur(14px); border-top-color: transparent; transition: opacity 160ms ease; }
+.reader[data-immersive][data-controls="hidden"] .comic-footer { opacity: 0; pointer-events: none; }
+.reader[data-immersive][data-controls="hidden"] .comic-footer * { pointer-events: none !important; }
 @media (prefers-reduced-motion: reduce) { .reader[data-immersive] .comic-footer { transition: none; } }
 
 /* What lies over the page keeps clear of what floats over it, in the full window and in the full screen alike.
@@ -135,3 +135,7 @@ button.editable-number:hover:not(:disabled) { background: var(--color-muted); co
 .reader[data-immersive] .comic-region-bar { position: absolute; z-index: 21; top: 8px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 12px; max-width: calc(100% - 32px); border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); box-shadow: 0 4px 16px #30364722; color: var(--color-text); }
 .reader[data-window-full] .comic-region-bar { top: calc(var(--column-top-h) + 8px); }
 .reader[data-window-full]:has(> .reader-source, > .reader-notice:not(.comic-region-bar)) { padding-top: var(--column-top-h); }
+
+/* Reading aloud (计划 4.8): the paragraph being heard is marked softly, and the question after a stop sits above the pages. */
+.reader-novel [data-reading-aloud] mark { background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: inherit; border-radius: 2px; }
+.reader-read-ask { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); }

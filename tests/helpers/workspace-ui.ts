@@ -59,10 +59,10 @@ export async function openWorkPage(cardId: string) {
   await stay();
 }
 
-/** The title bar's back button for the tab in front: ready once the place the tab is on has settled into its history. */
-export async function goBack() {
-  await waitFor(() => expect(screen.getByTestId("nav-back")).toHaveProperty("disabled", false));
-  fireEvent.click(screen.getByTestId("nav-back"));
+/** Alt + ← or → for the tab in front (in the settings: the pages that were visited), once what the tab did last has settled into its history. */
+export async function walk(direction: "back" | "forward") {
+  await settle();
+  fireEvent.keyDown(window, { key: direction === "back" ? "ArrowLeft" : "ArrowRight", altKey: true });
 }
 
 /** Lets what a tab does on its way out (saving the place) and what React does after it happen. */

@@ -39,8 +39,15 @@ let ort: Ort | null = null;
 let session: Session | null = null;
 let sampleRate: OrtTensor | null = null;
 const streams = new Map<number, Stream>();
+const activeAnalyzes = new Set<number>();
 const cancelled = new Set<number>();
+const activeRuns = new Set<Promise<unknown>>();
 let shuttingDown = false;
+
+function trackRun<T>(run: Promise<T>): Promise<T> {
+  activeRuns.add(run);
+  return run.finally(() => { activeRuns.delete(run); });
+}
 
 function zeroState(): OrtTensor {
   return new ort!.Tensor("float32", new Float32Array(2 * 1 * 128), [2, 1, 128]);
@@ -123,19 +130,21 @@ port.on("message", (message: { type: string; id?: number; stream?: number; pcm?:
       } else if (message.type === "push") {
         const stream = streams.get(message.stream!);
         if (!stream) throw new Error("unknown stream");
-        const run = stream.chain.then(() => infer(stream, message.pcm!, () => false));
+        const run = trackRun(stream.chain.then(() => infer(stream, message.pcm!, () => false)));
         stream.chain = run.then(() => undefined, () => undefined);
         const probs = await run;
         port.postMessage({ type: "result", id: message.id, probs }, [probs.buffer as ArrayBuffer]);
       } else if (message.type === "analyze") {
-        const probs = await analyze(message.id!, message.file!);
+        activeAnalyzes.add(message.id!);
+        const probs = await trackRun(analyze(message.id!, message.file!));
         port.postMessage({ type: "result", id: message.id, probs }, [probs.buffer as ArrayBuffer]);
       } else if (message.type === "cancel") {
-        cancelled.add(message.id!);
+        if (message.id !== undefined && activeAnalyzes.has(message.id)) cancelled.add(message.id);
       } else if (message.type === "shutdown") {
-        // Leave the runtime in an orderly way: ending the thread in the middle of a WebAssembly call can take the process down with it.
+        // Leave the runtime in an orderly way: wait for active WebAssembly calls to exit before releasing the session.
         shuttingDown = true;
         streams.clear();
+        await Promise.allSettled([...activeRuns]);
         await session?.release?.().catch(() => undefined);
         session = null;
         port.postMessage({ type: "bye" });
@@ -144,7 +153,10 @@ port.on("message", (message: { type: string; id?: number; stream?: number; pcm?:
     } catch (error) {
       port.postMessage({ type: message.type === "init" ? "init-error" : "error", id: message.id, message: error instanceof Error ? error.message : String(error) });
     } finally {
-      if (message.type === "analyze") cancelled.delete(message.id!);
+      if (message.type === "analyze" && message.id !== undefined) {
+        activeAnalyzes.delete(message.id);
+        cancelled.delete(message.id);
+      }
     }
   })();
 });

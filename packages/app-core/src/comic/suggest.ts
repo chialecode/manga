@@ -4,7 +4,7 @@ import type { WorkMediaKind } from "@manga/contracts";
 import { htmlImageSources, htmlSvgImageHrefs, resolveArchiveReference } from "../domain/formats.ts";
 import { samplePdfContent } from "../domain/pdfjs-document.ts";
 import type { ZipPool } from "../media/zip-pool.ts";
-import { VIDEO_EXTENSIONS, isImageName, mobiTableOfFile } from "./scan.ts";
+import { VIDEO_EXTENSIONS, isIgnoredName, isImageName, mobiTableOfFile } from "./scan.ts";
 
 export type KindSuggestion = {
   kind: WorkMediaKind;
@@ -73,6 +73,12 @@ export async function suggestKind(file: string, options: { zips: ZipPool; signal
   if (ext === ".cbz") return { kind: "comic", basis: "extension", confidence: "high" };
   if (ext === ".txt") return { kind: "novel", basis: "extension", confidence: "high" };
   try {
+    if (ext === ".zip") {
+      const index = await options.zips.index(file, options.signal);
+      const images = index.entries.filter((entry) => !entry.directory && !entry.unsafe && isImageName(entry.name) && !isIgnoredName(entry.name));
+      if (images.length > 0) return { kind: "comic", basis: "images_only", confidence: "high", pages: images.length };
+      return { kind: "novel", basis: "unknown", confidence: "low" };
+    }
     if (ext === ".pdf") {
       const sample = await samplePdfContent({ file }, { signal: options.signal });
       if (sample.textPages === 0 && sample.imagePages >= Math.ceil(sample.sampled * 0.8)) return { kind: "comic", basis: "images_only", confidence: "high", pages: sample.pages };

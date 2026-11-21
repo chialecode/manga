@@ -1,12 +1,16 @@
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow, ReactFlowProvider, getNodesBounds, useNodesState, useReactFlow, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { toPng, toSvg } from "html-to-image";
 import { ChevronDown, ChevronUp, CornerDownRight, Download, Link2, Minus, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import type { MindmapActionInput } from "@manga/contracts/canvas";
 import { attempt } from "../../../lib/api.ts";
+import { isImeEvent, isTypingTarget } from "../../../lib/ime.ts";
+import { useAsyncGuard } from "../../../hooks/use-async-guard.ts";
+import { Popup } from "../../../components/popup.tsx";
 import type { ProjectTabContext } from "../project-page.tsx";
 import { DocWorkspace, type DocKind } from "./doc-workspace.tsx";
+import { useCanvasOpQueue } from "./use-canvas-op-queue.ts";
 import { RefPicker, type PickedRef } from "./ref-picker.tsx";
 import { THEMES, THEME_COLORS, buildTree, descendantsOf, flowOf, indexAmong, layoutTree, neighbour, type MindTheme, type MmDoc, type MmRef, type TopicNode } from "./mindmap-model.ts";
 
@@ -14,11 +18,6 @@ type MapSummary = { id: string; title: string; theme: string; nodes: number; upd
 type Action = MindmapActionInput;
 type EditResult = { doc: MmDoc; created: string[] };
 type ExportFormat = "png" | "svg" | "markdown" | "opml";
-
-const isTyping = (target: EventTarget | null): boolean => {
-  const element = target as HTMLElement | null;
-  return Boolean(element && (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT" || element.isContentEditable));
-};
 
 const MAP_KIND: DocKind<MapSummary> = {
   prefix: "mindmap", item: "map", focusKind: "mindmap",
@@ -55,10 +54,12 @@ const TopicContext = createContext<TopicActions | null>(null);
 function TopicView({ id, data, selected }: NodeProps<TopicNode>) {
   const actions = useContext(TopicContext)!;
   const { node } = data;
+  const nodeTextRef = useRef(node.text);
+  nodeTextRef.current = node.text;
   const editing = Boolean((data as { editing?: boolean }).editing);
   const [value, setValue] = useState(node.text);
   const area = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (editing) { setValue(node.text); requestAnimationFrame(() => { area.current?.focus(); area.current?.select(); }); } }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (editing) { setValue(nodeTextRef.current); requestAnimationFrame(() => { area.current?.focus(); area.current?.select(); }); } }, [editing]);
   const done = (save: boolean) => actions.commitText(id, save ? value : null);
   return (
     <div className={`mm-topic mm-b${data.branch % 6}${data.depth === 0 ? " is-root" : ""}${selected ? " is-selected" : ""}`} data-testid={`mm-node-${id}`} data-depth={data.depth} data-collapsed={node.collapsed ? "true" : "false"}
@@ -67,7 +68,7 @@ function TopicView({ id, data, selected }: NodeProps<TopicNode>) {
       <Handle type="source" position={Position.Right} isConnectable={false} />
       {editing ? (
         <textarea ref={area} className="mm-edit nodrag nowheel" data-testid={`mm-edit-${id}`} value={value} rows={1} aria-label={actions.placeholder} onChange={(event) => setValue(event.target.value)} onBlur={() => done(true)}
-          onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); done(true); } else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); done(false); } else if (event.key === "Tab") { event.stopPropagation(); } }} />
+          onKeyDown={(event) => { if (isImeEvent(event)) return; if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); done(true); } else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); done(false); } else if (event.key === "Tab") { event.stopPropagation(); } }} />
       ) : (
         <span className="mm-text" title={node.text}>{node.text || actions.placeholder}</span>
       )}
@@ -92,14 +93,28 @@ function MapView({ ctx, mapId, onChanged }: { ctx: ProjectTabContext; mapId: str
   const [exporting, setExporting] = useState(false);
   const [menu, setMenu] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
-  const pending = useRef(0);
+  const exportBtnRef = useRef<HTMLButtonElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!menu || !exportMenuRef.current) return;
+    exportMenuRef.current.style.position = "fixed";
+    exportMenuRef.current.style.inset = "auto";
+  }, [menu]);
+  const { enqueue, hasMore } = useCanvasOpQueue();
+  const guard = useAsyncGuard();
   const docRef = useRef<MmDoc | null>(null);
   const selectedRef = useRef<string | null>(null);
   const onError = useRef(ctx.onError);
   onError.current = ctx.onError;
   docRef.current = doc;
   selectedRef.current = selectedId;
+
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.stopPropagation(); setMenu(false); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menu]);
 
   const tree = useMemo(() => buildTree(doc?.nodes ?? []), [doc?.nodes]);
   const placed = useMemo(() => layoutTree(tree), [tree]);
@@ -117,45 +132,37 @@ function MapView({ ctx, mapId, onChanged }: { ctx: ProjectTabContext; mapId: str
   }, [base, selectedId, editId, setNodes]);
 
   const load = useCallback(async () => {
+    const token = guard.next();
     const result = await attempt<MmDoc>("mindmap.get", { mapId });
+    if (!guard.isCurrent(token)) return;
     if (!result.ok) { onError.current(result.error.message); return; }
     setDoc(result.value);
     setSelectedId((current) => (current && result.value.nodes.some((node) => node.id === current) ? current : result.value.nodes.find((node) => node.parentId === null)?.id ?? null));
-  }, [mapId]);
+  }, [mapId, guard]);
   useEffect(() => { void load(); }, [load]);
 
   /** One edit at a time, in order. While more are waiting, an answer is not drawn: the last one carries the final state, so a quick run of edits does not flicker. */
-  const commit = useCallback((actions: Action[], label?: string): Promise<EditResult | null> => {
-    pending.current += 1;
-    const run = async (): Promise<EditResult | null> => {
-      try {
-        const result = await attempt<EditResult>("mindmap.edit", { mapId, actions, ...(label ? { label } : {}) });
-        if (!result.ok) { onError.current(result.error.code === "VALIDATION_ERROR" && (result.error.details as { reason?: string } | undefined)?.reason === "descendant" ? t("mindmap.cannotMove") : result.error.message); await load(); return null; }
-        if (pending.current <= 1) setDoc(result.value.doc);
-        onChanged();
-        return result.value;
-      } finally { pending.current -= 1; }
-    };
-    const next = queue.current.then(run, run);
-    queue.current = next.catch(() => undefined);
-    return next;
-  }, [mapId, load, onChanged, t]);
+  const commit = useCallback((actions: Action[], label?: string): Promise<EditResult | null> => (
+    enqueue(async () => {
+      const result = await attempt<EditResult>("mindmap.edit", { mapId, actions, ...(label ? { label } : {}) });
+      if (!guard.isAlive()) return null;
+      if (!result.ok) { onError.current(result.error.code === "VALIDATION_ERROR" && (result.error.details as { reason?: string } | undefined)?.reason === "descendant" ? t("mindmap.cannotMove") : result.error.message); await load(); return null; }
+      if (!hasMore()) setDoc(result.value.doc);
+      onChanged();
+      return result.value;
+    })
+  ), [mapId, load, onChanged, t, enqueue, hasMore, guard]);
 
   const step = useCallback(async (direction: "undo" | "redo") => {
-    pending.current += 1;
-    const run = async () => {
-      try {
-        const result = await attempt<{ doc: MmDoc }>(`mindmap.${direction}`, { mapId });
-        if (!result.ok) { if (result.error.code !== "NOT_FOUND") onError.current(result.error.message); await load(); return; }
-        setDoc(result.value.doc);
-        setSelectedId((current) => (current && result.value.doc.nodes.some((node) => node.id === current) ? current : result.value.doc.nodes.find((node) => node.parentId === null)?.id ?? null));
-        onChanged();
-      } finally { pending.current -= 1; }
-    };
-    const next = queue.current.then(run, run);
-    queue.current = next.catch(() => undefined);
-    await next;
-  }, [mapId, load, onChanged]);
+    await enqueue(async () => {
+      const result = await attempt<{ doc: MmDoc }>(`mindmap.${direction}`, { mapId });
+      if (!guard.isAlive()) return;
+      if (!result.ok) { if (result.error.code !== "NOT_FOUND") onError.current(result.error.message); await load(); return; }
+      setDoc(result.value.doc);
+      setSelectedId((current) => (current && result.value.doc.nodes.some((node) => node.id === current) ? current : result.value.doc.nodes.find((node) => node.parentId === null)?.id ?? null));
+      onChanged();
+    });
+  }, [mapId, load, onChanged, enqueue, guard]);
 
   const reveal = useCallback((id: string) => {
     const spot = placed.find((item) => item.id === id);
@@ -237,7 +244,7 @@ function MapView({ ctx, mapId, onChanged }: { ctx: ProjectTabContext; mapId: str
   // ---- keyboard ----
 
   const onKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (isTyping(event.target) || editId) return;
+    if (isImeEvent(event) || isTypingTarget(event.target) || editId) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key;
     const id = selectedRef.current;
@@ -268,9 +275,10 @@ function MapView({ ctx, mapId, onChanged }: { ctx: ProjectTabContext; mapId: str
 
   async function setTheme(next: string) {
     const result = await attempt("mindmap.setTheme", { mapId, theme: next });
+    if (!guard.isAlive()) return;
     if (!result.ok) { onError.current(result.error.message); return; }
     await load();
-    onChanged();
+    if (guard.isAlive()) onChanged();
   }
 
   async function draw(format: "png" | "svg"): Promise<string> {
@@ -293,16 +301,18 @@ function MapView({ ctx, mapId, onChanged }: { ctx: ProjectTabContext; mapId: str
     setMenu(false);
     if (!window.manga.pick) return;
     const folder = await window.manga.pick({ mode: "directory" });
-    if (!folder) return;
+    if (!folder || !guard.isAlive()) return;
     setExporting(true);
     try {
       const data = format === "png" || format === "svg" ? await draw(format) : undefined;
+      if (!guard.isAlive()) return;
       const result = await attempt<{ fileName: string }>("mindmap.export", { mapId, format, pathHandle: folder.pathHandle, ...(data ? { data } : {}) });
+      if (!guard.isAlive()) return;
       if (result.ok) ctx.onNotice(t("mindmap.exported", { name: result.value.fileName }));
       else onError.current(t("mindmap.exportFailed", { reason: result.error.message }));
     } catch (error) {
-      onError.current(t("mindmap.exportFailed", { reason: error instanceof Error ? error.message : String(error) }));
-    } finally { setExporting(false); }
+      if (guard.isAlive()) onError.current(t("mindmap.exportFailed", { reason: error instanceof Error ? error.message : String(error) }));
+    } finally { if (guard.isAlive()) setExporting(false); }
   }
 
   if (!doc) return <div className="wb-canvas" aria-busy="true" />;
@@ -340,11 +350,11 @@ function MapView({ ctx, mapId, onChanged }: { ctx: ProjectTabContext; mapId: str
             </label>
           </span>
           <span className="wb-tool-group mm-export">
-            <button type="button" data-testid="mindmap-export" aria-haspopup="menu" aria-expanded={menu} disabled={exporting} onClick={() => setMenu((open) => !open)}><Download size={15} aria-hidden="true" /> {t("mindmap.export")}</button>
+            <button ref={exportBtnRef} type="button" data-testid="mindmap-export" aria-haspopup="menu" aria-expanded={menu} disabled={exporting} onClick={() => setMenu((open) => !open)}><Download size={15} aria-hidden="true" /> {t("mindmap.export")}</button>
             {menu ? (
-              <div className="mm-menu" role="menu" data-testid="mindmap-export-menu">
+              <Popup anchor={exportBtnRef} boxRef={exportMenuRef} onClose={() => setMenu(false)} align="end" role="menu" className="mm-menu" testId="mindmap-export-menu">
                 {(["png", "svg", "markdown", "opml"] as const).map((format) => <button key={format} type="button" role="menuitem" data-testid={`mindmap-export-${format}`} onClick={() => void exportAs(format)}>{t(`mindmap.export.${format}` as never)}</button>)}
-              </div>
+              </Popup>
             ) : null}
           </span>
           <span className="wb-status detail-muted" data-testid="mindmap-status" aria-live="polite">{t("mindmap.counts", { count: doc.nodes.length })}</span>

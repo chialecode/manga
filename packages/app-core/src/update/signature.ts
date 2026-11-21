@@ -5,6 +5,7 @@ import zlib from "node:zlib";
 import { z } from "zod";
 import { MangaError, UPDATE_ERROR_MESSAGES } from "@manga/contracts";
 import { keyIdOf, publicKeyFromBase64, rawPublicKey } from "../plugins/package.ts";
+import { sha512File } from "../shared/utils.ts";
 
 export { rawPublicKey };
 
@@ -51,7 +52,7 @@ export function sha512BytesBase64(bytes: Uint8Array): string {
 }
 
 export function sha512FileBase64(filePath: string): string {
-  return sha512BytesBase64(fs.readFileSync(filePath));
+  return sha512File(filePath, "base64");
 }
 
 /**
@@ -474,11 +475,16 @@ export function serializeBlockMapGzip(blockMap: BlockMapData): Buffer {
   return zlib.gzipSync(Buffer.from(JSON.stringify(blockMap), "utf8"));
 }
 
+const MAX_BLOCKMAP_DECOMPRESSED_BYTES = 32 * 1024 * 1024;
+
 export function parseBlockMapBytes(raw: Uint8Array): BlockMapData {
   let text: string;
   if (raw.length >= 2 && raw[0] === 0x1f && raw[1] === 0x8b) {
-    text = zlib.gunzipSync(raw).toString("utf8");
+    text = zlib.gunzipSync(raw, { maxOutputLength: MAX_BLOCKMAP_DECOMPRESSED_BYTES }).toString("utf8");
   } else {
+    if (raw.byteLength > MAX_BLOCKMAP_DECOMPRESSED_BYTES) {
+      throw new Error("blockmap exceeds size limit");
+    }
     text = Buffer.from(raw).toString("utf8");
   }
   return BlockMapSchema.parse(JSON.parse(text));

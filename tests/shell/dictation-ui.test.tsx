@@ -756,6 +756,7 @@ describe("Voice transcription settings 5 sections, local ASR models, dictionary 
             save: async (patch) => {
               savedPatches.push(patch);
               setSettings((cur) => ({ ...cur, ...patch }));
+              return true;
             },
           }}
           keyTable={resolveKeys(null)}

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Mic, Plus, Sparkles, Square, TextQuote, X } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import type { QuickTask } from "@manga/contracts/quick-tasks";
 import { Menu, type MenuItem } from "../menu.tsx";
+import { isImeEvent } from "../../lib/ime.ts";
 import type { QuoteTag } from "../../lib/quote-tags.ts";
 import type { AttachedImage } from "../../lib/types.ts";
 import { formatClock } from "../../readers/video-model.ts";
@@ -23,7 +24,15 @@ export function MicButton(props: { t: T; state: RecorderState; enabled: boolean;
   const timer = useRef<number | undefined>(undefined);
   const holding = useRef(false);
   const pressing = useRef(false);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const onHoldEndRef = useRef(props.onHoldEnd);
+  onHoldEndRef.current = props.onHoldEnd;
+  useEffect(() => () => {
+    window.clearTimeout(timer.current);
+    if (holding.current) {
+      holding.current = false;
+      onHoldEndRef.current();
+    }
+  }, []);
   if (!props.enabled) return null;
   const active = state.phase !== "idle";
   const label = active ? t("record.stop") : t("record.startKey", { key: props.toggleKey });
@@ -121,6 +130,8 @@ export type ComposerProps = {
   onQuick: (task: QuickTask) => void;
   noModel: boolean;
   onSettings: () => void;
+  /** The model, thinking and window the next question goes with (A-137), beside the note/ask switch. */
+  modelPicker?: ReactNode;
   running: boolean;
   onStop: () => void;
   onSend: () => void;
@@ -131,10 +142,13 @@ export type ComposerProps = {
     online: boolean;
     semantic?: boolean;
     webpage?: boolean;
+    /** "联网搜索": offered when true, shown as unavailable when false, not shown when not given. */
+    webSearch?: boolean;
     subtitle: boolean;
     allowOnline: boolean;
     allowSemantic?: boolean;
     allowWebpage?: boolean;
+    allowWebSearch?: boolean;
     subtitleAheadMin: number;
     materials: number;
   };
@@ -142,6 +156,7 @@ export type ComposerProps = {
   onToggleOnline: () => void;
   onToggleSemantic?: () => void;
   onToggleWebpage?: () => void;
+  onToggleWebSearch?: () => void;
   onSubtitleAhead: (minutes: number) => void;
   onMaterials: () => void;
   mic: Parameters<typeof MicButton>[0] | null;
@@ -161,6 +176,8 @@ export function Composer(props: ComposerProps) {
   if (props.plus.online) plus.push({ id: "online", label: t("chat.plus.online"), checked: props.plus.allowOnline, onSelect: props.onToggleOnline });
   if (props.plus.semantic && props.onToggleSemantic) plus.push({ id: "semantic", label: t("chat.plus.semantic"), checked: Boolean(props.plus.allowSemantic), onSelect: props.onToggleSemantic });
   if (props.plus.webpage && props.onToggleWebpage) plus.push({ id: "webpage", label: t("chat.plus.webpage"), checked: Boolean(props.plus.allowWebpage), onSelect: props.onToggleWebpage });
+  // The model makes the search words from the conversation; nothing of the library is put in them by itself (计划 4.4).
+  if (props.plus.webSearch !== undefined && props.onToggleWebSearch) plus.push({ id: "websearch", label: props.plus.webSearch ? t("chat.plus.webSearch") : t("chat.plus.webSearchMissing"), checked: Boolean(props.plus.allowWebSearch), disabled: !props.plus.webSearch, onSelect: props.onToggleWebSearch });
   if (props.plus.subtitle) for (const minutes of SUBTITLE_AHEAD) plus.push({ id: `ahead-${minutes}`, label: minutes === 0 ? t("rp.subtitle.default") : t("rp.subtitle.ahead", { minutes }), checked: props.plus.subtitleAheadMin === minutes, onSelect: () => props.onSubtitleAhead(minutes) });
   plus.push({ id: "materials", label: props.plus.materials ? t("chat.plus.materialsCount", { count: props.plus.materials }) : t("chat.plus.materials"), onSelect: props.onMaterials });
 
@@ -188,13 +205,13 @@ export function Composer(props: ComposerProps) {
           onCompositionEnd={() => setComposing(false)}
           onKeyDown={(event) => {
             // Enter confirms a candidate in an input method; it only sends when nothing is being composed.
-            if (event.key === "Enter" && !event.shiftKey && !composing && !event.nativeEvent.isComposing) {
+            if (event.key === "Enter" && !event.shiftKey && !isImeEvent(event, composing)) {
               event.preventDefault();
-              if (can) props.onSend();
+              if (can && !props.sending && !(props.mode === "ask" && props.running)) props.onSend();
             }
           }}
         />
-        {(props.plus.allowOnline || props.plus.allowSemantic || props.plus.allowWebpage) ? (
+        {(props.plus.allowOnline || props.plus.allowSemantic || props.plus.allowWebpage || props.plus.allowWebSearch) ? (
           <ul className="chat-tags" data-testid="chat-opt-in-tags" aria-label={t("chat.optIn")}>
             {props.plus.allowOnline ? (
               <li className="chat-tag" data-testid="chat-opt-in-online">
@@ -206,6 +223,12 @@ export function Composer(props: ComposerProps) {
               <li className="chat-tag" data-testid="chat-opt-in-semantic">
                 <span className="chat-tag-label">{t("chat.optIn.semantic")}</span>
                 <button type="button" className="icon-button" data-testid="chat-opt-in-remove-semantic" aria-label={t("chat.optIn.remove", { label: t("chat.optIn.semantic") })} onClick={props.onToggleSemantic}><X size={12} /></button>
+              </li>
+            ) : null}
+            {props.plus.allowWebSearch && props.onToggleWebSearch ? (
+              <li className="chat-tag" data-testid="chat-opt-in-websearch" title={t("chat.optIn.webSearchHint")}>
+                <span className="chat-tag-label">{t("chat.optIn.webSearch")}</span>
+                <button type="button" className="icon-button" data-testid="chat-opt-in-remove-websearch" aria-label={t("chat.optIn.remove", { label: t("chat.optIn.webSearch") })} onClick={props.onToggleWebSearch}><X size={12} /></button>
               </li>
             ) : null}
             {props.plus.allowWebpage && props.onToggleWebpage ? (
@@ -223,6 +246,7 @@ export function Composer(props: ComposerProps) {
               <button type="button" aria-pressed={props.mode === "ask"} data-testid="chat-mode-ask" onClick={() => props.onMode("ask")}>{t("chat.mode.ask")}</button>
             </div>
           ) : null}
+          {props.mode === "ask" && props.modelPicker ? props.modelPicker : null}
           <span className="flex-1" />
           <Menu label={t("chat.plus")} testId="chat-plus" align="end" trigger={<Plus size={16} />} items={plus} />
           {props.mode === "ask" && props.dictation ? (

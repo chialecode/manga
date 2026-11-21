@@ -90,6 +90,7 @@ type Active = {
   lastSampleAt: number;
   gaps: Array<{ atMs: number; ms: number }>;
   stopping: boolean;
+  stopPromise: Promise<SessionView> | null;
 };
 
 export type SessionView = {
@@ -257,13 +258,25 @@ export class CaptureService {
     return { active, session: this.view(this.row(sessionId)) };
   }
 
-  list(input: { resourceId?: string; workId?: string; limit?: number }): { sessions: SessionView[] } {
+  list(input: { resourceId?: string; workId?: string; before?: string; limit?: number }): { sessions: SessionView[] } {
     const limit = input.limit ?? 50;
-    const rows = input.resourceId
-      ? this.db.prepare("SELECT s.* FROM capture_sessions s WHERE s.id IN (SELECT DISTINCT session_id FROM capture_events WHERE resource_id = ?) ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?").all(input.resourceId, limit)
-      : input.workId
-        ? this.db.prepare("SELECT * FROM capture_sessions WHERE work_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?").all(input.workId, limit)
-        : this.db.prepare("SELECT * FROM capture_sessions ORDER BY created_at DESC, rowid DESC LIMIT ?").all(limit);
+    const where: string[] = [];
+    const params: Array<string | number> = [];
+    if (input.resourceId) {
+      where.push("s.id IN (SELECT DISTINCT session_id FROM capture_events WHERE resource_id = ?)");
+      params.push(input.resourceId);
+    } else if (input.workId) {
+      where.push("s.work_id = ?");
+      params.push(input.workId);
+    }
+    if (input.before) {
+      where.push("s.created_at < ?");
+      params.push(input.before);
+    }
+    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const rows = this.db
+      .prepare(`SELECT s.* FROM capture_sessions s ${clause} ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?`)
+      .all(...params, limit);
     return { sessions: (rows as SessionRow[]).map((row) => this.view(row)) };
   }
 
@@ -301,7 +314,7 @@ export class CaptureService {
     const stream = this.deps.vad.available ? this.deps.vad.open() : null;
     this.active = {
       id, file, fd, bytes: 0, nextSeq: 0, lastChunkBytes: 0, stream, segmenter: new VadSegmenter({ marginMs: readRecordingSettings(this.deps.store).boundaryMarginMs }),
-      closedSegments: [], feed: Promise.resolve(), fedBytes: 0, filterBroken: stream === null, events: 0, lastSampleAt: -Infinity, gaps: [], stopping: false,
+      closedSegments: [], feed: Promise.resolve(), fedBytes: 0, filterBroken: stream === null, events: 0, lastSampleAt: -Infinity, gaps: [], stopping: false, stopPromise: null,
     };
     // The starting place is recorded at once, so even a recording with no recognized speech knows where it began.
     this.insertEvent(id, { offsetMs: 0, reason: "start", resourceId: input.resourceId, resourceRevisionId: input.resourceRevisionId, locator: input.locator });
@@ -389,6 +402,9 @@ export class CaptureService {
 
   /** End a recording: finish the file, keep what was captured, and hand it on to filtering. Never throws away audio. */
   async stop(input: { sessionId: string; reason?: CaptureStopReason; durationMs?: number }): Promise<SessionView> {
+    if (this.active && this.active.id === input.sessionId && this.active.stopPromise) {
+      return this.active.stopPromise;
+    }
     const active = this.active && this.active.id === input.sessionId && !this.active.stopping ? this.active : null;
     if (!active) {
       // A second stop (a repeated key event, a late stop from the renderer) is harmless once the recording has ended.
@@ -397,44 +413,59 @@ export class CaptureService {
       throw new MangaError("VALIDATION_ERROR", "this recording is not in progress", { details: { reason: "not_recording" } });
     }
     active.stopping = true;
-    if (input.durationMs !== undefined) {
-      const claimed = Math.round(input.durationMs);
-      const have = pcmDurationMs(active.bytes);
-      // The renderer's own count says audio went missing at the tail: silence restores the length the events were measured on.
-      if (claimed > have + 400 && claimed - have <= MAX_PAD_MS) {
-        const fill = Buffer.alloc(Math.round((claimed - have) * PCM_BYTES_PER_MS) & ~1);
-        active.gaps.push({ atMs: have, ms: pcmDurationMs(fill.length) });
-        fs.writeSync(active.fd, fill);
-        active.bytes += fill.length;
-        active.filterBroken = true;
+    const finish = (async (): Promise<SessionView> => {
+      if (input.durationMs !== undefined) {
+        const claimed = Math.round(input.durationMs);
+        const have = pcmDurationMs(active.bytes);
+        // The renderer's own count says audio went missing at the tail: silence restores the length the events were measured on.
+        if (claimed > have + 400 && claimed - have <= MAX_PAD_MS) {
+          const fill = Buffer.alloc(Math.round((claimed - have) * PCM_BYTES_PER_MS) & ~1);
+          active.gaps.push({ atMs: have, ms: pcmDurationMs(fill.length) });
+          fs.writeSync(active.fd, fill);
+          active.bytes += fill.length;
+          active.filterBroken = true;
+        }
       }
-    }
-    await Promise.race([active.feed, new Promise<void>((resolve) => setTimeout(resolve, 5000))]);
-    fs.closeSync(active.fd);
-    active.stream?.close();
-    const totalMs = pcmDurationMs(active.bytes);
-    this.insertEvent(active.id, { offsetMs: totalMs, reason: "stop" });
-    let summary: VadSummary | null = null;
-    const wholeFrames = Math.floor(active.bytes / 2 / 512) * 512 * 2;
-    if (!active.filterBroken && active.fedBytes >= wholeFrames) {
-      const segments = [...active.closedSegments, ...active.segmenter.flush(totalMs)];
-      summary = this.summarize(segments, totalMs, false, active.gaps);
-    }
-    this.active = null;
-    const stopReason = input.reason ?? "user";
-    this.patch(active.id, {
-      status: "stopped", stage: "recorded", duration_ms: totalMs, stopped_at: new Date().toISOString(),
-      vad_json: summary ? JSON.stringify(summary) : null,
-      error_json: stopReason === "user" || stopReason === "shutdown" ? null : JSON.stringify({ code: "INTERRUPTED", message: `recording ended: ${stopReason}` }),
-    });
-    this.deps.notify("capture.changed", { sessionId: active.id, stage: "recorded", reason: stopReason });
-    // A recording that holds no audio (stopped at once, or the device never delivered) has nothing to filter.
-    if (active.bytes === 0) {
-      this.finishEmpty(active.id);
+      let drainTimer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        await Promise.race([
+          active.feed,
+          new Promise<void>((resolve) => {
+            drainTimer = setTimeout(resolve, 5000);
+            drainTimer.unref?.();
+          }),
+        ]);
+      } finally {
+        if (drainTimer !== null) clearTimeout(drainTimer);
+      }
+      fs.closeSync(active.fd);
+      active.stream?.close();
+      const totalMs = pcmDurationMs(active.bytes);
+      this.insertEvent(active.id, { offsetMs: totalMs, reason: "stop" });
+      let summary: VadSummary | null = null;
+      const wholeFrames = Math.floor(active.bytes / 2 / 512) * 512 * 2;
+      if (!active.filterBroken && active.fedBytes >= wholeFrames) {
+        const segments = [...active.closedSegments, ...active.segmenter.flush(totalMs)];
+        summary = this.summarize(segments, totalMs, false, active.gaps);
+      }
+      if (this.active === active) this.active = null;
+      const stopReason = input.reason ?? "user";
+      this.patch(active.id, {
+        status: "stopped", stage: "recorded", duration_ms: totalMs, stopped_at: new Date().toISOString(),
+        vad_json: summary ? JSON.stringify(summary) : null,
+        error_json: stopReason === "user" || stopReason === "shutdown" ? null : JSON.stringify({ code: "INTERRUPTED", message: `recording ended: ${stopReason}` }),
+      });
+      this.deps.notify("capture.changed", { sessionId: active.id, stage: "recorded", reason: stopReason });
+      // A recording that holds no audio (stopped at once, or the device never delivered) has nothing to filter.
+      if (active.bytes === 0) {
+        this.finishEmpty(active.id);
+        return this.view(this.row(active.id));
+      }
+      this.pipeline.schedule(active.id);
       return this.view(this.row(active.id));
-    }
-    this.pipeline.schedule(active.id);
-    return this.view(this.row(active.id));
+    })();
+    active.stopPromise = finish;
+    return finish;
   }
 
   summarize(segments: SpeechSegment[], totalMs: number, analyzedFull: boolean, gaps: Array<{ atMs: number; ms: number }> = []): VadSummary {
@@ -456,7 +487,10 @@ export class CaptureService {
   /** Stop recording because the module is turned off or the app is closing; what was captured is kept and filtered later. */
   async shutdown(reason: CaptureStopReason): Promise<void> {
     this.pipeline.abortAll();
-    if (this.active && !this.active.stopping) await this.stop({ sessionId: this.active.id, reason });
+    this.organizer.abortAll();
+    if (this.active) {
+      await (this.active.stopPromise ?? this.stop({ sessionId: this.active.id, reason }));
+    }
   }
 
   /** After a crash or restart: a recording that was in progress becomes a stopped one holding what reached the disk. */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Camera, ChevronLeft, ChevronRight, Columns2, Crop, Fullscreen, Maximize2, Minimize2, Minus, MoreHorizontal, Pause, Play, Plus, ScrollText, Shrink, Square } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Crop, Fullscreen, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Shrink } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import type { SourceCard } from "../lib/types.ts";
 import {
@@ -7,12 +7,14 @@ import {
   type ComicAnimation, type ComicDirection, type ComicFit, type ComicLayout, type ComicPageInfo, type Region, type Size,
 } from "./comic-model.ts";
 import { ComicPageView } from "./comic-page.tsx";
+import { ComicMorePopup } from "./comic-more-popup.tsx";
 import { SourceBanner } from "./source-banner.tsx";
 import { isTypingTarget, useFullscreen, usePrefersReducedMotion } from "./use-fullscreen.ts";
 import { useWindowFullscreen } from "./window-fullscreen.tsx";
-import { MatchLink } from "./match-link.tsx";
+import { useAutoHide } from "../reader/use-auto-hide.ts";
 import { EditableNumber } from "./editable-number.tsx";
 import { usePageSources } from "./use-page-sources.ts";
+import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, roundZoom, useComicZoom } from "./use-comic-zoom.ts";
 import { captureBus } from "../voice/capture-bus.ts";
 import { captureImage, captureSpread, type PageDrawing } from "./screenshot-capture.ts";
 import type { ScreenshotPort } from "../hooks/use-screenshots.tsx";
@@ -53,15 +55,6 @@ const FALLBACK_VIEWPORT: Size = { width: 1000, height: 700 };
 const STAGE_PADDING = 16;
 const STRIP_GAP = 8;
 const PROGRESS_DELAY_MS = 700;
-const ZOOM_STEP = 0.25;
-const ZOOM_MIN = 0.25;
-const ZOOM_MAX = 4;
-/** One wheel notch (100) with Ctrl held changes the size by about 15%; a pinch sends many small ones. */
-const ZOOM_WHEEL_RATE = 0.0015;
-/** The size set by the wheel is saved once it has rested this long, so a turn of the wheel is not a save per event. */
-const ZOOM_SAVE_MS = 300;
-/** Wheel events closer together than this belong to one gesture: it turns one page, however long it spins or glides. */
-const WHEEL_GESTURE_GAP_MS = 220;
 
 export function ComicReader(props: {
   t: T;
@@ -99,6 +92,7 @@ export function ComicReader(props: {
   const stage = useRef<HTMLDivElement>(null);
   /** The bar below. In a full window or screen it floats over the bottom of the frame, and what else floats there (the last-page prompt) is lifted by its height. */
   const footer = useRef<HTMLElement>(null);
+  const moreAnchor = useRef<HTMLButtonElement>(null);
   const [footerH, setFooterH] = useState(0);
   const { fullscreen, toggle: toggleFullscreen } = useFullscreen(root);
   const windowFull = useWindowFullscreen();
@@ -119,13 +113,8 @@ export function ComicReader(props: {
   const [autoOn, setAutoOn] = useState(false);
   const [ended, setEnded] = useState(false);
   const [more, setMore] = useState(false);
-  // The size on screen. A turn of the wheel changes it at once and is saved a moment later; a button or a key saves at once and this follows.
-  const [zoom, setZoomNow] = useState(settings.zoom);
-  const pendingZoom = useRef<number | null>(null);
-  const zoomTimer = useRef<number | null>(null);
-  const zoomAnchor = useRef<{ fx: number; fy: number; px: number; py: number } | null>(null);
-  const anchored = useRef(false);
-  useEffect(() => { if (pendingZoom.current === null) setZoomNow(settings.zoom); }, [settings.zoom]);
+  const immersive = fullscreen || windowFull.active;
+  const controls = useAutoHide(root, { enabled: immersive, hold: more, wakeOnAnyPointerMove: true });
   const [failed, setFailed] = useState<Record<string, true>>({});
   const retried = useRef(new Set<string>());
   // A page that was forgotten is asked for again on the next pass.
@@ -138,6 +127,17 @@ export function ComicReader(props: {
 
   const ids = useMemo(() => pages.map((page) => page.id), [pages]);
   const { sources, load, forget } = usePageSources({ resourceId: doc.resourceId, revisionId: doc.revisionId, pageIds: ids }, strip ? 40 : 24);
+
+  const goRef = useRef<(delta: 1 | -1) => void>(() => undefined);
+  const { zoom, applyZoom, anchored } = useComicZoom({
+    stage,
+    settingsZoom: settings.zoom,
+    strip,
+    selecting,
+    onZoom: (next) => props.onSettings({ zoom: next }),
+    onStep: (delta) => goRef.current(delta),
+    onStripScrollTop: setScrollTop,
+  });
 
   // The frame's size drives every fit. It is not changed by what the stage holds, so a page that is bigger or smaller than the
   // frame (zoom) cannot change the size the next page is fitted to. Before it is measured (and in a test with no layout) a plain window is assumed.
@@ -266,65 +266,41 @@ export function ComicReader(props: {
     setPageIndex(spreads[nextSpread]!.pages[0]!);
     stage.current?.scrollTo?.(0, 0);
   }, [pages.length, strip, pageIndex, spreads, spreadIndex, jump]);
+  goRef.current = go;
 
   /** The key reaches the capture that is defined further down. */
   const shotRef = useRef<(() => Promise<void>) | null>(null);
   // A key or a timer reads the latest navigation without re-binding.
-  const latest = useRef({ go, jump, ended, settings, onSettings: props.onSettings, toggleFullscreen, zoom, strip, selecting });
-  latest.current = { go, jump, ended, settings, onSettings: props.onSettings, toggleFullscreen, zoom, strip, selecting };
+  const latest = useRef({ go, jump, ended, toggleFullscreen, zoom, applyZoom, more, selecting, drawn });
+  latest.current = { go, jump, ended, toggleFullscreen, zoom, applyZoom, more, selecting, drawn };
 
-  // A size from the wheel is saved once it has rested, and at once when the reader is left.
-  const commitZoom = useCallback(() => {
-    if (zoomTimer.current !== null) window.clearTimeout(zoomTimer.current);
-    zoomTimer.current = null;
-    const value = pendingZoom.current;
-    pendingZoom.current = null;
-    if (value !== null) latest.current.onSettings({ zoom: value });
-  }, []);
-  useEffect(() => () => commitZoom(), [commitZoom]);
-  const wheelZoom = useCallback((value: number) => {
-    setZoomNow(value);
-    pendingZoom.current = value;
-    if (zoomTimer.current !== null) window.clearTimeout(zoomTimer.current);
-    zoomTimer.current = window.setTimeout(commitZoom, ZOOM_SAVE_MS);
-  }, [commitZoom]);
-  // After a size change from the wheel the page point under the pointer is put back under it.
-  useLayoutEffect(() => {
-    const at = zoomAnchor.current;
-    const node = stage.current;
-    if (!at || !node) return;
-    zoomAnchor.current = null;
-    anchored.current = latest.current.strip;
-    node.scrollLeft = at.fx * node.scrollWidth - at.px;
-    node.scrollTop = at.fy * node.scrollHeight - at.py;
-    if (latest.current.strip) setScrollTop(node.scrollTop);
-  }, [zoom]);
-
+  const stripSnapRef = useRef({ pageIndex, stripBoxes });
+  stripSnapRef.current = { pageIndex, stripBoxes };
   useEffect(() => {
-    // The wheel's own placing of the page (above) is not undone by the snap that keeps a page in view across layouts.
+    // The wheel's own placing of the page is not undone by the snap that keeps a page in view across layouts.
     if (anchored.current) return;
     // Leaving strip mode and coming back must land on the same page.
-    if (strip && stage.current && stripBoxes) {
-      stage.current.scrollTop = stripBoxes.tops[pageIndex] ?? 0;
+    const boxes = stripSnapRef.current.stripBoxes;
+    if (strip && stage.current && boxes) {
+      stage.current.scrollTop = boxes.tops[stripSnapRef.current.pageIndex] ?? 0;
       setScrollTop(stage.current.scrollTop);
     }
-    // Only a layout change repositions; scrolling itself moves the page index.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strip, stripWidth]);
-  // The next layout change is the person's own again.
-  useEffect(() => { anchored.current = false; }, [zoom]);
+  }, [strip, stripWidth, anchored]);
 
   // Reaching a note's source: show the page, and the region when it framed one.
+  const focusRef = useRef({ focus: props.focus, onFocusApplied: props.onFocusApplied });
+  focusRef.current = { focus: props.focus, onFocusApplied: props.onFocusApplied };
+  const focusNonce = props.focus?.nonce;
+  const focusPageId = props.focus?.pageId;
   useEffect(() => {
-    const focus = props.focus;
+    const focus = focusRef.current.focus;
     if (!focus || focus.applied) return;
     const index = pages.findIndex((page) => page.id === focus.pageId);
     if (index < 0) return;
     latest.current.jump(index);
     setHighlight(focus.region ? { pageIndex: index, region: focus.region } : null);
-    props.onFocusApplied?.(focus.nonce);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.focus?.nonce, props.focus?.pageId, pages]);
+    focusRef.current.onFocusApplied?.(focus.nonce);
+  }, [focusNonce, focusPageId, pages]);
 
   // The source highlight belongs to its page; turning away from it removes it.
   useEffect(() => {
@@ -357,13 +333,16 @@ export function ComicReader(props: {
       else if (action === "prev") current.go(-1);
       else if (action === "first") current.jump(0);
       else if (action === "last") current.jump(pages.length - 1);
-      else if (action === "zoomIn") current.onSettings({ zoom: Math.min(ZOOM_MAX, round(current.zoom + ZOOM_STEP)) });
-      else if (action === "zoomOut") current.onSettings({ zoom: Math.max(ZOOM_MIN, round(current.zoom - ZOOM_STEP)) });
-      else if (action === "zoomReset") current.onSettings({ zoom: 1 });
+      else if (action === "zoomIn") current.applyZoom(Math.min(ZOOM_MAX, roundZoom(current.zoom + ZOOM_STEP)));
+      else if (action === "zoomOut") current.applyZoom(Math.max(ZOOM_MIN, roundZoom(current.zoom - ZOOM_STEP)));
+      else if (action === "zoomReset") current.applyZoom(1);
       else if (action === "fullscreen") current.toggleFullscreen();
       else if (action === "screenshot") void shotRef.current?.();
-      else if (action === "escape") { setSelecting(false); setDrawn(null); setEnded(false); }
-      else return;
+      else if (action === "escape") {
+        if (current.more) setMore(false);
+        else if (current.selecting || current.drawn || current.ended) { setSelecting(false); setDrawn(null); setEnded(false); }
+        else return;
+      } else return;
       event.preventDefault();
     };
     // Only the focused tab answers the keys (A-94).
@@ -372,47 +351,9 @@ export function ComicReader(props: {
     return () => window.removeEventListener("keydown", onKey);
   }, [reading, layout, pages.length, tab.focused]);
 
-  // ---- wheel: one page per gesture; Ctrl and the wheel change the size around the pointer ----
-  // A page that is bigger than the window scrolls first, and turns once the wheel is turned again at its edge. The strip is a plain scrolling page.
-  const wheel = useRef({ lastAt: 0, fired: false });
-  useEffect(() => {
-    const node = stage.current;
-    if (!node) return;
-    const onWheel = (event: WheelEvent) => {
-      const current = latest.current;
-      if (event.ctrlKey) {
-        event.preventDefault();
-        const next = clampZoom(current.zoom * Math.exp(-event.deltaY * ZOOM_WHEEL_RATE));
-        if (next === current.zoom) return;
-        const box = node.getBoundingClientRect();
-        const px = event.clientX - box.left;
-        const py = event.clientY - box.top;
-        zoomAnchor.current = node.scrollWidth > 0 && node.scrollHeight > 0 ? { fx: (node.scrollLeft + px) / node.scrollWidth, fy: (node.scrollTop + py) / node.scrollHeight, px, py } : null;
-        wheelZoom(next);
-        return;
-      }
-      if (current.strip || current.selecting || event.defaultPrevented) return;
-      if (Math.abs(event.deltaY) < 1 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-      const now = Date.now();
-      const state = wheel.current;
-      if (now - state.lastAt > WHEEL_GESTURE_GAP_MS) state.fired = false;
-      state.lastAt = now;
-      const down = event.deltaY > 0;
-      const room = down ? node.scrollTop + node.clientHeight < node.scrollHeight - 1 : node.scrollTop > 0;
-      // A gesture that began as a scroll stays one, so gliding to the edge does not turn the page by itself.
-      if (room) { state.fired = true; return; }
-      event.preventDefault();
-      if (state.fired) return;
-      state.fired = true;
-      current.go(down ? 1 : -1);
-    };
-    node.addEventListener("wheel", onWheel, { passive: false });
-    return () => node.removeEventListener("wheel", onWheel);
-  }, [wheelZoom]);
-
   // ---- auto flip ----
   useEffect(() => {
-    if (!autoOn || settings.autoFlipSeconds <= 0 || selecting || draft) return;
+    if (!autoOn || !tab.visible || settings.autoFlipSeconds <= 0 || selecting || draft) return;
     const timer = window.setInterval(() => {
       if (document.hidden) return;
       const current = latest.current;
@@ -420,7 +361,7 @@ export function ComicReader(props: {
       current.go(1);
     }, settings.autoFlipSeconds * 1000);
     return () => window.clearInterval(timer);
-  }, [autoOn, settings.autoFlipSeconds, selecting, draft]);
+  }, [autoOn, tab.visible, settings.autoFlipSeconds, selecting, draft]);
   useEffect(() => { if (ended) setAutoOn(false); }, [ended]);
 
   // ---- page sources that failed to show ----
@@ -451,21 +392,24 @@ export function ComicReader(props: {
     quoteTags.put({ kind: "region", resourceId: doc.resourceId, revisionId: doc.revisionId, pageId: pages[index]!.id, pageNumber: index + 1, region, label: t("chat.tag.region", { page: index + 1 }) });
   }, [doc.resourceId, doc.revisionId, pages, t]);
 
+  // Scope region capture to currently visible page(s) so turning away from a framed region screenshots the visible page instead of failing.
+  const visibleDraft = draft && (strip ? Math.abs(draft.pageIndex - pageIndex) <= 1 : Boolean(spread?.pages.includes(draft.pageIndex))) ? draft : null;
+
   // ---- a screenshot of the page, the spread, or the framed region ----
   // The picture is the page's own pixels, not what the window shows of them: a page fitted small is captured at its original size.
   const shooting = useRef(false);
   const takeScreenshot = useCallback(async () => {
     const port = props.screenshots;
-    const root = stage.current;
-    if (!port || !root || shooting.current || pages.length === 0) return;
+    const rootNode = stage.current;
+    if (!port || !rootNode || shooting.current || pages.length === 0) return;
     const drawingOf = (index: number): PageDrawing | null => {
-      const node = Array.from(root.querySelectorAll("[data-page-id]")).find((entry) => entry.getAttribute("data-page-id") === pages[index]!.id);
-      const drawn = node?.querySelector("img.comic-image, canvas.comic-pdf") ?? null;
-      return drawn instanceof HTMLImageElement || drawn instanceof HTMLCanvasElement ? drawn : null;
+      const node = Array.from(rootNode.querySelectorAll("[data-page-id]")).find((entry) => entry.getAttribute("data-page-id") === pages[index]!.id);
+      const drawnEl = node?.querySelector("img.comic-image, canvas.comic-pdf") ?? null;
+      return drawnEl instanceof HTMLImageElement || drawnEl instanceof HTMLCanvasElement ? drawnEl : null;
     };
     shooting.current = true;
     try {
-      const region = draft ?? null;
+      const region = visibleDraft && drawingOf(visibleDraft.pageIndex) ? visibleDraft : null;
       const shown = region ? [region.pageIndex] : strip ? [pageIndex] : (spread ? [...spread.pages] : []);
       const drawings = shown.map(drawingOf);
       if (shown.length === 0 || drawings.some((entry) => entry === null)) { port.fail("no-frame"); return; }
@@ -486,7 +430,7 @@ export function ComicReader(props: {
     } finally {
       shooting.current = false;
     }
-  }, [props.screenshots, pages, draft, strip, pageIndex, spread, reading, doc.resourceId, doc.revisionId]);
+  }, [props.screenshots, pages, visibleDraft, strip, pageIndex, spread, reading, doc.resourceId, doc.revisionId]);
 
   shotRef.current = takeScreenshot;
 
@@ -529,7 +473,7 @@ export function ComicReader(props: {
   );
 
   return (
-    <section ref={root} className="reader comic-reader" data-testid="comic-reader" data-direction={reading} data-layout={layout} data-fit={settings.fit} data-fullscreen={fullscreen || undefined} data-window-full={(windowFull.active && !fullscreen) || undefined} data-immersive={fullscreen || windowFull.active || undefined} style={{ "--comic-footer-h": `${footerH}px` } as CSSProperties}>
+    <section ref={root} className="reader comic-reader" data-testid="comic-reader" data-direction={reading} data-layout={layout} data-fit={settings.fit} data-fullscreen={fullscreen || undefined} data-window-full={(windowFull.active && !fullscreen) || undefined} data-immersive={immersive || undefined} data-controls={immersive && controls.hidden ? "hidden" : "shown"} style={{ "--comic-footer-h": `${footerH}px` } as CSSProperties}>
       {props.sourceCard ? <SourceBanner t={t} card={props.sourceCard} testPrefix="comic" onBackToNote={props.onBackToNote} onRepair={props.onRepair} /> : null}
       {!doc.available ? (
         <p className="reader-notice" role="status" data-testid="comic-original-missing">{t("comic.originalMissing")} <button type="button" className="link-button" data-testid="comic-original-repair" onClick={props.onRepair}>{t("reading.sourceRepair")}</button></p>
@@ -543,38 +487,39 @@ export function ComicReader(props: {
       ) : null}
 
       <div ref={frame} className="comic-frame" data-testid="comic-frame">
-      <div
-        ref={stage}
-        className="comic-stage"
-        data-testid="comic-stage"
-        data-selecting={selecting || undefined}
-        onScroll={strip ? onStripScroll : undefined}
-        onClick={(event) => {
-          if (strip || selecting || event.target instanceof HTMLButtonElement) return;
-          const box = event.currentTarget.getBoundingClientRect();
-          const action = tapAction(event.clientX - box.left, box.width, reading);
-          if (action === "next") go(1); else if (action === "prev") go(-1);
-        }}
-      >
-        {total === 0 ? <p className="detail-muted comic-empty" data-testid="comic-empty">{t("comic.empty")}</p> : null}
-        {total > 0 && strip && stripBoxes ? (
-          <div className="comic-strip" data-testid="comic-strip" style={{ height: stripBoxes.total, width: stripWidth }}>
-            {(() => {
-              const range = visibleStripRange(stripBoxes.tops, stripBoxes.heights, scrollTop, viewport.height, viewport.height);
-              const out: ReactNode[] = [];
-              for (let index = range.first; index <= range.last; index += 1) {
-                out.push(<div key={pages[index]!.id} className="comic-strip-slot" style={{ top: stripBoxes.tops[index], height: stripBoxes.heights[index] }}>{pageView(index, { width: stripWidth, height: stripBoxes.heights[index]! })}</div>);
-              }
-              return out;
-            })()}
-          </div>
-        ) : null}
-        {total > 0 && !strip && spread ? (
-          <div key={spreadIndex} className="comic-spread" data-testid="comic-spread" data-anim={animation} data-step={step > 0 ? "forward" : "back"} data-reading={reading}>
-            {visual.map((index) => pageView(index, boxes[spread.pages.indexOf(index)] ?? { width: 200, height: 300 }))}
-          </div>
-        ) : null}
-      </div>
+        <div
+          ref={stage}
+          className="comic-stage"
+          data-testid="comic-stage"
+          data-selecting={selecting || undefined}
+          onScroll={strip ? onStripScroll : undefined}
+          onClick={(event) => {
+            if (strip || selecting) return;
+            if (event.target instanceof Element && event.target.closest("button, a, input, select, textarea")) return;
+            const box = event.currentTarget.getBoundingClientRect();
+            const action = tapAction(event.clientX - box.left, box.width, reading);
+            if (action === "next") go(1); else if (action === "prev") go(-1);
+          }}
+        >
+          {total === 0 ? <p className="detail-muted comic-empty" data-testid="comic-empty">{t("comic.empty")}</p> : null}
+          {total > 0 && strip && stripBoxes ? (
+            <div className="comic-strip" data-testid="comic-strip" style={{ height: stripBoxes.total, width: stripWidth }}>
+              {(() => {
+                const range = visibleStripRange(stripBoxes.tops, stripBoxes.heights, scrollTop, viewport.height, viewport.height);
+                const out: ReactNode[] = [];
+                for (let index = range.first; index <= range.last; index += 1) {
+                  out.push(<div key={pages[index]!.id} className="comic-strip-slot" style={{ top: stripBoxes.tops[index], height: stripBoxes.heights[index] }}>{pageView(index, { width: stripWidth, height: stripBoxes.heights[index]! })}</div>);
+                }
+                return out;
+              })()}
+            </div>
+          ) : null}
+          {total > 0 && !strip && spread ? (
+            <div key={spreadIndex} className="comic-spread" data-testid="comic-spread" data-anim={animation} data-step={step > 0 ? "forward" : "back"} data-reading={reading}>
+              {visual.map((index) => pageView(index, boxes[spread.pages.indexOf(index)] ?? { width: 200, height: 300 }))}
+            </div>
+          ) : null}
+        </div>
         {ended ? (
           <div className="comic-end" role="status" data-testid="comic-end">
             <p>{t("comic.lastPage")}</p>
@@ -583,7 +528,7 @@ export function ComicReader(props: {
         ) : null}
       </div>
 
-      <footer ref={footer} className="comic-footer" data-testid="comic-footer">
+      <footer ref={footer} className="comic-footer" data-testid="comic-footer" {...controls.bind}>
         <div className="reader-group comic-pager" role="group" aria-label={t("comic.pager")}>
           {rtl ? nextButton : prevButton}
           <EditableNumber
@@ -622,61 +567,38 @@ export function ComicReader(props: {
               <option value="original">{t("comic.fitOriginal")}</option>
             </select>
           </label>
-          <button type="button" className="icon-button" data-testid="comic-zoom-out" aria-label={t("comic.zoomOut")} title={t("comic.zoomOut")} disabled={zoom <= ZOOM_MIN} onClick={() => props.onSettings({ zoom: Math.max(ZOOM_MIN, round(zoom - ZOOM_STEP)) })}><Minus size={16} /></button>
-          <button type="button" className="reader-size zoom-value" data-testid="comic-zoom-value" aria-label={t("comic.zoomReset")} title={t("comic.zoomReset")} onClick={() => props.onSettings({ zoom: 1 })}>{t("comic.zoomValue", { percent: Math.round(zoom * 100) })}</button>
-          <button type="button" className="icon-button" data-testid="comic-zoom-in" aria-label={t("comic.zoomIn")} title={t("comic.zoomIn")} disabled={zoom >= ZOOM_MAX} onClick={() => props.onSettings({ zoom: Math.min(ZOOM_MAX, round(zoom + ZOOM_STEP)) })}><Plus size={16} /></button>
+          <button type="button" className="icon-button" data-testid="comic-zoom-out" aria-label={t("comic.zoomOut")} title={t("comic.zoomOut")} disabled={zoom <= ZOOM_MIN} onClick={() => applyZoom(Math.max(ZOOM_MIN, roundZoom(zoom - ZOOM_STEP)))}><Minus size={16} /></button>
+          <button type="button" className="reader-size zoom-value" data-testid="comic-zoom-value" aria-label={t("comic.zoomReset")} title={t("comic.zoomReset")} onClick={() => applyZoom(1)}>{t("comic.zoomValue", { percent: Math.round(zoom * 100) })}</button>
+          <button type="button" className="icon-button" data-testid="comic-zoom-in" aria-label={t("comic.zoomIn")} title={t("comic.zoomIn")} disabled={zoom >= ZOOM_MAX} onClick={() => applyZoom(Math.min(ZOOM_MAX, roundZoom(zoom + ZOOM_STEP)))}><Plus size={16} /></button>
         </div>
         <div className="reader-group comic-tools" role="toolbar" aria-label={t("comic.toolbar")} data-testid="comic-toolbar">
           <button type="button" className="icon-button" data-testid="comic-region-tool" aria-pressed={selecting} aria-label={t("comic.regionTool")} title={t("comic.regionTool")} onClick={() => { setSelecting(!selecting); setDrawn(null); }}><Crop size={16} /></button>
-          {props.screenshots ? <button type="button" className="icon-button" data-testid="comic-screenshot" aria-label={draft ? t("screenshot.region") : t("screenshot.page")} title={draft ? t("screenshot.region") : t("screenshot.page")} onClick={() => void takeScreenshot()}><Camera size={16} /></button> : null}
+          {props.screenshots ? <button type="button" className="icon-button" data-testid="comic-screenshot" aria-label={visibleDraft ? t("screenshot.region") : t("screenshot.page")} title={visibleDraft ? t("screenshot.region") : t("screenshot.page")} onClick={() => void takeScreenshot()}><Camera size={16} /></button> : null}
           <button type="button" className="icon-button" data-testid="comic-window-fullscreen" aria-pressed={windowFull.active} aria-label={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} title={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} onClick={windowFull.toggle}>{windowFull.active ? <Shrink size={16} /> : <Fullscreen size={16} />}</button>
           <button type="button" className="icon-button" data-testid="comic-fullscreen" aria-pressed={fullscreen} aria-label={t("comic.fullscreen")} title={t("comic.fullscreen")} onClick={toggleFullscreen}>{fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-          <button type="button" className="icon-button" data-testid="comic-more-settings" aria-expanded={more} aria-label={t("comic.settings")} title={t("comic.settings")} onClick={() => setMore((open) => !open)}><MoreHorizontal size={18} /></button>
+          <button ref={moreAnchor} type="button" className="icon-button" data-testid="comic-more-settings" aria-expanded={more} aria-label={t("comic.settings")} title={t("comic.settings")} onClick={() => setMore((open) => !open)}><MoreHorizontal size={18} /></button>
         </div>
         {more ? (
-          <div className="reader-more reader-more-pop reader-more-up" data-testid="comic-more-panel">
-            <div className="reader-group" role="group" aria-label={t("comic.layout")}>
-              <button type="button" className="icon-button" data-testid="comic-layout-single" aria-pressed={layout === "single"} aria-label={t("comic.layoutSingle")} title={t("comic.layoutSingle")} onClick={() => props.onSettings({ layout: "single" })}><Square size={16} /></button>
-              <button type="button" className="icon-button" data-testid="comic-layout-double" aria-pressed={layout === "double"} aria-label={t("comic.layoutDouble")} title={t("comic.layoutDouble")} onClick={() => props.onSettings({ layout: "double" })}><Columns2 size={16} /></button>
-              <button type="button" className="icon-button" data-testid="comic-layout-strip" aria-pressed={layout === "strip"} aria-label={t("comic.layoutStrip")} title={t("comic.layoutStrip")} onClick={() => props.onSettings({ layout: "strip" })}><ScrollText size={16} /></button>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              data-testid="comic-direction"
-              data-direction={reading}
-              aria-label={t("comic.direction")}
-              title={t("comic.direction")}
-              onClick={() => {
-                const next: ComicDirection = reading === "rtl" ? "ltr" : "rtl";
-                setDirectionOverride(next);
-                props.onSettings({ direction: next });
-              }}
-            >{reading === "rtl" ? t("comic.dirRtl") : t("comic.dirLtr")}</button>
-            <label className="reader-range">
-              <input type="checkbox" data-testid="comic-cover-alone" checked={settings.coverAlone} disabled={layout !== "double"} onChange={(event) => props.onSettings({ coverAlone: event.target.checked })} />
-              {t("comic.coverAlone")}
-            </label>
-            <div className="reader-group">
-              <button type="button" className="icon-button" data-testid="comic-autoflip" aria-pressed={autoOn} aria-label={t("comic.autoFlip")} title={t("comic.autoFlip")} onClick={() => { if (!autoOn && settings.autoFlipSeconds <= 0) props.onSettings({ autoFlipSeconds: 5 }); setAutoOn(!autoOn); }}>{autoOn ? <Pause size={16} /> : <Play size={16} />}</button>
-              <label className="reader-range">{t("comic.autoFlipSeconds")}
-                <input type="number" min={0} max={120} step={1} data-testid="comic-autoflip-seconds" value={settings.autoFlipSeconds} onChange={(event) => props.onSettings({ autoFlipSeconds: Math.min(120, Math.max(0, Number(event.target.value) || 0)) })} />
-              </label>
-            </div>
-            <label className="reader-range">{t("comic.animation")}
-              <select data-testid="comic-animation" value={settings.animation} onChange={(event) => props.onSettings({ animation: event.target.value as ComicAnimation })}>
-                <option value="fade">{t("comic.animFade")}</option>
-                <option value="slide">{t("comic.animSlide")}</option>
-                <option value="none">{t("comic.animNone")}</option>
-              </select>
-            </label>
-            <MatchLink label={t("match.fromReader")} onMatch={props.onMatch} />
-          </div>
+          <ComicMorePopup
+            t={t}
+            anchor={moreAnchor}
+            layout={layout}
+            reading={reading}
+            coverAlone={settings.coverAlone}
+            autoOn={autoOn}
+            autoFlipSeconds={settings.autoFlipSeconds}
+            animation={settings.animation}
+            onClose={() => setMore(false)}
+            onLayout={(next) => props.onSettings({ layout: next })}
+            onDirection={(next) => { setDirectionOverride(next); props.onSettings({ direction: next }); }}
+            onCoverAlone={(value) => props.onSettings({ coverAlone: value })}
+            onToggleAutoFlip={() => { if (!autoOn && settings.autoFlipSeconds <= 0) props.onSettings({ autoFlipSeconds: 5 }); setAutoOn(!autoOn); }}
+            onAutoFlipSeconds={(seconds) => props.onSettings({ autoFlipSeconds: seconds })}
+            onAnimation={(next) => props.onSettings({ animation: next })}
+            onMatch={props.onMatch}
+          />
         ) : null}
       </footer>
     </section>
   );
 }
-
-const round = (value: number) => Math.round(value * 100) / 100;
-const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, round(value)));

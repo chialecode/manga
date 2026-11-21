@@ -16,6 +16,8 @@ export type ProfileForm = {
   videoMiB: string;
   videoSeconds: string;
   transcriptionInterface: TranscriptionInterface;
+  /** The levels the provider declares for the model (empty: any level, as typed by hand); not saved from the form. */
+  reasoningLevels: string[];
 };
 
 const MiB = 1024 * 1024;
@@ -31,6 +33,7 @@ export const profileForm = (profile: ModelProfile): ProfileForm => ({
   videoMiB: mib(profile.limits.videoBytes),
   videoSeconds: String(profile.limits.videoSeconds),
   transcriptionInterface: profile.transcriptionInterface ?? "audio_transcriptions",
+  reasoningLevels: [...(profile.reasoningLevels ?? [])],
 });
 
 const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().every((item, index) => item === [...b].sort()[index]);
@@ -46,9 +49,12 @@ export function profilePatch(before: ProfileForm, after: ProfileForm): ModelProf
   if (!same(before.capabilities, after.capabilities)) patch.capabilities = after.capabilities.filter((item): item is (typeof MODEL_CAPABILITIES)[number] => (MODEL_CAPABILITIES as readonly string[]).includes(item));
   if (before.reasoningEffort !== after.reasoningEffort) patch.reasoningEffort = after.reasoningEffort === "" ? null : (after.reasoningEffort as ReasoningEffort);
   const limits: NonNullable<ModelProfilePatch["limits"]> = {};
-  if (after.fileMiB !== before.fileMiB) limits.fileBytes = Math.round(Number(after.fileMiB) * MiB);
-  if (after.videoMiB !== before.videoMiB) limits.videoBytes = Math.round(Number(after.videoMiB) * MiB);
-  if (after.videoSeconds !== before.videoSeconds) limits.videoSeconds = Math.round(Number(after.videoSeconds));
+  const fileMiB = Number(after.fileMiB);
+  const videoMiB = Number(after.videoMiB);
+  const videoSeconds = Number(after.videoSeconds);
+  if (after.fileMiB !== before.fileMiB && after.fileMiB.trim() !== "" && Number.isFinite(fileMiB)) limits.fileBytes = Math.round(fileMiB * MiB);
+  if (after.videoMiB !== before.videoMiB && after.videoMiB.trim() !== "" && Number.isFinite(videoMiB)) limits.videoBytes = Math.round(videoMiB * MiB);
+  if (after.videoSeconds !== before.videoSeconds && after.videoSeconds.trim() !== "" && Number.isFinite(videoSeconds)) limits.videoSeconds = Math.round(videoSeconds);
   if (Object.keys(limits).length) patch.limits = limits;
   if (after.transcriptionInterface !== before.transcriptionInterface) patch.transcriptionInterface = after.transcriptionInterface;
   return patch;

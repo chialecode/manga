@@ -23,8 +23,20 @@ if (Number(process.versions.node.split('.')[0]) < 24) {
   process.exit(1);
 }
 
-for (const name of fs.readdirSync(path.join(root, 'scripts')).filter(name => name.endsWith('.mjs')).sort()) {
-  run(process.execPath, ['--check', `scripts/${name}`]);
+function collectScriptMjs(dir, prefix = 'scripts') {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name === 'node_modules') continue;
+    const rel = `${prefix}/${entry.name}`;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...collectScriptMjs(full, rel));
+    else if (entry.name.endsWith('.mjs')) out.push(rel);
+  }
+  return out;
+}
+
+for (const rel of collectScriptMjs(path.join(root, 'scripts'))) {
+  run(process.execPath, ['--check', rel]);
 }
 for (const name of [
   'docs/governance/document-registry.json',

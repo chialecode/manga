@@ -40,17 +40,18 @@ export function planClipCut(request: { inMs: number; outMs: number }, index: { p
   const after = lowerBound(keyframesMs, request.inMs + SAME + 1e-9);
   const keyframe = after > 0 ? keyframesMs[after - 1]! : null;
   if (keyframe === null) return { ...base, problems: ["no-keyframe"] };
-  // The first frame at or after the requested end; none means the copy runs to the end of the file.
-  const next = lowerBound(ptsMs, request.outMs - SAME);
-  const toEnd = next >= ptsMs.length;
-  const end = toEnd ? Math.max(durationMs, ptsMs[ptsMs.length - 1]!) : ptsMs[next]!;
   const first = lowerBound(ptsMs, keyframe - SAME);
+  if (first >= ptsMs.length) return { ...base, problems: ["range"] };
+  // The first frame at or after the requested end (always at least one frame past `first`); none means the copy runs to the end of the file.
+  const next = Math.max(first + 1, lowerBound(ptsMs, request.outMs - SAME));
+  const toEnd = next >= ptsMs.length;
   const last = toEnd ? ptsMs.length : next;
+  const end = toEnd ? Math.max(durationMs, ptsMs[ptsMs.length - 1]!, keyframe + 1) : ptsMs[next]!;
   const before = ptsMs[Math.max(0, last - 1)]!;
   const gap = toEnd ? 0 : Math.max(1, end - before);
   return {
     actualInMs: keyframe, actualOutMs: end, toEnd, onKeyframe: Math.abs(keyframe - request.inMs) <= SAME,
-    frames: Math.max(0, last - first), frameGapMs: gap, problems: [],
+    frames: Math.max(1, last - first), frameGapMs: gap, problems: [],
   };
 }
 
@@ -180,6 +181,25 @@ export function outputExtension(container: string, sourceName: string): string |
   if (container === "matroska") return own === "webm" ? "webm" : "mkv";
   if (container === "mov") return own === "mov" || own === "m4v" ? own : "mp4";
   return null;
+}
+
+/** Formats a millisecond timestamp as `MM:SS` or `MM:SS.t` for clip summaries and proposals. */
+export function formatClock(ms: number): string {
+  const safe = Math.max(0, Math.round(ms));
+  const totalSec = Math.floor(safe / 1000);
+  const min = String(Math.floor(totalSec / 60)).padStart(2, "0");
+  const sec = String(totalSec % 60).padStart(2, "0");
+  const tenths = Math.floor((safe % 1000) / 100);
+  return tenths > 0 ? `${min}:${sec}.${tenths}` : `${min}:${sec}`;
+}
+
+/** Container stream index of the primary non-attached-pic video stream, or `null` when absent. */
+export function primaryVideoStreamIndex(json: FfprobeJson): number | null {
+  const streams = json.streams ?? [];
+  const video = streams.find((stream) => stream.codec_type === "video" && !(stream.disposition as { attached_pic?: number } | undefined)?.attached_pic);
+  if (!video) return null;
+  const index = Number(video.index);
+  return Number.isInteger(index) && index >= 0 ? index : null;
 }
 
 /** The muxer the tool is told to write, since the temporary name does not say. */

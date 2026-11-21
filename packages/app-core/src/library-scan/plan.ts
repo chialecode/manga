@@ -68,7 +68,7 @@ export function planScan(kind: ScanKind, entries: WalkEntry[], rootName: string,
   const units: ScanUnit[] = [];
   const imagesByDir = new Map<string, { count: number; size: number; mtime: number; names: string[] }>();
   for (const entry of entries) {
-    if (entry.t !== "f" || isIgnoredName(entry.p.split("/").pop() ?? entry.p)) continue;
+    if (entry.t !== "f" || isIgnoredName(entry.p)) continue;
     if (kind === "comic" && IMAGE_EXTENSIONS.has(extOf(entry.p))) {
       const dir = parentOf(entry.p);
       const seen = imagesByDir.get(dir) ?? { count: 0, size: 0, mtime: 0, names: [] };

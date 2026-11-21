@@ -112,7 +112,7 @@ export function useVideoPlayback(options: Options) {
       setFrame({ status: "unavailable", message: result.error.message });
       return null;
     }
-    if (result.value.ready === false) return "absent";
+    if (!result.value || result.value.ready === false || typeof result.value.frame !== "number" || !Number.isFinite(result.value.frame)) return "absent";
     buildAsked.current = false;
     return result.value as FrameAnswer & { variableFrameRate?: boolean };
   }, [target.resourceId, target.revisionId]);
@@ -324,7 +324,7 @@ export function useVideoPlayback(options: Options) {
 
   /** Move to the frame `delta` away from the one on screen. The first step builds the frame table in the background; later steps are instant. */
   const stepFrame = useCallback((delta: number) => {
-    frameChain.current = frameChain.current.then(async () => {
+    const run = async () => {
       if (!element) return;
       if (!element.paused) element.pause();
       setFrame((current) => (current.status === "ready" ? current : { status: "loading" }));
@@ -336,8 +336,10 @@ export function useVideoPlayback(options: Options) {
       currentRef.current = at;
       setCurrentMs(at);
       setFrame(asFrame(answer));
-    });
-    return frameChain.current;
+    };
+    const next = frameChain.current.then(run, run);
+    frameChain.current = next.catch(() => undefined);
+    return next;
   }, [element, lookupFrame, timeNow]);
 
   /**
@@ -346,7 +348,7 @@ export function useVideoPlayback(options: Options) {
    * a typed time never waits for a table to be built.
    */
   const gotoTime = useCallback((ms: number) => {
-    frameChain.current = frameChain.current.then(async () => {
+    const run = async () => {
       if (!element) return;
       const limit = Number.isFinite(element.duration) ? Math.max(0, element.duration * 1000 - origin()) : Number.POSITIVE_INFINITY;
       const wanted = Math.min(Math.max(0, ms), limit);
@@ -361,8 +363,10 @@ export function useVideoPlayback(options: Options) {
       setCurrentMs(at);
       setEnded(false);
       if (paused) setFrame(asFrame(answer));
-    });
-    return frameChain.current;
+    };
+    const next = frameChain.current.then(run, run);
+    frameChain.current = next.catch(() => undefined);
+    return next;
   }, [element, lookupFrame, seekTo]);
 
   /** → held: play at the temporary rate until it is let go. A paused video plays while it is held and is paused again after. */

@@ -9,8 +9,8 @@ import type { VideoService } from "../video/service.ts";
 import type { WorkFolders } from "../work-folders.ts";
 import { applyOps, diffRows, OpLog, type OpState, type RowOp } from "./ops.ts";
 import { RoughcutExports, type ExportDestination } from "./roughcut-export.ts";
-import { compareStreams, outputExtension, planClipCut, streamsFromProbe, trackProblems } from "./roughcut-plan.ts";
-import { KEY_LIMIT, evenKeys, keyBetween } from "./sort-key.ts";
+import { compareStreams, formatClock, outputExtension, planClipCut, primaryVideoStreamIndex, streamsFromProbe, trackProblems } from "./roughcut-plan.ts";
+import { KEY_LIMIT, evenKeys, isValidSortKey, keyBetween } from "./sort-key.ts";
 
 type CutRow = { id: string; project_id: string | null; title: string; created_at: string; updated_at: string };
 type ClipRow = { id: string; cut_id: string; resource_id: string; resource_revision_id: string; in_ms: number; out_ms: number; sort_key: string; label: string; created_at: string };
@@ -63,8 +63,13 @@ class Draft {
   keyAt(index: number | undefined, except?: string): string {
     const siblings = this.ordered(except);
     const at = index === undefined ? siblings.length : Math.min(index, siblings.length);
-    const key = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
-    if (key.length <= KEY_LIMIT) return key;
+    const before = siblings[at - 1]?.sort_key ?? null;
+    const after = siblings[at]?.sort_key ?? null;
+    const usable = (before === null || isValidSortKey(before)) && (after === null || isValidSortKey(after)) && (before === null || after === null || before < after);
+    if (usable) {
+      const key = keyBetween(before, after);
+      if (key.length <= KEY_LIMIT) return key;
+    }
     const fresh = evenKeys(siblings.length + 1);
     siblings.forEach((row, i) => { row.sort_key = fresh[i < at ? i : i + 1]!; });
     return fresh[at]!;
@@ -79,7 +84,7 @@ class Draft {
 export class RoughcutService {
   private readonly o: RoughcutOptions;
   readonly exports: RoughcutExports;
-  private readonly streamCache = new Map<string, RoughcutStreams | null>();
+  private readonly streamCache = new Map<string, { streams: RoughcutStreams | null; videoIndex: number | null }>();
 
   constructor(options: RoughcutOptions) {
     this.o = options;
@@ -179,20 +184,13 @@ export class RoughcutService {
     const draft = new Draft(row.id, before);
     const created: string[] = [];
     const steps: string[] = [];
-    const fmt = (ms: number) => {
-      const totalSec = Math.floor(Math.max(0, ms) / 1000);
-      const min = String(Math.floor(totalSec / 60)).padStart(2, "0");
-      const sec = String(totalSec % 60).padStart(2, "0");
-      const tenths = Math.floor((Math.max(0, ms) % 1000) / 100);
-      return tenths > 0 ? `${min}:${sec}.${tenths}` : `${min}:${sec}`;
-    };
     const titleOf = (resourceId: string) =>
       (this.sqlite.prepare("SELECT title FROM resources WHERE id = ?").get(resourceId) as { title: string } | undefined)?.title ?? resourceId;
     for (const action of actions) {
       if (action.type === "add") {
         const resTitle = titleOf(action.resourceId);
         this.apply(draft, action, created);
-        steps.push(`加入片段《${resTitle}》 ${fmt(action.inMs)}–${fmt(action.outMs)}${action.label ? `（${action.label}）` : ""}`);
+        steps.push(`加入片段《${resTitle}》 ${formatClock(action.inMs)}–${formatClock(action.outMs)}${action.label ? `（${action.label}）` : ""}`);
       } else if (action.type === "update") {
         const ordered = draft.ordered();
         const idx = ordered.findIndex((item) => item.id === action.clipId) + 1;
@@ -201,7 +199,7 @@ export class RoughcutService {
         const nextIn = action.inMs ?? clip.in_ms;
         const nextOut = action.outMs ?? clip.out_ms;
         this.apply(draft, action, created);
-        steps.push(`调整第 ${idx} 段《${resTitle}》区间为 ${fmt(nextIn)}–${fmt(nextOut)}${action.label !== undefined ? `（备注：${action.label || "无"}）` : ""}`);
+        steps.push(`调整第 ${idx} 段《${resTitle}》区间为 ${formatClock(nextIn)}–${formatClock(nextOut)}${action.label !== undefined ? `（备注：${action.label || "无"}）` : ""}`);
       } else if (action.type === "move") {
         const ordered = draft.ordered();
         const fromIdx = ordered.findIndex((item) => item.id === action.clipId) + 1;
@@ -218,7 +216,7 @@ export class RoughcutService {
         const inMs = clip.in_ms;
         const outMs = clip.out_ms;
         this.apply(draft, action, created);
-        steps.push(`移除第 ${idx} 段《${resTitle}》（${fmt(inMs)}–${fmt(outMs)}）`);
+        steps.push(`移除第 ${idx} 段《${resTitle}》（${formatClock(inMs)}–${formatClock(outMs)}）`);
       }
     }
     if (draft.clips.size > MAX_CLIPS) throw bad("the sequence has too many clips", "limit");
@@ -270,7 +268,7 @@ export class RoughcutService {
       throw new MangaError("NOT_FOUND", "the video does not exist");
     }
     if (!video.probe?.streams?.some((stream) => stream.type === "video")) throw bad("that is not a video", "not-video");
-    if (!(outMs > inMs)) throw bad("a clip must end after it starts", "range");
+    if (!(inMs >= 0 && outMs > inMs)) throw bad("a clip must start at or after zero and end after it starts", "range");
     if (outMs > video.probe.durationMs + END_SLACK_MS) throw bad("the clip ends after the video does", "range");
     return { revisionId: video.revisionId };
   }
@@ -310,24 +308,25 @@ export class RoughcutService {
   // ------------------------------------------------------------------ plan
 
   /** The streams of a source as a copy cares about them, kept per file until the file changes. */
-  private async streamsOf(file: string): Promise<RoughcutStreams | null> {
+  private async streamsOf(file: string, signal?: AbortSignal): Promise<{ streams: RoughcutStreams | null; videoIndex: number | null }> {
     const stat = fs.statSync(file);
     const key = `${file}|${stat.size}|${stat.mtimeMs}`;
     if (this.streamCache.has(key)) return this.streamCache.get(key)!;
     const run = await this.o.ffmpeg.run("ffprobe", ["-v", "error", "-hide_banner", "-print_format", "json", "-show_format", "-show_streams", "-show_data_hash", "SHA256", "-i", file], {
-      timeoutMs: 60_000, maxStdoutBytes: 16 * 1024 * 1024, redactPaths: [file, path.dirname(file)],
+      signal, timeoutMs: 60_000, maxStdoutBytes: 16 * 1024 * 1024, redactPaths: [file, path.dirname(file)],
     });
-    const streams = streamsFromProbe(JSON.parse(run.stdout.toString("utf8")));
+    const parsed = JSON.parse(run.stdout.toString("utf8"));
+    const value = { streams: streamsFromProbe(parsed), videoIndex: primaryVideoStreamIndex(parsed) };
     if (this.streamCache.size > 200) this.streamCache.delete(this.streamCache.keys().next().value!);
-    this.streamCache.set(key, streams);
-    return streams;
+    this.streamCache.set(key, value);
+    return value;
   }
 
   /**
    * Checks the sequence and says what an export would do: for every clip, where the copy really starts and ends, and whether the clips can be joined
    * (same container and codecs, picture size and rate, time base and audio). Changes nothing. A sequence that cannot be joined says why, clip by clip.
    */
-  async plan(cutId: string, asked: RoughcutExportOptions = DEFAULT_ROUGHCUT_OPTIONS, signal?: AbortSignal): Promise<{ plan: RoughcutPlan; sources: Map<string, string>; streams: Map<string, RoughcutStreams> }> {
+  async plan(cutId: string, asked: RoughcutExportOptions = DEFAULT_ROUGHCUT_OPTIONS, signal?: AbortSignal): Promise<{ plan: RoughcutPlan; sources: Map<string, string>; streams: Map<string, RoughcutStreams>; videoIndices: Map<string, number> }> {
     const row = this.cut(cutId);
     const rows = this.rows(cutId);
     const merge = asked.mode === "merge";
@@ -342,6 +341,7 @@ export class RoughcutService {
     const clips: RoughcutClipPlan[] = [];
     const sources = new Map<string, string>();
     const streamsOfClip = new Map<string, RoughcutStreams>();
+    const videoIndices = new Map<string, number>();
     /** What stops a clip from being exported at all, and what stops it from being joined to the first one. */
     const own = new Map<string, RoughcutProblem[]>();
     const join = new Map<string, RoughcutProblem[]>();
@@ -371,9 +371,11 @@ export class RoughcutService {
             onKeyframe: cut.onKeyframe, frames: cut.frames, toEnd: cut.toEnd, frameGapMs: cut.frameGapMs,
           });
         }
-        const streams = await this.streamsOf(video.path);
+        const probed = await this.streamsOf(video.path, signal);
+        const streams = probed.streams;
         if (!streams) { mine.push({ code: "no-video", clipId: clip.id }); continue; }
         streamsOfClip.set(clip.id, streams);
+        if (probed.videoIndex !== null) videoIndices.set(clip.id, probed.videoIndex);
         // The file this clip alone would be written as. A merged export uses the first clip's.
         entry.extension = outputExtension(streams.container, path.basename(video.path));
         if (!entry.extension) mine.push({ code: "container", clipId: clip.id, detail: { first: streams.container, other: "-" } });
@@ -406,7 +408,7 @@ export class RoughcutService {
       actualMs: Math.round(clips.reduce((sum, clip) => sum + (clip.actualOutMs - clip.actualInMs), 0)),
       container: first?.streams.container ?? null, extension, streams: first?.streams ?? null, tool,
     };
-    return { plan, sources, streams: streamsOfClip };
+    return { plan, sources, streams: streamsOfClip, videoIndices };
   }
 
   /**
@@ -418,7 +420,7 @@ export class RoughcutService {
     registered: (view: RoughcutExportView) => void;
   }): Promise<RoughcutExportView> {
     if (!this.o.ffmpeg.available) throw new MangaError("CAPABILITY_UNAVAILABLE", "the media tool is not installed");
-    const { plan, sources, streams } = await this.plan(input.cutId, input.options, signal);
+    const { plan, sources, streams, videoIndices } = await this.plan(input.cutId, input.options, signal);
     signal?.throwIfAborted();
     hooks?.validate();
     const chapterTitles = new Map<string, string>();
@@ -444,7 +446,7 @@ export class RoughcutService {
         }),
       };
     }
-    return this.exports.start({ plan, sources, streams, chapterTitles, destination, fileName: input.fileName, onRegistered: hooks?.registered });
+    return this.exports.start({ plan, sources, streams, videoIndices, chapterTitles, destination, fileName: input.fileName, onRegistered: hooks?.registered });
   }
 
   /** The keyframes of a clip's video as the frame table has them, for a timeline to show and for marks to land on. */

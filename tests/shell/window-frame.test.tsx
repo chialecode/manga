@@ -1,11 +1,11 @@
 /** @vitest-environment jsdom */
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts";
 import { ShellFrame } from "../../apps/desktop/src/renderer/shell.tsx";
 import { RAIL_WIDTH, SIDE_WIDTH, clampSide, dragLimit } from "../../packages/app-core/src/domain/shell-layout.ts";
-import { frame, frameProps, menus, pointer, shellRail, windowHost } from "../helpers/shell-frame.tsx";
+import { frame, frameProps, pointer, shellRail, windowHost } from "../helpers/shell-frame.tsx";
 
 beforeEach(() => { try { localStorage.clear(); } catch { /* none */ } });
 afterEach(() => { cleanup(); delete (window as unknown as { manga?: unknown }).manga; });
@@ -15,7 +15,7 @@ const order = (root: Element, ids: string[]) => Array.from(root.querySelectorAll
 describe("AT-125 a press on a divider with text selected", () => {
   it("is a drag of the divider: no native drag of the selection starts", () => {
     const sources: Array<[string, RegExp]> = [
-      ["apps/desktop/src/renderer/shell.tsx", /shell-resize-/],
+      ["apps/desktop/src/renderer/shell-chrome.tsx", /shell-resize-/],
       ["apps/desktop/src/renderer/rail.tsx", /onPointerMove={pointer.move}/],
       ["apps/desktop/src/renderer/reader/side-panel.tsx", /reading-panel-grip/],
       ["apps/desktop/src/renderer/pages/debug-panel.tsx", /debug-grip/],
@@ -40,55 +40,85 @@ describe("AT-136 the main area has square corners (UI-01)", () => {
   });
 });
 
-describe("AT-81 AT-111 window frame: the top row, the rail and the columns", () => {
-  it("has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel", async () => {
+describe("AT-81 AT-111 window frame: the title bar, the rail and the columns (A-136)", () => {
+  it("has no row of its own across the window: the tops of the rail, the sidebar, the main area and the dock are the title bar, with no history buttons and no menus", async () => {
     windowHost();
     const { container } = frame(1600, 900);
-    // One row across the top (UI-01); it is the first thing in the window and the columns are under it.
-    expect(container.querySelectorAll("header").length).toBe(1);
     const root = screen.getByTestId("shell-root");
-    const top = screen.getByTestId("shell-top");
-    expect(root.firstElementChild).toBe(top);
-    expect(top.classList.contains("shell-drag")).toBe(true);
-    // The sidebar's switch, back, forward and the menus stand at its left, the debugging and dock switches and the window's buttons at its right.
-    const left = top.querySelector(".top-left")!;
-    expect(order(left, ["shell-sidebar-toggle", "nav-back", "nav-forward", "menubar"])).toEqual(["shell-sidebar-toggle", "nav-back", "nav-forward", "menubar"]);
-    const right = top.querySelector(".top-right")!;
-    await screen.findByTestId("window-controls");
-    expect(right.lastElementChild).toBe(screen.getByTestId("window-controls"));
-    expect(right.contains(screen.getByTestId("shell-dock-toggle"))).toBe(true);
-    expect(top.querySelectorAll("[data-testid='window-controls']").length).toBe(1);
-    // Under the top: the rail, the sidebar, the main area, the dock, side by side, and dividers between the columns that are docked.
+    // No header across the window: the columns start at its top edge (UI-01).
+    expect(container.querySelectorAll("header").length).toBe(0);
     const body = root.querySelector(".shell-body")!;
+    expect(root.firstElementChild).toBe(body);
     expect(order(body, ["shell-rail", "shell-sidebar", "shell-resize-sidebar", "shell-main", "shell-resize-dock", "shell-dock"])).toEqual(["shell-rail", "shell-sidebar", "shell-resize-sidebar", "shell-main", "shell-resize-dock", "shell-dock"]);
     expect(screen.getByTestId("shell-rail").style.width).toBe(`${RAIL_WIDTH}px`);
     expect(screen.getByTestId("shell-sidebar").getAttribute("data-shell-state")).toBe("dock");
     expect(screen.getByTestId("shell-dock").getAttribute("data-shell-state")).toBe("dock");
-    // There is no switch between modes anywhere.
+    // The rail's top holds the sidebar's switch and is taken hold of around it.
+    const railTop = screen.getByTestId("shell-rail").firstElementChild!;
+    expect(railTop.classList.contains("rail-top")).toBe(true);
+    expect(railTop.classList.contains("shell-drag")).toBe(true);
+    expect(railTop.contains(screen.getByTestId("shell-sidebar-toggle"))).toBe(true);
+    // With the dock docked, the end of the title bar is the dock's top: the dock's switch, then the window's buttons last.
+    const dockTop = screen.getByTestId("dock-top");
+    expect(screen.getByTestId("shell-dock").firstElementChild).toBe(dockTop);
+    expect(dockTop.classList.contains("shell-drag")).toBe(true);
+    const end = screen.getByTestId("title-end");
+    expect(dockTop.contains(end)).toBe(true);
+    await screen.findByTestId("window-controls");
+    expect(end.lastElementChild).toBe(screen.getByTestId("window-controls"));
+    expect(end.contains(screen.getByTestId("shell-dock-toggle"))).toBe(true);
+    expect(root.querySelectorAll("[data-testid='window-controls']").length).toBe(1);
+    expect(screen.queryByTestId("main-top-end")).toBeNull();
+    // No back and forward, no menus, no switch between modes.
+    for (const id of ["nav-back", "nav-forward", "menubar", "menu-file", "menu-help"]) expect(screen.queryByTestId(id), id).toBeNull();
     expect(root.querySelector("[data-testid^='mode-']")).toBeNull();
     expect(screen.getByTestId("sidebar-slot")).toBeTruthy();
     expect(screen.getByTestId("main-slot")).toBeTruthy();
     expect(screen.getByTestId("dock-slot")).toBeTruthy();
-    // The build's channel is not in the top (it is in the About dialog).
+    // The build's channel is not in the title bar (it is on Settings > Update).
     expect(root.textContent).not.toMatch(/测试通道|开发版|正式版/);
   });
 
-  it("keeps the same top row in a window too narrow for the columns, and opens them over the page from their buttons", async () => {
+  it("moves the end of the title bar to the main area's tab strip when the dock is folded away, gives the strip its width, and back to the dock with it", async () => {
+    windowHost();
+    const folded = structuredClone(DEFAULT_SHELL_PREFERENCE);
+    folded.dock.visible = false;
+    const { rerender } = frame(1600, 900, { preference: folded });
+    const main = screen.getByTestId("shell-main");
+    const top = screen.getByTestId("main-top-end");
+    expect(main.contains(top)).toBe(true);
+    expect(top.classList.contains("shell-drag")).toBe(true);
+    expect(top.contains(screen.getByTestId("title-end"))).toBe(true);
+    await screen.findByTestId("window-controls");
+    expect(screen.getByTestId("title-end").lastElementChild).toBe(screen.getByTestId("window-controls"));
+    expect(screen.queryByTestId("dock-top")).toBeNull();
+    // The strip of the top-right column leaves the buttons their room.
+    expect(main.style.getPropertyValue("--title-end-w")).toMatch(/^\d+px$/);
+    rerender(<ShellFrame {...frameProps(1600, 900)} />);
+    expect(screen.getByTestId("dock-top").contains(screen.getByTestId("title-end"))).toBe(true);
+    expect(screen.queryByTestId("main-top-end")).toBeNull();
+    expect(main.style.getPropertyValue("--title-end-w")).toBe("");
+  });
+
+  it("keeps the same title bar in a window too narrow for the columns, and opens them over the page from their buttons", async () => {
     windowHost();
     frame(800, 700);
-    const top = screen.getByTestId("shell-top");
     expect(screen.queryByTestId("shell-sidebar")).toBeNull();
     expect(screen.queryByTestId("shell-resize-sidebar")).toBeNull();
-    expect(order(top, ["shell-sidebar-toggle", "nav-back", "nav-forward", "menubar", "shell-dock-toggle"])).toEqual(["shell-sidebar-toggle", "nav-back", "nav-forward", "menubar", "shell-dock-toggle"]);
-    // The window's buttons are still at the end of the only top there is, and the rail is still there.
+    expect(screen.getByTestId("shell-rail").contains(screen.getByTestId("shell-sidebar-toggle"))).toBe(true);
+    // The dock is not docked: the end of the title bar is over the main area, the window's buttons last.
+    const end = screen.getByTestId("title-end");
+    expect(screen.getByTestId("main-top-end").contains(end)).toBe(true);
+    expect(end.contains(screen.getByTestId("shell-dock-toggle"))).toBe(true);
     await screen.findByTestId("window-controls");
-    expect(top.querySelector(".top-right")!.lastElementChild).toBe(screen.getByTestId("window-controls"));
-    expect(screen.getByTestId("shell-rail")).toBeTruthy();
-    // A button opens its column over the page; the dock cannot be over it at the same time as the sidebar.
+    expect(end.lastElementChild).toBe(screen.getByTestId("window-controls"));
+    // A button opens its column over the page, under the title bar; the dock cannot be over it at the same time as the sidebar.
     fireEvent.click(screen.getByTestId("shell-dock-toggle"));
     expect(screen.getByTestId("shell-dock").getAttribute("data-shell-state")).toBe("overlay");
+    expect(screen.getByTestId("main-top-end").contains(end)).toBe(true);
     fireEvent.click(screen.getByTestId("shell-sidebar-toggle"));
     expect(screen.getByTestId("shell-sidebar").getAttribute("data-shell-state")).toBe("overlay");
+    expect(screen.getByTestId("shell-sidebar").style.top).toBe("36px");
     expect(screen.getByTestId("shell-dock").getAttribute("data-shell-state")).toBe("hidden");
   });
 
@@ -129,44 +159,6 @@ describe("AT-81 AT-111 window frame: the top row, the rail and the columns", () 
     expect(screen.getByTestId("shell-rail")).toBeTruthy();
     expect(screen.getByTestId("shell-root").getAttribute("data-immersive")).toBe("false");
     expect(screen.queryByTestId("immersive-hotzone")).toBeNull();
-  });
-
-  it("walks the tab's history from the back and forward buttons, and disables a button with nowhere to go", () => {
-    const onBack = vi.fn();
-    const onForward = vi.fn();
-    frame(1280, 840, { history: { canBack: true, canForward: false, onBack, onForward } });
-    const back = screen.getByTestId("nav-back") as HTMLButtonElement;
-    const forward = screen.getByTestId("nav-forward") as HTMLButtonElement;
-    expect(back.disabled).toBe(false);
-    expect(forward.disabled).toBe(true);
-    fireEvent.click(back);
-    expect(onBack).toHaveBeenCalledTimes(1);
-    fireEvent.click(forward);
-    expect(onForward).not.toHaveBeenCalled();
-    cleanup();
-    frame(1280, 840, { history: { canBack: false, canForward: true, onBack, onForward } });
-    expect((screen.getByTestId("nav-back") as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByTestId("nav-forward"));
-    expect(onForward).toHaveBeenCalledTimes(1);
-  });
-
-  it("has four menus in the top row, opens one and runs the command that is picked", () => {
-    const picked = vi.fn();
-    frame(1280, 840, { menus: menus(picked) });
-    const bar = screen.getByTestId("menubar");
-    expect(within(bar).getAllByRole("button").map((node) => node.textContent)).toEqual(["文件", "编辑", "视图", "帮助"]);
-    fireEvent.click(screen.getByTestId("menu-file"));
-    expect(screen.getAllByRole("menuitem").map((node) => node.textContent)).toEqual(["新标签页", "退出"]);
-    fireEvent.click(screen.getByRole("menuitem", { name: "新标签页" }));
-    expect(picked).toHaveBeenCalledWith("new-tab");
-    expect(picked).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("menu")).toBeNull();
-    // Escape closes an open menu and returns the focus to its button.
-    fireEvent.click(screen.getByTestId("menu-help"));
-    expect(screen.getAllByRole("menuitem").map((node) => node.textContent)).toEqual(["关于"]);
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-    expect(screen.queryByRole("menu")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByTestId("menu-help"));
   });
 
   it("drags a divider to resize its column inside the limits, and puts the default back on a double click", () => {
@@ -394,7 +386,8 @@ describe("AT-82 AT-111 AT-119 window frame: the icon rail", () => {
     expect(navigation.tagName).toBe("NAV");
     expect(navigation.getAttribute("aria-label")).toBe("图标栏");
     expect(navigation.querySelector("h1, h2")).toBeNull();
-    expect(Array.from(navigation.querySelectorAll("button")).map((node) => node.getAttribute("aria-label"))).toEqual(["主页", "对话", "小说", "漫画", "动漫", "笔记", "白板", "设置"]);
+    // The sidebar's switch first, in the rail's part of the title bar; then the views, and the settings.
+    expect(Array.from(navigation.querySelectorAll("button")).map((node) => node.getAttribute("aria-label"))).toEqual(["隐藏侧栏", "主页", "对话", "小说", "漫画", "动漫", "笔记", "白板", "设置"]);
     expect(screen.getByTestId("nav-comic").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("nav-home").getAttribute("aria-current")).toBeNull();
     expect(screen.getByTestId("nav-settings").closest(".rail-bottom")).toBeTruthy();
@@ -483,7 +476,11 @@ describe("AT-105 the window's own buttons", () => {
     frame(1600, 900);
     const group = await screen.findByTestId("window-controls");
     expect(group.classList.contains("shell-no-drag")).toBe(true);
-    expect(group.closest(".shell-top")!.classList.contains("shell-drag")).toBe(true);
+    expect(group.closest(".shell-drag")).toBe(screen.getByTestId("dock-top"));
+    // The empty part of a tab strip along the top edge is taken hold of as well; a sidebar's heading too.
+    const frameCss = readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8");
+    expect(frameCss).toMatch(/\.tab-actions\[data-top-row="true"\]\) \.dv-void-container \{[^}]*app-region: drag/);
+    expect(frameCss).toMatch(/\.sidebar-head \{[^}]*app-region: drag/);
     const css = readFileSync("apps/desktop/src/renderer/styles.css", "utf8");
     expect(css).toMatch(/\.shell-no-drag \{[^}]*app-region: no-drag/);
     expect(css).toMatch(/\.shell-drag \{[^}]*app-region: drag/);
@@ -507,7 +504,7 @@ describe("AT-111 the frame in a short window", () => {
   it("marks a window shorter than the compact height, and keeps every part of the frame", () => {
     frame(1280, 600);
     expect(screen.getByTestId("shell-root").getAttribute("data-compact")).toBe("true");
-    for (const id of ["shell-top", "shell-rail", "shell-sidebar", "shell-main", "shell-dock"]) expect(screen.getByTestId(id), id).toBeTruthy();
+    for (const id of ["shell-top", "shell-rail", "shell-sidebar", "shell-main", "shell-dock", "title-end"]) expect(screen.getByTestId(id), id).toBeTruthy();
     cleanup();
     frame(1280, 840);
     expect(screen.getByTestId("shell-root").getAttribute("data-compact")).toBe("false");

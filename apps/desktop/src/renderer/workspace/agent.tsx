@@ -7,6 +7,7 @@ import { mediaContextFor, readerContext, type ReaderContext } from "../lib/reade
 import type { QuoteTag } from "../lib/quote-tags.ts";
 import type { AttachedImage } from "../lib/types.ts";
 import { useDraft } from "./drafts.ts";
+import { useModelChoice } from "./model-choice.tsx";
 import { useServices } from "./services.tsx";
 
 const ACTIVE = ["queued", "running", "waiting_input"];
@@ -34,28 +35,34 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   const [run, setRun] = useState<Record<string, unknown> | null>(null);
   const surfaceRef = useRef(shown);
   surfaceRef.current = shown;
+  const sRef = useRef(s);
+  sRef.current = s;
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
 
   // The conversation of the surface: a subject's own session is opened (and made once), the context's current one is read.
   const subject = `${shown.contextId ?? ""}|${shown.open?.kind ?? ""}|${shown.open?.targetId ?? ""}|${shown.sessionId ?? ""}`;
+  const subjectRef = useRef(subject);
+  subjectRef.current = subject;
   // Read again when the conversations change: the current one moved, or the conversation shown was deleted and its subject needs a new one.
   const currentVersion = s.conversationVersion;
   useEffect(() => {
     if (!active) { setSessionId(undefined); return; }
-    if (shown.sessionId) { setSessionId(shown.sessionId); return; }
+    const current = surfaceRef.current;
+    if (current.sessionId) { setSessionId(current.sessionId); return; }
     let cancelled = false;
     void (async () => {
-      if (shown.open) {
-        const opened = await attempt<{ id?: string }>("session.open", { kind: shown.open.kind, targetId: shown.open.targetId, contextId: shown.contextId });
+      if (current.open) {
+        const opened = await attempt<{ id?: string }>("session.open", { kind: current.open.kind, targetId: current.open.targetId, contextId: current.contextId });
         if (cancelled) return;
-        if (!opened.ok) { s.setError(opened.error.message); setSessionId(undefined); return; }
+        if (!opened.ok) { sRef.current.setError(opened.error.message); setSessionId(undefined); return; }
         setSessionId(String(opened.value.id ?? "") || undefined);
         return;
       }
-      const current = await attempt<{ conversation: { sessionId: string } | null }>("conversation.current", { contextId: shown.contextId });
-      if (!cancelled) setSessionId(current.ok ? current.value.conversation?.sessionId : undefined);
+      const res = await attempt<{ conversation: { sessionId: string } | null }>("conversation.current", { contextId: current.contextId });
+      if (!cancelled) setSessionId(res.ok ? res.value.conversation?.sessionId : undefined);
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, subject, currentVersion]);
 
   // The pane starts without a task when it shows another conversation.
@@ -64,16 +71,15 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     if (lastSession.current !== sessionId) { lastSession.current = sessionId; setRun(null); }
   }, [sessionId]);
 
-  const runs = (s.workspace?.runs as Array<{ id: string; sessionId: string; status: string }> | undefined) ?? [];
   useEffect(() => {
     if (!sessionId) { setRun(null); return; }
+    const runs = (s.workspace?.runs as Array<{ id: string; sessionId: string; status: string }> | undefined) ?? [];
     const own = runs.filter((entry) => entry.sessionId === sessionId);
     const found = own.find((entry) => ACTIVE.includes(entry.status) || entry.status === "interrupted") ?? own[0];
     if (!found) return;
     let cancelled = false;
     void attempt("agent.getRun", { runId: found.id }).then((result) => { if (!cancelled && result.ok) setRun(result.value); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, s.workspace]);
 
   useEffect(() => {
@@ -90,36 +96,37 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [run?.runId, run?.id, run?.status]);
 
-  // When a task ends the messages and the conversation lists are read again.
-  const runStatus = String(run?.status ?? "");
-  const lastStatus = useRef(runStatus);
-  useEffect(() => {
-    if (lastStatus.current !== runStatus && !ACTIVE.includes(runStatus)) { s.bump(); s.conversationsChanged(); }
-    lastStatus.current = runStatus;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runStatus]);
-
   const visibleRun = run && sessionId && String(run.sessionId ?? "") === sessionId ? run : null;
   const running = ACTIVE.includes(String(visibleRun?.status ?? ""));
 
+  // When a task finishes for the same session (ACTIVE -> terminal), refresh messages and conversation lists.
+  const visibleStatus = String(visibleRun?.status ?? "");
+  const lastRunState = useRef<{ sessionId: string | undefined; status: string }>({ sessionId, status: visibleStatus });
+  useEffect(() => {
+    const prev = lastRunState.current;
+    if (prev.sessionId === sessionId && ACTIVE.includes(prev.status) && visibleStatus !== "" && !ACTIVE.includes(visibleStatus)) {
+      sRef.current.bump();
+      sRef.current.conversationsChanged();
+    }
+    lastRunState.current = { sessionId, status: visibleStatus };
+  }, [sessionId, visibleStatus]);
+
   /** The session a send or a note goes to; the context's current conversation is made when there is none. */
-  const ensureSession = useCallback(async (): Promise<string | undefined> => {
-    const now = surfaceRef.current;
-    if (now.sessionId) return now.sessionId;
-    if (now.open) {
-      const opened = await attempt<{ id?: string }>("session.open", { kind: now.open.kind, targetId: now.open.targetId, contextId: now.contextId });
-      if (!opened.ok) { s.setError(opened.error.message); return undefined; }
+  const ensureSession = useCallback(async (origin = surfaceRef.current): Promise<string | undefined> => {
+    if (origin.sessionId) return origin.sessionId;
+    if (origin.open) {
+      const opened = await attempt<{ id?: string }>("session.open", { kind: origin.open.kind, targetId: origin.open.targetId, contextId: origin.contextId });
+      if (!opened.ok) { sRef.current.setError(opened.error.message); return undefined; }
       const id = String(opened.value.id ?? "") || undefined;
-      if (id) setSessionId(id);
+      if (id && surfaceRef.current.draftKey === origin.draftKey) setSessionId(id);
       return id;
     }
     if (sessionId) return sessionId;
-    const created = await attempt<{ sessionId: string }>("conversation.new", { contextId: now.contextId });
-    if (!created.ok) { s.setError(created.error.message); return undefined; }
-    setSessionId(created.value.sessionId);
-    s.conversationsChanged();
+    const created = await attempt<{ sessionId: string }>("conversation.new", { contextId: origin.contextId });
+    if (!created.ok) { sRef.current.setError(created.error.message); return undefined; }
+    if (surfaceRef.current.draftKey === origin.draftKey) setSessionId(created.value.sessionId);
+    sRef.current.conversationsChanged();
     return created.value.sessionId;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   /** A picture of the page, the framed region or the moment on screen, prepared for the next task. The bytes stay in the main process. */
@@ -152,6 +159,10 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     s.setNotice(t("rp.attach.done", { what: image.extraction }));
   }
 
+  const { picker: modelPicker, activeConnection } = useModelChoice(shown.contextId);
+  const activeConnectionRef = useRef(activeConnection);
+  activeConnectionRef.current = activeConnection;
+
   /**
    * The Agent's send. The conversation is the surface's own; the picked tags become the task's selection, picture and interval, so what the user sees
    * as tags is exactly what goes. A note never comes here, which is why a missing model cannot stop one.
@@ -159,16 +170,17 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   async function sendAgent(input: { text: string; attach?: "page" | "frame"; library?: boolean; quickTask?: { id: string | null; name: string }; tags: readonly QuoteTag[] }): Promise<boolean> {
     const text = input.text;
     if (!text.trim()) return false;
-    const sid = await ensureSession();
+    const origin = surfaceRef.current;
+    const originSubject = subjectRef.current;
+    const sid = await ensureSession(origin);
     if (!sid) return false;
-    const now = surfaceRef.current;
     const resources = (s.workspace?.resources as Array<{ id: string; title: string }> | undefined) ?? [];
-    const readResourceIds = [...new Set([...composer.materials, ...(input.library ? resources.map((item) => item.id) : []), ...(now.resourceId ? [now.resourceId] : [])])];
-    const noteObjectIds = [...new Set([...composer.noteMaterials, ...(now.noteObjectId ? [now.noteObjectId] : [])])];
+    const readResourceIds = [...new Set([...composer.materials, ...(input.library ? resources.map((item) => item.id) : []), ...(origin.resourceId ? [origin.resourceId] : [])])];
+    const noteObjectIds = [...new Set([...composer.noteMaterials, ...(origin.noteObjectId ? [origin.noteObjectId] : [])])];
     // The reader's place rides along only when it is this surface's own subject; a position left by another reader is not sent.
     const live = readerContext.get();
-    const place = live && live.kind !== "novel" && now.resourceId === live.resourceId ? live : null;
-    const mine = input.tags.filter((tag) => tag.resourceId === now.resourceId);
+    const place = live && live.kind !== "novel" && origin.resourceId === live.resourceId ? live : null;
+    const mine = input.tags.filter((tag) => tag.resourceId === origin.resourceId);
     const selectionTag = mine.find((tag): tag is Extract<QuoteTag, { kind: "selection" }> => tag.kind === "selection");
     const regionTags = mine.filter((tag): tag is Extract<QuoteTag, { kind: "region" }> => tag.kind === "region");
     const intervalTag = mine.find((tag): tag is Extract<QuoteTag, { kind: "interval" }> => tag.kind === "interval");
@@ -190,11 +202,13 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     const mediaContext = placed ? mediaContextFor(placed, { region: framed, subtitleAheadMs: composer.subtitleAheadMin * 60_000 }) : undefined;
     const conns = (s.settings?.connections as Array<{ purpose?: string }> | undefined) ?? [];
     const canSemantic = s.facets.has("semantic") && conns.some((item) => item.purpose === "embedding");
-    const canWebpage = s.facets.has("research") && now.contextId !== null;
+    const canWebpage = s.facets.has("research") && origin.contextId !== null;
+    const canWebSearch = webSearchAvailable(conns as Array<Record<string, unknown>>, activeConnectionRef.current as Record<string, unknown> | null);
     const allowCommands: string[] = [];
     if (composer.allowOnline && s.facets.has("metadata")) allowCommands.push("metadata.search");
     if (composer.allowSemantic && canSemantic) allowCommands.push("semantic.search");
     if (composer.allowWebpage && canWebpage) allowCommands.push("webpage.fetch");
+    if (composer.allowWebSearch && canWebSearch) allowCommands.push("web.search");
     const result = await attempt("agent.send", {
       sessionId: sid,
       text,
@@ -208,9 +222,9 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
       ...(selectionTag ? { selection: { resourceId: selectionTag.resourceId, resourceRevisionId: selectionTag.revisionId, partId: selectionTag.partId, start: selectionTag.start, end: selectionTag.end } } : {}),
     });
     if (!result.ok) { s.setError(result.error.message); return false; }
-    setRun(result.value);
+    if (subjectRef.current === originSubject || sessionIdRef.current === sid) setRun(result.value);
     // What was chosen for this task is spent: pictures, recordings, widening and online search are asked for again each time.
-    patch({ ...(text === composer.draft ? { draft: "" } : {}), images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, subtitleAheadMin: 0 });
+    patch({ ...(text === composer.draft ? { draft: "" } : {}), images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, allowWebSearch: false, subtitleAheadMin: 0 });
     s.setError(undefined);
     s.conversationsChanged();
     await s.refresh();
@@ -218,24 +232,28 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   }
 
   async function retry(runId: string) {
+    const originSession = sessionIdRef.current;
     const result = await attempt("agent.retry", { runId });
     if (!result.ok) s.setError(result.error.message);
-    else setRun(result.value);
+    else if (sessionIdRef.current === originSession) setRun(result.value);
     await s.refresh();
   }
 
   async function stop() {
     const runId = String(visibleRun?.runId ?? visibleRun?.id ?? "");
     if (!runId) return;
+    const originSession = sessionIdRef.current;
     await attempt("agent.cancel", { runId });
     const latest = await attempt("agent.getRun", { runId });
-    if (latest.ok) setRun(latest.value);
+    if (latest.ok && sessionIdRef.current === originSession) setRun(latest.value);
   }
 
   const connections = (s.settings?.connections as Array<{ purpose?: string }> | undefined) ?? [];
   const noModel = s.settings !== null && !connections.some((item) => item.purpose === "text");
   const semantic = s.facets.has("semantic") && connections.some((item) => item.purpose === "embedding");
   const webpage = s.facets.has("research") && shown.contextId !== null;
+  const webSearch = webSearchAvailable(connections as Array<Record<string, unknown>>, activeConnection as Record<string, unknown> | null);
+  const readAloudOn = speechAvailable(connections as Array<Record<string, unknown>>);
   const resources = (s.workspace?.resources as Array<{ id: string; title: string }> | undefined) ?? [];
   const reader = readerContext.get();
   const mediaResourceId = shown.resourceId;
@@ -269,12 +287,15 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     recorder: s.voiceOn ? s.recorder : null,
     dictation: s.voiceOn ? s.dictation ?? null : null,
     noModel,
+    modelPicker,
     onSettings: () => s.open.settings("models"),
     onStop: () => void stop(),
     onRetry: (runId) => void retry(runId),
     online: s.facets.has("metadata"),
     semantic,
     webpage,
+    webSearch,
+    readAloud: readAloudOn,
     resources,
     recordingsOf: s.voiceOn ? mediaResourceId ?? null : null,
     onAttach: (what) => void attachImage(what),
@@ -303,4 +324,25 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   });
 
   return { pane: chatView.pane, capsule: active ? chatView.capsule : null, running, stop: () => void stop(), sessionId };
+}
+
+/** Whether answers and novels can be read aloud (计划 4.7): a speech connection whose plugin is on. */
+export function speechAvailable(connections: Array<Record<string, unknown>>): boolean {
+  return connections.some((item) => item.purpose === "speech" && (item.account as { available?: boolean } | null | undefined)?.available !== false);
+}
+
+/**
+ * Whether "联网搜索" can be offered (计划 4.4): the active conversation model searches by itself (a DeepSeek model whose profile says so), or a web search
+ * service from a provider is configured and its plugin is on.
+ */
+export function webSearchAvailable(connections: Array<Record<string, unknown>>, activeConnection?: Record<string, unknown> | null): boolean {
+  const usable = (item: Record<string, unknown>) => { const account = item.account as { available?: boolean } | null | undefined; return !account || account.available !== false; };
+  const text = activeConnection !== undefined
+    ? (activeConnection && usable(activeConnection) ? activeConnection : undefined)
+    : connections.find((item) => item.purpose === "text" && usable(item));
+  const profile = (text?.profile ?? {}) as { capabilities?: string[]; dialect?: string };
+  let deepseekHost = false;
+  try { deepseekHost = new URL(String(text?.baseUrl ?? "")).hostname === "api.deepseek.com"; } catch { /* not an address */ }
+  if (text && profile.capabilities?.includes("web_search") && (profile.dialect === "deepseek" || deepseekHost)) return true;
+  return connections.some((item) => item.purpose === "search" && usable(item));
 }

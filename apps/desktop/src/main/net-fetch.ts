@@ -16,7 +16,12 @@ function abortError(signal: AbortSignal): unknown {
 
 function headersOf(raw: IncomingMessage["headers"]): Headers {
   const headers = new Headers();
-  for (const [name, value] of Object.entries(raw)) for (const item of Array.isArray(value) ? value : [value]) headers.append(name, String(item));
+  for (const [name, value] of Object.entries(raw)) {
+    if (value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined) headers.append(name, String(item));
+    }
+  }
   return headers;
 }
 
@@ -35,8 +40,10 @@ export function createNetFetch(net: NetLike): (url: string, init?: FetchInit) =>
       if (signal?.aborted) { reject(abortError(signal)); return; }
       const request = net.request({ url, method: init.method ?? "GET", redirect: "manual" });
       let settled = false;
+      let closed = false;
       let body: ReadableStreamDefaultController<Uint8Array> | undefined;
       const onAbort = () => {
+        closed = true;
         request.abort();
         if (!settled) { settled = true; reject(abortError(signal!)); }
         else try { body?.error(abortError(signal!)); } catch { /* already closed */ }
@@ -44,10 +51,16 @@ export function createNetFetch(net: NetLike): (url: string, init?: FetchInit) =>
       signal?.addEventListener("abort", onAbort, { once: true });
       const done = () => signal?.removeEventListener("abort", onAbort);
       const answer = (response: Response) => { if (!settled) { settled = true; resolve(response); } };
-      const fail = (error: unknown) => { done(); if (!settled) { settled = true; reject(error); } else try { body?.error(error); } catch { /* already closed */ } };
+      const fail = (error: unknown) => {
+        closed = true;
+        done();
+        if (!settled) { settled = true; reject(error); }
+        else try { body?.error(error); } catch { /* already closed */ }
+      };
 
       for (const [name, value] of Object.entries(init.headers ?? {})) request.setHeader(name, value);
       request.on("redirect", (statusCode, _method, redirectUrl) => {
+        closed = true;
         request.abort();
         done();
         answer(new Response(null, { status: statusCode, headers: { location: redirectUrl } }));
@@ -55,6 +68,7 @@ export function createNetFetch(net: NetLike): (url: string, init?: FetchInit) =>
       request.on("response", (response) => {
         const status = response.statusCode;
         if (NULL_BODY.has(status)) {
+          closed = true;
           done();
           answer(new Response(null, { status, statusText: response.statusMessage, headers: headersOf(response.headers) }));
           return;
@@ -62,12 +76,24 @@ export function createNetFetch(net: NetLike): (url: string, init?: FetchInit) =>
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             body = controller;
-            response.on("data", (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
-            response.on("end", () => { done(); try { controller.close(); } catch { /* already errored */ } });
+            response.on("data", (chunk: Buffer) => {
+              if (closed) return;
+              try {
+                controller.enqueue(new Uint8Array(chunk));
+              } catch {
+                closed = true;
+              }
+            });
+            response.on("end", () => {
+              if (closed) return;
+              closed = true;
+              done();
+              try { controller.close(); } catch { /* already errored */ }
+            });
             response.on("error", (error: Error) => fail(error));
             response.on("aborted", () => fail(new Error("the response was aborted")));
           },
-          cancel() { done(); request.abort(); },
+          cancel() { closed = true; done(); request.abort(); },
         });
         answer(new Response(stream, { status, statusText: response.statusMessage, headers: headersOf(response.headers) }));
       });

@@ -47,6 +47,9 @@ const run = (commandId: string, input: unknown): Promise<CommandResult> => windo
 export function useNovel(deps: NovelDeps) {
   const { i18n, setError, setNotice, contextId, tabId, openNote, refresh } = deps;
   const viewRequest = useRef(0);
+  const sliceRequest = useRef(0);
+  const searchRequest = useRef(0);
+  const positionInFlight = useRef<Promise<unknown>>(Promise.resolve());
   const [reading, setReading] = useState<ReadingDocument | null>(null);
   const [hits, setHits] = useState<Array<{ text: string; fragmentId?: string; locator?: { partId: string; range: { start: number; end: number } } }>>([]);
   const [searched, setSearched] = useState(false);
@@ -67,7 +70,7 @@ export function useNovel(deps: NovelDeps) {
   const positionRef = useRef<{ partId: string; start: number; end: number } | null>(null);
   const positionTimer = useRef<number | null>(null);
   /** The save the timer waits to make: made at once when the reader goes away or the window closes, so the last page turned is not lost. */
-  const positionSave = useRef<(() => void) | null>(null);
+  const positionSave = useRef<(() => Promise<unknown>) | null>(null);
   /** The position last saved from here; before any, the one the book was opened at. */
   const savedAt = useRef<{ resourceId: string; partId: string; start: number } | null>(null);
   const extending = useRef(false);
@@ -107,6 +110,14 @@ export function useNovel(deps: NovelDeps) {
     const resourceId = reading?.resourceId;
     return () => { if (resourceId) { readerContext.clear(resourceId, tabId); quoteTags.clearFor(resourceId); } };
   }, [reading?.resourceId]);
+  useEffect(() => () => {
+    if (announced.current) {
+      captureBus.clear(announced.current, tabId);
+      announced.current = null;
+    }
+    for (const url of Object.values(assetUrlsRef.current)) URL.revokeObjectURL(url);
+    assetUrlsRef.current = {};
+  }, [tabId]);
   useEffect(() => {
     if (!agentSelection?.partId) return;
     captureBus.emit({
@@ -181,12 +192,20 @@ export function useNovel(deps: NovelDeps) {
       for (const url of Object.values(urls)) URL.revokeObjectURL(url);
       return;
     }
-    // Replacing the asset set releases the previous object URLs so an inactive book holds no media.
+    // Replace asset URLs without leaking overwritten blobs or retaining revoked URLs.
+    const nextUrls: Record<string, string> = {};
     for (const [assetId, url] of Object.entries(assetUrlsRef.current)) {
-      if (!urls[assetId]) URL.revokeObjectURL(url);
+      if (urls[assetId]) {
+        URL.revokeObjectURL(url);
+      } else if (ids.has(assetId)) {
+        nextUrls[assetId] = url;
+      } else {
+        URL.revokeObjectURL(url);
+      }
     }
-    assetUrlsRef.current = { ...assetUrlsRef.current, ...urls };
-    setAssetUrls(assetUrlsRef.current);
+    Object.assign(nextUrls, urls);
+    assetUrlsRef.current = nextUrls;
+    setAssetUrls(nextUrls);
   }
 
   async function loadOriginal(resourceId: string, revisionId: string | undefined, request: number) {
@@ -217,13 +236,14 @@ export function useNovel(deps: NovelDeps) {
    */
   async function openSlice(partId: string, start: number, options: { highlight?: { start: number; end: number } | null; revisionId?: string; quiet?: boolean } = {}) {
     const request = viewRequest.current;
+    const sliceMine = ++sliceRequest.current;
     const current = readingRef.current;
     if (!current) return;
     const revisionId = options.revisionId ?? current.revisionId;
     const pdf = current.format === "pdf";
     const sliceStart = pdf ? 0 : start;
     const result = await run("library.readSlice", { resourceId: current.resourceId, revisionId, partId, start: sliceStart, limit: pdf ? 8000 : WINDOW_CHARS });
-    if (request !== viewRequest.current || readingRef.current?.resourceId !== current.resourceId) return;
+    if (request !== viewRequest.current || sliceMine !== sliceRequest.current || readingRef.current?.resourceId !== current.resourceId) return;
     if (result.status === "error") { setError(result.error?.message); return; }
     const value = result.value as { text?: string; start?: number; end?: number; kind?: string; textLayer?: boolean; images?: ReadingAsset[]; placements?: Array<{ assetId: string; offset: number; width?: number; height?: number }>; render?: ReadingDocument["slice"] extends null ? never : NonNullable<ReadingDocument["slice"]>["render"] } | undefined;
     const next: ReadingDocument = {
@@ -260,12 +280,12 @@ export function useNovel(deps: NovelDeps) {
           },
         },
       });
-      if (request !== viewRequest.current) return;
+      if (request !== viewRequest.current || sliceMine !== sliceRequest.current) return;
       if (progress.status === "error") setError(progress.error?.message);
       // A book read in "最近" goes to the top of the novels' list there.
       else announceCommand("progress.set", { contextId, resourceId: next.resourceId });
     }
-    if (request !== viewRequest.current) return;
+    if (request !== viewRequest.current || sliceMine !== sliceRequest.current) return;
     await loadAssets(next, request);
   }
 
@@ -319,12 +339,12 @@ export function useNovel(deps: NovelDeps) {
     // Still on the page of the saved position (the book was just opened, or laid out anew): it stays exactly where it is.
     const opened = current.progress?.restoredPartId && current.progress.restoredRange ? { partId: current.progress.restoredPartId, start: current.progress.restoredRange.start } : null;
     if (pageHolds(savedAt.current?.resourceId === current.resourceId ? savedAt.current : opened, at)) return;
-    const save = () => {
+    const save = (): Promise<unknown> => {
       if (positionTimer.current !== null) window.clearTimeout(positionTimer.current);
       positionTimer.current = null;
       positionSave.current = null;
       savedAt.current = { resourceId: current.resourceId, partId, start: at.start };
-      void window.manga.command({
+      const req = window.manga.command({
         commandId: "progress.set", idempotencyKey: id(), input: {
           contextId, resourceId: current.resourceId, resourceRevisionId: current.revisionId, consumed: false,
           locator: { kind: "text", partId, representationId: current.revisionId, normalizationVersion: NORMALIZATION_V1, range: { start: at.start, end: at.end } },
@@ -333,15 +353,26 @@ export function useNovel(deps: NovelDeps) {
         if (saved.status === "error") setError(saved.error?.message);
         else announceCommand("progress.set", { contextId, resourceId: current.resourceId });
       });
+      positionInFlight.current = req;
+      return req;
     };
     positionSave.current = save;
-    positionTimer.current = window.setTimeout(save, POSITION_SAVE_MS);
+    positionTimer.current = window.setTimeout(() => { void save(); }, POSITION_SAVE_MS);
   }
   // A page turned just before the reader closes (or the window does) is still saved: the waiting save is made at once, not dropped.
   useEffect(() => {
-    const now = () => positionSave.current?.();
-    window.addEventListener("pagehide", now);
-    return () => { window.removeEventListener("pagehide", now); now(); };
+    const flushNow = async () => {
+      await positionSave.current?.();
+      await positionInFlight.current;
+    };
+    const onHide = () => { void flushNow(); };
+    window.addEventListener("pagehide", onHide);
+    const stopSaveNow = window.manga?.onSaveNow?.(flushNow);
+    return () => {
+      stopSaveNow?.();
+      window.removeEventListener("pagehide", onHide);
+      void flushNow();
+    };
   }, []);
 
   /** The page on screen when it is in the open slice, else the slice itself. */
@@ -491,7 +522,7 @@ export function useNovel(deps: NovelDeps) {
     const outcome = await relinkResource(resourceId);
     if (outcome.kind === "cancelled") return;
     // A quote that has no single home in the new file stays unrepaired, and the user is told how many.
-    const shown = relinkNotice(i18n.t, outcome, () => void repairNoteSource());
+    const shown = relinkNotice(i18n.t, outcome, () => void repairNoteSource(), setError);
     if (shown.error) { setError(shown.error); return; }
     setNotice(shown.notice, shown.action);
     setError(undefined);
@@ -567,7 +598,10 @@ export function useNovel(deps: NovelDeps) {
   }
 
   async function search(text: string) {
-    const result = await run("library.find", { text, resourceId: reading?.resourceId });
+    const mine = ++searchRequest.current;
+    const resourceId = readingRef.current?.resourceId;
+    const result = await run("library.find", { text, resourceId });
+    if (mine !== searchRequest.current || readingRef.current?.resourceId !== resourceId) return;
     setSearched(true);
     setHits(result.status === "ok" ? asArray(result.value) : []);
   }

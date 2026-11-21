@@ -109,7 +109,7 @@ export function createOpeners(get: () => OpenerDeps): Openers {
 
     async episode(tabId, resourceId) {
       if (!(await gate(resourceId))) return;
-      const tab = c().tabsOf().find((item) => item.id === tabId);
+      const tab = c().tabById(tabId);
       if (tab) c().navigate(tabId, { ...tab.target, resourceId }, tab.title);
     },
 

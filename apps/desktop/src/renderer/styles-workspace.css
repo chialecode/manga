@@ -51,7 +51,7 @@
 .bubble-source { display: inline-flex; padding: 1px 9px; border-radius: 10px; font-size: 11px; color: var(--color-accent); background: var(--color-accent-soft); text-align: left; }
 button.bubble-source:hover { filter: brightness(.95); }
 button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); background: var(--color-muted); }
-.bubble-sources { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; padding: 0; margin: 0; }
+ul.bubble-sources { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; padding: 0; margin: 0; }
 .bubble-quote { margin: 0; padding: 4px 10px; border-left: 3px solid var(--color-brand); color: var(--color-subtle); font-size: 12px; line-height: 1.6; max-height: 6.5em; overflow: hidden; }
 .bubble-text { margin: 0; line-height: 1.7; white-space: pre-wrap; }
 .bubble-markdown { white-space: normal; }
@@ -63,6 +63,11 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .bubble-markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
 .bubble-markdown :where(th, td) { border: 1px solid var(--color-border); padding: 3px 8px; }
 .bubble-error { margin: 0; color: var(--color-danger); font-size: 12px; }
+/* An answer's thinking (folded) and the sources it cites (计划 4.3/4.4). */
+.bubble-thinking summary { cursor: pointer; color: var(--color-subtle); font-size: 12px; }
+.bubble-thinking .bubble-text { margin-top: 4px; font-size: 12px; }
+div.bubble-sources, .bubble-citations { display: block; font-size: 12px; }
+div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20px; }
 .bubble-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; }
 .bubble-tools { opacity: 0; transition: opacity 120ms ease; }
 .bubble:hover .bubble-tools, .bubble:focus-within .bubble-tools { opacity: 1; }
@@ -104,6 +109,11 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .chat-input { width: 100%; min-height: 44px; max-height: 180px; resize: none; border: 0; outline: 0; background: transparent; color: var(--color-text); font-size: 13px; line-height: 1.6; padding: 2px 0; }
 .chat-input::placeholder { color: var(--color-subtle); }
 .chat-bar { display: flex; align-items: center; gap: 4px; }
+/* The model picker (A-137): the model, its thinking and its window in one short line that gives way first when the bar is narrow. */
+.chat-model { display: inline-flex; min-width: 0; flex: 0 1 auto; }
+.chat-model .menu-button { display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; height: 28px; padding: 0 6px 0 8px; border-radius: 7px; font-size: 12px; color: var(--color-subtle); }
+.chat-model .menu-button:hover, .chat-model .menu-button[aria-expanded="true"] { background: var(--color-muted); color: var(--color-text); }
+.chat-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-switch { display: inline-flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--color-muted); }
 .chat-switch > button { padding: 3px 11px; border-radius: 7px; font-size: 12px; color: var(--color-subtle); }
 .chat-switch > button[aria-pressed="true"] { color: var(--color-accent); background: var(--color-surface); box-shadow: var(--shadow-control); font-weight: 600; }
@@ -113,12 +123,14 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .chat-mic[data-recording="true"], .chat-mic[aria-pressed="true"] { color: var(--color-danger); background: #B4231418; }
 .chat-mic-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-danger); margin-left: 2px; }
 
-/* the floating capsule that stands in for the right pane */
-.chat-capsule { position: absolute; right: 18px; bottom: 18px; z-index: 30; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+/* the header-docked capsule that stands in for the right pane without covering the page */
+.chat-capsule { position: absolute; top: 4px; right: calc(6px + var(--title-end-w, 0px)); left: 6px; bottom: auto; z-index: 30; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 6px; pointer-events: none; }
 /* Only the bar and the note box take the pointer; the space around and between them (the box may open further down) does not. */
 .chat-capsule > * { pointer-events: auto; }
-.capsule-bar { display: inline-flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 22px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 6px 20px #30364726; }
-.capsule-note { display: flex; flex-direction: column; gap: 6px; width: min(320px, calc(100vw - 48px)); padding: 10px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 8px 24px #30364730; }
+.capsule-bar { display: inline-flex; align-items: center; height: 28px; gap: 2px; padding: 0 3px; border-radius: 7px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-control); }
+.capsule-bar .icon-button { width: 24px; height: 24px; padding: 0; border-radius: 5px; }
+.capsule-bar .chat-mic[data-recording="true"], .capsule-bar .chat-mic[aria-pressed="true"] { width: auto; padding: 0 6px; gap: 4px; }
+.capsule-note { display: flex; flex-direction: column; gap: 6px; width: min(320px, 100%); padding: 10px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 8px 24px var(--color-player-pop-shadow); }
 .capsule-note textarea { width: 100%; resize: none; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; line-height: 1.6; }
 .capsule-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 
@@ -249,6 +261,15 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .msettings-field-stack textarea { width: 100%; min-height: 110px; resize: vertical; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; line-height: 1.6; }
 .connection { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; }
 .connection + .connection { border-top: 1px solid var(--color-border); }
+/* Connections from a provider plugin, under their account (计划 4.2): the heading carries the account's key and the plugin's state. */
+.connection-account { border-top: 1px solid var(--color-border); }
+.connection-account-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 12px 16px 4px; }
+.connection-account-head .msettings-actions { margin-left: auto; }
+.connection-account[data-available="no"] .connection { opacity: 0.6; }
+.connection-account > .detail-muted { padding: 0 16px 12px; }
+.provider-offer { padding: 8px 16px; }
+.provider-choice { align-items: flex-start; padding: 6px 0; }
+.provider-choice input { margin-top: 3px; }
 .connection-form { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
 
 /* ---- the dialog that adds or changes a model connection ---- */
@@ -348,3 +369,6 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 .rate-input:hover, .rate-input:focus { border-color: var(--color-border); background: var(--color-surface); }
 .rate-input[aria-invalid="true"] { border-color: var(--color-danger); }
 .rate-new .rate-input { width: 7ch; text-align: left; }
+
+/* Reading an answer aloud: the controls sit in the bubble's action row. */
+.read-aloud { display: inline-flex; align-items: center; gap: 6px; }

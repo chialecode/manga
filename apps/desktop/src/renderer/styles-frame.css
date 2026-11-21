@@ -1,24 +1,20 @@
-/* ---- The window (A-94): one top row, the icon rail, the sidebar, the tabbed main area and the dock ---- */
+/* ---- The window (A-94, A-136): the icon rail, the sidebar, the tabbed main area and the dock, each from the top edge down; their tops are the title bar ---- */
 
 .manga-shell { position: relative; padding: 0; font-size: 14px; background: var(--color-bg); }
 
-/* The top row is 36 px, as high as the window's own buttons. Its empty middle is the place the window is taken hold of; its buttons are not. */
+/* A row across the window, 36 px, as high as the window's own buttons: the floating top of window full screen, and the light window's top. Its empty
+   middle is the place the window is taken hold of; its buttons are not. */
 .shell-top { position: relative; z-index: 40; display: flex; align-items: center; flex: 0 0 var(--column-top-h); height: var(--column-top-h); padding-left: 6px; color: var(--color-on-frame); background: var(--color-frame); user-select: none; }
-.top-left { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .top-fill { flex: 1 1 0; align-self: stretch; min-width: 24px; }
-.top-right { display: flex; align-items: center; align-self: stretch; gap: 8px; flex: 0 0 auto; }
-.top-right > [data-testid="shell-title-actions"] { align-self: center; }
-.shell-top .shell-icon, .shell-top .menu-button { width: 28px; height: 28px; }
-.menubar { display: flex; align-items: center; gap: 0; margin-left: 4px; }
-.menubar-label { font-size: 13px; padding: 0 2px; white-space: nowrap; }
+/* The right end of the title bar (A-136): the state and debugging switches, the stop button, the dock's switch, the window's own buttons. */
+.title-end { display: flex; align-items: center; align-self: stretch; gap: 8px; flex: 0 0 auto; height: 100%; }
+.title-end > [data-testid="shell-title-actions"] { align-self: center; }
+.shell-top .shell-icon, .shell-top .menu-button, .title-end .shell-icon, .rail-top .shell-icon { width: 28px; height: 28px; }
 .titlebar-menu { display: inline-flex; }
 .titlebar-menu .menu-button { width: auto; height: 28px; padding: 0 8px; justify-content: center; border-radius: 6px; color: var(--color-on-frame); }
 .titlebar-menu .menu-button:hover, .titlebar-menu .menu-button[aria-expanded="true"] { background: var(--color-muted); color: var(--color-text); }
 .titlebar-menu .menu-list { -webkit-app-region: no-drag; app-region: no-drag; }
 .shell-icon:disabled { opacity: .35; }
-/* Where the window is too narrow for every button, the menus and forward are left to the keys (Alt + →, the mouse's side button). */
-@media (max-width: 639px) { .menubar { display: none; } }
-@media (max-width: 479px) { .top-left [data-testid="nav-forward"] { display: none; } }
 
 /* The window's own buttons (A-91): as high as the top, 46 px wide like the system's, in the theme's colors; never part of a drag area. */
 .window-controls { display: flex; flex: 0 0 auto; align-self: stretch; margin-left: 6px; }
@@ -29,14 +25,23 @@
 .window-control[data-kind="close"]:hover:not(:disabled) { background: var(--color-danger); color: #fff; }
 .window-control[data-kind="close"]:active:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 82%, #000); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .window-control { transition: none; } }
-/* macOS keeps its traffic lights at the left end of the window; the top leaves them room. */
+/* macOS keeps its traffic lights at the left end of the window: the floating top leaves them room, the rail's switch goes under them, and the top of
+   the column beside the rail starts past them. */
 .manga-shell[data-window-controls="system"] .shell-top { padding-left: 78px; }
+.manga-shell[data-window-controls="system"] .rail-top { height: calc(var(--column-top-h) + 24px); padding-top: 24px; }
+.manga-shell[data-window-controls="system"] .shell-sidebar[data-shell-state="dock"] .sidebar-head { padding-left: 34px; }
+.manga-shell[data-window-controls="system"][data-sidebar="away"] .shell-main .dv-tabs-and-actions-container { padding-left: 34px; }
 
 /* ---- the body: rail | sidebar | main | dock ---- */
 .shell-body { background: var(--color-frame); }
-.shell-rail { display: flex; flex-direction: column; justify-content: space-between; align-items: center; flex: 0 0 auto; min-height: 0; padding: 4px 0 8px; background: var(--color-frame); user-select: none; }
+.shell-rail { display: flex; flex-direction: column; justify-content: flex-start; align-items: center; flex: 0 0 auto; min-height: 0; padding: 0 0 8px; background: var(--color-frame); user-select: none; }
 .rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.rail-bottom { flex: none; }
+.rail-bottom { flex: none; margin-top: auto; }
+/* The rail's part of the title bar: the sidebar's switch, in the 36 px of the tops beside it; around it the window is taken hold of. */
+.rail-top { display: flex; align-items: center; justify-content: center; flex: none; width: 100%; height: var(--column-top-h); margin-bottom: 4px; }
+/* The docked sidebar's heading is its part of the title bar: as high as the other tops, and its empty part takes hold of the window. */
+.shell-sidebar[data-shell-state="dock"] .sidebar-head { height: var(--column-top-h); min-height: var(--column-top-h); padding-top: 0; padding-bottom: 0; -webkit-app-region: drag; app-region: drag; }
+.shell-sidebar[data-shell-state="dock"] .sidebar-head :is(button, input, a, [role="button"]) { -webkit-app-region: no-drag; app-region: no-drag; }
 .rail-group[data-dragging="true"] .rail-button { transition: transform 120ms ease; }
 .rail-group[data-dragging="true"] .rail-button[data-dragging="true"] { transition: none; z-index: 1; background: var(--color-accent-soft); color: var(--color-accent); box-shadow: var(--shadow-control); cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .rail-group[data-dragging="true"] .rail-button { transition: none; } }
@@ -48,12 +53,16 @@
 .shell-sidebar { display: flex; flex-direction: column; min-height: 0; background: var(--color-sidebar); color: var(--color-text); outline: none; }
 /* The card of a view, out of the rail while the sidebar is folded away: it starts under the top row beside the rail, is as high as its content up to the window, and has a
    border, round corners and a shadow of its own. */
-.shell-card { max-height: 100%; border: 1px solid var(--color-border); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: 0 10px 28px #30364726; }
+.shell-card { max-height: calc(100% - var(--column-top-h)); border: 1px solid var(--color-border); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: 0 10px 28px #30364726; }
 .shell-card > .sidebar { height: auto; max-height: 100%; flex: 0 1 auto; }
 .shell-card .sidebar-scroll { flex: 0 1 auto; }
 /* The main area meets the sidebar, the rail and the top row square (UI-01): a 1 px line and the ground tell them apart, no rounded corner. */
-.shell-main { display: flex; flex-direction: column; background: var(--color-surface); border-left: 1px solid var(--color-border); border-top: 1px solid var(--color-border); overflow: hidden; }
-.shell-compact .shell-main, .manga-shell[data-immersive="true"] .shell-main { border-left: 0; border-top: 0; }
+.shell-main { display: flex; flex-direction: column; background: var(--color-surface); border-left: 1px solid var(--color-border); overflow: hidden; isolation: isolate; }
+.shell-compact .shell-main, .manga-shell[data-immersive="true"] .shell-main { border-left: 0; }
+/* The right end of the title bar over the main area's tab strip, while the dock is not docked (A-136). */
+.main-top-end { position: absolute; top: 0; right: 0; z-index: 31; display: flex; height: var(--column-top-h); }
+/* The dock's part of the title bar, with the right end of the title bar in it. */
+.dock-top { display: flex; align-items: center; justify-content: flex-end; flex: none; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); }
 .shell-dock { display: flex; flex-direction: column; min-height: 0; background: var(--color-surface); border-left: 1px solid var(--color-border); outline: none; }
 .shell-dock[data-shell-state="overlay"] { box-shadow: var(--shadow-panel); }
 .shell-dock-body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; padding: 8px 16px 12px; }
@@ -90,6 +99,8 @@
 [data-hidden-layer], [data-hidden-layer] * { visibility: hidden !important; }
 [data-hidden-layer] { pointer-events: none; }
 .settings-area { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-surface); }
+/* The settings have no tabs; an empty strip stands in the tab strip's place, so the main area's part of the title bar is still there to take hold of. */
+.main-top-row { flex: none; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); }
 .settings-pane { display: flex; flex: 1 1 0; min-width: 0; min-height: 0; }
 .settings-pane > .settings-view { flex: 1 1 0; min-width: 0; }
 .context-host { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -100,7 +111,9 @@
 .tab-slot, .tab-host { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .tab-parking > .tab-host { position: absolute; inset: 0; }
 .view-empty { justify-content: flex-start; padding-top: 22vh; }
-.column-switcher { display: flex; gap: 4px; flex: none; padding: 4px 8px; border-bottom: 1px solid var(--color-border); background: var(--color-frame); }
+.column-switcher { display: flex; align-items: center; gap: 4px; flex: none; height: var(--column-top-h); padding: 0 8px; border-bottom: 1px solid var(--color-border); background: var(--color-frame); }
+.column-switcher:not([data-hidden-layer] *) { -webkit-app-region: drag; app-region: drag; }
+.column-switcher > button { -webkit-app-region: no-drag; app-region: no-drag; }
 .column-switch { padding: 3px 10px; border-radius: 12px; font-size: 12px; color: var(--color-subtle); }
 .column-switch:hover { background: var(--color-muted); color: var(--color-text); }
 .column-switch[aria-pressed="true"] { color: var(--color-accent); background: var(--color-accent-soft); }
@@ -120,19 +133,23 @@
 .elsewhere-bar { display: flex; align-items: center; gap: 10px; flex: none; padding: 6px 12px; font-size: 12.5px; color: var(--color-accent); background: var(--color-accent-soft); }
 .elsewhere-bar > .truncate { flex: 1 1 0; min-width: 0; }
 
-/* The capsule that stands in for the dock sits at the corner of the main area; over a reader with a bar along its bottom it takes the top corner. */
-.shell-main:has(.tab-panel[data-focused="true"][data-visible="true"] .video-shell:not(:fullscreen)) .chat-capsule,
-.shell-main:has(.tab-panel[data-focused="true"][data-visible="true"] .comic-footer) .chat-capsule,
-.shell-main:has(.tab-panel[data-focused="true"][data-visible="true"] .reader-foot) .chat-capsule { top: 44px; bottom: auto; flex-direction: column-reverse; }
-.shell-main:has(> .chat-capsule):has(.tab-panel[data-focused="true"] :is(.video-shell:not(:fullscreen), .comic-footer, .reader-foot)) .tab-panel[data-focused="true"] :is(.reader-notice, .reader-source) { margin-right: 104px; }
-.shell-main:has(> .chat-capsule) .tab-panel[data-focused="true"] .video-shell:not(:fullscreen) .video-subtitle-notice { right: 104px; }
+/* The capsule that stands in for a folded dock and the right end of the title bar sit in the tab-strip chrome at the top right of the main area, outside
+   `.tab-panel`, so neither covers a video frame, comic page, or reading canvas; the top-right tab/column strip leaves room for both (A-136). */
+.shell-main { --main-top-end: calc(var(--title-end-w, 0px) + var(--capsule-room, 0px)); }
+.shell-main:has(> .chat-capsule) { --capsule-room: var(--capsule-bar-w, 72px); }
+.shell-main .context-host[data-active="true"] .view-dock:not([data-hidden-layer]) > .column-switcher { padding-right: calc(8px + var(--main-top-end)); }
+.shell-main .context-host[data-active="true"] .view-dock:not([data-hidden-layer]):not(:has(> .column-switcher)) .dv-tabs-and-actions-container:has(.tab-actions[data-top-right="true"]) { padding-right: var(--main-top-end); }
+/* Too narrow for tabs beside the end of the title bar: the title bar takes a row of its own over the main area (a drag area, with the end and the capsule
+   in it) and the tabs start under it. */
+.shell-main[data-title-row="own"] { padding-top: var(--column-top-h); --main-top-end: 0px; }
+.shell-main[data-title-row="own"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); -webkit-app-region: drag; app-region: drag; }
 
 /* ---- the tabs, in the dock's own parts ---- */
 .dockview-theme-manga {
-  color-scheme: light;
+  color-scheme: inherit;
   --dv-paneview-active-outline-color: var(--color-accent);
   --dv-tabs-and-actions-container-font-size: 13px;
-  --dv-tabs-and-actions-container-height: 34px;
+  --dv-tabs-and-actions-container-height: var(--column-top-h);
   --dv-drag-over-background-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
   --dv-drag-over-border-color: var(--color-accent);
   --dv-edge-dock-indicator-color: var(--color-accent);
@@ -176,6 +193,11 @@
 }
 .dockview-theme-manga .dv-drop-target-container .dv-drop-target-anchor.dv-drop-target-anchor-container-changed { opacity: 0; transition: none; }
 .dockview-theme-manga .dv-tabs-and-actions-container { border-bottom: 1px solid var(--color-border); }
+/* The tab strips along the window's top edge are the main area's part of the title bar (A-136): their empty part takes hold of the window. A tab cannot
+   be dropped on that empty part (the system has it); it is dropped on another tab or on the column instead. */
+/* Only the view on screen drags: a hidden view keeps its dock laid out under it, and Chromium collects drag areas from hidden boxes too, so a hidden strip's
+   empty part would swallow the clicks on the tabs drawn over it. */
+.dockview-theme-manga .dv-tabs-and-actions-container:not([data-hidden-layer] *):has(.tab-actions[data-top-row="true"]) .dv-void-container { -webkit-app-region: drag; app-region: drag; }
 /* The column holding the focus shows it on the top edge of its front tab. */
 .dockview-theme-manga .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tab.dv-active-tab { box-shadow: inset 0 2px 0 var(--color-accent); }
 .dockview-theme-manga .dv-groupview.dv-inactive-group > .dv-tabs-and-actions-container .dv-tab.dv-active-tab { box-shadow: inset 0 2px 0 var(--color-border); }

@@ -15,7 +15,10 @@ export const PLUGIN_PERMISSIONS = ["network", "files", "library-import"] as cons
 export type PluginPermission = (typeof PLUGIN_PERMISSIONS)[number];
 
 /** The places in the application a plugin can fill. A slot names one job, and the application decides who does it among the enabled plugins. */
-export const PLUGIN_SLOTS = ["acquisition.engine"] as const;
+export const PLUGIN_SLOTS = ["acquisition.engine", "model.provider"] as const;
+
+/** Slots a package fills by declaration alone, with no entry and no process: the host does the work through its own adapters (计划 4.1). */
+export const DECLARATIVE_SLOTS: readonly PluginSlot[] = ["model.provider"];
 export type PluginSlot = (typeof PLUGIN_SLOTS)[number];
 
 /** The parts of the interface a plugin turns on while it is enabled. */
@@ -27,6 +30,7 @@ export type PluginTrust = "first-party" | "user" | "unknown";
 
 const name = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const version = z.string().regex(/^\d{1,6}\.\d{1,6}\.\d{1,6}$/, "a version is three numbers: 1.2.3");
+const hasTraversalSegment = (relPath: string): boolean => relPath.split("/").some((segment) => segment === "." || segment === "..");
 
 export const PluginManifestSchema = z.object({
   format: z.literal(PLUGIN_FORMAT),
@@ -42,13 +46,20 @@ export const PluginManifestSchema = z.object({
   entry: z.string().min(1).max(200).nullable(),
   provides: z.array(z.object({ slot: z.enum(PLUGIN_SLOTS), id: z.string().min(1).max(64).regex(name) }).strict()).max(8),
   facets: z.array(z.enum(PLUGIN_FACETS)).max(PLUGIN_FACETS.length),
+  /** The provider file under the payload (`manga-provider-v1`); required by, and only allowed with, the `model.provider` slot. */
+  provider: z.string().min(1).max(200).regex(/^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.json$/).refine((value) => !hasTraversalSegment(value), "path traversal segments are not allowed").optional(),
 }).strict().superRefine((manifest, ctx) => {
   const dupes = (items: string[]) => new Set(items).size !== items.length;
   if (dupes(manifest.permissions)) ctx.addIssue({ code: "custom", message: "a permission is listed twice", path: ["permissions"] });
   if (dupes(manifest.facets)) ctx.addIssue({ code: "custom", message: "a facet is listed twice", path: ["facets"] });
   if (dupes(manifest.provides.map((item) => `${item.slot}/${item.id}`))) ctx.addIssue({ code: "custom", message: "a slot is filled twice", path: ["provides"] });
-  if (manifest.entry !== null && !/^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:mjs|cjs|js)$/.test(manifest.entry)) ctx.addIssue({ code: "custom", message: "the entry is not a script inside the payload", path: ["entry"] });
-  if (manifest.entry === null && manifest.provides.length) ctx.addIssue({ code: "custom", message: "a package with no entry cannot fill a slot", path: ["provides"] });
+  if (manifest.entry !== null && (!/^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:mjs|cjs|js)$/.test(manifest.entry) || hasTraversalSegment(manifest.entry))) ctx.addIssue({ code: "custom", message: "the entry is not a script inside the payload", path: ["entry"] });
+  const declarative = manifest.provides.filter((item) => DECLARATIVE_SLOTS.includes(item.slot));
+  if (manifest.entry === null && manifest.provides.length > declarative.length) ctx.addIssue({ code: "custom", message: "a package with no entry cannot fill a slot", path: ["provides"] });
+  if (manifest.entry !== null && declarative.length) ctx.addIssue({ code: "custom", message: "a declarative slot is filled only by a package with no entry", path: ["provides"] });
+  if (declarative.length && !manifest.provider) ctx.addIssue({ code: "custom", message: "a provider package names its provider file", path: ["provider"] });
+  if (!declarative.length && manifest.provider) ctx.addIssue({ code: "custom", message: "only a provider package names a provider file", path: ["provider"] });
+  if (declarative.length > 1) ctx.addIssue({ code: "custom", message: "a package provides one provider", path: ["provides"] });
 });
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
 
@@ -65,6 +76,6 @@ export type PluginSignature = z.infer<typeof PluginSignatureSchema>;
 /** Why a package or a request about one was refused; each has a sentence of its own in the plugin page. */
 export const PLUGIN_REFUSALS = [
   "format", "size", "unsafe", "manifest", "entry", "unsigned", "signature", "untrusted", "incompatible", "permissions",
-  "same-version", "older", "unknown", "disabled", "integrity", "no-previous", "running", "key", "source",
+  "same-version", "older", "unknown", "disabled", "integrity", "no-previous", "running", "key", "source", "provider",
 ] as const;
 export type PluginRefusal = (typeof PLUGIN_REFUSALS)[number];

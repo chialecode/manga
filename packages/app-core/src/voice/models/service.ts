@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { MangaError, type LocalAsrModelItem, type LocalAsrModelState } from "@manga/contracts";
 import type { JobQueue } from "../../media/job-queue.ts";
+import { errorMessage, writeFileAtomic } from "../../shared/utils.ts";
 import {
   ASR_MODEL_CATALOG,
   getCatalogModel,
@@ -154,6 +155,12 @@ export class AsrModelService {
       env: options.env,
       maxUncompressedBytes: options.maxUncompressedBytes,
       getAvailableDiskBytes: options.getAvailableDiskBytes,
+      onBeforeReplace: async (modelId) => {
+        // Unload again right before replacing `.onnx` files in case dictation reloaded the model during a long download.
+        if (this.isInstalled(modelId)) {
+          await this.unloadModelHook?.(modelId);
+        }
+      },
     });
   }
 
@@ -328,7 +335,7 @@ export class AsrModelService {
           this.transientStates.delete(model.modelId);
         } else {
           const staging = readStagingState(this.stagingDir, model.modelId);
-          const msg = error instanceof Error ? error.message : String(error);
+          const msg = errorMessage(error);
           this.transientStates.set(model.modelId, {
             state: "failed",
             ...(staging ? { downloadedBytes: staging.bytes, totalBytes: model.archiveBytes } : {}),
@@ -391,9 +398,6 @@ export class AsrModelService {
     }
 
     await this.downloader.cancel(model.modelId);
-    if (this.isInstalled(model.modelId)) {
-      await this.unloadModelHook?.(model.modelId);
-    }
 
     this.transientStates.set(model.modelId, {
       state: "verifying",
@@ -414,6 +418,9 @@ export class AsrModelService {
           tarExe: this.tarExe,
           env: this.env,
           signal: input.signal,
+          onBeforeReplace: async () => {
+            if (this.isInstalled(model.modelId)) await this.unloadModelHook?.(model.modelId);
+          },
         });
         installedBytes = res.installedBytes;
       } else {
@@ -436,6 +443,9 @@ export class AsrModelService {
           copyDirectoryRegularFiles(effectiveSourceDir, stagedImportDir);
           const verified = await verifyRequiredModelFiles(stagedImportDir, model.requiredFiles, input.signal);
           installedBytes = verified.installedBytes;
+          if (this.isInstalled(model.modelId)) {
+            await this.unloadModelHook?.(model.modelId);
+          }
           atomicReplaceDirectory(stagedImportDir, finalModelDir, this.stagingDir);
         } finally {
           fs.rmSync(stagedImportDir, { recursive: true, force: true });
@@ -456,7 +466,7 @@ export class AsrModelService {
       return this.getItem(model.modelId);
     } catch (error) {
       cleanModelStaging(this.stagingDir, model.modelId);
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg = errorMessage(error);
       this.transientStates.set(model.modelId, {
         state: "failed",
         errorMessage: msg,
@@ -601,17 +611,9 @@ export class AsrModelService {
   }
 
   private writeManifest(manifest: InstalledManifestFile): void {
-    fs.mkdirSync(this.stagingDir, { recursive: true });
-    fs.mkdirSync(this.modelsDir, { recursive: true });
-    const tmp = path.join(
-      this.stagingDir,
-      `installed.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.json.tmp`,
-    );
     try {
-      fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), "utf8");
-      fs.renameSync(tmp, this.manifestPath);
+      writeFileAtomic(this.manifestPath, JSON.stringify(manifest, null, 2));
     } catch (error) {
-      fs.rmSync(tmp, { force: true });
       if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOSPC") {
         throw new MangaError("DISK_FULL", "磁盘空间不足，无法更新已安装模型清单", { cause: error });
       }

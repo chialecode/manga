@@ -44,26 +44,47 @@ export function versionsOf(store: DrizzleStore, workId: string): WorkVersion[] {
   return rows.length ? rows.map((row) => ({ workId: row.id, label: row.title, resourceCount: row.n, lastOpenedAt: row.lastOpenedAt, current: row.id === workId })) : alone;
 }
 
-/** How many versions the work's title has; 1 when it stands alone. */
-export function versionCount(store: DrizzleStore, workId: string): number {
-  const entry = store.sqlite.prepare(`SELECT w.media_kind AS kind, ${bangumiEntrySql("w")} AS entry, EXISTS (SELECT 1 FROM resources r WHERE r.work_id = w.id) AS has FROM works w WHERE w.id = ?`).get(workId) as { kind: string; entry: string | null; has: number } | undefined;
-  if (!entry?.entry || !entry.has) return 1;
-  return (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM work_links l JOIN works w ON w.id = l.work_id
-    WHERE l.provider_id = 'bangumi' AND l.link_state = 'linked' AND l.external_id = ? AND w.media_kind = ?
+/** How many versions each work's title has (1 when it stands alone), computed in a single batched pass. */
+export function versionCounts(store: DrizzleStore, workIds: readonly string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!workIds.length) return counts;
+  const marks = workIds.map(() => "?").join(",");
+  const entries = store.sqlite.prepare(`SELECT w.id AS id, w.media_kind AS kind, ${bangumiEntrySql("w")} AS entry,
+      EXISTS (SELECT 1 FROM resources r WHERE r.work_id = w.id) AS has
+    FROM works w WHERE w.id IN (${marks})`).all(...workIds) as Array<{ id: string; kind: string; entry: string | null; has: number }>;
+  const keys = new Map<string, { kind: string; entry: string }>();
+  const workKey = new Map<string, string>();
+  for (const row of entries) {
+    if (!row.entry || !row.has) { counts.set(row.id, 1); continue; }
+    const k = `${row.kind}:${row.entry}`;
+    workKey.set(row.id, k);
+    if (!keys.has(k)) keys.set(k, { kind: row.kind, entry: row.entry });
+  }
+  if (!keys.size) return counts;
+  const entryIds = [...new Set([...keys.values()].map((item) => item.entry))];
+  const entryMarks = entryIds.map(() => "?").join(",");
+  const grouped = store.sqlite.prepare(`SELECT w.media_kind AS kind, l.external_id AS entry, COUNT(*) AS n
+    FROM work_links l JOIN works w ON w.id = l.work_id
+    WHERE l.provider_id = 'bangumi' AND l.link_state = 'linked' AND l.external_id IN (${entryMarks})
       AND l.rowid = (SELECT gl.rowid FROM work_links gl WHERE gl.work_id = w.id AND gl.provider_id = 'bangumi' AND gl.link_state = 'linked' ORDER BY gl.confirmed_at DESC, gl.rowid DESC LIMIT 1)
-      AND EXISTS (SELECT 1 FROM resources r2 WHERE r2.work_id = w.id)`).get(entry.entry, entry.kind) as { n: number }).n || 1;
+      AND EXISTS (SELECT 1 FROM resources r2 WHERE r2.work_id = w.id)
+    GROUP BY w.media_kind, l.external_id`).all(...entryIds) as Array<{ kind: string; entry: string; n: number }>;
+  const totals = new Map(grouped.map((row) => [`${row.kind}:${row.entry}`, row.n]));
+  for (const [id, k] of workKey) counts.set(id, totals.get(k) || 1);
+  return counts;
 }
 
-/** How many of a work's resources were imported on their own, outside every library path. */
-export function outsideCount(store: DrizzleStore, workId: string): number {
-  return (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND ${outsideSql("r")}`).get(workId) as { n: number }).n;
-}
-
-/** How many of a work's resources are in a library path with their file gone (a scan or an opening found it missing): listed and marked as not available (A-113). */
-export function missingCount(store: DrizzleStore, workId: string): number {
-  const located = (available: 0 | 1) => `EXISTS (SELECT 1 FROM resource_revisions v JOIN file_locations fl ON fl.resource_revision_id = v.id WHERE v.resource_id = r.id AND fl.available = ${available})`;
-  return (store.sqlite.prepare(`SELECT COUNT(*) AS n FROM resources r WHERE r.work_id = ? AND NOT ${outsideSql("r")} AND ${located(0)} AND NOT ${located(1)}`).get(workId) as { n: number }).n;
-}
+/**
+ * Whether a resource still has an available file in a library path, or has no file location at all (hosted/pasted content).
+ * Resources whose library-path files are all marked `available = 0` do not match.
+ */
+export const availableResourceSql = (alias: string) => `(NOT EXISTS (
+  SELECT 1 FROM resource_revisions arv JOIN file_locations arl ON arl.resource_revision_id = arv.id
+  WHERE arv.resource_id = ${alias}.id AND arl.library_path_id IS NOT NULL
+) OR EXISTS (
+  SELECT 1 FROM resource_revisions arv2 JOIN file_locations arl2 ON arl2.resource_revision_id = arv2.id
+  WHERE arv2.resource_id = ${alias}.id AND arl2.library_path_id IS NOT NULL AND arl2.available = 1
+))`;
 
 /**
  * Whether anything the user wrote belongs to the work itself: terms and dictionary entries, edited or locked fields, a note or a recording
@@ -76,11 +97,31 @@ export const userContentSql = (alias: string, leaving = "NULL") => `(EXISTS (SEL
   OR EXISTS (SELECT 1 FROM content_objects un WHERE un.work_id = ${alias}.id AND un.deleted_at IS NULL)
   OR EXISTS (SELECT 1 FROM capture_sessions uc WHERE uc.work_id = ${alias}.id)
   OR EXISTS (SELECT 1 FROM work_files uf WHERE uf.work_id = ${alias}.id AND (uf.resource_id IS NULL OR uf.resource_id IS NOT ${leaving}))
-  OR EXISTS (SELECT 1 FROM agent_sessions us WHERE us.kind = 'work' AND us.target_id = ${alias}.id AND EXISTS (SELECT 1 FROM agent_runs ur WHERE ur.session_id = us.id)))`;
+  OR EXISTS (SELECT 1 FROM agent_sessions us WHERE us.kind = 'work' AND us.target_id = ${alias}.id AND EXISTS (SELECT 1 FROM agent_runs ur WHERE ur.session_id = us.id))
+  OR ${alias}.cover_state IN ('user', 'locked')
+  OR EXISTS (SELECT 1 FROM covers ucv WHERE ucv.work_id = ${alias}.id AND ucv.source = 'user')
+  OR EXISTS (SELECT 1 FROM project_materials upm WHERE upm.kind = 'work' AND upm.target_id = ${alias}.id))`;
 
 export function workHoldsUserContent(store: DrizzleStore, workId: string, leavingResourceId?: string): boolean {
   // What was made from a resource that is leaving goes with it, so it does not keep the work it leaves.
   const row = store.sqlite.prepare(`SELECT ${userContentSql("w", "?")} AS held FROM works w WHERE w.id = ?`).get(leavingResourceId ?? null, workId) as { held: number } | undefined;
+  return row?.held === 1;
+}
+
+/** Whether anything the user made belongs to a resource itself (bookmarks, notes, recordings, screenshots, files, conversations, confirmed danmaku, project materials). */
+export const resourceUserContentSql = (alias: string) => `(EXISTS (SELECT 1 FROM bookmarks ub WHERE ub.resource_id = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM content_objects uco WHERE uco.deleted_at IS NULL AND json_extract(uco.scope_json, '$.resourceId') = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM refs urf JOIN anchors ua ON ua.id = urf.to_id JOIN content_objects uco2 ON uco2.id = urf.from_object_id WHERE urf.to_kind = 'anchor' AND ua.resource_id = ${alias}.id AND uco2.deleted_at IS NULL)
+  OR EXISTS (SELECT 1 FROM capture_events uce JOIN capture_sessions ucs ON ucs.id = uce.session_id WHERE uce.resource_id = ${alias}.id AND ucs.stage NOT IN ('cancelled', 'no_speech'))
+  OR EXISTS (SELECT 1 FROM screenshots ush WHERE ush.resource_id = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM rough_cut_clips urcc WHERE urcc.resource_id = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM work_files uwf WHERE uwf.resource_id = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM agent_sessions uas WHERE uas.kind = 'resource' AND uas.target_id = ${alias}.id AND EXISTS (SELECT 1 FROM agent_runs uar WHERE uar.session_id = uas.id))
+  OR EXISTS (SELECT 1 FROM danmaku_matches udm JOIN resource_revisions udv ON udv.id = udm.resource_revision_id WHERE udv.resource_id = ${alias}.id AND NOT (udm.confirmed = 0 AND udm.method = 'bangumi'))
+  OR EXISTS (SELECT 1 FROM project_materials upm WHERE upm.kind = 'resource' AND upm.target_id = ${alias}.id))`;
+
+export function resourceHoldsUserContent(store: DrizzleStore, resourceId: string): boolean {
+  const row = store.sqlite.prepare(`SELECT ${resourceUserContentSql("r")} AS held FROM resources r WHERE r.id = ?`).get(resourceId) as { held: number } | undefined;
   return row?.held === 1;
 }
 

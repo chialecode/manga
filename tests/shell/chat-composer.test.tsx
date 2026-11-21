@@ -65,6 +65,7 @@ function Harness(props: {
   initial?: Partial<ComposerState>;
   probe: Probe;
   running?: boolean;
+  sending?: boolean;
   tags?: readonly QuoteTag[];
   tasks?: QuickTask[];
 }) {
@@ -89,7 +90,7 @@ function Harness(props: {
     running: props.running ?? false,
     onStop: () => undefined,
     onSend: () => { props.probe.sent += 1; },
-    sending: false,
+    sending: props.sending ?? false,
     plus: { attach, online: props.online ?? false, subtitle: context?.kind === "video", allowOnline: composer.allowOnline, subtitleAheadMin: composer.subtitleAheadMin, materials: composer.materials.length + composer.noteMaterials.length + composer.recordings.length },
     onAttach: (what) => props.probe.attached.push(what),
     onToggleOnline: () => setComposer((current) => ({ ...current, allowOnline: !current.allowOnline })),
@@ -243,6 +244,21 @@ describe("the right pane's input: what goes with the next task", () => {
     expect(probe.sent).toBe(0);
     fireEvent.keyDown(input, { key: "Enter" });
     expect(probe.sent).toBe(1);
+  });
+
+  it("ignores Enter send while sending or while an ask task is already running (US-08)", () => {
+    const busySending = newProbe();
+    busySending.mode = "ask";
+    const view = render(<Harness context={comicPlace()} probe={busySending} initial={{ draft: "你好" }} sending />);
+    fireEvent.keyDown(screen.getByTestId("agent-composer"), { key: "Enter" });
+    expect(busySending.sent).toBe(0);
+    view.unmount();
+
+    const busyRunning = newProbe();
+    busyRunning.mode = "ask";
+    render(<Harness context={comicPlace()} probe={busyRunning} initial={{ draft: "追问" }} running />);
+    fireEvent.keyDown(screen.getByTestId("agent-composer"), { key: "Enter" });
+    expect(busyRunning.sent).toBe(0);
   });
 });
 

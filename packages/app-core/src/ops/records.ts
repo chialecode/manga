@@ -1,5 +1,6 @@
 import { CAPTURE_STAGES } from "@manga/contracts";
 import type { DrizzleStore } from "@manga/storage-drizzle";
+import { escapeLike } from "../shared/utils.ts";
 
 export type RecordItem = {
   kind: "note" | "recording";
@@ -23,7 +24,7 @@ export type RecordItem = {
 };
 
 const AUDIO_STATES = ["staged", "retained", "cleaned", "none"];
-const like = (value: string) => `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+const like = (value: string) => `%${escapeLike(value)}%`;
 
 /**
  * Every note and recording in one filterable list (the settings "records" page). Notes that were deleted are kept hidden but not
@@ -53,24 +54,27 @@ export function recordsList(store: DrizzleStore, filter: { type?: "all" | "note"
     else if (AUDIO_STATES.includes(filter.state)) { where.push("x.kind = 'recording' AND x.audio_state = ?"); params.push(filter.state); }
   }
   if (filter.q) {
-    where.push("(x.title LIKE ? ESCAPE '\\' OR x.preview LIKE ? ESCAPE '\\' OR x.body LIKE ? ESCAPE '\\' OR w.title LIKE ? ESCAPE '\\')");
+    where.push("(x.title LIKE ? ESCAPE '\\' OR x.preview LIKE ? ESCAPE '\\' OR x.body LIKE ? ESCAPE '\\' OR w.title LIKE ? ESCAPE '\\' OR rw.title LIKE ? ESCAPE '\\')");
     const needle = like(filter.q);
-    params.push(needle, needle, needle, needle);
+    params.push(needle, needle, needle, needle, needle);
   }
   const from = `FROM (${parts.join(" UNION ALL ")}) x LEFT JOIN works w ON w.id = x.work_id LEFT JOIN removed_works rw ON rw.id = x.work_id LEFT JOIN resources r ON r.id = x.resource_id WHERE ${where.join(" AND ")}`;
   const total = (store.sqlite.prepare(`SELECT COUNT(*) AS n ${from}`).get(...params) as { n: number }).n;
-  const limit = Math.min(100, filter.limit ?? 30);
-  const rows = store.sqlite.prepare(`SELECT x.kind, x.id, x.title, x.preview, x.at, x.deleted_at, x.work_id, x.tags, x.stage, x.audio_state, x.duration_ms, x.resource_id,
+  const limit = Math.max(1, Math.min(100, Math.floor(filter.limit ?? 30)));
+  const offset = Math.max(0, Math.floor(filter.offset ?? 0));
+  const rows = store.sqlite.prepare(`SELECT x.kind, x.id, x.title,
+      CASE WHEN x.kind = 'note' THEN x.preview ELSE COALESCE((SELECT COALESCE(ts.revised_text, ts.text) FROM transcript_segments ts WHERE ts.session_id = x.id AND ts.state = 'done' ORDER BY ts.start_ms, ts.seq LIMIT 1), '') END AS preview,
+      x.at, x.deleted_at, x.work_id, x.tags, x.stage, x.audio_state, x.duration_ms, x.resource_id,
       COALESCE(w.title, rw.title) AS work_title, COALESCE(w.media_kind, rw.media_kind, r.kind) AS media_kind, r.title AS resource_title,
       CASE WHEN x.kind = 'note' THEN EXISTS (SELECT 1 FROM refs f WHERE f.from_object_id = x.id AND f.to_kind = 'anchor') ELSE x.resource_id IS NOT NULL END AS has_source
-      ${from} ORDER BY x.at DESC, x.id DESC LIMIT ? OFFSET ?`).all(...params, limit, filter.offset ?? 0) as Array<{
+      ${from} ORDER BY x.at DESC, x.id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as Array<{
     kind: "note" | "recording"; id: string; title: string; preview: string; at: string; deleted_at: string | null; work_id: string | null; tags: string; stage: string | null; audio_state: string | null;
     duration_ms: number | null; resource_id: string | null; work_title: string | null; media_kind: string | null; resource_title: string | null; has_source: number;
   }>;
   const items = rows.map((row): RecordItem => {
     let preview = "";
     if (row.kind === "note") { try { preview = (JSON.parse(row.preview) as { text?: string }).text ?? ""; } catch { preview = ""; } }
-    else preview = (store.sqlite.prepare("SELECT COALESCE(revised_text, text) AS text FROM transcript_segments WHERE session_id = ? AND state = 'done' ORDER BY start_ms, seq LIMIT 1").get(row.id) as { text?: string } | undefined)?.text ?? "";
+    else preview = row.preview;
     let tags: string[] = [];
     try { tags = JSON.parse(row.tags) as string[]; } catch { tags = []; }
     return {

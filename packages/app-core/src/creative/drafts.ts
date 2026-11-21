@@ -110,13 +110,15 @@ export class DraftService {
   }
 
   list(projectId?: string): { drafts: DraftSummary[] } {
-    const rows = (projectId
-      ? this.store.sqlite.prepare("SELECT * FROM drafts WHERE project_id = ? ORDER BY updated_at DESC, id").all(projectId)
-      : this.store.sqlite.prepare("SELECT * FROM drafts ORDER BY updated_at DESC, id").all()) as DraftRow[];
+    const sql = `SELECT d.id, d.project_id, d.title, d.version, LENGTH(d.text) AS chars, d.created_at, d.updated_at,
+        (SELECT COUNT(*) FROM draft_suggestions s WHERE s.draft_id = d.id AND s.status IN ('pending','running')) AS pending
+      FROM drafts d ${projectId ? "WHERE d.project_id = ?" : ""} ORDER BY d.updated_at DESC, d.id`;
+    const rows = (projectId ? this.store.sqlite.prepare(sql).all(projectId) : this.store.sqlite.prepare(sql).all()) as Array<{
+      id: string; project_id: string | null; title: string; version: number; chars: number; created_at: string; updated_at: string; pending: number;
+    }>;
     return {
       drafts: rows.map((row) => ({
-        id: row.id, projectId: row.project_id, title: row.title, version: row.version, chars: [...row.text].length, createdAt: row.created_at, updatedAt: row.updated_at,
-        pending: (this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM draft_suggestions WHERE draft_id = ? AND status IN ('pending','running')").get(row.id) as { n: number }).n,
+        id: row.id, projectId: row.project_id, title: row.title, version: row.version, chars: row.chars, createdAt: row.created_at, updatedAt: row.updated_at, pending: row.pending,
       })),
     };
   }
@@ -143,6 +145,15 @@ export class DraftService {
     this.row(draftId);
     this.store.sqlite.prepare("UPDATE drafts SET title = ?, updated_at = ? WHERE id = ?").run(title, new Date().toISOString(), draftId);
     return this.doc(this.row(draftId));
+  }
+
+  /** Aborts any in-flight suggestion requests belonging to drafts of `projectId` (called before deleting the project). */
+  abortForProject(projectId: string): void {
+    if (!this.running.size) return;
+    const rows = this.store.sqlite.prepare(
+      "SELECT s.id FROM draft_suggestions s JOIN drafts d ON d.id = s.draft_id WHERE d.project_id = ?",
+    ).all(projectId) as Array<{ id: string }>;
+    for (const row of rows) this.running.get(row.id)?.abort();
   }
 
   delete(draftId: string): { draftId: string; versions: number; suggestions: number } {
@@ -207,8 +218,8 @@ export class DraftService {
   }
 
   private versions(row: DraftRow): VersionSummary[] {
-    const rows = this.store.sqlite.prepare("SELECT version, label, text, created_at FROM draft_versions WHERE draft_id = ? ORDER BY version DESC").all(row.id) as Array<{ version: number; label: string; text: string; created_at: string }>;
-    const list = rows.map((item) => ({ version: item.version, label: item.label, chars: [...item.text].length, createdAt: item.created_at, current: item.version === row.version }));
+    const rows = this.store.sqlite.prepare("SELECT version, label, LENGTH(text) AS chars, created_at FROM draft_versions WHERE draft_id = ? ORDER BY version DESC").all(row.id) as Array<{ version: number; label: string; chars: number; created_at: string }>;
+    const list = rows.map((item) => ({ version: item.version, label: item.label, chars: item.chars, createdAt: item.created_at, current: item.version === row.version }));
     // The version being edited is always listed, even before the history holds its text.
     if (!list.some((item) => item.current)) list.unshift({ version: row.version, label: "", chars: [...row.text].length, createdAt: row.updated_at, current: true });
     return list;
@@ -316,10 +327,18 @@ export class DraftService {
     return row;
   }
 
-  private viewOf(row: SuggestionRow, draft: DraftRow): SuggestionView {
+  private viewOf(
+    row: SuggestionRow,
+    draft: DraftRow,
+    precomputed?: Array<{ snapshot: SourceSnapshot; state: SourceState; after: string | null }>,
+  ): SuggestionView {
     const model = row.model_json ? JSON.parse(row.model_json) as ModelInfo : { connectionId: null };
-    const sources = this.compare(JSON.parse(row.sources_json) as SourceSnapshot[], draft);
     const open = row.status === "pending" || row.status === "running";
+    const snapshots = precomputed ? null : JSON.parse(row.sources_json) as SourceSnapshot[];
+    const sources = precomputed
+      ?? (open
+        ? this.compare(snapshots!, draft)
+        : snapshots!.map((snapshot) => ({ snapshot, state: "same" as const, after: null })));
     return {
       id: row.id, draftId: row.draft_id, kind: row.kind, instruction: row.instruction, status: row.status, baseVersion: row.base_version, adoptedVersion: row.adopted_version,
       createdAt: row.created_at, updatedAt: row.updated_at, connectionId: model.connectionId, model: model.model ?? null, by: model.by ?? null, range: model.range ?? null, language: model.language ?? null,
@@ -339,9 +358,9 @@ export class DraftService {
   suggestion(suggestionId: string): { suggestion: SuggestionDetail } {
     const row = this.suggestionRow(suggestionId);
     const draft = this.row(row.draft_id);
-    const view = this.viewOf(row, draft);
     const snapshots = JSON.parse(row.sources_json) as SourceSnapshot[];
     const compared = this.compare(snapshots, draft);
+    const view = this.viewOf(row, draft, compared);
     const model = row.model_json ? JSON.parse(row.model_json) as ModelInfo : { connectionId: null };
     return {
       suggestion: {
@@ -426,11 +445,10 @@ export class DraftService {
     const snapshots = JSON.parse(row.sources_json) as SourceSnapshot[];
     const { system, user } = prompt(row.kind, row.instruction, row.base_text, model.range, model.language, snapshots);
     const finish = (status: DraftSuggestionStatus, patch: Partial<ModelInfo>, result = "") => {
-      // A suggestion that was deleted with its draft while it was being written has nowhere to go.
-      if (!this.store.sqlite.prepare("SELECT 1 FROM draft_suggestions WHERE id = ?").get(id)) return;
-      this.store.sqlite.prepare("UPDATE draft_suggestions SET status = ?, result_text = ?, model_json = ?, updated_at = ? WHERE id = ?")
-        .run(status, result, JSON.stringify({ ...model, ...patch, finishedAt: new Date().toISOString() }), new Date().toISOString(), id);
-      this.hooks.notify?.("draft.suggestion", { draftId: row.draft_id, suggestionId: id, status });
+      // Only settle a row that is still running (deleted drafts or synchronously cancelled suggestions stay as-is).
+      const changed = this.store.sqlite.prepare("UPDATE draft_suggestions SET status = ?, result_text = ?, model_json = ?, updated_at = ? WHERE id = ? AND status = 'running'")
+        .run(status, result, JSON.stringify({ ...model, ...patch, finishedAt: new Date().toISOString() }), new Date().toISOString(), id).changes;
+      if (changed === 1) this.hooks.notify?.("draft.suggestion", { draftId: row.draft_id, suggestionId: id, status });
     };
     try {
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(RUN_TIMEOUT_MS)]);
@@ -449,9 +467,11 @@ export class DraftService {
   cancel(suggestionId: string): { suggestion: SuggestionView } {
     const row = this.suggestionRow(suggestionId);
     if (row.status !== "running") throw new MangaError("VALIDATION_ERROR", "only a suggestion that is being written can be cancelled", { details: { reason: "state", status: row.status } });
+    const now = new Date().toISOString();
+    const changed = this.store.sqlite.prepare("UPDATE draft_suggestions SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'running'").run(now, suggestionId).changes;
     const controller = this.running.get(suggestionId);
     if (controller) controller.abort();
-    else this.store.sqlite.prepare("UPDATE draft_suggestions SET status = 'cancelled', updated_at = ? WHERE id = ?").run(new Date().toISOString(), suggestionId);
+    if (changed === 1) this.hooks.notify?.("draft.suggestion", { draftId: row.draft_id, suggestionId, status: "cancelled" });
     return { suggestion: this.viewOf(this.suggestionRow(suggestionId), this.row(row.draft_id)) };
   }
 
@@ -462,9 +482,11 @@ export class DraftService {
     const draft = this.row(row.draft_id);
     if (draft.version !== row.base_version && !force) throw new MangaError("REVISION_CONFLICT", "the draft changed after this suggestion was made", { details: { reason: "draftChanged", baseVersion: row.base_version, version: draft.version } });
     const model = JSON.parse(row.model_json ?? "{}") as ModelInfo;
+    const nextText = this.applied(row, draft, model);
+    if (nextText.length > DRAFT_TEXT_LIMIT) throw new MangaError("VALIDATION_ERROR", "the draft is too long", { details: { reason: "limit" } });
     this.store.sqlite.transaction(() => {
       this.keep(draft, `采纳前：${kindName(row.kind)}`);
-      this.store.sqlite.prepare("UPDATE drafts SET text = ?, version = version + 1, updated_at = ? WHERE id = ?").run(this.applied(row, draft, model), new Date().toISOString(), draft.id);
+      this.store.sqlite.prepare("UPDATE drafts SET text = ?, version = version + 1, updated_at = ? WHERE id = ?").run(nextText, new Date().toISOString(), draft.id);
       const next = this.row(draft.id);
       this.keep(next, `采纳：${kindName(row.kind)}`);
       this.store.sqlite.prepare("UPDATE draft_suggestions SET status = 'adopted', adopted_version = ?, model_json = ?, updated_at = ? WHERE id = ?")

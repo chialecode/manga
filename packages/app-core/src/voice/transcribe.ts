@@ -97,7 +97,7 @@ export class VoicePipeline {
         await this.finalizeAudio(id, run.controller.signal);
         return;
       }
-      if (options.retryFailed) this.host.db.prepare("UPDATE transcript_segments SET state = 'pending', error_json = NULL WHERE session_id = ? AND state = 'failed'").run(id);
+      if (options.retryFailed) this.host.db.prepare(`UPDATE transcript_segments SET state = 'pending', error_json = ${KEEP_ECHO_MARK} WHERE session_id = ? AND state = 'failed'`).run(id);
       const asr = jobs.submit({ lane: "net", kind: "capture-asr", key: `capture:${id}:asr`, owner: VOICE_MODULE, run: ({ signal, progress }) => this.asrStage(run, AbortSignal.any([signal, run.controller.signal]), options.connectionId, progress) });
       await asr.promise;
     } catch (error) {
@@ -141,13 +141,35 @@ export class VoicePipeline {
     if (!vad) return 0;
     const connection = this.host.asr.resolve(connectionId);
     const chunks = planChunks(vad.segments, { maxChunkMs: maxChunkMsForBytes(connection?.maxUploadBytes) });
+    const plannedKeys = new Set(chunks.map((chunk) => chunk.key));
     const db = this.host.db;
-    const known = new Set((db.prepare("SELECT chunk_key FROM transcript_segments WHERE session_id = ?").all(id) as Array<{ chunk_key: string }>).map((row) => baseKey(row.chunk_key)));
+    const existing = db.prepare("SELECT id, chunk_key, start_ms, end_ms, state FROM transcript_segments WHERE session_id = ?").all(id) as Array<{
+      id: string;
+      chunk_key: string;
+      start_ms: number;
+      end_ms: number;
+      state: string;
+    }>;
+    // Remove unstarted pending blocks whose chunk boundaries changed (e.g. a smaller maxUploadBytes connection was selected).
+    const stalePendingIds: string[] = [];
+    const preserved: typeof existing = [];
+    for (const row of existing) {
+      if (row.state === "pending" && !plannedKeys.has(baseKey(row.chunk_key))) {
+        stalePendingIds.push(row.id);
+      } else {
+        preserved.push(row);
+      }
+    }
+    const known = new Set(preserved.map((row) => baseKey(row.chunk_key)));
+    const overlapsPreserved = (chunk: PlannedChunk) =>
+      preserved.some((row) => !(chunk.endMs <= row.start_ms || chunk.startMs >= row.end_ms));
     const now = new Date().toISOString();
+    const remove = db.prepare("DELETE FROM transcript_segments WHERE id = ?");
     const insert = db.prepare("INSERT OR IGNORE INTO transcript_segments(id, session_id, seq, chunk_key, start_ms, end_ms, text, state, precision, calibrated, anchors_json, attempts, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     db.transaction(() => {
+      for (const staleId of stalePendingIds) remove.run(staleId);
       chunks.forEach((chunk, index) => {
-        if (known.has(chunk.key)) return;
+        if (known.has(chunk.key) || overlapsPreserved(chunk)) return;
         insert.run(createId("seg"), id, index * 1000, chunk.key, chunk.startMs, chunk.endMs, "", "pending", "chunk", 0, "[]", 0, now, now);
       });
     })();

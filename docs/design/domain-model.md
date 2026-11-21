@@ -514,6 +514,18 @@ interface CapturePositionEvent {
 
 迁移的用例（`tests/library/schema-v16-migration.test.ts`，合成 v15 资料含手写词条、带 `heard` 词条与自动词条）：迁移前有 `manga.sqlite.premigrate-v15` 备份、迁移后新增列与四张表及索引齐全、`category` 与 `dictionary_aliases` 回填准确且手写优先不变、中断后再次启动完成、失败回滚到 v15、第二次启动幂等、v17 资料被拒绝打开。
 
+**库结构增量（版本 16 → 17，A-133、A-134）。** 一次迁移完成，做法同上（迁移前备份 `manga.sqlite.premigrate-v16`、单事务、失败回滚、中断后重做、只认识 v16 的版本拒绝打开 v17 的资料）。
+
+| 分组 | 新增或改动 | 说明 |
+| --- | --- | --- |
+| 提供者账户 | `provider_accounts(id PRIMARY KEY, provider_ref, label, credential_ref, created_at)` | 一个提供者插件（`provider_ref` = 插件 id / 提供者 id）下的一把密钥。密钥本身在凭据保险库里，表里只有引用；账户下所有连接引用同一个凭据，改一次全部生效；最后一个连接删除时账户与凭据一起删除 |
+| 连接归属 | `provider_connections` 增 `account_id`、`provider_model`（可空），索引 `provider_connections_account`；旧连接的 `adapter_id` 回填为 `openai-http` | 从提供者加入的连接记下账户与它在提供者目录里的模型 id，地址与模型由提供者文件决定、不能改成别的；手动添加的连接两列为空、行为不变。用途新增 `speech`（语音合成）与 `search`（网页搜索） |
+| 服务用量 | `service_usage(id PRIMARY KEY, connection_id, model_id, service, task, unit, quantity, cost_usd, status, error_code, run_id, created_at)`，索引 `service_usage_created` | 语音识别（秒）、语音合成（计费字数）、网页搜索（次）每次调用一行，按提供者文件的价格估算费用；不记识别的文字、朗读的文字与搜索词。只在本机，不进资料包与项目包 |
+
+对话模型的回答另在 `agent_messages.payload_json` 里保存思考内容（`reasoning`）、服务自己的搜索（`serverToolCalls`，原样）、搜索进度与引用来源；它们是这条回答的一部分，随会话删除，不新增表。朗读的音频只在内存里，不写盘。
+
+迁移的用例（`tests/library/schema-v17-migration.test.ts`，合成 v16 资料含手动添加的连接与它们的密钥）：迁移前有 `manga.sqlite.premigrate-v16` 备份、迁移后新增列、两张表与索引齐全、连接与密钥一条不少、中断后再次启动完成、第二次启动不再改动、新建资料与迁移结果结构一致、只认识 v16 的版本拒绝打开。
+
 创作对象的规范载荷初期可以保存在 content_object 的版本化 JSON 中，附件另存文件；文本块和检索关系建立派生投影。以后迁移为规范化子表时，保持公共对象和导出格式兼容。
 
 reference 是权威关系表，载荷仅保存关联 ID。对象修订和关系变化在统一事务内提交。列表查询只读取摘要，不加载所有大载荷。

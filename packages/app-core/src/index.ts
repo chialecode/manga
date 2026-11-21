@@ -5,7 +5,7 @@ export { TestVault, UnavailableVault, ElectronSafeStorageVault, type CredentialV
 export { GrantRegistry } from "./grants.ts";
 export { exportLibraryPackage, exportLibraryPackageCancellable, importLibraryPackage, recoverOrRollback, previewLibraryPackage, importLibraryPackageResolved } from "./domain/library-package.ts";
 export { parseDocument, parseDocumentBytes, parseEpubBytes, parseMobiBytes, parsePdfBytes, parseTextBytes, buildEpubFixture, buildMobiFixture, buildPdfFixture, buildPdfObjectStreamFixture, buildZip, readZip, palmdocDecompress, htmlToText, htmlImageSources, htmlSvgImageHrefs, sniffFormat } from "./domain/formats.ts";
-export { applyNoteOp, coerceNoteDocument, notePlainText, uniqueBlockIds, isKnownBlockType } from "./domain/note-document.ts";
+export { applyNoteOp, coerceNoteDocument, notePlainText, uniqueBlockIds } from "./domain/note-document.ts";
 export { resolveTextLocator, findQuoteMatches } from "./domain/anchors.ts";
 export { deriveShell, reduceHover, initialHover, defaultShell, clampSide, dragLimit, RAIL_WIDTH, TOP_ROW_HEIGHT, MAIN_FLOOR, SIDE_WIDTH } from "./domain/shell-layout.ts";
 export type { ShellChrome, ShellViewport, OverlaySide, HoverState } from "./domain/shell-layout.ts";

@@ -256,7 +256,10 @@ export class AcquisitionService {
   /** Runs `work` after what was started for the same job before it, so a command and an engine event cannot interleave. */
   private serial<T>(id: string, work: () => Promise<T>): Promise<T> {
     const next = (this.chains.get(id) ?? Promise.resolve()).then(work, work);
-    this.chains.set(id, next.catch(() => undefined));
+    const tail = next.catch(() => undefined).finally(() => {
+      if (this.chains.get(id) === tail) this.chains.delete(id);
+    });
+    this.chains.set(id, tail);
     return next;
   }
 
@@ -412,9 +415,10 @@ export class AcquisitionService {
       const row = this.row(jobId);
       if (row.state !== "choosing" && row.state !== "downloading") throw new MangaError("VALIDATION_ERROR", "files can be chosen while the download is waiting for them or running", { details: { reason: "state", state: row.state } });
       const entries = this.entries(jobId);
+      const byIdx = new Map(entries.map((entry) => [entry.idx, entry]));
       const chosen = [...new Set(indexes)].sort((a, b) => a - b);
-      if (chosen.some((index) => !entries.some((entry) => entry.idx === index))) throw new MangaError("VALIDATION_ERROR", "a chosen file is not in the torrent", { details: { reason: "index" } });
-      const bytes = chosen.reduce((sum, index) => sum + entries.find((entry) => entry.idx === index)!.length, 0);
+      if (chosen.some((index) => !byIdx.has(index))) throw new MangaError("VALIDATION_ERROR", "a chosen file is not in the torrent", { details: { reason: "index" } });
+      const bytes = chosen.reduce((sum, index) => sum + byIdx.get(index)!.length, 0);
       const nextBudget = budget ? this.cleanBudget(budget) : this.budgetOf(row);
       if (nextBudget.maxBytes && bytes > nextBudget.maxBytes) throw new MangaError("QUOTA_EXCEEDED", "the chosen files are larger than the limit set for this download", { details: { bytes, maxBytes: nextBudget.maxBytes } });
       const room = this.free(this.dataDir(jobId));
@@ -574,7 +578,7 @@ export class AcquisitionService {
 
   private onEvent(pluginId: string, name: string, payload: unknown): void {
     if (this.disposed || !name.startsWith("acq.") || typeof payload !== "object" || !payload) return;
-    const p = payload as Record<string, any>;
+    const p = payload as Record<string, unknown>;
     if (name === "acq.engineError") { this.o.notify("acquisition.engineError", { pluginId }); return; }
     const jobId = typeof p.jobId === "string" ? p.jobId : null;
     if (!jobId || !this.active.has(jobId)) return;
@@ -593,7 +597,7 @@ export class AcquisitionService {
     void this.call(row.engine, "engine.remove", { jobId: row.id, deleteFiles: false }).then(() => this.applyLimits(row.engine)).catch(() => undefined);
   }
 
-  private handle(row: JobRow, name: string, p: Record<string, any>): void {
+  private handle(row: JobRow, name: string, p: Record<string, unknown>): void {
     const id = row.id;
     // A finished download that is being shared sends progress and its end; the file list it also sends is already known.
     if (row.state === "done" && !["acq.progress", "acq.error", "acq.seedStopped"].includes(name)) return;
@@ -705,12 +709,13 @@ export class AcquisitionService {
     } else if (!fingerprint) throw new Failure("STAGED_MISSING", "a downloaded file is no longer there");
     // Several attempts: whatever is at a name when it is time to write may be a file that appeared in the meantime.
     let target = entry.target_rel;
+    let placed = false;
     for (let attempt = 0; attempt < 5; attempt += 1) {
       if (target) {
         const abs = absUnder(root, target);
         if (fs.existsSync(abs)) {
           // Published before and the record of it was lost: this very file is there already.
-          if (fs.statSync(abs).size === entry.length && (await sha256File(abs)) === fingerprint) break;
+          if (fs.statSync(abs).size === entry.length && (await sha256File(abs)) === fingerprint) { placed = true; break; }
           target = null;
         } else if (!fs.existsSync(src)) throw new Failure("STAGED_MISSING", "a downloaded file is no longer there");
       }
@@ -719,19 +724,20 @@ export class AcquisitionService {
         if (!placement) { update({ publish_state: "conflict", note: "no-name" }); throw new Failure("PUBLISH_CONFLICT", "no free name was found for a file"); }
         target = placement.rel;
         update({ target_rel: target });
-        if (placement.adopted) break;
+        if (placement.adopted) { placed = true; break; }
       }
       const abs = absUnder(root, target);
       if (fs.existsSync(abs)) continue;
       try {
         await publishFile(src, abs, { length: entry.length, fingerprint: fingerprint! }, { forceCopy: this.o.forceCopy, freeBytes: (dir) => this.free(dir), tempName: (to) => path.join(path.dirname(to), `.${path.basename(to)}.${id.slice(-8)}-${entry.idx}.publish`) });
+        placed = true;
         break;
       } catch (error) {
         if (error instanceof TargetTaken) { target = null; continue; }
         throw error;
       }
     }
-    if (!target) throw new Failure("PUBLISH_CONFLICT", "no free name was found for a file");
+    if (!placed || !target) throw new Failure("PUBLISH_CONFLICT", "no free name was found for a file");
     await this.o.fault?.("after-publish", { jobId: id, index: entry.idx });
     update({ publish_state: "published", target_rel: target, note: null });
     fs.rmSync(src, { force: true });

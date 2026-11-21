@@ -1,38 +1,38 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Camera, Captions, ChevronLeft, ChevronRight, Fullscreen, Gauge, Languages, ListVideo, Maximize2, Minimize2, MoreHorizontal, Pause, Play, Repeat, Shrink, StepBack, StepForward } from "lucide-react";
+import { Camera, Captions, Fullscreen, Gauge, Languages, ListVideo, Maximize2, Minimize2, MoreHorizontal, Pause, Play, Repeat, Shrink } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { Menu, type MenuGroup, type MenuItem } from "../components/menu.tsx";
-import { popupOpen } from "../components/popup.tsx";
 import type { SourceCard } from "../lib/types.ts";
+import { isImeEvent } from "../lib/ime.ts";
 import { readerContext } from "../lib/reader-context.ts";
 import { useTab } from "../workspace/tab-context.tsx";
 import { tabMarks } from "../workspace/marks.ts";
 import { useKeyTable } from "../lib/key-table.tsx";
 import { quoteTags, useQuoteTags } from "../lib/quote-tags.ts";
+import { useAutoHide } from "../reader/use-auto-hide.ts";
 import { SourceBanner } from "./source-banner.tsx";
 import { isTypingTarget, useFullscreen } from "./use-fullscreen.ts";
 import { useWindowFullscreen } from "./window-fullscreen.tsx";
-import { MatchLink } from "./match-link.tsx";
 import { SubtitleLayer } from "./subtitle-layer.tsx";
 import { normalizeStyle } from "./subtitle-model.ts";
-import { pageInk, shownLines } from "./subtitle-raster.ts";
 import { useSubtitles } from "./use-subtitles.ts";
 import { useVideoHealth } from "./use-video-health.ts";
 import { videoFacts } from "../lib/video-facts.ts";
 import { useVideoCapture } from "./use-video-capture.ts";
-import { captureVideoFrame } from "./screenshot-capture.ts";
+import { useVideoScreenshot } from "./use-video-screenshot.ts";
 import type { ScreenshotPort } from "../hooks/use-screenshots.tsx";
 import { useVideoPlayback, type ProgressReport } from "./use-video-playback.ts";
 import { useVideoSource } from "./use-video-source.ts";
 import {
-  clampRate, displayFrame, DUCK_FACTOR, formatClock, intervalOf, parseClock, stepRate, subtitleRenderer, videoKeyAction,
+  clampRate, displayFrame, DUCK_FACTOR, formatClock, intervalOf, parseClock, stepRate, videoKeyAction,
   type TimeRange,
 } from "./video-model.ts";
-import { createArrowKeys } from "./video-keys.ts";
+import { createArrowKeys, type ArrowSide } from "./video-keys.ts";
 import { SeekBar, type SeekMarker } from "./video-seekbar.tsx";
 import { VideoStatus } from "./video-status.tsx";
 import { VideoTime } from "./video-time.tsx";
 import { stepVolume, VolumeControl } from "./video-volume.tsx";
+import { VideoMorePopup } from "./video-more-popup.tsx";
 import { DanmakuLayer, type DanmakuCapture } from "./danmaku-layer.tsx";
 import { DanmakuControl } from "./danmaku-controls.tsx";
 import { shownCount, sourcesOf } from "./danmaku-model.ts";
@@ -111,6 +111,7 @@ export function VideoPlayer(props: {
   const target = useMemo(() => ({ resourceId: doc.resourceId, revisionId: doc.revisionId }), [doc.resourceId, doc.revisionId]);
   const [element, setElement] = useState<HTMLVideoElement | null>(null);
   const shell = useRef<HTMLDivElement>(null);
+  const moreAnchor = useRef<HTMLButtonElement>(null);
   const { fullscreen, toggle: toggleFullscreen } = useFullscreen(shell);
   const windowFull = useWindowFullscreen();
   /** Either full screen: the controls float over the picture and fade while it plays. */
@@ -135,6 +136,8 @@ export function VideoPlayer(props: {
     onEnded: () => { if (settings.autoNext && props.next) props.onNext(); },
     onMediaError: source.reportMediaError,
   });
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
   useVideoCapture(element, target, playback.ready, originMs, tab.tabId);
   // A video that is playing shows on the tab's title (A-95).
   useEffect(() => {
@@ -143,17 +146,16 @@ export function VideoPlayer(props: {
   }, [playback.playing, tab.tabId]);
   // A tab that cannot be seen does not keep playing; one that is only not in focus plays on as the person left it (A-94).
   useEffect(() => {
-    if (!tab.visible && playback.playing) playback.pause();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!tab.visible && playbackRef.current.playing) playbackRef.current.pause();
   }, [tab.visible]);
   // While a recording runs with "pause" chosen, a playing video waits and carries on when the recording ends.
   const pausedForRecording = useRef(false);
   const ducking = props.duck?.active === true && props.duck.mode === "pause";
   useEffect(() => {
-    if (ducking && playback.playing) { pausedForRecording.current = true; playback.pause(); }
-    if (!ducking && pausedForRecording.current) { pausedForRecording.current = false; void playback.play(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (ducking && playbackRef.current.playing) { pausedForRecording.current = true; playbackRef.current.pause(); }
+    if (!ducking && pausedForRecording.current) { pausedForRecording.current = false; void playbackRef.current.play(); }
   }, [ducking]);
+
   const subtitleStyle = useMemo(() => normalizeStyle({ placement: settings.subtitlePlacement, sizePct: settings.subtitleSizePct, font: settings.subtitleFont, outline: settings.subtitleOutline, assStyle: settings.assStyle }), [settings.subtitlePlacement, settings.subtitleSizePct, settings.subtitleFont, settings.subtitleOutline, settings.assStyle]);
   const subtitles = useSubtitles({ target, video: element, ready: ready && playback.ready, sourceKey: url ?? "", style: subtitleStyle, originMs });
 
@@ -176,6 +178,8 @@ export function VideoPlayer(props: {
   const [markB, setMarkB] = useState<number | null>(null);
   const interval = intervalOf(markA, markB);
   const keys = useKeyTable();
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
   const [more, setMore] = useState(false);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -183,7 +187,6 @@ export function VideoPlayer(props: {
   const showOnTopLayer = useCallback((node: HTMLDivElement | null) => {
     try { if (node && typeof node.showPopover === "function" && !node.matches(":popover-open")) node.showPopover(); } catch { /* shown in place */ }
   }, []);
-  const [idle, setIdle] = useState(false);
   const [inputError, setInputError] = useState("");
   // The T key asks the clock to open for typing.
   const [timeAsk, setTimeAsk] = useState(0);
@@ -206,6 +209,23 @@ export function VideoPlayer(props: {
     return () => observer?.disconnect();
   }, []);
 
+  // ---- controls fade in full screen while a video plays (shared useAutoHide) ----
+  const held = playback.holding || playback.rewinding;
+  const controlsHide = useAutoHide(shell, {
+    enabled: full && !playback.ended,
+    hold: more,
+    delayMs: IDLE_MS,
+    wakeOnAnyPointerMove: true,
+    resting: !playback.playing && !held,
+    quietHold: held,
+    barRef: controls,
+    shouldWakeOnKey: (event) => videoKeyAction(event, keysRef.current)?.type !== "arrow",
+    wakeOnPointerEnter: false,
+  });
+  const idle = controlsHide.hidden;
+  const wakeBar = useRef<() => void>(() => undefined);
+  wakeBar.current = full && !playback.ended ? controlsHide.wake : () => undefined;
+
   // How far the bar, floating over the picture, reaches up from the bottom edge: the dialogue and every prompt over the picture are lifted by it.
   const lift = full && !idle ? controlsH : 0;
   const duration = playback.durationMs > 0 ? playback.durationMs : doc.durationMs;
@@ -215,13 +235,15 @@ export function VideoPlayer(props: {
   // ---- a note's source: go there (and play it when asked) ----
   const applied = useRef(0);
   const focus = props.focus ?? null;
+  const onFocusAppliedRef = useRef(props.onFocusApplied);
+  onFocusAppliedRef.current = props.onFocusApplied;
   useEffect(() => {
     if (!focus || focus.applied || !playback.ready || applied.current === focus.nonce) return;
     applied.current = focus.nonce;
-    if (focus.play && focus.endMs !== undefined) playback.playRange(focus.startMs, focus.endMs);
-    else playback.seekTo(focus.startMs);
-    props.onFocusApplied?.(focus.nonce);
-  }, [focus, playback.ready, playback]);
+    if (focus.play && focus.endMs !== undefined) playbackRef.current.playRange(focus.startMs, focus.endMs);
+    else playbackRef.current.seekTo(focus.startMs);
+    onFocusAppliedRef.current?.(focus.nonce);
+  }, [focus, playback.ready]);
 
   const defaultAudio = doc.audio.find((track) => track.default) ?? doc.audio[0];
 
@@ -231,104 +253,95 @@ export function VideoPlayer(props: {
   const danmakuSettings = useDanmakuSettings(danmakuOn);
   const danmaku = useDanmaku({ on: danmakuOn, enabled: danmakuSettings.settings.enabled, resourceId: doc.resourceId, revisionId: doc.revisionId, convert: danmakuSettings.settings.convert });
   const [danmakuOpen, setDanmakuOpen] = useState(false);
-  useEffect(() => { if (danmakuOn) setDanmakuSources(sourcesOf(danmaku.items)); }, [danmakuOn, danmaku.items]);
+  useEffect(() => { if (danmakuOn && tab.focused) setDanmakuSources(sourcesOf(danmaku.items)); }, [danmakuOn, tab.focused, danmaku.items]);
   const danmakuCanvas = useRef<(() => DanmakuCapture | null) | null>(null);
   const danmakuShown = useMemo(() => shownCount(danmaku.items, danmakuSettings.settings), [danmaku.items, danmakuSettings.settings]);
   const toggleDanmaku = useCallback(() => { void danmakuSettings.save({ enabled: !danmakuSettings.settings.enabled }); }, [danmakuSettings]);
 
   // ---- a screenshot of the frame on screen ----
-  // The picture is the video element's own frame at the size of the file; nothing is asked of FFmpeg, so it is the frame the person sees.
-  const shooting = useRef(false);
-  const takeScreenshot = useCallback(async () => {
-    const port = props.screenshots;
-    if (!port || !element || shooting.current) return;
-    shooting.current = true;
-    try {
-      const positionMs = Math.max(0, Math.round(element.currentTime * 1000 - originMs));
-      // Comments are in the picture only when the person asked for that and they are on screen.
-      const comments = danmakuOn && danmakuSettings.settings.enabled && danmakuSettings.settings.shotWith ? danmakuCanvas.current?.() ?? null : null;
-      const track = subtitles.tracks.find((entry) => entry.id === subtitles.selectedId);
-      const second = subtitles.secondaryId ? subtitles.tracks.find((entry) => entry.id === subtitles.secondaryId) : undefined;
-      // What is on screen at that moment, as lines: it goes into the record whether or not it is drawn into the picture.
-      const mainText = shownLines(subtitles.cues, positionMs).join("\n");
-      const secondText = shownLines(subtitles.secondaryCues, positionMs).join("\n");
-      const size = { w: element.videoWidth, h: element.videoHeight };
-      const withSubtitles = settings.shotSubtitles !== false && (track !== undefined || second !== undefined);
-      const shot = await captureVideoFrame(element, {
-        // Asked for after the frame is taken: an ASS renderer needs a moment to draw at the size of the file.
-        subtitles: withSubtitles ? async () => ({
-          text: { main: subtitles.cues, second: subtitles.secondaryCues, timeMs: positionMs, style: subtitleStyle, ink: pageInk() },
-          ass: track && subtitleRenderer(track) === "ass" ? await subtitles.assPicture(size) : null,
-        }) : null,
-        danmaku: comments ? { ...comments, opacity: danmakuSettings.settings.opacity } : null,
-      });
-      if ("failure" in shot) { port.fail(shot.failure); return; }
-      const audio = doc.audio.find((entry) => entry.index === (audioIndex ?? defaultAudio?.index));
-      const frame = playback.frame.status === "ready" ? displayFrame(playback.frame.frame) : null;
-      await port.save({
-        resourceId: doc.resourceId, resourceRevisionId: doc.revisionId, data: shot.data,
-        video: {
-          positionMs, playbackRate: element.playbackRate,
-          ...(frame !== null ? { frame } : {}),
-          ...(audio ? { audioTrack: [audio.language, audio.title].filter(Boolean).join(" ") || `#${audio.index}` } : {}),
-          ...(track ? { subtitleTrack: [track.language, track.title].filter(Boolean).join(" ") || track.id, subtitleTrackId: track.id } : {}),
-          ...(mainText ? { subtitleText: mainText } : {}),
-          ...(second ? { subtitleSecondaryTrack: [second.language, second.title].filter(Boolean).join(" ") || second.id } : {}),
-          ...(secondText ? { subtitleSecondaryText: secondText } : {}),
-          composited: shot.subtitlesDrawn && shot.danmakuDrawn ? "both" : shot.subtitlesDrawn ? "subtitles" : shot.danmakuDrawn ? "danmaku" : "none",
-        },
-      });
-    } finally {
-      shooting.current = false;
-    }
-  }, [props.screenshots, element, originMs, subtitles.tracks, subtitles.selectedId, subtitles.secondaryId, subtitles.cues, subtitles.secondaryCues, subtitles.assPicture, subtitleStyle, settings.shotSubtitles, doc.audio, doc.resourceId, doc.revisionId, audioIndex, defaultAudio?.index, playback.frame, danmakuOn, danmakuSettings.settings.enabled, danmakuSettings.settings.shotWith, danmakuSettings.settings.opacity]);
+  const takeScreenshot = useVideoScreenshot({
+    screenshots: props.screenshots,
+    element,
+    resourceId: doc.resourceId,
+    revisionId: doc.revisionId,
+    originMs,
+    audio: doc.audio,
+    audioIndex,
+    defaultAudioIndex: defaultAudio?.index,
+    frame: playback.frame,
+    shotSubtitles: settings.shotSubtitles,
+    subtitleStyle,
+    subtitles,
+    danmakuOn,
+    danmakuSettings: danmakuSettings.settings,
+    danmakuCanvas,
+  });
 
   // ---- keyboard ----
-  // ← and → are a step when tapped and a hold when held; the controller tells the two apart and reads the player as it is at that moment.
+  // ← and → (or remapped seek keys) step when tapped and hold when held; activeArrow remembers the pressed key for keyup matching.
   const live = useRef({ playback, settings });
   live.current = { playback, settings };
-  /** Shows the bar in full screen (set by the fading below): a tap shows where it landed when the key goes up. */
-  const wakeBar = useRef<() => void>(() => undefined);
+  const activeArrow = useRef<{ side: ArrowSide; code: string; key: string } | null>(null);
   const arrows = useMemo(() => createArrowKeys({
     tap: (side) => { live.current.playback.seekBy(side * live.current.settings.seekStepSeconds * 1000); wakeBar.current(); },
     holdStart: (side) => { if (side > 0) live.current.playback.holdStart(); else live.current.playback.rewindStart(); },
     holdEnd: (side) => { if (side > 0) live.current.playback.holdEnd(); else live.current.playback.rewindEnd(); },
   }), []);
-  useEffect(() => () => arrows.release(), [arrows]);
+  useEffect(() => () => { activeArrow.current = null; arrows.release(); }, [arrows]);
+  // Switching away from this tab releases any held seek key immediately.
+  useEffect(() => {
+    if (!tab.focused) { activeArrow.current = null; arrows.release(); }
+  }, [tab.focused, arrows]);
 
+  const actState = useRef({
+    keys, settings, rate, playback, onSettings: props.onSettings, toggleFullscreen,
+    volumeOpen, danmakuOpen, more, menuAt, fullscreen, markA, markB, takeScreenshot, danmakuOn, toggleDanmaku,
+  });
+  actState.current = {
+    keys, settings, rate, playback, onSettings: props.onSettings, toggleFullscreen,
+    volumeOpen, danmakuOpen, more, menuAt, fullscreen, markA, markB, takeScreenshot, danmakuOn, toggleDanmaku,
+  };
+
+  // Stable key action handler (reads volatile playback/UI state via ref so 10 Hz clock updates never re-bind window.keydown).
   const act = useCallback((event: KeyboardEvent) => {
-    const action = videoKeyAction(event, keys);
+    const s = actState.current;
+    const action = videoKeyAction(event, s.keys);
     if (!action) return false;
     switch (action.type) {
-      case "toggle": playback.toggle(); break;
-      case "arrow": arrows.down(action.side, event.repeat); break;
-      case "volume": props.onSettings({ volume: stepVolume(settings.muted ? 0 : settings.volume, action.delta), muted: false }); break;
-      case "frame": void playback.stepFrame(action.delta); break;
-      case "mute": props.onSettings({ muted: !settings.muted }); break;
-      case "fullscreen": toggleFullscreen(); break;
-      case "markA": setMarkA(playback.currentMs); break;
-      case "markB": setMarkB(playback.currentMs); break;
-      case "rate": props.onSettings({ rate: stepRate(rate, action.direction, settings.rates) }); break;
-      case "customRate": props.onSettings({ rate: rate === 1 ? clampRate(settings.customRate) : 1 }); break;
-      case "start": playback.seekTo(0); break;
+      case "toggle": s.playback.toggle(); break;
+      case "arrow":
+        activeArrow.current = { side: action.side, code: event.code, key: event.key };
+        arrows.down(action.side, event.repeat);
+        break;
+      case "volume": s.onSettings({ volume: stepVolume(s.settings.muted ? 0 : s.settings.volume, action.delta), muted: false }); break;
+      case "frame": void s.playback.stepFrame(action.delta); break;
+      case "mute": s.onSettings({ muted: !s.settings.muted }); break;
+      case "fullscreen": s.toggleFullscreen(); break;
+      case "markA": setMarkA(s.playback.currentMs); break;
+      case "markB": setMarkB(s.playback.currentMs); break;
+      case "rate": s.onSettings({ rate: stepRate(s.rate, action.direction, s.settings.rates) }); break;
+      case "customRate": s.onSettings({ rate: s.rate === 1 ? clampRate(s.settings.customRate) : 1 }); break;
+      case "start": s.playback.seekTo(0); break;
       case "time": setTimeAsk((count) => count + 1); break;
-      case "screenshot": void takeScreenshot(); break;
-      case "danmaku": if (danmakuOn) toggleDanmaku(); break;
+      case "screenshot": void s.takeScreenshot(); break;
+      case "danmaku": if (s.danmakuOn) s.toggleDanmaku(); break;
       case "escape":
-        if (volumeOpen) setVolumeOpen(false);
-        else if (danmakuOpen) setDanmakuOpen(false);
-        else if (menuAt) setMenuAt(null);
-        else if (fullscreen) toggleFullscreen();
-        else if (markA !== null || markB !== null) { setMarkA(null); setMarkB(null); }
+        if (s.volumeOpen) setVolumeOpen(false);
+        else if (s.danmakuOpen) setDanmakuOpen(false);
+        else if (s.more) setMore(false);
+        else if (s.menuAt) setMenuAt(null);
+        else if (s.fullscreen) s.toggleFullscreen();
+        else if (s.markA !== null || s.markB !== null) { setMarkA(null); setMarkB(null); }
         else return false;
         break;
     }
     return true;
-  }, [keys, settings.volume, settings.muted, settings.rates, settings.customRate, rate, playback, props, arrows, toggleFullscreen, volumeOpen, menuAt, fullscreen, markA, markB, takeScreenshot]);
+  }, [arrows]);
 
   // Put on in the commit that makes the tab the focused one, so that a key pressed at once is not lost.
   useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (isImeEvent(event)) return;
       const node = event.target;
       // A range slider is a control of this player: its arrow keys are the player's. Text fields keep their own keys.
       const slider = node instanceof HTMLInputElement && node.type === "range";
@@ -342,53 +355,26 @@ export function VideoPlayer(props: {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [act, tab.focused]);
-  // Letting go of an arrow ends a step or a hold wherever the focus is; a window that lost focus never sees the key go up.
+  // Letting go of a seek key ends a step or a hold wherever the focus is (works for remapped keys too); blur releases any hold.
   useEffect(() => {
     const onUp = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") arrows.up(-1);
-      else if (event.key === "ArrowRight") arrows.up(1);
+      const action = videoKeyAction(event, keysRef.current);
+      if (action?.type === "arrow") {
+        if (activeArrow.current?.side === action.side) activeArrow.current = null;
+        arrows.up(action.side);
+        return;
+      }
+      const heldArrow = activeArrow.current;
+      if (heldArrow && ((heldArrow.code && event.code === heldArrow.code) || event.key === heldArrow.key)) {
+        activeArrow.current = null;
+        arrows.up(heldArrow.side);
+      }
     };
-    const onBlur = () => arrows.release();
+    const onBlur = () => { activeArrow.current = null; arrows.release(); };
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", onBlur);
     return () => { window.removeEventListener("keyup", onUp); window.removeEventListener("blur", onBlur); };
   }, [arrows]);
-
-  // ---- controls fade in full screen while a video plays ----
-  // A menu or the volume slider that is open keeps them: they hang from a control, which would fade out from under them. ← and → do not show
-  // the bar while they are down (A-112): a tap shows it when the key goes up, a hold shows only its hint and fades a bar that is showing, unless
-  // the pointer is on the bar. After a hold the bar stays away until the pointer moves or another key is pressed.
-  const keysRef = useRef(keys);
-  keysRef.current = keys;
-  const held = playback.holding || playback.rewinding;
-  // Set by a hold and cleared by the pointer or another key: a hold that ends paused (a paused video held with →, or ← that resumes a moment
-  // later) leaves the bar away instead of bringing it back while the video is not playing.
-  const quietAfterHold = useRef(false);
-  useEffect(() => {
-    // At the end the bar stays: the prompt to play again is lifted above it, and the person reaches for the bar next.
-    if (!full || playback.ended) { quietAfterHold.current = false; setIdle(false); wakeBar.current = () => undefined; return; }
-    const resting = !playback.playing && !held;
-    let timer = 0;
-    const onBar = () => { try { return Boolean(controls.current?.matches(":hover")); } catch { return false; } };
-    const arm = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => { if (popupOpen() || onBar()) arm(); else setIdle(true); }, IDLE_MS);
-    };
-    // A paused video keeps its bar: waking it there does not start the timer that fades it.
-    const wake = () => { quietAfterHold.current = false; setIdle(false); if (!resting) arm(); };
-    const onKey = (event: KeyboardEvent) => { if (videoKeyAction(event, keysRef.current)?.type !== "arrow") wake(); };
-    if (held) {
-      quietAfterHold.current = true;
-      if (!popupOpen() && !onBar()) setIdle(true);
-      else arm();
-    } else if (resting) {
-      if (!quietAfterHold.current) setIdle(false);
-    } else arm();
-    wakeBar.current = wake;
-    window.addEventListener("pointermove", wake);
-    window.addEventListener("keydown", onKey);
-    return () => { window.clearTimeout(timer); window.removeEventListener("pointermove", wake); window.removeEventListener("keydown", onKey); };
-  }, [full, playback.playing, playback.ended, held]);
 
   // ---- right button: the menu (the temporary rate is a held → key, not the mouse) ----
   useEffect(() => {
@@ -399,8 +385,6 @@ export function VideoPlayer(props: {
   }, [menuAt]);
 
   // ---- typed times and rates ----
-  // The time is typed in the clock itself; a jump lands on the frame that contains the time. The reason a text was refused
-  // is returned to the clock, which keeps the field open.
   const goTime = (text: string): string | null => {
     const ms = parseClock(text);
     if (ms === null) { setInputError(t("video.timeInvalid")); return t("video.timeInvalid"); }
@@ -424,8 +408,6 @@ export function VideoPlayer(props: {
     { id: "off", testId: "video-subtitles-secondary-off", label: t("video.subtitleSecondaryOff"), checked: subtitles.secondaryId === null, onSelect: () => subtitles.selectSecondary(null) },
     ...subtitles.tracks.map((track, index) => ({ id: track.id, testId: `video-subtitles-secondary-${track.id}`, label: trackName(track, index + 1), checked: subtitles.secondaryId === track.id, disabled: track.format === null || track.format === "ass" || track.id === subtitles.selectedId, onSelect: () => subtitles.selectSecondary(track.id) })),
   ];
-  // One button for both. The second group is there only when a second track can be chosen (or one is chosen and has to be switched off): a file with
-  // a single track, or with nothing but ASS, has the main subtitle alone.
   const canHaveSecondary = subtitles.tracks.length > 1 && subtitles.tracks.some((track) => (track.format === "srt" || track.format === "vtt") && track.id !== subtitles.selectedId);
   const subtitleGroups: MenuGroup[] = [
     { id: "primary", title: t("video.subtitlePrimary"), items: subtitleItems },
@@ -457,46 +439,57 @@ export function VideoPlayer(props: {
   ];
 
   // ---- the Agent's right pane hears where the video is, to offer it as context ----
-  const frameNow = playback.frame.status === "ready" ? displayFrame(playback.frame.frame) : null;
+  const frameNow = playback.frame.status === "ready" && Number.isFinite(playback.frame.frame) ? displayFrame(playback.frame.frame) : null;
   const intervalStart = interval?.startMs;
   const intervalEnd = interval?.endMs;
+  // Throttle context broadcasts to 1 Hz during continuous playback while keeping exact ms when paused.
+  const contextPositionMs = playback.playing ? Math.floor(playback.currentMs / 1000) * 1000 : Math.round(playback.currentMs);
   useEffect(() => {
     readerContext.set({
       kind: "video", resourceId: doc.resourceId, revisionId: doc.revisionId, title: doc.episodeLabel ? `${doc.title} ${doc.episodeLabel}` : doc.title, workId: doc.workId ?? null,
-      positionMs: Math.round(playback.currentMs), durationMs: doc.durationMs, frame: frameNow,
+      positionMs: contextPositionMs, durationMs: doc.durationMs, frame: frameNow,
       interval: intervalStart !== undefined && intervalEnd !== undefined ? { startMs: intervalStart, endMs: intervalEnd } : null,
     }, tab.tabId);
-  }, [playback.currentMs, frameNow, intervalStart, intervalEnd, doc.resourceId, doc.revisionId, doc.title, doc.episodeLabel, doc.durationMs, doc.workId, tab.tabId]);
+  }, [contextPositionMs, frameNow, intervalStart, intervalEnd, doc.resourceId, doc.revisionId, doc.title, doc.episodeLabel, doc.durationMs, doc.workId, tab.tabId]);
   useEffect(() => () => { readerContext.clear(doc.resourceId, tab.tabId); quoteTags.clearFor(doc.resourceId); }, [doc.resourceId, tab.tabId]);
 
   // A marked stretch (A-B) is a quote tag for the right pane; the player only reads. Removing the tag there clears the marks here.
   const tags = useQuoteTags(doc.resourceId);
   const intervalTagged = tags.some((tag) => tag.kind === "interval");
   const tagged = useRef(false);
+  const tRef = useRef(t);
+  tRef.current = t;
   useEffect(() => {
     if (intervalStart !== undefined && intervalEnd !== undefined) {
       tagged.current = true;
       quoteTags.put({
         kind: "interval", resourceId: doc.resourceId, revisionId: doc.revisionId, startMs: Math.round(intervalStart), endMs: Math.round(intervalEnd),
-        label: t("chat.tag.interval", { start: formatClock(intervalStart), end: formatClock(intervalEnd) }),
+        label: tRef.current("chat.tag.interval", { start: formatClock(intervalStart), end: formatClock(intervalEnd) }),
       });
     } else if (tagged.current) {
       tagged.current = false;
       quoteTags.removeKind("interval", doc.resourceId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intervalStart, intervalEnd, doc.resourceId, doc.revisionId]);
   useEffect(() => {
     if (tagged.current && !intervalTagged) { tagged.current = false; setMarkA(null); setMarkB(null); }
   }, [intervalTagged]);
 
-  const frameText2 = playback.playing ? "" : playback.frame.status === "ready"
-    ? t("video.frameOf", { frame: displayFrame(playback.frame.frame), total: playback.frame.totalFrames })
+  const frameText = playback.playing ? "" : frameNow !== null && playback.frame.status === "ready"
+    ? t("video.frameOf", { frame: frameNow, total: playback.frame.totalFrames })
     : playback.frame.status === "loading" ? t("video.frameLoading") : playback.frame.status === "absent" ? t("video.frameOnDemand") : playback.frame.status === "unavailable" ? t("video.frameUnavailable") : "";
 
   const copyBadge = source.state.phase === "ready" && source.state.via === "play_copy";
   const alternateAudio = audioIndex !== undefined && audioIndex !== defaultAudio?.index;
   const showPlayButton = ready && playback.ready && !playback.playing && !playback.ended;
+
+  const openContextMenu = (clientX: number, clientY: number) => {
+    const menuWidth = 180;
+    const menuHeight = Math.min(360, (settings.rates.length + 1) * 34 + 16);
+    const maxX = Math.max(8, (window.innerWidth || 1280) - menuWidth - 8);
+    const maxY = Math.max(8, (window.innerHeight || 720) - menuHeight - 8);
+    setMenuAt({ x: Math.max(8, Math.min(clientX, maxX)), y: Math.max(8, Math.min(clientY, maxY)) });
+  };
 
   return (
     <section className="reader video-reader" data-testid="video-reader" data-ready={playback.ready || undefined} data-fullscreen={full || undefined} data-window-full={(windowFull.active && !fullscreen) || undefined}>
@@ -511,7 +504,7 @@ export function VideoPlayer(props: {
           style={{ "--player-lift": `${lift}px` } as CSSProperties}
           onClick={() => { if (ready) playback.toggle(); }}
           onDoubleClick={toggleFullscreen}
-          onContextMenu={(event) => { event.preventDefault(); if (ready) setMenuAt({ x: event.clientX, y: event.clientY }); }}
+          onContextMenu={(event) => { event.preventDefault(); if (ready) openContextMenu(event.clientX, event.clientY); }}
         >
           <video
             ref={setElement}
@@ -582,7 +575,15 @@ export function VideoPlayer(props: {
           ) : null}
         </div>
 
-        <div ref={controls} className="video-controls" data-testid="video-controls" role="toolbar" aria-label={t("video.controls")} data-compact={compact || undefined}>
+        <div
+          ref={controls}
+          className="video-controls"
+          data-testid="video-controls"
+          role="toolbar"
+          aria-label={t("video.controls")}
+          data-compact={compact || undefined}
+          {...controlsHide.bind}
+        >
           <SeekBar t={t} currentMs={playback.currentMs} durationMs={duration} bufferedMs={playback.bufferedMs} markers={markers} disabled={!ready} onSeek={playback.seekTo} />
           <div className="video-row">
             <button type="button" className="icon-button" data-testid="video-toggle" aria-label={playback.playing ? t("video.pause") : t("video.play")} title={playback.playing ? t("video.pause") : t("video.play")} disabled={!ready} onClick={playback.toggle}>{playback.playing ? <Pause size={18} /> : <Play size={18} />}</button>
@@ -591,40 +592,44 @@ export function VideoPlayer(props: {
             <span
               className="video-frame"
               data-testid="video-frame"
-              data-frame={playback.frame.status === "ready" ? displayFrame(playback.frame.frame) : undefined}
+              data-frame={frameNow ?? undefined}
               data-verified={playback.frameVerified === null ? undefined : String(playback.frameVerified)}
               title={playback.frame.status === "unavailable" ? playback.frame.message : playback.frame.status === "ready" && playback.frame.variableFrameRate ? t("video.frameVfr") : undefined}
-            >{frameText2}</span>
+            >{frameText}</span>
             <span className="flex-1" />
             {compact ? null : menus}
             {danmakuOn ? (
-              <DanmakuControl t={t} view={danmaku} settings={danmakuSettings.settings} shown={danmakuShown} open={danmakuOpen} onOpen={setDanmakuOpen} onToggle={toggleDanmaku} onOpenSettings={props.onDanmakuSettings} />
+              <DanmakuControl t={t} view={danmaku} settings={danmakuSettings.settings} shown={danmakuShown} open={danmakuOpen} active={tab.visible} onOpen={setDanmakuOpen} onToggle={toggleDanmaku} onOpenSettings={props.onDanmakuSettings} />
             ) : null}
             <VolumeControl t={t} volume={settings.volume} muted={settings.muted} open={volumeOpen} onOpen={setVolumeOpen} onChange={(patch) => props.onSettings(patch)} />
             {props.screenshots ? <button type="button" className="icon-button" data-testid="video-screenshot" aria-label={t("screenshot.take")} title={`${t("screenshot.takeHint")}`} disabled={!ready} onClick={() => void takeScreenshot()}><Camera size={18} /></button> : null}
             <button type="button" className="icon-button" data-testid="video-window-fullscreen" aria-pressed={windowFull.active} aria-label={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} title={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} onClick={windowFull.toggle}>{windowFull.active ? <Shrink size={18} /> : <Fullscreen size={18} />}</button>
             <button type="button" className="icon-button" data-testid="video-fullscreen" aria-label={fullscreen ? t("video.exitFullscreen") : t("video.fullscreen")} title={fullscreen ? t("video.exitFullscreen") : t("video.fullscreen")} onClick={toggleFullscreen}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
-            <button type="button" className="icon-button" data-testid="video-more" aria-expanded={more} aria-label={t("video.more")} title={t("video.more")} onClick={() => setMore((open) => !open)}><MoreHorizontal size={18} /></button>
+            <button ref={moreAnchor} type="button" className="icon-button" data-testid="video-more" aria-expanded={more} aria-label={t("video.more")} title={t("video.more")} onClick={() => setMore((open) => !open)}><MoreHorizontal size={18} /></button>
           </div>
 
           {more ? (
-            <div className="video-more-panel" data-testid="video-more-panel">
-              <div className="video-row">
-                <button type="button" className="icon-button" data-testid="video-step-back" aria-label={t("video.back", { seconds: settings.seekStepSeconds })} title={t("video.back", { seconds: settings.seekStepSeconds })} disabled={!ready} onClick={() => playback.seekBy(-settings.seekStepSeconds * 1000)}><ChevronLeft size={18} /></button>
-                <button type="button" className="icon-button" data-testid="video-step-forward" aria-label={t("video.forward", { seconds: settings.seekStepSeconds })} title={t("video.forward", { seconds: settings.seekStepSeconds })} disabled={!ready} onClick={() => playback.seekBy(settings.seekStepSeconds * 1000)}><ChevronRight size={18} /></button>
-                <button type="button" className="icon-button" data-testid="video-prev-frame" aria-label={t("video.prevFrame")} title={t("video.prevFrame")} disabled={!ready} onClick={() => void playback.stepFrame(-1)}><StepBack size={16} /></button>
-                <button type="button" className="icon-button" data-testid="video-next-frame" aria-label={t("video.nextFrame")} title={t("video.nextFrame")} disabled={!ready} onClick={() => void playback.stepFrame(1)}><StepForward size={16} /></button>
-                {compact ? menus : null}
-              </div>
-              <div className="video-row video-tools">
-                <button type="button" className="secondary-button" data-testid="video-mark-a" aria-pressed={markA !== null} onClick={() => setMarkA(playback.currentMs)}>{t("video.markA")}{markA !== null ? ` ${formatClock(markA)}` : ""}</button>
-                <button type="button" className="secondary-button" data-testid="video-mark-b" aria-pressed={markB !== null} onClick={() => setMarkB(playback.currentMs)}>{t("video.markB")}{markB !== null ? ` ${formatClock(markB)}` : ""}</button>
-                {interval ? <span className="video-interval" data-testid="video-interval">{t("video.interval", { start: formatClock(interval.startMs), end: formatClock(interval.endMs) })}</span> : null}
-                {markA !== null || markB !== null ? <button type="button" className="link-button" data-testid="video-clear-marks" onClick={() => { setMarkA(null); setMarkB(null); }}>{t("video.clearMarks")}</button> : null}
-                {props.tools ? props.tools({ currentMs: playback.currentMs, durationMs: duration, interval }) : null}
-                <MatchLink label={t("match.fromReader")} onMatch={props.onMatch} />
-              </div>
-            </div>
+            <VideoMorePopup
+              t={t}
+              anchor={moreAnchor}
+              ready={ready}
+              compact={compact}
+              menus={menus}
+              seekStepSeconds={settings.seekStepSeconds}
+              currentMs={playback.currentMs}
+              durationMs={duration}
+              markA={markA}
+              markB={markB}
+              interval={interval}
+              tools={props.tools}
+              onMatch={props.onMatch}
+              onSeekBy={(deltaMs) => playback.seekBy(deltaMs)}
+              onStepFrame={(delta) => void playback.stepFrame(delta)}
+              onMarkA={() => setMarkA(playback.currentMs)}
+              onMarkB={() => setMarkB(playback.currentMs)}
+              onClearMarks={() => { setMarkA(null); setMarkB(null); }}
+              onClose={() => setMore(false)}
+            />
           ) : null}
           {inputError ? <p className="video-input-error" role="alert" data-testid="video-input-error">{inputError}</p> : null}
         </div>

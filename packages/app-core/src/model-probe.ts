@@ -1,6 +1,7 @@
 import { MangaError } from "@manga/contracts";
 import type { ConnectionTestResult, ModelProfile } from "@manga/contracts/models";
 import { joinApiPath, type TextRequest } from "@manga/model-protocol";
+import { dialectOf } from "./providers/registry.ts";
 
 /** The result of the last test of a connection as it was stored; one that no longer reads is dropped rather than shown. */
 export function parseLastTest(raw: string | null | undefined): ConnectionTestResult | null {
@@ -22,12 +23,19 @@ type Failure = NonNullable<ConnectionTestResult["failure"]>;
  */
 export function failureOf(error: unknown): Failure {
   if (!(error instanceof MangaError)) return { category: "other", detail: error instanceof Error ? error.message.slice(0, 160) : "unknown failure" };
-  const details = (error.details ?? {}) as { status?: unknown; kind?: unknown };
+  const details = (error.details ?? {}) as { status?: unknown; kind?: unknown; reason?: unknown };
   const status = typeof details.status === "number" ? details.status : undefined;
   const kind = typeof details.kind === "string" ? details.kind : undefined;
+  const reason = typeof details.reason === "string" ? details.reason : undefined;
   const make = (category: Failure["category"], detail?: string): Failure => ({ category, ...(status !== undefined ? { status } : {}), ...(detail ? { detail } : {}) });
-  if (error.code === "AUTHENTICATION_FAILED" || status === 401 || status === 403) return make("auth");
+  if (error.code === "AUTHENTICATION_FAILED" || error.code === "CREDENTIAL_UNAVAILABLE" || status === 401 || status === 403) {
+    return make("auth", error.code === "CREDENTIAL_UNAVAILABLE" ? error.message.slice(0, 160) : undefined);
+  }
   if (error.code === "RATE_LIMITED" || status === 429) return make("rate_limit");
+  if (kind === "billing" || status === 402) return make("billing");
+  if (kind === "busy" || status === 503) return make("busy");
+  if (error.code === "PROVIDER_UNAVAILABLE" && reason === "plugin_disabled") return make("provider", error.message);
+  if (reason === "provider_host" || reason === "private" || reason === "private_address" || reason === "url" || reason === "scheme") return make("address", error.message.slice(0, 160));
   if (kind === "model") return make("model");
   if (kind === "path") return make("address", "the path does not exist at this address");
   if (kind === "context") return make("other", "the service says the request is longer than the model takes");
@@ -57,7 +65,7 @@ const firstNumber = (entry: Record<string, unknown>, names: readonly string[]): 
 export async function modelLimitsOf(baseUrl: string, apiKey: string, modelId: string, signal: AbortSignal, timeoutMs: number): Promise<{ contextWindow?: number; maxOutput?: number }> {
   try {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
-    const response = await fetch(joinApiPath(baseUrl, "/models"), { headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" }, signal: combined });
+    const response = await fetch(joinApiPath(baseUrl, "/models"), { headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" }, redirect: "error", signal: combined });
     if (!response.ok) return {};
     if (/text\/html/i.test(response.headers.get("content-type") ?? "")) return {};
     const body = await response.json() as { data?: unknown };
@@ -77,12 +85,15 @@ export async function modelLimitsOf(baseUrl: string, apiKey: string, modelId: st
  * What the profile adds to a request. The longest answer is sent only when the person or a test set it: a default is a guess, and a service that takes less than
  * the guess refuses the request. The reasoning effort goes only to a model that reasons.
  */
-export function requestLimits(profile: ModelProfile): Pick<TextRequest, "maxOutputTokens" | "maxTokensField" | "reasoningEffort" | "contextWindow"> {
+export function requestLimits(profile: ModelProfile, baseUrl?: string): Pick<TextRequest, "maxOutputTokens" | "maxTokensField" | "reasoningEffort" | "contextWindow" | "dialect"> {
   const reasons = profile.capabilities.includes("reasoning");
+  // DeepSeek (计划 4.3): `max_tokens`, and thinking switched on or off explicitly from the level (no level is "关闭思考").
+  const dialect = dialectOf(profile, baseUrl ?? "");
   return {
     ...(profile.source.maxOutput !== "default" ? { maxOutputTokens: profile.maxOutput } : {}),
-    maxTokensField: reasons ? "max_completion_tokens" : "max_tokens",
+    maxTokensField: reasons && !dialect ? "max_completion_tokens" : "max_tokens",
     ...(reasons && profile.reasoningEffort ? { reasoningEffort: profile.reasoningEffort } : {}),
     contextWindow: profile.contextWindow,
+    ...(dialect ? { dialect } : {}),
   };
 }

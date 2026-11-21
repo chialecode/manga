@@ -8,13 +8,15 @@ export function useNoteEmbeds(objectId: string | null, enabled: boolean) {
   const [items, setItems] = useState<Record<string, EmbedItem>>({});
   const current = useRef(objectId);
   current.current = objectId;
+  const seq = useRef(0);
 
   const reload = useCallback(async () => {
     const id = current.current;
+    const mine = ++seq.current;
     if (!enabled || !id) { setItems({}); return; }
     const result = await attempt<{ embeds: EmbedItem[] }>("embed.list", { sourceKind: "note", sourceId: id });
-    // A reply for a note that is no longer open is dropped.
-    if (current.current !== id) return;
+    // A reply for a note that is no longer open, or superseded by a newer reload, is dropped.
+    if (current.current !== id || seq.current !== mine) return;
     setItems(result.ok ? Object.fromEntries(asArray<EmbedItem>(result.value.embeds).map((item) => [item.slot, item])) : {});
   }, [enabled]);
 

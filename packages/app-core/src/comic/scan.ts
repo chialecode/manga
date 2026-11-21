@@ -10,6 +10,7 @@ import { ARCHIVE_EXTENSIONS, VIDEO_EXTENSIONS, isIgnoredName, isImageName } from
 import { Lane } from "../media/process-runner.ts";
 import { verifyDecodes } from "../media/thumbnails.ts";
 import type { ZipPool } from "../media/zip-pool.ts";
+import { errorMessage } from "../shared/utils.ts";
 import { parseComicInfo, type ComicInfo } from "./comicinfo.ts";
 
 export { BROWSER_IMAGE_TYPES, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, isIgnoredName, isImageName, mediaTypeForName } from "../media/kinds.ts";
@@ -79,7 +80,7 @@ async function describePages(candidates: Candidate[], options: ScanOptions): Pro
       pages[index] = { ...base, width: info.width, height: info.height, hash, bytes, spread: info.width > info.height * 1.2, ok: true };
     } catch (error) {
       if (options.signal?.aborted) throw new MangaError("CANCELLED", "comic scan was cancelled");
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       pages[index] = { ...base, width: 0, height: 0, hash: sha(`${candidate.id}:unreadable`), ok: false, error: message.slice(0, 200) };
     } finally {
       done += 1;
@@ -113,6 +114,23 @@ function assertPageCount(count: number, max: number): void {
   if (count > max) throw new MangaError("UNSUPPORTED_FORMAT", `the source has ${count} pages, more than the ${max} allowed`);
 }
 
+function readPrefixBytes(file: string, maxBytes: number): Buffer {
+  const fd = fs.openSync(file, "r");
+  try {
+    const size = Math.min(fs.fstatSync(fd).size, maxBytes);
+    const buffer = Buffer.alloc(size);
+    let done = 0;
+    while (done < size) {
+      const got = fs.readSync(fd, buffer, done, size - done, done);
+      if (got === 0) break;
+      done += got;
+    }
+    return done === size ? buffer : buffer.subarray(0, done);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** Pages are the images directly inside `dir`. Sub-folders are separate chapters and are planned by `planDirectory`. */
 export async function scanComicDirectory(dir: string, options: ScanOptions): Promise<ScanResult> {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new MangaError("NOT_FOUND", "comic folder is not available");
@@ -126,7 +144,7 @@ export async function scanComicDirectory(dir: string, options: ScanOptions): Pro
   let info: ComicInfo | null = null;
   const infoFile = fs.readdirSync(dir).find((name) => name.toLowerCase() === "comicinfo.xml");
   if (infoFile) {
-    try { info = parseComicInfo(fs.readFileSync(path.join(dir, infoFile)).subarray(0, 1024 * 1024)); } catch { info = null; }
+    try { info = parseComicInfo(readPrefixBytes(path.join(dir, infoFile), 1024 * 1024)); } catch { info = null; }
   }
   applyComicInfo(pages, info);
   const warnings = pages.filter((page) => !page.ok).map((page) => `page ${page.name} could not be read`);
@@ -143,7 +161,14 @@ export async function scanCbz(file: string, options: ScanOptions): Promise<ScanR
   const warnings: string[] = [];
   const unsafe = index.entries.filter((entry) => entry.unsafe);
   if (unsafe.length) warnings.push(`${unsafe.length} archive entries with unsafe names were skipped`);
-  const imageEntries = index.entries.filter((entry) => !entry.directory && !entry.unsafe && isImageName(entry.name) && !isIgnoredName(entry.name));
+  // Deduplicate by entry name (keeping the last entry to match ZipIndex.byName).
+  const uniqueImages = new Map<string, typeof index.entries[number]>();
+  for (const entry of index.entries) {
+    if (!entry.directory && !entry.unsafe && isImageName(entry.name) && !isIgnoredName(entry.name)) {
+      uniqueImages.set(entry.name, entry);
+    }
+  }
+  const imageEntries = [...uniqueImages.values()];
   if (imageEntries.some((entry) => entry.encrypted)) throw new MangaError("UNSUPPORTED_FORMAT", "the archive is encrypted and cannot be read");
   imageEntries.sort((a, b) => comparePaths(a.name, b.name));
   assertPageCount(imageEntries.length, options.maxPages ?? MAX_PAGES);
@@ -192,6 +217,8 @@ export async function scanComicEpub(file: string, options: ScanOptions): Promise
   const spine = tagsOf(opf, "itemref").map((item) => item.idref ?? "").filter(Boolean);
   const direction = /page-progression-direction\s*=\s*["']rtl["']/i.test(opf) ? "rtl" as const : undefined;
   const title = /<dc:title[^>]*>([^<]*)<\/dc:title>/i.exec(opf)?.[1]?.trim() || path.basename(file).replace(/\.[^.]+$/, "");
+  const maxPages = options.maxPages ?? MAX_PAGES;
+  const maxSpine = Math.max(maxPages * 4, 20_000);
   const seen = new Set<string>();
   const ordered: string[] = [];
   const addImage = (name: string | undefined) => {
@@ -201,8 +228,13 @@ export async function scanComicEpub(file: string, options: ScanOptions): Promise
     if (info.encrypted) throw new MangaError("UNSUPPORTED_FORMAT", "the archive is encrypted and cannot be read");
     seen.add(name);
     ordered.push(name);
+    if (ordered.length > maxPages) throw new MangaError("UNSUPPORTED_FORMAT", `the source has more than the ${maxPages} pages allowed`);
   };
+  let visited = 0;
   for (const idref of spine) {
+    options.signal?.throwIfAborted();
+    if (visited >= maxSpine) break;
+    visited += 1;
     const item = items.get(idref);
     if (!item?.href) continue;
     const href = resolveArchiveReference(base, item.href);
@@ -214,7 +246,7 @@ export async function scanComicEpub(file: string, options: ScanOptions): Promise
     const refs = [...htmlImageSources(html), ...htmlSvgImageHrefs(html)];
     for (const reference of refs) addImage(resolveArchiveReference(dir, reference) ?? undefined);
   }
-  assertPageCount(ordered.length, options.maxPages ?? MAX_PAGES);
+  assertPageCount(ordered.length, maxPages);
   const candidates: Candidate[] = ordered.map((name) => ({
     id: name, name: name.split("/").pop() ?? name, ref: { kind: "epub", entry: name },
     load: { bytes: () => options.zips.read(file, name, { signal: options.signal }) },
@@ -302,19 +334,26 @@ export function mobiRecordTable(reader: MobiReader): MobiTable {
   }
   // The markup names images by their position among the image records (`recindex`, 1-based).
   const order: number[] = [];
+  const seenOrder = new Set<number>();
   try {
     const chunks: Buffer[] = [];
     let budget = MOBI_TEXT_BUDGET;
     for (let i = 1; i <= textRecords && i < count; i += 1) {
-      const record = reader.read(offsets[i]!, offsets[i + 1]! - offsets[i]!);
-      budget -= record.length;
+      const length = offsets[i + 1]! - offsets[i]!;
+      if (length > budget) break;
+      const record = reader.read(offsets[i]!, length);
+      const decoded = compression === 2 ? Buffer.from(palmdocDecompress(record)) : record;
+      budget -= decoded.length;
       if (budget < 0) break;
-      chunks.push(compression === 2 ? Buffer.from(palmdocDecompress(record)) : record);
+      chunks.push(decoded);
     }
     const markup = Buffer.concat(chunks).toString("latin1");
     for (const match of markup.matchAll(/recindex\s*=\s*["']?(\d+)/gi)) {
       const record = firstImage + Number(match[1]) - 1;
-      if (!order.includes(record)) order.push(record);
+      if (!seenOrder.has(record)) {
+        seenOrder.add(record);
+        order.push(record);
+      }
     }
   } catch { /* record order is the fallback */ }
   const byRecord = new Map(all.map((item) => [item.recordIndex, item]));
@@ -338,19 +377,24 @@ export function readMobiRecord(file: string, offset: number, length: number): Bu
 export async function scanComicMobi(file: string, options: ScanOptions): Promise<ScanResult> {
   const stat = fs.statSync(file);
   if (stat.size > 2 * 1024 * 1024 * 1024) throw new MangaError("UNSUPPORTED_FORMAT", "the file is larger than the read budget");
-  const { title, records } = mobiTableOfFile(file);
-  assertPageCount(records.length, options.maxPages ?? MAX_PAGES);
-  const candidates: Candidate[] = records.map((record, index) => ({
-    id: `rec${record.recordIndex}`, name: `${String(index + 1).padStart(4, "0")}`, ref: { kind: "mobi", recordIndex: record.recordIndex },
-    load: { bytes: async () => readMobiRecord(file, record.offset, record.length) },
-  }));
-  const pages = await describePages(candidates, options);
-  return {
-    source: "mobi",
-    title: title || path.basename(file).replace(/\.[^.]+$/, ""),
-    fingerprint: fingerprintOf(pages),
-    manifest: { source: "mobi", pages, warnings: pages.filter((page) => !page.ok).map((page) => `page ${page.name} could not be read`) },
-  };
+  const { reader, close } = fileReader(file);
+  try {
+    const { title, records } = mobiRecordTable(reader);
+    assertPageCount(records.length, options.maxPages ?? MAX_PAGES);
+    const candidates: Candidate[] = records.map((record, index) => ({
+      id: `rec${record.recordIndex}`, name: `${String(index + 1).padStart(4, "0")}`, ref: { kind: "mobi", recordIndex: record.recordIndex },
+      load: { bytes: async () => Buffer.from(reader.read(record.offset, record.length)) },
+    }));
+    const pages = await describePages(candidates, options);
+    return {
+      source: "mobi",
+      title: title || path.basename(file).replace(/\.[^.]+$/, ""),
+      fingerprint: fingerprintOf(pages),
+      manifest: { source: "mobi", pages, warnings: pages.filter((page) => !page.ok).map((page) => `page ${page.name} could not be read`) },
+    };
+  } finally {
+    close();
+  }
 }
 
 /** Page sizes of a PDF whose pages are the pictures. Rendering stays with PDF.js in the reader. */
