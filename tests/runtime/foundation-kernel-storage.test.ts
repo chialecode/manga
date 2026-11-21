@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { MangaRuntime, ResourceScope, SequencedBus } from "@manga/kernel";
-import type { MangaModule } from "@manga/plugin-sdk";
+import { MangaRuntime, ResourceScope, SequencedBus } from "../../packages/kernel/src/index.ts";
+import type { MangaModule } from "../../packages/plugin-sdk/src/index.ts";
 import { DrizzleStore, acquireHostLock, matchQuery, releaseHostLock } from "@manga/storage-drizzle";
 
 const tmpDirs: string[] = [];
