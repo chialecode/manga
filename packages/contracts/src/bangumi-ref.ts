@@ -39,8 +39,23 @@ function idOf(digits: string): string | null {
   return trimmed.length > 0 && trimmed.length <= MAX_ID_DIGITS ? trimmed : null;
 }
 
+/** `text` up to its first `?` or `#` (a URL's query and fragment dropped). */
+function beforeQuery(text: string): string {
+  const cut = text.search(/[?#]/);
+  return cut < 0 ? text : text.slice(0, cut);
+}
+
+/** `path` without leading and trailing slashes; a loop, since `/\/+$/` is quadratic on long runs of slashes. */
+function trimSlashes(path: string): string {
+  let start = 0;
+  let end = path.length;
+  while (start < end && path[start] === "/") start += 1;
+  while (end > start && path[end - 1] === "/") end -= 1;
+  return path.slice(start, end);
+}
+
 function parsePath(rawPath: string): ParsedBangumiRef {
-  const trimmed = rawPath.replace(/^\/+/, "").replace(/\/+$/, "");
+  const trimmed = trimSlashes(rawPath);
   const [kind, id, ...rest] = trimmed ? trimmed.split("/") : [];
   if (!kind) return { ok: false, reason: "not-a-subject" };
   const lower = kind.toLowerCase();
@@ -73,7 +88,7 @@ export function parseBangumiRef(input: string): ParsedBangumiRef {
     const parsed = parsePath(url.pathname);
     return parsed.ok ? { ...parsed, form: "url" } : parsed;
   }
-  const rawPath = text.replace(/[?#].*$/, "");
+  const rawPath = beforeQuery(text);
   return rawPath.includes("/") ? parsePath(rawPath) : { ok: false, reason: "not-a-subject" };
 }
 
@@ -96,7 +111,7 @@ export function classifySearchInput(input: string): SearchIntent {
   }
   const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text);
   const bareHost = BARE_HOST.test(text);
-  const entryPath = /^\/?(?:subject|character|person)\/[^\s]*$/i.test(text.replace(/[?#].*$/, ""));
+  const entryPath = /^\/?(?:subject|character|person)\/[^\s]*$/i.test(beforeQuery(text));
   if (!hasScheme && !bareHost && !entryPath) return { type: "name", query: text };
   const parsed = parseBangumiRef(text.replace(/^\/(?=(?:subject|character|person)\/)/i, ""));
   return parsed.ok ? { type: "entry", externalId: parsed.externalId } : { type: "refused", reason: parsed.reason };

@@ -158,7 +158,7 @@ describe("library paths and the background scan", () => {
       const rows = ctx.app.store.sqlite.prepare("SELECT w.title AS work, w.media_kind AS kind, r.title FROM resources r JOIN works w ON w.id = r.work_id ORDER BY r.sort_key").all() as Array<{ work: string; kind: string; title: string }>;
       expect(rows.map((row) => row.work)).toEqual(["某漫画", "某漫画", "某漫画"]);
       expect(new Set(rows.map((row) => row.kind))).toEqual(new Set(["comic"]));
-      expect(rows.map((row) => row.title.replaceAll("/", "/").split("/").pop())).toEqual(["第1话", "第2话", "第10话"]);
+      expect(rows.map((row) => row.title.split("/").pop())).toEqual(["第1话", "第2话", "第10话"]);
     } finally { ctx.app.close(); }
   });
 

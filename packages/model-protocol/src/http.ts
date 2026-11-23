@@ -228,7 +228,7 @@ export function providerReason(body: string): string | null {
   const message = typeof error === "string" ? error : typeof (error as { message?: unknown } | null)?.message === "string" ? (error as { message: string }).message : null;
   if (!message) return null;
   // Nothing key- or token-shaped goes on (an error is shown and logged); the service's own words about the request do.
-  const text = message.replace(/\s*\(request_id:[^)]*\)\s*$/i, "")
+  const text = message.replace(/\(request_id:[^)]*\)\s*$/i, "").trimEnd()
     .replace(/\bBearer\s+\S+/gi, "Bearer <key>")
     .replace(/\b(?:sk|pk|rk|key)-[A-Za-z0-9_-]{8,}/gi, "<key>")
     .replace(/[A-Za-z0-9_-]{32,}/g, "<token>")

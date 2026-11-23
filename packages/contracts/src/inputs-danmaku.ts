@@ -59,11 +59,40 @@ export const DEFAULT_DANMAKU_SETTINGS: DanmakuSettings = {
 };
 
 /**
+ * Whether an innermost group that contains `+` or `*` is itself followed by `+`, `*` or `{`. A linear scan:
+ * written as a regex, this check is itself quadratic on long unclosed groups.
+ */
+function hasQuantifiedQuantifierGroup(pattern: string): boolean {
+  let inGroup = false;
+  let quantified = false;
+  for (let i = 0; i < pattern.length; i += 1) {
+    if (pattern.charCodeAt(i) === 92) {
+      // A backslash escapes the next character.
+      i += 1;
+      continue;
+    }
+    const char = pattern[i];
+    if (char === "(") {
+      inGroup = true;
+      quantified = false;
+    } else if (char === ")") {
+      const next = pattern[i + 1];
+      if (inGroup && quantified && (next === "+" || next === "*" || next === "{")) return true;
+      inGroup = false;
+      quantified = false;
+    } else if (inGroup && (char === "+" || char === "*")) {
+      quantified = true;
+    }
+  }
+  return false;
+}
+
+/**
  * A pattern the person typed is kept only when the engine can build it and it cannot make the screen wait: a group that holds a repeat and is repeated
  * itself, like `(a+)+`, is the classic way to make a match take forever, and is refused.
  */
 export function validPattern(pattern: string): boolean {
-  if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(pattern)) return false;
+  if (hasQuantifiedQuantifierGroup(pattern)) return false;
   try { new RegExp(pattern, "u"); return true; } catch { return false; }
 }
 

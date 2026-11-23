@@ -197,7 +197,7 @@ describe("AT-172 the floating recording box", () => {
     expect(html).not.toContain('id="label"');
     expect(html).not.toContain('id="meta"');
     expect(html).toContain("mangaOverlay");
-    const script = /<script>([\s\S]*)<\/script>/.exec(html)![1]!;
+    const script = /<script>([\s\S]*)<\/script\s*>/i.exec(html)![1]!;
     expect(() => new Function(script)).not.toThrow();
 
     // Preload security boundary: mangaOverlay still exposes ONLY onState and stop.

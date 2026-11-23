@@ -257,6 +257,27 @@ export function assertReleaseInstallerVerified(options: Parameters<typeof verify
 }
 
 /**
+ * `publisherName` of `app-update.yml`, as a scalar (`publisherName: x`) or a block list (`- x` lines, blank lines
+ * allowed). Parsed line by line: a single regex over the list backtracks exponentially on crafted input.
+ */
+function publisherNames(yamlText: string): string[] {
+  const lines = yamlText.split(/\r?\n/);
+  const at = lines.findIndex((line) => line.startsWith("publisherName:"));
+  if (at < 0) return [];
+  const scalar = lines[at]!.slice("publisherName:".length).trim();
+  if (scalar) return [scalar];
+  const names: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    const item = line.trim();
+    if (!item) continue;
+    if (!item.startsWith("-")) break;
+    const name = item.slice(1).trim();
+    if (name && !/\s/.test(name)) names.push(name);
+  }
+  return names;
+}
+
+/**
  * Check that `app-update.yml` has `provider: github`, `owner: chialecode`, `repo: manga`, and `publisherName` including `chialecode` (计划 3.1, 4.4).
  */
 export function checkAppUpdateConfig(yamlText: string | null | undefined): string[] {
@@ -271,9 +292,7 @@ export function checkAppUpdateConfig(yamlText: string | null | undefined): strin
   for (const field of ["provider", "owner", "repo", "updaterCacheDirName", "publisherName"]) {
     if ([...yamlText.matchAll(new RegExp(`^${field}:`, "gm"))].length > 1) problems.push(`duplicate ${field}`);
   }
-  const hasPublisherList = /^publisherName:\s*\r?\n(?:\s*-\s*\S+\s*\r?\n?)*\s*-\s*chialecode\s*$/m.test(yamlText);
-  const hasPublisherScalar = /^publisherName:\s*chialecode\s*$/m.test(yamlText);
-  if (!hasPublisherList && !hasPublisherScalar) {
+  if (!publisherNames(yamlText).includes("chialecode")) {
     problems.push("missing publisherName chialecode");
   }
   return problems;

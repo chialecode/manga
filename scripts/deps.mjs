@@ -60,7 +60,7 @@ async function inventory() {
   const now = Date.now();
   const outdated = pnpm(["outdated", "-r", "--format", "json"]);
   const rows = await mapLimit(Object.entries(outdated), 6, async ([name, info]) => {
-    const response = await fetch(`https://registry.npmjs.org/${name.replace("/", "%2F")}`, { headers: { "user-agent": "dependency-inventory" } });
+    const response = await fetch(`https://registry.npmjs.org/${name.replaceAll("/", "%2F")}`, { headers: { "user-agent": "dependency-inventory" } });
     if (!response.ok) throw new Error(`registry ${name}: HTTP ${response.status}`);
     const doc = await response.json();
     const current = stable(info.current);

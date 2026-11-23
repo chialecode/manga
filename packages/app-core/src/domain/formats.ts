@@ -227,11 +227,11 @@ function decodeEntities(value: string): string {
 export function htmlToText(html: string): { text: string; images: number; externalHrefs: string[] } {
   const without = html
     // Document head text is not body content; keeping it would leak titles into the reading text.
-    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, "")
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, "")
-    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, "")
+    .replace(/<head\b[^>]*>[\s\S]*?<\/head\s*>/gi, "")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, "")
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title\s*>/gi, "")
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg\s*>/gi, "")
     .replace(/<\?xml[^>]*\?>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");
   const images = without.match(/<img\b/gi)?.length ?? 0;

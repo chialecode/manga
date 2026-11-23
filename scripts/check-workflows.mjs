@@ -4,6 +4,23 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * Whether the workflow input `name` has `default: true` among the lines indented under it. Read line by line:
+ * the equivalent multi-line regex backtracks exponentially on crafted text.
+ */
+function inputDefaultsToTrue(text, name) {
+  const lines = text.split("\n");
+  const at = lines.findIndex((line) => line.trim() === `${name}:`);
+  if (at < 0) return false;
+  const indent = lines[at].length - lines[at].trimStart().length;
+  for (const line of lines.slice(at + 1)) {
+    if (!line.trim()) continue;
+    if (line.length - line.trimStart().length <= indent) return false;
+    if (/^default:[ \t]*true(?:[ \t]|#|$)/.test(line.trim())) return true;
+  }
+  return false;
+}
+
 function matchActionPattern(actionRef, pattern) {
   const [refRepo] = actionRef.split("@");
   const [patRepo, patVer] = pattern.split("@");
@@ -126,7 +143,7 @@ export function validateWorkflows({
   if (!/^\s*workflow_dispatch:/m.test(normalizedRelease)) {
     errors.push("release.yml: missing workflow_dispatch trigger");
   }
-  if (!/dry_run:\s*\n(?:\s+.*\n)*?\s+default:\s*true\b/m.test(normalizedRelease)) {
+  if (!inputDefaultsToTrue(normalizedRelease, "dry_run")) {
     errors.push("release.yml: workflow_dispatch.inputs.dry_run must default to true");
   }
   for (const forbiddenTrigger of ["push", "pull_request", "pull_request_target", "issue_comment", "discussion"]) {
