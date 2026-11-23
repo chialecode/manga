@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Channel } from "@manga/contracts";
 import type { MangaProductApp } from "@manga/app-core";
 import { launchSucceeded } from "./launch-guard.ts";
+import { isMainWindowOpen, writeUpdateRestartMarker } from "./update-restart.ts";
 
 /**
  * Coordinates `running-instance.json`, `--quit-for-update` handshakes, and background polling
@@ -60,6 +61,8 @@ export function createQuitForUpdateController(input: {
   flushWindowSaves: (options?: { strict?: boolean; signal?: AbortSignal }) => Promise<void>;
   setPreparingUpdate: (value: boolean) => void;
   resetSaved: () => void;
+  /** Called after an abandoned quit-for-update so the instance stays reachable (quit flag cleared, tray back). */
+  onAborted?: () => void;
   destroyWindowTray: () => void;
   disposeAsr: () => void;
 }): QuitForUpdateController {
@@ -152,11 +155,18 @@ export function createQuitForUpdateController(input: {
       }
       try {
         input.setPreparingUpdate(true);
-        input.getWindow()?.setEnabled(false);
+        const win = input.getWindow();
+        const windowOpen = isMainWindowOpen(win);
+        win?.setEnabled(false);
         await input.flushWindowSaves({ strict: true, signal: cancelled.signal });
         await input.getAppService()?.prepareQuitForUpdate({ signal: cancelled.signal });
         cancelled.signal.throwIfAborted();
         if (!requestStillCurrent()) throw new Error("update quit request withdrawn");
+        writeUpdateRestartMarker(input.runtimeDir, {
+          reason: "dev-install",
+          windowOpen,
+          fromVersion: input.version,
+        });
         input.destroyWindowTray();
         cleanupInstanceFiles();
         input.disposeAsr();
@@ -169,6 +179,7 @@ export function createQuitForUpdateController(input: {
         input.setPreparingUpdate(false);
         const win = input.getWindow();
         if (win && !win.isDestroyed()) win.setEnabled(true);
+        input.onAborted?.();
         try { fs.writeFileSync(quitAckFile, JSON.stringify({ pid: process.pid, status: "busy" })); } catch { /* ignore */ }
         if (requestStillCurrent()) { try { fs.rmSync(quitSignalFile, { force: true }); } catch { /* ignore */ } }
       } finally {

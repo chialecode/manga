@@ -2,6 +2,7 @@ import type { Menu, MenuItemConstructorOptions, Tray } from "electron";
 import type { Channel } from "@manga/contracts";
 import { createTranslator } from "@manga/i18n";
 import { resolveAppIconPath } from "./window-assets.ts";
+import { parseLaunchArgs } from "./update-restart.ts";
 
 export { resolveAppIconPath };
 
@@ -212,14 +213,19 @@ export function routeSecondInstance(input: {
   additionalData?: unknown;
   hasQuitSignal?: () => boolean;
   onQuitForUpdate: () => void;
+  quitting?: boolean;
   tray?: Pick<WindowTrayController, "restore"> | null;
   window?: TrayWindowLike | null;
   hideWindow?: boolean;
 }): "quit-for-update" | "restored" | "noop" {
   const extra = input.additionalData as { quitForUpdate?: boolean } | undefined;
-  if (input.argv.includes("--quit-for-update") || extra?.quitForUpdate === true || input.hasQuitSignal?.() === true) {
+  const launch = parseLaunchArgs(input.argv);
+  if (launch.quitForUpdate || extra?.quitForUpdate === true || input.hasQuitSignal?.() === true) {
     input.onQuitForUpdate();
     return "quit-for-update";
+  }
+  if (input.quitting === true || launch.background) {
+    return "noop";
   }
   if (input.tray?.restore()) {
     return "restored";
