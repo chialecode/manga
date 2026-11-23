@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Channel } from "@manga/contracts";
 import type { MangaProductApp } from "@manga/app-core";
 import { launchSucceeded } from "./launch-guard.ts";
+import { isMainWindowOpen, writeUpdateRestartMarker } from "./update-restart.ts";
 
 /**
  * Coordinates `running-instance.json`, `--quit-for-update` handshakes, and background polling
@@ -152,11 +153,18 @@ export function createQuitForUpdateController(input: {
       }
       try {
         input.setPreparingUpdate(true);
-        input.getWindow()?.setEnabled(false);
+        const win = input.getWindow();
+        const windowOpen = isMainWindowOpen(win);
+        win?.setEnabled(false);
         await input.flushWindowSaves({ strict: true, signal: cancelled.signal });
         await input.getAppService()?.prepareQuitForUpdate({ signal: cancelled.signal });
         cancelled.signal.throwIfAborted();
         if (!requestStillCurrent()) throw new Error("update quit request withdrawn");
+        writeUpdateRestartMarker(input.runtimeDir, {
+          reason: "dev-install",
+          windowOpen,
+          fromVersion: input.version,
+        });
         input.destroyWindowTray();
         cleanupInstanceFiles();
         input.disposeAsr();

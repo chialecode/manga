@@ -21,6 +21,14 @@ import { askLightToQuit, LIGHT_QUIT_WAIT_MS } from "./light-runtime.ts";
 import { startUpdateInstaller } from "./detached-installer.ts";
 import { createQuitForUpdateController, signalQuitForUpdateAndExit } from "./quit-for-update.ts";
 import { registerMainIpcHandlers } from "./ipc-handlers.ts";
+import {
+  clearUpdateRestartMarker,
+  consumeUpdateRestartMarker,
+  decideStartupWindow,
+  isMainWindowOpen,
+  parseLaunchArgs,
+  writeUpdateRestartMarker,
+} from "./update-restart.ts";
 
 /** How long a closing window waits for the page to save what waits for its save. */
 const SAVE_BEFORE_CLOSE_MS = 1500;
@@ -82,7 +90,8 @@ app.setPath("sessionData", layout.partitions.runtime);
 // Crash dumps belong with the logs, not in a folder of their own under the roaming profile.
 app.setPath("crashDumps", path.join(layout.partitions.logs, "crashes"));
 
-const quitForUpdateFlag = process.argv.includes("--quit-for-update");
+const launchArgs = parseLaunchArgs(process.argv.slice(1));
+const quitForUpdateFlag = launchArgs.quitForUpdate;
 const cliHoldWriteMs = (() => {
   const match = process.argv.find((arg) => arg.startsWith("--manga-hold-write-ms="));
   return match ? Number.parseInt(match.slice("--manga-hold-write-ms=".length), 10) || 0 : 0;
@@ -100,8 +109,8 @@ const asrService = new AsrService({ resourcesPath: process.resourcesPath });
 let ownerGrant: string | undefined;
 const actor = { kind: "user" as const, id: "desktop-user" };
 const hideWindow = smoke || process.env.MANGA_WINDOW_HIDDEN === "1";
-// `--background` (A-135): `stage install-dev` starts the development build in the tray without showing a window.
-const startInTray = !hideWindow && process.argv.includes("--background");
+// `--background` (A-135) or a recent tray-state release update restart keeps the main window parked in the tray.
+let startInTray = !hideWindow && launchArgs.background;
 let window: BrowserWindow | undefined;
 let windowTray: WindowTrayController | undefined;
 let saved = false;
@@ -170,6 +179,11 @@ if (layout.writable) {
     // ignore
   }
   instanceControl.clearStaleSignalFiles();
+  const startupDecision = decideStartupWindow({
+    args: launchArgs,
+    marker: consumeUpdateRestartMarker(layout.partitions.runtime),
+  });
+  startInTray = !hideWindow && !startupDecision.openWindow;
   instanceControl.writeRunningInstance("starting");
   app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
     routeSecondInstance({
@@ -177,6 +191,7 @@ if (layout.writable) {
       additionalData,
       hasQuitSignal: () => fs.existsSync(instanceControl.quitSignalFile),
       onQuitForUpdate: () => { void instanceControl.handleQuitForUpdate(); },
+      quitting: quitting || preparingUpdate,
       tray: windowTray,
       window,
       hideWindow,
@@ -194,6 +209,7 @@ function lightOpenRunning(error: unknown): boolean {
 }
 
 async function runDetachedWindowsInstaller(input: { installerPath: string; mode: "restart" | "quit"; expectedSha512: string }): Promise<boolean> {
+  const windowOpen = isMainWindowOpen(window);
   let relaunchArgs: string[] = [];
   if (process.env.MANGA_UPDATE_RELAUNCH_ARGS) {
     try {
@@ -214,6 +230,13 @@ async function runDetachedWindowsInstaller(input: { installerPath: string; mode:
   });
   if (!handle.ok) return false;
   if (input.mode === "restart") {
+    if (layout.writable) {
+      writeUpdateRestartMarker(layout.partitions.runtime, {
+        reason: "update",
+        windowOpen,
+        fromVersion: buildInfo.version,
+      });
+    }
     setTimeout(() => {
       destroyWindowTray();
       instanceControl.cleanupInstanceFiles();
@@ -222,6 +245,8 @@ async function runDetachedWindowsInstaller(input: { installerPath: string; mode:
       appService = undefined;
       app.exit(0);
     }, 60).unref?.();
+  } else if (layout.writable) {
+    clearUpdateRestartMarker(layout.partitions.runtime);
   }
   return true;
 }
@@ -275,6 +300,7 @@ async function bootService(): Promise<void> {
       onInstallFailed: () => {
         saved = false;
         preparingUpdate = false;
+        if (layout.writable) clearUpdateRestartMarker(layout.partitions.runtime);
         if (window && !window.isDestroyed()) window.setEnabled(true);
       },
       onBeforeInstall: async () => {

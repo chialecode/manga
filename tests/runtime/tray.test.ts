@@ -480,6 +480,35 @@ describe("single-instance restore and quit-for-update lifecycle", () => {
     expect(win.isFocused()).toBe(true);
   });
 
+  it("stays silent on second-instance --background or while quitting without popping a tray-parked window", () => {
+    const win = createFakeWindow({ visible: false, skipTaskbar: true, focused: false });
+    const harness = createFakeTrayHarness();
+    const tray = trayFor(win, harness, { channel: "development" });
+    expect(tray.parkInTray()).toBe(true);
+
+    let updateQuits = 0;
+    const bgOutcome = routeSecondInstance({
+      argv: ["manga-dev.exe", "--BACKGROUND"],
+      onQuitForUpdate: () => { updateQuits += 1; },
+      tray,
+      window: win,
+    });
+    expect(bgOutcome).toBe("noop");
+    expect(updateQuits).toBe(0);
+    expect(win.isVisible()).toBe(false);
+    expect(win.isFocused()).toBe(false);
+
+    const quittingOutcome = routeSecondInstance({
+      argv: ["manga-dev.exe"],
+      onQuitForUpdate: () => { updateQuits += 1; },
+      quitting: true,
+      tray,
+      window: win,
+    });
+    expect(quittingOutcome).toBe("noop");
+    expect(win.isVisible()).toBe(false);
+  });
+
   it("destroys the tray icon without restoring on --quit-for-update and detaches cleanly on dispose/close", () => {
     const win = createFakeWindow();
     const harness = createFakeTrayHarness();

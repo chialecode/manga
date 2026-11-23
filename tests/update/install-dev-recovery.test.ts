@@ -4,7 +4,15 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeBuildInfo } from "@manga/app-core";
-import { findDefaultDevInstaller, launchArgsAfterInstall, launchOutsideJob, quoteWindowsArg, runInstallDev } from "../../scripts/stage/install-dev.mjs";
+import {
+  findDefaultDevInstaller,
+  isExplorerExecutable,
+  launchArgsAfterInstall,
+  launchOutsideJob,
+  quoteWindowsArg,
+  resolveDesktopShellLaunch,
+  runInstallDev,
+} from "../../scripts/stage/install-dev.mjs";
 import { packagedFingerprintKeys } from "../../scripts/stage/lib.mjs";
 
 const scratch: string[] = [];
@@ -175,25 +183,140 @@ describe("Development installer recovery review (AT-158)", () => {
   });
 
   it("starts the installed development app in the tray after every install, running before or not, and reports a launch kept inside the job (A-135)", async () => {
-    for (const [wasRunning, inJob] of [[true, false], [false, true]] as const) {
+    for (const [wasRunning, inJob, viaShell] of [[true, false, true], [false, true, false]] as const) {
       const fixture = devFixture();
       if (!wasRunning) fs.rmSync(path.join(fixture.runtime, "running-instance.json"));
       const launches: Array<{ exe: string; args: string[] }> = [];
+      const launchOptions: unknown[] = [];
       const result = await runInstallDev({ ...fixture.options, background: true, relaunchFn: undefined, relaunchReadyTimeoutMs: 2_000,
         isProcessAliveFn: (pid: number) => (pid === 770077 ? wasRunning && fixture.options.isProcessAliveFn(pid) : pid === 770079),
         spawnInstallerFn: async () => {
           writeBuildInfo(fixture.resources, { version: fixture.version, channel: "development", commit: "2222222", builtAt: "2026-11-08T11:00:00.000Z", schemaVersion: 14 });
           return { status: 0 };
         },
-        launchOutsideJobFn: (exe: string, args: string[]) => {
+        launchOutsideJobFn: (exe: string, args: string[], _env: unknown, optionsForLaunch: unknown) => {
           launches.push({ exe, args });
+          launchOptions.push(optionsForLaunch);
           fs.writeFileSync(path.join(fixture.runtime, "running-instance.json"), JSON.stringify({ pid: 770079, channel: "development", testIdentity: true, execPath: fixture.executable, version: fixture.version, state: "ready" }));
-          return { pid: 770079, inJob };
+          return { pid: 770079, inJob, viaShell };
         },
       });
-      expect(result).toMatchObject({ status: "passed", installed: true, wasRunning, relaunched: true, background: true, inJob, newVersion: fixture.version });
+      expect(result).toMatchObject({ status: "passed", installed: true, wasRunning, relaunched: true, background: true, inJob, viaShell, newVersion: fixture.version });
       expect(launches).toEqual([{ exe: fixture.executable, args: ["--background"] }]);
+      // The fixture redirects the app's folders through its environment, which a desktop-shell launch would drop.
+      expect(launchOptions).toEqual([{ viaDesktopShell: false }]);
     }
+  });
+
+  it("verifies explorer.exe parent so Windows PCA/shell jobs do not false-positive inJob on desktop-shell launches (A-135)", () => {
+    const winRoot = ["W", "Windows"].join(":\\");
+    const explorerExe = path.win32.join(winRoot, "Explorer.EXE");
+    const fakeExplorer = path.win32.join(["W", "Temp"].join(":\\"), "explorer.exe");
+    const cmdExe = path.win32.join(winRoot, "System32", "cmd.exe");
+
+    expect(isExplorerExecutable(explorerExe, winRoot)).toBe(true);
+    expect(isExplorerExecutable(path.win32.join(winRoot, "explorer.exe"), `${winRoot}\\`)).toBe(true);
+    expect(isExplorerExecutable(fakeExplorer, winRoot)).toBe(false);
+    expect(isExplorerExecutable(cmdExe, winRoot)).toBe(false);
+    expect(isExplorerExecutable("", winRoot)).toBe(false);
+    expect(isExplorerExecutable(explorerExe, "")).toBe(false);
+
+    // Explorer child with raw IsProcessInJob=true (Windows PCA/shell or app-owned job) -> inJob: false.
+    expect(resolveDesktopShellLaunch({
+      pid: 35436,
+      ppid: 8668,
+      livePpid: 8668,
+      selfPid: 100,
+      parentExecutablePath: explorerExe,
+      systemRoot: winRoot,
+      rawInJob: true,
+    })).toEqual({ pid: 35436, inJob: false, viaShell: true, parentIsExplorer: true });
+
+    // Short-lived child already exited (livePpid: null) with live explorer.exe ppid -> inJob: false.
+    expect(resolveDesktopShellLaunch({
+      pid: 35436,
+      ppid: 8668,
+      livePpid: null,
+      selfPid: 100,
+      parentExecutablePath: explorerExe,
+      systemRoot: winRoot,
+      rawInJob: true,
+    })).toEqual({ pid: 35436, inJob: false, viaShell: true, parentIsExplorer: true });
+
+    // Live parent mismatch, self parent, or non-explorer parent fails closed to conservative rawInJob.
+    expect(resolveDesktopShellLaunch({
+      pid: 35436,
+      ppid: 8668,
+      livePpid: 9999,
+      selfPid: 100,
+      parentExecutablePath: explorerExe,
+      systemRoot: winRoot,
+      rawInJob: true,
+    })).toEqual({ pid: 35436, inJob: true, viaShell: true, parentIsExplorer: false });
+
+    expect(resolveDesktopShellLaunch({
+      pid: 35436,
+      ppid: 100,
+      livePpid: 100,
+      selfPid: 100,
+      parentExecutablePath: explorerExe,
+      systemRoot: winRoot,
+      rawInJob: true,
+    })).toEqual({ pid: 35436, inJob: true, viaShell: true, parentIsExplorer: false });
+
+    expect(resolveDesktopShellLaunch({
+      pid: 35436,
+      ppid: 4242,
+      livePpid: 4242,
+      selfPid: 100,
+      parentExecutablePath: cmdExe,
+      systemRoot: winRoot,
+      rawInJob: true,
+    })).toEqual({ pid: 35436, inJob: true, viaShell: true, parentIsExplorer: false });
+  });
+
+  it("uses viaDesktopShell: true for real development installs when environment folders are not overridden (A-135)", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-install-dev-shell-"));
+    scratch.push(root);
+    const localAppData = path.join(root, "local");
+    const installDir = path.join(root, "Programs", "manga-dev");
+    const resources = path.join(installDir, "resources");
+    const runtime = path.join(localAppData, "manga-dev", "runtime");
+    fs.mkdirSync(resources, { recursive: true });
+    fs.mkdirSync(runtime, { recursive: true });
+    const executable = path.join(installDir, "manga-dev.exe");
+    fs.writeFileSync(executable, "synthetic development executable");
+    const oldVersion = "0.1.2-dev.202611081000";
+    const version = "0.1.2-dev.202611081100";
+    writeBuildInfo(resources, { version: oldVersion, channel: "development", commit: "1111111", builtAt: "2026-11-08T10:00:00.000Z", schemaVersion: 14 });
+    const installer = path.join(root, `manga-dev-setup-${version}.exe`);
+    fs.writeFileSync(installer, "synthetic installer");
+
+    const launchOptions: unknown[] = [];
+    const result = await runInstallDev({
+      testIdentity: false,
+      installDir,
+      installerPath: installer,
+      newVersion: version,
+      evidenceDir: null,
+      registryEntries: [{ DisplayName: "MANGA Dev", DisplayVersion: oldVersion, InstallLocation: installDir }],
+      runningProcessesFn: () => [],
+      env: { ...process.env, LOCALAPPDATA: localAppData, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
+      snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
+      isProcessAliveFn: (pid: number) => pid === 770080,
+      spawnInstallerFn: async () => {
+        writeBuildInfo(resources, { version, channel: "development", commit: "2222222", builtAt: "2026-11-08T11:00:00.000Z", schemaVersion: 14 });
+        return { status: 0 };
+      },
+      launchOutsideJobFn: (_exe: string, args: string[], _env: unknown, opts: unknown) => {
+        launchOptions.push({ args, opts });
+        fs.writeFileSync(path.join(runtime, "running-instance.json"), JSON.stringify({ pid: 770080, channel: "development", testIdentity: false, execPath: executable, version, state: "ready" }));
+        return { pid: 770080, inJob: false, viaShell: true };
+      },
+      relaunchReadyTimeoutMs: 2_000,
+    });
+    expect(result).toMatchObject({ status: "passed", installed: true, relaunched: true, background: true, inJob: false, viaShell: true, newVersion: version });
+    expect(launchOptions).toEqual([{ args: ["--background"], opts: { viaDesktopShell: true } }]);
   });
 
   it("keeps the gate's rehearsal rule for the test identity by default: reopen only an app that was running, with the caller's arguments (A-135)", async () => {
@@ -222,5 +345,13 @@ describe("Development installer recovery review (AT-158)", () => {
     const started = launchOutsideJob(cmd, ["/d", "/c", "exit", "0"], process.env);
     expect(Number.isInteger(started.pid)).toBe(true);
     expect(typeof started.inJob).toBe("boolean");
+    expect(started.viaShell).toBe(false);
+    // Empty argument list must also succeed cleanly without failing on missing env var removal.
+    const hostname = path.join(systemRoot, "System32", "hostname.exe");
+    if (fs.existsSync(hostname)) {
+      const noArgs = launchOutsideJob(hostname, [], process.env);
+      expect(Number.isInteger(noArgs.pid)).toBe(true);
+      expect(noArgs.viaShell).toBe(false);
+    }
   }, 60_000);
 });

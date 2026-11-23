@@ -49,10 +49,14 @@ export function quoteWindowsArg(arg) {
 // Node cannot ask for CREATE_BREAKAWAY_FROM_JOB, so a short PowerShell helper calls CreateProcessW. Inside an agent's command sandbox (a job
 // object that ends its processes when the command returns) the started app leaves the job when the job allows it; a job that forbids breaking
 // away gets the app started inside it, reported as `inJob` (A-135). The environment is inherited from this helper, which inherits `env`.
+// With `viaDesktopShell`, a helper that runs inside a job first asks the desktop shell (explorer.exe, Shell.Application of the desktop window)
+// to start the app: it is then explorer's child, in no job of this command even when the job forbids breaking away, and it has the shell's
+// environment instead of `env`. The helper waits up to 15 s for the new process of that executable (preferring a child of %SystemRoot%\explorer.exe
+// whose parent is not the same executable).
 const LAUNCH_OUTSIDE_JOB_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
-  "$exe = $env:MANGA_LAUNCH_EXE; $line = $env:MANGA_LAUNCH_LINE; $dir = $env:MANGA_LAUNCH_DIR",
-  "Remove-Item Env:MANGA_LAUNCH_EXE, Env:MANGA_LAUNCH_LINE, Env:MANGA_LAUNCH_DIR",
+  "$exe = $env:MANGA_LAUNCH_EXE; $line = $env:MANGA_LAUNCH_LINE; $dir = $env:MANGA_LAUNCH_DIR; $params = [string]$env:MANGA_LAUNCH_PARAMS; $viaShell = $env:MANGA_LAUNCH_VIA_SHELL -eq '1'",
+  "Remove-Item Env:MANGA_LAUNCH_EXE, Env:MANGA_LAUNCH_LINE, Env:MANGA_LAUNCH_DIR, Env:MANGA_LAUNCH_PARAMS, Env:MANGA_LAUNCH_VIA_SHELL -ErrorAction SilentlyContinue",
   "Add-Type -TypeDefinition @'",
   "using System; using System.Runtime.InteropServices; using System.Text;",
   "public static class MangaLaunchOutsideJob {",
@@ -63,6 +67,11 @@ const LAUNCH_OUTSIDE_JOB_SCRIPT = [
   "    IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string dir, ref StartupInfo info, out ProcessInformation pi);",
   "  [DllImport(\"kernel32.dll\", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);",
   "  [DllImport(\"kernel32.dll\")] static extern bool CloseHandle(IntPtr handle);",
+  "  [DllImport(\"kernel32.dll\")] static extern IntPtr GetCurrentProcess();",
+  "  [DllImport(\"kernel32.dll\", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int processId);",
+  "  public static bool SelfInJob() { bool inJob; return IsProcessInJob(GetCurrentProcess(), IntPtr.Zero, out inJob) && inJob; }",
+  "  public static bool InJob(int processId) { IntPtr handle = OpenProcess(0x1000, false, processId); if (handle == IntPtr.Zero) return false;",
+  "    bool inJob; bool ok = IsProcessInJob(handle, IntPtr.Zero, out inJob); CloseHandle(handle); return ok && inJob; }",
   "  static bool Create(string exe, string line, string dir, uint flags, out ProcessInformation pi) {",
   "    var info = new StartupInfo(); info.cb = Marshal.SizeOf(typeof(StartupInfo));",
   "    return CreateProcessW(exe, new StringBuilder(line), IntPtr.Zero, IntPtr.Zero, false, flags, IntPtr.Zero, dir, ref info, out pi); }",
@@ -75,18 +84,96 @@ const LAUNCH_OUTSIDE_JOB_SCRIPT = [
   "    CloseHandle(pi.thread); CloseHandle(pi.process);",
   "    return \"{\\\"pid\\\":\" + pi.processId + \",\\\"inJob\\\":\" + (inJob ? \"true\" : \"false\") + \"}\"; } }",
   "'@",
+  "if ($viaShell -and (Test-Path -LiteralPath $exe -PathType Leaf) -and [MangaLaunchOutsideJob]::SelfInJob()) {",
+  "  $started = $null",
+  "  $sysRoot = if ($env:SystemRoot) { $env:SystemRoot } elseif ($env:WINDIR) { $env:WINDIR } else { [Environment]::GetFolderPath('Windows') }",
+  "  $explorerExe = if ($sysRoot) { [IO.Path]::GetFullPath((Join-Path $sysRoot 'explorer.exe')) } else { '' }",
+  "  function Get-Explorers { $map = @{}; if ($explorerExe) { foreach ($p in @(Get-CimInstance Win32_Process -Filter \"Name='explorer.exe'\")) { if ($p.ExecutablePath -and [string]::Equals([IO.Path]::GetFullPath($p.ExecutablePath), $explorerExe, [StringComparison]::OrdinalIgnoreCase)) { $map[[int]$p.ProcessId] = $p.ExecutablePath } } }; return $map }",
+  "  try {",
+  "    $name = [IO.Path]::GetFileName($exe).Replace(\"'\", \"''\")",
+  "    function Get-Same { @(Get-CimInstance Win32_Process -Filter \"Name='$name'\" | Where-Object { $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $exe, [StringComparison]::OrdinalIgnoreCase) }) }",
+  "    $before = @{}; foreach ($p in Get-Same) { $before[[int]$p.ProcessId] = $true }",
+  "    $exp = Get-Explorers",
+  "    $f = [Reflection.BindingFlags]; $m = [Reflection.Missing]::Value",
+  "    $t = [Type]::GetTypeFromCLSID([Guid]'9BA05972-F6A8-11CF-A442-00A0C90A8F39'); $sw = [Activator]::CreateInstance($t)",
+  "    $d = $t.InvokeMember('FindWindowSW', $f::InvokeMethod, $null, $sw, @($m, $m, 8, 0, 1))",
+  "    if ($null -ne $d) {",
+  "      $doc = $d.GetType().InvokeMember('Document', $f::GetProperty, $null, $d, $null)",
+  "      $app = $doc.GetType().InvokeMember('Application', $f::GetProperty, $null, $doc, $null)",
+  "      [void]$app.GetType().InvokeMember('ShellExecute', $f::InvokeMethod, $null, $app, @($exe, $params, $dir, 'open', 1))",
+  "      $deadline = (Get-Date).AddSeconds(15)",
+  "      while ($null -eq $started -and (Get-Date) -lt $deadline) {",
+  "        $now = Get-Same; $ids = @{}; foreach ($p in $now) { $ids[[int]$p.ProcessId] = $true }",
+  "        $cand = @($now | Where-Object { -not $before.ContainsKey([int]$_.ProcessId) -and -not $ids.ContainsKey([int]$_.ParentProcessId) })",
+  "        $started = @($cand | Where-Object { $exp.ContainsKey([int]$_.ParentProcessId) }) | Select-Object -First 1",
+  "        if ($null -eq $started) { $started = $cand | Select-Object -First 1 }",
+  "        if ($null -eq $started) { Start-Sleep -Milliseconds 200 }",
+  "      }",
+  "    }",
+  "  } catch { $started = $null }",
+  "  if ($null -ne $started) {",
+  "    $startedId = [int]$started.ProcessId; $parentId = [int]$started.ParentProcessId",
+  "    $live = @(Get-CimInstance Win32_Process -Filter \"ProcessId=$startedId\" | Select-Object -First 1)",
+  "    $liveParent = if ($live.Count -gt 0) { [int]$live[0].ParentProcessId } else { $null }",
+  "    $expAfter = Get-Explorers",
+  "    $parentPath = if ($expAfter.ContainsKey($parentId)) { $expAfter[$parentId] } else { '' }",
+  "    $rawInJob = [MangaLaunchOutsideJob]::InJob($startedId)",
+  "    function Esc([string]$s) { if ($null -eq $s) { return '' }; return $s.Replace('\\', '\\\\').Replace('\"', '\\\"') }",
+  "    $liveJson = if ($null -eq $liveParent) { 'null' } else { [string]$liveParent }",
+  "    $rawJson = if ($rawInJob) { 'true' } else { 'false' }",
+  "    [Console]::Out.Write('{\"pid\":' + $startedId + ',\"ppid\":' + $parentId + ',\"livePpid\":' + $liveJson + ',\"selfPid\":' + $PID + ',\"parentExecutablePath\":\"' + (Esc $parentPath) + '\",\"systemRoot\":\"' + (Esc $sysRoot) + '\",\"rawInJob\":' + $rawJson + ',\"viaShell\":true}'); exit 0",
+  "  }",
+  "}",
   "[Console]::Out.Write([MangaLaunchOutsideJob]::Start($exe, $line, $dir))",
 ].join("\n");
 
+/** Whether `executablePath` is `%SystemRoot%\explorer.exe` (case-insensitive). */
+export function isExplorerExecutable(executablePath, systemRoot = process.env.SystemRoot || process.env.WINDIR || "") {
+  const candidate = String(executablePath ?? "").trim();
+  const root = String(systemRoot ?? "").trim();
+  if (!candidate || !root) return false;
+  return path.win32.normalize(candidate).toLowerCase() === path.win32.normalize(path.win32.join(root, "explorer.exe")).toLowerCase();
+}
+
+/**
+ * Resolves `{ pid, inJob, viaShell, parentIsExplorer }` for a desktop-shell launch.
+ * On Windows 10/11, `explorer.exe` / PCA routinely assigns GUI apps started via ShellExecute to a system
+ * shell job object, causing raw `IsProcessInJob(handle, NULL)` to false-positive even though the process
+ * is explorer's child and not in this command's job. Confirming `%SystemRoot%\explorer.exe` as the parent
+ * reports `inJob: false`; otherwise falls back conservatively to `rawInJob` without launching a second copy.
+ */
+export function resolveDesktopShellLaunch(input) {
+  const pid = Number(input.pid);
+  const ppid = Number(input.ppid ?? 0);
+  const selfPid = Number(input.selfPid ?? 0);
+  const livePpid = input.livePpid === undefined || input.livePpid === null ? ppid : Number(input.livePpid);
+  const parentIsExplorer = Number.isInteger(pid)
+    && pid > 0
+    && Number.isInteger(ppid)
+    && ppid > 0
+    && livePpid === ppid
+    && ppid !== selfPid
+    && ppid !== pid
+    && isExplorerExecutable(input.parentExecutablePath, input.systemRoot);
+  return {
+    pid,
+    inJob: parentIsExplorer ? false : input.rawInJob === true,
+    viaShell: true,
+    parentIsExplorer,
+  };
+}
+
 /**
  * Starts `exe args` detached and, when allowed, outside the job object this command runs in, so the app keeps running after the command ends.
- * Returns `{ pid, inJob }`; `inJob: true` means the job forbade breaking away and the app may end with the command (A-135).
+ * With `viaDesktopShell` and this command inside a job, the desktop shell starts it first (it then has the shell's environment, not `env`).
+ * Returns `{ pid, inJob, viaShell }`; `inJob: true` means the app could not leave the job and may end with the command (A-135).
  */
-export function launchOutsideJob(exe, args, env) {
+export function launchOutsideJob(exe, args, env, { viaDesktopShell = false } = {}) {
   if (process.platform !== "win32") throw new Error("launching outside the job is Windows only");
   const line = [exe, ...args].map(quoteWindowsArg).join(" ");
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", LAUNCH_OUTSIDE_JOB_SCRIPT], {
-    env: { ...env, MANGA_LAUNCH_EXE: exe, MANGA_LAUNCH_LINE: line, MANGA_LAUNCH_DIR: path.dirname(exe) },
+  const params = args.map(quoteWindowsArg).join(" ");
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Sta", "-ExecutionPolicy", "Bypass", "-Command", LAUNCH_OUTSIDE_JOB_SCRIPT], {
+    env: { ...env, MANGA_LAUNCH_EXE: exe, MANGA_LAUNCH_LINE: line, MANGA_LAUNCH_DIR: path.dirname(exe), MANGA_LAUNCH_PARAMS: params, MANGA_LAUNCH_VIA_SHELL: viaDesktopShell ? "1" : "0" },
     encoding: "utf8",
     windowsHide: true,
     timeout: 60_000,
@@ -95,7 +182,11 @@ export function launchOutsideJob(exe, args, env) {
   if (result.status !== 0 || !Number.isInteger(parsed?.pid)) {
     throw new Error(`could not start the development app (${String(result.stderr ?? "").trim().split("\n")[0] || `exit ${String(result.status)}`})`);
   }
-  return { pid: parsed.pid, inJob: parsed.inJob === true };
+  if (parsed.viaShell === true) {
+    const resolved = resolveDesktopShellLaunch(parsed);
+    return { pid: resolved.pid, inJob: resolved.inJob, viaShell: true };
+  }
+  return { pid: parsed.pid, inJob: parsed.inJob === true, viaShell: false };
 }
 
 export function readRunningInstance(runtimeDir) {
@@ -277,6 +368,7 @@ export async function runInstallDev(options = {}) {
       relaunched: Boolean(payload.relaunched),
       background,
       ...(payload.inJob !== undefined ? { inJob: Boolean(payload.inJob) } : {}),
+      ...(payload.viaShell !== undefined ? { viaShell: Boolean(payload.viaShell) } : {}),
       previousVersion: payload.previousVersion ?? null,
       newVersion: payload.newVersion ?? expectedNewVersion ?? null,
       seconds: Number(((Date.now() - startedMs) / 1000).toFixed(2)),
@@ -438,6 +530,7 @@ export async function runInstallDev(options = {}) {
     let relaunchedPid = null;
     let draftPreserved;
     let inJob;
+    let viaShell;
     const launchArgs = launchArgsAfterInstall(options.relaunchArgs, background);
     for (const signalFile of ["quit-for-update.json", "quit-for-update-ack.json", "running-instance.json"]) {
       try { fs.rmSync(path.join(devRuntimeDir, signalFile), { force: true }); } catch { /* ignore */ }
@@ -456,16 +549,22 @@ export async function runInstallDev(options = {}) {
       relaunched = custom?.relaunched === true;
       relaunchedPid = custom?.pid ?? null;
       draftPreserved = custom?.draftPreserved;
-      if (background) inJob = custom?.inJob === true;
+      if (background) {
+        inJob = custom?.inJob === true;
+        if (custom?.viaShell !== undefined) viaShell = custom.viaShell === true;
+      }
     } else if (background) {
       let launched;
       try {
-        launched = (options.launchOutsideJobFn ?? launchOutsideJob)(installedDevExe, launchArgs, relaunchEnv);
+        // The desktop shell gives the app its own environment, so it is used only when nothing here overrides the app's environment.
+        const viaDesktopShell = !places && !options.relaunchEnv;
+        launched = (options.launchOutsideJobFn ?? launchOutsideJob)(installedDevExe, launchArgs, relaunchEnv, { viaDesktopShell });
       } catch {
         return { relaunched: false, relaunchedPid: null };
       }
       relaunchedPid = launched.pid;
       inJob = launched.inJob;
+      viaShell = launched.viaShell === true;
     } else {
       const child = spawn(installedDevExe, launchArgs, {
         env: relaunchEnv,
@@ -500,7 +599,7 @@ export async function runInstallDev(options = {}) {
         await sleep(150);
       }
     }
-    return { relaunched, relaunchedPid, draftPreserved, inJob };
+    return { relaunched, relaunchedPid, draftPreserved, inJob, viaShell };
   };
   const failAndRecover = async (payload) => {
     withdrawRequest();
@@ -619,7 +718,7 @@ export async function runInstallDev(options = {}) {
     }
 
     const startAfter = wasRunning || background;
-    const { relaunched, relaunchedPid, draftPreserved, inJob } = startAfter
+    const { relaunched, relaunchedPid, draftPreserved, inJob, viaShell } = startAfter
       ? await relaunchDevelopment(installedVersion) : { relaunched: false, relaunchedPid: null };
 
     return finalize(
@@ -629,6 +728,7 @@ export async function runInstallDev(options = {}) {
         wasRunning,
         relaunched,
         inJob,
+        viaShell,
         previousVersion,
         newVersion: installedVersion,
         ...(startAfter && !relaunched ? { reason: "updated development instance did not become ready" } : {}),
