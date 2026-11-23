@@ -260,3 +260,20 @@ describe("AT-105 what the page may ask of the window", () => {
     for (const name of ["windowState", "windowAction", "onWindowState"]) expect(preload).toContain(name);
   });
 });
+
+describe("an abandoned update or quit", () => {
+  it("leaves the running instance reachable on every failure path", () => {
+    // A tray "Quit" removes the icon and sets the quit flag; if the update handshake then fails, a later
+    // launch must still bring the window back instead of being ignored while the flag stays set.
+    const main = readFileSync(new URL("../../apps/desktop/src/main/index.ts", import.meta.url), "utf8");
+    expect(main).toMatch(/function recoverAfterAbortedQuit\(\): void \{\s*quitting = false;\s*windowTray\?\.ensureActive\(\);\s*\}/);
+    for (const hook of ["onInstallFailed: () => {", "onUpdateRestartFailed: () => {"]) {
+      const body = main.slice(main.indexOf(hook), main.indexOf("},", main.indexOf(hook)));
+      expect(body).toContain("recoverAfterAbortedQuit();");
+    }
+    expect(main).toContain("onAborted: () => { recoverAfterAbortedQuit(); }");
+    const controller = readFileSync(new URL("../../apps/desktop/src/main/quit-for-update.ts", import.meta.url), "utf8");
+    const failure = controller.slice(controller.indexOf("input.setPreparingUpdate(false);"));
+    expect(failure.slice(0, failure.indexOf("} finally {"))).toContain("input.onAborted?.();");
+  });
+});

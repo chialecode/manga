@@ -116,6 +116,16 @@ let windowTray: WindowTrayController | undefined;
 let saved = false;
 /** The application is on its way out (a quit, the system ending the session): closing the window then closes it, never into the tray (A-136). */
 let quitting = false;
+
+/**
+ * An update or quit that was cancelled must leave the running instance reachable: a tray "Quit" may have
+ * removed the icon and set `quitting` before the update handshake failed, and a second launch ignores
+ * the request while `quitting` stays set.
+ */
+function recoverAfterAbortedQuit(): void {
+  quitting = false;
+  windowTray?.ensureActive();
+}
 let preparingUpdate = false;
 
 function destroyWindowTray(): void {
@@ -164,6 +174,7 @@ const instanceControl = createQuitForUpdateController({
   flushWindowSaves,
   setPreparingUpdate: (value) => { preparingUpdate = value; },
   resetSaved: () => { saved = false; },
+  onAborted: () => { recoverAfterAbortedQuit(); },
   destroyWindowTray,
   disposeAsr: () => asrService.dispose(),
 });
@@ -302,6 +313,7 @@ async function bootService(): Promise<void> {
         preparingUpdate = false;
         if (layout.writable) clearUpdateRestartMarker(layout.partitions.runtime);
         if (window && !window.isDestroyed()) window.setEnabled(true);
+        recoverAfterAbortedQuit();
       },
       onBeforeInstall: async () => {
         const light = await askLightToQuit(lightRuntimeDir(), { timeoutMs: LIGHT_QUIT_WAIT_MS });
@@ -317,6 +329,7 @@ async function bootService(): Promise<void> {
           saved = false;
           preparingUpdate = false;
           if (window && !window.isDestroyed()) window.setEnabled(true);
+          recoverAfterAbortedQuit();
           throw error;
         }
       },
@@ -491,6 +504,7 @@ if (!quitForUpdateFlag) void app.whenReady().then(async () => {
       saved = false;
       preparingUpdate = false;
       if (window && !window.isDestroyed()) window.setEnabled(true);
+      recoverAfterAbortedQuit();
     },
   });
 
@@ -546,8 +560,7 @@ if (!quitForUpdateFlag) void app.whenReady().then(async () => {
         preparingUpdate = false;
         saved = false;
         closeChosen = false;
-        quitting = false;
-        windowTray?.ensureActive();
+        recoverAfterAbortedQuit();
         if (!closing.isDestroyed()) {
           if (!hideWindow) closing.setSkipTaskbar(false);
           closing.setEnabled(true);

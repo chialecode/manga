@@ -61,6 +61,8 @@ export function createQuitForUpdateController(input: {
   flushWindowSaves: (options?: { strict?: boolean; signal?: AbortSignal }) => Promise<void>;
   setPreparingUpdate: (value: boolean) => void;
   resetSaved: () => void;
+  /** Called after an abandoned quit-for-update so the instance stays reachable (quit flag cleared, tray back). */
+  onAborted?: () => void;
   destroyWindowTray: () => void;
   disposeAsr: () => void;
 }): QuitForUpdateController {
@@ -177,6 +179,7 @@ export function createQuitForUpdateController(input: {
         input.setPreparingUpdate(false);
         const win = input.getWindow();
         if (win && !win.isDestroyed()) win.setEnabled(true);
+        input.onAborted?.();
         try { fs.writeFileSync(quitAckFile, JSON.stringify({ pid: process.pid, status: "busy" })); } catch { /* ignore */ }
         if (requestStillCurrent()) { try { fs.rmSync(quitSignalFile, { force: true }); } catch { /* ignore */ } }
       } finally {
