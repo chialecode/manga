@@ -36,6 +36,8 @@ describe("text from outside is matched in linear time", () => {
     const body = JSON.stringify({ error: { message: "slow down" + TAB.repeat(50_000) + "x" } });
     expect(quick(() => providerReason(body))).toBeTruthy();
     expect(providerReason(JSON.stringify({ error: { message: "rate limited (request_id: abc-1)  " } }))).toBe("rate limited");
+    expect(quick(() => providerReason(JSON.stringify({ error: { message: "(request_id:".repeat(20_000) } })))).toBeTruthy();
+    expect(providerReason(JSON.stringify({ error: { message: "busy (Request_ID: x) later" } }))).toBe("busy (Request_ID: x) later");
   });
 
   it("reads publisherName lists line by line", () => {
@@ -49,5 +51,6 @@ describe("text from outside is matched in linear time", () => {
 
   it("removes script blocks whose end tag carries whitespace", () => {
     expect(htmlToText("<p>a</p><script>alert(1)</script ><p>b</p>").text).not.toContain("alert");
+    expect(htmlToText("<p>a</p><script>alert(1)</script foo><p>b</p>").text).not.toContain("alert");
   });
 });
