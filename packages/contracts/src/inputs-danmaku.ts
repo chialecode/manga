@@ -67,9 +67,10 @@ function hasQuantifiedQuantifierGroup(pattern: string): boolean {
   let quantified = false;
   for (let i = 0; i < pattern.length; i += 1) {
     if (pattern.charCodeAt(i) === 92) {
-      // A backslash escapes the next character. An escaped "(" still starts a candidate group, as in the
-      // check this replaces: "((.*)\(.*)+" must stay refused.
-      if (pattern[i + 1] === "(") {
+      // A backslash escapes the next character. An escaped "(" still starts a candidate group when none is
+      // open, as in the check this replaces ("((.*)\(.*)+" stays refused); inside an open group it is
+      // ordinary text and must not reset the group ("(.*.*\()+" stays refused too).
+      if (pattern[i + 1] === "(" && !inGroup) {
         inGroup = true;
         quantified = false;
       }

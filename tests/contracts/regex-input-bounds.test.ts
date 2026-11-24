@@ -31,6 +31,8 @@ describe("text from outside is matched in linear time", () => {
     expect(validPattern("(ab){2}")).toBe(true);
     expect(validPattern("(a+)b")).toBe(true);
     expect(validPattern("((.*)\\(.*)+!")).toBe(false);
+    expect(validPattern("(.*.*\\()+!")).toBe(false);
+    expect(validPattern("(a\\(b)c")).toBe(true);
     expect(quick(() => validPattern("\\(" + "a".repeat(50_000)))).toBe(true);
   });
 
@@ -52,6 +54,7 @@ describe("text from outside is matched in linear time", () => {
     expect(checkAppUpdateConfig([...base, "publisherName: chialecode"].join(NL))).toEqual([]);
     expect(checkAppUpdateConfig([...base, "publisherName:", "  - other"].join(NL))).toContain("missing publisherName chialecode");
     expect(checkAppUpdateConfig([...base, "publisherName:", "  - Evil Corp", "  - chialecode"].join(NL))).toContain("missing publisherName chialecode");
+    expect(checkAppUpdateConfig([...base, "publisherName:", "  -", "  - chialecode"].join(NL))).toContain("missing publisherName chialecode");
   });
 
   it("removes script blocks whose end tag carries whitespace", () => {

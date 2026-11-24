@@ -272,8 +272,8 @@ function publisherNames(yamlText: string): string[] {
     if (!item) continue;
     if (!item.startsWith("-")) break;
     const name = item.slice(1).trim();
-    if (/\s/.test(name)) break;
-    if (name) names.push(name);
+    if (!name || /\s/.test(name)) break;
+    names.push(name);
   }
   return names;
 }
