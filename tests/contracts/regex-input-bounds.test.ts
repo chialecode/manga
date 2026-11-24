@@ -30,6 +30,8 @@ describe("text from outside is matched in linear time", () => {
     expect(validPattern("(x|y+)*")).toBe(false);
     expect(validPattern("(ab){2}")).toBe(true);
     expect(validPattern("(a+)b")).toBe(true);
+    expect(validPattern("((.*)\\(.*)+!")).toBe(false);
+    expect(quick(() => validPattern("\\(" + "a".repeat(50_000)))).toBe(true);
   });
 
   it("drops a service's request id without scanning whitespace twice", () => {
@@ -38,6 +40,8 @@ describe("text from outside is matched in linear time", () => {
     expect(providerReason(JSON.stringify({ error: { message: "rate limited (request_id: abc-1)  " } }))).toBe("rate limited");
     expect(quick(() => providerReason(JSON.stringify({ error: { message: "(request_id:".repeat(20_000) } })))).toBeTruthy();
     expect(providerReason(JSON.stringify({ error: { message: "busy (Request_ID: x) later" } }))).toBe("busy (Request_ID: x) later");
+    expect(providerReason(JSON.stringify({ error: { message: "bad key (request_id: abc (request_id: r1)" } }))).toBe("bad key");
+    expect(providerReason(JSON.stringify({ error: { message: "İ".repeat(15) + " busy (request_id: req_1)" } }))).toBe("İ".repeat(15) + " busy");
   });
 
   it("reads publisherName lists line by line", () => {
@@ -47,10 +51,12 @@ describe("text from outside is matched in linear time", () => {
     expect(checkAppUpdateConfig([...base, "publisherName:", "  - other", "", "  - chialecode"].join(NL))).toEqual([]);
     expect(checkAppUpdateConfig([...base, "publisherName: chialecode"].join(NL))).toEqual([]);
     expect(checkAppUpdateConfig([...base, "publisherName:", "  - other"].join(NL))).toContain("missing publisherName chialecode");
+    expect(checkAppUpdateConfig([...base, "publisherName:", "  - Evil Corp", "  - chialecode"].join(NL))).toContain("missing publisherName chialecode");
   });
 
   it("removes script blocks whose end tag carries whitespace", () => {
     expect(htmlToText("<p>a</p><script>alert(1)</script ><p>b</p>").text).not.toContain("alert");
     expect(htmlToText("<p>a</p><script>alert(1)</script foo><p>b</p>").text).not.toContain("alert");
+    expect(quick(() => htmlToText("<script>".repeat(2_000) + "</script".repeat(2_000)), 2_000)).toBeTruthy();
   });
 });

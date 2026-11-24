@@ -222,11 +222,14 @@ export function mapHttpError(status: number, body: string): MangaError {
  * anchored at the end is quadratic on a message that repeats the opening many times.
  */
 function withoutRequestId(message: string): string {
-  const at = message.toLowerCase().lastIndexOf("(request_id:");
+  const trimmed = message.trimEnd();
+  if (!trimmed.endsWith(")")) return message;
+  const close = trimmed.length - 1;
+  // The id runs to the final ")" without another ")" inside, so it starts after the previous ")".
+  const from = trimmed.lastIndexOf(")", close - 1) + 1;
+  const at = trimmed.slice(from, close).search(/\(request_id:/i);
   if (at < 0) return message;
-  const close = message.indexOf(")", at);
-  if (close < 0 || message.slice(close + 1).trim() !== "") return message;
-  return message.slice(0, at).trimEnd();
+  return trimmed.slice(0, from + at).trimEnd();
 }
 
 /**
