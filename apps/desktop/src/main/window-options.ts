@@ -6,6 +6,8 @@ export const productWindow = {
   minHeight: 360,
   /** The window background is the app's own frame color (`--color-frame` in styles.css); a test keeps them equal. */
   backgroundColor: "#F3F4F7",
+  /** Dark window background (`:root[data-theme="dark"]` `--color-bg` in styles.css) for OS-dark windows such as light open. */
+  darkBackgroundColor: "#14171F",
   /**
    * No system frame and no system caption buttons (`titleBarOverlay` is not set): the page draws minimize, maximize or restore, and close itself
    * (A-91), and the top row is the height of those buttons. macOS keeps its traffic lights, which the page leaves room for.

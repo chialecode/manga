@@ -187,7 +187,7 @@ function createWindow(file: string | null): LightWindow {
     ...(icon ? { icon } : {}),
     show: false,
     title: "MANGA",
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#17181C" : productWindow.backgroundColor,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? productWindow.darkBackgroundColor : productWindow.backgroundColor,
     titleBarStyle: productWindow.titleBarStyle,
     webPreferences: {
       preload: path.join(__dirname, "preload-light.cjs"),

@@ -222,6 +222,17 @@ describe("window colors", () => {
     expect(main).toContain("titleBarStyle: productWindow.titleBarStyle");
   });
 
+  it("light open uses the dark theme's background color when the system is in dark mode", () => {
+    const css = readFileSync(new URL("../../apps/desktop/src/renderer/styles.css", import.meta.url), "utf8");
+    const darkBlock = /:root\[data-theme="dark"\]\s*\{([\s\S]*?)\}/.exec(css)![1]!;
+    const darkBg = /--color-bg:\s*(#[0-9A-Fa-f]{6})/.exec(darkBlock)![1]!.toUpperCase();
+    expect(productWindow.darkBackgroundColor).toBe("#14171F");
+    expect(productWindow.darkBackgroundColor.toUpperCase()).toBe(darkBg);
+    const lightMain = readFileSync(new URL("../../apps/desktop/src/main/light/main.ts", import.meta.url), "utf8");
+    expect(lightMain).toContain("nativeTheme.shouldUseDarkColors ? productWindow.darkBackgroundColor : productWindow.backgroundColor");
+    expect(lightMain).not.toContain("#17181C");
+  });
+
   it("the buttons are as high as the top row", () => {
     const layout = readFileSync(new URL("../../packages/app-core/src/domain/shell-layout.ts", import.meta.url), "utf8");
     expect(Number(/export const TOP_ROW_HEIGHT = (\d+);/.exec(layout)![1])).toBe(productWindow.topHeightPx);
@@ -230,6 +241,33 @@ describe("window colors", () => {
     // One variable carries the height; the top, and everything that sits under it in window full screen, read it.
     expect(css).toMatch(new RegExp(String.raw`--column-top-h: *${productWindow.topHeightPx}px`));
     expect(frame).toMatch(/\.shell-top \{[^}]*height: var\(--column-top-h\)/);
+  });
+});
+
+describe("typography tokens and tabular numerals", () => {
+  it("defines --font-sans and --font-mono with Chinese UI fallbacks and uses them across renderer stylesheets", () => {
+    const rendererDir = new URL("../../apps/desktop/src/renderer/", import.meta.url);
+    const css = readFileSync(new URL("styles.css", rendererDir), "utf8").replace(/\r\n/g, "\n");
+    const workspaceCss = readFileSync(new URL("styles-workspace.css", rendererDir), "utf8").replace(/\r\n/g, "\n");
+    const pluginsCss = readFileSync(new URL("styles-plugins.css", rendererDir), "utf8").replace(/\r\n/g, "\n");
+
+    expect(css).toContain('--font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;');
+    expect(css).toContain('--font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace;');
+    expect(css).toMatch(/html,\s*body,\s*#root\s*\{[^}]*font-family:\s*var\(--font-sans\);/);
+    expect(css).toMatch(/\.about-facts dd\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/);
+
+    // Every monospace surface in the renderer stylesheets uses var(--font-mono) rather than bare monospace or ad-hoc stacks without CJK fallback.
+    expect(css).toMatch(/\.tiptap \[data-block-type="code"\],\s*\.tiptap \[data-block-type="plaintext"\]\s*\{[^}]*font-family:\s*var\(--font-mono\);/);
+    for (const selector of [".bubble-markdown code", ".settings-path", ".debug-list dd", ".debug-events"]) {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      expect(workspaceCss, selector).toMatch(new RegExp(`${escaped}\\s*\\{[^}]*font-family:\\s*var\\(--font-mono\\);`));
+    }
+    expect(pluginsCss).toMatch(/\.plugin-fingerprint\s*\{[^}]*font-family:\s*var\(--font-mono\);/);
+
+    const withoutTheme = css.replace(/@theme\s*\{[\s\S]*?\}/, "");
+    for (const [name, sheet] of [["styles.css", withoutTheme], ["styles-workspace.css", workspaceCss], ["styles-plugins.css", pluginsCss]] as const) {
+      expect(sheet, name).not.toMatch(/font-family:\s*monospace\b|Consolas|Cascadia Mono|ui-monospace/);
+    }
   });
 });
 
