@@ -218,6 +218,21 @@ export function mapHttpError(status: number, body: string): MangaError {
 }
 
 /**
+ * `message` without a trailing `(request_id: …)` and the whitespace around it. Found with string searches: a regex
+ * anchored at the end is quadratic on a message that repeats the opening many times.
+ */
+function withoutRequestId(message: string): string {
+  const trimmed = message.trimEnd();
+  if (!trimmed.endsWith(")")) return message;
+  const close = trimmed.length - 1;
+  // The id runs to the final ")" without another ")" inside, so it starts after the previous ")".
+  const from = trimmed.lastIndexOf(")", close - 1) + 1;
+  const at = trimmed.slice(from, close).search(/\(request_id:/i);
+  if (at < 0) return message;
+  return trimmed.slice(0, from + at).trimEnd();
+}
+
+/**
  * What a service said about a request it refused (`{"error":{"message":…}}`), so the person and the call record see why instead of a bare status. Only
  * that one field is read, without the request id the service adds, cut to 240 characters; a body that is not that JSON gives nothing.
  */
@@ -228,7 +243,7 @@ export function providerReason(body: string): string | null {
   const message = typeof error === "string" ? error : typeof (error as { message?: unknown } | null)?.message === "string" ? (error as { message: string }).message : null;
   if (!message) return null;
   // Nothing key- or token-shaped goes on (an error is shown and logged); the service's own words about the request do.
-  const text = message.replace(/\s*\(request_id:[^)]*\)\s*$/i, "")
+  const text = withoutRequestId(message)
     .replace(/\bBearer\s+\S+/gi, "Bearer <key>")
     .replace(/\b(?:sk|pk|rk|key)-[A-Za-z0-9_-]{8,}/gi, "<key>")
     .replace(/[A-Za-z0-9_-]{32,}/g, "<token>")

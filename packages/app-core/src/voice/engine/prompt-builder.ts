@@ -50,7 +50,7 @@ export type BuiltAsrHint =
       prompt?: undefined;
     };
 
-const WEIGHT_SUFFIX_RE = /\s*:\s*[+-]?\d+(?:\.\d+)?\s*$/;
+const WEIGHT_SUFFIX_RE = /:\s*[+-]?\d+(?:\.\d+)?\s*$/;
 const LEADING_COLONS_RE = /^:+/;
 const INTERNAL_DELIMS_RE = /[,，;；\r\n\t]+/g;
 const HAS_LETTER_OR_DIGIT_RE = /[\p{L}\p{N}]/u;
