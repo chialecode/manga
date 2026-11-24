@@ -8,8 +8,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "变更结果、依据、验证与影响的 PR 模板",
-      "reviewed": "2026-09-19",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "AGENTS.md",
@@ -17,17 +17,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "MANGA：AI Agent 与开发者工作入口",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
-    },
-    {
-      "path": "USER-ACTIONS.md",
-      "kind": "status",
-      "status": "active",
-      "owner": "产品负责人 / 技术负责人",
-      "scope": "用户待办：用户需要做的全部事项的唯一入口（待决定及当前默认、人工检查及步骤、授权与外部配置），不绑定阶段",
-      "reviewed": "2026-11-13",
-      "basis": "A-53：2026-10-06 用户要求把所有需要用户确认的内容集中到一个文档，Agent 与用户的流水线互不阻塞；由原 docs/decisions/open-questions.md 迁移，Agent 侧后续 loop 移至执行状态"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "CLAUDE.md",
@@ -44,8 +35,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "MANGA 开发与贡献指南",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "DESIGN.md",
@@ -71,8 +62,8 @@
       "status": "active",
       "owner": "项目维护者",
       "scope": "ADR-0002：本地验证优先的 GitHub 协作",
-      "reviewed": "2026-10-04",
-      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/decisions/0003-ui-editing.md",
@@ -118,8 +109,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "决定索引：已确认决定与 ADR",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-25 A-38/A-39/A-40：统一 Q/ACT/LOOP 事项、全软件基本功能 MVP 与反馈循环、活跃开源优先及 A 方案前查证；独立复核后集中交接；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-25 A-38/A-39/A-40：统一 Q/ACT/LOOP 事项、全软件基本功能 MVP 与反馈循环、活跃开源优先及 A 方案前查证；独立复核后集中交接；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/delivery/roadmap-and-acceptance.md",
@@ -127,17 +118,17 @@
       "status": "draft",
       "owner": "产品负责人 / 质量负责人",
       "scope": "MANGA 交付阶段与验收计划",
-      "reviewed": "2026-11-13",
-      "basis": "既有分阶段验收定义；本次 Agent 优先顺序已确认；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "既有分阶段验收定义；本次 Agent 优先顺序已确认；2026-09-20 用户九项决定、Agent 下一步规则与当时的 A 验收审查；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/delivery/status.md",
       "kind": "status",
       "status": "active",
       "owner": "质量负责人",
-      "scope": "Agent 侧的当前执行状态：当前阶段、已实现能力、当前事实、验证基线、后续 loop、原型 POC 的当前去向与推荐下一步",
-      "reviewed": "2026-11-13",
-      "basis": "阶段清理（A-45、A-57）：已合并阶段的结论提炼进本页；当前事实以本页为准；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "scope": "实现现状：已实现的能力、当前事实、验证基线、支持矩阵、实现中采用的默认、原型 POC 的当前去向、原 LOOP 条目的去向",
+      "reviewed": "2026-11-24",
+      "basis": "阶段清理（A-45、A-57）：已合并阶段的结论提炼进本页；当前事实以本页为准；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/design-rules/DESIGN.md",
@@ -243,9 +234,9 @@
       "kind": "rule",
       "status": "active",
       "owner": "技术负责人",
-      "scope": "A/B 职责、版本与证据交接、连续执行、集中审批、差异返工和完成标准",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "scope": "issue 驱动的开发流程：需求队列、什么时候找用户、每次改动的流程、高风险清单、开发版自动安装、多 Agent 并行、教训循环、每周维护与完成标准",
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/dev-rules/git-and-github.md",
@@ -253,8 +244,8 @@
       "status": "active",
       "owner": "项目维护者",
       "scope": "分支/commit/push 的时机、频率、交接与授权；GitHub、CI、分支保护及外部集成",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；2026-09-19 用户要求规范 Git 节奏，并明确 AI Agent 一次性实现里程碑后集中审批；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/dev-rules/quality-gates.md",
@@ -262,8 +253,8 @@
       "status": "active",
       "owner": "技术负责人",
       "scope": "验证与质量门禁",
-      "reviewed": "2026-11-13",
-      "basis": "通用阶段入口、报告门禁与真实服务开关取代按阶段的脚本；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "通用阶段入口、报告门禁与真实服务开关取代按阶段的脚本；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/dev-rules/README.md",
@@ -289,8 +280,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "文档治理与变更规则",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/product-rules/core-product-principles.md",
@@ -325,8 +316,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "MANGA 文档导航",
-      "reviewed": "2026-11-13",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/SUMMARY.md",
@@ -334,8 +325,8 @@
       "status": "active",
       "owner": "项目维护者",
       "scope": "GitBook 阅读目录",
-      "reviewed": "2026-11-13",
-      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立 Git/GitHub 配置；ADR-0002；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/templates/change-proposal.md",
@@ -370,8 +361,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "文档模板",
-      "reviewed": "2026-09-19",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/templates/validation-report.md",
@@ -388,8 +379,8 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "MANGA",
-      "reviewed": "2026-11-13",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-22 A 审查、人工负面反馈与 A-32—34；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；2026-09-22 A 审查、人工负面反馈与 A-32—34；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "REVIEW.md",
@@ -397,8 +388,17 @@
       "status": "active",
       "owner": "文档维护者",
       "scope": "MANGA 评审口径",
-      "reviewed": "2026-10-06",
-      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户授权建立文档框架；ADR-0001；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
+    },
+    {
+      "path": "LESSONS.md",
+      "kind": "entry",
+      "status": "active",
+      "owner": "文档维护者",
+      "scope": "MANGA 开发中踩过的坑：规则、原因、证据与出现次数；出现 3 次的提升进开发规则",
+      "reviewed": "2026-11-24",
+      "basis": "A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "SECURITY.md",
@@ -424,17 +424,8 @@
       "status": "active",
       "owner": "产品负责人 / 技术负责人",
       "scope": "已确认产品与技术决定的 A 编号及职责正本索引",
-      "reviewed": "2026-10-26",
-      "basis": "2026-09-19 用户逐项答复和公开内容要求；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
-    },
-    {
-      "path": "docs/templates/agent-handoff.md",
-      "kind": "template",
-      "status": "active",
-      "owner": "技术负责人 / 质量负责人",
-      "scope": "A 计划、B 交付、A 审查/差异返工与集中待用户处理清单的最小结构",
-      "reviewed": "2026-10-07",
-      "basis": "A-20；用户要求为 A 规划 → B 执行 → A 审查建立高效交流机制；2026-09-19 用户要求同一交付未 push 的审查修复 amend，独立交付分别提交；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞"
+      "reviewed": "2026-11-24",
+      "basis": "2026-09-19 用户逐项答复和公开内容要求；A-20：用户要求 A 规划、B 连续执行、A 集中审查，少打断、统一审批和 Git 交接；后续修订依据见确认记录 A 编号；A-53：用户事项集中到 USER-ACTIONS.md，Agent 与用户互不阻塞；A-138：issue 驱动的小 PR 流程（2026-11-24）"
     },
     {
       "path": "docs/modules/library.md",
@@ -480,26 +471,6 @@
       "scope": "Agent 模块规格：会话、预算、工具授权与协议适配",
       "reviewed": "2026-10-04",
       "basis": "新模块规格要求；AGENT-06、MODEL-04；2026-09-20 A 审查补齐工具 schema、流完成与材料授权；后续修订依据见确认记录 A 编号"
-    },
-    {
-      "path": "docs/delivery/stage-plan.md",
-      "kind": "plan",
-      "status": "active",
-      "owner": "技术负责人",
-      "scope": "当前阶段唯一计划：阶段开始的整理与依赖盘点、DeepSeek 插件（声明式模型提供者插件与 model.provider 位置、按 GET /models 加入模型、共用密钥、DeepSeek 思考模式与 reasoning_content 回传、原生联网搜索、DeepSeek 语音识别接入识别引擎、语音合成与朗读、网页搜索工具）、schema v17、真实 API 契约、观察项与基准、人工检查、B 执行 prompt",
-      "reviewed": "2026-11-14",
-      "basis": "A-133：本阶段范围（2026-11-14 用户要求把 DeepSeek API 作为插件接入，启动后模型列表里能加入对应模型，并授权真实 API 测试）；A-134：插件形态与接入方式；Q-41 默认值；ACT-23 真实 API 授权范围；A-46：计划覆盖整个阶段、不分批；A-40 开源查证；A-35 依赖盘点",
-      "retireAfter": "m13"
-    },
-    {
-      "path": "docs/delivery/stage-report.md",
-      "kind": "evidence",
-      "status": "active",
-      "owner": "开发者 / 质量负责人",
-      "scope": "当前阶段报告：C0 整理与 D1 依赖盘点、工作包/需求/验收映射、L1 的 reasoning_content 回传规则、提供者文件与接法白名单、schema v17 迁移、DeepSeek 真实契约结果与用量、Q-41 默认值的取舍、全套阶段门禁、朗读基准与源码指纹",
-      "reviewed": "2026-11-15",
-      "basis": "docs/delivery/stage-plan.md 第 9 节；A-133、A-134、A-132；PLUG-07、MODEL-06、MODEL-07、VOICE-18、VOICE-19、SEARCH-03；AT-184—AT-193",
-      "retireAfter": "m13"
     },
     {
       "path": "docs/modules/comic.md",

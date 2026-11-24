@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.voice` / 语音记录与听写 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）：包含带来源位置的长录音笔记（`capture.*`）与应用内低延迟听写、本地离线识别引擎及二次元词库（`dictation.*`、`asrModel.*`、`dictionary.*`，A-130、A-131）。ASR 契约测试已用合成 TTS 语音覆盖（≤ 10 次请求）；Bangumi 角色详情与多协议转录真实契约见[用户待办](../../USER-ACTIONS.md#act-21)（ACT-21，not-run）；设备、声学与输入法项见 H-11、H-102、H-104—H-111 |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）：包含带来源位置的长录音笔记（`capture.*`）与应用内低延迟听写、本地离线识别引擎及二次元词库（`dictation.*`、`asrModel.*`、`dictionary.*`，A-130、A-131）。ASR 契约测试已用合成 TTS 语音覆盖（≤ 10 次请求）；Bangumi 角色详情与多协议转录真实契约见[#52](https://github.com/chialecode/manga/issues/52)（ACT-21，not-run）；设备、声学与输入法项见 H-11、H-102、H-104—H-111 |
 | 需求 / 设计依据 | VOICE-01—19、AT-06—08、AT-54、AT-57—59、AT-76、AT-172、AT-174—183、AT-189—AT-191；[领域模型第 9 节](../design/domain-model.md#9-语音采集与位置映射)、[交互设计第 7 节](../design/interaction-and-workflows.md#7-工作流-b口述感想与异步整理)、[架构设计](../design/architecture.md)、Q-05、Q-40 |
 | 包与公开入口 | `packages/app-core/src/voice`（`models/`、`engine/`、`correct/`、`polish/`、`dictation/` 及录音会话）、`apps/desktop/src/main/asr-host.ts` / `asr-service.ts`、`apps/desktop/src/renderer/voice/`；命令 `capture.*`、`dictation.start/append/stop/cancel/status`、`dictation.history.list/delete/clear/retranscribe`、`asrModel.list/download/pause/cancel/import/delete`、`dictionary.list/removedWorks/add/update/remove/importBatch/importMetadata/cancelImportMetadata/prompt/observeEdit`、`dictionary.suggestions.list/decide`、`settings.getRecording/setRecording` |
 

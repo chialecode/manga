@@ -22,7 +22,7 @@
 | `docs/product/`、`docs/design/` | 需求和详细设计评审稿 |
 | `docs/product-rules/`、`docs/dev-rules/`、`docs/design-rules/` | 按任务触发的持续约束 |
 | `docs/governance/`、`docs/decisions/` | 文档登记、治理和决定 |
-| `docs/delivery/`、`docs/evidence/gate/`、`docs/templates/` | 当前阶段计划、报告与状态；最近一次阶段门禁的最终证据；模板 |
+| `docs/delivery/`、`docs/evidence/gate/`、`docs/templates/` | 交付路线与实现现状；最近一次整套门禁的最终证据；模板 |
 | `scripts/verify.mjs` | 统一入口：语法、文档、工具锁引用形态、公开内容、依赖方向与轻量/语音推理闭包边界、无用代码与依赖（`knip`）、类型、全部 Vitest、`git diff --check` |
 | `scripts/stage.mjs`、`scripts/stage/` | 阶段门禁与发布入口：`gate`/`test`/`bench`/`package`/`installer`/`install-dev`/`release`/`report`（含 `version-lib.mjs`、`installer-lib.mjs`、`install-dev.mjs`、`light-open.mjs`、`rollback-rehearsal.mjs`、`bench-dictation.mjs`、`release.mjs`、`release-decide.mjs`、`release-publish-verify.mjs`）；当前阶段取自登记表的 `currentStage`，门禁定义在 `scripts/stage/gate.json`（按输入分组的指纹与每份结果依赖哪些组、必需用例、基准目标、包烟测阶段与窗口场景） |
 | `scripts/check-docs.mjs`、`check-deps.mjs`、`check-publication.mjs`、`check-workflows.mjs` 及其 `.test.mjs` | 文档与登记、包依赖方向与轻量/`asr-host` 入口闭包、公开内容检查及反例、GitHub Actions 工作流安全检查；`stage-report.test.mjs` 为阶段报告门禁反例 |
@@ -57,7 +57,7 @@
 | OS 临时目录中的 `manga-*` | 自动化合成夹具与故障子进程数据；每次独立，不提交 |
 | `docs/evidence/gate/` | 最近一次阶段门禁的经脱敏、可审阅的 JSON/截图（≤ 5 MiB）；下一阶段的门禁覆盖它 |
 
-签名密钥不在仓库里：第一方插件签名私钥 `%APPDATA%\manga-release\plugin-signing.key`（公钥在 `packages/app-core/src/plugins/trust.ts`），正式版更新签名私钥 `%APPDATA%\manga-release\update-signing.key`（公钥 `update-signing.pub` 内置在 `packages/app-core/src/update/signature.ts`）；须自行备份（见[用户待办](../../USER-ACTIONS.md)）。
+签名密钥不在仓库里：第一方插件签名私钥 `%APPDATA%\manga-release\plugin-signing.key`（公钥在 `packages/app-core/src/plugins/trust.ts`），正式版更新签名私钥 `%APPDATA%\manga-release\update-signing.key`（公钥 `update-signing.pub` 内置在 `packages/app-core/src/update/signature.ts`）；须自行备份（见 [#51](https://github.com/chialecode/manga/issues/51)）。
 
 路径计算正本为 `scripts/desktop-paths.ts`。生成目录在 Git 忽略范围内；包含 Profile 的目录不是可随意自动删除的缓存。开发机本地的界面参考图放在 `dist/design-refs`，不进入仓库，文字正本见[交互设计 3.4](../design/interaction-and-workflows.md#34-三媒介界面2026-10-03-参考)。
 
@@ -73,7 +73,7 @@
 | `pnpm dev` | Windows 可用 | 检查 Electron SQLite ABI 后以独立开发 Profile 启动；无须手工 rebuild；媒体功能需要 `dist/tools` 中的随包工具 |
 | `node scripts/verify.mjs` | 可用 | 统一入口，范围见[质量门禁](quality-gates.md) |
 | `node scripts/quick-gate.mjs [--phases a,b] [--all-tests]` | Windows 可用 | 日常的快速门禁（目标 5 分钟内）：`verify --skip-tests`、与自上次提交以来改动的文件相关的 Vitest、点名的打包烟测阶段；不写证据，不代替整套门禁（[两级门禁](quality-gates.md#gate-tiers)） |
-| `node scripts/stage.mjs gate` | Windows 可用 | 整套门禁（只在 B 交付整个阶段时跑一次）：verify（不跑测试）→ test → package → installer → bench → package 补到连续 2 次 → report，第一个失败就停，结果仍有效的步骤不重跑，每步用时写进 `gate-run.json`（`scripts/stage/gate.mjs`） |
+| `node scripts/stage.mjs gate` | Windows 可用 | 整套门禁（发布前，以及改到打包、安装、更新、签名或发布链路时跑）：verify（不跑测试）→ test → package → installer → bench → package 补到连续 2 次 → report，第一个失败就停，结果仍有效的步骤不重跑，每步用时写进 `gate-run.json`（`scripts/stage/gate.mjs`） |
 | `node scripts/stage.mjs test` | 可用 | 全部 Vitest + 脚本自测，按必需用例匹配写入跑次目录 |
 | `node scripts/stage.mjs bench` | 可用 | 10k 元数据 / 50k 块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、200 封面读取与 1000 条消息停靠栏的打包窗口测量（`scripts/stage/bench-scan-pane.mjs`，需先有打包产物），再加语义检索（1 万片）、粗剪导出开销、本机回环 BT 下载 200 MB（`bench-creative.mjs`、`bench-bt.mjs`）、白板/导图交互（`bench-canvas.mjs`，隐藏窗口）、5000 条消息的对话（打包窗口的 `bench-chat` 阶段）、任务媒体（60 s 片段、4 MB 图像、迁移与 500 MB 升级复制，`bench-agent-media.mjs`）、轻量冷启动（`light-open.mjs`）以及本地极速模型松键上屏与万词音近替换基准（`bench-dictation.mjs`），保留原始样本 |
 | `node scripts/stage.mjs package` | Windows 可用 | Forge 未签名包及打包烟测（含媒体、录音与听写 `voice` / `dictation-*`、`window-walk`、创作工作区 `creative`、插件下载 `plugins`、长对话与任务媒体 `loop`、更新 `update`、轻量打开 `light`、旧版凭据 `credentials-async`、schema 迁移与数据位置 `data-locations-*` 并写 `scenarios.json`；再用 electron-builder 做出本通道的按用户安装包（不签名）。需先生成合成样本与旧版凭据 Profile（`scripts/samples/build-legacy-credentials.mjs`），拉取门禁离线极速 ASR 模型（`scripts/tools/fetch-speech-asr.mjs`），并有第一方私钥来签随包插件） |
@@ -106,4 +106,4 @@
 
 ## 建立工程时登记
 
-Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md) 选定，当前实际目录/依赖按上表，产品验收另行记录。数据位置按 A-118 分两个根（应用数据在 `%LOCALAPPDATA%\manga`，用户文件在系统登记的“文档”下的 `manga`，下载在“下载”下的 `manga`；开发版各用 `-dev` 后缀，所有路径统一用小写的 `manga`），全部生成位置可配置、通道隔离，启动定位在 `packages/app-core/src/locations.ts`。组合运行时、写入宿主与媒体后端的技术定稿见[用户待办](../../USER-ACTIONS.md)与 [ADR-0007](../decisions/0007-technology-stack.md)。密钥示例用占位值，实际依赖由锁文件维护。
+Electron、TypeScript、monorepo 为已确认方向；Windows 11 x64 为首发基线。UI、编辑、SQLite 驱动及对应工程基础已按 [ADR-0007](../decisions/0007-technology-stack.md) 选定，当前实际目录/依赖按上表，产品验收另行记录。数据位置按 A-118 分两个根（应用数据在 `%LOCALAPPDATA%\manga`，用户文件在系统登记的“文档”下的 `manga`，下载在“下载”下的 `manga`；开发版各用 `-dev` 后缀，所有路径统一用小写的 `manga`），全部生成位置可配置、通道隔离，启动定位在 `packages/app-core/src/locations.ts`。组合运行时、写入宿主与媒体后端的技术定稿见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)与 [ADR-0007](../decisions/0007-technology-stack.md)。密钥示例用占位值，实际依赖由锁文件维护。

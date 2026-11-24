@@ -129,7 +129,7 @@ export function formatReleaseNotesMarkdown({
       `- **性能基准说明**：本地门禁基准源码指纹 \`${benchFingerprint.slice(0, 12)}\`（与本次发布源码一致：${benchMatchesSource ? "是" : "否"}）。`,
     );
   }
-  lines.push("- **人工检查状态**：发布相关人工检查项与状态见仓库 `USER-ACTIONS.md`。");
+  lines.push("- **人工检查状态**：发布相关人工检查项与状态见仓库中带 `needs-user` 标签的 issue。");
 
   return `${lines.join("\n")}\n`;
 }

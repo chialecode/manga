@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.acquisition` / 下载 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；公网与真实资源未测（只在本机回环地址上测过），手动检查见[用户待办](../../USER-ACTIONS.md#checks) |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）；公网与真实资源未测（只在本机回环地址上测过），手动检查见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user) |
 | 需求 / 设计依据 | ACQ-01、ACQ-02、ACQ-03、AT-42、AT-43、AT-46、AT-47、AT-56；[外部扩展设计](../design/external-providers-and-acquisition.md)、[数据与安全](../dev-rules/data-and-security.md) |
 | 包与公开入口 | `packages/app-core/src/acquisition/`（`service.ts` 任务与流水线、`files.ts` 发布与目标名）；契约 `packages/contracts/src/acquisition.ts`；随应用的第一方引擎 `plugins/acquisition-bt/`（`src/main.mjs`、`engine.mjs`、`link.mjs`、`stubs/`）；命令 `acquisition.list`、`get`、`add`、`select`、`pause`、`resume`、`cancel`、`remove`、`retryPublish`、`retryImport`、`restart`、`setSeeding`；界面 `apps/desktop/src/renderer/pages/downloads/` |
 
@@ -45,6 +45,6 @@ Feature `acquisition`；没有自己的界面部分（页面由引擎插件的 `
 
 ## 6. 验证与未决
 
-自动：`tests/acquisition/engine.test.ts`（引擎本身在回环蜂群上：元数据、选文件、校验、限速、做种）、`bt-e2e.test.ts`（经插件进程的完整下载）、`host.test.ts`（引擎要什么与宿主拒绝什么、选文件与预算与空间、发布中途崩溃、真实跨卷发布、暂停与引擎消失、做种）、`tests/shell/downloads-ui.test.tsx`；回环蜂群由 `tests/helpers/bt-swarm.ts` 在独立进程里起，磁力里带 `?passkey=` 用来验证它不泄漏。窗口：`plugins`（见[插件模块](plugins.md)）里的下载部分：在打包应用里经页面从回环蜂群下载、选文件、发布、入库为作品、暂存清空、磁力密钥未出现。基准：`btLoopback`（本机回环 200 MB 下载，读回成品核对所有分片哈希，未校验分片数必须为 0；记录吞吐），见[执行状态](../delivery/status.md)。
+自动：`tests/acquisition/engine.test.ts`（引擎本身在回环蜂群上：元数据、选文件、校验、限速、做种）、`bt-e2e.test.ts`（经插件进程的完整下载）、`host.test.ts`（引擎要什么与宿主拒绝什么、选文件与预算与空间、发布中途崩溃、真实跨卷发布、暂停与引擎消失、做种）、`tests/shell/downloads-ui.test.tsx`；回环蜂群由 `tests/helpers/bt-swarm.ts` 在独立进程里起，磁力里带 `?passkey=` 用来验证它不泄漏。窗口：`plugins`（见[插件模块](plugins.md)）里的下载部分：在打包应用里经页面从回环蜂群下载、选文件、发布、入库为作品、暂存清空、磁力密钥未出现。基准：`btLoopback`（本机回环 200 MB 下载，读回成品核对所有分片哈希，未校验分片数必须为 0；记录吞吐），见[实现现状](../delivery/status.md)。
 
 限制：没有在公共 DHT 与真实 tracker 上测过；WebRTC、web seed 与 uTP 关闭，所以某些只能经 WebRTC 或 web seed 到达的来源取不到；速度限制是引擎客户端范围内取最严格的一个，不是按任务分别限制；只支持磁力与种子文件，不支持 HTTP 直链与其他来源；Agent 目前不能添加或管理下载；没有计划任务与带宽时间表；做种要求文件保持下载时的位置与名字，用户改名或移动后需要重新下载校验才能做种；真实资源的版权与来源合法性由用户负责，应用不提供任何来源。

@@ -3,7 +3,7 @@
 | 入口 | 负责内容 |
 | --- | --- |
 | [已确认决定](confirmed-decisions.md) | A 编号索引、有效决定与职责正本 |
-| [用户待办](../../USER-ACTIONS.md)（根目录） | 仍待用户处理的决定（含 Agent 当前在用的默认值）、人工检查与授权的唯一入口；决定答复后回写到确认记录 |
+| [`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user) | 仍待用户处理的决定（含 Agent 当前在用的默认值）、人工检查与授权的唯一入口；决定答复后回写到确认记录 |
 | [ADR-0001：建立文档治理框架](0001-document-governance.md) | 本次文档组织与治理选择 |
 | [ADR-0002：本地验证优先的 GitHub 协作](0002-local-first-github.md) | 独立 Git 历史、必要 CI、单人维护 Ruleset 与低频操作 |
 | [ADR-0007：基础技术栈](0007-technology-stack.md) | accepted：UI、编辑、存储驱动及对应工程基础，含依赖刷新结果与开源选型记录 |

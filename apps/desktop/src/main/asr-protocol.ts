@@ -108,7 +108,7 @@ export type AsrHostMessage =
   | { t: "result"; id: number; ok: false; error: { code: string; message: string } };
 
 /**
- * Dry/wet linear mix (`0.75 * denoised + 0.25 * raw` by default, per stage-plan 4.2) so speech enhancement never
+ * Dry/wet linear mix (`0.75 * denoised + 0.25 * raw` by default, per the archived dictation plan §4.2: https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-plan.md) so speech enhancement never
  * strips soft consonants completely. Preserves the exact length of `raw`.
  */
 export function mixDenoisedSamples(raw: Float32Array, denoised: Float32Array, wet = GTCRN_WET_MIX): Float32Array {

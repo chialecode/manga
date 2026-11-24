@@ -6,26 +6,25 @@
 | 编写日期 | 2026-09-19；2026-10-06 更新 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速、安装与自动更新、首个正式版与轻量打开、类 Typeless 的听写都已合入 main（最近合并提交 `92d1b0b`，已发布 v0.1.1）；当前阶段（DeepSeek 插件）在 `feat/m13-deepseek-plugin` 已完成 B 实施、A 集中审查、试用反馈修复、全仓代码审查重构、无用代码与文档清理及合并前依赖盘点，已于 2026-11-21 经 [PR #28](https://github.com/chialecode/manga/pull/28) 合并进 `main`。产品验收尚未完成，已实现能力与验证状态见[执行状态](delivery/status.md) |
+| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速、安装与自动更新、首个正式版与轻量打开（已发布 v0.1.1）、类 Typeless 的听写（阶段合并提交 `92d1b0b`）、DeepSeek 插件（2026-11-21 经 [PR #28](https://github.com/chialecode/manga/pull/28) 合并）都已合入 main；之后按 issue 驱动的小 PR 开发（A-138）。产品验收尚未完成，已实现能力与验证状态见[实现现状](delivery/status.md) |
 
 ## 1. 阅读顺序
 
-开始开发先读根 [AGENTS.md](../AGENTS.md)和 [当前执行状态](delivery/status.md)，再按任务阅读下列正本。首次了解产品可先读产品原则与需求，研究组合架构再读组合方案。
+开始开发先读根 [AGENTS.md](../AGENTS.md)和 [实现现状](delivery/status.md)，再按任务阅读下列正本。首次了解产品可先读产品原则与需求，研究组合架构再读组合方案。
 
 | 开发入口 | 用途 |
 | --- | --- |
 | [文档治理](governance/documentation-policy.md) / [完整登记表](governance/document-registry.json) | 权威范围、状态、责任、更新与归档；所有自有 Markdown 均登记 |
 | [产品规则](product-rules/README.md) | 已确认方向与长期承诺 |
 | [开发规则](dev-rules/README.md) / [仓库地图](dev-rules/repo-map.md) | 工作流、模块/契约、数据、Agent 与真实命令 |
-| [A/B 协作](dev-rules/development-workflow.md#agent-handoff) / [Agent 与用户的交流](dev-rules/development-workflow.md#agent-user) / [交接模板](templates/agent-handoff.md) | A 规划、B 连续执行、A 集中复核；Agent 与用户只经用户待办和编号交流，互不阻塞 |
+| [开发流程](dev-rules/development-workflow.md#change-loop) / [什么时候找用户](dev-rules/development-workflow.md#user-actions) / [教训](../LESSONS.md) | 一个 issue 一个小 PR，CI 与独立审查后合并；需要用户的事建 `needs-user` issue，互不阻塞；踩过的坑写进 LESSONS |
 | [设计规则](design-rules/README.md) | UI 治理、可访问性与视觉证据 |
-| [用户待办](../USER-ACTIONS.md) | 用户需要做的全部事的唯一入口：待决定（含当前默认）、人工检查（含步骤）、授权；不限阶段，可顺延 |
+| [Issues](https://github.com/chialecode/manga/issues) | 需求、缺陷与后续项的唯一队列；用户需要做的事（待决定、人工检查、授权）带 `needs-user` 标签，不限阶段，可顺延 |
 | [决定索引](decisions/README.md) | 已确认决定与 ADR |
 | [基础技术栈决定](decisions/0007-technology-stack.md) | A-15 已授权的 UI、编辑、存储与工程基础选择；原型到正式工程的迁移/验证边界 |
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
-| [执行状态](delivery/status.md) | POC/AT 的实际执行情况与证据 |
-| [最近一次门禁证据](evidence/gate/) | 最近一次阶段门禁（test、package、bench、report）的脱敏结果，随阶段更新；过程文档与轮次证据按[阶段收尾清理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
-| [当前阶段计划](delivery/stage-plan.md) / [当前阶段报告](delivery/stage-report.md) | 当前阶段唯一计划（A-46）与 B 交付报告：阶段开始的整理与依赖盘点、DeepSeek 插件（声明式提供者插件、从 DeepSeek 加入模型与 schema v17、思考与工具循环、联网搜索与网页搜索、DeepSeek 语音识别、回答与小说朗读、用量与费用估算、真实 API 契约）、观察项与基准、人工检查；报告含映射、L1 的回传规则、v17 迁移、真实契约与用量、门禁与朗读基准 |
+| [实现现状](delivery/status.md) | POC/AT 的实际执行情况与证据 |
+| [最近一次门禁证据](evidence/gate/) | 最近一次整套门禁（test、package、bench、report）的脱敏结果，下一次整套门禁覆盖；过程文档与轮次证据按[每周整理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
 | [模块规格](modules/library.md) | 各内置模块的数据所有权、命令、上下文、停用与恢复 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 
@@ -46,11 +45,11 @@
 
 ## 2. 已确认要求与首发基线
 
-长期方向的唯一摘要见 [核心产品原则](product-rules/core-product-principles.md)。2026-09-19 用户新增确认本地单用户、基础功能无需登录、Windows 11 x64 首发，其他桌面系统后续独立验收；正式产品尚未验收，已实现的能力见执行状态。
+长期方向的唯一摘要见 [核心产品原则](product-rules/core-product-principles.md)。2026-09-19 用户新增确认本地单用户、基础功能无需登录、Windows 11 x64 首发，其他桌面系统后续独立验收；正式产品尚未验收，已实现的能力见实现现状。
 
 ## 3. 假设、待决事项与决定
 
-[已确认决定](decisions/confirmed-decisions.md)保留 A 编号与职责正本；[用户待办](../USER-ACTIONS.md)统一尚需用户决定、人工检查、配置与外部授权（A-53），Agent 侧的非阻塞后续 loop 在[执行状态](delivery/status.md#followup-loops)，报告只引用当前编号。软件先贯通[全部基本功能 MVP](delivery/roadmap-and-acceptance.md#mvp-loop)，再据反馈迭代；不等单模块所有打磨项清零才推进下一基本功能。基础库按 ADR-0007 实施；已授权实现继续，剩余决定只阻塞具体依赖动作。
+[已确认决定](decisions/confirmed-decisions.md)保留 A 编号与职责正本；尚需用户决定、人工检查、配置与外部授权的是带 `needs-user` 标签的 issue，Agent 侧的非阻塞后续项也是 issue（A-138），报告只引用 issue 号。软件先贯通[全部基本功能 MVP](delivery/roadmap-and-acceptance.md#mvp-loop)，再据反馈迭代；不等单模块所有打磨项清零才推进下一基本功能。基础库按 ADR-0007 实施；已授权实现继续，剩余决定只阻塞具体依赖动作。
 
 ## 4. 约束与范围的表达
 
@@ -81,3 +80,4 @@
 | 0.8 | 2026-09-19 | 落实 Agent 优先、可配置目录、媒体/录音/提供者/语言/许可决定；移除已解决问题，新增公开内容检查 |
 | 0.9 | 2026-10-04 | 阶段清理（A-45）：登记表增加当前阶段与 `retireAfter`；导航只保留当前阶段计划与正本 |
 | 1.0 | 2026-10-06 | 去阶段标签（A-57）：文档只区分已实现与待实现；阶段总结提炼进执行状态、确认记录与 ADR；入库的门禁证据固定在 `evidence/gate/` |
+| 1.1 | 2026-11-24 | issue 驱动（A-138）：用户待办 `USER-ACTIONS.md`、阶段计划、阶段报告与交接模板退役，需要用户的事与后续项改为 GitHub Issues；执行状态改名实现现状；新增 LESSONS |

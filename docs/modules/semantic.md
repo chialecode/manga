@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.semantic` / 语义检索（可选） / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；真实 Embedding 调用 not-run（[ACT-05](../../USER-ACTIONS.md#act-05)），索引与检索用受控向量验证 |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）；真实 Embedding 调用 not-run（[ACT-05](https://github.com/chialecode/manga/blob/bd03185/USER-ACTIONS.md#act-05)），索引与检索用受控向量验证 |
 | 需求 / 设计依据 | SEARCH-02、MODEL-03、AT-31；[领域模型](../design/domain-model.md)、[架构](../design/architecture.md) |
 | 包与公开入口 | `packages/app-core/src/semantic/`（`service.ts`、`chunk.ts`、`ports.ts`、`http.ts`）；命令 `semantic.status`、`configure`、`rebuild`、`cancel`、`update`、`clear`、`search`；界面：设置里的语义检索页，项目“摘录”标签里的“按含义搜”入口 |
 
@@ -25,7 +25,7 @@ Feature `semantic`；Facet `service`/`ui`；硬依赖 `manga.library`。向量�
 
 ## 3. Agent 与界面
 
-命令在同一个网关注册，界面经这一入口调用。语义检索会调用外部 Embedding 服务，不对 Agent 开放（A-73）；Agent 在项目会话里的 `research.search` 只搜本地资料，不使用向量索引。跨项目的调用在命令层被拒绝（`creative/agent-access.ts`），不只是不在工具清单里；“最近”里的对话与资源、作品、笔记的对话没有这些命令；仍只由所有者操作的部分登记在[执行状态](../delivery/status.md#loop-09)。设置页：开关、选连接、选切法、开启前显示对片数的估计、进度、取消、重建与更新、清除，“待补 N 片”与“当前设置与索引不一致”的提示，并显示当前引擎。项目的“摘录”标签里有“全文 / 按含义”两种搜索，按含义的结果与全文结果同样可打开所在位置；没有开启或在建时说明状态，不静默显示空结果。
+命令在同一个网关注册，界面经这一入口调用。语义检索会调用外部 Embedding 服务，不对 Agent 开放（A-73）；Agent 在项目会话里的 `research.search` 只搜本地资料，不使用向量索引。跨项目的调用在命令层被拒绝（`creative/agent-access.ts`），不只是不在工具清单里；“最近”里的对话与资源、作品、笔记的对话没有这些命令；仍只由所有者操作的部分登记在[实现现状](../delivery/status.md#loop-09)。设置页：开关、选连接、选切法、开启前显示对片数的估计、进度、取消、重建与更新、清除，“待补 N 片”与“当前设置与索引不一致”的提示，并显示当前引擎。项目的“摘录”标签里有“全文 / 按含义”两种搜索，按含义的结果与全文结果同样可打开所在位置；没有开启或在建时说明状态，不静默显示空结果。
 
 ## 4. 生命周期与兼容
 
@@ -33,4 +33,4 @@ Feature `semantic`；Facet `service`/`ui`；硬依赖 `manga.library`。向量�
 
 ## 5. 验证与未决
 
-自动：`tests/semantic/chunk.test.ts`、`semantic.test.ts`（`vec0` 与 JavaScript 两条路径各一套同样的用例）、`tests/shell/semantic-ui.test.tsx`（AT-31）。基准（服务层，1 万个片）：`semanticSearchP95Ms` 与 `semanticFallbackP95Ms`，见[执行状态](../delivery/status.md)。限制：只支持 OpenAI 兼容的 Embedding 服务；不索引文稿与网页全文；没有混合排序（全文与向量的合并排序）；跨语言检索的质量取决于所选模型，未实测。
+自动：`tests/semantic/chunk.test.ts`、`semantic.test.ts`（`vec0` 与 JavaScript 两条路径各一套同样的用例）、`tests/shell/semantic-ui.test.tsx`（AT-31）。基准（服务层，1 万个片）：`semanticSearchP95Ms` 与 `semanticFallbackP95Ms`，见[实现现状](../delivery/status.md)。限制：只支持 OpenAI 兼容的 Embedding 服务；不索引文稿与网页全文；没有混合排序（全文与向量的合并排序）；跨语言检索的质量取决于所选模型，未实测。

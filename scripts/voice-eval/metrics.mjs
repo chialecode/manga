@@ -1,4 +1,4 @@
-// Evaluation metrics for voice dictation (`stage-plan.md` 4.11):
+// Evaluation metrics for voice dictation (archived dictation plan §4.11: https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-plan.md):
 // - Punctuation-normalized Character Error Rate (`cer`)
 // - Proper-noun recall (`entityRecall` = deterministic replacement + recalled candidates; `directEntityRecall` = text only)
 // - Non-entity sentence false-modification rate (`falseModifyRate`)

@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.research` / 材料搜寻 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；联网只测过受控服务器，真实网页未测 |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）；联网只测过受控服务器，真实网页未测 |
 | 需求 / 设计依据 | CRE-06、SEARCH-01、AT-30、ACQ-03；[领域模型](../design/domain-model.md)、[外部扩展设计](../design/external-providers-and-acquisition.md) |
 | 包与公开入口 | `packages/app-core/src/creative/research.ts`、`extract.ts`、`packages/app-core/src/net/broker.ts`；命令 `research.search`、`webpage.fetch`、`webpage.list`、`webpage.get`、`webpage.delete`、`excerpt.create`、`list`、`get`、`update`、`delete`、`follow`；界面 `apps/desktop/src/renderer/pages/projects/research/` |
 

@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.comic` / 漫画阅读 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）：缩放与适配的测量问题已修复，工具栏按参考精简、阅读设置收进“…”（A-47），没有顶栏和“下一话”按钮、滚轮翻页与 Ctrl 加滚轮缩放（A-71、Q-24）；第三轮返工（A-92）：读到最后的提示、页码输入与框选截图的按钮在窗口全屏与屏幕全屏下不被浮出的底栏与栏顶挡住（见[视频模块](video.md)的“浮层避让”）；人工检查见[用户待办](../../USER-ACTIONS.md#checks)的 H-06、H-08、H-31 |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）：缩放与适配的测量问题已修复，工具栏按参考精简、阅读设置收进“…”（A-47），没有顶栏和“下一话”按钮、滚轮翻页与 Ctrl 加滚轮缩放（A-71、Q-24）；第三轮返工（A-92）：读到最后的提示、页码输入与框选截图的按钮在窗口全屏与屏幕全屏下不被浮出的底栏与栏顶挡住（见[视频模块](video.md)的“浮层避让”）；人工检查见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)的 H-06、H-08、H-31 |
 | 需求 / 设计依据 | LIB-01—03、READ-02、NOTE-04；[领域模型](../design/domain-model.md)、[交互设计 3.4](../design/interaction-and-workflows.md#34-三媒介界面2026-10-03-参考) |
 | 包与公开入口 | `packages/app-core/src/comic`、`media`；命令 `comic.pages`、`comic.pageHandle`、`comic.pageHandles`、`material.region`（都先做打开核对，库外与文件丢失的漫画不取页，见[资料库模块](library.md#资源位置资源库位置--相对路径a-80)）；库命令 `library.inspectFile`、`works.importDirectory` |
 
@@ -36,4 +36,4 @@ Agent 通过 `material.region` 与阅读器选区取得图片材料；该命令�
 
 ## 5. 验证与未决
 
-自动：`tests/comic`、`tests/media`（句柄、范围请求、zip 池、缩略图）、`tests/reading/comic-model.test.ts`、`comic-reader.test.tsx`（含页面尺寸不变量与滚动条占位）、`tests/samples`；打包烟测 media 阶段用合成漫画样本驱动真实窗口；`window-walk` 阶段在宽窗、窄窗、矮窗各取适配整页/宽度/高度并依次缩放 100%/125%/200%/75%/50%，断言页面尺寸 = 基准 × 缩放（±1 px）、舞台尺寸不变、小于舞台时居中、大于舞台时可滚动、适配整页时整页可见且不出现横向滚动（AT-68）；悬浮胶囊在带底栏的页面（漫画页、播放器）停在右上角、标题栏之下，标题栏下的提示条让出这个角；窗口观察 `capsule-clear-of-controls` 在三种窗口尺寸下量它（含展开笔记框，漫画页另开框选工具量提示条上的按钮）不压住工具栏、提示条、底栏和播放器的任何按钮与滑块。真实库只读试验的聚合结论见[执行状态](../delivery/status.md#真实服务与真实库试验聚合结果)（无文件名与路径）。未决：Q-12（阅读偏好默认值）；人工项 H-06、H-08；真实库中约 6% 的 PDF 只设所有者密码，现在可以打开；是否保持这一放宽由 A 审查确认。
+自动：`tests/comic`、`tests/media`（句柄、范围请求、zip 池、缩略图）、`tests/reading/comic-model.test.ts`、`comic-reader.test.tsx`（含页面尺寸不变量与滚动条占位）、`tests/samples`；打包烟测 media 阶段用合成漫画样本驱动真实窗口；`window-walk` 阶段在宽窗、窄窗、矮窗各取适配整页/宽度/高度并依次缩放 100%/125%/200%/75%/50%，断言页面尺寸 = 基准 × 缩放（±1 px）、舞台尺寸不变、小于舞台时居中、大于舞台时可滚动、适配整页时整页可见且不出现横向滚动（AT-68）；悬浮胶囊在带底栏的页面（漫画页、播放器）停在右上角、标题栏之下，标题栏下的提示条让出这个角；窗口观察 `capsule-clear-of-controls` 在三种窗口尺寸下量它（含展开笔记框，漫画页另开框选工具量提示条上的按钮）不压住工具栏、提示条、底栏和播放器的任何按钮与滑块。真实库只读试验的聚合结论见[实现现状](../delivery/status.md#真实服务与真实库试验聚合结果)（无文件名与路径）。未决：Q-12（阅读偏好默认值）；人工项 H-06、H-08；真实库中约 6% 的 PDF 只设所有者密码，现在可以打开；这一放宽已在当时的审查中确认，要改就开 issue。

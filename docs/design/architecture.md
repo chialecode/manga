@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-ARCH |
 | 版本与日期 | 0.5 / 2026-09-25 |
 | 状态 | 评审稿；基础技术栈见 ADR-0007，EPUB 生产引擎待定 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)；文档状态不代表实现通过 |
 | 输入 | [产品需求](../product/requirements.md) |
 | 详细设计 | [领域模型](domain-model.md)、[Agent 与插件](agent-and-plugins.md)、[界面与工作流](interaction-and-workflows.md) |
 
@@ -15,7 +15,7 @@
 
 系统采用本地模块化单体：一个桌面宿主组合多个业务模块，通过明确的接口和生命周期协作。业务能力可拆分，运行时不默认引入远程微服务。
 
-A-40 的当前技术方向是优先整合活跃开源能力。Agent A 在提出选型方案前查证维护与适用证据；MANGA 负责组合、领域与用户流程，具体口径见[开源选型规则](../dev-rules/architecture-and-contracts.md#open-source-first)。既有实现以可逆适配逐步演进，不因本次方案调整宣称已经完成替换。
+A-40 的当前技术方向是优先整合活跃开源能力。Agent 在提出选型方案前查证维护与适用证据；MANGA 负责组合、领域与用户流程，具体口径见[开源选型规则](../dev-rules/architecture-and-contracts.md#open-source-first)。既有实现以可逆适配逐步演进，不因本次方案调整宣称已经完成替换。
 
 组合、运行时选型、功能中心与生命周期细化见[可组合与 AI-Native 架构方案](composable-ai-native-architecture.md)。运行时候选已按统一契约验证，生产只装配一个实现（自研 kernel，ADR-0005）。所有业务功能可不安装、停用或替换；维持宿主运行的基础接口必须保留可用实现。外部数据库与下载接入见[外部扩展设计](external-providers-and-acquisition.md)。
 

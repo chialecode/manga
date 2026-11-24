@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/delivery/status.md">执行状态</a> ·
+  <a href="docs/delivery/status.md">实现现状</a> ·
   <a href="docs/README.md">文档导航</a> ·
   <a href="https://github.com/chialecode/manga/discussions">反馈与讨论</a> ·
   <a href="CONTRIBUTING.md">参与开发</a> ·
@@ -22,7 +22,7 @@
 MANGA 取自 **Manga、Anime、Novel、Game、Agent**。它把阅读观看、随手记录、素材整理和辅助创作放进同一个工作区：项目和“最近”各有自己的标签页、分屏、对话与阅读进度，可以一边看原作一边写。阅读器、播放器、笔记、白板、思维导图和创作工具共享稳定的内容引用，内置 Agent 通过结构化上下文和与界面相同的业务命令参与工作。
 
 > [!NOTE]
-> **开发中，尚无正式发行版。** 下面列出的能力已经在 `main` 上实现，并通过了自动化测试与打包窗口观察；人工检查与产品验收尚未完成。首版只面向**本地单用户、Windows 11 x64**，基础功能不需要登录。各项能力的验证状态与已知限制见[执行状态](docs/delivery/status.md)。
+> **开发中，正式版按计划每周从 [Releases](https://github.com/chialecode/manga/releases) 发布（目前只有 v0.1.1；定时发布的修复见 [#94](https://github.com/chialecode/manga/issues/94)）。** 下面列出的能力已经在 `main` 上实现，并通过了自动化测试与打包窗口观察；人工检查与产品验收尚未完成。首版只面向**本地单用户、Windows 11 x64**，基础功能不需要登录。各项能力的验证状态与已知限制见[实现现状](docs/delivery/status.md)。
 
 ## 能做什么
 
@@ -65,8 +65,8 @@ pnpm dev
 | `pnpm dev` | 启动开发版桌面应用 |
 | `node scripts/verify.mjs` | 离线统一检查：文档与公开内容、工作流配置、依赖边界、类型检查、未使用代码、Vitest；开发者、pre-push hook 与 CI 共用 |
 | `node scripts/quick-gate.mjs` | 日常的快速门禁（约 5 分钟内）：检查、与改动相关的测试、`--phases` 点名的打包烟测阶段 |
-| `node scripts/stage.mjs gate` | 整套阶段门禁（B 交付整个阶段时跑一次）：依次运行测试、打包烟测、安装包、性能基准与报告，跳过结果仍有效的步骤 |
-| `node scripts/stage.mjs install-dev` | 把刚打出的开发版安装包更新到本机已装的开发版；每次需要用户人工检查时由 Agent 执行 |
+| `node scripts/stage.mjs gate` | 整套门禁（发布前，以及改到打包、安装、更新、签名或发布链路时跑）：依次运行测试、打包烟测、安装包、性能基准与报告，跳过结果仍有效的步骤 |
+| `node scripts/stage.mjs install-dev` | 把刚打出的开发版安装包更新到本机已装的开发版；每次合并进 `main` 后由 Agent 在本机执行 |
 | `node scripts/stage.mjs release` | 在门禁通过的 `main` 上生成正式版发布产物并完成升级演练 |
 
 打包输出在 `dist/desktop/packages`，构建资产与缓存都是生成物。环境要求与检查边界见[质量门禁](docs/dev-rules/quality-gates.md)。
@@ -86,7 +86,7 @@ pnpm dev
 
 ## 技术栈
 
-Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockview（标签页与分屏）、Tiptap / CodeMirror、SQLite（better-sqlite3 + Drizzle ORM，FTS5，可选 sqlite-vec）、Zod 4、PDF.js、FFmpeg（LGPL）+ JASSUB、sherpa-onnx（独立子进程的本地离线语音识别与 GTCRN 增强）、Vitest。选型理由与使用边界见 [ADR-0007](docs/decisions/0007-technology-stack.md)，当前版本见[执行状态](docs/delivery/status.md)。
+Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockview（标签页与分屏）、Tiptap / CodeMirror、SQLite（better-sqlite3 + Drizzle ORM，FTS5，可选 sqlite-vec）、Zod 4、PDF.js、FFmpeg（LGPL）+ JASSUB、sherpa-onnx（独立子进程的本地离线语音识别与 GTCRN 增强）、Vitest。选型理由与使用边界见 [ADR-0007](docs/decisions/0007-technology-stack.md)，当前版本见[实现现状](docs/delivery/status.md)。
 
 ## 设计原则
 
@@ -107,15 +107,15 @@ Electron 45、React 19、TypeScript 7、Vite、Tailwind CSS 与 Radix UI、dockv
 | 架构与数据 | [总体架构](docs/design/architecture.md)、[可组合与 AI-Native 架构](docs/design/composable-ai-native-architecture.md)、[领域模型](docs/design/domain-model.md) |
 | Agent 与插件 | [Agent、上下文与插件协议](docs/design/agent-and-plugins.md)、[外部数据源与下载扩展](docs/design/external-providers-and-acquisition.md) |
 | 界面 | [界面与工作流](docs/design/interaction-and-workflows.md)、[设计规则](DESIGN.md) |
-| 进度 | [执行状态](docs/delivery/status.md)、[当前阶段计划](docs/delivery/stage-plan.md)、[当前阶段报告](docs/delivery/stage-report.md)、[已确认的决定](docs/decisions/confirmed-decisions.md) |
+| 进度 | [实现现状](docs/delivery/status.md)、[Issues](https://github.com/chialecode/manga/issues)、[已确认的决定](docs/decisions/confirmed-decisions.md)、[教训](LESSONS.md) |
 
 ## 参与开发
 
-- **维护者：**需要你做的事（人工检查、待决定、授权与外部配置）只记在 [USER-ACTIONS.md](USER-ACTIONS.md)。
+- **维护者：**需要你做的事（人工检查、待决定、授权与外部配置）是带 [`needs-user`](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user) 标签的 issue。
 - **AI Agent 与程序员：**先读 [AGENTS.md](AGENTS.md)，再按任务读取相关规则；入门见 [CONTRIBUTING.md](CONTRIBUTING.md)，评审口径见 [REVIEW.md](REVIEW.md)。
-- **协作方式：**一个阶段一个分支、一个提交、一个 PR；本地验证优先，PR 只用 squash 合并，所有提交带 DCO 签名。详见 [Git 与 GitHub](docs/dev-rules/git-and-github.md)。
+- **协作方式：**一个 issue 一个分支、一个小 PR；本地验证优先，CI 与独立审查通过后 squash 合并，所有提交带 DCO 签名。详见[开发流程](docs/dev-rules/development-workflow.md#change-loop)与 [Git 与 GitHub](docs/dev-rules/git-and-github.md)。
 - **文档规则：**权威文档、生命周期与变更流程见[文档治理](docs/governance/documentation-policy.md)。
-- **反馈：**缺陷、建议和使用问题请在 [Discussions](https://github.com/chialecode/manga/discussions) 提出。为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，仓库关闭了 Issues，PR 只接受协作者创建。
+- **反馈：**缺陷、建议和使用问题请在 [Discussions](https://github.com/chialecode/manga/discussions) 提出。为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，Issues 只允许协作者创建（需求队列，见[开发流程](docs/dev-rules/development-workflow.md#issues)），PR 只接受协作者创建。
 
 ## 安全与许可证
 

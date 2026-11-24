@@ -1,40 +1,36 @@
 # MANGA 开发与贡献指南
 
-MANGA 已有可运行的桌面应用，产品验收尚未完成。先读 [AGENTS.md](AGENTS.md) 和 [文档导航](docs/README.md)，再按任务进入专题。首次定位项目请查 [仓库地图](docs/dev-rules/repo-map.md)。
+MANGA 已有可运行的桌面应用与每周发布的正式版，产品验收尚未完成。先读 [AGENTS.md](AGENTS.md) 和[文档导航](docs/README.md)，再按任务进入专题。首次定位项目请查[仓库地图](docs/dev-rules/repo-map.md)。
 
 ## 完成一次变更
 
-1. 明确用户场景和对应需求编号；小型修复直接使用任务说明，跨模块或公共契约调整按 [开发流程](docs/dev-rules/development-workflow.md)补充方案。
-2. 阅读受影响规则、设计、代码与测试。产品范围依据[已确认决定](docs/decisions/confirmed-decisions.md)与需求正本，仍待决定的事项见[用户待办](USER-ACTIONS.md)；不将评审稿中的每个细节当作用户已经批准。
-3. 实现并同步受影响的需求、接口、迁移、交互和验收映射；记录重要决策，避免重复维护正本。
-4. 按 [质量门禁](docs/dev-rules/quality-gates.md)完成验证，按 [REVIEW.md](REVIEW.md)检查最终变更。
-5. 按 [Git 工作节奏](docs/dev-rules/git-and-github.md#1-本地优先与工作节奏)，一个阶段（里程碑或明确子阶段）使用一个分支、一个 commit：push 前阶段内的实现、返工、审查记录和修复全部 amend 进该提交，消息描述最终结果；只有不同阶段分别提交，已推送提交默认追加修复。每个提交都带 DCO `Signed-off-by` 签名，按 Git 规则启用的 hook 会自动补上，未启用时用 `git commit -s`。中间提交只按恢复需要建立；审查收敛且统一验证通过后，在有效授权内集中 push。使用 [变更交付模板](.github/PULL_REQUEST_TEMPLATE.md)说明结果和真实验证状态。
-
-本项目采用[连续执行、集中审批](docs/dev-rules/development-workflow.md#continuous-execution)。本地实现、检查、修复和必要 Git 准备由 Agent 连续处理，不在工作包之间等待“继续”；需要用户处理的决定、人工检查、外部操作授权和配置统一写进[用户待办](USER-ACTIONS.md)，与阶段解耦、可顺延；非阻塞决定先按默认值实现，真正阻塞的问题只暂停依赖部分（A-53）。
-
-默认分工是 [A 制定计划 → B 执行交付 → A 集中审查](docs/dev-rules/development-workflow.md#agent-handoff)，交接使用仓库计划、Git 版本和[统一信息模板](docs/templates/agent-handoff.md)。A 直接修复可确定的局部问题，需要 B 的较大返工一次性给完整差异清单，不反复转述聊天或逐问题来回交接。
+1. 在 [Issues](https://github.com/chialecode/manga/issues) 找到或新建对应 issue，明确用户场景和需求编号；跨模块或公共契约调整先在 issue 里写清方案（[开发流程](docs/dev-rules/development-workflow.md)）。
+2. 阅读受影响规则、设计、代码与测试。产品范围依据[已确认决定](docs/decisions/confirmed-decisions.md)与需求正本；仍待用户决定的事项是带 `needs-user` 标签的 issue，不将评审稿中的每个细节当作用户已经批准。
+3. 从最新 `main` 切分支 `<type>/<issue号>-<简短描述>`，实现并同步受影响的需求、接口、迁移、交互和验收映射。
+4. 按[质量门禁](docs/dev-rules/quality-gates.md)用 `node scripts/quick-gate.mjs` 验证；发布前以及改到打包、安装、更新、签名或发布链路时跑整套 `node scripts/stage.mjs gate`。
+5. 提交用 Conventional Commits，每个提交带 DCO `Signed-off-by`（按 [Git 规则](docs/dev-rules/git-and-github.md#local-git)启用的 hook 会自动补上，未启用时用 `git commit -s`）。push 后按 [PR 模板](.github/PULL_REQUEST_TEMPLATE.md)建 PR，写明结果和真实验证状态。
+6. CI `repository-quality` 通过、非作者独立审查（[REVIEW.md](REVIEW.md)）无阻塞项后，低风险 PR squash 合并；碰到[高风险清单](docs/dev-rules/development-workflow.md#high-risk)的加 `risk:high`，由维护者合并。
 
 ## 环境与命令
 
-前置：使用 `.node-version` 指定的 Node.js 24.19+，在仓库根执行 `pnpm install`。没有发行安装包。开发宿主：`pnpm dev`。
+前置：使用 `.node-version` 指定的 Node.js 24.19+，在仓库根执行 `pnpm install`。开发宿主：`pnpm dev`。
 
 | 命令 | 作用 |
 | --- | --- |
 | `pnpm dev` | 以独立开发 Profile 启动 Electron 宿主 |
-| `node scripts/verify.mjs` | 脚本语法、文档、公开内容、依赖方向、类型检查、全部 Vitest 及必要回归 |
-| `node scripts/stage.mjs test` | 阶段门禁：全部 Vitest 与必需用例核对 |
-| `node scripts/stage.mjs package` | Windows 未签名本地包与打包烟测 |
-| `node scripts/stage.mjs bench` | 服务层与打包窗口的性能基准 |
-| `node scripts/stage.mjs report` | 核对上述证据，缺项或失败非零退出 |
+| `node scripts/quick-gate.mjs` | 日常快速门禁（约 5 分钟内）：`verify --skip-tests`、与改动相关的测试、点名的打包烟测阶段 |
+| `node scripts/verify.mjs` | 脚本语法、文档、公开内容、依赖方向、类型检查、全部 Vitest 及必要回归（`pre-push` 与 CI 共用） |
+| `node scripts/stage.mjs gate` | 整套门禁：测试、打包烟测、安装演练、性能基准与报告 |
+| `node scripts/stage.mjs package` / `install-dev` | 做出开发版安装包；在本机静默更新 `MANGA Dev` |
 | `node scripts/check-docs.mjs` | 仅文档检查 |
 | `node scripts/check-publication.mjs` | 工作树与暂存内容的路径、凭据和私有文件检查 |
 
-详细入口与阻塞项见 [仓库地图](docs/dev-rules/repo-map.md)、[质量门禁](docs/dev-rules/quality-gates.md)。
+详细入口见[仓库地图](docs/dev-rules/repo-map.md)、[质量门禁](docs/dev-rules/quality-gates.md)。
 
 ## 协作与发布
 
-采用任务分支与 PR、squash 合并、0 个强制外部审批的单人维护流程。初始化后的 main 变更必须满足 [Git 与 GitHub 协作规则](docs/dev-rules/git-and-github.md)；该页也说明首次 clone 的本地 hook 配置、CI 触发与低频操作。不要覆盖他人修改或重写无关历史。提交、推送、PR、合并与发布按用户和宿主已授权范围执行。
+采用 issue 驱动、任务分支与 PR、squash 合并、0 个强制外部审批的单人维护流程；`main` 的规则、CI 触发、本地 hook 配置与低频操作见 [Git 与 GitHub 协作规则](docs/dev-rules/git-and-github.md)。不要覆盖他人修改或重写无关历史。正式版由每周发布工作流构建、签名并发布。
 
-外部反馈、缺陷和建议请使用 [Discussions](https://github.com/chialecode/manga/discussions)。为避免 AI 批量生成的垃圾内容和难以处理的低质量 Issue，仓库关闭 Issues，PR 仅限协作者创建（A-123）；有价值的讨论由维护者整理进计划或用户待办。
+只有协作者能建 issue 和 PR。外部反馈、缺陷和建议请使用 [Discussions](https://github.com/chialecode/manga/discussions)，有价值的由维护者整理成 issue。
 
-项目采用 [Apache-2.0](LICENSE)。提交贡献须具有相应权利；是否额外采用贡献协议、产品签名及分发方式见 [用户待办](USER-ACTIONS.md#q-09)。第三方依赖按其许可证保留必要声明，项目许可证不改变依赖义务。安全问题通过 [私密漏洞报告](SECURITY.md)提交。
+项目采用 [Apache-2.0](LICENSE)。提交贡献须具有相应权利；是否额外采用贡献协议、产品签名及分发方式见 [#48](https://github.com/chialecode/manga/issues/48)。第三方依赖按其许可证保留必要声明，项目许可证不改变依赖义务。安全问题通过[私密漏洞报告](SECURITY.md)提交。

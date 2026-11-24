@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.library` / 资料库 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）：分块全文索引、原文/托管导入、四类候选解析、资源库路径与后台增量扫描、作品主页、不可用资源的内容视图与重新定位、同条目作品的版本显示（A-47、A-50、A-67—A-69）；解析引擎中 PDF 经 PDF.js，EPUB/MOBI 为仓内适配器，均未验收；资源位置改为“资源库位置 + 相对路径”并关闭所有绕开资源库的入口、作品内容文件夹、截图（A-79、A-80）已实现并自检；第三轮返工（A-86—A-88）：打开前的统一核对、删除条目与“未归入作品”、内容文件夹改按条目与“未分类”放、笔记写成 Markdown 文件、schema v11 已实现并自检 |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）：分块全文索引、原文/托管导入、四类候选解析、资源库路径与后台增量扫描、作品主页、不可用资源的内容视图与重新定位、同条目作品的版本显示（A-47、A-50、A-67—A-69）；解析引擎中 PDF 经 PDF.js，EPUB/MOBI 为仓内适配器，均未验收；资源位置改为“资源库位置 + 相对路径”并关闭所有绕开资源库的入口、作品内容文件夹、截图（A-79、A-80）已实现并自检；第三轮返工（A-86—A-88）：打开前的统一核对、删除条目与“未归入作品”、内容文件夹改按条目与“未分类”放、笔记写成 Markdown 文件、schema v11 已实现并自检 |
 | 需求 / 设计依据 | LIB-01、LIB-02、LIB-04、NOTE-05、DATA-05；[领域模型](../design/domain-model.md)、[Agent 协议](../design/agent-and-plugins.md) |
 | 包与公开入口 | `packages/app-core`（`src/library-scan/`）；另有 `library.list`、`library.importDocument`、`library.read`、`library.readSlice`、`library.rebuildIndex`、`library.repairSource`、`library.resourceContent`、`library.openable`（只读，界面在打开前问）、`works.counterpart`、`works.deletePreview`、`works.delete`、`works.unassigned`（只给所有者，不进 Agent 的命令表）；资源库路径与扫描：`library.paths.list/add/update/remove/ensureDownloads`、`library.scan.start/cancel/status/setSchedule`（仅所有者；`library.scan.status` 对任务只给目录名，不含本机路径）；截图 `screenshot.save/list/get/image/delete`；作品内容文件夹 `workFolders.list/forWork/rename` |
 
@@ -19,7 +19,7 @@
 
 数据模型见[领域模型 4.4](../design/domain-model.md#44-资源库路径与后台扫描)。实现：`library_paths`、`library_files`（路径、相对路径、大小、修改时间、指纹、状态与上次所见的扫描）、`scan_jobs` 三张表（schema v8 追加）；`ScanService` 一次只运行一个扫描，其余排队；目录遍历在 `worker_threads` 的 worker 中进行，主进程只收批次、按单个文件一次小事务写库，每处理一个文件让出一次事件循环；进度通知节流为约每 200 ms 一次；`SCAN_LIMITS` 为 50 000 个单位、深度 8，超出时标记 `truncated` 且不把未列出的文件记为消失；无权限或中途消失的目录记入 `unreadable`，不使整次扫描失败，也不把其中的文件标为不可用。作品划分、增量跳过、不可用标记与移动重关联按设计实现，导入一个单位用与目录导入相同的代码（`importScanUnit`），所以扫描与导入产生同样的作品。路径的“自动扫描”与全局计划（启动时、间隔 30 分钟/1/6/24 小时或关闭，默认启动时与每小时）由应用内计时器触发，睡眠唤醒后不重复补扫；`add` 一个路径会立即扫描一次。扫描不联网；封面与文件自带资料在扫描结束后由后台任务低优先级读取。
 
-**规模表现（bench，合成数据）：** 5000 个小说文件（20 个系列目录加 3000 个散文件）一次扫描在开发机上约 13—33 s（随机器状态变化），期间主进程事件循环延迟 p99 13.3—31.8 ms、书架与设置所用命令的应答 p95 7.4—19.7 ms（自检与复核的三次运行，门槛均为 100 ms，数据见[执行状态](../delivery/status.md#验证基线)）。基准发现并处理了两个问题：`resource_revisions(resource_id, created_at)` 与 `file_locations(resource_revision_id)` 没有索引，每个资源的“最新修订”与“所在文件”查询都读整张表，3000 多个作品时扫描后的封面与资料读取一次占满主进程约 38 s；后台任务队列在同一轮事件循环里连续跑完所有不等待的任务。已在 DDL 里补上两个索引，任务队列在两个任务之间让出一轮事件循环（任务被取消时仍会启动并看到已取消的信号）。
+**规模表现（bench，合成数据）：** 5000 个小说文件（20 个系列目录加 3000 个散文件）一次扫描在开发机上约 13—33 s（随机器状态变化），期间主进程事件循环延迟 p99 13.3—31.8 ms、书架与设置所用命令的应答 p95 7.4—19.7 ms（自检与复核的三次运行，门槛均为 100 ms，数据见[实现现状](../delivery/status.md#验证基线)）。基准发现并处理了两个问题：`resource_revisions(resource_id, created_at)` 与 `file_locations(resource_revision_id)` 没有索引，每个资源的“最新修订”与“所在文件”查询都读整张表，3000 多个作品时扫描后的封面与资料读取一次占满主进程约 38 s；后台任务队列在同一轮事件循环里连续跑完所有不等待的任务。已在 DDL 里补上两个索引，任务队列在两个任务之间让出一轮事件循环（任务被取消时仍会启动并看到已取消的信号）。
 
 ### 资源位置：资源库位置 + 相对路径（A-80）
 

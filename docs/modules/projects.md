@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.projects` / 项目 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；人工检查见[用户待办](../../USER-ACTIONS.md#checks) |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）；人工检查见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user) |
 | 需求 / 设计依据 | CRE-01、UI-07、DATA-03、AT-25、AT-87；[领域模型](../design/domain-model.md)、[交互设计](../design/interaction-and-workflows.md) |
 | 包与公开入口 | `packages/app-core/src/creative/projects.ts`、`objects.ts`、`project-package.ts`、`bundle.ts`、`library-section.ts`；命令 `project.list`、`create`、`get`、`update`、`delete`、`addMaterial`、`objects`、`removeMaterial`、`terms`、`addTerm`、`updateTerm`、`removeTerm`、`importTerms`、`exportPackage`、`packagePreview`、`importPackage`；界面 `apps/desktop/src/renderer/pages/projects/` |
 
@@ -29,7 +29,7 @@ Feature `projects`；Facet `service`/`ui`；硬依赖 `manga.library`。创作�
 
 ## 3. Agent 与界面
 
-项目会话只在项目的材料范围内读写资料，授权与模型覆盖遵守项目范围；命令在同一个网关注册，界面经这一入口调用。项目上下文里的项目对话中，Agent 可以读取本项目（`project.list/get/objects/terms`），并做两项可撤销的写入：`project.addMaterial` 与 `project.addTerm`（执行者记为 Agent，术语写入进操作日志）；创建、更新、删除、移除材料、术语的改删与导入、项目包的导出与导入仍是所有者命令（A-73）。跨项目的调用在命令层被拒绝（`creative/agent-access.ts`），不只是不在工具清单里；“最近”里的对话与资源、作品、笔记的对话没有这些命令；仍只由所有者操作的部分登记在[执行状态](../delivery/status.md#loop-09)。创作模式的左栏列项目会话（有项目的在前，不属于项目的对话在后）；项目页含材料、白板、导图、文稿、摘录、粗剪、术语、设置各标签，关闭的模块对应标签不出现，材料里指向关闭模块的行显示“模块已关闭”。项目页的新建与重命名可用键盘完成，窗口在宽、窄、矮三种尺寸下无横向溢出（窗口观察 `creative-fit-*`）。从作品或笔记页可把条目加入项目，也可当场新建项目。
+项目会话只在项目的材料范围内读写资料，授权与模型覆盖遵守项目范围；命令在同一个网关注册，界面经这一入口调用。项目上下文里的项目对话中，Agent 可以读取本项目（`project.list/get/objects/terms`），并做两项可撤销的写入：`project.addMaterial` 与 `project.addTerm`（执行者记为 Agent，术语写入进操作日志）；创建、更新、删除、移除材料、术语的改删与导入、项目包的导出与导入仍是所有者命令（A-73）。跨项目的调用在命令层被拒绝（`creative/agent-access.ts`），不只是不在工具清单里；“最近”里的对话与资源、作品、笔记的对话没有这些命令；仍只由所有者操作的部分登记在[实现现状](../delivery/status.md#loop-09)。创作模式的左栏列项目会话（有项目的在前，不属于项目的对话在后）；项目页含材料、白板、导图、文稿、摘录、粗剪、术语、设置各标签，关闭的模块对应标签不出现，材料里指向关闭模块的行显示“模块已关闭”。项目页的新建与重命名可用键盘完成，窗口在宽、窄、矮三种尺寸下无横向溢出（窗口观察 `creative-fit-*`）。从作品或笔记页可把条目加入项目，也可当场新建项目。
 
 ## 4. 生命周期与兼容
 
@@ -37,4 +37,4 @@ Feature `projects`；Facet `service`/`ui`；硬依赖 `manga.library`。创作�
 
 ## 5. 验证与未决
 
-自动：`tests/creative/projects.test.ts`、`project-package.test.ts`、`library-package-creative.test.ts`、`tests/shell/projects-ui.test.tsx`、`project-package-ui.test.tsx`、`tests/library/schema-v9-migration.test.ts`，对应 AT-25、AT-28 往返部分；窗口观察 `creative-reach-projects`、`creative-project-tabs`、`creative-project-package`。人工检查与已知限制见[执行状态](../delivery/status.md)与[用户待办](../../USER-ACTIONS.md#checks)。未决：项目包是否可选择附带媒体（需求允许，目前不附带，只带可读快照）。
+自动：`tests/creative/projects.test.ts`、`project-package.test.ts`、`library-package-creative.test.ts`、`tests/shell/projects-ui.test.tsx`、`project-package-ui.test.tsx`、`tests/library/schema-v9-migration.test.ts`，对应 AT-25、AT-28 往返部分；窗口观察 `creative-reach-projects`、`creative-project-tabs`、`creative-project-package`。人工检查与已知限制见[实现现状](../delivery/status.md)与[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)。未决：项目包是否可选择附带媒体（需求允许，目前不附带，只带可读快照）。

@@ -17,7 +17,7 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 | 能力 | 已选择技术 | 使用边界 |
 | --- | --- | --- |
 | 应用界面 | React + React DOM | 渲染层和受信任 UI Facet；kernel、领域和存储不依赖 React |
-| 组件、样式与图标 | shadcn/ui、Radix UI、Tailwind CSS、Lucide React | A-35 确认 shadcn 源码组件，按实际使用引入；语义 Token 与产品视觉独立维护；集成状态见执行状态 |
+| 组件、样式与图标 | shadcn/ui、Radix UI、Tailwind CSS、Lucide React | A-35 确认 shadcn 源码组件，按实际使用引入；语义 Token 与产品视觉独立维护；集成状态见实现现状 |
 | 富文本与结构化输入 | Tiptap / ProseMirror | 笔记、带引用节点的输入；适配稳定块 ID、修订、撤销与 Agent 修改 |
 | Markdown / 纯文本源编辑 | CodeMirror 6 | 对应源编辑视图；同一会话只有一个权威编辑状态 |
 | Markdown 展示 | react-markdown + remark-gfm；按需 remark-cjk-friendly | Agent 输出和预览；安全 HTML 呈现另行验证 |
@@ -42,13 +42,13 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 3. better-sqlite3/Drizzle 验证旧库打开、迁移、单写入、事务事件、崩溃恢复、FTS5 中日文检索与一致备份。保持既有迁移历史和对象身份，禁止重建用户数据库来迁就适配器。
 4. 正式 Windows 包验证原生依赖、开发/正式 Profile 隔离和配置目录。原型的数据库与打包成绩不能继承到新实现。
 5. Zod、JSZip 和模型适配分别验证错误、取消、范围、晚到结果与往返兼容。OpenAI 格式文本及转录的契约见 [Agent 协议](../design/agent-and-plugins.md#9-模型连接能力与路由)；SDK 未覆盖的接口由独立协议适配器补齐。
-6. 选型改变须有实证理由与新的决定。新实现未验证时，状态保持“已选型、未集成/未验证”；对应结果进入 [执行状态](../delivery/status.md)。
+6. 选型改变须有实证理由与新的决定。新实现未验证时，状态保持“已选型、未集成/未验证”；对应结果进入 [实现现状](../delivery/status.md)。
 
 ## 后续选择
 
-组合内核已按 ADR-0005 定稿；阅读解析器（EPUB/MOBI 的生产引擎，[Q-14](../../USER-ACTIONS.md#q-14)）、第三方插件的执行隔离（Q-06）在进入对应能力时结合证据决定，不能由本 ADR 推导为已接受。依赖具体版本由兼容性验证及锁文件确定；产品格式、目录与优先级已经确认，见[确认记录](confirmed-decisions.md)。
+组合内核已按 ADR-0005 定稿；阅读解析器（EPUB/MOBI 的生产引擎，[Q-14](https://github.com/chialecode/manga/issues/48)）、第三方插件的执行隔离（Q-06）在进入对应能力时结合证据决定，不能由本 ADR 推导为已接受。依赖具体版本由兼容性验证及锁文件确定；产品格式、目录与优先级已经确认，见[确认记录](confirmed-decisions.md)。
 
-2026-09-25 用户要求重新评估自研阅读/播放与插件解耦：PDF.js 已接入并 accepted，播放后端与其他媒体能力的选型记录见下文[开源选型记录](#open-source-record)。Q-14—Q-16 在[用户待办](../../USER-ACTIONS.md#q-14)统一承接，不重复询问本 ADR 已接受的库。
+2026-09-25 用户要求重新评估自研阅读/播放与插件解耦：PDF.js 已接入并 accepted，播放后端与其他媒体能力的选型记录见下文[开源选型记录](#open-source-record)。Q-14 在[#48](https://github.com/chialecode/manga/issues/48)，Q-15、Q-16 在[#46](https://github.com/chialecode/manga/issues/46)统一承接，不重复询问本 ADR 已接受的库。
 
 ## 2026-09-23 最新稳定依赖与 UI 决定（A-35）
 
@@ -156,7 +156,7 @@ Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点�
 
 ## 2026-11-14 最小发行龄改为 7 天（A-132）
 
-此后的盘点按“满 7 天的最新稳定版”取：`pnpm-workspace.yaml` 写入 `minimumReleaseAge: 10080`（分钟，此前仓库内没有这项配置），Dependabot 冷却期同为 7 天。盘点命令改为 `node scripts/deps.mjs`（基于 `pnpm outdated -r` 与 npm 源的发行时间，分同主版本与主版本），漏洞检查为 `node scripts/deps.mjs --audit`，见[开发流程 2.6](../dev-rules/development-workflow.md#dependency-inventory)。以下各节记录的是当时 14 天的口径。
+此后的盘点按“满 7 天的最新稳定版”取：`pnpm-workspace.yaml` 写入 `minimumReleaseAge: 10080`（分钟，此前仓库内没有这项配置），Dependabot 冷却期同为 7 天。盘点命令改为 `node scripts/deps.mjs`（基于 `pnpm outdated -r` 与 npm 源的发行时间，分同主版本与主版本），漏洞检查为 `node scripts/deps.mjs --audit`，见[开发流程第 6 节](../dev-rules/development-workflow.md#dependency-inventory)。以下各节记录的是当时 14 天的口径。
 
 ## 2026-11-14 依赖盘点（DeepSeek 插件阶段）
 
@@ -214,7 +214,7 @@ Windows 原生构建优先在独立打包暂存目录对 better-sqlite3 执行 @
 <a id="open-source-record"></a>
 ## 开源选型记录（A-40）
 
-查询日期 2026-10-03（媒介能力）与 2026-10-06（聊天、扫描、元数据）；来源是官方仓库 API、npm registry 与官方文档。“维护”只指近期有提交或发行，适用性以实测为准。表中是已采用的选择与未采用的理由；EPUB/MOBI 的生产引擎仍未定，候选是 epub.js、Readium Web、foliate-js（MOBI/KF8 的候选 foliate-js 接口不稳定），见 [Q-14](../../USER-ACTIONS.md#q-14)。
+查询日期 2026-10-03（媒介能力）与 2026-10-06（聊天、扫描、元数据）；来源是官方仓库 API、npm registry 与官方文档。“维护”只指近期有提交或发行，适用性以实测为准。表中是已采用的选择与未采用的理由；EPUB/MOBI 的生产引擎仍未定，候选是 epub.js、Readium Web、foliate-js（MOBI/KF8 的候选 foliate-js 接口不稳定），见 [Q-14](https://github.com/chialecode/manga/issues/48)。
 
 | 能力 | 采用 | 未采用与理由 |
 | --- | --- | --- |

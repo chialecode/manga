@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-DATA |
 | 版本与日期 | 0.2 / 2026-09-19 |
 | 状态 | 评审稿；以下类型表达协议语义，尚非应用源码 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)；文档状态不代表实现通过 |
 | 对应需求 | LIB、READ、NOTE、VOICE、CTX、CRE、CLIP、DATA 系列 |
 | 相关文档 | [总体架构](architecture.md)、[Agent 与插件](agent-and-plugins.md) |
 
@@ -370,7 +370,7 @@ interface CapturePositionEvent {
 
 失败/取消不删除已确认长期保存的片段。临时音频按明确的失败/取消清理策略显示可恢复、待清理或已清理；具体时机见 Q-05，尚未定稿前原型不自动删除。重新识别或整理形成新尝试/新修订，只有音频可用时才承诺无需重新录制的 ASR 重试。音频清理后，笔记与转写仍保留原始时间间隔、来源和修订，并明确“未保留/已清理”，不能显示可播放的假入口。设置变更只影响后续采集，不追溯删除既有附件；本地清理不承诺远端服务同步删除。
 
-本节新增筛选、保留与回顾契约属于 A-30，已实现（自检结果与限制见[执行状态](../delivery/status.md)，产品验收见 AT-57—59）。实现取舍：筛选使用 Silero VAD（见 [语音模块](../modules/voice.md)）；ASR 只返回整块文本时整块是一个“粗定位、待校准”片段；暂停不开新锚点，翻页、选区变化、跳转与资源/集切换开新锚点。
+本节新增筛选、保留与回顾契约属于 A-30，已实现（自检结果与限制见[实现现状](../delivery/status.md)，产品验收见 AT-57—59）。实现取舍：筛选使用 Silero VAD（见 [语音模块](../modules/voice.md)）；ASR 只返回整块文本时整块是一个“粗定位、待校准”片段；暂停不开新锚点，翻页、选区变化、跳转与资源/集切换开新锚点。
 
 ### 9.5 应用内听写、词库扩展与听写记录
 
