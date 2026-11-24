@@ -112,7 +112,7 @@ node scripts/stage.mjs report      # 核对上述结果并写 report.json
 
 ## 3. 应用与工程门禁
 
-正式工程的测试工具按 [ADR-0007](../decisions/0007-technology-stack.md) 采用 Vitest、Testing Library/jsdom 和对应浏览器烟测的 playwright-core。jsdom 测试用文件头 `/** @vitest-environment jsdom */`，共享设置在 `tests/helpers/`；jsdom 和浏览器烟测不替代 Electron 原生输入法与设备实测。Vitest 按文件并行，工作进程数是逻辑处理器的一半（开发机上全部用例约 70 s，逐个文件跑时约 480 s）；等渲染的界面用例要用 `findBy*` / `waitFor` 等到元素出现，不能在首次渲染后同步取。Vitest 的测试进程带 `--no-wasm-code-gc`：Node 24 所带的 V8 在工作线程结束、回收 WebAssembly 代码时偶发致命错误（[LOOP-08](../delivery/status.md#loop-08)），这个参数只作用于测试进程，不影响应用（应用跑在 Electron 自带的 V8 上）；Node 24.x 发行带上修复后去掉。
+正式工程的测试工具按 [ADR-0007](../decisions/0007-technology-stack.md) 采用 Vitest、Testing Library/jsdom 和对应浏览器烟测的 playwright-core。jsdom 测试用文件头 `/** @vitest-environment jsdom */`，共享设置在 `tests/helpers/`；jsdom 和浏览器烟测不替代 Electron 原生输入法与设备实测。Vitest 按文件并行，工作进程数是逻辑处理器的一半（开发机上全部用例约 70 s，逐个文件跑时约 480 s）；等渲染的界面用例要用 `findBy*` / `waitFor` 等到元素出现，不能在首次渲染后同步取。性能与超时类用例在机器忙时会偶发失败（[#33](https://github.com/chialecode/manga/issues/33)、[#95](https://github.com/chialecode/manga/issues/95)，由 LESSONS 出现 3 次后提升为规则）：门禁与 `pre-push` 不和其他重负载任务（另一个仓库的构建、打包或整套门禁）同时跑；超时失败先在空闲时单独重跑确认，再按需建 `bug` issue，改用显式就绪信号，不靠删除或放宽断言通过。Vitest 的测试进程带 `--no-wasm-code-gc`：Node 24 所带的 V8 在工作线程结束、回收 WebAssembly 代码时偶发致命错误（[LOOP-08](../delivery/status.md#loop-08)），这个参数只作用于测试进程，不影响应用（应用跑在 Electron 自带的 V8 上）；Node 24.x 发行带上修复后去掉。
 
 产品 AT 仍按阶段执行，不能用 POC 子集标为 passed。
 
