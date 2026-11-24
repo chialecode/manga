@@ -16,6 +16,8 @@
 @import "./styles-roughcut.css";
 
 @theme {
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace;
   --color-bg: #F3F4F7;
   --color-surface: #FFFFFF;
   --color-muted: #F2F3F6;
@@ -119,7 +121,7 @@ html, body, #root {
   background: var(--color-bg);
   color: var(--color-text);
   margin: 0;
-  font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .shell-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; flex-shrink: 0; }
@@ -132,7 +134,7 @@ html, body, #root {
 .tiptap [data-block-type="list"]::before { content: "•"; margin-right: .5em; margin-left: -1em; color: var(--color-subtle); }
 .tiptap [data-block-type="list"][data-ordered="true"]::before { content: "1."; }
 .tiptap [data-block-type="quote"] { border-left: 3px solid var(--color-border); padding-left: 1em; color: var(--color-subtle); }
-.tiptap [data-block-type="code"], .tiptap [data-block-type="plaintext"] { white-space: pre-wrap; font-family: monospace; background: var(--color-muted); }
+.tiptap [data-block-type="code"], .tiptap [data-block-type="plaintext"] { white-space: pre-wrap; font-family: var(--font-mono); background: var(--color-muted); }
 .tiptap > div + div { margin-top: .5em; }
 
 :focus-visible {
@@ -216,3 +218,4 @@ button:disabled { cursor: default; opacity: .5; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
 .about-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin-top: 12px; font-size: 13px; }
 .about-facts dt { color: var(--color-subtle); }
+.about-facts dd { font-variant-numeric: tabular-nums; }
