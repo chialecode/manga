@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.agent` / Agent / 开发者 |
-| 文档状态 / 实现状态 | 会话/运行循环、即时 runId、材料快照、持久消息/工具检查点、同 run 重试与双 runtime 已接线；停靠栏是聊天窗口、对话标签没有停靠栏、上下文调试面板、快捷任务模板与使用记录（A-47、A-48、A-52）已实现并自检（见[执行状态](../delivery/status.md)）；对话记录可以在设置里删除（A-89）、模型的添加与编辑在弹窗里（A-90）已实现并自检；技能与完整阅读上下文待实现；产品验收为 not-run |
+| 文档状态 / 实现状态 | 会话/运行循环、即时 runId、材料快照、持久消息/工具检查点、同 run 重试与双 runtime 已接线；停靠栏是聊天窗口、对话标签没有停靠栏、上下文调试面板、快捷任务模板与使用记录（A-47、A-48、A-52）已实现并自检（见[实现现状](../delivery/status.md)）；对话记录可以在设置里删除（A-89）、模型的添加与编辑在弹窗里（A-90）已实现并自检；技能与完整阅读上下文待实现；产品验收为 not-run |
 | 需求 / 设计依据 | AGENT-01—07、MODEL-01、MODEL-04—MODEL-07、SEARCH-03、AT-49/50、AT-184—AT-188、AT-192、AT-193、AT-95—AT-97 |
 | 包与公开入口 | `packages/app-core`、`packages/model-protocol`；`agent.createSession`、`agent.send`、`agent.cancel`、`agent.retry`、`agent.getRun`；另有 `session.stream`、`debug.context`、`quickTasks.list/save/delete/reorder/restore`、`usage.query`（契约见 `packages/contracts/src/inputs-workspace.ts`） |
 
@@ -56,6 +56,6 @@ AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历�
 
 ## 5. 验证与未决
 
-DeepSeek：`tests/agent/deepseek-thinking.test.ts`（两个运行时的思考开关、等级映射、`reasoning_content` 回传与拒绝、内置搜索的请求与解析、错误分类）、`tests/agent/deepseek-agent.test.ts`（3 步工具循环、联网搜索与下一轮回传、后台任务关思考、插件停用时中止与零请求）、`tests/agent/models-providers.test.tsx`、`tests/research/web-search.test.ts`、`tests/research/usage-services.test.ts`；真实接口 `tests/real/deepseek-contract.test.ts`（只在有密钥文件时运行）。AT-09/11/12/13/44/49/50 的子场景（`tests/agent/loop.test.ts`、`protocol-faults.test.ts`，`tests/runtime/grants-package-inventory.test.ts`、`location-ownership-idempotency.test.ts`）。真实 API 契约按独立用途读取忽略的本地配置，普通 CI 不联网。A-22 自研/PI 双 runtime 已接入 `completeText`/`streamText`，设置可切换，运行中冻结。不得因子场景通过宣称模块或产品验收完成。AT-64、AT-66、AT-67 与 AT-54/58/59 的结果见[执行状态](../delivery/status.md)；调试面板脱敏、快捷任务渲染与校验、使用记录写入分别有单元测试，打包烟测 `window-walk` 阶段走过聊天窗口、调试面板与快捷任务。
+DeepSeek：`tests/agent/deepseek-thinking.test.ts`（两个运行时的思考开关、等级映射、`reasoning_content` 回传与拒绝、内置搜索的请求与解析、错误分类）、`tests/agent/deepseek-agent.test.ts`（3 步工具循环、联网搜索与下一轮回传、后台任务关思考、插件停用时中止与零请求）、`tests/agent/models-providers.test.tsx`、`tests/research/web-search.test.ts`、`tests/research/usage-services.test.ts`；真实接口 `tests/real/deepseek-contract.test.ts`（只在有密钥文件时运行）。AT-09/11/12/13/44/49/50 的子场景（`tests/agent/loop.test.ts`、`protocol-faults.test.ts`，`tests/runtime/grants-package-inventory.test.ts`、`location-ownership-idempotency.test.ts`）。真实 API 契约按独立用途读取忽略的本地配置，普通 CI 不联网。A-22 自研/PI 双 runtime 已接入 `completeText`/`streamText`，设置可切换，运行中冻结。不得因子场景通过宣称模块或产品验收完成。AT-64、AT-66、AT-67 与 AT-54/58/59 的结果见[实现现状](../delivery/status.md)；调试面板脱敏、快捷任务渲染与校验、使用记录写入分别有单元测试，打包烟测 `window-walk` 阶段走过聊天窗口、调试面板与快捷任务。
 
 `getRun` 返回用户输入、消息检查点与 live text；App 刷新恢复当前 run；重试从已执行工具回执续作。

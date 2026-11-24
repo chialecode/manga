@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-AGENT |
 | 版本与日期 | 0.4 / 2026-09-19 |
 | 状态 | 评审稿；类型片段用于定义契约语义 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)；文档状态不代表实现通过 |
 | 对应需求 | BASE-01、CTX、AGENT、MODEL、SEARCH、PLUG 系列 |
 | 相关文档 | [总体架构](architecture.md)、[领域与数据](domain-model.md)、[交互流程](interaction-and-workflows.md) |
 
@@ -382,7 +382,7 @@ MANGA 拥有公开插件 SDK、命令、上下文和数据协议。运行时实�
 
 首批支持 OpenAI 格式，作为已确认要求。文本分别适配 Responses 与 Chat Completions 的消息、工具调用和流式事件；不得混用两套事件格式。Chat Completions 按最严格的服务发送：只有一条 system 消息且在最前（开头连续的几条合成一条），之后出现的系统内容（摘要、附在早先对话之后的材料、视觉识别结果）作为以 `System:` 开头的用户消息，PI 运行时同样如此；不少开源模型的对话模板拒绝其他排法。不带参数的工具调用可能给出空字符串，按 `{}` 处理；模型最后一轮既不调用工具、又只有空白时，任务记为可重试的失败，而不是空回答的成功。语音识别由统一的 `AsrEngine` 按 `AsrCapabilities` 能力描述适配三类引擎：（1）OpenAI 兼容文件转录 `/audio/transcriptions`（`transcriptionInterface: "audio_transcriptions"`，multipart 的 `file`/`model`/`prompt`/`language`）；（2）OpenAI 兼容对话接口音频输入 `/chat/completions`（`transcriptionInterface: "chat_input_audio"`，仅在 `purpose = 'transcription'` 连接上启用，发送 base64 WAV `input_audio` 与仅含逐字转写要求和专名参考列表的系统消息）；（3）本地 `sherpa-onnx` 离线模型（在独立 `utilityProcess` 中运行）。听写与录音笔记可各自选定引擎，已完成录音按所选引擎块长上限切分；用户选择的外部音频原件不修改，后续采集音频按保留设置管理。Realtime/WebSocket 转录是后续能力，不是文件转录的前置条件；OpenAI 兼容性也不代表时间戳、说话人识别或人声筛选可用，这些能力须单独验证。
 
-按 A-29，文档不指定具体模型或服务默认值。开发测试读取环境变量中的 OpenAI 兼容 LLM/ASR 配置；必要测试缺配置时才按[开发流程](../dev-rules/development-workflow.md#model-test-config)询问开发者。应用通过 BYOK 设置独立绑定模型，不把测试环境自动变为产品预设。ASR 的有限真实短测（见[执行状态](../delivery/status.md#真实服务与真实库试验聚合结果)）只证明合成样本，不代表完整设置界面或录音流程已验收。
+按 A-29，文档不指定具体模型或服务默认值。开发测试读取环境变量中的 OpenAI 兼容 LLM/ASR 配置；必要测试缺配置时才按[开发流程](../dev-rules/development-workflow.md#model-test-config)询问开发者。应用通过 BYOK 设置独立绑定模型，不把测试环境自动变为产品预设。ASR 的有限真实短测（见[实现现状](../delivery/status.md#真实服务与真实库试验聚合结果)）只证明合成样本，不代表完整设置界面或录音流程已验收。
 
 长录音在本地筛选人声后才上传 ASR，按接口大小/时长限制分块并保存回到原采集时间轴的映射；全程无人声时不发起转录请求。分段文本的来源与音频保留遵循[领域模型](domain-model.md#9-语音采集与位置映射)，不依赖 LLM 处理音频。
 

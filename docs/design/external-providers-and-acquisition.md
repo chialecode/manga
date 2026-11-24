@@ -5,7 +5,7 @@
 | 文档编号 | DESIGN-MANGA-PROVIDERS |
 | 版本与日期 | 0.2 / 2026-09-19 |
 | 状态 | 评审稿；接口与配置均为拟议契约，未实现或完成站点验证 |
-| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[用户待办](../../USER-ACTIONS.md)；文档状态不代表实现通过 |
+| 治理与决定 | [文档治理](../governance/documentation-policy.md)；[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)；文档状态不代表实现通过 |
 | 上位方案 | [可组合与 AI-Native 架构](composable-ai-native-architecture.md) |
 | 关联协议 | [领域模型](domain-model.md)、[Agent 与插件](agent-and-plugins.md)、[交付验收](../delivery/roadmap-and-acceptance.md) |
 
@@ -290,7 +290,7 @@ BT 计划记录内容身份（info hash）、文件选择、目标目录、分�
 | `jobs.get` / `jobs.cancel` | 通用查看/停止 | 真实任务状态与已有产物 |
 | `library.import` | 导入用户文件或已验证下载产物 | Resource/Revision 与来源回执 |
 
-这些命令按安装与启用状态发现。仅安装元数据源时，Agent 不会获得下载工具。当前的 `acquisition.*` 命令是所有者命令，Agent 的工具清单里没有它们（见[执行状态的 LOOP-09](../delivery/status.md#loop-09)）。Agent 请求“用 A 补中文标题、B 补放送信息”可转为字段策略草案和实际对象差异；站点资料中出现的命令不能修改权限或控制工作流。
+这些命令按安装与启用状态发现。仅安装元数据源时，Agent 不会获得下载工具。当前的 `acquisition.*` 命令是所有者命令，Agent 的工具清单里没有它们（见[实现现状的 LOOP-09](../delivery/status.md#loop-09)）。Agent 请求“用 A 补中文标题、B 补放送信息”可转为字段策略草案和实际对象差异；站点资料中出现的命令不能修改权限或控制工作流。
 
 ## 9. 验收与故障样本
 

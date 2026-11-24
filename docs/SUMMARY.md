@@ -3,11 +3,11 @@
 ## 项目与开发入口
 
 - [MANGA](../README.md)
-- [用户待办](../USER-ACTIONS.md)
 - [文档导航](README.md)
 - [AI Agent 与开发者工作入口](../AGENTS.md)
 - [贡献指南](../CONTRIBUTING.md)
 - [评审口径](../REVIEW.md)
+- [教训](../LESSONS.md)
 - [界面设计入口](../DESIGN.md)
 - [安全报告](../SECURITY.md)
 
@@ -37,8 +37,6 @@
 - [界面与工作流](design/interaction-and-workflows.md)
 - [外部数据库与下载扩展](design/external-providers-and-acquisition.md)
 - [交付与验收](delivery/roadmap-and-acceptance.md)
-- [当前阶段计划](delivery/stage-plan.md)
-- [当前阶段报告](delivery/stage-report.md)
 - [资料库模块规格](modules/library.md)
 - [笔记模块规格](modules/notes.md)
 - [设置模块规格](modules/settings.md)
@@ -59,7 +57,7 @@
 - [粗剪模块规格](modules/roughcut.md)
 - [插件模块规格](modules/plugins.md)
 - [下载模块规格](modules/acquisition.md)
-- [当前执行状态](delivery/status.md)
+- [实现现状](delivery/status.md)
 
 ## 决定、模板与证据
 
@@ -73,7 +71,6 @@
   - [媒体与性能建议](decisions/0006-media-and-performance.md)
   - [基础技术栈](decisions/0007-technology-stack.md)
 - [模板索引](templates/README.md)
-  - [Agent A / B 交接](templates/agent-handoff.md)
   - [变更提案](templates/change-proposal.md)
   - [模块规格](templates/module-spec.md)
   - [决定记录](templates/decision-record.md)

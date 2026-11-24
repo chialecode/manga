@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Synthetic speech evaluation corpus generator (`stage-plan.md` 4.11).
+// Synthetic speech evaluation corpus generator (archived dictation plan §4.11: https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-plan.md).
 // Generates 80 fictional-entity/disfluency/near-homophone sentences x 3 acoustic variants = 240 WAVs (16 kHz mono)
 // into `dist/samples/voice-eval/` using Windows built-in `System.Speech`.
 // If not on Windows or no Chinese SAPI voice is installed, records `{ status: "not-run", reason }` and exits 0.

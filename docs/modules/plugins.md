@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.plugins` / 插件 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；信任边界与手动流程见[用户待办](../../USER-ACTIONS.md#checks) |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）；信任边界与手动流程见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user) |
 | 需求 / 设计依据 | PLUG-01—07、AT-34、AT-45、AT-47、AT-48；[Agent 与插件协议](../design/agent-and-plugins.md)、[外部扩展设计](../design/external-providers-and-acquisition.md)、[数据与安全](../dev-rules/data-and-security.md) |
 | 包与公开入口 | `packages/app-core/src/plugins/`（`package.ts` 包格式与签名、`trust.ts` 信任库、`service.ts` 安装与启停、`runtime.ts` 进程与消息、`spawn-node.ts`）；契约 `packages/contracts/src/plugin.ts`、`inputs-plugins.ts`；桌面端进程启动 `apps/desktop/src/main/plugin-process.ts`；命令 `plugin.list`、`bundled`、`inspect`、`install`、`enable`、`disable`、`rollback`、`uninstall`、`exportData`、`deleteData`、`trust.list`、`trust.add`、`trust.remove`；界面 `apps/desktop/src/renderer/pages/settings/plugins-page.tsx`、`plugin-dialogs.tsx` |
 
@@ -15,7 +15,7 @@ Feature `plugins`；Facet `service`/`ui`；无硬依赖。关闭本功能会停�
 
 **信任边界（Q-06）。** 插件包是一个 zip：`manifest.json`、`signature.json` 和 `payload/` 下的文件。签名（Ed25519）覆盖清单的字节，以及每个载荷文件的名字、大小与 SHA-256，所以包里任何内容改动都使签名失败。只有签名密钥在信任库里的包才能安装：信任库由随应用带来的第一方公钥（不可移除）和用户自己选择信任的公钥组成。信任是用到时才查的，不记在已安装的插件上，所以移除一把密钥会停止它签过的所有插件（`reconcileTrust`）。未签名或签名不符、密钥不被信任的包一概拒绝，不提供“仍然安装”的入口。
 
-**进程是故障边界，不是沙箱。** 每个可执行插件在自己的进程里运行（桌面端是 Electron 的 utility process，没有窗口，只用消息与应用通信）。进程可以崩溃、挂起或刷屏而不拖垮应用，但操作系统并不限制它能做什么；因此可执行插件只接受受信任发布者的包。宿主自己只做两件事：不启动不被信任的；只在“插件向宿主提出的请求”这一道门上检查用户确认过的权限（`network`、`files`、`library-import`）。目前宿主开放给插件的请求只有 `log`（无需权限）；插件所声明的权限由用户在安装时逐项确认，并记录在案，但插件进程自己的网络与文件读写不经宿主，由发布者负责。这一点已在安装界面与用户待办中如实写明。
+**进程是故障边界，不是沙箱。** 每个可执行插件在自己的进程里运行（桌面端是 Electron 的 utility process，没有窗口，只用消息与应用通信）。进程可以崩溃、挂起或刷屏而不拖垮应用，但操作系统并不限制它能做什么；因此可执行插件只接受受信任发布者的包。宿主自己只做两件事：不启动不被信任的；只在“插件向宿主提出的请求”这一道门上检查用户确认过的权限（`network`、`files`、`library-import`）。目前宿主开放给插件的请求只有 `log`（无需权限）；插件所声明的权限由用户在安装时逐项确认，并记录在案，但插件进程自己的网络与文件读写不经宿主，由发布者负责。这一点已在安装界面与 `needs-user` issue 中如实写明。
 
 ## 2. 数据与公开能力
 
@@ -44,4 +44,4 @@ Agent 不能安装、启用或信任插件：插件管理的命令是所有者�
 
 自动：`tests/plugins/provider-plugin.test.ts`（提供者文件的校验与拒绝原因、声明式位置、启停与零网络、账户与密钥、卸载后再装）；`tests/plugins/plugin-package.test.ts`（包格式、签名、解包限制、路径安全）、`plugin-service.test.ts`（信任、权限确认、升级回退、启停与进程、宿主请求的门、行为异常的插件、随应用的包、操作日志与半写的安装）、`tests/shell/plugins-ui.test.tsx`。窗口：`plugins`（打包应用里的 15 步：随包的插件被提供但没有自己装上、安装对话框在权限被确认之前不能确认、安装后启用并以第一方信任运行、下载页随引擎出现，接着对回环蜂群做一次下载，最后在设置页停用再启用；下载部分见[下载模块](acquisition.md)）。卸载保留数据、信任移除与升级回退由自动测试覆盖，窗口里没有走。
 
-限制：进程不是沙箱，只收可信发布者；第一方签名私钥由构建者持有，不在仓库里，没有私钥无法生成可安装的随包插件（见[用户待办](../../USER-ACTIONS.md#checks)里的备份事项）；清单没有 `needs` 字段，插件之间与对应用模块的依赖不由清单表达；宿主开放的请求只有 `log`，`network`、`files`、`library-import` 的门还没有对应的宿主方法；只有 `acquisition.engine` 与声明式的 `model.provider` 两个位置，新增位置要改契约；不支持从网络安装或自动更新，只从本机文件或随包安装。
+限制：进程不是沙箱，只收可信发布者；第一方签名私钥由构建者持有，不在仓库里，没有私钥无法生成可安装的随包插件（见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)里的备份事项）；清单没有 `needs` 字段，插件之间与对应用模块的依赖不由清单表达；宿主开放的请求只有 `log`，`network`、`files`、`library-import` 的门还没有对应的宿主方法；只有 `acquisition.engine` 与声明式的 `model.provider` 两个位置，新增位置要改契约；不支持从网络安装或自动更新，只从本机文件或随包安装。

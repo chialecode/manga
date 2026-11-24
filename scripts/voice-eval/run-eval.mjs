@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Offline voice dictation evaluation runner & 4.2 frontend switch comparison (`stage-plan.md` 4.2, 4.11, 7).
+// Offline voice dictation evaluation runner & 4.2 frontend switch comparison (archived dictation plan §4.2, §4.11, §7: https://github.com/chialecode/manga/blob/92d1b0b/docs/delivery/stage-plan.md).
 // Evaluates installed local ASR models across `asr_only -> asr_plus_correct -> asr_plus_polish`
 // and compares capture frontend switches (`browserNoiseSuppression`, `autoGainControl`, `gtcrnDenoise` 0.75 mix vs 1.0 full vs off).
 // Live LLM polish runs ONLY when `MANGA_LIVE_VOICE_EVAL_LLM=1` AND `.env.local` configures `MANGA_TEST_LLM_*`.

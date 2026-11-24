@@ -13,7 +13,7 @@ node scripts/verify.mjs
 
 `verify.mjs` 是本地与 CI 共用的统一入口，依次检查：`scripts/` 顶层 MJS 语法；文档登记表与 GitHub 配置 JSON；文档结构（`check-docs.mjs`）；随包工具与门禁模型锁文件引用形态（`check-tool-links.mjs --pins`：离线核对 FFmpeg 锁定月末保留标签而非会被清理的每日标签，Silero VAD、字幕字体与 GTCRN 许可锁定 40 位完整提交 SHA，GTCRN 模型与门禁离线 ASR 模型锁定明确 GitHub Release 标签、同名资产、64 位十六进制 SHA-256 与字节数，含反例自测）；GitHub Actions 工作流静态安全检查（`check-workflows.mjs`）；公开内容检查及其反例；文档检查与阶段报告门禁的反例自测；包依赖方向、主进程与轻量入口闭包边界（`check-deps.mjs`，含 `checkLightClosure`、`sherpa-onnx-node` / `asr-host.ts` 仅限推理子进程加载、安装包配置禁止 `fileAssociations` 及内置反例）；根与 `apps/desktop` 两个 `tsc --noEmit`；未使用代码与依赖（`knip`）；烟测无未注释 `sleep(` 检查（`findUncommentedSmokeSleeps()`）；全部 Vitest；`git diff --check` 与 `git diff --cached --check`。它不安装依赖；缺少 `node_modules` 或 vitest 时非零退出，不使用 `--if-present`。10 MiB TXT 与 30 MiB EPUB 等大文件用例只在 `MANGA_LARGE_FILES=1` 时运行，阶段入口会设置它。需要合成样本、固定 FFmpeg 或语音模型的用例在这些前置缺失时失败；只有声明了 `MANGA_MEDIA_PREREQUISITES=absent` 的环境（CI）才把它们记为跳过，阶段入口会清除这个变量。
 
-开发启动用 `pnpm dev`，自动检查 Electron SQLite ABI 并隔离开发 Profile；目录约定见 [仓库地图](repo-map.md#生成物约定)。人工检查的启动、样本、操作和预期写在[用户待办](../../USER-ACTIONS.md#checks)，写到用户能直接照做，不只引用本页。
+开发启动用 `pnpm dev`，自动检查 Electron SQLite ABI 并隔离开发 Profile；目录约定见 [仓库地图](repo-map.md#生成物约定)。人工检查的启动、样本、操作和预期写在[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)，写到用户能直接照做，不只引用本页。
 
 ### 1.1 公开内容检查
 
@@ -40,26 +40,26 @@ node scripts/verify.mjs
 
 ## 2. 阶段证据入口
 
-阶段门禁的配置是 `scripts/stage/gate.json`（指纹覆盖范围、必需用例、基准目标与规模、包烟测阶段与窗口场景），当前阶段取自登记表的 `currentStage`，所以命令不带阶段名；每个阶段开始时 A 改写这份配置，统一入口为：
+阶段门禁的配置是 `scripts/stage/gate.json`（指纹覆盖范围、必需用例、基准目标与规模、包烟测阶段与窗口场景），当前阶段取自登记表的 `currentStage`，所以命令不带阶段名；改动涉及门禁范围（用例、基准、烟测阶段）时在同一个 PR 里更新这份配置，统一入口为：
 
 ```powershell
 node scripts/quick-gate.mjs [--phases a,b] # 日常的快速门禁（约 5 分钟内，见下方“两级门禁”）：verify、与改动相关的测试、点名的打包烟测阶段；不写证据
-node scripts/stage.mjs gate        # 整套门禁（只在 B 交付整个阶段时跑一次），按最早暴露失败的顺序跑，结果仍然有效的步骤不重跑；不更新本机开发版；第一步是依赖漏洞检查
-node scripts/deps.mjs [--json]     # 依赖盘点：满 7 天的新版本（同主版本／主版本），只出报告；阶段开始与门禁前各跑一次（开发流程 2.6）
+node scripts/stage.mjs gate        # 整套门禁（发布前，以及改到打包、安装、更新、签名或发布链路时跑），按最早暴露失败的顺序跑，结果仍然有效的步骤不重跑；不更新本机开发版；第一步是依赖漏洞检查
+node scripts/deps.mjs [--json]     # 依赖盘点：满 7 天的新版本（同主版本／主版本），只出报告；每周维护与整套门禁前各跑一次（开发流程第 6 节）
 node scripts/deps.mjs --audit      # 已知漏洞：未登记在 scripts/deps-exceptions.json 或例外过了复查日期则失败（退出码 1），跑不起来退出码 2（未执行）
 node scripts/stage.mjs test        # 全部 Vitest + 脚本自测，按必需用例匹配并写 cases.json、test-run.json
 node scripts/stage.mjs bench       # 10,000 元数据 / 50,000 检索块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、封面读取与 1000 条消息停靠栏、3000 条弹幕的播放、后台保留一个播放器的内存增量、调用追踪的开销与笔记写成 Markdown 文件的耗时，以及更新与发布的记录项
 node scripts/stage.mjs package     # Windows 未签名包及其烟测阶段，写 package.json 与 scenarios.json，做出本通道的按用户安装包；不更新本机开发版
 node scripts/stage.mjs installer   # 两个通道以测试安装身份（MANGA Test / MANGA Dev Test）装到临时目录、启动、0.1.1→0.1.2 覆盖升级演练、卸载，核对真实安装快照前后一致
-node scripts/stage.mjs install-dev # 每次需要用户人工检查时由 Agent 执行（B 交付整个阶段、A 审查修复或返工后、按用户反馈修复后请用户复查；见开发流程）：若本机已安装开发版（MANGA Dev），让运行中的开发版保存并退出、静默更新，然后不论原来是否在运行或窗口是否打开都以 --background 在托盘打开（A-135；在作业对象里先请桌面外壳 explorer.exe 启动并核实父进程后记 viaShell: true 与 inJob: false，无法脱离时记 inJob: true），写 install-dev.json，绝不碰正式版；已装的就是这个构建（版本相同且 app.asar 内容相同）时跳过，不请开发版退出
+node scripts/stage.mjs install-dev # 每次合并进 main 后由 Agent 在本机执行（开发流程 2.2）：若本机已安装开发版（MANGA Dev），让运行中的开发版保存并退出、静默更新，然后不论原来是否在运行或窗口是否打开都以 --background 在托盘打开（A-135；在作业对象里先请桌面外壳 explorer.exe 启动并核实父进程后记 viaShell: true 与 inJob: false，无法脱离时记 inJob: true），写 install-dev.json，绝不碰正式版；已装的就是这个构建（版本相同且 app.asar 内容相同）时跳过，不请开发版退出
 node scripts/stage.mjs release     # 在门禁通过的干净 main 上生成正式版安装包、块图、latest.yml、.sig、SHA256SUMS、发布说明并完成升级演练，写 release.json（无当次授权时不发布）
 node scripts/stage.mjs report      # 核对上述结果并写 report.json
 ```
 
-- 输出默认写到 Git 忽略的 `dist/evidence-runs/<跑次>/`（跑次默认 `current`，`STAGE_RUN` 指定其他）；路径计算正本为 `scripts/desktop-paths.ts`。只把审查需要引用的最终结果复制进 `docs/evidence/gate/`，入库证据不超过 5 MiB，下一阶段的门禁覆盖它。
+- 输出默认写到 Git 忽略的 `dist/evidence-runs/<跑次>/`（跑次默认 `current`，`STAGE_RUN` 指定其他）；路径计算正本为 `scripts/desktop-paths.ts`。只把审查需要引用的最终结果复制进 `docs/evidence/gate/`，入库证据不超过 5 MiB，下一次整套门禁覆盖它。
 - <a id="gate-tiers"></a>**两级门禁（2026-11-14 用户决定）。** 整套 `stage gate` 一次要 35—40 分钟，所以不再在每次修改后跑：
-  - **整套门禁**：只在 B 把整个阶段交给 A 审查时跑一次。每周的发布流程在发布前仍按 `release.yml` 核对。
-  - **快速门禁 `node scripts/quick-gate.mjs`**：其余时候都用它，包括阶段内的修改、A 审查的修复、返工、按用户反馈的修复与阶段内追加。目标 5 分钟内，依次跑：
+  - **整套门禁**：发布前，以及改到打包、安装、更新、签名或发布链路的 PR 合并前跑一次。每周的发布流程在发布前仍按 `release.yml` 核对。
+  - **快速门禁 `node scripts/quick-gate.mjs`**：其余时候都用它，包括日常的 PR、审查修复与按用户反馈的修复。目标 5 分钟内，依次跑：
     - `verify --skip-tests`；
     - 与自上次提交以来改动的文件相关的 Vitest（`vitest related`；`--all-tests` 跑全部）；
     - `--phases` 点名的打包烟测阶段（同 `MANGA_PACKAGE_PHASES`，只点改动涉及的，默认不跑）。
@@ -98,11 +98,11 @@ node scripts/stage.mjs report      # 核对上述结果并写 report.json
 | 开关 | 内容与边界 |
 | --- | --- |
 | `MANGA_LIVE_BANGUMI=1` | Bangumi 只读契约（含条目、角色与人员端点）：不用凭据，每次不超过 10 个请求，证据只含端点、结果与计数；网络不可达记 blocked（可带 `NODE_USE_ENV_PROXY=1` 与代理） |
-| `MANGA_LIVE_ASR=1` | 本地忽略的测试配置里的外部转录服务（含标准 `/audio/transcriptions` 与 `/chat/completions` `input_audio` 对话音频输入，[ACT-21](../../USER-ACTIONS.md#act-21)）：只发送合成语音与虚构人名提示，每个连接不超过 5 个请求（总计不超过 10 个），配置缺失或未授权记 not-run；只记录请求是否被接受及返回文字与期望相似度，配置值与密钥不打印、不写入证据 |
+| `MANGA_LIVE_ASR=1` | 本地忽略的测试配置里的外部转录服务（含标准 `/audio/transcriptions` 与 `/chat/completions` `input_audio` 对话音频输入，[ACT-21](https://github.com/chialecode/manga/issues/52)）：只发送合成语音与虚构人名提示，每个连接不超过 5 个请求（总计不超过 10 个），配置缺失或未授权记 not-run；只记录请求是否被接受及返回文字与期望相似度，配置值与密钥不打印、不写入证据 |
 | `MANGA_LIVE_VOICE_EVAL_LLM=1`（`scripts/voice-eval/run-eval.mjs`） | 离线语音评测脚本的真实文本模型润色对照：仅在显式开启且 `.env.local` 配有 `MANGA_TEST_LLM_*` 时对虚构二次元语料调用文本模型验证轻度润色与四道防线；默认关闭时仅跑离线确定性润色，绝不读取无关环境变量或打印凭据 |
 | `MANGA_LIVE_MODELS=1` + `node scripts/live-models.mjs` | LLM/Embedding/ASR 的有限短测，只发送合成内容；整条产品路径的真实调用见下一行 |
 | `MANGA_LIVE_MODEL_CONTRACT=1`（`tests/real/model-contract.test.ts`） | 本地忽略的测试配置里的文本与 Embedding 服务（`MANGA_TEST_LLM_*`、`MANGA_TEST_EMBEDDING_*`）走产品自己的路径：连接测试、带图片的任务（文本模型不收图时须带原因拒绝）、用工具查书、整理录音、按语义搜索、压缩长对话后保住事实、凭据不落盘。全部内容为合成样本；请求经回环地址上的转发器按类计数，超出预算（默认文本 30、图片 3、Embedding 10、模型列表 4，可用 `MANGA_LIVE_MODEL_BUDGET="text=12,embedding=4"` 调整）即拒绝；证据只含结果、计数、耗时和每个请求的形状（结束原因、回答长度、是否为空、调用的工具名），不含模型写的内容；配置值不打印、不写入证据 |
-| `MANGA_LIVE_DEEPSEEK_KEY_FILE=.local/deepseek.key`（`tests/real/deepseek-contract.test.ts`） | DeepSeek 真实接口契约（[ACT-23](../../USER-ACTIONS.md#act-23) 的授权范围）：模型列表、两个运行时的思考加 3 步工具循环、内置联网搜索、看图、语音识别（含 100 s 长音频）、合成与识别的往返、网页搜索，以及 401、400 等错误分类；只发送合成内容，每次不超过 40 个请求，阶段合计不超过 300 个请求、2 美元，用量记在被忽略的 `.local/deepseek-usage.log`。密钥只从文件读取，输出经过滤，结果写到被忽略的 `.local/deepseek-contract.json`，只含状态码、形状、耗时、计费单位与相似度，不含回答正文；没有密钥文件时跳过 |
+| `MANGA_LIVE_DEEPSEEK_KEY_FILE=.local/deepseek.key`（`tests/real/deepseek-contract.test.ts`） | DeepSeek 真实接口契约（[ACT-23](https://github.com/chialecode/manga/blob/bd03185/USER-ACTIONS.md#act-23) 的授权范围）：模型列表、两个运行时的思考加 3 步工具循环、内置联网搜索、看图、语音识别（含 100 s 长音频）、合成与识别的往返、网页搜索，以及 401、400 等错误分类；只发送合成内容，每次不超过 40 个请求，阶段合计不超过 300 个请求、2 美元，用量记在被忽略的 `.local/deepseek-usage.log`。密钥只从文件读取，输出经过滤，结果写到被忽略的 `.local/deepseek-contract.json`，只含状态码、形状、耗时、计费单位与相似度，不含回答正文；没有密钥文件时跳过 |
 | `MANGA_LIVE_DANDANPLAY=1`（`tests/real/dandanplay-contract.test.ts`） | 弹弹play 开放接口契约，经产品的客户端签名：搜索一部公开作品、映射公开的 Bangumi 条目、读一集弹幕、用编造的文件描述匹配（须不命中）；每次不超过 `MANGA_LIVE_DANDANPLAY_BUDGET`（默认 7）个请求，第一次被拒即停（记 blocked）；应用凭据取自被忽略的本地配置，不打印、不写入证据，证据只含结果与计数 |
 | `MANGA_REAL_SAMPLES=1`，配合 `MANGA_TEST_LIBRARY_NOVEL`、`MANGA_TEST_LIBRARY_MANGA`、`MANGA_TEST_LIBRARY_ANIME` | 开发者自己各媒介资源根的只读打开试验（遍历整库，需数分钟，不进 CI）：路径取自进程环境或被忽略的 `.env.local`（测试只读取这三个键，其余键不读、不打印）；缺哪个就跳过哪个；不复制、不写入源目录，摘要只含数量与类别，不含文件名与路径 |
 | `MANGA_REAL_SAMPLES=1`，配合 `MANGA_TEST_LIBRARY_ANIME`（`tests/real/real-import.test.ts`） | 开发者自己的动漫目录的只读导入试验（AT-80）：作为资源库位置加进全新 Profile，扫描固定时长（预算 `MANGA_REAL_IMPORT_BUDGET_MS`，默认 240000 ms）；不复制、不改动源文件，摘要只含数字：第一部作品出现的时间、处理的文件数、媒体工具运行的次数与类型（读遍数据包的运行必须为 0）、卷的读盘量（系统能给出时） |
@@ -131,9 +131,9 @@ node scripts/stage.mjs report      # 核对上述结果并写 report.json
 
 ## 4. 证据与失败处理
 
-按 [报告模板](../templates/validation-report.md)记录输入、版本、环境、实际结果和限制，更新 [执行状态](../delivery/status.md)。检查基础设施变化至少验证能检出一个真实反例，避免脚本永远返回成功。
+按 [报告模板](../templates/validation-report.md)记录输入、版本、环境、实际结果和限制，更新 [实现现状](../delivery/status.md)。检查基础设施变化至少验证能检出一个真实反例，避免脚本永远返回成功。
 
-已合并阶段的过程证据按[阶段开始的整理](../governance/documentation-policy.md#stage-cleanup)在下一阶段提炼进执行状态等不分阶段的正本后删除，`docs/evidence/gate/` 只留最近一次门禁的结果，Git 历史是归档。
+过程证据按[每周整理](../governance/documentation-policy.md#stage-cleanup)提炼进实现现状等不分阶段的正本后删除，`docs/evidence/gate/` 只留最近一次门禁的结果，Git 历史是归档。
 
 环境失败、业务失败和未执行分别报告。不能删测试、弱化断言、重写旧结果或改验收目标来制造通过；合理需求调整由有效决定驱动并同步正本。模型、网络和设备的非确定性场景使用可控故障夹具验证协议，有限真实测试验证实际适配。
 

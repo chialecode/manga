@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.metadata` / 元数据与封面 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）：只在作品主页手动匹配、按条目 ID 或链接关联、关联与刷新先预览差异、不自动同步；网络资料、封面原图、角色与声优、制作人员存数据库（A-51）；Bangumi 只读契约测试已用真实服务执行并通过（9 个请求，含角色与制作人员两个端点）；人工检查见[用户待办](../../USER-ACTIONS.md#checks)的 H-07 |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）：只在作品主页手动匹配、按条目 ID 或链接关联、关联与刷新先预览差异、不自动同步；网络资料、封面原图、角色与声优、制作人员存数据库（A-51）；Bangumi 只读契约测试已用真实服务执行并通过（9 个请求，含角色与制作人员两个端点）；人工检查见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user)的 H-07 |
 | 需求 / 设计依据 | META-01—03、LIB-02；[外部扩展设计 3.3](../design/external-providers-and-acquisition.md#33-首个实现bangumi)、[领域模型](../design/domain-model.md) |
 | 包与公开入口 | `packages/app-core/src/metadata`；命令 `metadata.providers`、`setProvider`、`search`、`candidates`、`link`、`unlink`、`refresh`、`related`、`findMissing`，以及 `metadata.resolveRef`、`metadata.preview`、`metadata.characters`；库命令 `works.setOverride`、`covers.list/select/lock/fromImage/handles` |
 

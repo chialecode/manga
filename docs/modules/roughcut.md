@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 模块 ID / 产品名称 / 负责人 | `manga.roughcut` / 粗剪 / 开发者 |
-| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[执行状态](../delivery/status.md)）；真实样本的导出手感见[用户待办](../../USER-ACTIONS.md#checks) |
+| 文档状态 / 实现状态 | 已实现并自检（产品验收 not-run，见[实现现状](../delivery/status.md)）；真实样本的导出手感见[`needs-user` issue](https://github.com/chialecode/manga/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-user) |
 | 需求 / 设计依据 | CLIP-01、CLIP-02、AT-32、AT-33、AT-98；[领域模型](../design/domain-model.md)、[交互设计](../design/interaction-and-workflows.md) |
 | 包与公开入口 | `packages/app-core/src/creative/roughcut.ts`（序列与编辑）、`roughcut-plan.ts`（切点与兼容性）、`roughcut-export.ts`（导出）；契约 `packages/contracts/src/roughcut.ts`、`inputs-roughcut.ts`；命令 `roughcut.list`、`create`、`get`、`rename`、`delete`、`edit`、`undo`、`redo`、`plan`、`export`、`cancel`、`exports`；界面 `apps/desktop/src/renderer/pages/projects/roughcut/`，播放器里的“加入粗剪”（`components/add-to-roughcut.tsx`） |
 
@@ -33,7 +33,7 @@ Feature `roughcut`；Facet `service`/`ui`；硬依赖 `manga.projects`，可选�
 
 ## 3. Agent 与界面
 
-命令在同一个网关注册，界面经这一入口调用。Agent 在本项目的会话里可以读粗剪（`roughcut.list/get`）；编辑与导出仍是所有者命令（A-73）。跨项目的调用在命令层被拒绝（`creative/agent-access.ts`），不只是不在工具清单里；“最近”里的对话与资源、作品、笔记的对话没有这些命令；仍只由所有者操作的部分登记在[执行状态](../delivery/status.md#loop-09)。界面：项目页的“粗剪”标签，左侧序列列表，右侧是片段列表（片段的标题、请求区间，可直接键入时间；上下移动；备注；移除；预览所选区间）、总时长、检查结果（每个片段的请求与实际区间、移动了多少秒、问题清单），以及导出区（选择目录与文件名、进度、取消、历史记录与每次的核对结果和用时）。导出过程中序列被锁定，不能编辑。序列改动后过一小会儿再重新检查，不在每次按键之后检查。播放器里有“加入粗剪”：有标记的区间就加标记，没有标记就从当前位置起取几秒，目标序列可以就地新建，必要时连项目也就地建一个。
+命令在同一个网关注册，界面经这一入口调用。Agent 在本项目的会话里可以读粗剪（`roughcut.list/get`）；编辑与导出仍是所有者命令（A-73）。跨项目的调用在命令层被拒绝（`creative/agent-access.ts`），不只是不在工具清单里；“最近”里的对话与资源、作品、笔记的对话没有这些命令；仍只由所有者操作的部分登记在[实现现状](../delivery/status.md#loop-09)。界面：项目页的“粗剪”标签，左侧序列列表，右侧是片段列表（片段的标题、请求区间，可直接键入时间；上下移动；备注；移除；预览所选区间）、总时长、检查结果（每个片段的请求与实际区间、移动了多少秒、问题清单），以及导出区（选择目录与文件名、进度、取消、历史记录与每次的核对结果和用时）。导出过程中序列被锁定，不能编辑。序列改动后过一小会儿再重新检查，不在每次按键之后检查。播放器里有“加入粗剪”：有标记的区间就加标记，没有标记就从当前位置起取几秒，目标序列可以就地新建，必要时连项目也就地建一个。
 
 ## 4. 生命周期与兼容
 
@@ -41,6 +41,6 @@ Feature `roughcut`；Facet `service`/`ui`；硬依赖 `manga.projects`，可选�
 
 ## 5. 验证与未决
 
-自动：`tests/creative/roughcut-plan.test.ts`（切点、流兼容）、`roughcut.test.ts`（AT-32）、`roughcut-export.test.ts`（AT-33：真实 ffmpeg 生成的合成视频，覆盖关键帧与非关键帧起点、多个来源与同一来源两次、剪到文件结尾、不同容器、安全文件名、不覆盖、取消、核对不符、来源消失、被中断、模块关闭）、`tests/shell/roughcut-ui.test.tsx`。窗口：`creative-roughcut-export`（打包应用里对合成视频导出，逐帧核对成品帧数与计划一致）。基准：`roughcutOverheadMs`（导出总用时中不属于媒体工具的部分），见[执行状态](../delivery/status.md)。
+自动：`tests/creative/roughcut-plan.test.ts`（切点、流兼容）、`roughcut.test.ts`（AT-32）、`roughcut-export.test.ts`（AT-33：真实 ffmpeg 生成的合成视频，覆盖关键帧与非关键帧起点、多个来源与同一来源两次、剪到文件结尾、不同容器、安全文件名、不覆盖、取消、核对不符、来源消失、被中断、模块关闭）、`tests/shell/roughcut-ui.test.tsx`。窗口：`creative-roughcut-export`（打包应用里对合成视频导出，逐帧核对成品帧数与计划一致）。基准：`roughcutOverheadMs`（导出总用时中不属于媒体工具的部分），见[实现现状](../delivery/status.md)。
 
 限制：起点只能在关键帧上，所以含开放式 GOP 的源在起点处可能带有引用前一组画面的开头图像，已在计划中以请求与实际区间的差表现，但播放器是否显示它们取决于播放器；各片段的参数集（序列与图像参数集）以哈希比较，接起来后以带内参数集出现的变化不检查；只取第一条视频流；音轨与字幕轨默认全部保留，也可以只选其中几条（没有选音轨时各片段的音轨数必须相同；图像字幕放不进 MP4 与 MOV），数据流与元数据不保留，章节只在合并导出且勾选时由各片段生成；容器随第一个片段，不能转封装为别的格式；没有转场、没有变速、没有多轨时间线。
