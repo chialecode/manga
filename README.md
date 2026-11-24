@@ -22,7 +22,7 @@
 MANGA 取自 **Manga、Anime、Novel、Game、Agent**。它把阅读观看、随手记录、素材整理和辅助创作放进同一个工作区：项目和“最近”各有自己的标签页、分屏、对话与阅读进度，可以一边看原作一边写。阅读器、播放器、笔记、白板、思维导图和创作工具共享稳定的内容引用，内置 Agent 通过结构化上下文和与界面相同的业务命令参与工作。
 
 > [!NOTE]
-> **开发中，正式版每周从 [Releases](https://github.com/chialecode/manga/releases) 发布（首个为 v0.1.1）。** 下面列出的能力已经在 `main` 上实现，并通过了自动化测试与打包窗口观察；人工检查与产品验收尚未完成。首版只面向**本地单用户、Windows 11 x64**，基础功能不需要登录。各项能力的验证状态与已知限制见[实现现状](docs/delivery/status.md)。
+> **开发中，正式版按计划每周从 [Releases](https://github.com/chialecode/manga/releases) 发布（目前只有 v0.1.1；定时发布的修复见 [#94](https://github.com/chialecode/manga/issues/94)）。** 下面列出的能力已经在 `main` 上实现，并通过了自动化测试与打包窗口观察；人工检查与产品验收尚未完成。首版只面向**本地单用户、Windows 11 x64**，基础功能不需要登录。各项能力的验证状态与已知限制见[实现现状](docs/delivery/status.md)。
 
 ## 能做什么
 

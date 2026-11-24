@@ -54,7 +54,7 @@ POC-07 使用 MANGA 的统一契约和场景验证运行时候选。自研最小
 <a id="current-stage"></a>
 ### 2.2 最近合并的阶段：DeepSeek 插件
 
-2026-11-14 从 `main @ 2726b0e`（上一阶段的 [PR #21](https://github.com/chialecode/manga/pull/21) 于 2026-11-14 squash 合并为 `92d1b0b`）开始规划，计划见[DeepSeek 插件阶段的计划](https://github.com/chialecode/manga/blob/bd03185/docs/delivery/stage-plan.md)，2026-11-21 经 [PR #28](https://github.com/chialecode/manga/pull/28) 合并（此后按 issue 驱动的小 PR 开发，A-138）。用户 2026-11-14 要求把 DeepSeek API 作为一个插件接入：DeepSeek 2026-11-13 开放了网页搜索、语音合成、语音识别与自己的大语言模型等一整套应用 API；插件启动后，模型列表里就能加入对应的模型；用户提供真实密钥并授权真实 API 测试（A-133、A-134、ACT-23）。细节的默认值见Q-41（[#36](https://github.com/chialecode/manga/issues/36)）。本阶段需求 `PLUG-07`、`MODEL-06`、`MODEL-07`、`VOICE-18`、`VOICE-19`、`SEARCH-03` 待实现。
+2026-11-14 从 `main @ 2726b0e`（上一阶段的 [PR #21](https://github.com/chialecode/manga/pull/21) 于 2026-11-14 squash 合并为 `92d1b0b`）开始规划，计划见[DeepSeek 插件阶段的计划](https://github.com/chialecode/manga/blob/bd03185/docs/delivery/stage-plan.md)，2026-11-21 经 [PR #28](https://github.com/chialecode/manga/pull/28) 合并（此后按 issue 驱动的小 PR 开发，A-138）。用户 2026-11-14 要求把 DeepSeek API 作为一个插件接入：DeepSeek 2026-11-13 开放了网页搜索、语音合成、语音识别与自己的大语言模型等一整套应用 API；插件启动后，模型列表里就能加入对应的模型；用户提供真实密钥并授权真实 API 测试（A-133、A-134、ACT-23）。细节的默认值见Q-41（[#36](https://github.com/chialecode/manga/issues/36)）。本阶段需求 `PLUG-07`、`MODEL-06`、`MODEL-07`、`VOICE-18`、`VOICE-19`、`SEARCH-03` 已随 PR #28 实现，验证状态见[实现现状](status.md)。
 
 - 声明式提供者插件：[AT-184](#at-deepseek)；
 - 从提供者加入模型、提供者账户（schema v17）：AT-185；
