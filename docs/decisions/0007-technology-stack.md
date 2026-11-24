@@ -48,7 +48,7 @@ MANGA 采用成熟的界面、编辑、存储和工程基础，减少通用基�
 
 组合内核已按 ADR-0005 定稿；阅读解析器（EPUB/MOBI 的生产引擎，[Q-14](https://github.com/chialecode/manga/issues/48)）、第三方插件的执行隔离（Q-06）在进入对应能力时结合证据决定，不能由本 ADR 推导为已接受。依赖具体版本由兼容性验证及锁文件确定；产品格式、目录与优先级已经确认，见[确认记录](confirmed-decisions.md)。
 
-2026-09-25 用户要求重新评估自研阅读/播放与插件解耦：PDF.js 已接入并 accepted，播放后端与其他媒体能力的选型记录见下文[开源选型记录](#open-source-record)。Q-14—Q-16 在[#48](https://github.com/chialecode/manga/issues/48)统一承接，不重复询问本 ADR 已接受的库。
+2026-09-25 用户要求重新评估自研阅读/播放与插件解耦：PDF.js 已接入并 accepted，播放后端与其他媒体能力的选型记录见下文[开源选型记录](#open-source-record)。Q-14 在[#48](https://github.com/chialecode/manga/issues/48)，Q-15、Q-16 在[#46](https://github.com/chialecode/manga/issues/46)统一承接，不重复询问本 ADR 已接受的库。
 
 ## 2026-09-23 最新稳定依赖与 UI 决定（A-35）
 
@@ -156,7 +156,7 @@ Agent 的待审操作与门禁提速这一阶段开始时与门禁前各盘点�
 
 ## 2026-11-14 最小发行龄改为 7 天（A-132）
 
-此后的盘点按“满 7 天的最新稳定版”取：`pnpm-workspace.yaml` 写入 `minimumReleaseAge: 10080`（分钟，此前仓库内没有这项配置），Dependabot 冷却期同为 7 天。盘点命令改为 `node scripts/deps.mjs`（基于 `pnpm outdated -r` 与 npm 源的发行时间，分同主版本与主版本），漏洞检查为 `node scripts/deps.mjs --audit`，见[开发流程 2.6](../dev-rules/development-workflow.md#dependency-inventory)。以下各节记录的是当时 14 天的口径。
+此后的盘点按“满 7 天的最新稳定版”取：`pnpm-workspace.yaml` 写入 `minimumReleaseAge: 10080`（分钟，此前仓库内没有这项配置），Dependabot 冷却期同为 7 天。盘点命令改为 `node scripts/deps.mjs`（基于 `pnpm outdated -r` 与 npm 源的发行时间，分同主版本与主版本），漏洞检查为 `node scripts/deps.mjs --audit`，见[开发流程第 6 节](../dev-rules/development-workflow.md#dependency-inventory)。以下各节记录的是当时 14 天的口径。
 
 ## 2026-11-14 依赖盘点（DeepSeek 插件阶段）
 

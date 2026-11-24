@@ -28,7 +28,7 @@
 
 - push 与建 PR 长期授权。push 前确认目标分支与待推送提交的公开内容（[公开内容检查](quality-gates.md#11-公开内容检查)），`pre-push` hook 会跑 `node scripts/verify.mjs`；首次推送设置 upstream，不用 `--all`、`--mirror` 或强推。
 - 使用 [PR 模板](../../.github/PULL_REQUEST_TEMPLATE.md)：关联 issue、做了什么、验证（命令 / 结果 / 未运行项）、风险。碰了[高风险清单](development-workflow.md#high-risk)加 `risk:high`。
-- CI `repository-quality` 通过、非作者的独立审查无阻塞项后：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 等用户合并。审查修复推到同一分支，只按新提交查一次必要结果，不循环 `push → 等 CI → 小修 → push`，不通过反复推送调试能在本地复现的问题。
+- CI `repository-quality` 通过、非作者的独立审查无阻塞项后：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 等用户合并。独立审查通过前不用 `gh pr merge --auto`：规则集不要求审批，自动合并会在 CI 通过后立即合并。审查修复推到同一分支，只按新提交查一次必要结果，不循环 `push → 等 CI → 小修 → push`，不通过反复推送调试能在本地复现的问题。
 - 合并后 GitHub 删除远端分支；本地 `git switch main && git pull --ff-only`，再[安装开发版](development-workflow.md#dev-install-at-handoff)。
 
 <a id="local-git"></a>
@@ -119,7 +119,7 @@ node scripts/verify.mjs
 - 使用 GitHub 私密漏洞报告作为安全入口，处理范围见 [SECURITY.md](../../SECURITY.md)。不编造邮箱、支持时限或不存在的发行版本。
 - 项目许可证已确认为 [Apache-2.0](../../LICENSE)；额外贡献权利安排、发布签名和安装包发布方式仍见 [Q-09](https://github.com/chialecode/manga/issues/48)。不擅自变更已确认许可；提交的 DCO 签名按第 1.2 节执行。
 
-维护者在 Settings 中调整配置后，应同步相应 JSON、规则正本和验证记录。通过 API 更新时，先读取当前值，只提交差异；请求串行执行，变更请求之间至少间隔一秒，出错停止而非盲目重放。完成后一轮核对即可，不安排定时巡检或自动纠偏。
+`issue_creation_policy` 与 `pull_request_creation_policy` 不在 REST 仓库接口里返回，用 GraphQL 仓库字段 `issueCreationPolicy` / `pullRequestCreationPolicy` 核对。维护者在 Settings 中调整配置后，应同步相应 JSON、规则正本和验证记录。通过 API 更新时，先读取当前值，只提交差异；请求串行执行，变更请求之间至少间隔一秒，出错停止而非盲目重放。完成后一轮核对即可，不安排定时巡检或自动纠偏。
 
 ## 5. Dependabot 与低频操作
 

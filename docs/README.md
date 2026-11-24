@@ -6,7 +6,7 @@
 | 编写日期 | 2026-09-19；2026-10-06 更新 |
 | 状态 | 导航与治理入口生效；产品与设计细化仍按各文档状态 |
 | 产品主线 | 围绕二次元内容，让阅读观看、随手记录、素材整理和辅助创作形成连续的工作流 |
-| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速、安装与自动更新、首个正式版与轻量打开、类 Typeless 的听写都已合入 main（最近合并提交 `92d1b0b`，已发布 v0.1.1）；当前阶段（DeepSeek 插件）在 `feat/m13-deepseek-plugin` 已完成 B 实施、A 集中审查、试用反馈修复、全仓代码审查重构、无用代码与文档清理及合并前依赖盘点，已于 2026-11-21 经 [PR #28](https://github.com/chialecode/manga/pull/28) 合并进 `main`。产品验收尚未完成，已实现能力与验证状态见[实现现状](delivery/status.md) |
+| 实现状态 | 小说、漫画、动漫的阅读/播放、笔记与录音定位、Bangumi 元数据、Agent、创作工作区、粗剪、插件与 BitTorrent 获取，以及按项目组织、带标签页与分屏的单一工作区、体验与代码整理、依赖升级与 Agent 工程循环、Agent 的待审操作与门禁提速、安装与自动更新、首个正式版与轻量打开、类 Typeless 的听写（最近的阶段合并提交 `92d1b0b`，已发布 v0.1.1）、DeepSeek 插件（2026-11-21 经 [PR #28](https://github.com/chialecode/manga/pull/28) 合并）都已合入 main；之后按 issue 驱动的小 PR 开发（A-138）。产品验收尚未完成，已实现能力与验证状态见[实现现状](delivery/status.md) |
 
 ## 1. 阅读顺序
 
@@ -24,7 +24,7 @@
 | [基础技术栈决定](decisions/0007-technology-stack.md) | A-15 已授权的 UI、编辑、存储与工程基础选择；原型到正式工程的迁移/验证边界 |
 | [模板](templates/README.md) | 提案、模块规格、决定与验证报告 |
 | [实现现状](delivery/status.md) | POC/AT 的实际执行情况与证据 |
-| [最近一次门禁证据](evidence/gate/) | 最近一次阶段门禁（test、package、bench、report）的脱敏结果，随阶段更新；过程文档与轮次证据按[阶段收尾清理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
+| [最近一次门禁证据](evidence/gate/) | 最近一次整套门禁（test、package、bench、report）的脱敏结果，下一次整套门禁覆盖；过程文档与轮次证据按[每周整理](governance/documentation-policy.md#stage-cleanup)处理，历史在 Git 里 |
 | [模块规格](modules/library.md) | 各内置模块的数据所有权、命令、上下文、停用与恢复 |
 | [Git 与 GitHub](dev-rules/git-and-github.md) / [GitBook 阅读目录](SUMMARY.md) | 本地验证、远端协作、分支规则、低频自动化及文档接入 |
 
