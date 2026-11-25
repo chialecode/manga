@@ -292,13 +292,13 @@ const inkBetween = (view: BrowserWindow, fromCss: number, toCss: number) => js<n
   return ink;
 })()`);
 
-/** Bright pixels in a part of the window as the screen shows it (the comments are white letters; the bars around the picture are black). */
+/** Bright pixels in a part of the window as the screen shows it (default 0.8 opacity caps white letters on the black bar at ~204, with anti-aliased 12 px strokes mostly in 120–204). */
 async function brightOnScreen(view: BrowserWindow, box: Box): Promise<number> {
   if (box.w < 2 || box.h < 2) return 0;
-  const image = await view.webContents.capturePage({ x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.w), height: Math.round(box.h) }, { stayAwake: true });
+  const image = await view.webContents.capturePage({ x: Math.ceil(box.x), y: Math.ceil(box.y), width: Math.floor(box.w), height: Math.floor(box.h) }, { stayAwake: true });
   const bitmap = image.toBitmap();
   let bright = 0;
-  for (let i = 0; i + 3 < bitmap.length; i += 4) if (bitmap[i]! > 200 && bitmap[i + 1]! > 200 && bitmap[i + 2]! > 200) bright += 1;
+  for (let i = 0; i + 3 < bitmap.length; i += 4) if (bitmap[i]! > 120 && bitmap[i + 1]! > 120 && bitmap[i + 2]! > 120) bright += 1;
   return bright;
 }
 
@@ -336,10 +336,13 @@ async function walkDanmakuWindowTop(view: BrowserWindow, observe: Observe, shot?
       await play(1);
       const maxCss = Math.min(bar, tall.layer?.h ?? 0);
       let above = 0;
-      const aboveDeadline = Date.now() + 4000;
-      while (above <= 40 && Date.now() < aboveDeadline) {
+      const aboveDeadline = Date.now() + 5000;
+      while (Date.now() < aboveDeadline) {
         above = await inkBetween(view, 0, maxCss);
-        if (above <= 40) await waitFrames(view);
+        const currentTime = await js<number>(view, `document.querySelector('[data-testid="video-element"]')?.currentTime ?? 0`);
+        // The first comment enters from the right edge at 1.5 s; pausing as soon as alpha ink crosses 40 catches only a ~2 px stroked sliver at 1x DPR.
+        if (above > 40 && currentTime >= 2.3) break;
+        await waitFrames(view);
       }
       await pause();
       await waitFrames(view, 2);
@@ -353,7 +356,8 @@ async function walkDanmakuWindowTop(view: BrowserWindow, observe: Observe, shot?
         const l = layer?.getBoundingClientRect();
         return Boolean(hit && area && area.contains(hit) && l && ${point.y} >= l.top && ${point.y} <= l.bottom);
       })()`);
-      const screen = await brightOnScreen(view, { x: tall.area!.x, y: tall.area!.y, w: tall.area!.w, h: bar });
+      // Inset from the picture's top edge by 2 CSS px so fractional DPR rounding never leaks the bright video frame into the bar check.
+      const screen = await brightOnScreen(view, { x: tall.area!.x, y: tall.area!.y, w: Math.max(0, tall.area!.w - 1), h: Math.max(0, bar - 2) });
       detail.aboveThePicture = { bar: Math.round(bar), canvasInk: above, screenBright: screen, reach };
       if (above <= 40) problems.push(`no comment was drawn on the canvas above the picture (${above} pixels)`);
       if (!reach) problems.push("something of the page covers the bar above the picture where the comments are");
