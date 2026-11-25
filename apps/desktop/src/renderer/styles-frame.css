@@ -61,8 +61,8 @@
 .shell-compact .shell-main, .manga-shell[data-immersive="true"] .shell-main { border-left: 0; }
 /* The right end of the title bar over the main area's tab strip, while the dock is not docked (A-136). */
 .main-top-end { position: absolute; top: 0; right: 0; z-index: 31; display: flex; height: var(--column-top-h); }
-/* The dock's part of the title bar, with the right end of the title bar in it. */
-.dock-top { display: flex; align-items: center; justify-content: flex-end; flex: none; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); }
+/* The dock's part of the title bar, with the right end of the title bar in it; sits above the dock resize divider so overflowing status pills stay clickable. */
+.dock-top { position: relative; z-index: 31; display: flex; align-items: center; justify-content: flex-end; flex: none; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); }
 .shell-dock { display: flex; flex-direction: column; min-height: 0; background: var(--color-surface); border-left: 1px solid var(--color-border); outline: none; }
 .shell-dock[data-shell-state="overlay"] { box-shadow: var(--shadow-panel); }
 .shell-dock-body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; padding: 8px 16px 12px; }
