@@ -388,8 +388,8 @@ test("report rejects a 5000-file scan that fell short, or a gated figure that do
   const variants = [
     (bench) => { bench.scanPane.ok = false; },
     (bench) => { bench.scanPane.scan.files[0] = 100; },
-    (bench) => { bench.scanPane.scan.added[1] = 100; },
-    (bench) => { bench.scanPane.scan.files = [config.bench.scan.files]; bench.scanPane.scan.added = [config.bench.scan.files]; },
+    (bench) => { bench.scanPane.scan.added[0] = 100; },
+    (bench) => { bench.scanPane.scan.files = Array.from({ length: Math.max(0, config.bench.scan.runs - 1) }, () => config.bench.scan.files); bench.scanPane.scan.added = [...bench.scanPane.scan.files]; },
     (bench) => { bench.scanPane.scan.loopLag.raw = [1, 1, 1]; },
     (bench) => { bench.scanPane.scan.loopLag.raw[0] = -1; },
     // One long stall among many short delays moves the p99 only when the samples say so; the metric has to follow them.
@@ -581,16 +581,17 @@ test("report enforces packaged light open smoke, bench light raw samples/p95/rec
   }
 
   // 2. `bench.json`: `bench.light` raw samples, p95 agreement, workingSetMiB and fullAppOpenVideo comparison record.
+  const lightRuns = config.bench.light?.runs ?? 3;
   for (const [index, mutate] of [
     (bench) => { delete bench.light; },
     (bench) => { bench.light.ok = false; },
     (bench) => { bench.light.kind = "service"; },
     (bench) => { bench.light.failures = ["video run 1 failed"]; },
-    (bench) => { bench.light.raw.videoFirstFrameMs = [1, 1, 1, 1]; },
-    (bench) => { bench.light.raw.comicFirstPageMs = [-1, 1, 1, 1, 1]; },
-    (bench) => { bench.light.raw.secondOpenMs = [1, 1, 1, 1, 400]; bench.metrics.lightSecondOpenMs = 1; },
-    (bench) => { bench.light.raw.secondOpenMs = [900, 900, 900, 900, 900]; bench.metrics.lightSecondOpenMs = 900; },
-    (bench) => { bench.light.records.workingSetMiB = [120, 120]; },
+    (bench) => { bench.light.raw.videoFirstFrameMs = Array.from({ length: lightRuns - 1 }, () => 1); },
+    (bench) => { bench.light.raw.comicFirstPageMs = [-1, ...Array.from({ length: lightRuns - 1 }, () => 1)]; },
+    (bench) => { bench.light.raw.secondOpenMs = [...Array.from({ length: lightRuns - 1 }, () => 1), 400]; bench.metrics.lightSecondOpenMs = 1; },
+    (bench) => { bench.light.raw.secondOpenMs = Array.from({ length: lightRuns }, () => 900); bench.metrics.lightSecondOpenMs = 900; },
+    (bench) => { bench.light.records.workingSetMiB = Array.from({ length: lightRuns - 1 }, () => 120); },
     (bench) => { bench.light.records.workingSetMiB[0] = 0; },
     (bench) => { delete bench.light.records.fullAppOpenVideo; },
     (bench) => { bench.light.records.fullAppOpenVideo.firstFrameMs = 0; },

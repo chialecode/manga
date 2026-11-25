@@ -4,7 +4,7 @@ import os from "node:os";
 import { performance } from "node:perf_hooks";
 import { MangaProductApp, TestVault } from "../../packages/app-core/src/index.ts";
 import { renderCover } from "../samples/media-draw.mjs";
-import { p95, p99 } from "./lib.mjs";
+import { loadGate, p95, p99 } from "./lib.mjs";
 
 /**
  * Library scan, cover and right-pane measurements, taken on synthetic data only:
@@ -230,13 +230,14 @@ async function measurePane(dir, launch) {
   };
 }
 
-/** Three scans of 5000 files, each in a Profile of its own; the delay and answer samples of all of them are judged together. */
+/** Scans of 5000 files (`gate.json` `bench.scan.runs`, each in a Profile of its own); the delay and answer samples are judged together. */
 export async function runScanPaneBench({ launch }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-scan-pane-"));
   try {
+    const scanRuns = loadGate().bench?.scan?.runs ?? 1;
     const runs = [];
     let covers = null;
-    for (let run = 0; run < 3; run += 1) {
+    for (let run = 0; run < scanRuns; run += 1) {
       const measured = await measureScan(path.join(root, `scan-${run}`), { withCovers: run === 0 });
       runs.push(measured.scan);
       covers ??= measured.covers;

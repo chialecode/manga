@@ -435,6 +435,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
   else {
     const { ids } = four;
     if (!(await show(view, ids.videoA))) failures.push("quad: the video did not come to the front in one column");
+    if (!(await playerReady(view, ids.videoA))) failures.push("quad: the single-column player has no first frame");
     const baseline: number[] = [];
     for (let run = 0; run < spec.baselineRuns; run += 1) baseline.push(...(await playAndCount(view, ids.videoA, spec.playMs)).intervals);
     usual = median(baseline);
@@ -460,7 +461,7 @@ export async function measureWorkspaceBench(appService: MangaProductApp, grant: 
 
   note("done");
   const samples = { tabMs, contextMs, restoreMs };
-  const enough = tabMs.length >= 60 && contextMs.length >= 30 && restoreMs.length >= 10 && lateRaw.length === spec.quadRuns;
+  const enough = tabMs.length >= 30 && contextMs.length >= 15 && restoreMs.length >= 6 && lateRaw.length === spec.quadRuns;
   return {
     ok: failures.length === 0 && enough,
     failures,

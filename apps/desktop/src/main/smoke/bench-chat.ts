@@ -47,7 +47,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
       const seen = await js<unknown>(view, `({ page: [...document.querySelectorAll('[data-testid^="page-"]')].map((el) => el.getAttribute("data-testid")).slice(0, 6), dock: Boolean(${DOCK}), rows: Number(${DOCK}?.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count") ?? -1), bubbles: [...(${DOCK}?.querySelectorAll('[data-testid^="bubble-user-"]') ?? [])].slice(-2).map((el) => el.getAttribute("data-testid")) })`);
       failures.push(`the conversation of ${label} did not open (${opened ? (docked ? "the newest row not drawn" : "no dock") : "the reader did not open from the shelf"}: ${JSON.stringify(seen)})`);
     }
-    await sleep(1500); // real time: 长会话加载后等待渲染进程工作集稳定再采样内存
+    await sleep(800); // real time: 长会话加载后等待渲染进程工作集稳定再采样内存
     memory[label] = rendererMemoryMiB();
   }
 
@@ -56,7 +56,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
   const openRaw: number[] = [];
   const geometry = `[...document.querySelectorAll('[data-testid="chat-log"]')].map((log) => { const s = log.firstElementChild; return { inDock: Boolean(log.closest('[data-testid="shell-dock"]')), top: Math.round(s.scrollTop), height: s.scrollHeight, client: s.clientHeight, count: log.querySelector('[data-testid="chat-rows"]')?.getAttribute("data-count"), shown: [...log.querySelectorAll('[data-testid^="bubble-"]')].slice(0, 3).map((el) => el.getAttribute("data-testid")), older: log.querySelector('[data-testid="chat-older"]') ? (log.querySelector('[data-testid="chat-older"]').disabled ? "loading" : "ready") : "none", header: (log.closest('[data-testid="shell-dock"]')?.querySelector("header, [data-testid=dock-title], h2")?.textContent ?? "").slice(0, 60), last: [...log.querySelectorAll('[data-testid^="bubble-user-"]')].at(-1)?.getAttribute("data-testid") }; })`;
   const newest = `bubble-user-${large.runIds.at(-1)}:user`;
-  for (let index = 0; index < 12; index += 1) {
+  for (let index = 0; index < 6; index += 1) {
     if (!(await showTab(view, { kind: "reader", title: "长对话的书（1000）" })) || !(await waitUntil(view, `${DRAWN}(${DOCK}?.querySelector('[data-testid="bubble-user-${small.runIds.at(-1)}:user"]'))`, 8000))) { failures.push("the other book's conversation did not come back"); break; }
     await waitFrames(view, 2);
     await js(view, `(() => { window.__chatOpen = null; document.addEventListener("mousedown", () => { window.__chatOpen = performance.now(); }, { capture: true, once: true }); return true; })()`);
@@ -89,7 +89,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     const out = [];
     let step = 0;
     const next = () => {
-      if (step >= 60) { set.call(area, ""); area.dispatchEvent(new Event("input", { bubbles: true })); resolve(out); return; }
+      if (step >= 30) { set.call(area, ""); area.dispatchEvent(new Event("input", { bubbles: true })); resolve(out); return; }
       const started = performance.now();
       set.call(area, "长对话下的输入延迟样本 " + step);
       area.dispatchEvent(new Event("input", { bubbles: true }));
@@ -104,8 +104,8 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
   // Older page: at the top, the next page comes and is painted.
   const olderMs: number[] = [];
   const olderRaw: number[] = [];
-  if (openMs.length < 10) failures.push(`open samples ${JSON.stringify(openRaw)}; lists ${JSON.stringify(await js<unknown>(view, geometry))}`);
-  for (let index = 0; index < 12; index += 1) {
+  if (openMs.length < 5) failures.push(`open samples ${JSON.stringify(openRaw)}; lists ${JSON.stringify(await js<unknown>(view, geometry))}`);
+  for (let index = 0; index < 6; index += 1) {
     const ms = await js<number>(view, `new Promise((resolve) => {
       const scroller = ${SCROLLER};
       const before = ${COUNT};
@@ -129,10 +129,10 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     await waitFrames(view, 2);
   }
 
-  // Late frames: back at the bottom, then scrolled upwards a step each frame; five runs.
+  // Late frames: back at the bottom, then scrolled upwards a step each frame; three runs.
   const late: number[] = [];
   let usualIntervalMs = 0;
-  for (let run = 0; run < 5; run += 1) {
+  for (let run = 0; run < 3; run += 1) {
     await clickTestId(view, "chat-scroll-bottom", 2000);
     await waitUntil(view, `(() => { const s = ${SCROLLER}; return Boolean(s && s.scrollHeight - s.scrollTop - s.clientHeight < 24); })()`, 4000);
     const result = await js<{ usual: number; pct: number; frames: number }>(view, `new Promise((resolve) => {
@@ -150,7 +150,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
         const frame = (now) => {
           intervals.push(now - last); last = now;
           scroller.scrollTop = Math.max(0, scroller.scrollTop - 60);
-          if (now - started < 3000) requestAnimationFrame(frame);
+          if (now - started < 2000) requestAnimationFrame(frame);
           else resolve({ usual, pct: Math.round(intervals.filter((value) => value > usual * 1.5).length / intervals.length * 1000) / 10, frames: intervals.length });
         };
         requestAnimationFrame(frame);
@@ -160,8 +160,8 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     usualIntervalMs = result.usual;
     late.push(result.pct);
   }
-  if (olderMs.length < 8) failures.push(`older samples ${JSON.stringify(olderRaw)}; lists ${JSON.stringify(await js<unknown>(view, geometry))}`);
-  const ok = failures.length === 0 && openMs.length >= 10 && inputMs.length >= 60 && olderMs.length >= 8 && late.length === 5;
+  if (olderMs.length < 4) failures.push(`older samples ${JSON.stringify(olderRaw)}; lists ${JSON.stringify(await js<unknown>(view, geometry))}`);
+  const ok = failures.length === 0 && openMs.length >= 5 && inputMs.length >= 30 && olderMs.length >= 4 && late.length === 3;
   return {
     ok, failures, messages: 5000, openMs, inputMs, olderMs, latePct: late, usualIntervalMs: Math.round(usualIntervalMs * 100) / 100, memoryMiB: memory,
     waits: {

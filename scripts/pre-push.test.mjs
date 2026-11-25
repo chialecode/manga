@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pruneLogs, runLogged } from './pre-push.mjs';
+import { planPrePushTests, pruneLogs, runLogged } from './pre-push.mjs';
 
 const dir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'manga-hook-'));
 
@@ -42,4 +42,16 @@ test('only the newest logs are kept, and other files are left alone', () => {
     assert.ok(left.includes('other.log'));
     assert.ok(!left.includes('pre-push-2026-01-10.log') && left.includes('pre-push-2026-01-12.log'));
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('planPrePushTests chooses skip, related, or full based on changed paths', () => {
+  assert.deepEqual(planPrePushTests(['docs/dev-rules/quality-gates.md', 'README.md']), { mode: 'skip', files: [] });
+  assert.deepEqual(planPrePushTests(['apps/desktop/src/main/smoke/danmaku-walk.ts', 'README.md']), {
+    mode: 'related',
+    files: ['apps/desktop/src/main/smoke/danmaku-walk.ts'],
+  });
+  assert.equal(planPrePushTests(['vitest.config.ts', 'packages/app-core/src/index.ts']).mode, 'full');
+  assert.equal(planPrePushTests(['tests/helpers/app.ts']).mode, 'full');
+  assert.equal(planPrePushTests(['apps/desktop/src/main/index.ts'], { forceFull: true }).mode, 'full');
+  assert.equal(planPrePushTests(null).mode, 'full');
 });

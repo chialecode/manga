@@ -57,6 +57,7 @@ function makeEmptySnapshotOptions(root: string) {
     desktopDir,
     programsDir,
     registryEntries: [],
+    registry: () => null,
   };
 }
 

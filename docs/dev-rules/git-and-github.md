@@ -26,7 +26,7 @@
 <a id="pr-and-merge"></a>
 ### 1.3 push、PR 与合并
 
-- push 与建 PR 长期授权。push 前确认目标分支与待推送提交的公开内容（[公开内容检查](quality-gates.md#11-公开内容检查)），`pre-push` hook 会跑 `node scripts/verify.mjs`；首次推送设置 upstream，不用 `--all`、`--mirror` 或强推。
+- push 与建 PR 长期授权。push 前确认目标分支与待推送提交的公开内容（[公开内容检查](quality-gates.md#11-公开内容检查)），`pre-push` hook 会跑 `verify.mjs --skip-tests` 与改动文件相关的 `vitest related`（改动共享配置或夹具、或设 `MANGA_PRE_PUSH_FULL=1` 时跑完整 `node scripts/verify.mjs`）；首次推送设置 upstream，不用 `--all`、`--mirror` 或强推。
 - 使用 [PR 模板](../../.github/PULL_REQUEST_TEMPLATE.md)：关联 issue、做了什么、验证（命令 / 结果 / 未运行项）、风险。碰了[高风险清单](development-workflow.md#high-risk)加 `risk:high`。
 - CI `repository-quality` 通过、非作者的独立审查无阻塞项后：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 等用户合并。独立审查通过前不用 `gh pr merge --auto`：规则集不要求审批，自动合并会在 CI 通过后立即合并。审查修复推到同一分支，只按新提交查一次必要结果，不循环 `push → 等 CI → 小修 → push`，不通过反复推送调试能在本地复现的问题。
 - 合并后 GitHub 删除远端分支；本地 `git switch main && git pull --ff-only`，再[安装开发版](development-workflow.md#dev-install-at-handoff)。
@@ -44,7 +44,7 @@ git config --local core.hooksPath .githooks
 node scripts/verify.mjs
 ```
 
-`.gitattributes` 负责文本行尾，`.editorconfig` 负责编辑习惯。`pre-push` 经 `scripts/pre-push.mjs` 调用同一验证入口，并把完整输出写入 `dist/evidence-runs/pre-push-*.log`（保留最近 10 份；失败时打印路径，供定位偶发失败），不访问 GitHub API、不自动提交或格式化；`prepare-commit-msg` 只为提交消息补提交者的 DCO 签名。Git 不随 clone 自动启用自定义 hook，新工作区需要显式配置；hook 可被跳过，不能代替远端合并约束。
+`.gitattributes` 负责文本行尾，`.editorconfig` 负责编辑习惯。`pre-push` 经 `scripts/pre-push.mjs` 运行静态检查与受影响测试（完整全量测试仍由远端 CI 兜底，亦可用 `MANGA_PRE_PUSH_FULL=1` 强制全量），并把完整输出写入 `dist/evidence-runs/pre-push-*.log`（保留最近 10 份；失败时打印路径，供定位偶发失败），不访问 GitHub API、不自动提交或格式化；`prepare-commit-msg` 只为提交消息补提交者的 DCO 签名。Git 不随 clone 自动启用自定义 hook，新工作区需要显式配置；hook 可被跳过，不能代替远端合并约束。
 
 ## 2. CI 的范围与触发
 

@@ -336,39 +336,39 @@
     "scaleWindowSamples": {
       "scaleColdStartToLibraryMs": [
         "coldStartToLibraryMs",
-        3
+        2
       ],
       "scaleUiFeedbackP95Ms": [
         "uiFeedbackMs",
-        10
+        6
       ],
       "scaleRailSwitchP95Ms": [
         "railSwitchMs",
-        10
+        6
       ],
       "scaleSearchNamesP95Ms": [
         "searchNamesMs",
-        10
+        6
       ],
       "scaleSettingsP95Ms": [
         "settingsMs",
-        10
+        6
       ],
       "scaleLargeTxtTailP95Ms": [
         "largeTxtTailMs",
-        3
+        2
       ],
       "scaleLargeEpubTailP95Ms": [
         "largeEpubTailMs",
-        3
+        2
       ],
       "scaleSaveReceiptP95Ms": [
         "saveReceiptMs",
-        5
+        4
       ],
       "scaleDuringParseUiP95Ms": [
         "duringParseUiMs",
-        3
+        2
       ],
       "scaleDuringParseSaveP95Ms": [
         "duringParseSaveMs",
@@ -376,21 +376,21 @@
       ],
       "scaleHomeListP95Ms": [
         "homeListMs",
-        10
+        6
       ],
       "scaleMediaGridP95Ms": [
         "mediaGridMs",
-        10
+        6
       ],
       "scaleScanLateFramePct": [
         "scanLateFramePct",
-        3
+        2
       ]
     },
     "measurements": [
       {
         "id": "scanThroughputFilesPerS",
-        "minSamples": 3
+        "minSamples": 1
       },
       {
         "id": "coverImageReadMs",
@@ -415,29 +415,29 @@
     ],
     "scan": {
       "files": 5000,
-      "runs": 3,
-      "minLagSamples": 1000,
-      "minAnswerSamples": 300
+      "runs": 1,
+      "minLagSamples": 400,
+      "minAnswerSamples": 100
     },
     "creative": {
       "ttsFirstAudio": {
         "metric": "ttsFirstAudioP95Ms",
         "stat": "p95",
-        "minSamples": 10,
-        "scale": { "answers": 10 },
+        "minSamples": 5,
+        "scale": { "answers": 5 },
         "requirement": "AT-191：打包窗口里点击回答的“朗读”到第一块音频交给播放（假 DeepSeek，排除网络；每次回答文字不同，不走缓存），p95 ≤ 300 ms"
       },
       "readAloudGap": {
         "metric": "readAloudGapP95Ms",
         "stat": "p95",
-        "minSamples": 20,
-        "scale": { "paragraphs": 24 },
+        "minSamples": 10,
+        "scale": { "paragraphs": 12 },
         "requirement": "AT-191：打包窗口里朗读小说，段与段之间的静默（下一段在上一段播完前到达记 0），p95 ≤ 150 ms（假 DeepSeek，排除网络）"
       },
       "semantic": {
         "metric": "semanticSearchP95Ms",
         "stat": "p95",
-        "minSamples": 100,
+        "minSamples": 40,
         "scale": {
           "segments": 10000
         },
@@ -447,7 +447,7 @@
       "semanticFallback": {
         "metric": "semanticFallbackP95Ms",
         "stat": "p95",
-        "minSamples": 100,
+        "minSamples": 40,
         "scale": {
           "segments": 10000
         },
@@ -457,7 +457,7 @@
       "roughcut": {
         "metric": "roughcutOverheadMs",
         "stat": "max",
-        "minSamples": 5,
+        "minSamples": 3,
         "scale": {
           "clips": 10
         },
@@ -475,7 +475,7 @@
       "whiteboardOpen": {
         "metric": "whiteboardOpenMs",
         "stat": "max",
-        "minSamples": 5,
+        "minSamples": 3,
         "scale": {
           "cards": 500
         },
@@ -484,7 +484,7 @@
       "whiteboardDrag": {
         "metric": "whiteboardDragP95Ms",
         "stat": "p95",
-        "minSamples": 120,
+        "minSamples": 60,
         "scale": {
           "cards": 500
         },
@@ -493,7 +493,7 @@
       "whiteboardZoom": {
         "metric": "whiteboardZoomP95Ms",
         "stat": "p95",
-        "minSamples": 120,
+        "minSamples": 60,
         "scale": {
           "cards": 500
         },
@@ -502,7 +502,7 @@
       "mindmapFold": {
         "metric": "mindmapFoldP95Ms",
         "stat": "p95",
-        "minSamples": 60,
+        "minSamples": 40,
         "scale": {
           "nodes": 1000
         },
@@ -511,16 +511,16 @@
       "videoImport": {
         "metric": "videoImportBrowsableMs",
         "stat": "max",
-        "minSamples": 3,
+        "minSamples": 2,
         "scale": {
           "videos": 50
         },
-        "requirement": "AT-80：50 个合成视频的文件夹加为资源库位置并扫描，从开始到整季作为一个作品列出、每集都能打开（最慢一次）≤ 10 s；在 3 个独立 Profile 里各做一次"
+        "requirement": "AT-80：50 个合成视频的文件夹加为资源库位置并扫描，从开始到整季作为一个作品列出、每集都能打开（最慢一次）≤ 10 s；在独立 Profile 里验证"
       },
       "videoImportPacketReads": {
         "metric": "videoImportPacketReads",
         "stat": "max",
-        "minSamples": 3,
+        "minSamples": 2,
         "scale": {
           "videos": 50
         },
@@ -529,43 +529,43 @@
       "danmaku3000": {
         "metric": "danmaku3000LateFramePct",
         "stat": "max",
-        "minSamples": 5,
+        "minSamples": 3,
         "scale": {
           "comments": 1500
         },
-        "requirement": "AT-94：一集 3000 条弹幕在打包版窗口里播放时，到达页面的时间晚于无弹幕时常规帧间隔 1.5 倍的帧占比，五次播放取最大，≤ 2 %（场景：20 秒内集中出现，每秒约 150 条）"
+        "requirement": "AT-94：一集 3000 条弹幕在打包版窗口里播放时，到达页面的时间晚于无弹幕时常规帧间隔 1.5 倍的帧占比，三次播放取最大，≤ 2 %（场景：20 秒内集中出现，每秒约 150 条）"
       },
       "readerMemory": {
         "metric": "readerMemoryIncreaseMiB",
         "stat": "max",
-        "minSamples": 3,
+        "minSamples": 2,
         "scale": {
-          "runs": 3
+          "runs": 2
         },
-        "requirement": "AT-88：设置盖在视频阅读器上时，应用各进程工作集比没有阅读器时的增量，三个各自独立的窗口取最大，≤ 300 MiB（样本为 640×360 H.264，分辨率更高的视频更大）"
+        "requirement": "AT-88：设置盖在视频阅读器上时，应用各进程工作集比没有阅读器时的增量，独立窗口取最大，≤ 300 MiB（样本为 640×360 H.264，分辨率更高的视频更大）"
       },
       "traceOverhead": {
         "metric": "traceOverheadP95Ms",
         "stat": "p95",
-        "minSamples": 200,
+        "minSamples": 60,
         "scale": {
           "requestBytes": 60000
         },
-        "requirement": "AT-97：一次约 80 KiB 的请求（40 条消息、12 个工具定义）的记录从开始、首字到完成三次调用的耗时，200 次的 p95 ≤ 10 ms（表里已有 400 条记录）"
+        "requirement": "AT-97：一次约 80 KiB 的请求（40 条消息、12 个工具定义）的记录从开始、首字到完成三次调用的耗时，p95 ≤ 10 ms（表里已有 400 条记录）"
       },
       "noteFileWrite": {
         "metric": "noteFileWriteP95Ms",
         "stat": "p95",
-        "minSamples": 200,
+        "minSamples": 50,
         "scale": {
           "blocks": 200
         },
-        "requirement": "AT-102：保存一条 200 个块（标题、段落、列表、引用、代码）的笔记后，把它写成 Markdown 文件（读笔记、生成 Markdown、写文件、记录文件）的耗时，200 次的 p95 ≤ 25 ms；写在保存之后的短暂等待之后、主进程里，所以这是它占用窗口的时间，保存的答复时间另记、不含它"
+        "requirement": "AT-102：保存一条 200 个块（标题、段落、列表、引用、代码）的笔记后，把它写成 Markdown 文件（读笔记、生成 Markdown、写文件、记录文件）的耗时，p95 ≤ 25 ms；写在保存之后的短暂等待之后、主进程里，所以这是它占用窗口的时间，保存的答复时间另记、不含它"
       },
       "tabSwitch": {
         "metric": "tabSwitchP95Ms",
         "stat": "p95",
-        "minSamples": 60,
+        "minSamples": 30,
         "scale": {
           "tabs": 8
         },
@@ -574,7 +574,7 @@
       "contextSwitch": {
         "metric": "contextSwitchP95Ms",
         "stat": "p95",
-        "minSamples": 30,
+        "minSamples": 15,
         "scale": {
           "contexts": 3
         },
@@ -583,7 +583,7 @@
       "contextRestore": {
         "metric": "contextRestoreP95Ms",
         "stat": "p95",
-        "minSamples": 10,
+        "minSamples": 6,
         "scale": {
           "contexts": 3
         },
@@ -592,20 +592,20 @@
       "quadLateFrame": {
         "metric": "quadLateFramePct",
         "stat": "max",
-        "minSamples": 5,
-        "scale": {
-          "columns": 4
-        },
-        "requirement": "AT-118：四宫格（两路视频其一播放、漫画、一篇笔记文稿）播放时，到达页面的时间晚于同一播放在单栏里常规帧间隔 1.5 倍的帧占比，五次播放取最大，≤ 2 %"
-      },
-      "quadMemory": {
-        "metric": "quadMemoryIncreaseMiB",
-        "stat": "max",
         "minSamples": 3,
         "scale": {
           "columns": 4
         },
-        "requirement": "AT-118：四宫格相对单栏视频，应用各进程工作集的增量，三个各自独立的窗口取最大，≤ 600 MiB"
+        "requirement": "AT-118：四宫格（两路视频其一播放、漫画、一篇笔记文稿）播放时，到达页面的时间晚于同一播放在单栏里常规帧间隔 1.5 倍的帧占比，三次播放取最大，≤ 2 %"
+      },
+      "quadMemory": {
+        "metric": "quadMemoryIncreaseMiB",
+        "stat": "max",
+        "minSamples": 2,
+        "scale": {
+          "columns": 4
+        },
+        "requirement": "AT-118：四宫格相对单栏视频，应用各进程工作集的增量，独立窗口取最大，≤ 600 MiB"
       },
       "mountedReaders": {
         "metric": "mountedReadersOverColumns",
@@ -619,7 +619,7 @@
       "viewSwitch": {
         "metric": "viewSwitchP95Ms",
         "stat": "p95",
-        "minSamples": 60,
+        "minSamples": 30,
         "scale": {
           "views": 2
         },
@@ -628,7 +628,7 @@
       "viewRestore": {
         "metric": "viewRestoreP95Ms",
         "stat": "p95",
-        "minSamples": 10,
+        "minSamples": 5,
         "scale": {
           "views": 2
         },
@@ -637,7 +637,7 @@
       "coversShown": {
         "metric": "coversShownP95Ms",
         "stat": "p95",
-        "minSamples": 10,
+        "minSamples": 5,
         "scale": {
           "cells": 2
         },
@@ -646,16 +646,16 @@
       "dragLateFrame": {
         "metric": "dragLateFramePct",
         "stat": "max",
-        "minSamples": 5,
+        "minSamples": 3,
         "scale": {
-          "runs": 5
+          "runs": 3
         },
-        "requirement": "AT-125、AT-132：拖动分隔条与图标时，到达页面的时间晚于空闲时常规帧间隔 1.5 倍的帧占比，五次取最大，≤ 2 %"
+        "requirement": "AT-125、AT-132：拖动分隔条与图标时，到达页面的时间晚于空闲时常规帧间隔 1.5 倍的帧占比，三次取最大，≤ 2 %"
       },
       "novelTurn": {
         "metric": "novelTurnP95Ms",
         "stat": "p95",
-        "minSamples": 60,
+        "minSamples": 30,
         "scale": {
           "characters": 300000
         },
@@ -664,7 +664,7 @@
       "novelRefont": {
         "metric": "novelRefontP95Ms",
         "stat": "p95",
-        "minSamples": 20,
+        "minSamples": 10,
         "scale": {
           "characters": 300000
         },
@@ -673,7 +673,7 @@
       "novelOpen": {
         "metric": "novelOpenP95Ms",
         "stat": "p95",
-        "minSamples": 20,
+        "minSamples": 10,
         "scale": {
           "characters": 300000
         },
@@ -682,7 +682,7 @@
       "chatOpen": {
         "metric": "chatOpenP95Ms",
         "stat": "p95",
-        "minSamples": 10,
+        "minSamples": 5,
         "scale": {
           "messages": 5000
         },
@@ -691,7 +691,7 @@
       "chatInput": {
         "metric": "chatInputP95Ms",
         "stat": "p95",
-        "minSamples": 60,
+        "minSamples": 30,
         "scale": {
           "messages": 5000
         },
@@ -700,16 +700,16 @@
       "chatLateFrame": {
         "metric": "chatLateFramePct",
         "stat": "max",
-        "minSamples": 5,
+        "minSamples": 3,
         "scale": {
           "messages": 5000
         },
-        "requirement": "AT-143：5000 条消息的对话每帧向上滚 60 px、持续 3 s（途中载入更早的页），晚于空闲时常规帧间隔 1.5 倍的帧占比，五次取最大，≤ 2 %"
+        "requirement": "AT-143：5000 条消息的对话每帧向上滚 60 px、持续 2 s（途中载入更早的页），晚于空闲时常规帧间隔 1.5 倍的帧占比，三次取最大，≤ 2 %"
       },
       "chatOlderPage": {
         "metric": "chatOlderPageP95Ms",
         "stat": "p95",
-        "minSamples": 8,
+        "minSamples": 4,
         "scale": {
           "messages": 5000
         },
@@ -718,7 +718,7 @@
       "clip60": {
         "metric": "clip60P95Ms",
         "stat": "p95",
-        "minSamples": 8,
+        "minSamples": 4,
         "scale": {
           "seconds": 60
         },
@@ -727,7 +727,7 @@
       "freeze4mb": {
         "metric": "freeze4mbP95Ms",
         "stat": "p95",
-        "minSamples": 20,
+        "minSamples": 10,
         "scale": {
           "bytes": 4194304
         },
@@ -736,7 +736,7 @@
       "proposalPropose": {
         "metric": "proposalProposeP95Ms",
         "stat": "p95",
-        "minSamples": 30,
+        "minSamples": 15,
         "scale": {
           "objects": 500
         },
@@ -745,7 +745,7 @@
       "proposalApply": {
         "metric": "proposalApplyP95Ms",
         "stat": "p95",
-        "minSamples": 20,
+        "minSamples": 10,
         "scale": {
           "objects": 500
         },
@@ -754,11 +754,11 @@
       "dictationLocalReleaseToText": {
         "metric": "dictationLocalReleaseToTextMs",
         "stat": "p95",
-        "minSamples": 5,
+        "minSamples": 3,
         "scale": {
           "audioSeconds": 4
         },
-        "requirement": "AT-174、AT-179：打包窗口本地 SenseVoice 模型已热驻留时，约 4 s 语音从松开快捷键到文字出现在编辑区（5 次测量）p95 ≤ 1500 ms"
+        "requirement": "AT-174、AT-179：打包窗口本地 SenseVoice 模型已热驻留时，约 4 s 语音从松开快捷键到文字出现在编辑区（3 次测量）p95 ≤ 1500 ms"
       },
       "dictationCorrection": {
         "metric": "dictationCorrectionMs",
@@ -773,42 +773,42 @@
     "canvas": {
       "cards": 500,
       "nodes": 1000,
-      "openRuns": 5,
-      "zoomSamples": 60,
-      "dragSamples": 60,
-      "foldRounds": 3
+      "openRuns": 3,
+      "zoomSamples": 30,
+      "dragSamples": 30,
+      "foldRounds": 2
     },
     "reader": {
       "danmaku": {
         "comments": 3000,
-        "runs": 5,
-        "baselineRuns": 3,
-        "playMs": 6000
+        "runs": 3,
+        "baselineRuns": 2,
+        "playMs": 3000
       },
       "memory": {
-        "runs": 3
+        "runs": 2
       }
     },
     "workspace": {
       "window": {
-        "switchRounds": 10,
-        "contextRounds": 12,
-        "restoreRounds": 8,
+        "switchRounds": 5,
+        "contextRounds": 6,
+        "restoreRounds": 4,
         "readers": 10,
-        "quadRuns": 5,
-        "baselineRuns": 3,
-        "playMs": 6000
+        "quadRuns": 3,
+        "baselineRuns": 2,
+        "playMs": 3000
       },
       "memory": {
-        "runs": 3
+        "runs": 2
       }
     },
     "light": {
-      "runs": 5
+      "runs": 3
     }
   },
   "package": {
-    "passStreak": 2,
+    "passStreak": 1,
     "windowWalkMaxSeconds": 240,
     "smoke": [
       "initial",

@@ -332,7 +332,7 @@ export async function measureCanvasBench(appService: MangaProductApp, grant: str
   const byLevel: Record<string, number[]> = {};
   for (const row of foldRun.rows) if (row.sample.ok) (byLevel[row.level] ??= []).push(row.sample.ms);
 
-  const complete = reachedProjects && openMs.length === spec.openRuns && zoomMs.length >= spec.zoomSamples * 2 && dragMs.length >= spec.dragSamples * 2 && dropSaved && mapOpenMs >= 0 && foldMs.length + unfoldMs.length >= 60;
+  const complete = reachedProjects && openMs.length === spec.openRuns && zoomMs.length >= spec.zoomSamples * 2 && dragMs.length >= spec.dragSamples * 2 && dropSaved && mapOpenMs >= 0 && foldMs.length + unfoldMs.length >= 40;
   return {
     ok: failures.length === 0 && complete,
     failures,

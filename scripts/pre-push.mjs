@@ -1,17 +1,55 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
-// The pre-push hook runs the full verification and keeps its complete output, so a one-off failure can be diagnosed
-// later instead of from the last few lines of the terminal.
+// The pre-push hook runs static verification (`verify.mjs --skip-tests`) plus `vitest related` for files changed
+// relative to `origin/main` (falling back to full `verify.mjs` when shared test/workspace config changes or
+// `MANGA_PRE_PUSH_FULL=1` is set). Complete output is kept so a one-off failure can be diagnosed later.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KEEP = 10;
 
+const FULL_TRIGGER_PATHS = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'tsconfig.json',
+  'vitest.config.ts',
+  'scripts/verify.mjs',
+  'scripts/pre-push.mjs',
+]);
+
+/** Decide whether the changed repository-relative file list requires the full Vitest suite instead of `vitest related`. */
+export function planPrePushTests(changedFiles, { forceFull = false } = {}) {
+  if (forceFull || !Array.isArray(changedFiles)) return { mode: 'full', files: [] };
+  const normalized = [...new Set(changedFiles.map((file) => String(file).replaceAll('\\', '/').trim()).filter(Boolean))];
+  if (normalized.some((file) => FULL_TRIGGER_PATHS.has(file) || file.startsWith('tests/helpers/'))) {
+    return { mode: 'full', files: normalized };
+  }
+  const codeFiles = normalized.filter((file) => /\.(c|m)?(t|j)sx?$/.test(file));
+  if (codeFiles.length === 0) return { mode: 'skip', files: [] };
+  return { mode: 'related', files: codeFiles };
+}
+
+/** Files changed between `origin/main` (or `HEAD~1`) and `HEAD`, plus working-tree edits, or `null` if git diff fails. */
+function collectChangedFiles(cwd = root) {
+  const git = (args) => spawnSync('git', args, { cwd, encoding: 'utf8' });
+  const base = git(['merge-base', 'HEAD', 'origin/main']);
+  const ref = base.status === 0 && base.stdout.trim() ? base.stdout.trim() : 'HEAD~1';
+  const committed = git(['diff', '--name-only', `${ref}...HEAD`]);
+  if (committed.status !== 0) return null;
+  const unstaged = git(['diff', '--name-only', 'HEAD']);
+  const names = [
+    ...committed.stdout.split('\n'),
+    ...(unstaged.status === 0 ? unstaged.stdout.split('\n') : []),
+  ];
+  return [...new Set(names.map((name) => name.trim()).filter(Boolean))].filter((name) => fs.existsSync(path.join(cwd, name)));
+}
+
 /** Runs a command, mirrors its output to the terminal and writes all of it to the log file. Resolves with the exit code. */
-export function runLogged(command, args, { cwd = root, logFile, mirror = true } = {}) {
+export function runLogged(command, args, { cwd = root, logFile, mirror = true, append = false } = {}) {
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
-  const log = fs.createWriteStream(logFile);
+  const log = fs.createWriteStream(logFile, { flags: append ? 'a' : 'w' });
   log.write(`$ ${path.basename(command)} ${args.join(' ')}\nstarted ${new Date().toISOString()}\n\n`);
   return new Promise((resolve) => {
     const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -39,7 +77,27 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const dir = path.join(root, 'dist/evidence-runs');
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logFile = path.join(dir, `pre-push-${stamp}.log`);
-  const code = await runLogged(process.execPath, ['scripts/verify.mjs'], { logFile });
+  const forceFull = process.env.MANGA_PRE_PUSH_FULL === '1';
+  const plan = planPrePushTests(forceFull ? null : collectChangedFiles(root), { forceFull });
+  let code = 0;
+  if (plan.mode === 'full') {
+    code = await runLogged(process.execPath, ['scripts/verify.mjs'], { logFile });
+  } else {
+    code = await runLogged(process.execPath, ['scripts/verify.mjs', '--skip-tests'], { logFile });
+    if (code === 0 && plan.mode === 'related') {
+      const vitest = path.join(root, 'node_modules/vitest/vitest.mjs');
+      if (!fs.existsSync(vitest)) {
+        console.error('FAILED tests: vitest is not installed');
+        code = 1;
+      } else {
+        code = await runLogged(
+          process.execPath,
+          [vitest, 'related', '--run', '--config', 'vitest.config.ts', '--passWithNoTests', ...plan.files],
+          { logFile, append: true },
+        );
+      }
+    }
+  }
   pruneLogs(dir);
   const shown = path.relative(root, logFile).split(path.sep).join('/');
   if (code !== 0) console.error(`pre-push verification failed (exit ${code}); the complete output is in ${shown}`);
