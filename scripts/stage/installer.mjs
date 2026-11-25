@@ -10,6 +10,7 @@ import {
   channelIcons,
   compareRealInstallations,
   readOpenWithState,
+  readRegistryValues,
   removeTestInstallations,
   snapshotRealInstallations,
 } from "./installer-lib.mjs";
@@ -162,15 +163,20 @@ try {
   for (const channel of ["release", "development"]) {
     const result = install(installers[channel], channel);
     const entry = uninstallEntries().find((item) => item.DisplayName === TEST_CHANNEL_INSTALL[channel].productName);
+    // The entry is named for the identity and holds the folder itself (A-139), not only through its uninstaller's path.
+    const uninstallKey = TEST_CHANNEL_INSTALL[channel].uninstallKey;
+    const [writtenLocation] = readRegistryValues([[`Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${uninstallKey}`, "InstallLocation"]]).values;
     step(
-      `${channel}: installed per user without elevation into the chosen folder`,
+      `${channel}: installed per user without elevation into the chosen folder, uninstall entry ${uninstallKey} with InstallLocation`,
       result.status === 0
         && fs.existsSync(exeOf(channel))
         && Boolean(entry)
+        && entry.Key === uninstallKey
+        && Boolean(writtenLocation) && path.resolve(String(writtenLocation)) === path.resolve(installDir(channel))
         && path.resolve(String(entry.InstallLocation)) === path.resolve(installDir(channel))
         && entry.DisplayVersion === versions[channel]
         && entry.Publisher === "chialecode",
-      { version: entry?.DisplayVersion ?? null, publisher: entry?.Publisher ?? null, seconds: Math.round(result.ms / 1000) },
+      { key: entry?.Key ?? null, installLocation: writtenLocation, version: entry?.DisplayVersion ?? null, publisher: entry?.Publisher ?? null, seconds: Math.round(result.ms / 1000) },
     );
     // A silent first installation makes both shortcuts.
     step(`${channel}: Start menu and desktop shortcuts after a silent first install`, shortcuts(channel).every((file) => fs.existsSync(file)));

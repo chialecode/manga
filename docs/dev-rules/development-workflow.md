@@ -56,14 +56,14 @@ PR 只要碰到下列任一项就是高风险，加 `risk:high`，Agent 不自�
 <a id="dev-install-at-handoff"></a>
 ### 2.2 开发版自动安装
 
-每次合并进 `main` 后（本机拉取 `main` 后），以及请用户做人工检查前，Agent 在本机执行：
+每次合并进 `main` 后（本机拉取 `main` 后），以及请用户做人工检查前，Agent 在本机执行（窗口开着时 `install-dev` 最多等 10 分钟，加上打包可能超过单条命令的时限，放到后台运行，等它写出 `install-dev.json`）：
 
 ```powershell
 node scripts/stage.mjs package
 node scripts/stage.mjs install-dev
 ```
 
-`package` 做出与当前源码指纹一致的开发版安装包；`install-dev` 让运行中的 `MANGA Dev` 保存并退出、静默更新，再以 `--background` 在托盘打开（A-135），写 `install-dev.json`，从不碰正式版。`MANGA_DEV_AUTO_INSTALL=0` 时跳过；门禁、单元测试与 CI 不调用它。装好的版本写进 PR 或 issue 评论。
+`package` 做出与当前源码指纹一致的开发版安装包；`install-dev` 在开发版没装时静默装到默认目录（首次安装也自动）；`MANGA Dev` 有看得见的窗口（最小化也算，隐藏到托盘不算）时每 2 秒检查、最多等 10 分钟，仍开着就跳过（`reason: "window_open"`，不算失败）；之后让运行中的 `MANGA Dev` 保存并退出、静默更新，再以 `--background` 在托盘打开（A-135、A-139），写统一字段的 `install-dev.json`，从不碰正式版。卸载项是 `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\io.github.chialecode.manga-dev`。`MANGA_DEV_AUTO_INSTALL=0` 时跳过；门禁、单元测试与 CI 不调用它。装好的版本写进 PR 或 issue 评论。
 
 <a id="next-step"></a>
 ### 2.3 收尾报告

@@ -14,3 +14,8 @@
 - **测试临时目录要随夹具清理。** 一次完整的测试曾在系统临时目录留下多个 `manga-*` 目录；夹具统一带清理，阶段入口在 Vitest 前后数目录，多出来算失败。证据：原 LOOP-25、LOOP-28。出现 2 次。
 - **改测试名时同步 `scripts/stage/gate.json` 里引用它的必需用例。** 必需用例按测试全名的正则匹配，改名后匹配不到就是 `not-run`，`stage test` 与每周发布的 `check` 都会失败；改名后跑一次 `node scripts/stage.mjs test` 看有没有没被接受的用例。证据：#28 为 A-136 改名后连续两周没有发布，[#94](https://github.com/chialecode/manga/issues/94)。出现 1 次。
 - **失败时故意保留的诊断目录不能再算成遗留目录。** 否则真正的失败原因被“临时目录没清理”盖住；失败输出先列失败的测试和没被接受的用例。证据：[#94](https://github.com/chialecode/manga/issues/94)。出现 1 次。
+
+## 打包与安装
+
+- **electron-builder 的卸载项不写 `InstallLocation`。** 它只把目录写进 `HKCU\Software\<guid>`；要让卸载项自己带目录，在 `customInstall`（在它自己的注册表写入之后运行）里写 `WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"`。卸载项的名字来自 `nsis.guid`（不设时由 `appId` 算出一个 UUID）。证据：[#96](https://github.com/chialecode/manga/issues/96)。出现 1 次。
+- **会进公开证据的回执不能写本机路径。** `install-dev.json` 会复制进 `docs/evidence/`，公开内容检查把任何带盘符的路径当本机路径；目录写成 `%LOCALAPPDATA%\Programs\...` 这样的形式。证据：[#96](https://github.com/chialecode/manga/issues/96)。出现 1 次。

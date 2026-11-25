@@ -69,7 +69,7 @@
   - `window.json`：记住上次轻量窗口的宽高与坐标；
   - `cache/`：`play-copies/` 与 `index.json`（`JsonPlayCopyStore`，上限 2 GiB，超限按 LRU 清理未在使用中的播放副本）及会话临时目录 `work/<sessionId>/`；
   - `logs/`（含 `crashes/`）：仅记错误分类与摘要，不记明文用户文件路径。
-- **更新与 `install-dev` 退出握手：** 完整应用执行 `UpdateService` 重启/退出更新，以及 `scripts/stage/install-dev.mjs` 更新开发版前，通过 `askLightToQuit` 向同通道 `light/runtime/quit-request.json` 写入退出请求并等待最多 10 秒：轻量进程保存当前播放/阅读位置、写出 `quit-ack.json` 后干净退出；若超时或被拒绝则中止本次更新并提示“请先关闭轻量播放窗口”，不强杀轻量进程。轻量进程自身不做自动更新检查与下载。
+- **更新与 `install-dev` 退出握手：** 完整应用执行 `UpdateService` 重启/退出更新，以及 `scripts/stage/install-dev.mjs` 更新开发版前，通过 `askLightToQuit` 向同通道 `light/runtime/quit-request.json` 写入退出请求并等待最多 10 秒（`install-dev` 在这之前先等看得见的开发版窗口关闭，轻量播放窗口同样算，最多 10 分钟，A-139，所以这个握手实际只对已经隐藏的轻量进程起作用）：轻量进程保存当前播放/阅读位置、写出 `quit-ack.json` 后干净退出；若超时或被拒绝则中止本次更新并提示“请先关闭轻量播放窗口”，不强杀轻量进程。轻量进程自身不做自动更新检查与下载。
 - **按用户 `HKCU` 注册“打开方式”，不抢默认关联：** 安装程序只写 `HKCU`、不写 `HKLM`，且禁止使用 `electron-builder` 的 `fileAssociations`（由 `checkInstallerConfig` 与测试守护，防止覆写 `.<ext>` 默认值抢走用户原有默认播放器/看图软件）。共注册 21 个扩展名（13 个视频：`.avi .flv .m2ts .m4v .mkv .mov .mp4 .mpeg .mpg .ogv .ts .webm .wmv`；1 个漫画包：`.cbz`；7 个图片：`.avif .bmp .gif .jpeg .jpg .png .webp`；`.zip` 与文件夹只支持拖入、窗口内选择或命令行打开，不进系统“打开方式”）：
   1. `HKCU\Software\Classes\<ProgID>`（正式版 `Manga.Video` / `Manga.Comic` / `Manga.Image`，开发版 `MangaDev.*`，测试身份 `MangaTest.*` / `MangaDevTest.*`）：友好类型名、`DefaultIcon` 与 `shell\open\command = "\"<exe>\" --manga-light \"%1\""`；
   2. `HKCU\Software\Classes\.<ext>\OpenWithProgids`：写入名为 `<ProgID>` 的空字符串值（`REG_SZ`），不改 `.<ext>` 的 `(Default)` 默认值与 `UserChoice`；

@@ -16,6 +16,7 @@ import {
   ICON_SIZES,
   INSTALLER_META,
   TEST_CHANNEL_INSTALL,
+  UNINSTALL_LOCATION_NSIS,
   appUpdateYaml,
   averageDown,
   checkAppUpdateConfig,
@@ -26,6 +27,7 @@ import {
   installerConfig,
   installerInclude,
   inspectIco,
+  isTestUninstallKey,
   OPEN_WITH_TYPES,
   openWithIdentity,
   openWithNsis,
@@ -125,8 +127,39 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
   it("keeps the two channels apart in what Windows tells apart", () => {
     const release = CHANNEL_INSTALL.release;
     const development = CHANNEL_INSTALL.development;
-    for (const field of ["appId", "productName", "executableName", "dirName", "shortcutName"] as const) expect(release[field]).not.toBe(development[field]);
+    for (const field of ["appId", "productName", "executableName", "dirName", "shortcutName", "uninstallKey"] as const) expect(release[field]).not.toBe(development[field]);
     expect([release.shortcutName, development.shortcutName]).toEqual(["MANGA", "MANGA Dev"]);
+  });
+
+  it("names the uninstall entry for the identity and writes the folder into it (A-139)", () => {
+    const identities = [
+      [CHANNEL_INSTALL.release, "io.github.chialecode.manga"],
+      [CHANNEL_INSTALL.development, "io.github.chialecode.manga-dev"],
+      [TEST_CHANNEL_INSTALL.release, "io.github.chialecode.manga-test"],
+      [TEST_CHANNEL_INSTALL.development, "io.github.chialecode.manga-dev-test"],
+    ] as const;
+    for (const [meta, key] of identities) expect([meta.uninstallKey, `io.github.chialecode.${meta.dirName}`]).toEqual([key, key]);
+    for (const channel of ["release", "development"] as const) {
+      for (const testIdentity of [false, true]) {
+        const config = make(channel, testIdentity);
+        // electron-builder names UNINSTALL_REGISTRY_KEY (and Software\<guid>) after nsis.guid; the Electron appId stays the taskbar identity.
+        expect(config.nsis.guid).toBe(installMeta(channel, { testIdentity }).uninstallKey);
+        expect(config.appId).toBe(installMeta(channel, { testIdentity }).appId);
+      }
+      const include = installerInclude(channel);
+      // In customInstall, after electron-builder's own registry writes, so the entry holds the folder itself.
+      expect(UNINSTALL_LOCATION_NSIS).toBe('  WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"');
+      expect(include).toContain(`!macro customInstall\r\n  !insertmacro MangaShortcutsInstall\r\n${UNINSTALL_LOCATION_NSIS}\r\n`);
+      expect(include.split(UNINSTALL_LOCATION_NSIS)).toHaveLength(2);
+      const config = make(channel);
+      expect(checkInstallerConfig(channel, { ...config, nsis: { ...config.nsis, guid: undefined } }, include)).toEqual(["uninstall key undefined"]);
+      expect(checkInstallerConfig(channel, config, include.replace(UNINSTALL_LOCATION_NSIS, ""))).toEqual(["uninstall entry without InstallLocation"]);
+    }
+    // Cleaning up a test install removes the test identity's own entry, or an older run's GUID entry, and nothing else.
+    const testDev = TEST_CHANNEL_INSTALL.development;
+    for (const key of [testDev.uninstallKey, "1ed31a6e-8dd9-52be-8f90-5052ea376f6f", "{1ED31A6E-8DD9-52BE-8F90-5052EA376F6F}"]) expect(isTestUninstallKey(key, testDev)).toBe(true);
+    for (const key of [CHANNEL_INSTALL.development.uninstallKey, CHANNEL_INSTALL.release.uninstallKey, TEST_CHANNEL_INSTALL.release.uninstallKey,
+      `${testDev.uninstallKey}' ; Remove-Item x`, "..", ""]) expect(isTestUninstallKey(key, testDev)).toBe(false);
   });
 
   it("names what is wrong in a configuration that would not do", () => {
@@ -135,7 +168,7 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, deleteAppDataOnUninstall: true } }, installerInclude("release"))).toEqual(["uninstall deletes data"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, oneClick: true, allowElevation: true } }, installerInclude("release"))).toEqual(["one-click", "asks for elevation"]);
     expect(checkInstallerConfig("release", config, installerInclude("development"))).toEqual(["default folder", "\"Open with\" registration missing or different"]);
-    expect(checkInstallerConfig("development", config, installerInclude("development"))).toEqual(["appId app.manga.desktop", "productName MANGA", "not the channel's icon"]);
+    expect(checkInstallerConfig("development", config, installerInclude("development"))).toEqual(["appId app.manga.desktop", "productName MANGA", "uninstall key io.github.chialecode.manga", "not the channel's icon"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, language: "1033", installerLanguages: ["en_US"] } }, installerInclude("release"))).toEqual(["not Simplified Chinese (zh_CN / 2052)"]);
     expect(checkInstallerConfig("release", { ...config, win: { ...config.win, icon: "" } }, installerInclude("release"))).toEqual(["missing icon"]);
     expect(checkInstallerConfig("release", { ...config, nsis: { ...config.nsis, installerIcon: DEV_ICON_ICO } }, installerInclude("release"))).toEqual(["not the channel's icon"]);

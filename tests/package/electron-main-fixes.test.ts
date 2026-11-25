@@ -368,6 +368,7 @@ describe("detached update helper pruning and install-dev lock recovery", () => {
       evidenceDir: null,
       registryEntries: [],
       runningProcessesFn: () => [],
+      isWindowOpenFn: () => false,
       snapshotOptions,
       spawnInstallerFn: async () => {
         ran += 1;

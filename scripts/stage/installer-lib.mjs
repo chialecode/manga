@@ -47,10 +47,19 @@ export const INSTALLER_META = {
  * the folder can be changed, the default is `%LOCALAPPDATA%\Programs\manga` (development: `manga-dev`), and uninstalling removes the program, its
  * shortcuts and its uninstall entry only: the data (A-118) and the person's files stay. The two channels differ in everything Windows tells apart, so
  * both can be installed at once. Test identities (`TEST_CHANNEL_INSTALL`, 计划 4.8) isolate automated installer and update runs from real installations.
+ * The uninstall entry is `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\<uninstallKey>`, named for the identity like the author's other
+ * desktop apps (A-139; electron-builder's `nsis.guid`); the Electron `appId` (taskbar and notification identity) is a separate name.
  */
 export const CHANNEL_INSTALL = {
-  release: { appId: "app.manga.desktop", productName: "MANGA", executableName: "manga", dirName: "manga", shortcutName: "MANGA" },
-  development: { appId: "app.manga.desktop.dev", productName: "MANGA Dev", executableName: "manga-dev", dirName: "manga-dev", shortcutName: "MANGA Dev" },
+  release: { appId: "app.manga.desktop", productName: "MANGA", executableName: "manga", dirName: "manga", shortcutName: "MANGA", uninstallKey: "io.github.chialecode.manga" },
+  development: {
+    appId: "app.manga.desktop.dev",
+    productName: "MANGA Dev",
+    executableName: "manga-dev",
+    dirName: "manga-dev",
+    shortcutName: "MANGA Dev",
+    uninstallKey: "io.github.chialecode.manga-dev",
+  },
 };
 
 export const TEST_CHANNEL_INSTALL = {
@@ -60,6 +69,7 @@ export const TEST_CHANNEL_INSTALL = {
     executableName: "manga-test",
     dirName: "manga-test",
     shortcutName: "MANGA Test",
+    uninstallKey: "io.github.chialecode.manga-test",
     channel: "release",
     testIdentity: true,
   },
@@ -69,6 +79,7 @@ export const TEST_CHANNEL_INSTALL = {
     executableName: "manga-dev-test",
     dirName: "manga-dev-test",
     shortcutName: "MANGA Dev Test",
+    uninstallKey: "io.github.chialecode.manga-dev-test",
     channel: "development",
     testIdentity: true,
   },
@@ -353,6 +364,12 @@ export function appUpdateYaml({
 
 export { checkAppUpdateConfig };
 
+/**
+ * electron-builder writes the folder only under `INSTALL_REGISTRY_KEY`; this line in `customInstall` (which runs after electron-builder's own
+ * registry writes) puts it into the uninstall entry too, like the author's other desktop apps (A-139).
+ */
+export const UNINSTALL_LOCATION_NSIS = '  WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"';
+
 /** The NSIS lines electron-builder includes: the default folder named for the channel unless an earlier installation or `/D=` chose another. */
 export function installerInclude(channel, { testIdentity = false } = {}) {
   const { dirName } = installMeta(channel, { testIdentity });
@@ -373,7 +390,7 @@ export function installerInclude(channel, { testIdentity = false } = {}) {
     `; "Open with" (4.5): ProgIDs, OpenWithProgids values, Applications and Capabilities in HKCU; the extension keys' default values are never written.`,
     // The shortcuts' steps go first in electron-builder's two hooks, which the "Open with" lines define.
     ...openWithNsis(channel, { testIdentity }).flatMap((line) => {
-      if (line === "!macro customInstall") return [line, "  !insertmacro MangaShortcutsInstall"];
+      if (line === "!macro customInstall") return [line, "  !insertmacro MangaShortcutsInstall", UNINSTALL_LOCATION_NSIS];
       if (line === "!macro customUnInstall") return [line, "  !insertmacro MangaShortcutsUninstall"];
       return [line];
     }),
@@ -536,6 +553,8 @@ export function installerConfig(channel, { output, include, version, testIdentit
       signAndEditExecutable: false,
     },
     nsis: {
+      // The uninstall entry's name (A-139): electron-builder uses it for `UNINSTALL_REGISTRY_KEY` and `INSTALL_REGISTRY_KEY` (`Software\<guid>`).
+      guid: meta.uninstallKey,
       oneClick: false,
       perMachine: false,
       allowElevation: false,
@@ -565,6 +584,8 @@ export function checkInstallerConfig(channel, config, includeText, { testIdentit
   const problems = [];
   if (config.appId !== meta.appId) problems.push(`appId ${config.appId}`);
   if (config.productName !== meta.productName) problems.push(`productName ${config.productName}`);
+  if (config.nsis?.guid !== meta.uninstallKey) problems.push(`uninstall key ${config.nsis?.guid}`);
+  if (!includeText.includes(UNINSTALL_LOCATION_NSIS)) problems.push("uninstall entry without InstallLocation");
   if (config.nsis?.perMachine !== false) problems.push("not per user");
   if (config.nsis?.oneClick !== false) problems.push("one-click");
   if (config.nsis?.allowElevation !== false) problems.push("asks for elevation");
@@ -859,13 +880,21 @@ function removeTestOpenWithRegistry(channel) {
   runPowershell(script, { ...process.env, MANGA_OPEN_WITH_CLEANUP: JSON.stringify(payload) });
 }
 
+/**
+ * Whether an uninstall entry may be removed as the test identity's: its own key (A-139), or the GUID key an older installer gave it (a leftover
+ * of an earlier run). Anything else is refused, and the key is put into a registry path only after this check.
+ */
+export function isTestUninstallKey(key, meta) {
+  return key === meta.uninstallKey || /^\{?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\}?$/i.test(key);
+}
+
 /** Remove only the two explicitly reserved test identities, including leftovers of interrupted checks. */
 export async function removeTestInstallations(channels = ["release", "development"]) {
   if (process.platform !== "win32") return;
   for (const channel of channels) {
     const meta = TEST_CHANNEL_INSTALL[channel];
-    const entry = readRegistryInstallations().find((item) => item.DisplayName === meta.productName);
-    if (entry) {
+    const entries = readRegistryInstallations().filter((item) => item.Key === meta.uninstallKey || item.DisplayName === meta.productName);
+    for (const entry of entries) {
       const uninstaller = entry.UninstallString.replace(/^"([^"]+)".*$/, "$1");
       const location = path.resolve(entry.InstallLocation);
       if (uninstaller && fs.existsSync(uninstaller)) {
@@ -881,7 +910,7 @@ export async function removeTestInstallations(channels = ["release", "developmen
         }
         if (fs.existsSync(path.join(location, `${meta.executableName}.exe`))) throw new Error("test uninstaller did not finish");
       }
-      if (!/^\{?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\}?$/i.test(entry.Key)) throw new Error("invalid test uninstall registry key");
+      if (!isTestUninstallKey(entry.Key, meta)) throw new Error("invalid test uninstall registry key");
       // These checked literal registry paths stay within the named test entry; no filesystem paths are passed to another shell.
       runPowershell(`if (Test-Path -LiteralPath '${UNINSTALL_KEY}\\${entry.Key}') { Remove-Item -LiteralPath '${UNINSTALL_KEY}\\${entry.Key}' -Recurse -Force -ErrorAction Stop }\nif (Test-Path -LiteralPath 'HKCU:\\Software\\${entry.Key}') { Remove-Item -LiteralPath 'HKCU:\\Software\\${entry.Key}' -Recurse -Force -ErrorAction Stop }`);
     }

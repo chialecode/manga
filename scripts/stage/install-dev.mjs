@@ -200,7 +200,7 @@ export function readRunningInstance(runtimeDir) {
 }
 
 function readUninstallEntries() {
-  return readUninstallRegistryEntries({ timeoutMs: 20_000 });
+  return readUninstallRegistryEntries({ throwOnError: true, timeoutMs: 20_000 });
 }
 
 /** The packaged directory the latest `stage package` made (`latest-package.json` `target`), or null. */
@@ -299,19 +299,53 @@ function compareIsolatedRelease(before, after) {
 }
 
 /**
- * Automatic local update of the `development` channel (`node scripts/stage.mjs install-dev`, 计划 4.2, AT-158).
+ * The installation folder as `install-dev.json` records it. The receipt is published evidence, so it never holds a machine path: a folder under
+ * the Programs folder is written from there (`%LOCALAPPDATA%\Programs\manga-dev`, or `<programs>\...` for the gate's own folders), any
+ * other folder by its name only.
+ */
+export function receiptLocation(dir, programsRoot, programsLabel) {
+  const relative = path.relative(programsRoot, dir);
+  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) return `${programsLabel}\\${relative}`;
+  return `...\\${path.basename(dir)}`;
+}
+
+/** How `install-dev` waits while MANGA Dev shows a window (A-139): a check every 2 seconds, up to 10 minutes, then this build is skipped. */
+export const WINDOW_POLL_MS = 2_000;
+export const WINDOW_WAIT_MS = 10 * 60_000;
+
+/**
+ * Whether a process of `executable` (full path) shows a window the person can see: the process's main window as .NET finds it, the first
+ * visible top-level window without an owner. A minimized window counts; a window hidden to the tray is not visible and does not.
+ */
+export function devWindowOpen(executable) {
+  if (process.platform !== "win32") return false;
+  const script = "$target = [IO.Path]::GetFullPath($env:MANGA_DEV_EXECUTABLE); $name = [IO.Path]::GetFileNameWithoutExtension($target); $open = @(Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals([IO.Path]::GetFullPath($_.Path), $target, [StringComparison]::OrdinalIgnoreCase) -and $_.MainWindowHandle -ne [IntPtr]::Zero }).Count; [Console]::Out.Write($open)";
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { env: { ...process.env, MANGA_DEV_EXECUTABLE: executable }, encoding: "utf8", windowsHide: true, timeout: 20_000 });
+  const count = Number(String(result.stdout ?? "").trim());
+  if (result.status !== 0 || String(result.stdout ?? "").trim() === "" || !Number.isInteger(count)) throw new Error("unable to inspect the development app's windows");
+  return count > 0;
+}
+
+/**
+ * Automatic local update of the `development` channel (`node scripts/stage.mjs install-dev`, 计划 4.2, AT-158, A-139).
  *
  * Rules:
  * - Skips when `MANGA_DEV_AUTO_INSTALL=0` or on CI (`CI=true` / `GITHUB_ACTIONS=true`).
- * - Only touches the `development` channel (`MANGA Dev`, or `MANGA Dev Test` when `testIdentity: true`).
- * - Never installs, closes, or modifies the `release` channel (`MANGA` / `MANGA Test`).
- * - If the development channel is not installed, skips and records the reason in `install-dev.json`.
- * - If the development channel is running, requests graceful save-and-exit via `--quit-for-update` and waits up to `quitTimeoutMs` (default 30s).
- *   If it does not exit within `quitTimeoutMs`, aborts without force-killing (`taskkill` is never used).
- * - Silently installs the new development installer (`/S`) into the existing installation directory, verifies the installed version,
- *   and then starts the development app in the tray (`--background`) whether it was running or not, outside this command's job object when
- *   the job allows it (A-135: the person keeps the development build running). `background: false` (the default for the test identity the
- *   gate's rehearsals use) keeps the older rule: reopen it only if it was running, with the caller's arguments.
+ * - Only touches the `development` channel (`MANGA Dev`, or `MANGA Dev Test` when `testIdentity: true`), found by its uninstall entry
+ *   `io.github.chialecode.<identity>`; never installs, closes, or modifies the `release` channel (`MANGA` / `MANGA Test`).
+ * - Not installed yet: installs it the first time too, silently into the default folder (`%LOCALAPPDATA%\Programs\manga-dev`).
+ * - A window of the installed development app the person can see (minimized included, hidden to the tray not): waits for it, checking every
+ *   2 seconds for up to 10 minutes, then skips this build (`reason: "window_open"`, not a failure).
+ * - Running (in the tray, or after its window closed): requests graceful save-and-exit via `--quit-for-update` and waits up to `quitTimeoutMs`
+ *   (default 30s). If it does not exit within `quitTimeoutMs`, aborts without force-killing (`taskkill` is never used).
+ * - Silently installs the new development installer (`/S`) into the installation directory, verifies the installed version, and then starts
+ *   the development app in the tray (`--background`) whether it was running or not, outside this command's job object when the job allows it
+ *   (A-135: the person keeps the development build running). `background: false` (the default for the test identity the gate's rehearsals use)
+ *   keeps the older rule: reopen it only if it was running, with the caller's arguments.
+ * - Writes `install-dev.json` with the camelCase fields the author's desktop apps share (`identity`, `installed`, `skipped`, `reason`, `error`,
+ *   `guidance`, `firstInstall`, `oldVersion`, `newVersion`, `installLocation`, `wasRunning`, `windowOpen`, `deferred`, `deferMs`, `quitMs`,
+ *   `relaunched`, `background`, `inJob`, `elapsedMs`, `at`) and MANGA's own (`status`, the stage and its fingerprints, `channel`,
+ *   `productName`, `testIdentity`, `viaShell`, `releaseUntouched`, `releaseChanges`, `draftPreserved`, `recoveryVersion`). `reason` is a code.
  */
 export async function runInstallDev(options = {}) {
   const startedMs = Date.now();
@@ -322,6 +356,8 @@ export async function runInstallDev(options = {}) {
   const places = options.places ?? null;
   const quitTimeoutMs = options.quitTimeoutMs ?? 30_000;
   const relaunchReadyTimeoutMs = options.relaunchReadyTimeoutMs ?? 30_000;
+  const windowWaitMs = options.windowWaitMs ?? WINDOW_WAIT_MS;
+  const windowPollMs = options.windowPollMs ?? WINDOW_POLL_MS;
   const background = options.background ?? !testIdentity;
 
   let stage = "unknown";
@@ -344,6 +380,9 @@ export async function runInstallDev(options = {}) {
   const expectedSha256 = options.expectedSha256 ?? defaultInstaller?.sha256;
   const expectedNewVersion = options.newVersion ?? inferInstallerVersion(installerPath) ?? null;
 
+  // What this run has found so far, for the receipt's shared fields.
+  const facts = { firstInstall: false, oldVersion: null, installLocation: null, wasRunning: false, windowOpen: false, deferred: false, deferMs: 0, quitMs: 0 };
+
   const finalize = (payload, extraMemory = {}) => {
     const realAfter = snapshotRealInstallations({
       channels: ["release"],
@@ -354,27 +393,38 @@ export async function runInstallDev(options = {}) {
     const isolatedDiff = compareIsolatedRelease(isolatedReleaseBefore, isolatedReleaseAfter);
     const releaseUntouched = realDiff.ok && isolatedDiff.ok;
     const releaseChanges = [...realDiff.changes, ...isolatedDiff.changes];
+    const status = releaseUntouched ? payload.status : "failed";
 
     const record = {
-      status: releaseUntouched ? payload.status : "failed",
+      identity: meta.dirName,
+      installed: Boolean(payload.installed),
+      skipped: status === "skipped",
+      reason: releaseUntouched ? payload.reason ?? null : "release_changed",
+      error: releaseUntouched ? payload.error ?? null : [payload.error, `the release channel changed: ${releaseChanges.join("; ")}`].filter(Boolean).join("; "),
+      guidance: payload.guidance ?? null,
+      firstInstall: facts.firstInstall,
+      oldVersion: facts.oldVersion,
+      newVersion: payload.newVersion ?? expectedNewVersion ?? null,
+      installLocation: facts.installLocation,
+      wasRunning: Boolean(payload.wasRunning ?? facts.wasRunning),
+      windowOpen: facts.windowOpen,
+      deferred: facts.deferred,
+      deferMs: facts.deferMs,
+      quitMs: facts.quitMs,
+      relaunched: Boolean(payload.relaunched),
+      background,
+      inJob: Boolean(payload.inJob),
+      elapsedMs: Date.now() - startedMs,
+      at: startedAt,
+      // MANGA's own fields.
+      status,
       stage,
       ...fingerprints,
-      at: startedAt,
       channel: "development",
       productName: meta.productName,
       testIdentity,
-      installed: Boolean(payload.installed),
-      wasRunning: Boolean(payload.wasRunning),
-      relaunched: Boolean(payload.relaunched),
-      background,
-      ...(payload.inJob !== undefined ? { inJob: Boolean(payload.inJob) } : {}),
       ...(payload.viaShell !== undefined ? { viaShell: Boolean(payload.viaShell) } : {}),
-      previousVersion: payload.previousVersion ?? null,
-      newVersion: payload.newVersion ?? expectedNewVersion ?? null,
-      seconds: Number(((Date.now() - startedMs) / 1000).toFixed(2)),
       releaseUntouched,
-      ...(payload.skipReason ? { skipReason: payload.skipReason } : {}),
-      ...(payload.reason ? { reason: payload.reason } : {}),
       ...(releaseChanges.length > 0 ? { releaseChanges } : {}),
       ...(payload.draftPreserved !== undefined ? { draftPreserved: payload.draftPreserved } : {}),
       ...(payload.recoveryVersion ? { recoveryVersion: payload.recoveryVersion } : {}),
@@ -390,82 +440,95 @@ export async function runInstallDev(options = {}) {
   };
 
   if (options.autoInstall === false || env.MANGA_DEV_AUTO_INSTALL === "0") {
-    return finalize({
-      status: "skipped",
-      installed: false,
-      wasRunning: false,
-      relaunched: false,
-      previousVersion: null,
-      newVersion: expectedNewVersion,
-      skipReason: "MANGA_DEV_AUTO_INSTALL=0",
-    });
+    return finalize({ status: "skipped", reason: "disabled", guidance: "MANGA_DEV_AUTO_INSTALL=0: the development build is not installed automatically" });
   }
 
   if (options.ci === true || env.CI === "true" || env.GITHUB_ACTIONS === "true") {
-    return finalize({
-      status: "skipped",
-      installed: false,
-      wasRunning: false,
-      relaunched: false,
-      previousVersion: null,
-      newVersion: expectedNewVersion,
-      skipReason: "CI environment",
-    });
+    return finalize({ status: "skipped", reason: "ci", guidance: "CI environment: nothing is installed on this machine" });
   }
 
-  const entries = options.registryEntries ?? readUninstallEntries();
-  const entry = entries.find((item) => item.DisplayName === meta.productName) ?? null;
-  const candidateInstallDir = options.installDir
-    ?? entry?.InstallLocation
-    ?? (places?.programs ? path.join(places.programs, meta.dirName) : "");
-  const installedDevExe = candidateInstallDir ? path.join(candidateInstallDir, `${meta.executableName}.exe`) : "";
-  const isInstalled = testIdentity
-    ? Boolean(candidateInstallDir && fs.existsSync(installedDevExe) && (entry || options.installDir || places?.programs))
-    : Boolean(entry && candidateInstallDir && fs.existsSync(installedDevExe));
-
-  if (!isInstalled) {
-    return finalize({
-      status: "skipped",
-      installed: false,
-      wasRunning: false,
-      relaunched: false,
-      previousVersion: null,
-      newVersion: expectedNewVersion,
-      skipReason: "development channel is not installed",
-    });
+  // The development channel's own uninstall entry, keyed by the app's identity (A-139); without one (or without its executable) this is the
+  // first installation, into the default folder.
+  let entries;
+  try {
+    entries = options.registryEntries ?? (options.readUninstallEntriesFn ?? readUninstallEntries)();
+  } catch {
+    return finalize({ status: "failed", reason: "registry_unreadable", error: "could not read the installed apps from the registry; nothing was installed" });
   }
-
-  const beforeBuild = readBuildInfoIfPresent(path.join(candidateInstallDir, "resources"));
-  const previousVersion = beforeBuild?.version ?? (entry?.DisplayVersion || null);
-  if (beforeBuild?.channel !== "development") return finalize({ status: "failed", previousVersion, reason: "installed development build metadata is missing or belongs to another channel" });
-  if (!installerPath || !fs.existsSync(installerPath)) {
+  const entry = entries.find((item) => item.Key === meta.uninstallKey) ?? null;
+  const localAppData = places?.local ?? env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local");
+  const defaultInstallDir = path.join(places?.programs ?? path.join(localAppData, "Programs"), meta.dirName);
+  const candidateInstallDir = options.installDir || entry?.InstallLocation || defaultInstallDir;
+  const installedDevExe = path.join(candidateInstallDir, `${meta.executableName}.exe`);
+  facts.installLocation = receiptLocation(candidateInstallDir, path.dirname(defaultInstallDir), places?.programs ? "<programs>" : "%LOCALAPPDATA%\\Programs");
+  // A development build installed without its identity's entry (an older installer's GUID entry, or a folder without one) is not a first
+  // installation: installing over it would leave two entries in Apps & Features. It is reported; A-139 keeps no compatibility code for it.
+  if (!testIdentity && !entry && (fs.existsSync(installedDevExe) || entries.some((item) => item.DisplayName === meta.productName))) {
     return finalize({
       status: "failed",
-      installed: false,
-      wasRunning: false,
-      relaunched: false,
-      previousVersion,
-      newVersion: expectedNewVersion,
-      reason: "current development installer is missing or stale and could not be built",
+      reason: "legacy_install",
+      error: `${meta.productName} is installed without the uninstall entry ${meta.uninstallKey}; nothing was installed`,
+      guidance: `uninstall ${meta.productName} in Settings > Apps (its data is kept), then run \`node scripts/stage.mjs install-dev\` again`,
     });
+  }
+  const isInstalled = fs.existsSync(installedDevExe) && (testIdentity ? Boolean(entry || options.installDir || places?.programs) : Boolean(entry));
+  facts.firstInstall = !isInstalled;
+
+  const beforeBuild = isInstalled ? readBuildInfoIfPresent(path.join(candidateInstallDir, "resources")) : null;
+  const previousVersion = isInstalled ? beforeBuild?.version ?? (entry?.DisplayVersion || null) : null;
+  facts.oldVersion = previousVersion;
+  if (isInstalled && beforeBuild?.channel !== "development") {
+    return finalize({ status: "failed", reason: "metadata_invalid", error: "installed development build metadata is missing or belongs to another channel" });
+  }
+  if (!installerPath || !fs.existsSync(installerPath)) {
+    return finalize({ status: "failed", reason: "installer_missing", error: "current development installer is missing or stale and could not be built" });
   }
   const devPattern = /^0\.1\.(\d+)-dev\.(\d{12})$/;
   const previousParts = devPattern.exec(previousVersion ?? "");
   const nextParts = devPattern.exec(expectedNewVersion ?? "");
   if (!nextParts || (previousParts && (Number(nextParts[1]) < Number(previousParts[1]) || (nextParts[1] === previousParts[1] && nextParts[2] < previousParts[2])))) {
-    return finalize({ status: "failed", previousVersion, reason: "development installer version is invalid or older than the installed version" });
+    return finalize({ status: "failed", reason: "version_invalid", error: "development installer version is invalid or older than the installed version" });
   }
   // The installed build is already this one (same version and the same application archive as the packaged directory the installer was made
   // from): nothing to install, and the running development app is not asked to quit for nothing. The packaged directory is known for the installer
   // install-dev finds itself (the latest package); a caller that names another installer names its directory too, or nothing is skipped.
   const packagedAppDir = options.packagedAppDir !== undefined ? options.packagedAppDir : options.installerPath ? null : defaultPackagedAppDir(defaultInstaller?.recordFile);
-  if (previousVersion === expectedNewVersion && packagedAppDir && sameApplicationArchive(path.join(candidateInstallDir, "resources"), path.join(packagedAppDir, "resources"))) {
-    return finalize({ status: "skipped", previousVersion, newVersion: expectedNewVersion, skipReason: "this build is already installed" });
+  if (isInstalled && previousVersion === expectedNewVersion && packagedAppDir && sameApplicationArchive(path.join(candidateInstallDir, "resources"), path.join(packagedAppDir, "resources"))) {
+    return finalize({ status: "skipped", reason: "already_installed", guidance: "this build is already installed" });
   }
   const installerHash = () => createHash("sha256").update(fs.readFileSync(installerPath)).digest("hex");
-  if (expectedSha256 && installerHash() !== expectedSha256) return finalize({ status: "failed", previousVersion, reason: "development installer changed after packaging" });
+  if (expectedSha256 && installerHash() !== expectedSha256) {
+    return finalize({ status: "failed", reason: "installer_changed", error: "development installer changed after packaging" });
+  }
 
-  const localAppData = places?.local ?? env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local");
+  // A window the person can see means they are using MANGA Dev: wait for it to close or go to the tray, then go on (A-139).
+  if (isInstalled) {
+    const isWindowOpen = options.isWindowOpenFn ?? devWindowOpen;
+    const deferStart = Date.now();
+    for (;;) {
+      let open;
+      try {
+        open = isWindowOpen(installedDevExe);
+      } catch {
+        return finalize({ status: "failed", reason: "window_check_failed", error: `could not check whether ${meta.productName} shows a window; nothing was installed` });
+      }
+      if (!open) break;
+      facts.windowOpen = true;
+      facts.deferred = true;
+      const waited = Date.now() - deferStart;
+      if (waited >= windowWaitMs) {
+        facts.deferMs = waited;
+        return finalize({
+          status: "skipped",
+          reason: "window_open",
+          guidance: `${meta.productName} kept a window open for ${Math.round(windowWaitMs / 1000)} s, so this build was not installed; close the window (or hide it to the tray) and run \`node scripts/stage.mjs install-dev\` again`,
+        });
+      }
+      await sleep(Math.min(windowPollMs, windowWaitMs - waited));
+    }
+    if (facts.deferred) facts.deferMs = Date.now() - deferStart;
+  }
+
   const devRuntimeDir = path.join(localAppData, meta.dirName, "runtime");
   const targetEnv = {
     ...env,
@@ -484,19 +547,20 @@ export async function runInstallDev(options = {}) {
   const lightRuntimeDir = path.join(localAppData, meta.dirName, "light", "runtime");
   const light = await (options.askLightToQuitFn ?? askLightToQuit)(lightRuntimeDir, { timeoutMs: options.lightQuitTimeoutMs ?? LIGHT_QUIT_WAIT_MS });
   if (!light.ok) {
-    return finalize({ status: "aborted", wasRunning: false, previousVersion, newVersion: expectedNewVersion, reason: "请先关闭轻量播放窗口 (light open did not leave within 10s; nothing was installed)" });
+    return finalize({ status: "aborted", reason: "light_open", error: "请先关闭轻量播放窗口 (light open did not leave within 10s; nothing was installed)" });
   }
 
   const runningInstance = readRunningInstance(devRuntimeDir);
   const runningPid = options.runningPid ?? (Number.isInteger(runningInstance?.pid) ? runningInstance.pid : null);
   const checkAlive = options.isProcessAliveFn ?? isProcessAlive;
   const wasRunning = Boolean(runningPid && checkAlive(runningPid));
+  facts.wasRunning = wasRunning;
 
   if (!options.runningPid && wasRunning && (!runningInstance?.execPath || runningInstance.channel !== "development" || Boolean(runningInstance.testIdentity) !== testIdentity || path.resolve(runningInstance.execPath).toLowerCase() !== path.resolve(installedDevExe).toLowerCase())) {
-    return finalize({ status: "aborted", wasRunning: true, previousVersion, reason: "running instance does not belong to the installed development executable" });
+    return finalize({ status: "aborted", reason: "foreign_instance", error: "running instance does not belong to the installed development executable" });
   }
   if (!options.runningPid && !wasRunning && (options.runningProcessesFn ?? runningDevProcesses)(installedDevExe).length > 0) {
-    return finalize({ status: "aborted", wasRunning: true, previousVersion, reason: "running development build has no graceful-update handshake; close it before running install-dev" });
+    return finalize({ status: "aborted", wasRunning: true, reason: "no_handshake", error: "running development build has no graceful-update handshake; close it before running install-dev" });
   }
 
   const requestId = randomUUID();
@@ -517,12 +581,12 @@ export async function runInstallDev(options = {}) {
       } catch {
         // Corrupt or truncated lock file from an aborted run: treat as stale and replace it.
       }
-      if (isProcessAlive(prior?.pid)) return finalize({ status: "aborted", wasRunning, previousVersion, reason: "another development installation is already in progress" });
+      if (isProcessAlive(prior?.pid)) return finalize({ status: "aborted", reason: "install_in_progress", error: "another development installation is already in progress" });
       fs.rmSync(lockFile, { force: true });
     }
     fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, requestId }), { flag: "wx" });
   } catch {
-    return finalize({ status: "failed", wasRunning, previousVersion, reason: "could not acquire the development installation lock" });
+    return finalize({ status: "failed", reason: "lock_failed", error: "could not acquire the development installation lock" });
   }
 
   const relaunchDevelopment = async (expectedVersion) => {
@@ -609,7 +673,7 @@ export async function runInstallDev(options = {}) {
       && current?.channel === "development" && fs.existsSync(installedDevExe)) {
       try {
         const recovered = await relaunchDevelopment(current.version);
-        return finalize({ ...payload, relaunched: recovered.relaunched, recoveryVersion: current.version }, { relaunchedPid: recovered.relaunchedPid });
+        return finalize({ ...payload, relaunched: recovered.relaunched, inJob: recovered.inJob, viaShell: recovered.viaShell, recoveryVersion: current.version }, { relaunchedPid: recovered.relaunchedPid });
       } catch { /* retain the original installation failure in the evidence */ }
     }
     return finalize(payload);
@@ -618,7 +682,8 @@ export async function runInstallDev(options = {}) {
   try {
 
     if (wasRunning && runningPid) {
-      const waitDeadline = Date.now() + quitTimeoutMs;
+      const quitStart = Date.now();
+      const waitDeadline = quitStart + quitTimeoutMs;
       try {
         fs.mkdirSync(devRuntimeDir, { recursive: true });
         const requestPart = `${quitFile}.${requestId}.part`;
@@ -635,7 +700,7 @@ export async function runInstallDev(options = {}) {
         );
         fs.renameSync(requestPart, quitFile);
       } catch {
-        return finalize({ status: "failed", wasRunning, previousVersion, reason: "could not write the graceful quit request" });
+        return finalize({ status: "failed", reason: "quit_request_failed", error: "could not write the graceful quit request" });
       }
 
       if (options.requestQuitFn) {
@@ -653,7 +718,8 @@ export async function runInstallDev(options = {}) {
         });
         if (requested.status !== 0) {
           withdrawRequest();
-          return await failAndRecover({ status: "failed", wasRunning, previousVersion, reason: "development quit helper failed; installation was cancelled" });
+          facts.quitMs = Date.now() - quitStart;
+          return await failAndRecover({ status: "failed", reason: "quit_failed", error: "development quit helper failed; installation was cancelled" });
         }
       }
 
@@ -662,6 +728,7 @@ export async function runInstallDev(options = {}) {
         await sleep(100);
         exited = !checkAlive(runningPid);
       }
+      facts.quitMs = Date.now() - quitStart;
 
       if (!exited) {
         // Withdraw the request. The main process observes this and must not close after its write barrier releases.
@@ -670,37 +737,25 @@ export async function runInstallDev(options = {}) {
         return finalize(
           {
             status: "aborted",
-            installed: false,
-            wasRunning: true,
-            relaunched: false,
-            previousVersion,
-            newVersion: expectedNewVersion,
-            reason: `running development instance did not exit within ${Math.round(quitTimeoutMs / 1000)}s timeout; aborted without force-killing`,
+            reason: "quit_timeout",
+            error: `running development instance did not exit within ${Math.round(quitTimeoutMs / 1000)}s timeout; aborted without force-killing`,
           },
           { abortedPidStillAlive: checkAlive(runningPid) },
         );
       }
     }
 
-    // Silent install into the existing installation directory (`/S /D=<installDir>`).
-    if (expectedSha256 && installerHash() !== expectedSha256) return await failAndRecover({ status: "failed", wasRunning, previousVersion, reason: "development installer changed before execution" });
+    // Silent install into the installation directory (`/S /D=<installDir>`; the default folder on a first installation).
+    if (expectedSha256 && installerHash() !== expectedSha256) return await failAndRecover({ status: "failed", reason: "installer_changed", error: "development installer changed before execution" });
     const arrived = readRunningInstance(devRuntimeDir);
-    if (!options.runningPid && arrived?.pid && checkAlive(arrived.pid)) return finalize({ status: "aborted", wasRunning: true, previousVersion, reason: "a development instance opened before installation; installation was cancelled" });
+    if (!options.runningPid && arrived?.pid && checkAlive(arrived.pid)) return finalize({ status: "aborted", wasRunning: true, reason: "instance_reopened", error: "a development instance opened before installation; installation was cancelled" });
     const installArgs = ["/S", `/D=${candidateInstallDir}`];
     const installResult = options.spawnInstallerFn
       ? await options.spawnInstallerFn(installerPath, installArgs, candidateInstallDir)
       : spawnSync(installerPath, installArgs, { windowsHide: true, timeout: 300_000 });
 
     if ((installResult?.status ?? 1) !== 0) {
-      return await failAndRecover({
-        status: "failed",
-        installed: false,
-        wasRunning,
-        relaunched: false,
-        previousVersion,
-        newVersion: expectedNewVersion,
-        reason: `silent installer exited with status ${String(installResult?.status ?? 1)}`,
-      });
+      return await failAndRecover({ status: "failed", reason: "installer_failed", error: `silent installer exited with status ${String(installResult?.status ?? 1)}` });
     }
 
     const afterBuild = readBuildInfoIfPresent(path.join(candidateInstallDir, "resources"));
@@ -708,12 +763,9 @@ export async function runInstallDev(options = {}) {
     if (!installedVersion || afterBuild.channel !== "development" || !fs.existsSync(installedDevExe) || (expectedNewVersion && installedVersion !== expectedNewVersion)) {
       return await failAndRecover({
         status: "failed",
-        installed: false,
-        wasRunning,
-        relaunched: false,
-        previousVersion,
         newVersion: installedVersion,
-        reason: `installed version (${String(installedVersion)}) does not match expected version (${expectedNewVersion})`,
+        reason: "version_mismatch",
+        error: `installed version (${String(installedVersion)}) does not match expected version (${expectedNewVersion})`,
       });
     }
 
@@ -725,20 +777,18 @@ export async function runInstallDev(options = {}) {
       {
         status: startAfter && !relaunched ? "failed" : "passed",
         installed: true,
-        wasRunning,
         relaunched,
         inJob,
         viaShell,
-        previousVersion,
         newVersion: installedVersion,
-        ...(startAfter && !relaunched ? { reason: "updated development instance did not become ready" } : {}),
+        ...(startAfter && !relaunched ? { reason: "launch_failed", error: "updated development instance did not become ready" } : {}),
         ...(draftPreserved !== undefined ? { draftPreserved } : {}),
       },
       { relaunchedPid },
     );
   } catch {
     withdrawRequest();
-    return await failAndRecover({ status: "failed", wasRunning, previousVersion, reason: "development installation or relaunch failed" });
+    return await failAndRecover({ status: "failed", reason: "install_error", error: "development installation or relaunch failed" });
   } finally {
     withdrawRequest();
     try { fs.rmSync(`${quitFile}.${requestId}.part`, { force: true }); } catch { /* ignore */ }
@@ -769,6 +819,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const result = await runInstallDev();
   const { relaunchedPid: _pid, abortedPidStillAlive: _alive, ...publicSummary } = result;
   console.log(JSON.stringify({ check: "stage-install-dev", ...publicSummary }));
+  if (result.guidance) console.log(`[install-dev] ${result.guidance}`);
   if (result.inJob) {
     console.log(`[install-dev] ${result.productName} ${String(result.newVersion)} started inside this command's job object and may end with the command; open it once from the Start menu`);
   }
