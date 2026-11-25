@@ -809,19 +809,19 @@ export async function runProposalObservations(input: {
 
         detail.optIn = {
           webTagShown,
-          webHasFetch: webTools.includes("webpage.fetch"),
-          webHasSemantic: webTools.includes("semantic.search"),
+          webHasFetch: webTools.includes("webpage_fetch"),
+          webHasSemantic: webTools.includes("semantic_search"),
           savedWebpages: pages.length,
           tagClearedAfterSend,
-          nextHasFetch: nextTools.includes("webpage.fetch"),
-          semHasSemantic: semTools.includes("semantic.search"),
+          nextHasFetch: nextTools.includes("webpage_fetch"),
+          semHasSemantic: semTools.includes("semantic_search"),
           semFoundKey: semRequestBodies.includes("琥珀色的钥匙"),
           webpageInRecent,
         };
-        if (!webTools.includes("webpage.fetch") || webTools.includes("semantic.search")) problems.push(`first turn tools mismatch: ${JSON.stringify(webTools)}`);
+        if (!webTools.includes("webpage_fetch") || webTools.includes("semantic_search")) problems.push(`first turn tools mismatch: ${JSON.stringify(webTools)}`);
         if (pages.length === 0) problems.push("webpage.fetch did not save a webpage version in the project");
-        if (!tagClearedAfterSend || nextTools.includes("webpage.fetch")) problems.push("webpage.fetch opt-in was not cleared on the next turn");
-        if (!semTools.includes("semantic.search") || !semRequestBodies.includes("琥珀色的钥匙")) problems.push("semantic.search opt-in did not return results from the fake embedding service");
+        if (!tagClearedAfterSend || nextTools.includes("webpage_fetch")) problems.push("webpage.fetch opt-in was not cleared on the next turn");
+        if (!semTools.includes("semantic_search") || !semRequestBodies.includes("琥珀色的钥匙")) problems.push("semantic.search opt-in did not return results from the fake embedding service");
         if (webpageInRecent) problems.push("chat-plus-webpage was shown in '最近' conversation");
       } catch (error) {
         problems.push(`walk stopped: ${error instanceof Error ? error.message : String(error)}`);

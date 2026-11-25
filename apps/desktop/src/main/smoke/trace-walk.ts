@@ -34,7 +34,7 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
   const problems: string[] = [];
   const server = await startMockProvider({
     streamToolScript: [{ name: "library.find", arguments: '{"text":"x"}' }],
-    respond: (request) => (JSON.stringify(request.body.messages ?? []).includes("library.find") ? { text: "找到了。" } : undefined),
+    respond: (request) => (JSON.stringify(request.body.messages ?? []).includes("library_find") ? { text: "找到了。" } : undefined),
   });
   try {
     await call("settings.skipAi", {});
@@ -51,9 +51,10 @@ export async function runTraceSmoke(input: { appService: MangaProductApp; grant:
     await clickTestId(view, "chat-mode-ask");
     await setField(view, "agent-composer", PROMPT);
     const sent = await clickTestId(view, "agent-send");
-    const running = sent && await waitForTestId(view, "agent-stop", "data-present", null, 15_000);
-    const done = running && await waitForTestId(view, "agent-send", "data-present", null, 60_000);
-    const answered = done && await waitUntil(view, `document.body.innerText.includes("找到了。")`, 10_000);
+    // A loopback answer can finish between two polls of the stop button: wait for the reply text and the idle send button.
+    const answered = sent
+      && await waitUntil(view, `document.body.innerText.includes("找到了。")`, 60_000)
+      && await waitUntil(view, `!document.querySelector('[data-testid="agent-stop"]') && Boolean(document.querySelector('[data-testid="agent-send"]'))`, 15_000);
     if (!answered) problems.push("the task did not end with the model's answer");
     const opened = answered && await waitUntil(view, `document.querySelector('[data-testid^="bubble-trace-"]')`, 8000);
     if (!opened) problems.push("the reply has no way to its record");
