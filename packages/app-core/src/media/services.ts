@@ -47,11 +47,12 @@ export class MediaServices {
     return target;
   }
 
-  /** Stop background work and close open archives. Handles stay valid until the table is dropped with the app. */
+  /** Stop background work, terminate in-flight media tools, and close open archives. Handles stay valid until the table is dropped with the app. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.jobs.cancelWhere(() => true);
+    this.ffmpeg.dispose();
     this.zips.close();
   }
 }
