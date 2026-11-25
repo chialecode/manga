@@ -61,7 +61,7 @@ function makeEmptySnapshotOptions(root: string) {
 }
 
 describe("W2: Local development auto-update `stage install-dev` & `--quit-for-update` (AT-158)", () => {
-  it("skips when MANGA_DEV_AUTO_INSTALL=0 or on CI, and when development channel is not installed, always writing install-dev.json (AT-158)", async () => {
+  it("skips when MANGA_DEV_AUTO_INSTALL=0 or on CI, installs the development channel the first time when it is not installed, always writing install-dev.json (AT-158, A-139)", async () => {
     const temp = makeTempDir("manga-install-dev-skip-");
     const snapOpts = makeEmptySnapshotOptions(temp);
 
@@ -73,7 +73,8 @@ describe("W2: Local development auto-update `stage install-dev` & `--quit-for-up
       snapshotOptions: snapOpts,
     });
     expect(resDisabled.status).toBe("skipped");
-    expect(resDisabled.skipReason).toBe("MANGA_DEV_AUTO_INSTALL=0");
+    expect(resDisabled).toMatchObject({ skipped: true, reason: "disabled", installed: false });
+    expect(resDisabled.guidance).toContain("MANGA_DEV_AUTO_INSTALL=0");
     expect(resDisabled.releaseUntouched).toBe(true);
     expect(fs.existsSync(outDisabled)).toBe(true);
 
@@ -85,22 +86,52 @@ describe("W2: Local development auto-update `stage install-dev` & `--quit-for-up
       snapshotOptions: snapOpts,
     });
     expect(resCi.status).toBe("skipped");
-    expect(resCi.skipReason).toBe("CI environment");
+    expect(resCi).toMatchObject({ skipped: true, reason: "ci" });
     expect(resCi.releaseUntouched).toBe(true);
     expect(fs.existsSync(outCi)).toBe(true);
 
-    // 3. Not installed
+    // 3. Not installed: the first installation, silently into the default folder (A-139). The test identity and a synthetic installer only.
+    const places = { programs: path.join(temp, "Programs"), local: path.join(temp, "local"), documents: path.join(temp, "documents"), downloads: path.join(temp, "downloads") };
+    const version = "0.1.2-dev.202611081530";
+    const installer = path.join(temp, `manga-dev-test-setup-${version}.exe`);
+    fs.writeFileSync(installer, "fake-installer-binary");
     const outNotInstalled = path.join(temp, "not-installed", "install-dev.json");
+    const installerArgs: string[][] = [];
+    let windowChecks = 0;
     const resNotInstalled = await runInstallDev({
       env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
+      testIdentity: true,
+      places,
       registryEntries: [],
+      installerPath: installer,
+      newVersion: version,
+      isProcessAliveFn: () => false,
+      isWindowOpenFn: () => { windowChecks += 1; return false; },
+      runningProcessesFn: () => [],
+      spawnInstallerFn: async (_installer: string, args: string[], targetDir: string) => {
+        installerArgs.push(args);
+        fs.mkdirSync(path.join(targetDir, "resources"), { recursive: true });
+        fs.writeFileSync(path.join(targetDir, "manga-dev-test.exe"), "dev-binary-first");
+        writeBuildInfo(path.join(targetDir, "resources"), { version, channel: "development", commit: "2222222", builtAt: "2026-11-08T15:30:00.000Z", schemaVersion: 14 });
+        return { status: 0 };
+      },
       outputFile: outNotInstalled,
       snapshotOptions: snapOpts,
     });
-    expect(resNotInstalled.status).toBe("skipped");
-    expect(resNotInstalled.skipReason).toBe("development channel is not installed");
+    const defaultDir = path.join(places.programs, "manga-dev-test");
+    expect(resNotInstalled).toMatchObject({ status: "passed", installed: true, skipped: false, firstInstall: true, oldVersion: null, newVersion: version, installLocation: "<programs>\\manga-dev-test", reason: null, error: null });
+    expect(installerArgs).toEqual([["/S", `/D=${defaultDir}`]]);
+    // Nothing to wait for before a first installation.
+    expect(windowChecks).toBe(0);
     expect(resNotInstalled.releaseUntouched).toBe(true);
     expect(fs.existsSync(outNotInstalled)).toBe(true);
+    // The receipt has every field the author's desktop apps share, in camelCase.
+    const receipt = JSON.parse(fs.readFileSync(outNotInstalled, "utf8"));
+    for (const field of ["identity", "installed", "skipped", "reason", "error", "guidance", "firstInstall", "oldVersion", "newVersion", "installLocation", "wasRunning",
+      "windowOpen", "deferred", "deferMs", "quitMs", "relaunched", "background", "inJob", "elapsedMs", "at"]) expect(receipt).toHaveProperty(field);
+    expect(receipt.identity).toBe("manga-dev-test");
+    for (const key of Object.keys(receipt)) expect(key).toMatch(/^[a-z][A-Za-z0-9]*$/);
+    for (const gone of ["previousVersion", "skipReason", "seconds"]) expect(receipt).not.toHaveProperty(gone);
   });
 
   it("saves unsaved draft on --quit-for-update, updates development channel, relaunches it with draft intact, and leaves running release channel completely untouched (AT-158)", async () => {
@@ -184,6 +215,7 @@ describe("W2: Local development auto-update `stage install-dev` & `--quit-for-up
       installerPath: fakeNewInstaller,
       newVersion: "0.1.2-dev.202611081530",
       runningPid: 424242,
+      isWindowOpenFn: () => false,
       isProcessAliveFn: (pid: number) => (pid === 424242 ? devAlive : pid === process.pid),
       requestQuitFn: async () => {
         // Simulate renderer flushing unsaved note draft + main process prepareQuitForUpdate
@@ -215,7 +247,9 @@ describe("W2: Local development auto-update `stage install-dev` & `--quit-for-up
     expect(result.installed).toBe(true);
     expect(result.wasRunning).toBe(true);
     expect(result.relaunched).toBe(true);
-    expect(result.previousVersion).toBe("0.1.2-dev.202611081000");
+    expect(result.oldVersion).toBe("0.1.2-dev.202611081000");
+    expect(result.firstInstall).toBe(false);
+    expect(result.quitMs).toBeGreaterThanOrEqual(0);
     expect(result.newVersion).toBe("0.1.2-dev.202611081530");
     expect(result.draftPreserved).toBe(true);
     expect(result.releaseUntouched).toBe(true);
@@ -285,6 +319,7 @@ describe("W2: Local development auto-update `stage install-dev` & `--quit-for-up
       newVersion: "0.1.2-dev.202611081530",
       quitTimeoutMs: 350,
       runningPid: 515151,
+      isWindowOpenFn: () => false,
       isProcessAliveFn: () => !devExited,
       requestQuitFn: () => {
         // Start prepareQuitForUpdate in background; it blocks on the 60s write barrier.
@@ -306,7 +341,9 @@ describe("W2: Local development auto-update `stage install-dev` & `--quit-for-up
     expect(result.relaunched).toBe(false);
     expect(result.abortedPidStillAlive).toBe(true);
     expect(installerCalled).toBe(false);
-    expect(result.reason).toContain("aborted without force-killing");
+    expect(result.reason).toBe("quit_timeout");
+    expect(result.error).toContain("aborted without force-killing");
+    expect(result.quitMs).toBeGreaterThanOrEqual(350);
     expect(result.releaseUntouched).toBe(true);
 
     // Release the 60s write barrier and verify `prepareQuitForUpdate` now finishes cleanly.

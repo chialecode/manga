@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeBuildInfo } from "@manga/app-core";
 import {
+  WINDOW_POLL_MS,
+  WINDOW_WAIT_MS,
   findDefaultDevInstaller,
   isExplorerExecutable,
   launchArgsAfterInstall,
@@ -41,7 +43,7 @@ function devFixture() {
   let relaunchCalls = 0;
   const options = {
     testIdentity: true, places, installDir, installerPath: installer, newVersion: version, evidenceDir: null,
-    registryEntries: [], runningProcessesFn: () => [],
+    registryEntries: [], runningProcessesFn: () => [], isWindowOpenFn: () => false,
     env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
     snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
     isProcessAliveFn: (pid: number) => pid === 770077 && alive,
@@ -83,7 +85,7 @@ describe("Development installer recovery review (AT-158)", () => {
       });
       if (same) {
         expect(result.status).toBe("skipped");
-        expect(result.skipReason).toBe("this build is already installed");
+        expect(result.reason).toBe("already_installed");
         expect({ quitRequests, ...fixture.counts() }).toEqual({ quitRequests: 0, installerCalls: 0, relaunchCalls: 0 });
       } else {
         expect(quitRequests).toBe(1);
@@ -115,7 +117,8 @@ describe("Development installer recovery review (AT-158)", () => {
     });
     expect(asked).toEqual([path.join(fixture.places.local, "manga-dev-test", "light", "runtime")]);
     expect(result.status).toBe("aborted");
-    expect(result.reason).toContain("请先关闭轻量播放窗口");
+    expect(result.reason).toBe("light_open");
+    expect(result.error).toContain("请先关闭轻量播放窗口");
     expect(quitRequests).toBe(0);
     expect(fixture.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
 
@@ -178,7 +181,8 @@ describe("Development installer recovery review (AT-158)", () => {
     fs.writeFileSync(selected, "changed same bytes!");
     const result = await runInstallDev({ ...fixture.options, installerPath: selected, expectedSha256: latest.installer.sha256 });
     expect(result.status).toBe("failed");
-    expect(result.reason).toContain("changed after packaging");
+    expect(result.reason).toBe("installer_changed");
+    expect(result.error).toContain("changed after packaging");
     expect(fixture.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
   });
 
@@ -299,8 +303,9 @@ describe("Development installer recovery review (AT-158)", () => {
       installerPath: installer,
       newVersion: version,
       evidenceDir: null,
-      registryEntries: [{ DisplayName: "MANGA Dev", DisplayVersion: oldVersion, InstallLocation: installDir }],
+      registryEntries: [{ Key: "io.github.chialecode.manga-dev", DisplayName: "MANGA Dev", DisplayVersion: oldVersion, InstallLocation: installDir }],
       runningProcessesFn: () => [],
+      isWindowOpenFn: () => false,
       env: { ...process.env, LOCALAPPDATA: localAppData, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
       snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
       isProcessAliveFn: (pid: number) => pid === 770080,
@@ -315,8 +320,49 @@ describe("Development installer recovery review (AT-158)", () => {
       },
       relaunchReadyTimeoutMs: 2_000,
     });
-    expect(result).toMatchObject({ status: "passed", installed: true, relaunched: true, background: true, inJob: false, viaShell: true, newVersion: version });
+    expect(result).toMatchObject({ status: "passed", installed: true, relaunched: true, background: true, inJob: false, viaShell: true, newVersion: version,
+      identity: "manga-dev", firstInstall: false, oldVersion, installLocation: "...\\manga-dev" });
     expect(launchOptions).toEqual([{ args: ["--background"], opts: { viaDesktopShell: true } }]);
+  });
+
+  it("waits while the development app shows a window, then installs; skips this build when the window stays open past the limit (A-139)", async () => {
+    expect([WINDOW_POLL_MS, WINDOW_WAIT_MS]).toEqual([2_000, 600_000]);
+    // The window closes (or goes to the tray) after three checks: then the app is asked to quit and the build is installed.
+    const fixture = devFixture();
+    let checks = 0;
+    let quitRequests = 0;
+    const checked: string[] = [];
+    const result = await runInstallDev({ ...fixture.options, windowPollMs: 5,
+      isWindowOpenFn: (exe: string) => { checked.push(exe); checks += 1; return checks <= 3; },
+      requestQuitFn: async () => { quitRequests += 1; await fixture.options.requestQuitFn(); },
+      spawnInstallerFn: async () => {
+        writeBuildInfo(fixture.resources, { version: fixture.version, channel: "development", commit: "2222222", builtAt: "2026-11-08T11:00:00.000Z", schemaVersion: 14 });
+        return { status: 0 };
+      },
+    });
+    expect(result).toMatchObject({ status: "passed", installed: true, windowOpen: true, deferred: true, wasRunning: true, relaunched: true });
+    expect(result.deferMs).toBeGreaterThanOrEqual(10);
+    expect(checks).toBe(4);
+    expect(new Set(checked)).toEqual(new Set([fixture.executable]));
+    expect(quitRequests).toBe(1);
+
+    // The window stays open: nothing is asked of the app, nothing is installed, and the skip is not a failure.
+    const open = devFixture();
+    let openQuitRequests = 0;
+    const skipped = await runInstallDev({ ...open.options, windowPollMs: 5, windowWaitMs: 40, isWindowOpenFn: () => true,
+      requestQuitFn: async () => { openQuitRequests += 1; },
+    });
+    expect(skipped).toMatchObject({ status: "skipped", skipped: true, reason: "window_open", installed: false, windowOpen: true, deferred: true });
+    expect(skipped.deferMs).toBeGreaterThanOrEqual(40);
+    expect(skipped.guidance).toContain("install-dev");
+    expect(openQuitRequests).toBe(0);
+    expect(open.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
+
+    // A window check that fails is not taken for "no window".
+    const broken = devFixture();
+    const failed = await runInstallDev({ ...broken.options, isWindowOpenFn: () => { throw new Error("synthetic"); } });
+    expect(failed).toMatchObject({ status: "failed", reason: "window_check_failed", installed: false });
+    expect(broken.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
   });
 
   it("keeps the gate's rehearsal rule for the test identity by default: reopen only an app that was running, with the caller's arguments (A-135)", async () => {

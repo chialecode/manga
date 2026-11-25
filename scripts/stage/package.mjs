@@ -765,7 +765,7 @@ async function observeInstallDev() {
       installed: updatedRes.installed,
       wasRunning: updatedRes.wasRunning,
       relaunched: updatedRes.relaunched,
-      previousVersion: updatedRes.previousVersion,
+      oldVersion: updatedRes.oldVersion,
       newVersion: updatedRes.newVersion,
       draftPreserved: updatedRes.draftPreserved,
       releaseUntouched: updatedRes.releaseUntouched,
@@ -826,24 +826,53 @@ async function observeInstallDev() {
       problems.push(`install-dev 60s write abort failed: ${JSON.stringify(detail.aborted)}`);
     }
 
-    // 3. Not-installed skip case & MANGA_DEV_AUTO_INSTALL=0 skip case
-    const notInstRes = await runInstallDev({
+    // 3. Nothing installed yet: the first installation goes into the default folder (A-139) & MANGA_DEV_AUTO_INSTALL=0 skip case
+    fs.rmSync(devInstallDir, { recursive: true, force: true });
+    const firstVersion = "0.1.1-dev.202611081900";
+    let firstInstallArgs = null;
+    const firstRes = await runInstallDev({
       env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
+      testIdentity: true,
+      places,
       registryEntries: [],
-      outputFile: path.join(temp, "evidence", "install-dev-not-installed.json"),
+      installerPath: fakeNewInstaller,
+      newVersion: firstVersion,
+      isProcessAliveFn: () => false,
+      isWindowOpenFn: () => false,
+      runningProcessesFn: () => [],
+      spawnInstallerFn: async (_installer, args, targetDir) => {
+        firstInstallArgs = args;
+        fs.mkdirSync(path.join(targetDir, "resources"), { recursive: true });
+        fs.writeFileSync(path.join(targetDir, "manga-dev-test.exe"), "dev-binary-first");
+        writeBuildInfo(path.join(targetDir, "resources"), { version: firstVersion, channel: "development", commit: "3333333", builtAt: "2026-11-08T19:00:00.000Z", schemaVersion: 14 });
+        return { status: 0 };
+      },
+      outputFile: path.join(temp, "evidence", "install-dev-first.json"),
       snapshotOptions: snapOpts,
     });
+    detail.firstInstall = {
+      status: firstRes.status,
+      installed: firstRes.installed,
+      firstInstall: firstRes.firstInstall,
+      oldVersion: firstRes.oldVersion,
+      newVersion: firstRes.newVersion,
+      defaultFolder: firstRes.installLocation === "<programs>\\manga-dev-test" && firstInstallArgs?.[1] === `/D=${devInstallDir}`,
+      releaseUntouched: firstRes.releaseUntouched,
+    };
+    if (firstRes.status !== "passed" || !firstRes.installed || !firstRes.firstInstall || firstRes.oldVersion !== null
+      || firstRes.newVersion !== firstVersion || !detail.firstInstall.defaultFolder || !firstRes.releaseUntouched) {
+      problems.push(`install-dev first installation failed: ${JSON.stringify(detail.firstInstall)}`);
+    }
     const disabledRes = await runInstallDev({
       env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "0", CI: "", GITHUB_ACTIONS: "" },
       outputFile: path.join(temp, "evidence", "install-dev-disabled.json"),
       snapshotOptions: snapOpts,
     });
     detail.skipped = {
-      notInstalled: { status: notInstRes.status, skipReason: notInstRes.skipReason },
-      disabled: { status: disabledRes.status, skipReason: disabledRes.skipReason },
+      disabled: { status: disabledRes.status, reason: disabledRes.reason },
     };
-    if (notInstRes.status !== "skipped" || disabledRes.status !== "skipped") {
-      problems.push(`install-dev skip cases failed: ${JSON.stringify(detail.skipped)}`);
+    if (disabledRes.status !== "skipped" || disabledRes.reason !== "disabled") {
+      problems.push(`install-dev skip case failed: ${JSON.stringify(detail.skipped)}`);
     }
   } catch (error) {
     problems.push(error instanceof Error ? error.message : String(error));
