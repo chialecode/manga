@@ -219,6 +219,23 @@ describe.skipIf(mediaPrerequisitesAbsent)("running tools safely", () => {
     expect(spawned).toBe(false);
   });
 
+  it("cancels running and queued tasks when the service is disposed and leaves no process behind", async () => {
+    const disposable = new FfmpegService(tools, { concurrency: 1 });
+    let pid: number | undefined;
+    let spawnedSecond = false;
+    const running = disposable.run("ffmpeg", ["-v", "error", "-nostdin", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=30", "-t", "600", "-f", "null", "-"], { timeoutMs: 60_000, onSpawn: (value) => { pid = value; } });
+    const queued = disposable.run("ffmpeg", ["-version"], { onSpawn: () => { spawnedSecond = true; } });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(pid && alive(pid)).toBeTruthy();
+    const runningCheck = expect(running).rejects.toMatchObject({ code: "CANCELLED" });
+    const queuedCheck = expect(queued).rejects.toMatchObject({ code: "CANCELLED" });
+    disposable.dispose();
+    await Promise.all([runningCheck, queuedCheck]);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(pid && alive(pid)).toBeFalsy();
+    expect(spawnedSecond).toBe(false);
+  });
+
   it("reports progress from -progress lines", () => {
     const seen: number[] = [];
     const reader = FfmpegService.progressReader(10_000, (value) => seen.push(value));

@@ -352,6 +352,7 @@ export class LightMediaService {
 
   dispose(): void {
     this.jobs.cancelWhere(() => true);
+    this.ffmpeg.dispose();
     this.zips.close();
     for (const id of [...this.sessions.keys()]) this.close(id);
   }

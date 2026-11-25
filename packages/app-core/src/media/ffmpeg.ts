@@ -186,6 +186,7 @@ export type BackgroundOption = { signal?: AbortSignal; background?: boolean };
  */
 export class FfmpegService {
   private readonly lane: Lane;
+  private readonly life = new AbortController();
   private versionText: string | undefined;
 
   readonly tools: FfmpegTools | null;
@@ -196,6 +197,15 @@ export class FfmpegService {
   }
 
   get available(): boolean { return this.tools !== null; }
+
+  /** Stop every running and queued tool invocation owned by this service. */
+  dispose(): void {
+    this.life.abort();
+  }
+
+  private boundSignal(signal?: AbortSignal): AbortSignal {
+    return signal ? AbortSignal.any([this.life.signal, signal]) : this.life.signal;
+  }
 
   private require(): FfmpegTools {
     if (!this.tools) throw new MangaError("CAPABILITY_UNAVAILABLE", "the media tool is not installed");
@@ -209,7 +219,9 @@ export class FfmpegService {
   async version(): Promise<string> {
     if (this.versionText) return this.versionText;
     const tools = this.require();
-    const run = await runTool(tools.ffmpeg, ["-version"], { timeoutMs: 15_000 });
+    const run = await runTool(tools.ffmpeg, ["-version"], { timeoutMs: 15_000, signal: this.life.signal });
+    if (run.killed === "cancelled") throw new MangaError("CANCELLED", "media task was cancelled");
+    if (run.killed === "timeout") throw new MangaError("PROVIDER_UNAVAILABLE", "media task timed out", { retryable: true });
     const first = run.stdout.toString("utf8").split(/\r?\n/)[0] ?? "";
     this.versionText = /version\s+(\S+)/.exec(first)?.[1] ?? first.trim();
     return this.versionText;
@@ -218,9 +230,10 @@ export class FfmpegService {
   /** Raw run of ffmpeg or ffprobe under the lane cap. A non-zero exit throws unless `allowFailure` is set. */
   async run(tool: "ffmpeg" | "ffprobe", args: string[], options: FfmpegRunOptions & { allowFailure?: boolean } = {}): Promise<ToolRun> {
     const tools = this.require();
-    const { allowFailure, redactPaths, ...rest } = options;
+    const { allowFailure, redactPaths, signal: callerSignal, ...rest } = options;
+    const signal = this.boundSignal(callerSignal);
     return this.lane.run(async () => {
-      const run = await runTool(tools[tool], args, { ...rest, redact: redactPaths });
+      const run = await runTool(tools[tool], args, { ...rest, signal, redact: redactPaths });
       if (run.killed === "cancelled") throw new MangaError("CANCELLED", "media task was cancelled");
       if (run.killed === "timeout") throw new MangaError("PROVIDER_UNAVAILABLE", "media task timed out", { retryable: true });
       if (run.killed === "output-limit") throw new MangaError("UNSUPPORTED_FORMAT", "media tool produced more output than allowed");
@@ -228,7 +241,7 @@ export class FfmpegService {
         throw new MangaError("UNSUPPORTED_FORMAT", `media tool failed (exit ${run.code ?? run.signal}): ${run.stderr.trim().split(/\r?\n/).slice(-3).join(" | ")}`);
       }
       return run;
-    }, options.signal);
+    }, signal);
   }
 
   async probe(file: string, options: BackgroundOption = {}): Promise<ReturnType<typeof probeFromJson>> {
