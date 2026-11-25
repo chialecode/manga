@@ -4,7 +4,7 @@ import path from "node:path";
 import { createServer } from "node:http";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { startMockProvider, streamText } from "@manga/model-protocol";
 import { MangaProductApp, TestVault } from "@manga/app-core";
 import { startApp, waitForRun } from "../helpers/app.ts";
@@ -152,6 +152,43 @@ describe("sealed host after a location switch", () => {
       app.close();
     }
   }, 180_000);
+
+  it("commits already-copied fingerprints on a mid-batch copy error so rollback cleans them with no needs-review", async () => {
+    const { app, grant } = await startApp();
+    const target = tempTarget("mid-batch-fail");
+    const realOpenSync = fs.openSync;
+    const openSpy = vi.spyOn(fs, "openSync").mockImplementation(((filePath: fs.PathLike, flags?: fs.OpenMode, mode?: fs.Mode) => {
+      if (typeof filePath === "string" && filePath.endsWith(`${path.sep}f2.bin`) && typeof flags === "number" && (flags & fs.constants.O_CREAT) !== 0) {
+        const err = Object.assign(new Error("ENOSPC: no space left on device"), { code: "ENOSPC" });
+        throw err;
+      }
+      return realOpenSync(filePath, flags as never, mode as never);
+    }) as typeof fs.openSync);
+    try {
+      for (let index = 0; index < 5; index += 1) fs.writeFileSync(path.join(app.layout.partitions.attachments, `f${index}.bin`), `payload ${index}`);
+      const handle = app.registerPath("directory", target);
+      const proposed = await app.call(actor, { commandId: "settings.proposeLocations", idempotencyKey: "mid-fail-plan", input: { pathHandle: handle } }, grant.handle);
+      expect(proposed.status).toBe("ok");
+      const applied = await app.call(actor, { commandId: "settings.applyLocations", idempotencyKey: "mid-fail-apply", input: { checkpointId: proposed.value?.checkpointId, pathHandle: handle } }, grant.handle);
+      expect(applied.status).toBe("error");
+      openSpy.mockRestore();
+
+      const rows = app.store.sqlite.prepare(
+        "SELECT relative_path, state, fingerprint FROM migration_owned_files WHERE partition = 'attachments' ORDER BY relative_path",
+      ).all() as Array<{ relative_path: string; state: string; fingerprint: string | null }>;
+      expect(rows.filter((row) => row.state === "committed" && Boolean(row.fingerprint)).map((row) => row.relative_path)).toEqual(["f0.bin", "f1.bin"]);
+
+      const rollback = await app.call(actor, { commandId: "settings.recoverJobs", idempotencyKey: "mid-fail-rollback", input: { action: "rollback" } }, grant.handle);
+      expect(rollback.status).toBe("ok");
+      const result = rollback.value as { removed: string[]; needsReview: string[] };
+      expect(result.needsReview).toEqual([]);
+      expect(result.removed.map((file) => path.basename(file))).toEqual(expect.arrayContaining(["f0.bin", "f1.bin"]));
+      expect(fs.readdirSync(path.join(target, "attachments"))).toEqual([]);
+    } finally {
+      openSpy.mockRestore();
+      app.close();
+    }
+  });
 });
 
 describe("relocation plans", () => {

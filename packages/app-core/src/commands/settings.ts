@@ -368,22 +368,36 @@ export function applyLocations(app: SettingsHost, envelope: CommandEnvelope) {
       if (copy.partition === "data") {
         // Copy and verify `data` with no interleaved SQLite writes so WAL auto-checkpointing cannot mutate manga.sqlite mid-copy.
         const committed: Array<{ relative: string; hash: string }> = [];
-        for (const file of dataFiles) {
-          const relative = file.relativePath.replace(/^\.\//, "");
-          const targetFile = path.join(dest, relative);
-          committed.push({ relative, hash: copyOwnedFile(file.absolutePath, targetFile) });
+        let copyFailed = false;
+        try {
+          for (const file of dataFiles) {
+            const relative = file.relativePath.replace(/^\.\//, "");
+            const targetFile = path.join(dest, relative);
+            committed.push({ relative, hash: copyOwnedFile(file.absolutePath, targetFile) });
+          }
+          const expected = fingerprintTree(copy.source);
+          const actual = fingerprintTree(dest);
+          if (actual.hash !== expected.hash) throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} does not match its source`, { details: { partition: copy.partition } });
+          verified.push({ partition: copy.partition, bytes: actual.bytes, fingerprint: actual.hash });
+        } catch (error) {
+          copyFailed = true;
+          throw error;
+        } finally {
+          if (committed.length) {
+            if (copyFailed) {
+              try { markBatchCommitted(copy.partition, committed); } catch { /* preserve original copy error */ }
+            } else {
+              markBatchCommitted(copy.partition, committed);
+            }
+          }
         }
-        const expected = fingerprintTree(copy.source);
-        const actual = fingerprintTree(dest);
-        if (actual.hash !== expected.hash) throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} does not match its source`, { details: { partition: copy.partition } });
-        if (committed.length) markBatchCommitted(copy.partition, committed);
-        verified.push({ partition: copy.partition, bytes: actual.bytes, fingerprint: actual.hash });
         app.store.maybeCrash("location-copy");
         continue;
       }
       const files = listCopyFiles(copy.source);
       // Batch ownership writes in transactions so relocating thousands of attachments does not run 3 auto-commit WAL fsyncs per file,
-      // while still persisting `copying` ownership BEFORE any target file is written and `committed` + fingerprint immediately after each batch.
+      // while still persisting `copying` ownership BEFORE any target file is written and `committed` + fingerprint immediately after each batch
+      // (including committing already-copied files in `finally` if a copy throws mid-batch, so rollback cleanly removes them).
       for (let start = 0; start < files.length; start += OWNERSHIP_BATCH_SIZE) {
         const batch = files.slice(start, start + OWNERSHIP_BATCH_SIZE).map((file) => {
           const relative = file.relativePath.replace(/^\.\//, "");
@@ -391,8 +405,21 @@ export function applyLocations(app: SettingsHost, envelope: CommandEnvelope) {
         });
         markBatchCopying(copy.partition, batch);
         const committed: Array<{ relative: string; hash: string }> = [];
-        for (const item of batch) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
-        markBatchCommitted(copy.partition, committed);
+        let copyFailed = false;
+        try {
+          for (const item of batch) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
+        } catch (error) {
+          copyFailed = true;
+          throw error;
+        } finally {
+          if (committed.length) {
+            if (copyFailed) {
+              try { markBatchCommitted(copy.partition, committed); } catch { /* preserve original copy error */ }
+            } else {
+              markBatchCommitted(copy.partition, committed);
+            }
+          }
+        }
       }
       const expected = fingerprintTree(copy.source);
       const actual = fingerprintTree(dest);

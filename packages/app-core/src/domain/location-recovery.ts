@@ -157,20 +157,33 @@ export function resumeLocationCopy(
           store.sqlite.pragma("wal_checkpoint(TRUNCATE)");
         }
         const committed: Array<{ relative: string; hash: string }> = [];
-        for (const item of toCopy) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
-        const destTree = fingerprintTree(dest);
-        for (const file of files) {
-          const relative = file.relativePath.replace(/^\.\//, "");
-          const targetFile = path.join(dest, relative);
-          if (!fs.existsSync(targetFile) || (
-            ownedFileFingerprint(targetFile) !== ownedFileFingerprint(file.absolutePath)
-            && !targetFile.endsWith(".sqlite")
-          )) {
-            throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} is missing a source file`, { details: { partition: copy.partition, relative } });
+        let dataCopyFailed = false;
+        try {
+          for (const item of toCopy) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
+          const destTree = fingerprintTree(dest);
+          for (const file of files) {
+            const relative = file.relativePath.replace(/^\.\//, "");
+            const targetFile = path.join(dest, relative);
+            if (!fs.existsSync(targetFile) || (
+              ownedFileFingerprint(targetFile) !== ownedFileFingerprint(file.absolutePath)
+              && !targetFile.endsWith(".sqlite")
+            )) {
+              throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} is missing a source file`, { details: { partition: copy.partition, relative } });
+            }
+          }
+          verified.push({ partition: copy.partition, bytes: destTree.bytes, fingerprint: destTree.hash });
+        } catch (error) {
+          dataCopyFailed = true;
+          throw error;
+        } finally {
+          if (committed.length) {
+            if (dataCopyFailed) {
+              try { markBatchCommitted(copy.partition, committed); } catch { /* preserve original copy error */ }
+            } else {
+              markBatchCommitted(copy.partition, committed);
+            }
           }
         }
-        if (committed.length) markBatchCommitted(copy.partition, committed);
-        verified.push({ partition: copy.partition, bytes: destTree.bytes, fingerprint: destTree.hash });
         continue;
       }
       const toCopy: Array<{ source: string; target: string; relative: string }> = [];
@@ -199,8 +212,21 @@ export function resumeLocationCopy(
         const batch = toCopy.slice(start, start + OWNERSHIP_BATCH_SIZE);
         markBatchCopying(copy.partition, batch);
         const committed: Array<{ relative: string; hash: string }> = [];
-        for (const item of batch) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
-        markBatchCommitted(copy.partition, committed);
+        let copyFailed = false;
+        try {
+          for (const item of batch) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
+        } catch (error) {
+          copyFailed = true;
+          throw error;
+        } finally {
+          if (committed.length) {
+            if (copyFailed) {
+              try { markBatchCommitted(copy.partition, committed); } catch { /* preserve original copy error */ }
+            } else {
+              markBatchCommitted(copy.partition, committed);
+            }
+          }
+        }
       }
       const destTree = fingerprintTree(dest);
       for (const file of files) {
