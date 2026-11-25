@@ -832,6 +832,77 @@ describe("Voice transcription settings 5 sections, local ASR models, dictionary 
     await waitFor(() => expect(screen.getByTestId("voice-history-empty")).toBeTruthy());
   });
 
+  it("keeps pause and cancel enabled while asrModel.download is still pending (#103)", async () => {
+    let modelState: "not_installed" | "downloading" | "paused" = "not_installed";
+    let finishDownload: (() => void) | null = null;
+    const host = installHost({
+      "dictionary.list": () => ({ items: [] }),
+      "dictionary.prompt": () => ({ text: "", included: 0, cut: 0, chars: 0, limit: 500 }),
+      "dictionary.suggestions": () => ({ items: [] }),
+      "dictation.history.list": () => ({ items: [] }),
+      "asrModel.list": () => ({
+        models: [
+          {
+            modelId: "funasr",
+            name: "FunASR Nano",
+            kind: "funasrNano",
+            languages: ["zh"],
+            hotwords: 50,
+            license: "Apache-2.0",
+            licenseUrl: "https://www.apache.org/licenses/LICENSE-2.0",
+            archiveName: "funasr.tar.bz2",
+            archiveBytes: 240 * 1024 * 1024,
+            archiveSha256: "a".repeat(64),
+            state: modelState,
+            downloadedBytes: modelState === "not_installed" ? 0 : 12 * 1024 * 1024,
+            totalBytes: 240 * 1024 * 1024,
+            sources: [{ id: "mirror", label: "国内镜像", url: "https://example.com/funasr.tar.bz2" }],
+          },
+        ],
+      }),
+      "asrModel.download": () => new Promise((resolve) => {
+        modelState = "downloading";
+        finishDownload = () => resolve({ modelId: "funasr", state: modelState });
+        queueMicrotask(() => { host.emit("asrModel.changed", { modelId: "funasr", state: "downloading" }); });
+      }),
+      "asrModel.pause": () => {
+        modelState = "paused";
+        finishDownload?.();
+        finishDownload = null;
+        return { modelId: "funasr", state: "paused" };
+      },
+    });
+
+    render(
+      <VoicePage
+        t={i18n.t}
+        settings={{ connections: [] }}
+        recording={{ settings: DEFAULT_RECORDING_SETTINGS, save: async () => true }}
+        keyTable={resolveKeys(null)}
+        onGoto={() => undefined}
+        onError={() => undefined}
+        onNotice={() => undefined}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("voice-model-download-funasr")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("voice-model-download-funasr"));
+    fireEvent.click(screen.getByTestId("voice-model-confirm-do"));
+
+    const pauseBtn = await waitFor(() => screen.getByTestId("voice-model-pause-funasr") as HTMLButtonElement);
+    const cancelBtn = screen.getByTestId("voice-model-cancel-funasr") as HTMLButtonElement;
+    expect(pauseBtn.disabled).toBe(false);
+    expect(cancelBtn.disabled).toBe(false);
+
+    fireEvent.click(pauseBtn);
+    await waitFor(() => expect(host.of("asrModel.pause")).toEqual([
+      { commandId: "asrModel.pause", input: { modelId: "funasr" } },
+    ]));
+    await waitFor(() => expect(screen.getByTestId("voice-model-funasr").getAttribute("data-state")).toBe("paused"));
+    const resumeBtn = screen.getByTestId("voice-model-resume-funasr") as HTMLButtonElement;
+    await waitFor(() => expect(resumeBtn.disabled).toBe(false));
+  });
+
   it("offers transcriptionInterface selector in ConnectionDialog when purpose is transcription", async () => {
     const savedForms: ConnectionForm[] = [];
     render(
