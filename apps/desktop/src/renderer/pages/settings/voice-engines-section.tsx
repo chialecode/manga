@@ -132,6 +132,7 @@ export function VoiceEnginesSection(props: {
   const { t, settings, models, connections, engineOptions } = props;
   const [confirmingModel, setConfirmingModel] = useState<{ model: LocalAsrModelItem; sourceId: string } | null>(null);
   const [busyModelId, setBusyModelId] = useState<string | null>(null);
+  const [controlBusyModelId, setControlBusyModelId] = useState<string | null>(null);
   const guard = useAsyncGuard();
 
   async function runModelAction(
@@ -153,6 +154,23 @@ export function VoiceEnginesSection(props: {
       await props.reloadModels();
     } finally {
       if (guard.isAlive()) setBusyModelId(null);
+    }
+  }
+
+  /** Pause/cancel must remain clickable while `asrModel.download` is still pending on the main process. */
+  async function runModelControl(modelId: string, commandId: "asrModel.pause" | "asrModel.cancel") {
+    if (controlBusyModelId === modelId) return;
+    setControlBusyModelId(modelId);
+    try {
+      const result = await attempt<Record<string, unknown>>(commandId, { modelId });
+      if (!guard.isAlive()) return;
+      if (!result.ok) {
+        props.onError(result.error.message);
+        return;
+      }
+      await props.reloadModels();
+    } finally {
+      if (guard.isAlive()) setControlBusyModelId(null);
     }
   }
 
@@ -289,14 +307,14 @@ export function VoiceEnginesSection(props: {
                       ) : null}
                       {model.state === "downloading" ? (
                         <>
-                          <button type="button" className="secondary-button" data-testid={`voice-model-pause-${model.modelId}`} disabled={actionBusy} onClick={() => void runModelAction(model.modelId, "asrModel.pause", { modelId: model.modelId })}>{t("voice.model.pause")}</button>
-                          <button type="button" className="link-button" data-testid={`voice-model-cancel-${model.modelId}`} disabled={actionBusy} onClick={() => void runModelAction(model.modelId, "asrModel.cancel", { modelId: model.modelId })}>{t("voice.model.cancel")}</button>
+                          <button type="button" className="secondary-button" data-testid={`voice-model-pause-${model.modelId}`} disabled={controlBusyModelId === model.modelId} onClick={() => void runModelControl(model.modelId, "asrModel.pause")}>{t("voice.model.pause")}</button>
+                          <button type="button" className="link-button" data-testid={`voice-model-cancel-${model.modelId}`} disabled={controlBusyModelId === model.modelId} onClick={() => void runModelControl(model.modelId, "asrModel.cancel")}>{t("voice.model.cancel")}</button>
                         </>
                       ) : null}
                       {model.state === "paused" ? (
                         <>
                           <button type="button" className="primary-button" data-testid={`voice-model-resume-${model.modelId}`} disabled={actionBusy} onClick={() => void runModelAction(model.modelId, "asrModel.download", { modelId: model.modelId, confirmed: true })}>{t("voice.model.resume")}</button>
-                          <button type="button" className="link-button" data-testid={`voice-model-cancel-${model.modelId}`} disabled={actionBusy} onClick={() => void runModelAction(model.modelId, "asrModel.cancel", { modelId: model.modelId })}>{t("voice.model.cancel")}</button>
+                          <button type="button" className="link-button" data-testid={`voice-model-cancel-${model.modelId}`} disabled={controlBusyModelId === model.modelId || actionBusy} onClick={() => void runModelControl(model.modelId, "asrModel.cancel")}>{t("voice.model.cancel")}</button>
                         </>
                       ) : null}
                       {canDelete ? (
