@@ -90,6 +90,8 @@ export function usePager(input: {
   /** The chapter and start of the slice laid out last: the same ones with more text are an appended window. */
   const shown = useRef<string | null>(null);
   const placedMark = useRef<string | null>(null);
+  /** Target screen queued by layout re-placement; passive effects for the stale screen skip updating anchor/range until it commits. */
+  const pendingScreen = useRef<number | null>(null);
 
   const clearLoading = (resetPending = false) => {
     loading.current = false;
@@ -184,7 +186,9 @@ export function usePager(input: {
       anchor.current = { partId: slice.partId, offset: want.anchor };
     }
     if (pending.current && !loading.current) pending.current = null;
-    setScreen(Math.max(0, Math.min(last, target)));
+    const nextScreen = Math.max(0, Math.min(last, target));
+    pendingScreen.current = nextScreen !== screen ? nextScreen : null;
+    setScreen(nextScreen);
   }, [active, sliceKey, slice?.text, frame.textWidth, frame.height, frame.columns, frame.gap, style.fontSizePx, style.lineHeight, style.fontFamily, style.paragraphSpacingPx, highlight?.start, laidOut]);
 
   // The page on screen: its range is the position; near the end of the loaded text the next window is asked for.
@@ -192,6 +196,8 @@ export function usePager(input: {
     const node = input.body.current;
     // Out of the layout no page is shown, and the start of the text must not pass for the place the book was left.
     if (!active || !node || !slice || loading.current || !laidOut || outOfLayout(node)) return;
+    if (pendingScreen.current !== null && pendingScreen.current !== screen) return;
+    pendingScreen.current = null;
     const first = firstOffsetOnScreen(node, frame, screen, slice.start, slice.start);
     const next = screen < screens - 1 ? firstOffsetOnScreen(node, frame, screen + 1, slice.start, slice.end) : slice.end;
     // A page that still holds the character keeps it (a new layout, or a report from before the screen was set); another page is a move.
@@ -209,7 +215,10 @@ export function usePager(input: {
     const previous = partIndex > 0 ? parts[partIndex - 1]! : null;
     const next = partIndex >= 0 && partIndex < parts.length - 1 ? parts[partIndex + 1]! : null;
     const step = turn(direction, { screen, screens, sliceStart: slice.start, sliceEnd: slice.end, partLength, loading: loading.current, previous, next });
-    if (step.kind === "screen") setScreen(step.screen);
+    if (step.kind === "screen") {
+      pendingScreen.current = null;
+      setScreen(step.screen);
+    }
     else if (step.kind === "extend") {
       // The page after the last one loaded is the first one of the appended text.
       pending.current = { partId: slice.partId, anchor: slice.end };

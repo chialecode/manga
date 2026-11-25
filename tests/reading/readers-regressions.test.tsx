@@ -97,6 +97,71 @@ describe("novel pager and offset regressions", () => {
     act(() => { result.current.go(1); });
     expect(onExtend).toHaveBeenCalledTimes(2);
   });
+
+  it("preserves the reading anchor across repeated font-size toggles without walking backwards (#109)", async () => {
+    const text = "甲".repeat(200);
+    const bodyEl = document.createElement("div");
+    bodyEl.textContent = text;
+    document.body.appendChild(bodyEl);
+    const scrollEl = document.createElement("div");
+    let fontSize = 18;
+    const charsPerPage = () => (fontSize === 18 ? 20 : 14);
+    const pageStep = 416; // textWidth 400 + MIN_PAGE_GAP 16
+    Object.defineProperty(scrollEl, "clientWidth", { configurable: true, get: () => 400 });
+    Object.defineProperty(scrollEl, "clientHeight", { configurable: true, get: () => 600 });
+    Object.defineProperty(bodyEl, "scrollWidth", {
+      configurable: true,
+      get: () => Math.ceil(text.length / charsPerPage()) * pageStep - 16,
+    });
+    vi.spyOn(bodyEl, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    vi.spyOn(bodyEl, "getClientRects").mockReturnValue([{ left: 0, top: 0, width: 400, height: 600 }] as unknown as DOMRectList);
+    vi.spyOn(scrollEl, "getClientRects").mockReturnValue([{ left: 0, top: 0, width: 400, height: 600 }] as unknown as DOMRectList);
+    vi.spyOn(document, "createRange").mockImplementation(() => {
+      let start = 0;
+      return {
+        setStart(_node: Node, offset: number) { start = offset; },
+        setEnd() {},
+        getClientRects() {
+          const col = Math.floor(start / charsPerPage());
+          return [{ left: col * pageStep + 2, top: 0, width: 10, height: 18 }] as unknown as DOMRectList;
+        },
+      } as unknown as Range;
+    });
+    const { result, rerender } = renderHook(
+      ({ size }) => {
+        fontSize = size;
+        const scroll = useRef<HTMLElement | null>(scrollEl);
+        const body = useRef<HTMLDivElement | null>(bodyEl);
+        return usePager({
+          active: true,
+          scroll,
+          body,
+          slice: { partId: "p1", text, start: 0, end: text.length },
+          parts: [{ id: "p1", length: text.length }],
+          style: { measurePx: 400, marginPx: 0, fontSizePx: size, lineHeight: 1.6, pageMode: "single", pageRatio: "free" },
+          highlight: null,
+          restored: null,
+          callbacks: { onPart: vi.fn(), onWindow: vi.fn(), onExtend: vi.fn() },
+        });
+      },
+      { initialProps: { size: 18 } },
+    );
+    // Turn forward 3 pages at 18px -> offset 60 (page 4, screen 3).
+    act(() => { result.current.go(1); });
+    act(() => { result.current.go(1); });
+    act(() => { result.current.go(1); });
+    await waitFor(() => expect(result.current.range).toEqual({ start: 60, end: 80 }));
+    // Repeatedly toggle 18 -> 19 -> 18: offset 60 must stay on screen every time and never walk backwards.
+    for (let i = 0; i < 6; i += 1) {
+      rerender({ size: 19 });
+      await waitFor(() => expect(result.current.range).not.toBeNull());
+      expect(result.current.range!.start).toBeLessThanOrEqual(60);
+      expect(result.current.range!.end).toBeGreaterThan(60);
+      rerender({ size: 18 });
+      await waitFor(() => expect(result.current.range).toEqual({ start: 60, end: 80 }));
+    }
+    bodyEl.remove();
+  });
 });
 
 describe("subtitle fetch and duplicate-cue key regressions", () => {
