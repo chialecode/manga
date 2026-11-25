@@ -336,6 +336,8 @@ describe.skipIf(mediaPrerequisitesAbsent)("exporting a rough cut without re-enco
     const b = await importCopy(ctx, "b.mp4");
     const { cutId } = await sequence(ctx, [{ resourceId: a.resourceId, inMs: 0, outMs: 1000 }, { resourceId: b.resourceId, inMs: 0, outMs: 1000 }]);
     const made = await ctx.app.roughcuts.plan(cutId);
+    // Let background import-extras finish probing/reading `b.file` before removing it on Windows (avoids EPERM).
+    await ctx.app.media.jobs.idle();
     fs.rmSync(b.file);
     const out = tmp();
     const started = startInto(ctx, made, out);
@@ -549,6 +551,8 @@ describe.skipIf(mediaPrerequisitesAbsent)("rough cuts by tracks, files and folde
     const b = await importCopy(ctx, "b.mp4");
     const { cutId } = await sequence(ctx, [{ resourceId: a.resourceId, inMs: 0, outMs: 1000 }, { resourceId: b.resourceId, inMs: 0, outMs: 1000 }]);
     const made = await ctx.app.roughcuts.plan(cutId, { mode: "separate" });
+    // Let background import-extras finish reading `b.file` before removing it on Windows (avoids EPERM).
+    await ctx.app.media.jobs.idle();
     fs.rmSync(b.file);
     const out = tmp();
     const started = startInto(ctx, made, out, "分段");

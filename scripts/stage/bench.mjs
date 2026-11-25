@@ -500,7 +500,7 @@ const metrics = {
   lightSecondOpenMs: light.secondOpenMs.length ? p95(light.secondOpenMs) : Number.POSITIVE_INFINITY,
   ...creativeMetrics,
 };
-const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && (dictationWindowRun ? dictationWindowRun.ok === true : true) && (readAloudRun ? readAloudRun.ok === true : true) && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
+const passed = scaleWindow.ok === true && scanPane.ok === true && canvas.ok === true && reader.danmaku?.ok === true && reader.memory?.ok === true && workspace.window?.ok === true && workspace.memory?.ok === true && light.ok === true && (dictationWindowRun ? dictationWindowRun.ok === true : true) && (readAloudRun ? readAloudRun.ok === true : true) && (creative.dictationCorrection ? creative.dictationCorrection.detail?.ok === true : true) && Object.entries(requiredBenchTargets).every(([metric, limit]) => Number.isFinite(metrics[metric]) && metrics[metric] <= limit);
 fs.writeFileSync(path.join(evidence, "bench.json"), `${JSON.stringify({
   status: passed ? "passed" : "failed",
   stage,

@@ -196,13 +196,13 @@ describe("light open's boundaries (AT-167, AT-168, AT-170, 4.3, 4.6)", () => {
     const s1 = await service.open(ep1);
     const created1 = await service.call("video.playCopy", { resourceId: s1.sessionId, action: "create", reason: "playback_failed" }) as { copy: { id: string } };
     const waitCopy = async (svc: LightMediaService, sessionId: string) => {
-      for (let i = 0; i < 300; i += 1) {
-        const status = await svc.call("video.playCopy", { resourceId: sessionId, action: "status" }) as { copies: Array<{ state: string; bytes: number | null }> };
-        if (status.copies[0]?.state === "ready") return status.copies[0];
-        if (status.copies[0]?.state === "failed") throw new Error("play copy failed");
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      throw new Error("play copy timed out");
+      await svc.jobs.idle();
+      const status = await svc.call("video.playCopy", { resourceId: sessionId, action: "status" }) as {
+        copies: Array<{ state: string; bytes: number | null; error?: { code: string; message: string } | null }>;
+      };
+      const copy = status.copies[0];
+      if (copy?.state === "ready") return copy;
+      throw new Error(`play copy ended in state ${copy?.state ?? "missing"}: ${JSON.stringify(copy?.error ?? null)}`);
     };
     const ready1 = await waitCopy(service, s1.sessionId);
     expect(ready1.bytes ?? 0).toBeGreaterThan(0);

@@ -123,9 +123,14 @@ export type LocalAlignmentMatch = {
 };
 
 // Pre-allocated scratch buffers to avoid GC pressure during 10,000-term scans.
+const TONE_MISMATCH_COST_X10 = Math.round(TONE_MISMATCH_COST * 10);
+const FUZZY_PHONEME_COST_X10 = Math.round(FUZZY_PHONEME_COST * 10);
+const UNIT_COST_X10 = 10;
+const INF_DIST_X10 = 0x3fffffff;
+
 let bufCap = 256;
-let prevDist = new Float64Array(bufCap);
-let currDist = new Float64Array(bufCap);
+let prevDist = new Int32Array(bufCap);
+let currDist = new Int32Array(bufCap);
 let prevStart = new Int32Array(bufCap);
 let currStart = new Int32Array(bufCap);
 
@@ -144,8 +149,8 @@ function ensureBuffers(required: number): void {
   while (bufCap < required) {
     bufCap *= 2;
   }
-  prevDist = new Float64Array(bufCap);
-  currDist = new Float64Array(bufCap);
+  prevDist = new Int32Array(bufCap);
+  currDist = new Int32Array(bufCap);
   prevStart = new Int32Array(bufCap);
   currStart = new Int32Array(bufCap);
 }
@@ -277,8 +282,7 @@ export function fuzzySubstringSearchEncoded(
   if (n === 0 || m <= 0) return [];
 
   ensureBuffers(m + 1);
-  const maxAllowedDist = n * (1.0 - minThreshold);
-  const limit = maxAllowedDist + 1e-6;
+  const limit10 = Math.floor((n * (1.0 - minThreshold) + 1e-6) * UNIT_COST_X10);
 
   const inFlags = input.flags;
   const inExact = input.exactIds;
@@ -287,57 +291,106 @@ export function fuzzySubstringSearchEncoded(
   const hwCanon = hw.canonIds;
 
   // Row 0: allow starting with cost 0 ONLY at valid word-start boundaries in `input`.
+  let activeLo = m + 1;
+  let activeHi = -1;
   for (let j = 0; j < m; j += 1) {
     if ((inFlags[winStart + j]! & 1) !== 0) {
-      prevDist[j] = 0.0;
+      prevDist[j] = 0;
       prevStart[j] = j;
+      if (j < activeLo) activeLo = j;
+      activeHi = j;
     } else {
-      prevDist[j] = Number.POSITIVE_INFINITY;
+      prevDist[j] = INF_DIST_X10;
       prevStart[j] = -1;
     }
   }
-  prevDist[m] = Number.POSITIVE_INFINITY;
+  prevDist[m] = INF_DIST_X10;
   prevStart[m] = -1;
+  if (activeHi < activeLo) return [];
 
   for (let i = 1; i <= n; i += 1) {
     const he = hwExact[i - 1]!;
     const hc = hwCanon[i - 1]!;
-    currDist[0] = prevDist[0]! + 1.0;
-    currStart[0] = prevStart[0]!;
-    let rowMin = currDist[0]!;
 
-    for (let j = 1; j <= m; j += 1) {
+    let newLo = m + 1;
+    let newHi = -1;
+
+    let jStart: number;
+    if (activeLo === 0) {
+      const d0 = prevDist[0]! + UNIT_COST_X10;
+      currDist[0] = d0;
+      currStart[0] = prevStart[0]!;
+      if (d0 <= limit10) {
+        newLo = 0;
+        newHi = 0;
+      }
+      jStart = 1;
+    } else {
+      prevDist[activeLo - 1] = INF_DIST_X10;
+      currDist[activeLo - 1] = INF_DIST_X10;
+      jStart = activeLo;
+    }
+
+    const jBandEnd = activeHi < m ? activeHi + 1 : m;
+    if (activeHi < m) {
+      prevDist[activeHi + 1] = INF_DIST_X10;
+    }
+
+    for (let j = jStart; j <= jBandEnd; j += 1) {
       const idx = winStart + j - 1;
-      let cost = 1.0;
+      let cost = UNIT_COST_X10;
       if (he === inExact[idx]) {
-        cost = 0.0;
+        cost = 0;
       } else if (hc !== 0 && hc === inCanon[idx]) {
-        cost = hc < 0 ? TONE_MISMATCH_COST : FUZZY_PHONEME_COST;
+        cost = hc < 0 ? TONE_MISMATCH_COST_X10 : FUZZY_PHONEME_COST_X10;
       }
 
       const dMatch = prevDist[j - 1]! + cost;
-      const dDel = prevDist[j]! + 1.0;
-      const dIns = currDist[j - 1]! + 1.0;
+      const dDel = prevDist[j]! + UNIT_COST_X10;
+      const dIns = currDist[j - 1]! + UNIT_COST_X10;
 
+      let best: number;
       if (dMatch <= dDel) {
         if (dMatch <= dIns) {
-          currDist[j] = dMatch;
+          best = dMatch;
           currStart[j] = prevStart[j - 1]!;
         } else {
-          currDist[j] = dIns;
+          best = dIns;
           currStart[j] = currStart[j - 1]!;
         }
       } else if (dDel <= dIns) {
-        currDist[j] = dDel;
+        best = dDel;
         currStart[j] = prevStart[j]!;
       } else {
-        currDist[j] = dIns;
+        best = dIns;
         currStart[j] = currStart[j - 1]!;
       }
+      currDist[j] = best;
 
-      const v = currDist[j]!;
-      if (v < rowMin) rowMin = v;
+      if (best <= limit10) {
+        if (j < newLo) newLo = j;
+        newHi = j;
+      }
     }
+
+    // Beyond `activeHi + 1`, only horizontal insertions from `currDist[j - 1]` can remain <= limit10.
+    let jTail = jBandEnd + 1;
+    while (jTail <= m) {
+      const dIns = currDist[jTail - 1]! + UNIT_COST_X10;
+      if (dIns > limit10) break;
+      currDist[jTail] = dIns;
+      currStart[jTail] = currStart[jTail - 1]!;
+      if (jTail < newLo) newLo = jTail;
+      newHi = jTail;
+      jTail += 1;
+    }
+
+    if (newHi < newLo) {
+      return [];
+    }
+
+    activeLo = newLo;
+    activeHi = newHi;
 
     // Swap rolling rows
     const tmpD = prevDist;
@@ -346,19 +399,18 @@ export function fuzzySubstringSearchEncoded(
     const tmpS = prevStart;
     prevStart = currStart;
     currStart = tmpS;
-
-    if (rowMin > limit) {
-      return [];
-    }
   }
 
   const raw: LocalAlignmentMatch[] = [];
-  for (let j = 1; j <= m; j += 1) {
+  const scanLo = activeLo > 1 ? activeLo : 1;
+  const invDenom = 1.0 / (n * UNIT_COST_X10);
+  for (let j = scanLo; j <= activeHi; j += 1) {
     if ((inFlags[winStart + j - 1]! & 2) === 0) continue;
-    const dist = prevDist[j]!;
+    const dist10 = prevDist[j]!;
+    if (dist10 > limit10) continue;
     const sIdx = prevStart[j]!;
     if (sIdx < 0 || sIdx >= j) continue;
-    const score = 1.0 - dist / n;
+    const score = 1.0 - dist10 * invDenom;
     if (score + 1e-9 >= minThreshold) {
       raw.push({
         score: Math.max(0, Math.min(1, score)),

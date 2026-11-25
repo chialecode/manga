@@ -81,12 +81,47 @@ function build10kDictionary(targetCount) {
   return entries;
 }
 
+/**
+ * The dictionary of the unit test "corrects a sentence against 10,000 dictionary terms" (tests/voice/phonetic-correct.test.ts): 1,000 names of
+ * six characters, each in ten works, so many terms sound alike and every one is a candidate. It is far heavier than the distinct names above,
+ * and its timing is measured here, in a quiet process, rather than among the parallel test files (#33).
+ */
+function buildOverlapDictionary(targetCount) {
+  const surnames = ["星野", "神代", "雾岛", "苍井", "白石", "黑泽", "风间", "月城", "朝比奈", "七海"];
+  const givens = ["千夏", "凛音", "苍真", "遥香", "奏太", "美琴", "雪乃", "结衣", "阳菜", "莲华"];
+  const suffixes = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  const entries = [];
+  for (let round = 0; entries.length < targetCount; round += 1) {
+    for (const s of surnames) for (const g of givens) for (const suf of suffixes) {
+      if (entries.length >= targetCount) break;
+      entries.push({
+        id: `term_${entries.length + 1}`,
+        scope: "work",
+        workId: round === 0 ? "work_astral" : `work_${round}`,
+        workTitle: "星穹航路",
+        term: `${s}${g}${suf}号`,
+        category: "character",
+        source: `metadata:bangumi:character:${entries.length + 1}`,
+        disabled: false,
+        aliases: [],
+        blocked: [],
+      });
+    }
+  }
+  return entries;
+}
+
+/** Corrects `runs` times against each dictionary shape (distinct names and names that sound alike); returns the slower shape's samples so the reported p95 bounds both. */
 export function runDictationCorrectionBench({ terms = 10_000, runs = 50 } = {}) {
   const entries = build10kDictionary(terms);
   const buildStart = performance.now();
   const corrector = new PhoneticCorrector();
   corrector.setTerms(entries);
   const buildMs = Math.round((performance.now() - buildStart) * 100) / 100;
+  const overlapEntries = buildOverlapDictionary(terms);
+  const overlap = new PhoneticCorrector();
+  overlap.setTerms(overlapEntries);
+  const overlapSentence = "今天在活动室里，心野千夏三号和神代林音七号一起讨论了明天的排练计划。";
 
   const sentences = [
     "今天在白鹿学员旧图书馆里讨论星野灵与仓崎青子的分镜脚本节奏",
@@ -97,26 +132,40 @@ export function runDictationCorrectionBench({ terms = 10_000, runs = 50 } = {}) 
   // Warm up JIT before timed runs.
   for (let w = 0; w < 3; w += 1) {
     corrector.correct(sentences[w % sentences.length], { currentWorkId: "work-bench" });
+    overlap.correct(overlapSentence, { currentWorkId: "work_astral" });
   }
 
   const samples = [];
+  const overlapSamples = [];
   let replacementsTotal = 0;
+  let overlapReplacements = 0;
   for (let i = 0; i < runs; i += 1) {
     const text = sentences[i % sentences.length];
-    const t0 = performance.now();
+    let t0 = performance.now();
     const out = corrector.correct(text, { currentWorkId: "work-bench" });
-    const elapsed = Math.round((performance.now() - t0) * 100) / 100;
-    samples.push(elapsed);
+    samples.push(Math.round((performance.now() - t0) * 100) / 100);
     replacementsTotal += out.replacements.length;
+    t0 = performance.now();
+    const heard = overlap.correct(overlapSentence, { currentWorkId: "work_astral" });
+    overlapSamples.push(Math.round((performance.now() - t0) * 100) / 100);
+    if (heard.correctedText.includes("星野千夏三号") && heard.correctedText.includes("神代凛音七号")) overlapReplacements += 1;
   }
 
+  const distinctP95 = p95(samples);
+  const overlapP95 = p95(overlapSamples);
+  const governingSamples = overlapP95 >= distinctP95 ? overlapSamples : samples;
+
   return {
-    terms: entries.length,
-    samples,
+    terms: Math.min(entries.length, overlapEntries.length),
+    samples: governingSamples,
     detail: {
-      ok: replacementsTotal >= runs * 2,
+      ok: replacementsTotal >= runs * 2 && overlapReplacements === runs,
       buildMs,
       replacementsTotal,
+      dictionaries: {
+        distinct: { terms: entries.length, runs, p95Ms: distinctP95 },
+        overlap: { terms: overlapEntries.length, runs, p95Ms: overlapP95, corrected: overlapReplacements },
+      },
     },
   };
 }

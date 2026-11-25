@@ -319,15 +319,13 @@ describe.skipIf(mediaPrerequisitesAbsent)("play copies", () => {
       const item = await importVideo(ctx, "video-ac3");
       const started = ok<{ copy: { id: string; state: string; reason: string } }>(await run(ctx, "video.playCopy", { resourceId: item.resourceId, revisionId: item.revisionId, action: "create" }));
       expect(started.copy.reason).toBe("unsupported_audio");
-      const copy = await waitFor("the copy to be ready", () => {
-        const row = ctx.app.store.sqlite.prepare("SELECT state, bytes, timestamp_check_json AS check_json, error_json FROM play_copies WHERE id = ?").get(started.copy.id) as { state: string; bytes: number | null; check_json: string | null; error_json: string | null } | undefined;
-        if (row?.state === "failed") throw new Error(`copy failed: ${row.error_json}`);
-        return row?.state === "ready" ? row : undefined;
-      });
-      const check = JSON.parse(copy.check_json!) as { ok: boolean; originalFrames: number; copyFrames: number; maxDriftMs: number };
+      await ctx.app.media.jobs.idle();
+      const copy = ctx.app.store.sqlite.prepare("SELECT state, bytes, timestamp_check_json AS check_json, error_json FROM play_copies WHERE id = ?").get(started.copy.id) as { state: string; bytes: number | null; check_json: string | null; error_json: string | null } | undefined;
+      expect(copy?.state, JSON.stringify(copy)).toBe("ready");
+      const check = JSON.parse(copy!.check_json!) as { ok: boolean; originalFrames: number; copyFrames: number; maxDriftMs: number };
       expect(check).toMatchObject({ ok: true, originalFrames: 240 });
       expect(check.copyFrames).toBe(check.originalFrames);
-      expect(copy.bytes).toBeGreaterThan(1000);
+      expect(copy!.bytes).toBeGreaterThan(1000);
       const status = ok<{ copies: Array<{ id: string; state: string }> }>(await run(ctx, "video.playCopy", { resourceId: item.resourceId, revisionId: item.revisionId, action: "status" }));
       expect(status.copies).toMatchObject([{ id: started.copy.id, state: "ready" }]);
       const handle = ok<{ url: string; mediaType: string; startMs: number }>(await run(ctx, "video.handle", { resourceId: item.resourceId, revisionId: item.revisionId, source: "play_copy" }));
@@ -349,13 +347,11 @@ describe.skipIf(mediaPrerequisitesAbsent)("play copies", () => {
       const item = await importVideo(ctx, "video-mkv-hevc-10bit");
       const started = ok<{ copy: { id: string; reason: string } }>(await run(ctx, "video.playCopy", { resourceId: item.resourceId, revisionId: item.revisionId, action: "create" }));
       expect(started.copy.reason).toBe("no_hardware_hevc");
-      const row = await waitFor("the encode to finish", () => {
-        const found = ctx.app.store.sqlite.prepare("SELECT state, encoder, bytes, timestamp_check_json AS check_json, error_json FROM play_copies WHERE id = ?").get(started.copy.id) as { state: string; encoder: string; bytes: number | null; check_json: string | null; error_json: string | null } | undefined;
-        if (found?.state === "failed") throw new Error(`copy failed: ${found.error_json}`);
-        return found?.state === "ready" ? found : undefined;
-      }, 100_000);
-      expect(["h264_nvenc", "h264_amf", "h264_qsv", "libsvtav1"]).toContain(row.encoder);
-      expect(JSON.parse(row.check_json!)).toMatchObject({ ok: true, originalFrames: 240, copyFrames: 240 });
+      await ctx.app.media.jobs.idle();
+      const row = ctx.app.store.sqlite.prepare("SELECT state, encoder, bytes, timestamp_check_json AS check_json, error_json FROM play_copies WHERE id = ?").get(started.copy.id) as { state: string; encoder: string; bytes: number | null; check_json: string | null; error_json: string | null } | undefined;
+      expect(row?.state, JSON.stringify(row)).toBe("ready");
+      expect(["h264_nvenc", "h264_amf", "h264_qsv", "libsvtav1"]).toContain(row!.encoder);
+      expect(JSON.parse(row!.check_json!)).toMatchObject({ ok: true, originalFrames: 240, copyFrames: 240 });
       const copyFile = path.join(ctx.app.media.dir("play-copies"), fs.readdirSync(ctx.app.media.dir("play-copies"))[0]!);
       const probe = await ctx.app.media.ffmpeg.probe(copyFile);
       expect(probe.container).toBe("mov");
@@ -370,12 +366,10 @@ describe.skipIf(mediaPrerequisitesAbsent)("play copies", () => {
       const item = await importVideo(ctx, "video-nonzero-start");
       // The file plays directly; the owner forces a copy anyway (the troubleshooting switch).
       const started = ok<{ copy: { id: string } }>(await run(ctx, "video.playCopy", { resourceId: item.resourceId, revisionId: item.revisionId, action: "create", reason: "unsupported_video" }));
-      const row = await waitFor("the copy to finish", () => {
-        const found = ctx.app.store.sqlite.prepare("SELECT state, timestamp_check_json AS check_json, error_json FROM play_copies WHERE id = ?").get(started.copy.id) as { state: string; check_json: string | null; error_json: string | null } | undefined;
-        if (found?.state === "failed") throw new Error(`copy failed: ${found.error_json}`);
-        return found?.state === "ready" ? found : undefined;
-      });
-      expect(JSON.parse(row.check_json!)).toMatchObject({ ok: true });
+      await ctx.app.media.jobs.idle();
+      const row = ctx.app.store.sqlite.prepare("SELECT state, timestamp_check_json AS check_json, error_json FROM play_copies WHERE id = ?").get(started.copy.id) as { state: string; check_json: string | null; error_json: string | null } | undefined;
+      expect(row?.state, JSON.stringify(row)).toBe("ready");
+      expect(JSON.parse(row!.check_json!)).toMatchObject({ ok: true });
       const copyFile = path.join(ctx.app.media.dir("play-copies"), fs.readdirSync(ctx.app.media.dir("play-copies"))[0]!);
       const probe = await ctx.app.media.ffmpeg.probe(copyFile);
       expect(probe.startMs).toBeLessThan(50);
