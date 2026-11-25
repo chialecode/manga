@@ -264,6 +264,8 @@ export async function openRecords(view: BrowserWindow, type: "note" | "conversat
  * section. Library tabs already open are closed first so the page holds one shelf, and readers too (see `closeTabs`).
  */
 export async function openShelf(view: BrowserWindow, kind: ShelfKind, timeoutMs = 8000, closing: readonly string[] = ["library", "reader"]): Promise<boolean> {
+  // Only the view on screen renders `data-testid="tab"`; switching to "home" exposes every context tab before closing.
+  if (closing.length > 0 && !(await railTo(view, "home", timeoutMs))) return false;
   await closeTabs(view, closing);
   if (!(await viaSidebar(view, "home", "sidebar-entry-library", timeoutMs))) return false;
   if (!(await waitDrawn(view, "page-library", timeoutMs))) return false;
