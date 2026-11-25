@@ -334,22 +334,31 @@ export function applyLocations(app: SettingsHost, envelope: CommandEnvelope) {
   }
   // Mark the job running and register `data` ownership rows BEFORE checkpointing so zero SQLite writes occur while `data` (containing manga.sqlite) is copied and verified.
   app.store.sqlite.prepare("UPDATE recovery_jobs SET status = 'running', stage = 'copy', updated_at = ? WHERE id = ?").run(new Date().toISOString(), input.checkpointId);
+  const insertOwned = app.store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)");
+  const commitOwned = app.store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?");
+  const markBatchCopying = app.store.sqlite.transaction((partition: string, items: Array<{ relative: string; target: string }>) => {
+    for (const item of items) insertOwned.run(input.checkpointId, partition, item.relative, item.target, "copying", null);
+  });
+  const markBatchCommitted = app.store.sqlite.transaction((partition: string, items: Array<{ relative: string; hash: string }>) => {
+    for (const item of items) commitOwned.run(item.hash, input.checkpointId, partition, item.relative);
+  });
   const dataCopy = payload.copies.find((copy) => !copy.indexedOnly && copy.partition === "data");
   const dataFiles = dataCopy ? listCopyFiles(dataCopy.source) : [];
-  if (dataCopy) {
-    for (const file of dataFiles) {
-      const relative = file.relativePath.replace(/^\.\//, "");
-      const targetFile = path.join(dataCopy.target, relative);
-      app.store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)").run(
-        input.checkpointId, dataCopy.partition, relative, targetFile, "copying", null,
-      );
-    }
+  if (dataCopy && dataFiles.length) {
+    markBatchCopying(
+      dataCopy.partition,
+      dataFiles.map((file) => {
+        const relative = file.relativePath.replace(/^\.\//, "");
+        return { relative, target: path.join(dataCopy.target, relative) };
+      }),
+    );
   }
   const checkpoint = app.store.sqlite.pragma("wal_checkpoint(TRUNCATE)") as Array<{ busy: number; log: number; checkpointed: number }>;
   if (checkpoint[0]?.busy || (checkpoint[0] && checkpoint[0].log !== checkpoint[0].checkpointed)) {
     app.store.sqlite.prepare("UPDATE recovery_jobs SET status = 'planned', stage = 'planned', updated_at = ? WHERE id = ?").run(new Date().toISOString(), input.checkpointId);
     throw new MangaError("LOCATION_UNAVAILABLE", "database is busy; retry the migration", { retryable: true });
   }
+  const OWNERSHIP_BATCH_SIZE = 256;
   const verified: Array<{ partition: string; bytes: number; fingerprint: string }> = [];
   try {
     for (const copy of payload.copies) {
@@ -367,23 +376,23 @@ export function applyLocations(app: SettingsHost, envelope: CommandEnvelope) {
         const expected = fingerprintTree(copy.source);
         const actual = fingerprintTree(dest);
         if (actual.hash !== expected.hash) throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} does not match its source`, { details: { partition: copy.partition } });
-        for (const item of committed) {
-          app.store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?").run(item.hash, input.checkpointId, copy.partition, item.relative);
-        }
+        if (committed.length) markBatchCommitted(copy.partition, committed);
         verified.push({ partition: copy.partition, bytes: actual.bytes, fingerprint: actual.hash });
         app.store.maybeCrash("location-copy");
         continue;
       }
       const files = listCopyFiles(copy.source);
-      for (const file of files) {
-        const relative = file.relativePath.replace(/^\.\//, "");
-        const targetFile = path.join(dest, relative);
-        app.store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)").run(
-          input.checkpointId, copy.partition, relative, targetFile, "planned", null,
-        );
-        app.store.sqlite.prepare("UPDATE migration_owned_files SET state = 'copying' WHERE job_id = ? AND partition = ? AND relative_path = ?").run(input.checkpointId, copy.partition, relative);
-        const hash = copyOwnedFile(file.absolutePath, targetFile);
-        app.store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?").run(hash, input.checkpointId, copy.partition, relative);
+      // Batch ownership writes in transactions so relocating thousands of attachments does not run 3 auto-commit WAL fsyncs per file,
+      // while still persisting `copying` ownership BEFORE any target file is written and `committed` + fingerprint immediately after each batch.
+      for (let start = 0; start < files.length; start += OWNERSHIP_BATCH_SIZE) {
+        const batch = files.slice(start, start + OWNERSHIP_BATCH_SIZE).map((file) => {
+          const relative = file.relativePath.replace(/^\.\//, "");
+          return { source: file.absolutePath, relative, target: path.join(dest, relative) };
+        });
+        markBatchCopying(copy.partition, batch);
+        const committed: Array<{ relative: string; hash: string }> = [];
+        for (const item of batch) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
+        markBatchCommitted(copy.partition, committed);
       }
       const expected = fingerprintTree(copy.source);
       const actual = fingerprintTree(dest);

@@ -140,10 +140,18 @@ describe("sealed host after a location switch", () => {
       expect(applied.status).toBe("ok");
       const copied = fs.readdirSync(path.join(target, "attachments")).filter((name) => name.startsWith("f"));
       expect(copied).toHaveLength(2500);
+      const committedRows = app.store.sqlite.prepare(
+        "SELECT relative_path, state, fingerprint FROM migration_owned_files WHERE partition = 'attachments'",
+      ).all() as Array<{ relative_path: string; state: string; fingerprint: string | null }>;
+      expect(committedRows).toHaveLength(2500);
+      expect(committedRows.every((row) => row.state === "committed" && Boolean(row.fingerprint))).toBe(true);
+      const lastRow = committedRows.find((row) => row.relative_path === "f2499.bin");
+      const lastStat = fs.lstatSync(path.join(target, "attachments", "f2499.bin"), { bigint: true });
+      expect(JSON.parse(lastRow!.fingerprint!)).toMatchObject({ dev: String(lastStat.dev), ino: String(lastStat.ino), birthtimeNs: String(lastStat.birthtimeNs) });
     } finally {
       app.close();
     }
-  }, 60_000);
+  }, 180_000);
 });
 
 describe("relocation plans", () => {

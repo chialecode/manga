@@ -5,6 +5,7 @@ import { MangaError } from "@manga/contracts";
 import { sha256File } from "../shared/utils.ts";
 
 const HASH_CHUNK_BYTES = 1024 * 1024;
+const COPY_BUFFER = Buffer.allocUnsafe(HASH_CHUNK_BYTES);
 
 export function comparablePath(file: string): string {
   const resolved = path.resolve(file);
@@ -53,10 +54,32 @@ export function listCopyFiles(source: string): Array<{ relativePath: string; abs
 
 export function copyOwnedFile(sourceFile: string, targetFile: string): string {
   fs.mkdirSync(path.dirname(targetFile), { recursive: true });
-  fs.copyFileSync(sourceFile, targetFile, fs.constants.COPYFILE_EXCL);
-  const fd = fs.openSync(targetFile, "r+");
-  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  return ownedFileFingerprint(targetFile);
+  const hash = createHash("sha256");
+  const readFd = fs.openSync(sourceFile, "r");
+  let writeFd = -1;
+  try {
+    writeFd = fs.openSync(targetFile, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
+    for (;;) {
+      const read = fs.readSync(readFd, COPY_BUFFER, 0, COPY_BUFFER.length, null);
+      if (read === 0) break;
+      hash.update(COPY_BUFFER.subarray(0, read));
+      let offset = 0;
+      while (offset < read) offset += fs.writeSync(writeFd, COPY_BUFFER, offset, read - offset);
+    }
+    fs.fsyncSync(writeFd);
+    const stat = fs.fstatSync(writeFd, { bigint: true });
+    return JSON.stringify({ dev: String(stat.dev), ino: String(stat.ino), birthtimeNs: String(stat.birthtimeNs), hash: hash.digest("hex") });
+  } catch (error) {
+    if (writeFd >= 0) {
+      try { fs.closeSync(writeFd); } catch { /* ignore */ }
+      writeFd = -1;
+      try { fs.unlinkSync(targetFile); } catch { /* ignore */ }
+    }
+    throw error;
+  } finally {
+    if (writeFd >= 0) fs.closeSync(writeFd);
+    fs.closeSync(readFd);
+  }
 }
 
 export function fingerprintTree(dir: string): { bytes: number; hash: string } {

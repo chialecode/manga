@@ -109,19 +109,31 @@ export function resumeLocationCopy(
   }
   try {
     store.sqlite.prepare("UPDATE recovery_jobs SET status = 'running', stage = 'copy', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
+    const selectOwnedPartition = store.sqlite.prepare("SELECT relative_path, state, fingerprint, absolute_path AS path FROM migration_owned_files WHERE job_id = ? AND partition = ?");
+    const insertOwned = store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)");
+    const commitOwned = store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?");
+    const markBatchCopying = store.sqlite.transaction((partition: string, items: Array<{ relative: string; target: string }>) => {
+      for (const item of items) insertOwned.run(job.id, partition, item.relative, item.target, "copying", null);
+    });
+    const markBatchCommitted = store.sqlite.transaction((partition: string, items: Array<{ relative: string; hash: string }>) => {
+      for (const item of items) commitOwned.run(item.hash, job.id, partition, item.relative);
+    });
+    const OWNERSHIP_BATCH_SIZE = 256;
     const verified: Array<{ partition: string; bytes: number; fingerprint: string }> = [];
     for (const copy of payload.copies) {
       if (copy.indexedOnly) continue;
       const dest = copy.target;
       fs.mkdirSync(dest, { recursive: true });
       const files = listCopyFiles(copy.source);
+      const ownedRows = selectOwnedPartition.all(job.id, copy.partition) as Array<{ relative_path: string; state: string; fingerprint: string | null; path: string }>;
+      const ownedByRelative = new Map(ownedRows.map((row) => [row.relative_path, row]));
       if (copy.partition === "data") {
         // Record copying ownership before checkpointing so the live SQLite file does not mutate mid-copy.
         const toCopy: Array<{ source: string; target: string; relative: string }> = [];
         for (const file of files) {
           const relative = file.relativePath.replace(/^\.\//, "");
           const targetFile = path.join(dest, relative);
-          const owned = store.sqlite.prepare("SELECT state, fingerprint, absolute_path AS path FROM migration_owned_files WHERE job_id = ? AND partition = ? AND relative_path = ?").get(job.id, copy.partition, relative) as { state: string; fingerprint: string | null; path: string } | undefined;
+          const owned = ownedByRelative.get(relative);
           if (owned?.state === "committed" && fs.existsSync(targetFile)) {
             const destHash = ownedFileFingerprint(targetFile);
             if (destHash === owned.fingerprint || destHash === ownedFileFingerprint(file.absolutePath)) continue;
@@ -138,12 +150,12 @@ export function resumeLocationCopy(
             store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
             return { status: "needs-review", needsReview: [job.id], verified };
           }
-          store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)").run(
-            job.id, copy.partition, relative, targetFile, "copying", null,
-          );
           toCopy.push({ source: file.absolutePath, target: targetFile, relative });
         }
-        if (toCopy.length) store.sqlite.pragma("wal_checkpoint(TRUNCATE)");
+        if (toCopy.length) {
+          markBatchCopying(copy.partition, toCopy);
+          store.sqlite.pragma("wal_checkpoint(TRUNCATE)");
+        }
         const committed: Array<{ relative: string; hash: string }> = [];
         for (const item of toCopy) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
         const destTree = fingerprintTree(dest);
@@ -157,16 +169,15 @@ export function resumeLocationCopy(
             throw new MangaError("VALIDATION_ERROR", `copied ${copy.partition} is missing a source file`, { details: { partition: copy.partition, relative } });
           }
         }
-        for (const item of committed) {
-          store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?").run(item.hash, job.id, copy.partition, item.relative);
-        }
+        if (committed.length) markBatchCommitted(copy.partition, committed);
         verified.push({ partition: copy.partition, bytes: destTree.bytes, fingerprint: destTree.hash });
         continue;
       }
+      const toCopy: Array<{ source: string; target: string; relative: string }> = [];
       for (const file of files) {
         const relative = file.relativePath.replace(/^\.\//, "");
         const targetFile = path.join(dest, relative);
-        const owned = store.sqlite.prepare("SELECT state, fingerprint, absolute_path AS path FROM migration_owned_files WHERE job_id = ? AND partition = ? AND relative_path = ?").get(job.id, copy.partition, relative) as { state: string; fingerprint: string | null; path: string } | undefined;
+        const owned = ownedByRelative.get(relative);
         if (owned?.state === "committed" && fs.existsSync(targetFile)) {
           const destHash = ownedFileFingerprint(targetFile);
           if (destHash === owned.fingerprint || destHash === ownedFileFingerprint(file.absolutePath)) continue;
@@ -182,12 +193,14 @@ export function resumeLocationCopy(
           store.sqlite.prepare("UPDATE recovery_jobs SET status = 'needs-review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), job.id);
           return { status: "needs-review", needsReview: [job.id], verified };
         }
-        store.sqlite.prepare("INSERT OR REPLACE INTO migration_owned_files(job_id, partition, relative_path, absolute_path, state, fingerprint) VALUES (?,?,?,?,?,?)").run(
-          job.id, copy.partition, relative, targetFile, "planned", null,
-        );
-        store.sqlite.prepare("UPDATE migration_owned_files SET state = 'copying' WHERE job_id = ? AND partition = ? AND relative_path = ?").run(job.id, copy.partition, relative);
-        const hash = copyOwnedFile(file.absolutePath, targetFile);
-        store.sqlite.prepare("UPDATE migration_owned_files SET state = 'committed', fingerprint = ? WHERE job_id = ? AND partition = ? AND relative_path = ?").run(hash, job.id, copy.partition, relative);
+        toCopy.push({ source: file.absolutePath, target: targetFile, relative });
+      }
+      for (let start = 0; start < toCopy.length; start += OWNERSHIP_BATCH_SIZE) {
+        const batch = toCopy.slice(start, start + OWNERSHIP_BATCH_SIZE);
+        markBatchCopying(copy.partition, batch);
+        const committed: Array<{ relative: string; hash: string }> = [];
+        for (const item of batch) committed.push({ relative: item.relative, hash: copyOwnedFile(item.source, item.target) });
+        markBatchCommitted(copy.partition, committed);
       }
       const destTree = fingerprintTree(dest);
       for (const file of files) {
