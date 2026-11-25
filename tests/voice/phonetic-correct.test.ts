@@ -225,7 +225,7 @@ describe("voice phonetic recall & deterministic replacement (R1)", () => {
     expect(phoneticSimilarity("完全无关的句子", "星穹航路")).toBeLessThan(0.6);
   });
 
-  it("corrects a sentence against 10,000 dictionary terms with p95 <= 30 ms", () => {
+  it("corrects a sentence against 10,000 dictionary terms, the same way every time", () => {
     const corrector = new PhoneticCorrector();
     const surnames = ["星野", "神代", "雾岛", "苍井", "白石", "黑泽", "风间", "月城", "朝比奈", "七海"];
     const givens = ["千夏", "凛音", "苍真", "遥香", "奏太", "美琴", "雪乃", "结衣", "阳菜", "莲华"];
@@ -257,14 +257,10 @@ describe("voice phonetic recall & deterministic replacement (R1)", () => {
     expect(warm.correctedText).toContain("星野千夏三号");
     expect(warm.correctedText).toContain("神代凛音七号");
 
-    const samplesMs: number[] = [];
     for (let iter = 0; iter < 25; iter += 1) {
-      const t0 = performance.now();
-      corrector.correct(sample, { currentWorkId: "work_astral" });
-      samplesMs.push(performance.now() - t0);
+      expect(corrector.correct(sample, { currentWorkId: "work_astral" }).correctedText).toBe(warm.correctedText);
     }
-    samplesMs.sort((a, b) => a - b);
-    const p95 = samplesMs[Math.floor(samplesMs.length * 0.95)]!;
-    expect(p95).toBeLessThanOrEqual(30);
+    // How long this takes is measured where nothing else runs, not among the parallel test files (#33): `stage bench` `dictationCorrection`
+    // corrects against the same 10,000 terms 50 times and holds the p95 to 30 ms (gate.json `bench.creative`, AT-181, AT-183).
   });
 });
