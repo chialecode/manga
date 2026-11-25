@@ -56,7 +56,7 @@ PR 只要碰到下列任一项就是高风险，加 `risk:high`，Agent 不自�
 <a id="dev-install-at-handoff"></a>
 ### 2.2 开发版自动安装
 
-每次合并进 `main` 后（本机拉取 `main` 后），以及请用户做人工检查前，Agent 在本机执行：
+每次合并进 `main` 后（本机拉取 `main` 后），以及请用户做人工检查前，Agent 在本机执行（窗口开着时 `install-dev` 最多等 10 分钟，加上打包可能超过单条命令的时限，放到后台运行，等它写出 `install-dev.json`）：
 
 ```powershell
 node scripts/stage.mjs package

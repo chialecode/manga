@@ -880,13 +880,21 @@ function removeTestOpenWithRegistry(channel) {
   runPowershell(script, { ...process.env, MANGA_OPEN_WITH_CLEANUP: JSON.stringify(payload) });
 }
 
+/**
+ * Whether an uninstall entry may be removed as the test identity's: its own key (A-139), or the GUID key an older installer gave it (a leftover
+ * of an earlier run). Anything else is refused, and the key is put into a registry path only after this check.
+ */
+export function isTestUninstallKey(key, meta) {
+  return key === meta.uninstallKey || /^\{?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\}?$/i.test(key);
+}
+
 /** Remove only the two explicitly reserved test identities, including leftovers of interrupted checks. */
 export async function removeTestInstallations(channels = ["release", "development"]) {
   if (process.platform !== "win32") return;
   for (const channel of channels) {
     const meta = TEST_CHANNEL_INSTALL[channel];
-    const entry = readRegistryInstallations().find((item) => item.DisplayName === meta.productName);
-    if (entry) {
+    const entries = readRegistryInstallations().filter((item) => item.Key === meta.uninstallKey || item.DisplayName === meta.productName);
+    for (const entry of entries) {
       const uninstaller = entry.UninstallString.replace(/^"([^"]+)".*$/, "$1");
       const location = path.resolve(entry.InstallLocation);
       if (uninstaller && fs.existsSync(uninstaller)) {
@@ -902,7 +910,7 @@ export async function removeTestInstallations(channels = ["release", "developmen
         }
         if (fs.existsSync(path.join(location, `${meta.executableName}.exe`))) throw new Error("test uninstaller did not finish");
       }
-      if (!/^\{?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\}?$/i.test(entry.Key)) throw new Error("invalid test uninstall registry key");
+      if (!isTestUninstallKey(entry.Key, meta)) throw new Error("invalid test uninstall registry key");
       // These checked literal registry paths stay within the named test entry; no filesystem paths are passed to another shell.
       runPowershell(`if (Test-Path -LiteralPath '${UNINSTALL_KEY}\\${entry.Key}') { Remove-Item -LiteralPath '${UNINSTALL_KEY}\\${entry.Key}' -Recurse -Force -ErrorAction Stop }\nif (Test-Path -LiteralPath 'HKCU:\\Software\\${entry.Key}') { Remove-Item -LiteralPath 'HKCU:\\Software\\${entry.Key}' -Recurse -Force -ErrorAction Stop }`);
     }

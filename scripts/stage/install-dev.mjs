@@ -200,7 +200,7 @@ export function readRunningInstance(runtimeDir) {
 }
 
 function readUninstallEntries() {
-  return readUninstallRegistryEntries({ timeoutMs: 20_000 });
+  return readUninstallRegistryEntries({ throwOnError: true, timeoutMs: 20_000 });
 }
 
 /** The packaged directory the latest `stage package` made (`latest-package.json` `target`), or null. */
@@ -449,15 +449,30 @@ export async function runInstallDev(options = {}) {
 
   // The development channel's own uninstall entry, keyed by the app's identity (A-139); without one (or without its executable) this is the
   // first installation, into the default folder.
-  const entries = options.registryEntries ?? readUninstallEntries();
+  let entries;
+  try {
+    entries = options.registryEntries ?? (options.readUninstallEntriesFn ?? readUninstallEntries)();
+  } catch {
+    return finalize({ status: "failed", reason: "registry_unreadable", error: "could not read the installed apps from the registry; nothing was installed" });
+  }
   const entry = entries.find((item) => item.Key === meta.uninstallKey) ?? null;
   const localAppData = places?.local ?? env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local");
   const defaultInstallDir = path.join(places?.programs ?? path.join(localAppData, "Programs"), meta.dirName);
   const candidateInstallDir = options.installDir || entry?.InstallLocation || defaultInstallDir;
   const installedDevExe = path.join(candidateInstallDir, `${meta.executableName}.exe`);
+  facts.installLocation = receiptLocation(candidateInstallDir, path.dirname(defaultInstallDir), places?.programs ? "<programs>" : "%LOCALAPPDATA%\\Programs");
+  // A development build installed without its identity's entry (an older installer's GUID entry, or a folder without one) is not a first
+  // installation: installing over it would leave two entries in Apps & Features. It is reported; A-139 keeps no compatibility code for it.
+  if (!testIdentity && !entry && (fs.existsSync(installedDevExe) || entries.some((item) => item.DisplayName === meta.productName))) {
+    return finalize({
+      status: "failed",
+      reason: "legacy_install",
+      error: `${meta.productName} is installed without the uninstall entry ${meta.uninstallKey}; nothing was installed`,
+      guidance: `uninstall ${meta.productName} in Settings > Apps (its data is kept), then run \`node scripts/stage.mjs install-dev\` again`,
+    });
+  }
   const isInstalled = fs.existsSync(installedDevExe) && (testIdentity ? Boolean(entry || options.installDir || places?.programs) : Boolean(entry));
   facts.firstInstall = !isInstalled;
-  facts.installLocation = receiptLocation(candidateInstallDir, path.dirname(defaultInstallDir), places?.programs ? "<programs>" : "%LOCALAPPDATA%\\Programs");
 
   const beforeBuild = isInstalled ? readBuildInfoIfPresent(path.join(candidateInstallDir, "resources")) : null;
   const previousVersion = isInstalled ? beforeBuild?.version ?? (entry?.DisplayVersion || null) : null;
@@ -490,23 +505,26 @@ export async function runInstallDev(options = {}) {
   if (isInstalled) {
     const isWindowOpen = options.isWindowOpenFn ?? devWindowOpen;
     const deferStart = Date.now();
-    try {
-      while (isWindowOpen(installedDevExe)) {
-        facts.windowOpen = true;
-        facts.deferred = true;
-        const waited = Date.now() - deferStart;
-        if (waited >= windowWaitMs) {
-          facts.deferMs = waited;
-          return finalize({
-            status: "skipped",
-            reason: "window_open",
-            guidance: `${meta.productName} kept a window open for ${Math.round(windowWaitMs / 1000)} s, so this build was not installed; close the window (or hide it to the tray) and run \`node scripts/stage.mjs install-dev\` again`,
-          });
-        }
-        await sleep(Math.min(windowPollMs, windowWaitMs - waited));
+    for (;;) {
+      let open;
+      try {
+        open = isWindowOpen(installedDevExe);
+      } catch {
+        return finalize({ status: "failed", reason: "window_check_failed", error: `could not check whether ${meta.productName} shows a window; nothing was installed` });
       }
-    } catch {
-      return finalize({ status: "failed", reason: "window_check_failed", error: `could not check whether ${meta.productName} shows a window; nothing was installed` });
+      if (!open) break;
+      facts.windowOpen = true;
+      facts.deferred = true;
+      const waited = Date.now() - deferStart;
+      if (waited >= windowWaitMs) {
+        facts.deferMs = waited;
+        return finalize({
+          status: "skipped",
+          reason: "window_open",
+          guidance: `${meta.productName} kept a window open for ${Math.round(windowWaitMs / 1000)} s, so this build was not installed; close the window (or hide it to the tray) and run \`node scripts/stage.mjs install-dev\` again`,
+        });
+      }
+      await sleep(Math.min(windowPollMs, windowWaitMs - waited));
     }
     if (facts.deferred) facts.deferMs = Date.now() - deferStart;
   }

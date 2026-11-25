@@ -27,6 +27,7 @@ import {
   installerConfig,
   installerInclude,
   inspectIco,
+  isTestUninstallKey,
   OPEN_WITH_TYPES,
   openWithIdentity,
   openWithNsis,
@@ -154,6 +155,11 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
       expect(checkInstallerConfig(channel, { ...config, nsis: { ...config.nsis, guid: undefined } }, include)).toEqual(["uninstall key undefined"]);
       expect(checkInstallerConfig(channel, config, include.replace(UNINSTALL_LOCATION_NSIS, ""))).toEqual(["uninstall entry without InstallLocation"]);
     }
+    // Cleaning up a test install removes the test identity's own entry, or an older run's GUID entry, and nothing else.
+    const testDev = TEST_CHANNEL_INSTALL.development;
+    for (const key of [testDev.uninstallKey, "1ed31a6e-8dd9-52be-8f90-5052ea376f6f", "{1ED31A6E-8DD9-52BE-8F90-5052EA376F6F}"]) expect(isTestUninstallKey(key, testDev)).toBe(true);
+    for (const key of [CHANNEL_INSTALL.development.uninstallKey, CHANNEL_INSTALL.release.uninstallKey, TEST_CHANNEL_INSTALL.release.uninstallKey,
+      `${testDev.uninstallKey}' ; Remove-Item x`, "..", ""]) expect(isTestUninstallKey(key, testDev)).toBe(false);
   });
 
   it("names what is wrong in a configuration that would not do", () => {

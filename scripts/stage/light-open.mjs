@@ -302,8 +302,8 @@ export async function observeLightUpdate({ appPath, samplesRoot, runInstallDev }
     });
     rows.push({
       name: "light-update-refused-not-installed",
-      status: stuck.pid && kept.status === "aborted" && !kept.installed && refusedInstalls === 0 && String(kept.reason).includes("请先关闭轻量播放窗口") && alive(stuck.pid) && !fs.existsSync(path.join(runtime, "quit-request.json")) ? "passed" : "failed",
-      detail: { status: kept.status, installed: kept.installed, reason: kept.reason ?? null, lightStillOpen: stuck.pid ? alive(stuck.pid) : false, waitedMs: Date.now() - started },
+      status: stuck.pid && kept.status === "aborted" && !kept.installed && refusedInstalls === 0 && kept.reason === "light_open" && String(kept.error).includes("请先关闭轻量播放窗口") && alive(stuck.pid) && !fs.existsSync(path.join(runtime, "quit-request.json")) ? "passed" : "failed",
+      detail: { status: kept.status, installed: kept.installed, reason: kept.reason ?? null, error: kept.error ?? null, lightStillOpen: stuck.pid ? alive(stuck.pid) : false, waitedMs: Date.now() - started },
     });
   } catch (error) {
     rows.push({ name: "light-update-error", status: "failed", detail: error instanceof Error ? error.message : String(error) });

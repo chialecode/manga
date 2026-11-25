@@ -365,6 +365,43 @@ describe("Development installer recovery review (AT-158)", () => {
     expect(broken.counts()).toEqual({ installerCalls: 0, relaunchCalls: 0 });
   });
 
+  it("does not take an unreadable registry, or a development build installed without its identity's entry, for a first installation (A-139)", async () => {
+    // The registry cannot be read: nothing is asked of the app and nothing is installed.
+    const unreadable = devFixture();
+    let checks = 0;
+    const failed = await runInstallDev({ ...unreadable.options, registryEntries: undefined,
+      readUninstallEntriesFn: () => { throw new Error("synthetic registry timeout"); }, isWindowOpenFn: () => { checks += 1; return false; } });
+    expect(failed).toMatchObject({ status: "failed", reason: "registry_unreadable", installed: false });
+    expect([checks, unreadable.counts()]).toEqual([0, { installerCalls: 0, relaunchCalls: 0 }]);
+
+    // MANGA Dev (the real identity, in a synthetic LOCALAPPDATA) under an older installer's GUID entry, or a folder with no entry at all.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "manga-install-dev-legacy-"));
+    scratch.push(root);
+    const local = path.join(root, "local");
+    const folder = path.join(local, "Programs", "manga-dev");
+    fs.mkdirSync(folder, { recursive: true });
+    const guidEntry = { Key: "1ed31a6e-8dd9-52be-8f90-5052ea376f6f", DisplayName: "MANGA Dev", DisplayVersion: "0.1.2-dev.202611081000", InstallLocation: folder,
+      UninstallString: `"${path.join(folder, "Uninstall manga-dev.exe")}" /currentuser` };
+    const installer = path.join(root, "manga-dev-setup-0.1.2-dev.202611081100.exe");
+    fs.writeFileSync(installer, "synthetic installer");
+    for (const [registryEntries, exe] of [[[guidEntry], false], [[guidEntry], true], [[], true]] as const) {
+      fs.rmSync(path.join(folder, "manga-dev.exe"), { force: true });
+      if (exe) fs.writeFileSync(path.join(folder, "manga-dev.exe"), "synthetic development executable");
+      let asked = 0;
+      const legacy = await runInstallDev({
+        env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "", LOCALAPPDATA: local },
+        installerPath: installer, newVersion: "0.1.2-dev.202611081100", evidenceDir: null, registryEntries: [...registryEntries],
+        snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
+        runningProcessesFn: () => { asked += 1; return []; }, isWindowOpenFn: () => { asked += 1; return true; },
+        requestQuitFn: async () => { asked += 1; }, spawnInstallerFn: async () => { asked += 1; return { status: 0 }; },
+      });
+      expect(legacy).toMatchObject({ status: "failed", reason: "legacy_install", installed: false, firstInstall: false, installLocation: "%LOCALAPPDATA%\\Programs\\manga-dev" });
+      expect(legacy.error).toContain("io.github.chialecode.manga-dev");
+      expect(legacy.guidance).toContain("install-dev");
+      expect(asked).toBe(0);
+    }
+  });
+
   it("keeps the gate's rehearsal rule for the test identity by default: reopen only an app that was running, with the caller's arguments (A-135)", async () => {
     const fixture = devFixture();
     fs.rmSync(path.join(fixture.runtime, "running-instance.json"));
