@@ -486,6 +486,18 @@ describe("AT-105 the window's own buttons", () => {
     expect(css).toMatch(/\.shell-drag \{[^}]*app-region: drag/);
   });
 
+  it("keeps the docked title-bar end above the dock resize divider so overflowing banners stay clickable (#107)", () => {
+    const css = readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8");
+    const dockTop = css.match(/^\.dock-top\s*\{([^}]*)\}/m)?.[1] ?? "";
+    const divider = css.match(/^\.shell-divider\s*\{([^}]*)\}/m)?.[1] ?? "";
+    expect(dockTop).toMatch(/position:\s*relative\b/);
+    const dockTopZ = Number(dockTop.match(/z-index:\s*(\d+)/)?.[1] ?? NaN);
+    const dividerZ = Number(divider.match(/z-index:\s*(\d+)/)?.[1] ?? NaN);
+    expect(Number.isFinite(dockTopZ)).toBe(true);
+    expect(Number.isFinite(dividerZ)).toBe(true);
+    expect(dockTopZ).toBeGreaterThan(dividerZ);
+  });
+
   it("takes its colors from the theme's tokens, with a red close button on hover, and has no color of its own", () => {
     const css = readFileSync("apps/desktop/src/renderer/styles-frame.css", "utf8");
     const rules = css.split("\n").filter((line) => line.startsWith(".window-control"));
