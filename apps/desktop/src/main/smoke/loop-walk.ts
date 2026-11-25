@@ -123,12 +123,14 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     await toRail(view);
     const started = Date.now();
     const opened = await openFromShelf(view, "novel", seeded.resourceId, 12_000) && await ensureDock(view);
-    const drawn = opened && await waitUntil(view, `${DRAWN}(${DOCK}?.querySelector('[data-testid="chat-rows"] .chat-row')) && ${loadedCountExpr()} >= 200`, 15_000);
+    // A page of 200 items may yield 199 so a `(user, agent)` pair is never split across the `before` cursor boundary.
+    const drawn = opened && await waitUntil(view, `${DRAWN}(${DOCK}?.querySelector('[data-testid="chat-rows"] .chat-row')) && ${loadedCountExpr()} >= 199`, 15_000);
     detail.firstScreenMs = Date.now() - started;
     await waitUntil(view, `(() => { const s = ${SCROLLER}; return Boolean(s) && s.scrollHeight - s.scrollTop - s.clientHeight <= 8; })()`, 4000);
     await waitFrames(view, 2);
     const nodes = await js<number>(view, `${DOCK}?.querySelectorAll('[data-testid="chat-rows"] .chat-row').length ?? 0`);
-    detail.firstScreen = { drawn, nodes, loaded: await loadedCount(view), gap: await bottomGap(view) };
+    const firstLoaded = await loadedCount(view);
+    detail.firstScreen = { drawn, nodes, loaded: firstLoaded, gap: await bottomGap(view) };
     if (!drawn) problems.push("the newest screen of the long conversation was not drawn");
     if (nodes > 60) problems.push(`${nodes} message rows are in the page, more than 60`);
     if (!(await atBottom(view))) problems.push("the long conversation did not open at its newest message");
@@ -138,7 +140,7 @@ async function longSession(appService: MangaProductApp, call: Call, view: Browse
     await waitFrames(view, 2);
     const before = await topRow(view);
     await js(view, `(() => { const s = ${SCROLLER}; s.scrollTop = 100; return true; })()`);
-    const grew = await waitUntil(view, `${loadedCountExpr()} >= 400`, 8000);
+    const grew = await waitUntil(view, `${loadedCountExpr()} >= ${firstLoaded + 199}`, 8000);
     await waitFrames(view, 2);
     const afterOlder = await topRow(view);
     detail.older = { grew, loaded: await loadedCount(view), before, after: afterOlder };
