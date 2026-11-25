@@ -87,22 +87,25 @@ export function runStageTest({ withReport = false, ci = process.argv.includes("-
   });
   const accepted = (entry) => entry.status === "passed" || (entry.status === "not-run" && entry.tests.every((test) => test.status === "passed" || test.excused));
   const allAccepted = cases.every(accepted);
-  if (result.status === 0 && vitestReport.success && selfTestsPassed && allAccepted) {
+  const attemptPassed = result.status === 0 && vitestReport.success && selfTestsPassed && allAccepted;
+  if (attemptPassed) {
     fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 150 });
   }
-  // A passed attempt leaves nothing; a failed attempt retains its synthetic profile and reporter for diagnosis.
+  // A passed attempt leaves nothing; a failed attempt keeps its synthetic profile and reporter for diagnosis, and that folder is not a leftover.
+  const kept = attemptPassed ? null : path.basename(scratch);
   const entriesAfter = testTempEntries();
-  const leftovers = [...entriesAfter].filter((name) => !leftoversBefore.has(name));
+  const leftovers = [...entriesAfter].filter((name) => !leftoversBefore.has(name) && name !== kept);
   const tempDirs = {
     before: leftoversBefore.size,
     after: entriesAfter.size,
     removed: fs.existsSync(scratch) ? 0 : 1,
     left: leftovers.length,
     prefixes: [...new Set(leftovers.map((name) => name.replace(/[^-]*$/, "")))],
+    ...(kept ? { kept } : {}),
   };
   const testRun = {
     tempDirs,
-    status: result.status === 0 && vitestReport.success && selfTestsPassed && allAccepted && tempDirs.left === 0 ? "passed" : "failed",
+    status: attemptPassed && tempDirs.left === 0 ? "passed" : "failed",
     ...(cases.some((entry) => entry.status !== "passed") && allAccepted ? { excusedCases: cases.filter((entry) => entry.status !== "passed").map((entry) => entry.caseId) } : {}),
     at: new Date().toISOString(),
     stage,
@@ -120,17 +123,42 @@ export function runStageTest({ withReport = false, ci = process.argv.includes("-
     productAcceptance: "not-run",
     cases,
   }, null, 2)}\n`);
-  if (tempDirs.left > 0) {
-    console.error(JSON.stringify({ status: "failed", check: "stage-test", reason: "temporary directories left behind", count: leftovers.length, ...tempDirs }));
+  if (!attemptPassed) {
+    console.error(JSON.stringify(stageTestFailure({ vitestExit: result.status, vitestSuccess: vitestReport.success, executed, selfTests, cases, accepted, tempDirs }), null, 2));
     return 1;
   }
-  if (testRun.status !== "passed") {
-    console.error(JSON.stringify({ status: "failed", check: "stage-test", cases: cases.filter((entry) => entry.status !== "passed").map((entry) => entry.caseId) }));
+  if (tempDirs.left > 0) {
+    console.error(JSON.stringify({ status: "failed", check: "stage-test", reason: "temporary directories left behind", count: leftovers.length, ...tempDirs }));
     return 1;
   }
   if (withReport) return runStageReport();
   console.log(JSON.stringify({ status: "passed", check: "stage-test", evidence: path.relative(root, evidence).replaceAll("\\", "/"), productAcceptance: "not-run" }));
   return 0;
+}
+
+/**
+ * What made a stage test attempt fail, in the order to look at it: the failed tests, then each required case that was not accepted with its tests
+ * that failed or did not run (a pattern that matches no test is listed by itself), then the self-tests; and where the attempt's files were kept.
+ */
+export function stageTestFailure({ vitestExit, vitestSuccess, executed, selfTests, cases, accepted, tempDirs }) {
+  const failedTests = executed.filter((entry) => entry.status === "failed" && !selfTests.includes(entry.file)).map((entry) => `${entry.file}: ${entry.name}`);
+  const failedSelfTests = executed.filter((entry) => entry.status === "failed" && selfTests.includes(entry.file)).map((entry) => entry.file);
+  const notAccepted = cases.filter((entry) => !accepted(entry)).map((entry) => ({
+    caseId: entry.caseId,
+    tests: entry.tests.filter((test) => test.status !== "passed" && !test.excused).map((test) => `${test.status}: ${test.name}`),
+  }));
+  return {
+    status: "failed",
+    check: "stage-test",
+    reason: failedTests.length ? "tests failed" : notAccepted.length ? "required cases not accepted" : failedSelfTests.length ? "self-tests failed" : "vitest did not finish",
+    vitest: { exit: vitestExit ?? null, success: vitestSuccess === true },
+    failedTests: failedTests.slice(0, 50),
+    ...(failedTests.length > 50 ? { moreFailedTests: failedTests.length - 50 } : {}),
+    notAccepted,
+    failedSelfTests,
+    ...(tempDirs.kept ? { kept: `${tempDirs.kept} in the system temporary folder (vitest.json and the test profile, kept for diagnosis)` } : {}),
+    ...(tempDirs.left > 0 ? { leftovers: { count: tempDirs.left, prefixes: tempDirs.prefixes } } : {}),
+  };
 }
 
 /** The entries of the system's temporary folder named the way this repository's tests and stage scripts name theirs. */

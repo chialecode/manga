@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { evaluateStageEvidence } from "./stage/report.mjs";
 import { fingerprintKey, findUncommentedSmokeSleeps, hashTree, loadGate, p95, p99, stageFingerprints } from "./stage/lib.mjs";
-import { beginTestEvidence, excusedBy } from "./stage/test.mjs";
+import { beginTestEvidence, excusedBy, stageTestFailure } from "./stage/test.mjs";
 
 // Counterexamples for the stage gate: each mutation of an otherwise complete run must be rejected.
 const config = loadGate();
@@ -687,4 +687,39 @@ test("dictation window benchmark detail.ok and packaged speech assets are enforc
     assert.equal(report.engineeringReviewable, false);
     assert.ok(report.errors.includes(`package.json: packaged asset ${asset} missing or not verified`));
   }
+});
+
+test("a failed stage test names the failed tests and the required cases not accepted, and its kept folder is not a leftover (#94)", () => {
+  const accepted = (entry) => entry.status === "passed" || (entry.status === "not-run" && entry.tests.every((test) => test.status === "passed" || test.excused));
+  const cases = [
+    { caseId: "AT-1", status: "passed", tests: [{ file: "tests/a.test.ts", name: "a works", status: "passed" }] },
+    { caseId: "AT-2", status: "not-run", tests: [{ file: "tests", name: "^a test that was renamed$", status: "not-run" }] },
+    { caseId: "AT-3", status: "not-run", tests: [{ file: "tests", name: "^needs the gpu sample", status: "not-run", excused: "optional samples not generated on this machine: video-gpu" }] },
+    { caseId: "AT-4", status: "failed", tests: [{ file: "tests/b.test.ts", name: "b works", status: "failed" }, { file: "tests/a.test.ts", name: "a works", status: "passed" }] },
+  ];
+  const selfTests = ["scripts/check-docs.test.mjs"];
+  const executed = [
+    { file: "tests/a.test.ts", name: "a works", status: "passed" },
+    { file: "tests/b.test.ts", name: "b works", status: "failed" },
+    { file: "scripts/check-docs.test.mjs", name: "scripts/check-docs.test.mjs", status: "passed" },
+  ];
+  const failure = stageTestFailure({ vitestExit: 1, vitestSuccess: false, executed, selfTests, cases, accepted, tempDirs: { left: 0, prefixes: [], kept: "manga-vitest-abc123" } });
+  assert.equal(failure.reason, "tests failed");
+  assert.deepEqual(failure.failedTests, ["tests/b.test.ts: b works"]);
+  assert.deepEqual(failure.notAccepted, [{ caseId: "AT-2", tests: ["not-run: ^a test that was renamed$"] }, { caseId: "AT-4", tests: ["failed: b works"] }]);
+  assert.deepEqual(failure.failedSelfTests, []);
+  assert.match(failure.kept, /^manga-vitest-abc123 /);
+  assert.equal(failure.leftovers, undefined);
+
+  // Every test passed, but a required pattern matched none of them: that is the reason given, and a real leftover is still named.
+  const renamed = stageTestFailure({ vitestExit: 0, vitestSuccess: true, executed: executed.slice(0, 1), selfTests, cases: cases.slice(0, 3), accepted,
+    tempDirs: { left: 1, prefixes: ["manga-other-"], kept: "manga-vitest-def456" } });
+  assert.equal(renamed.reason, "required cases not accepted");
+  assert.deepEqual(renamed.notAccepted, [{ caseId: "AT-2", tests: ["not-run: ^a test that was renamed$"] }]);
+  assert.deepEqual(renamed.leftovers, { count: 1, prefixes: ["manga-other-"] });
+
+  // A failed self-test is named by its file.
+  const self = stageTestFailure({ vitestExit: 0, vitestSuccess: true, executed: [{ file: selfTests[0], name: selfTests[0], status: "failed" }], selfTests, cases: cases.slice(0, 1), accepted,
+    tempDirs: { left: 0, prefixes: [], kept: "manga-vitest-ghi789" } });
+  assert.deepEqual([self.reason, self.failedTests, self.failedSelfTests], ["self-tests failed", [], [selfTests[0]]]);
 });

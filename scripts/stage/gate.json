@@ -985,7 +985,7 @@
         "reads mobi html pages and their image records",
         "extracts pdf text, keeps scan pages without OCR",
         "cancels a pdf parse when the signal aborts and after the library module stops",
-        "discards late pdf text content after moving to another page",
+        "reuses the pdf document across page turns, discards late text, and destroys on bytes change or unmount",
         "paints an embedded font and a substitute font as separate samples",
         "follows the pdf page tree instead of treating every stream as a page",
         "reads a page tree that only exists inside an object stream with an xref stream",
@@ -1849,7 +1849,7 @@
         "^settings pages inside the app \\(A-49, A-52\\) opens settings from a shelf, reaches the quick-task page, and goes back to the same shelf",
         "^settings pages inside the app \\(A-49, A-52\\) leaves the pages that need a module out of the navigation",
         "^settings pages inside the app \\(A-49, A-52\\) returns from a note to the page it was opened from",
-        "^AT-60 AT-61 AT-62 AT-111 shell keeps the top row's own actions and a panel under the page, and the settings navigation is not the frame's$",
+        "^AT-60 AT-61 AT-62 AT-111 shell keeps the title bar's own actions and a panel under the page, and the settings navigation is not the frame's$",
         "^AT-87 AT-112 two contexts are two workspaces the settings belong to no context: opened from either, they add no tab to it, and leaving them finds each context as it was$",
         "^settings for media, recording and metadata "
       ]
@@ -2217,7 +2217,7 @@
       "id": "AT-74-top-row-without-modes",
       "kind": "automated",
       "tests": [
-        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch$",
+        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the rail's top holds the sidebar switch alone, with no back, forward or menus, and the sidebar holds no switch \\(A-136\\)$",
         "^AT-60 AT-61 AT-62 AT-111 shell reflects the saved preference: a hidden sidebar stays hidden until its switch is pressed, and the switch is a plain button$",
         "^the shell preference is version 2: ",
         "^schema v12 migration \\(one workspace: .*\\) converts a v11 library: "
@@ -2279,9 +2279,9 @@
       "id": "AT-81-window-frame",
       "kind": "automated",
       "tests": [
-        "^AT-81 AT-111 window frame: the top row, the rail and the columns ",
+        "^AT-81 AT-111 window frame: the title bar, the rail and the columns \\(A-136\\) ",
         "^a tab's own back and forward \\(AT-110\\) ",
-        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the top row starts with the sidebar switch, back, forward and the menus, in that order, and the sidebar holds no switch$"
+        "^AT-60 AT-61 AT-62 AT-111 shell has no mode switch: the rail's top holds the sidebar switch alone, with no back, forward or menus, and the sidebar holds no switch \\(A-136\\)$"
       ]
     },
     {
@@ -2333,9 +2333,9 @@
       "id": "AT-86-frame-tops-and-colors",
       "kind": "automated",
       "tests": [
-        "^AT-81 AT-111 window frame: the top row, the rail and the columns has one top row across the window with every control in it, the icon rail, the sidebar, the main area and the dock under it, and names no channel$",
-        "^AT-81 AT-111 window frame: the top row, the rail and the columns keeps the same top row in a window too narrow for the columns, and opens them over the page from their buttons$",
-        "^AT-81 AT-111 window frame: the top row, the rail and the columns brings the page up to the window's edges",
+        "^AT-81 AT-111 window frame: the title bar, the rail and the columns \\(A-136\\) has no row of its own across the window: the tops of the rail, the sidebar, the main area and the dock are the title bar, with no history buttons and no menus$",
+        "^AT-81 AT-111 window frame: the title bar, the rail and the columns \\(A-136\\) keeps the same title bar in a window too narrow for the columns, and opens them over the page from their buttons$",
+        "^AT-81 AT-111 window frame: the title bar, the rail and the columns \\(A-136\\) brings the page up to the window's edges",
         "^AT-105 the window's own buttons takes its colors from the theme's tokens, ",
         "^window colors "
       ]
@@ -2662,7 +2662,7 @@
       "id": "AT-111-frame-and-sidebar",
       "kind": "automated",
       "tests": [
-        "^AT-81 AT-111 window frame: the top row, the rail and the columns ",
+        "^AT-81 AT-111 window frame: the title bar, the rail and the columns \\(A-136\\) ",
         "^AT-82 AT-111 AT-119 window frame: the icon rail ",
         "^AT-111 the frame in a short window ",
         "^AT-60 AT-61 AT-62 AT-111 shell ",
@@ -2697,7 +2697,7 @@
         "^the readers kept loaded out of sight \\(A-95, AT-113\\) ",
         "^what a tab shows besides its name \\(A-95\\) ",
         "^how a thing was asked for \\(A-95\\) ",
-        "^AT-81 AT-111 window frame: the top row, the rail and the columns folds the dock and then the sidebar into overlays ",
+        "^AT-81 AT-111 window frame: the title bar, the rail and the columns \\(A-136\\) folds the dock and then the sidebar into overlays ",
         "^AT-89 window full screen: the reader fills the application window "
       ]
     },
