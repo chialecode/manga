@@ -27,7 +27,7 @@ async function releaseFixture(options: Record<string, unknown> = {}) {
     publicKeys: [{ publicKey: publicKeyBase64, label: "Synthetic Release Key" }],
     releaseRootDir: path.join(root, "release"), evidenceDir: path.join(root, "evidence"),
     writeEvidenceReleaseJson: false,
-    snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "local"), roamingAppDataDir: path.join(root, "roaming"), desktopDir: path.join(root, "desktop") },
+    snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "local"), roamingAppDataDir: path.join(root, "roaming"), desktopDir: path.join(root, "desktop"), registry: () => null },
     buildReleaseInstallerFn: async ({ installerOutPath }: { installerOutPath: string }) => fs.writeFileSync(installerOutPath, Buffer.alloc(32_768, 7)),
     ...options,
   });

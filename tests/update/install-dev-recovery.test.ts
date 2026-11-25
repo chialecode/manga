@@ -45,7 +45,7 @@ function devFixture() {
     testIdentity: true, places, installDir, installerPath: installer, newVersion: version, evidenceDir: null,
     registryEntries: [], runningProcessesFn: () => [], isWindowOpenFn: () => false,
     env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
-    snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
+    snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop"), registry: () => null },
     isProcessAliveFn: (pid: number) => pid === 770077 && alive,
     requestQuitFn: async () => { alive = false; },
     spawnInstallerFn: async () => { installerCalls += 1; return { status: 1 }; },
@@ -307,7 +307,7 @@ describe("Development installer recovery review (AT-158)", () => {
       runningProcessesFn: () => [],
       isWindowOpenFn: () => false,
       env: { ...process.env, LOCALAPPDATA: localAppData, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "" },
-      snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
+      snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop"), registry: () => null },
       isProcessAliveFn: (pid: number) => pid === 770080,
       spawnInstallerFn: async () => {
         writeBuildInfo(resources, { version, channel: "development", commit: "2222222", builtAt: "2026-11-08T11:00:00.000Z", schemaVersion: 14 });
@@ -391,7 +391,7 @@ describe("Development installer recovery review (AT-158)", () => {
       const legacy = await runInstallDev({
         env: { ...process.env, MANGA_DEV_AUTO_INSTALL: "1", CI: "", GITHUB_ACTIONS: "", LOCALAPPDATA: local },
         installerPath: installer, newVersion: "0.1.2-dev.202611081100", evidenceDir: null, registryEntries: [...registryEntries],
-        snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop") },
+        snapshotOptions: { registryEntries: [], localAppDataDir: path.join(root, "real-local"), roamingAppDataDir: path.join(root, "real-roaming"), desktopDir: path.join(root, "real-desktop"), registry: () => null },
         runningProcessesFn: () => { asked += 1; return []; }, isWindowOpenFn: () => { asked += 1; return true; },
         requestQuitFn: async () => { asked += 1; }, spawnInstallerFn: async () => { asked += 1; return { status: 0 }; },
       });

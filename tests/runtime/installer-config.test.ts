@@ -373,6 +373,7 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
       startMenuDir,
       desktopDir,
       registryEntries,
+      registry: () => null,
     });
     expect(before.release.executable).toMatchObject({ present: true, version: "0.1.1" });
     expect(before.release.shortcuts).toEqual({ startMenu: true, desktop: true });
@@ -389,6 +390,7 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
       startMenuDir,
       desktopDir,
       registryEntries,
+      registry: () => null,
     });
     const diff = compareRealInstallations(before, after);
     expect(diff.ok).toBe(false);

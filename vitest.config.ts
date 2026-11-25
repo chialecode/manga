@@ -4,7 +4,6 @@ import { defineConfig } from "vitest/config";
 // - `media`: FFmpeg/ffprobe pipelines (serialized so AT-80's PRIORITY_BELOW_NORMAL ffprobe calls are not starved on Windows).
 // - `update`: Windows PowerShell/installer recovery tests (serialized so concurrent PowerShell/CIM probes do not time out under load).
 const MEDIA_SUBPROCESS_TESTS = [
-  "tests/agent/agent-media.test.ts",
   "tests/agent/agent-media-native.test.ts",
   "tests/agent/media-context.test.ts",
   "tests/agent/proposal-integrity.test.ts",
@@ -17,7 +16,6 @@ const MEDIA_SUBPROCESS_TESTS = [
   "tests/media/media-regressions.test.ts",
   "tests/metadata/local-file.test.ts",
   "tests/metadata/metadata-commands.test.ts",
-  "tests/reading/video-player.test.tsx",
   "tests/shell/media-flows.test.tsx",
   "tests/shell/roughcut-ui.test.tsx",
   "tests/video/import-light.test.ts",

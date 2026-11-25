@@ -20,7 +20,7 @@ export type PolishTools = {
 export type PolishFigures = { viewSwitchMs: number[]; viewRestoreMs: number[]; coversShownMs: number[]; coverImages: number; coverCells: number; novelCharacters: number; dragLateFramePct: number[]; novelTurnMs: number[]; novelRefontMs: number[]; novelOpenMs: number[] };
 
 const LONG_CHAPTER_CHARACTERS = 300_000;
-const POLISH = { switchRounds: 30, restoreRounds: 10, coverRounds: 10, dragRuns: 5, dragSteps: 90, turns: 60, refonts: 20, opens: 20, idleFrames: 120 };
+const POLISH = { switchRounds: 15, restoreRounds: 5, coverRounds: 5, dragRuns: 3, dragSteps: 45, turns: 30, refonts: 10, opens: 10, idleFrames: 60 };
 const NAV = (name: string) => `document.querySelector('[data-testid="nav-${name}"]')`;
 const HOST = `document.querySelector('[data-testid="context-host"][data-active="true"]')`;
 

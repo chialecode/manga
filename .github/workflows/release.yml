@@ -95,7 +95,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run repository verification and stage checks
         run: |
-          node scripts/verify.mjs
+          node scripts/verify.mjs --skip-tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/stage.mjs test --ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

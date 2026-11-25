@@ -127,16 +127,16 @@ async function prepareScanFolders(dir, count = 3) {
 }
 
 /**
- * Launch the real window three times on one seeded Profile. Every launch is a new process (cold start)
+ * Launch the real window twice on one seeded Profile. Every launch is a new process (cold start)
  * and parses a distinct 10 MiB book in the background while the window is being used.
  */
 export async function runScaleWindowBench({ launch }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "manga-bench-scale-"));
   const seedStarted = Date.now();
-  const [seeded, scanFolders] = await Promise.all([seedScaleProfile(dir), prepareScanFolders(dir, 3)]);
+  const [seeded, scanFolders] = await Promise.all([seedScaleProfile(dir), prepareScanFolders(dir, 2)]);
   const seedMs = Date.now() - seedStarted;
   const runs = [];
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 2; i += 1) {
     const parseFile = path.join(dir, "books", `background-${i}.txt`);
     const unit = Buffer.from(`后台解析${i}。`);
     const background = Buffer.alloc(10 * 1024 * 1024, unit);

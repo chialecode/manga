@@ -26,7 +26,7 @@
 <a id="pr-and-merge"></a>
 ### 1.3 push、PR 与合并
 
-- push 与建 PR 长期授权。push 前确认目标分支与待推送提交的公开内容（[公开内容检查](quality-gates.md#11-公开内容检查)），`pre-push` hook 会跑 `node scripts/verify.mjs`；首次推送设置 upstream，不用 `--all`、`--mirror` 或强推。
+- push 与建 PR 长期授权。push 前确认目标分支与待推送提交的公开内容（[公开内容检查](quality-gates.md#11-公开内容检查)），`pre-push` hook 会跑 `verify.mjs --skip-tests` 与改动文件相关的 `vitest related`（改动共享配置或夹具、或设 `MANGA_PRE_PUSH_FULL=1` 时跑完整 `node scripts/verify.mjs`）；首次推送设置 upstream，不用 `--all`、`--mirror` 或强推。
 - 使用 [PR 模板](../../.github/PULL_REQUEST_TEMPLATE.md)：关联 issue、做了什么、验证（命令 / 结果 / 未运行项）、风险。碰了[高风险清单](development-workflow.md#high-risk)加 `risk:high`。
 - CI `repository-quality` 通过、非作者的独立审查无阻塞项后：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 等用户合并。独立审查通过前不用 `gh pr merge --auto`：规则集不要求审批，自动合并会在 CI 通过后立即合并。审查修复推到同一分支，只按新提交查一次必要结果，不循环 `push → 等 CI → 小修 → push`，不通过反复推送调试能在本地复现的问题。
 - 合并后 GitHub 删除远端分支；本地 `git switch main && git pull --ff-only`，再[安装开发版](development-workflow.md#dev-install-at-handoff)。
@@ -44,7 +44,7 @@ git config --local core.hooksPath .githooks
 node scripts/verify.mjs
 ```
 
-`.gitattributes` 负责文本行尾，`.editorconfig` 负责编辑习惯。`pre-push` 经 `scripts/pre-push.mjs` 调用同一验证入口，并把完整输出写入 `dist/evidence-runs/pre-push-*.log`（保留最近 10 份；失败时打印路径，供定位偶发失败），不访问 GitHub API、不自动提交或格式化；`prepare-commit-msg` 只为提交消息补提交者的 DCO 签名。Git 不随 clone 自动启用自定义 hook，新工作区需要显式配置；hook 可被跳过，不能代替远端合并约束。
+`.gitattributes` 负责文本行尾，`.editorconfig` 负责编辑习惯。`pre-push` 经 `scripts/pre-push.mjs` 运行静态检查与受影响测试（完整全量测试仍由远端 CI 兜底，亦可用 `MANGA_PRE_PUSH_FULL=1` 强制全量），并把完整输出写入 `dist/evidence-runs/pre-push-*.log`（保留最近 10 份；失败时打印路径，供定位偶发失败），不访问 GitHub API、不自动提交或格式化；`prepare-commit-msg` 只为提交消息补提交者的 DCO 签名。Git 不随 clone 自动启用自定义 hook，新工作区需要显式配置；hook 可被跳过，不能代替远端合并约束。
 
 ## 2. CI 的范围与触发
 
@@ -73,7 +73,7 @@ node scripts/verify.mjs
 - **触发与并发：** 每周一 `00:00 UTC`（北京时间 `08:00`，cron `0 0 * * 1`）定时运行，以及 `workflow_dispatch` 手动触发（输入 `dry_run`，默认 `true`：只构建与演练、不创建标签与 Release）；不响应 `push`、`pull_request` 或任何 fork 事件。`concurrency` 组为 `release` 且 `cancel-in-progress: false`，不中途取消正在进行的发布。
 - **四个阶段（按最小权限隔离）：**
   1. `decide`（Ubuntu，`contents: read`，不安装依赖）：运行 `node scripts/stage/release-decide.mjs`，读取最高的 `v0.1.*` 标签与 `main` 在它之后的新提交（包括 Dependabot 等任何合并进 `main` 的 PR）。没有新合并时以“本周没有新的合并”成功结束，不启动后续 Windows 构建；没有任何 `v0.1.*` 标签时发布 `0.1.1`；有新合并时算出下一个 `0.1.x` 版本号并生成中文发布说明素材，随后在同一轻量 Ubuntu 任务中运行 `node scripts/tools/check-tool-links.mjs` 对全部锁定随包工具下载地址发 HTTP `HEAD` 预检（跟随重定向），失效时在分配昂贵的 `windows-2025` 运行器之前即快速失败并明确指出失效锁文件（A-127）。离线静态检查 `check-tool-links.mjs --pins` 随 `verify.mjs` 守护 FFmpeg 使用月末保留标签而非会被上游清理的每日标签、其余工具固定 40 位完整提交 SHA。
-  2. `check`（`windows-2025`，`contents: read`，**无任何 secret**）：按锁文件下载随包工具（FFmpeg、Silero VAD、字幕字体）、生成合成样本，依次运行 `node scripts/verify.mjs`、`node scripts/stage.mjs test`、`node scripts/stage.mjs package` 与 `node scripts/stage.mjs installer`（使用测试身份 `MANGA Test` / `MANGA Dev Test`）。共享运行器不跑性能基准，基准结论以本机最近一次门禁证据为准，并在 `release.json` 记录基准源码指纹与本次发布源码是否一致。任一步骤失败则停止，本周不发布。
+  2. `check`（`windows-2025`，`contents: read`，**无任何 secret**）：按锁文件下载随包工具（FFmpeg、Silero VAD、字幕字体）、生成合成样本，依次运行 `node scripts/verify.mjs --skip-tests`、`node scripts/stage.mjs test --ci`、`node scripts/stage.mjs package --ci` 与 `node scripts/stage.mjs installer`（使用测试身份 `MANGA Test` / `MANGA Dev Test`）。共享运行器不跑性能基准，基准结论以本机最近一次门禁证据为准，并在 `release.json` 记录基准源码指纹与本次发布源码是否一致。任一步骤失败则停止，本周不发布。
   3. `build`（`windows-2025`，`contents: read`，绑定受保护环境 `environment: release`）：在同一提交上构建正式版安装包、生成块图 `.blockmap`、`latest.yml`、Ed25519 分离签名 `.sig`、`SHA256SUMS` 与中文 `RELEASE-NOTES.md`，并执行从上一版到当前版本的升级演练与 1 字节篡改拒绝演练（`node scripts/stage.mjs release --ci`）。环境的两个 secret（`MANGA_PLUGIN_SIGNING_KEY_PEM` 与 `MANGA_UPDATE_SIGNING_KEY_PEM`）分别只映射给打包插件和签名发布包的那一个步骤，写入运行器临时目录后交给脚本，步骤结束即在 `finally` 中删除，绝不打印或进入日志与 artifact。产物通过 `actions/upload-artifact` 上传（保留 7 天）。
   4. `publish`（Ubuntu，`contents: write`，**无 secret、不执行 `pnpm install`**，`if: inputs.dry_run != true`）：下载 artifact，运行 `node scripts/stage/release-publish-verify.mjs --publish` 用仓库内置公钥再次核对 `SHA256SUMS`、`latest.yml` 与 `.sig`，确认标签尚不存在后调用 `gh release create v0.1.x --target <SHA>` 发布正式版。
 - **静态检查守护：** `scripts/check-workflows.mjs` 随 `node scripts/verify.mjs` 自动运行，静态校验 `ci.yml` 与 `release.yml` 的触发器、顶层与各 job 权限、secret 只出现在 `build` 的指定步骤、所有 Action 固定 40 位完整 SHA 且在 `.github/actions-policy.json` 允许列表中、`publish` 不含任何依赖安装命令。

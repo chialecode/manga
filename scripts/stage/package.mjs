@@ -337,6 +337,32 @@ function migrationFiles(seed) {
   if (!out.backup || !out.backupHashesEqual) throw new Error(`the v13 move left no faithful backup: ${JSON.stringify(out)}`);
   return out;
 }
+// Synthesize a short 16 kHz mono English speech WAV via Windows SAPI when the optional zh-CN clip is unavailable (e.g. windows-2025 CI),
+// so the `deepseek` smoke phase can still exercise Silero VAD + mock DeepSeek transcription end-to-end.
+function ensureDeepSeekSmokeAudio(home, preferredClip = speechClip) {
+  if (fs.existsSync(preferredClip)) return preferredClip;
+  if (process.platform !== "win32") return preferredClip;
+  const fallback = path.join(home, "deepseek-speech.wav");
+  fs.mkdirSync(home, { recursive: true });
+  const script = [
+    "Add-Type -AssemblyName System.Speech",
+    "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer",
+    "try {",
+    "  $fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)",
+    "  $synth.SetOutputToWaveFile($env:MANGA_DEEPSEEK_FALLBACK_WAV, $fmt)",
+    "  $synth.Speak('The protagonist opens the old library door and finds a hidden letter.')",
+    "  $synth.SetOutputToNull()",
+    "} finally { $synth.Dispose() }",
+  ].join("; ");
+  const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 20_000,
+    env: { ...process.env, MANGA_DEEPSEEK_FALLBACK_WAV: fallback },
+  });
+  return res.status === 0 && fs.existsSync(fallback) && fs.statSync(fallback).size > 8000 ? fallback : preferredClip;
+}
+
 async function smoke(phase) {
   const sameAs = SAME_PROFILE_AS[phase];
   if (sameAs && !homes[sameAs]) throw new Error(`smoke ${phase} needs the Profile of ${sameAs}, which was not a phase of this run`);
@@ -364,6 +390,7 @@ async function smoke(phase) {
     // The window walk's danmaku step talks to a stand-in for the DanDanPlay service on the loopback address; it accepts only the credentials a smoke run uses.
     dandan = phase === "window-walk" ? await new FakeDandan().start() : credentialServices?.dandan ?? null;
     if (phase === "window-walk") dandan.accepts = { appId: "smokeapp01", secret: "smoke-secret-for-the-local-fake-server" };
+    const smokeAudio = phase === "deepseek" ? ensureDeepSeekSmokeAudio(home) : speechClip;
     result = await spawnAsync(path.join(appPath, "manga.exe"), ["--manga-smoke"], {
       cwd: home,
       env: {
@@ -375,7 +402,7 @@ async function smoke(phase) {
         MANGA_SMOKE_PHASE: phase,
         MANGA_SMOKE_EVIDENCE_DIR: evidence,
         MANGA_SMOKE_SAMPLES: samplesRoot,
-        MANGA_SMOKE_AUDIO: speechClip,
+        MANGA_SMOKE_AUDIO: smokeAudio,
         ...((phase === "voice" || phase === "dictation") ? { MANGA_SMOKE_ASR_MODEL_DIR: localAsrModelDir } : {}),
         ...(phase === "dictation" ? { MANGA_SMOKE_ALLOW_LOOPBACK_MODEL: "1" } : {}),
         ELECTRON_ENABLE_LOGGING: "1",
@@ -654,6 +681,7 @@ async function observeInstallDev() {
       desktopDir: path.join(temp, "fake-real-desktop"),
       programsDir: path.join(temp, "fake-real-local", "Programs"),
       registryEntries: [],
+      registry: () => null,
     };
     for (const d of [snapOpts.localAppDataDir, snapOpts.roamingAppDataDir, snapOpts.startMenuDir, snapOpts.desktopDir, snapOpts.programsDir]) {
       fs.mkdirSync(d, { recursive: true });
