@@ -79,11 +79,22 @@ type IndexedVariant = {
   kind: "term" | DictionaryAliasKind;
   phonemes: Phoneme[];
   encoded: EncodedPhonemes;
+  patternKey: string | null;
   cjkCount: number;
   kanaCount: number;
   asciiAlnumCount: number;
   pureAsciiWord: boolean;
   cjkChars: Set<string>;
+};
+
+type ExactPrefixBucket = {
+  lengths: number[];
+  byFolded: Map<string, Array<{ termId: string; variantIdx: number }>>;
+};
+
+type PhoneticPatternGroup = {
+  encoded: EncodedPhonemes;
+  refs: Array<{ termId: string; variantIdx: number }>;
 };
 
 type IndexedTerm = {
@@ -147,6 +158,17 @@ function foldSurface(text: string): string {
   return foldSameLength(text.trim());
 }
 
+function buildPatternKey(encoded: EncodedPhonemes): string {
+  const n = encoded.length;
+  const exactIds = encoded.exactIds;
+  const flags = encoded.flags;
+  let out = String(n);
+  for (let i = 0; i < n; i += 1) {
+    out += `:${exactIds[i]! * 4 + flags[i]!}`;
+  }
+  return out;
+}
+
 function analyzeSurface(surface: string): IndexedVariant {
   const phonemes = toPhonemes(surface);
   const encoded = encodePhonemes(phonemes);
@@ -179,6 +201,7 @@ function analyzeSurface(surface: string): IndexedVariant {
     kind: "term",
     phonemes,
     encoded,
+    patternKey: null,
     cjkCount,
     kanaCount,
     asciiAlnumCount,
@@ -201,11 +224,10 @@ function computeReadingHint(entry: CorrectorTermEntry): string {
 export class PhoneticCorrector {
   private readonly terms = new Map<string, IndexedTerm>();
   private readonly index = new Phoneme2GramIndex();
-  // Folded 2-char prefix (or 1-char for single-char surfaces) -> exact surface entries
-  private readonly exactByPrefix = new Map<
-    string,
-    Array<{ termId: string; variantIdx: number; folded: string }>
-  >();
+  // Deduplicates identical encoded phoneme sequences across works/variants so bag & DP run once per pattern.
+  private readonly patterns = new Map<string, PhoneticPatternGroup>();
+  // Folded 2-char prefix (or 1-char for single-char surfaces) -> length-grouped exact surface map.
+  private readonly exactByPrefix = new Map<string, ExactPrefixBucket>();
 
   get size(): number {
     return this.terms.size;
@@ -214,6 +236,7 @@ export class PhoneticCorrector {
   clear(): void {
     this.terms.clear();
     this.index.clear();
+    this.patterns.clear();
     this.exactByPrefix.clear();
   }
 
@@ -228,21 +251,62 @@ export class PhoneticCorrector {
     const existing = this.terms.get(termId);
     if (!existing) return;
     for (const v of existing.variants) {
-      if (!v.surfaceFolded) continue;
-      const prefixKey = v.surfaceFolded.length >= 2 ? v.surfaceFolded.slice(0, 2) : v.surfaceFolded;
-      const bucket = this.exactByPrefix.get(prefixKey);
-      if (!bucket) continue;
-      let write = 0;
-      for (let i = 0; i < bucket.length; i += 1) {
-        if (bucket[i]!.termId !== termId) {
-          bucket[write] = bucket[i]!;
-          write += 1;
+      if (v.surfaceFolded) {
+        const folded = v.surfaceFolded;
+        const prefixKey = folded.length >= 2 ? folded.slice(0, 2) : folded;
+        const bucket = this.exactByPrefix.get(prefixKey);
+        const list = bucket?.byFolded.get(folded);
+        if (bucket && list) {
+          let write = 0;
+          for (let i = 0; i < list.length; i += 1) {
+            if (list[i]!.termId !== termId) {
+              list[write] = list[i]!;
+              write += 1;
+            }
+          }
+          if (write === 0) {
+            bucket.byFolded.delete(folded);
+            if (bucket.byFolded.size === 0) {
+              this.exactByPrefix.delete(prefixKey);
+            } else {
+              const targetLen = folded.length;
+              let stillHasLen = false;
+              for (const k of bucket.byFolded.keys()) {
+                if (k.length === targetLen) {
+                  stillHasLen = true;
+                  break;
+                }
+              }
+              if (!stillHasLen) {
+                const lenIdx = bucket.lengths.indexOf(targetLen);
+                if (lenIdx !== -1) bucket.lengths.splice(lenIdx, 1);
+              }
+            }
+          } else {
+            list.length = write;
+          }
         }
       }
-      if (write === 0) this.exactByPrefix.delete(prefixKey);
-      else bucket.length = write;
+
+      if (v.patternKey) {
+        const group = this.patterns.get(v.patternKey);
+        if (group) {
+          let write = 0;
+          for (let i = 0; i < group.refs.length; i += 1) {
+            if (group.refs[i]!.termId !== termId) {
+              group.refs[write] = group.refs[i]!;
+              write += 1;
+            }
+          }
+          if (write === 0) {
+            this.patterns.delete(v.patternKey);
+            this.index.removeTerm(v.patternKey);
+          } else {
+            group.refs.length = write;
+          }
+        }
+      }
     }
-    this.index.removeTerm(termId);
     this.terms.delete(termId);
   }
 
@@ -295,24 +359,41 @@ export class PhoneticCorrector {
 
     this.terms.set(entry.id, indexed);
 
-    // Register exact surface buckets by 2-char prefix (or 1-char for single-char entries)
+    // Register exact surface buckets by 2-char prefix (or 1-char for single-char entries) and folded string length.
     for (let vIdx = 0; vIdx < variants.length; vIdx += 1) {
-      const folded = variants[vIdx]!.surfaceFolded;
-      if (!folded) continue;
-      const prefixKey = folded.length >= 2 ? folded.slice(0, 2) : folded;
-      let bucket = this.exactByPrefix.get(prefixKey);
-      if (!bucket) {
-        bucket = [];
-        this.exactByPrefix.set(prefixKey, bucket);
+      const v = variants[vIdx]!;
+      const folded = v.surfaceFolded;
+      if (folded) {
+        const prefixKey = folded.length >= 2 ? folded.slice(0, 2) : folded;
+        let bucket = this.exactByPrefix.get(prefixKey);
+        if (!bucket) {
+          bucket = { lengths: [], byFolded: new Map() };
+          this.exactByPrefix.set(prefixKey, bucket);
+        }
+        let list = bucket.byFolded.get(folded);
+        if (!list) {
+          list = [];
+          bucket.byFolded.set(folded, list);
+          if (!bucket.lengths.includes(folded.length)) {
+            bucket.lengths.push(folded.length);
+          }
+        }
+        list.push({ termId: entry.id, variantIdx: vIdx });
       }
-      bucket.push({ termId: entry.id, variantIdx: vIdx, folded });
-    }
 
-    // Register phonetic 2-gram postings (only variants eligible for phonetic recall need 2-gram indexing)
-    const phoneticVariants = variants.map((v) =>
-      this.isVariantPhoneticEligible(v) ? v.phonemes : [],
-    );
-    this.index.upsertTerm(entry.id, phoneticVariants);
+      // Register phonetic 2-gram postings once per unique encoded phoneme pattern.
+      if (this.isVariantPhoneticEligible(v)) {
+        const patternKey = buildPatternKey(v.encoded);
+        v.patternKey = patternKey;
+        let group = this.patterns.get(patternKey);
+        if (!group) {
+          group = { encoded: v.encoded, refs: [] };
+          this.patterns.set(patternKey, group);
+          this.index.upsertTerm(patternKey, [v.phonemes]);
+        }
+        group.refs.push({ termId: entry.id, variantIdx: vIdx });
+      }
+    }
   }
 
   private isVariantPhoneticEligible(v: IndexedVariant): boolean {
@@ -329,9 +410,9 @@ export class PhoneticCorrector {
     start: number,
     end: number,
     matchedText: string,
+    matchedFolded = foldSurface(matchedText),
   ): boolean {
     if (indexed.blockedExact.size === 0) return false;
-    const matchedFolded = foldSurface(matchedText);
     if (indexed.blockedExact.has(matchedFolded)) return true;
 
     for (const phrase of indexed.blockedPhrases) {
@@ -425,49 +506,54 @@ export class PhoneticCorrector {
     const allMatches: RawMatch[] = [];
 
     // Phase 1: Exact surface & alias scan (respecting ASCII word boundaries)
-    const checkBucket = (
-      pos: number,
-      bucket: Array<{ termId: string; variantIdx: number; folded: string }> | undefined,
-    ) => {
+    const checkBucket = (pos: number, prefix: string, bucket: ExactPrefixBucket | undefined) => {
       if (!bucket) return;
-      for (let b = 0; b < bucket.length; b += 1) {
-        const item = bucket[b]!;
-        const end = pos + item.folded.length;
+      const lengths = bucket.lengths;
+      for (let li = 0; li < lengths.length; li += 1) {
+        const len = lengths[li]!;
+        const end = pos + len;
         if (end > textLower.length) continue;
-        if (item.folded.length > 2 && !textLower.startsWith(item.folded, pos)) continue;
-
-        const indexed = this.terms.get(item.termId);
-        if (!indexed) continue;
-        const variant = indexed.variants[item.variantIdx]!;
-
-        // Enforce ASCII word boundaries so e.g. "cat" does not match inside "category"
-        if (variant.pureAsciiWord) {
-          if (pos > 0 && isAsciiWordCode(rawText.charCodeAt(pos - 1))) continue;
-          if (end < rawText.length && isAsciiWordCode(rawText.charCodeAt(end))) continue;
-        }
+        const candidateFolded = len === prefix.length ? prefix : textLower.slice(pos, end);
+        const items = bucket.byFolded.get(candidateFolded);
+        if (!items) continue;
 
         const matchedText = rawText.slice(pos, end);
-        if (this.isBlocked(indexed, textLower, pos, end, matchedText)) continue;
+        for (let b = 0; b < items.length; b += 1) {
+          const item = items[b]!;
+          const indexed = this.terms.get(item.termId);
+          if (!indexed) continue;
+          const variant = indexed.variants[item.variantIdx]!;
 
-        allMatches.push({
-          termId: item.termId,
-          indexed,
-          variant,
-          start: pos,
-          end,
-          matchedText,
-          score: 1.0,
-          isExact: true,
-          // Rule (§4.8): exact match with term or alias -> direct replacement!
-          directEligible: true,
-        });
+          // Enforce ASCII word boundaries so e.g. "cat" does not match inside "category"
+          if (variant.pureAsciiWord) {
+            if (pos > 0 && isAsciiWordCode(rawText.charCodeAt(pos - 1))) continue;
+            if (end < rawText.length && isAsciiWordCode(rawText.charCodeAt(end))) continue;
+          }
+
+          if (this.isBlocked(indexed, textLower, pos, end, matchedText, candidateFolded)) continue;
+
+          allMatches.push({
+            termId: item.termId,
+            indexed,
+            variant,
+            start: pos,
+            end,
+            matchedText,
+            score: 1.0,
+            isExact: true,
+            // Rule (§4.8): exact match with term or alias -> direct replacement!
+            directEligible: true,
+          });
+        }
       }
     };
 
     for (let pos = 0; pos < textLower.length; pos += 1) {
-      checkBucket(pos, this.exactByPrefix.get(textLower[pos]!));
+      const ch = textLower[pos]!;
+      checkBucket(pos, ch, this.exactByPrefix.get(ch));
       if (pos + 1 < textLower.length) {
-        checkBucket(pos, this.exactByPrefix.get(textLower.slice(pos, pos + 2)));
+        const pair = textLower.slice(pos, pos + 2);
+        checkBucket(pos, pair, this.exactByPrefix.get(pair));
       }
     }
 
@@ -479,17 +565,14 @@ export class PhoneticCorrector {
 
       this.index.forEachCandidate(
         inputPhonemes,
-        (termId, vIdx, anchorsBuf, anchorOffset, anchorCount) => {
-          const indexed = this.terms.get(termId);
-          if (!indexed) return;
-          const variant = indexed.variants[vIdx];
-          if (!variant) return;
+        (patternKey, _vIdx, anchorsBuf, anchorOffset, anchorCount) => {
+          const group = this.patterns.get(patternKey);
+          if (!group || group.refs.length === 0) return;
 
-          const hwEncoded = variant.encoded;
+          const hwEncoded = group.encoded;
           const hwLen = hwEncoded.length;
           if (hwLen === 0) return;
 
-          const scopeDirect = this.isDirectReplaceScope(indexed.entry, currentWorkId);
           const maxAllowedDist = hwLen * (1.0 - searchThreshold);
           const margin = Math.max(5, Math.ceil(hwLen * 0.35));
 
@@ -518,45 +601,57 @@ export class PhoneticCorrector {
               winEnd,
               searchThreshold,
             );
+            if (aligned.length === 0) continue;
 
+            const refs = group.refs;
             for (let m = 0; m < aligned.length; m += 1) {
               const seg = aligned[m]!;
               const charStart = inputPhonemes[seg.startPhonemeIdx]!.charStart;
               const charEnd = inputPhonemes[seg.endPhonemeIdx - 1]!.charEnd;
               const matchedText = rawText.slice(charStart, charEnd);
+              const matchedFolded = foldSurface(matchedText);
 
-              if (this.isBlocked(indexed, textLower, charStart, charEnd, matchedText)) {
-                continue;
+              for (let r = 0; r < refs.length; r += 1) {
+                const ref = refs[r]!;
+                const indexed = this.terms.get(ref.termId);
+                if (!indexed) continue;
+                const variant = indexed.variants[ref.variantIdx];
+                if (!variant) continue;
+
+                if (this.isBlocked(indexed, textLower, charStart, charEnd, matchedText, matchedFolded)) {
+                  continue;
+                }
+
+                const isSurfaceSameAsVariant = matchedFolded === variant.surfaceFolded;
+                // Exact kana <-> romaji match (e.g. `かみしろはるか` vs `Kamishiro Haruka`) has score 1.0
+                const isKanaRomajiExact =
+                  seg.score >= 0.999999 &&
+                  (variant.kind === "kana" || variant.kind === "romaji" || variant.kanaCount > 0);
+
+                const effectiveScore =
+                  isSurfaceSameAsVariant || isKanaRomajiExact
+                    ? 1.0
+                    : this.adjustPhoneticScore(seg.score, matchedText, indexed, variant);
+
+                if (effectiveScore + 1e-9 < CANDIDATE_RECALL_THRESHOLD) continue;
+
+                const isExact = isSurfaceSameAsVariant || isKanaRomajiExact;
+                const scopeDirect = this.isDirectReplaceScope(indexed.entry, currentWorkId);
+                const directEligible =
+                  isExact || (effectiveScore + 1e-9 >= DIRECT_REPLACE_THRESHOLD && scopeDirect);
+
+                allMatches.push({
+                  termId: ref.termId,
+                  indexed,
+                  variant,
+                  start: charStart,
+                  end: charEnd,
+                  matchedText,
+                  score: effectiveScore,
+                  isExact,
+                  directEligible,
+                });
               }
-
-              const isSurfaceSameAsVariant = foldSurface(matchedText) === variant.surfaceFolded;
-              // Exact kana <-> romaji match (e.g. `かみしろはるか` vs `Kamishiro Haruka`) has score 1.0
-              const isKanaRomajiExact =
-                seg.score >= 0.999999 &&
-                (variant.kind === "kana" || variant.kind === "romaji" || variant.kanaCount > 0);
-
-              const effectiveScore =
-                isSurfaceSameAsVariant || isKanaRomajiExact
-                  ? 1.0
-                  : this.adjustPhoneticScore(seg.score, matchedText, indexed, variant);
-
-              if (effectiveScore + 1e-9 < CANDIDATE_RECALL_THRESHOLD) continue;
-
-              const isExact = isSurfaceSameAsVariant || isKanaRomajiExact;
-              const directEligible =
-                isExact || (effectiveScore + 1e-9 >= DIRECT_REPLACE_THRESHOLD && scopeDirect);
-
-              allMatches.push({
-                termId,
-                indexed,
-                variant,
-                start: charStart,
-                end: charEnd,
-                matchedText,
-                score: effectiveScore,
-                isExact,
-                directEligible,
-              });
             }
           }
         },

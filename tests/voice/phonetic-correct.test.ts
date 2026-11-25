@@ -225,7 +225,30 @@ describe("voice phonetic recall & deterministic replacement (R1)", () => {
     expect(phoneticSimilarity("完全无关的句子", "星穹航路")).toBeLessThan(0.6);
   });
 
-  it("corrects a sentence against 10,000 dictionary terms with p95 <= 30 ms", () => {
+  it("keeps shared phonetic patterns and exact-prefix buckets consistent across incremental updates and removals", () => {
+    const corrector = new PhoneticCorrector();
+    corrector.setTerms([
+      makeTerm("w1_long", "星野千夏三号", { workId: "work_a" }),
+      makeTerm("w2_long", "星野千夏三号", { workId: "work_b" }),
+      makeTerm("w1_short", "星野千夏", { workId: "work_a", aliases: [{ alias: "星野千夏号", kind: "alias" }] }),
+    ]);
+
+    // Removing one work's copy of a shared pattern must keep the other work's copy active for phonetic recall.
+    corrector.removeTerm("w1_long");
+    const afterFirstRemove = corrector.correct("心野千夏三号来了", { currentWorkId: "work_b" });
+    expect(afterFirstRemove.correctedText).toBe("星野千夏三号来了");
+    // Shorter term sharing the same 2-char exact prefix ("星野") must still match exact surface & alias.
+    expect(corrector.correct("星野千夏号在这里", { currentWorkId: "work_a" }).correctedText).toBe("星野千夏在这里");
+
+    // Removing the last copy of the shared pattern clears phonetic recall for that pattern while keeping the shorter term intact.
+    corrector.removeTerm("w2_long");
+    const afterLastRemove = corrector.correct("心野千夏三号来了", { currentWorkId: "work_b" });
+    expect(afterLastRemove.correctedText).toBe("心野千夏三号来了");
+    expect(afterLastRemove.candidates.map((c) => c.term)).not.toContain("星野千夏三号");
+    expect(corrector.correct("星野千夏号在这里", { currentWorkId: "work_a" }).correctedText).toBe("星野千夏在这里");
+  });
+
+  it("corrects a sentence against 10,000 dictionary terms, the same way every time", () => {
     const corrector = new PhoneticCorrector();
     const surnames = ["星野", "神代", "雾岛", "苍井", "白石", "黑泽", "风间", "月城", "朝比奈", "七海"];
     const givens = ["千夏", "凛音", "苍真", "遥香", "奏太", "美琴", "雪乃", "结衣", "阳菜", "莲华"];
@@ -257,14 +280,11 @@ describe("voice phonetic recall & deterministic replacement (R1)", () => {
     expect(warm.correctedText).toContain("星野千夏三号");
     expect(warm.correctedText).toContain("神代凛音七号");
 
-    const samplesMs: number[] = [];
     for (let iter = 0; iter < 25; iter += 1) {
-      const t0 = performance.now();
-      corrector.correct(sample, { currentWorkId: "work_astral" });
-      samplesMs.push(performance.now() - t0);
+      expect(corrector.correct(sample, { currentWorkId: "work_astral" }).correctedText).toBe(warm.correctedText);
     }
-    samplesMs.sort((a, b) => a - b);
-    const p95 = samplesMs[Math.floor(samplesMs.length * 0.95)]!;
-    expect(p95).toBeLessThanOrEqual(30);
+    // How long this takes is measured where nothing else runs, not among the parallel test files (#33): `stage bench` `dictationCorrection`
+    // corrects this sentence against this same dictionary 50 times (scripts/stage/bench-dictation.mjs `buildOverlapDictionary`), next to a
+    // dictionary of 10,000 distinct names, and holds the p95 of both to 30 ms (gate.json `bench.creative`, AT-181, AT-183).
   });
 });
