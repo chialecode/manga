@@ -468,9 +468,14 @@ export class DrizzleStore {
     partId?: string;
     start?: number;
     end?: number;
+    /** Skip the existing-id check when the caller just minted a fresh fragment id. */
+    fresh?: boolean;
   }): Mutation[] {
     const ngrams = ngramsFor(input.text);
-    return [
+    // `search_idx.fragment_id` is UNINDEXED in FTS5, so an unconditional DELETE scans the whole index per chunk (O(N^2) on large imports).
+    // Check the indexed `text_fragments` primary key first and only emit DELETE when replacing an existing fragment.
+    const exists = !input.fresh && Boolean(this.sqlite.prepare("SELECT 1 FROM text_fragments WHERE id = ?").get(input.id));
+    const mutations: Mutation[] = [
       {
         sql: `INSERT OR REPLACE INTO text_fragments(id, resource_id, object_id, kind, text, ngrams, locator_json, resource_revision_id, part_id, start_offset, end_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
@@ -487,15 +492,18 @@ export class DrizzleStore {
           input.end ?? null,
         ],
       },
-      {
+    ];
+    if (exists) {
+      mutations.push({
         sql: `DELETE FROM search_idx WHERE fragment_id = ?`,
         params: [input.id],
-      },
-      {
-        sql: `INSERT INTO search_idx(fragment_id, kind, resource_id, text, ngrams) VALUES (?, ?, ?, ?, ?)`,
-        params: [input.id, input.kind, input.resourceId ?? "", input.text, ngrams],
-      },
-    ];
+      });
+    }
+    mutations.push({
+      sql: `INSERT INTO search_idx(fragment_id, kind, resource_id, text, ngrams) VALUES (?, ?, ?, ?, ?)`,
+      params: [input.id, input.kind, input.resourceId ?? "", input.text, ngrams],
+    });
+    return mutations;
   }
 
   /** Index every code-point window so a tail past the first chunk remains searchable. */
@@ -523,6 +531,7 @@ export class DrizzleStore {
         end: chunk.end,
         kind: input.kind,
         text: chunk.slice,
+        fresh: true,
         locator: input.partId && input.representationId ? {
           kind: "text",
           partId: input.partId,

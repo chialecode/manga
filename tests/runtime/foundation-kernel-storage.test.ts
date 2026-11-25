@@ -202,6 +202,18 @@ describe("storage-drizzle: lock, ngrams, rebuildSearchIndex, commit isolation", 
       const newHits = store.sqlite.prepare("SELECT fragment_id FROM search_idx WHERE search_idx MATCH ?").all(matchQuery("琉璃"));
       expect(oldHits).toHaveLength(0);
       expect(newHits).toHaveLength(1);
+
+      // Fresh chunk inserts must not emit O(N) FTS5 DELETE scans on unindexed fragment_id (#109).
+      const chunkMutations = store.indexTextChunks({
+        resourceId: "res-scope-1",
+        resourceRevisionId: "rev-1",
+        partId: "body",
+        representationId: "rev-1",
+        kind: "body",
+        text: "甲".repeat(8500),
+      });
+      expect(chunkMutations.filter((m) => m.sql.startsWith("DELETE FROM search_idx"))).toHaveLength(0);
+      expect(chunkMutations).toHaveLength(6); // 3 chunks * (INSERT text_fragments + INSERT search_idx)
     } finally {
       store.close();
     }
