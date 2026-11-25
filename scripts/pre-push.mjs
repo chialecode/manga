@@ -19,19 +19,40 @@ const FULL_TRIGGER_PATHS = new Set([
   'scripts/pre-push.mjs',
 ]);
 
+const isCodeFile = (file) => /\.(c|m)?(t|j)sx?$/.test(file);
+const isFullTrigger = (file) => (
+  FULL_TRIGGER_PATHS.has(file)
+  || file.startsWith('tests/helpers/')
+  || file.startsWith('tests/fixtures/')
+  || /(^|\/)tsconfig(\.[^/]+)?\.json$/.test(file)
+  || /(^|\/)package\.json$/.test(file)
+);
+const normalizePaths = (items) => [...new Set(items.map((file) => String(file).replaceAll('\\', '/').trim()).filter(Boolean))];
+
 /** Decide whether the changed repository-relative file list requires the full Vitest suite instead of `vitest related`. */
 export function planPrePushTests(changedFiles, { forceFull = false } = {}) {
-  if (forceFull || !Array.isArray(changedFiles)) return { mode: 'full', files: [] };
-  const normalized = [...new Set(changedFiles.map((file) => String(file).replaceAll('\\', '/').trim()).filter(Boolean))];
-  if (normalized.some((file) => FULL_TRIGGER_PATHS.has(file) || file.startsWith('tests/helpers/'))) {
-    return { mode: 'full', files: normalized };
+  if (forceFull || changedFiles == null) return { mode: 'full', files: [] };
+  let existing;
+  let deleted;
+  if (Array.isArray(changedFiles)) {
+    existing = normalizePaths(changedFiles);
+    deleted = [];
+  } else if (Array.isArray(changedFiles.existing) && Array.isArray(changedFiles.deleted)) {
+    existing = normalizePaths(changedFiles.existing);
+    deleted = normalizePaths(changedFiles.deleted);
+  } else {
+    return { mode: 'full', files: [] };
   }
-  const codeFiles = normalized.filter((file) => /\.(c|m)?(t|j)sx?$/.test(file));
+  const allPaths = [...new Set([...existing, ...deleted])];
+  if (allPaths.some(isFullTrigger) || deleted.some(isCodeFile)) {
+    return { mode: 'full', files: allPaths };
+  }
+  const codeFiles = existing.filter(isCodeFile);
   if (codeFiles.length === 0) return { mode: 'skip', files: [] };
   return { mode: 'related', files: codeFiles };
 }
 
-/** Files changed between `origin/main` (or `HEAD~1`) and `HEAD`, plus working-tree edits, or `null` if git diff fails. */
+/** Files changed between `origin/main` (or `HEAD~1`) and `HEAD`, plus working-tree edits, split into existing vs deleted, or `null` if git diff fails. */
 function collectChangedFiles(cwd = root) {
   const git = (args) => spawnSync('git', args, { cwd, encoding: 'utf8' });
   const base = git(['merge-base', 'HEAD', 'origin/main']);
@@ -39,11 +60,17 @@ function collectChangedFiles(cwd = root) {
   const committed = git(['diff', '--name-only', `${ref}...HEAD`]);
   if (committed.status !== 0) return null;
   const unstaged = git(['diff', '--name-only', 'HEAD']);
-  const names = [
+  const names = normalizePaths([
     ...committed.stdout.split('\n'),
     ...(unstaged.status === 0 ? unstaged.stdout.split('\n') : []),
-  ];
-  return [...new Set(names.map((name) => name.trim()).filter(Boolean))].filter((name) => fs.existsSync(path.join(cwd, name)));
+  ]);
+  const existing = [];
+  const deleted = [];
+  for (const name of names) {
+    if (fs.existsSync(path.join(cwd, name))) existing.push(name);
+    else deleted.push(name);
+  }
+  return { existing, deleted };
 }
 
 /** Runs a command, mirrors its output to the terminal and writes all of it to the log file. Resolves with the exit code. */

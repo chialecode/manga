@@ -339,22 +339,28 @@ function migrationFiles(seed) {
 }
 // Synthesize a short 16 kHz mono English speech WAV via Windows SAPI when the optional zh-CN clip is unavailable (e.g. windows-2025 CI),
 // so the `deepseek` smoke phase can still exercise Silero VAD + mock DeepSeek transcription end-to-end.
-function ensureDeepSeekSmokeAudio(home) {
-  if (fs.existsSync(speechClip)) return speechClip;
-  if (process.platform !== "win32") return speechClip;
+function ensureDeepSeekSmokeAudio(home, preferredClip = speechClip) {
+  if (fs.existsSync(preferredClip)) return preferredClip;
+  if (process.platform !== "win32") return preferredClip;
   const fallback = path.join(home, "deepseek-speech.wav");
   fs.mkdirSync(home, { recursive: true });
   const script = [
-    "param($OutFile)",
     "Add-Type -AssemblyName System.Speech",
     "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer",
-    "$fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)",
-    "$synth.SetOutputToWaveFile($OutFile, $fmt)",
-    "$synth.Speak('The protagonist opens the old library door and finds a hidden letter.')",
-    "$synth.SetOutputToNull()",
+    "try {",
+    "  $fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)",
+    "  $synth.SetOutputToWaveFile($env:MANGA_DEEPSEEK_FALLBACK_WAV, $fmt)",
+    "  $synth.Speak('The protagonist opens the old library door and finds a hidden letter.')",
+    "  $synth.SetOutputToNull()",
+    "} finally { $synth.Dispose() }",
   ].join("; ");
-  const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script, "-OutFile", fallback], { encoding: "utf8", windowsHide: true, timeout: 20_000 });
-  return res.status === 0 && fs.existsSync(fallback) && fs.statSync(fallback).size > 8000 ? fallback : speechClip;
+  const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 20_000,
+    env: { ...process.env, MANGA_DEEPSEEK_FALLBACK_WAV: fallback },
+  });
+  return res.status === 0 && fs.existsSync(fallback) && fs.statSync(fallback).size > 8000 ? fallback : preferredClip;
 }
 
 async function smoke(phase) {

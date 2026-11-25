@@ -167,7 +167,7 @@ export async function measureChatBench(appService: MangaProductApp, grant: strin
     waits: {
       open: "press on the dock's switch → the list mounted, its newest page read and its rows painted (next frame)",
       input: "set the composer's value and dispatch input → React commit → forced layout read",
-      late: "rAF intervals while the list scrolls up 60 px a frame for 3 s, over 1.5 × the median idle interval",
+      late: "rAF intervals while the list scrolls up 60 px a frame for 2 s, over 1.5 × the median idle interval",
       older: "wheel up and list put at its top → the next older page's rows in the list and painted (next frame)",
       memory: "working set of all the application's processes with the conversation open (MiB)",
     },
