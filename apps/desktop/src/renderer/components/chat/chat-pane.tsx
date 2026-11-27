@@ -8,15 +8,47 @@ type T = Translator["t"];
 
 /**
  * The conversation of one session: messages above, input below. The right pane and the chat page are the same thing at two widths;
- * the page limits the line length so a long answer stays readable.
+ * the page limits the line length so a long answer stays readable while keeping the scrollbar at the outer pane edge.
  */
-export function ChatPane(props: { t: T; stream: StreamState; /** The conversation shown: where it is scrolled to is kept under this. */ memoryKey?: string; actions: BubbleActions; composer: ComposerProps; empty: ReactNode; formatDate: (value: string) => string; wide?: boolean; header?: ReactNode; reveal?: RevealRequest | null; onRevealed?: (found: boolean) => void }) {
+export function ChatPane(props: {
+  t: T;
+  stream: StreamState;
+  /** The conversation shown: where it is scrolled to is kept under this. */
+  memoryKey?: string;
+  actions: BubbleActions;
+  composer: ComposerProps;
+  empty: ReactNode;
+  formatDate: (value: string) => string;
+  wide?: boolean;
+  header?: ReactNode;
+  reveal?: RevealRequest | null;
+  onRevealed?: (found: boolean) => void;
+  scrollSignal?: number;
+}) {
   return (
     <div className={`chat-pane ${props.wide ? "chat-pane-page" : ""}`} data-testid={props.wide ? "chat-page-pane" : "chat-pane"}>
-      {props.header}
+      {props.header ? <div className={`chat-pane-header ${props.wide ? "chat-pane-header-wide" : ""}`}>{props.header}</div> : null}
       {props.stream.status === "error" ? <p className="chat-error" role="alert" data-testid="chat-stream-error">{props.stream.error}</p> : null}
-      <MessageList t={props.t} items={props.stream.items} hasMore={props.stream.hasMore} onOlder={props.stream.loadOlder} loadingOlder={props.stream.loadingOlder} reveal={props.reveal} onRevealed={props.onRevealed} actions={props.actions} empty={props.empty} formatDate={props.formatDate} limited={props.wide} memoryKey={props.memoryKey} ready={props.stream.status === "ready" && props.stream.session?.id === props.memoryKey} />
-      <Composer {...props.composer} />
+      <MessageList
+        t={props.t}
+        items={props.stream.items}
+        hasMore={props.stream.hasMore}
+        onOlder={props.stream.loadOlder}
+        loadingOlder={props.stream.loadingOlder}
+        reveal={props.reveal}
+        onRevealed={props.onRevealed}
+        actions={props.actions}
+        empty={props.empty}
+        formatDate={props.formatDate}
+        limited={props.wide}
+        memoryKey={props.memoryKey}
+        ready={props.stream.status === "ready" && props.stream.session?.id === props.memoryKey}
+        scrollSignal={props.scrollSignal}
+        streaming={props.composer.running}
+      />
+      <div className={`chat-composer-wrap ${props.wide ? "chat-composer-wrap-wide" : ""}`}>
+        <Composer {...props.composer} />
+      </div>
     </div>
   );
 }

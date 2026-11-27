@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { RefreshCw } from "lucide-react";
+import type { ProviderBalance } from "@manga/contracts";
 import { DEFAULT_MODEL_PROFILE, type ConnectionTestResult, type ModelProfile } from "@manga/contracts/models";
 import type { MessageKey, Translator } from "@manga/i18n";
 import { Menu } from "../../components/menu.tsx";
@@ -136,7 +138,27 @@ export function ModelsPage(props: {
   const [adding, setAdding] = useState<ProviderInfo | null>(null);
   const [rekey, setRekey] = useState<{ id: string; label: string; secret: string; problem: string | null; busy: boolean } | null>(null);
   const [dropping, setDropping] = useState<{ id: string; label: string } | null>(null);
+  const [balances, setBalances] = useState<Record<string, { loading: boolean; data?: ProviderBalance; failed?: boolean }>>({});
   const providerName = (ref: string) => providerData?.providers.find((item) => item.ref === ref)?.name ?? ref.split("/").pop() ?? ref;
+  const fetchAccountBalance = useCallback(async (accountId: string) => {
+    const api = typeof window !== "undefined" ? (window as { manga?: Partial<MangaHost> }).manga : undefined;
+    if (!api?.command) return;
+    setBalances((current) => ({ ...current, [accountId]: { ...current[accountId], loading: true, failed: false } }));
+    const res = await attempt<{ balances?: ProviderBalance[]; balance?: ProviderBalance } | ProviderBalance>("providers.balance", { accountId });
+    if (!res.ok) {
+      setBalances((current) => ({ ...current, [accountId]: { loading: false, failed: true } }));
+      return;
+    }
+    const raw = res.value;
+    const found: ProviderBalance | undefined = "accountId" in raw && typeof raw.accountId === "string"
+      ? (raw as ProviderBalance)
+      : "balance" in raw && raw.balance
+        ? raw.balance
+        : Array.isArray((raw as { balances?: ProviderBalance[] }).balances)
+          ? (raw as { balances: ProviderBalance[] }).balances.find((item) => item.accountId === accountId) ?? (raw as { balances: ProviderBalance[] }).balances[0]
+          : undefined;
+    setBalances((current) => ({ ...current, [accountId]: { loading: false, ...(found ? { data: found } : { failed: true }) } }));
+  }, []);
   const resolveAvailable = (account: AccountRef): boolean => {
     if (!hasLiveProviders || !providerData) return account.available;
     const fromProviders = providerData.accounts.find((item) => item.id === account.id);
@@ -162,6 +184,25 @@ export function ModelsPage(props: {
   for (const account of providerData?.accounts ?? []) {
     if (!accountRows.has(account.id)) accountRows.set(account.id, { account: { id: account.id, label: account.label, providerRef: account.providerRef, available: account.available }, items: [] });
   }
+  const balanceEligibleIds = [...accountRows.values()]
+    .filter(({ account }) => account.available && (
+      account.providerRef.toLowerCase().includes("deepseek")
+      || Boolean((providerData?.providers.find((item) => item.ref === account.providerRef) as { accountCapabilities?: string[] } | undefined)?.accountCapabilities?.includes("balance"))
+    ))
+    .map(({ account }) => account.id);
+  const balanceEligibleKey = balanceEligibleIds.join("|");
+  useEffect(() => {
+    if (!balanceEligibleKey) return;
+    for (const accountId of balanceEligibleKey.split("|")) {
+      void fetchAccountBalance(accountId);
+    }
+  }, [balanceEligibleKey, fetchAccountBalance]);
+
+  const formatBalanceText = (balance: ProviderBalance): string => {
+    if (!balance.available || balance.balances.length === 0) return t("models.account.balanceEmpty");
+    const summary = balance.balances.map((entry) => `${entry.currency} ${entry.totalBalance}`).join(" / ");
+    return t("models.account.balance", { amount: summary });
+  };
 
   const probe = async (id: string) => {
     setProbing(id);
@@ -302,6 +343,33 @@ export function ModelsPage(props: {
                   <button type="button" className="link-button" onClick={() => props.onOpenPlugins?.()}>{t("models.offer.open")}</button>
                 </span>
               )}
+              {account.available && balanceEligibleIds.includes(account.id) ? (() => {
+                const entry = balances[account.id];
+                return (
+                  <span className="account-balance" data-testid={`account-balance-${account.id}`}>
+                    {entry?.loading ? (
+                      <span className="detail-muted">{t("models.account.balanceLoading")}</span>
+                    ) : entry?.data ? (
+                      <span className={`chip ${entry.data.available ? "chip-quiet" : "account-balance-empty"}`}>
+                        {formatBalanceText(entry.data)}
+                      </span>
+                    ) : entry?.failed ? (
+                      <span className="detail-muted">{t("models.account.balanceError")}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="icon-button account-balance-refresh"
+                      data-testid={`account-balance-refresh-${account.id}`}
+                      aria-label={t("models.account.balanceRefresh")}
+                      title={t("models.account.balanceRefresh")}
+                      disabled={entry?.loading}
+                      onClick={() => void fetchAccountBalance(account.id)}
+                    >
+                      <RefreshCw size={12} className={entry?.loading ? "spin" : undefined} aria-hidden="true" />
+                    </button>
+                  </span>
+                );
+              })() : null}
               <span className="msettings-actions">
                 <button type="button" className="secondary-button" data-testid={`account-set-key-${account.id}`} onClick={() => setRekey({ id: account.id, label: account.label, secret: "", problem: null, busy: false })}>{t("models.account.setKey")}</button>
                 <button type="button" className="link-button" data-testid={`account-delete-${account.id}`} disabled={items.length > 0} title={items.length ? t("models.account.deleteBlocked") : undefined} onClick={() => setDropping({ id: account.id, label: account.label })}>{t("models.account.delete")}</button>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import type { AgentChatSettings, ModelProfile, ReasoningEffort } from "@manga/contracts/models";
+import type { MessageKey } from "@manga/i18n";
+import type { ComposerThinkingControl } from "../components/chat/composer.tsx";
 import { Menu, type MenuGroup, type MenuItem } from "../components/menu.tsx";
 import { attempt } from "../lib/api.ts";
 import { createPatchQueue } from "../lib/patch-queue.ts";
@@ -70,18 +72,27 @@ function modelName(connection: Connection): string {
 }
 
 /**
- * The picker on the conversation page (A-137) plus the effective active text connection it resolves to:
+ * The picker on the conversation page (A-137) plus the effective active text connection and quick thinking toggle it resolves to:
  * which model the next message goes to, how hard it thinks, and how much of the window a task may fill. A
  * project with its own model shows that one, and choosing another there changes the project's model. A model of a provider's catalogue that the account
  * has not added yet is offered too; choosing it adds it to that account. Without any text model there is nothing to pick (the composer says so).
  */
-export function useModelChoice(contextId: string | null): { picker: ReactNode; activeConnection: Connection | null } {
+export function useModelChoice(contextId: string | null): {
+  picker: ReactNode;
+  activeConnection: Connection | null;
+  thinking: ComposerThinkingControl | null;
+} {
   const s = useServices();
   const t = s.t;
   const choice = useSyncExternalStore(choiceStore.subscribe, choiceStore.get, choiceStore.get);
   const [providers, setProviders] = useState<Providers | null>(null);
   const [projectModel, setProjectModel] = useState<string | null>(null);
-  const connections = useMemo(() => ((s.settings?.connections as Connection[] | undefined) ?? []).filter((item) => item.purpose === "text" && typeof item.id === "string"), [s.settings]);
+  const connections = useMemo(
+    () => ((s.settings?.connections as Connection[] | undefined) ?? []).filter(
+      (item) => item.purpose === "text" && typeof item.id === "string" && item.account?.available !== false,
+    ),
+    [s.settings],
+  );
   const sRef = useRef(s);
   sRef.current = s;
 
@@ -131,7 +142,7 @@ export function useModelChoice(contextId: string | null): { picker: ReactNode; a
     sRef.current.setNotice(t("chat.model.added", { name: model.name }));
   }, [chooseConnection, t]);
 
-  if (!connections.length) return { picker: null, activeConnection: null };
+  if (!connections.length) return { picker: null, activeConnection: null, thinking: null };
   const valid = (id: string | null) => (id && connections.some((item) => item.id === id) ? id : null);
   const currentId = valid(projectModel) ?? valid(choice.connectionId) ?? connections[0]!.id;
   const current = connections.find((item) => item.id === currentId)!;
@@ -166,7 +177,7 @@ export function useModelChoice(contextId: string | null): { picker: ReactNode; a
       id: "effort",
       title: t("chat.model.effort"),
       items: (["off", ...levels] as const).map((level) => ({
-        id: level, testId: `chat-effort-${level}`, label: t(`models.effort.${level}`), checked: effort === level, onSelect: () => { void save({ reasoningEffort: level }); },
+        id: level, testId: `chat-effort-${level}`, label: t(`models.effort.${level}` as MessageKey), checked: effort === level, onSelect: () => { void save({ reasoningEffort: level }); },
       })),
     });
   }
@@ -183,7 +194,7 @@ export function useModelChoice(contextId: string | null): { picker: ReactNode; a
     ],
   });
 
-  const summary = [modelName(current), reasons ? t(`models.effort.${effort}`) : null, windowLabel(contextSize)].filter(Boolean).join(" · ");
+  const summary = [modelName(current), reasons ? t(`models.effort.${effort}` as MessageKey) : null, windowLabel(contextSize)].filter(Boolean).join(" · ");
   const picker = (
     <Menu
       label={t("chat.model")}
@@ -194,5 +205,20 @@ export function useModelChoice(contextId: string | null): { picker: ReactNode; a
       trigger={<><span className="chat-model-name" data-testid="chat-model-summary">{summary}</span><ChevronDown size={13} aria-hidden="true" /></>}
     />
   );
-  return { picker, activeConnection: current };
+
+  const defaultOnLevel: ReasoningEffort = profile?.reasoningEffort && levels.includes(profile.reasoningEffort)
+    ? profile.reasoningEffort
+    : levels[0] ?? "low";
+  const thinking: ComposerThinkingControl | null = reasons
+    ? {
+      supported: true,
+      enabled: effort !== "off",
+      levelLabel: effort !== "off" ? t(`models.effort.${effort}` as MessageKey) : "",
+      onToggle: () => {
+        void save({ reasoningEffort: effort === "off" ? defaultOnLevel : "off" });
+      },
+    }
+    : null;
+
+  return { picker, activeConnection: current, thinking };
 }

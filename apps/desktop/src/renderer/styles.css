@@ -7,6 +7,7 @@
 @import "./styles-agent.css";
 @import "./styles-frame.css";
 @import "./styles-workspace.css";
+@import "./styles-chat.css";
 @import "./styles-creative.css";
 @import "./styles-canvas.css";
 @import "./styles-copy.css";
@@ -70,12 +71,26 @@
   --color-player-big-hover: #AD3268E6;
   --color-player-pop-shadow: #30364733;
   --shadow-panel: 0 2px 12px #30364708;
+  --shadow-popover: 0 10px 28px #30364724;
+  --shadow-card: 0 4px 14px #30364712;
   /* The height of a column's top; the one that floats over a window-filling page is what its overlays keep clear of. */
   --column-top-h: 36px;
   --shadow-control: 0 1px 3px #3036470B;
   --color-danger: #B42318;
   /* Danger as text on the page (warnings, "不能撤销", failed states); the fill above stays the ground of danger buttons. */
   --color-danger-text: #B42318;
+  --color-danger-soft: #B4231814;
+  --color-code-bg: #F6F7FA;
+  --color-code-head: #ECEEF4;
+  --color-syntax-comment: #6A7385;
+  --color-syntax-keyword: #9D2460;
+  --color-syntax-string: #18794E;
+  --color-syntax-number: #B45309;
+  --color-syntax-fn: #1D4ED8;
+  --color-syntax-operator: #4B5565;
+  --color-syntax-punctuation: #5C6578;
+  --color-syntax-tag: #B42318;
+  --color-syntax-attr: #7C3AED;
   --color-focus: #A83267;
   --color-background: #F3F4F7;
   --color-foreground: #303647;
@@ -99,6 +114,22 @@
   --color-text: #E6E9F2;
   --color-subtle: #9AA3B8;
   --color-danger-text: #F97066;
+  --color-danger-soft: #F9706622;
+  --color-code-bg: #171B24;
+  --color-code-head: #232836;
+  --color-syntax-comment: #8A94AB;
+  --color-syntax-keyword: #F08BB6;
+  --color-syntax-string: #7CE3A8;
+  --color-syntax-number: #F7C274;
+  --color-syntax-fn: #7AB8FF;
+  --color-syntax-operator: #C2CADB;
+  --color-syntax-punctuation: #9AA3B8;
+  --color-syntax-tag: #F97066;
+  --color-syntax-attr: #C79BFF;
+  --shadow-panel: 0 2px 14px #00000044;
+  --shadow-popover: 0 12px 32px #00000066;
+  --shadow-card: 0 4px 16px #00000038;
+  --shadow-control: 0 1px 3px #00000033;
   --color-accent: #E27AA8;
   --color-accent-soft: #3A2230;
   --color-accent-deep: #F5B3D0;
@@ -172,21 +203,6 @@ button:disabled { cursor: default; opacity: .5; }
 [data-testid="reading-title"] { font-weight: 600; padding-top: 8px; }
 [data-testid="reading-body"] { border-radius: 10px; }
 [data-testid="notes-list"] > li, [data-testid="page-library"] li { border-radius: 10px; }
-.agent-pane { display: flex; flex-direction: column; gap: 15px; min-width: 0; min-height: 0; flex: 1; overflow-wrap: anywhere; }
-.agent-context { padding: 12px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); color: var(--color-subtle); font-size: 12px; }
-.agent-context h2 { color: var(--color-text); }
-.agent-materials { border-radius: 10px; font-size: 12px; }
-.agent-thread { flex: 1; padding: 12px 0; font-size: 13px; line-height: 1.8; }
-.agent-thread > h2 { color: var(--color-subtle); font-size: 12px; }
-[data-testid="agent-input"] { background: var(--color-accent-soft); margin-left: 22px; padding: 10px 14px; border-radius: 12px 12px 3px 12px; }
-.agent-diagnostics { font-size: 11px; color: var(--color-subtle); margin-top: 15px; }
-.agent-compose { border: 1px solid var(--color-border); border-radius: 15px; background: var(--color-surface); padding: 12px; box-shadow: var(--shadow-control); margin-top: auto; flex-shrink: 0; }
-.agent-compose textarea { border: 0; background: transparent; width: 100%; resize: vertical; min-height: 64px; padding: 5px 2px; box-shadow: none; font-size: 13px; }
-.agent-compose textarea::placeholder { color: var(--color-subtle); }
-.agent-compose label > span { font-size: 11px; color: var(--color-subtle); }
-.compose-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
-.compose-actions button { border-radius: 7px; font-size: 12px; }
-.agent-footnote { text-align: center; color: var(--color-subtle); font-size: 10px; padding-top: 12px; }
 
 .content-heading, .content-heading > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .content-heading { justify-content: space-between; margin-bottom: 18px; }
@@ -208,7 +224,7 @@ button:disabled { cursor: default; opacity: .5; }
 .context-chips { display: flex; gap: 7px; flex-wrap: wrap; padding: 0 0 15px; border-bottom: 1px solid var(--color-border); }
 .context-chips > span { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--color-subtle); border: 1px solid var(--color-border); padding: 5px 9px; border-radius: 20px; }
 .assistant-avatar { color: var(--color-accent); background: var(--color-accent-soft); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
-.compose-actions .send-circle { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--color-accent); color: var(--color-primary-foreground); }
+html.change-theme *, html.change-theme *::before, html.change-theme *::after { transition: none !important; }
 @media (max-width: 600px) {
   .workspace-page { padding: 14px; }
   .content-heading h1 { font-size: 13px; }

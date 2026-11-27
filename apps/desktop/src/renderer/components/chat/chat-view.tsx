@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useChat, type ChatDeps } from "../../hooks/use-chat.ts";
 import type { RecorderHandle } from "../../voice/use-recorder.ts";
 import type { DictationHandle } from "../../voice/use-dictation.ts";
 import type { StreamNote, StreamVoice } from "../../hooks/use-session-stream.ts";
-import type { ComposerProps } from "./composer.tsx";
+import type { BubbleActions } from "./bubbles.tsx";
+import type { ComposerProps, ComposerThinkingControl } from "./composer.tsx";
 import { ChatPane } from "./chat-pane.tsx";
 import { Capsule } from "./capsule.tsx";
 import { MaterialsDialog } from "./materials-dialog.tsx";
@@ -18,8 +19,15 @@ export type ChatViewProps = ChatDeps & {
   onSettings: () => void;
   /** The model, thinking and window the next message goes with (A-137); absent where there is nothing to pick. */
   modelPicker?: ReactNode;
+  /** Quick reasoning toggle pill shown beside the model picker. */
+  thinking?: ComposerThinkingControl | null;
   onStop: () => void;
   onRetry: (runId: string) => void;
+  onRegenerate?: (runId: string) => void;
+  onContinue?: (runId: string) => void;
+  onEditUser?: (runId: string, text: string) => Promise<boolean>;
+  onPickFile?: () => void;
+  onDropFiles?: (files: File[]) => void;
   /** Whether online search can be offered for the next task (the metadata module). */
   online: boolean;
   /** Whether semantic search can be offered for the next task (the semantic module is on and an embedding connection is configured). */
@@ -30,6 +38,8 @@ export type ChatViewProps = ChatDeps & {
   webSearch?: boolean;
   /** Whether finished answers can be read aloud (计划 4.7). */
   readAloud?: boolean;
+  /** Whether WebSocket streaming TTS is available on the active speech service. */
+  streamingTts?: boolean;
   resources: Array<{ id: string; title: string }>;
   /** The open resource whose recordings can be taken along, when the voice module is on. */
   recordingsOf?: string | null;
@@ -55,6 +65,49 @@ export function useChatView(props: ChatViewProps) {
   const [traceRun, setTraceRun] = useState<string | null>(null);
   const context = chat.context;
 
+  // Keep latest handlers in a ref so `BubbleActions` stays referentially stable for `React.memo` bubbles.
+  const latestRef = useRef({ props, chat });
+  latestRef.current = { props, chat };
+
+  const actions = useMemo<BubbleActions>(() => ({
+    onJumpNote: (note) => latestRef.current.props.onJumpNote(note),
+    onJumpVoice: (voice, source) => latestRef.current.props.onJumpVoice(voice, source),
+    onEditNote: (note, text) => latestRef.current.chat.editNote(note.id, text),
+    onDeleteNote: (note) => latestRef.current.chat.deleteNote(note.id),
+    onQuoteNote: (note) => latestRef.current.chat.quoteNote(note),
+    onOpenRecording: (voice) => latestRef.current.props.onOpenRecording(voice),
+    onRetry: (runId) => latestRef.current.props.onRetry(runId),
+    onRegenerate: props.onRegenerate ? (runId) => {
+      latestRef.current.chat.bumpScroll();
+      latestRef.current.props.onRegenerate?.(runId);
+    } : undefined,
+    onContinue: props.onContinue ? (runId) => {
+      latestRef.current.chat.bumpScroll();
+      latestRef.current.props.onContinue?.(runId);
+    } : undefined,
+    onEditUser: props.onEditUser ? async (runId, text) => {
+      latestRef.current.chat.bumpScroll();
+      return (await latestRef.current.props.onEditUser?.(runId, text)) ?? false;
+    } : undefined,
+    onSaveNote: (item) => latestRef.current.chat.saveAnswerAsNote(item),
+    onOpenSettings: () => latestRef.current.props.onSettings(),
+    onOpenTrace: (runId) => setTraceRun(runId),
+    onProposalChanged: () => {
+      void latestRef.current.chat.stream.reload();
+      latestRef.current.props.bump();
+    },
+    readAloud: props.readAloud ?? false,
+    streamingTts: props.streamingTts ?? false,
+    canSaveNote: chat.noteable,
+  }), [
+    props.readAloud,
+    props.streamingTts,
+    chat.noteable,
+    Boolean(props.onRegenerate),
+    Boolean(props.onContinue),
+    Boolean(props.onEditUser),
+  ]);
+
   const mic: ComposerProps["mic"] = recorder
     ? {
       t,
@@ -71,20 +124,26 @@ export function useChatView(props: ChatViewProps) {
   const attach: "page" | "frame" | null = context?.kind === "comic" ? "page" : context?.kind === "video" ? "frame" : null;
   const composerProps: ComposerProps = {
     t,
-    value: composer.draft,
-    onChange: (value) => props.patchComposer({ draft: value }),
+    ...(props.draftKey !== undefined
+      ? { draftKey: props.draftKey }
+      : { value: composer.draft, onChange: (value) => props.patchComposer({ draft: value }) }),
     mode: chat.mode,
     onMode: chat.setMode,
     canNote: chat.noteable,
     tags: chat.tags,
     images: composer.images,
+    files: composer.files ?? [],
     onRemoveTag: chat.removeTag,
     onRemoveImage: chat.removeImage,
+    onRemoveFile: chat.removeFile,
+    onPickFile: props.onPickFile,
+    onDropFiles: props.onDropFiles,
     quick: chat.quick,
     onQuick: (task) => { void chat.runQuick(task); },
     noModel: props.noModel,
     onSettings: props.onSettings,
     modelPicker: props.modelPicker,
+    thinking: props.thinking,
     running: props.running,
     onStop: props.onStop,
     onSend: () => { void chat.send(); },
@@ -130,18 +189,8 @@ export function useChatView(props: ChatViewProps) {
         header={props.header}
         empty={props.empty}
         composer={composerProps}
-        actions={{
-          onJumpNote: props.onJumpNote,
-          onJumpVoice: props.onJumpVoice,
-          onEditNote: (note, text) => chat.editNote(note.id, text),
-          onDeleteNote: (note) => chat.deleteNote(note.id),
-          onQuoteNote: (note) => chat.quoteNote(note),
-          onOpenRecording: props.onOpenRecording,
-          onRetry: props.onRetry,
-          onOpenTrace: setTraceRun,
-          onProposalChanged: () => { void chat.stream.reload(); props.bump(); },
-          readAloud: props.readAloud ?? false,
-        }}
+        actions={actions}
+        scrollSignal={chat.scrollSignal}
       />
       {materials ? (
         <MaterialsDialog

@@ -23,6 +23,8 @@ export function ConversationBar(props: {
   onNew: () => void | Promise<void>;
   onResume: (sessionId: string) => void | Promise<void>;
   onError: (message: string) => void;
+  /** Compact icon-led bar for narrow side docks so the title stays readable. */
+  compact?: boolean;
 }) {
   const { t } = props;
   const [open, setOpen] = useState(false);
@@ -52,14 +54,14 @@ export function ConversationBar(props: {
   }, [open]);
 
   return (
-    <div className="conversation-bar" ref={root} data-testid="conversation-bar">
+    <div className={`conversation-bar ${props.compact ? "conversation-bar-compact" : ""}`} ref={root} data-testid="conversation-bar">
       <strong className="conversation-title truncate" data-testid="conversation-title" title={props.title}>{props.title || t("conversation.current")}</strong>
       <span className="flex-1" />
-      <button type="button" className="secondary-button conversation-button" data-testid="conversation-new" title={t("conversation.newHint")} onClick={() => { setOpen(false); void props.onNew(); }}>
-        <MessageSquarePlus size={15} aria-hidden="true" /><span>{t("conversation.new")}</span>
+      <button type="button" className="secondary-button conversation-button" data-testid="conversation-new" aria-label={t("conversation.new")} title={t("conversation.newHint")} onClick={() => { setOpen(false); void props.onNew(); }}>
+        <MessageSquarePlus size={15} aria-hidden="true" /><span className="conversation-button-label">{t("conversation.new")}</span>
       </button>
-      <button type="button" className="secondary-button conversation-button" data-testid="conversation-history" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)}>
-        <History size={15} aria-hidden="true" /><span>{t("conversation.history")}</span>
+      <button type="button" className="secondary-button conversation-button" data-testid="conversation-history" aria-label={t("conversation.history")} title={t("conversation.history")} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)}>
+        <History size={15} aria-hidden="true" /><span className="conversation-button-label">{t("conversation.history")}</span>
       </button>
       {open ? (
         <section className="conversation-panel" role="dialog" aria-label={t("conversation.historyTitle")} data-testid="conversation-panel">

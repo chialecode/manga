@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { measureElement as measureRow, observeElementRect, useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { ArrowDown } from "lucide-react";
@@ -18,10 +18,22 @@ type T = Translator["t"];
 
 export type { BubbleActions };
 
-function ScrollButton(props: { label: string }) {
+function ScrollButton(props: { label: string; streaming?: boolean }) {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
   if (isAtBottom) return null;
-  return <button type="button" className="chat-scroll-bottom" data-testid="chat-scroll-bottom" aria-label={props.label} title={props.label} onClick={() => { void scrollToBottom(); }}><ArrowDown size={16} /></button>;
+  return (
+    <button
+      type="button"
+      className={`chat-scroll-bottom ${props.streaming ? "is-streaming" : ""}`}
+      data-testid="chat-scroll-bottom"
+      data-streaming={props.streaming ? "true" : "false"}
+      aria-label={props.label}
+      title={props.label}
+      onClick={() => { void scrollToBottom(); }}
+    >
+      <ArrowDown size={16} />
+    </button>
+  );
 }
 
 /** Where each conversation was scrolled to, kept while another one is shown (the other mode's, a settings round trip) and put back when it returns. */
@@ -66,20 +78,20 @@ function ScrollMemory(props: { memoryKey: string | undefined; ready: boolean }) 
  * Open a bound resource and the pane is at the newest message; an old message is read by scrolling up and is not pulled away from.
  * Growth at the bottom (a reply being written, rows measured after their estimate) is followed at once, not by an animation that trails it.
  */
-export function MessageList(props: ListProps) {
+export const MessageList = memo(function MessageList(props: ListProps) {
   const { t } = props;
   return (
     <StickToBottom className="chat-log" initial="instant" resize="instant" role="log" aria-label={t("chat.log")} data-testid="chat-log">
       <StickToBottom.Content className={`chat-log-content ${props.limited ? "chat-log-wide" : ""}`}>
         {props.hasMore ? <button type="button" className="link-button chat-older" data-testid="chat-older" disabled={props.loadingOlder} onClick={() => { void props.onOlder(); }}>{t("chat.older")}</button> : null}
-        {props.items.length === 0 ? <div className="chat-empty" data-testid="chat-empty">{props.empty}</div> : null}
+        {props.items.length === 0 ? <div className={`chat-empty ${props.limited ? "chat-empty-wide" : ""}`} data-testid="chat-empty">{props.empty}</div> : null}
         <VirtualRows {...props} />
       </StickToBottom.Content>
-      <ScrollButton label={t("chat.toBottom")} />
+      <ScrollButton label={t("chat.toBottom")} streaming={props.streaming} />
       <ScrollMemory memoryKey={props.memoryKey} ready={props.ready ?? props.items.length > 0} />
     </StickToBottom>
   );
-}
+});
 
 /** A message to bring into view (from a note or a quote): found by its id, the older pages loaded first when it is not among the loaded ones. */
 export type RevealRequest = { id: string; token: number };
@@ -92,6 +104,10 @@ type ListProps = {
   reveal?: RevealRequest | null;
   /** The message was shown (true) or is not in the conversation (false). */
   onRevealed?: (found: boolean) => void;
+  /** Incremented whenever the user explicitly submits a new message or quick task, re-pinning scroll to the bottom. */
+  scrollSignal?: number;
+  /** True while an assistant answer is actively streaming in this session. */
+  streaming?: boolean;
 };
 
 /** A row's height before it is measured; also what a row counts as while the pane is hidden (it measures 0 then). */
@@ -109,14 +125,15 @@ function VirtualRows(props: ListProps) {
   const { items } = props;
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const { scrollRef, isAtBottom, stopScroll, state } = useStickToBottomContext();
+  const { scrollRef, isAtBottom, scrollToBottom, stopScroll, state } = useStickToBottomContext();
   const rows = useRef<HTMLDivElement>(null);
   // Whether the last scroll left the list at its very bottom: a row measured after its estimate, or a reply growing, keeps it there.
   const pinned = useRef(true);
+  const lastScrollTop = useRef(0);
   const leftAt = useRef<{ top: number; height: number } | null>(null);
   // Another conversation in the same list starts at its newest message (or where the scroll memory puts it back, which is a scroll of its own).
   const shownKey = useRef(props.memoryKey);
-  if (shownKey.current !== props.memoryKey) { shownKey.current = props.memoryKey; pinned.current = true; leftAt.current = null; }
+  if (shownKey.current !== props.memoryKey) { shownKey.current = props.memoryKey; pinned.current = true; leftAt.current = null; lastScrollTop.current = 0; }
   const atBottom = useRef(isAtBottom);
   atBottom.current = isAtBottom;
   const [margin, setMargin] = useState(0);
@@ -138,6 +155,23 @@ function VirtualRows(props: ListProps) {
   // A row that grows (an answer being written, a recording being transcribed): at the bottom the list follows it (use-stick-to-bottom);
   // scrolled up, only a row above the viewport moves the position, so what is being read stays put.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance: Virtualizer<HTMLElement, Element>) => !atBottom.current && item.start < (instance.scrollOffset ?? 0);
+
+  // Explicit user send or quick task: re-pin and scroll cleanly to the newest message.
+  const lastScrollSignal = useRef(props.scrollSignal ?? 0);
+  useEffect(() => {
+    const sig = props.scrollSignal ?? 0;
+    if (sig === lastScrollSignal.current) return;
+    lastScrollSignal.current = sig;
+    pinned.current = true;
+    const node = scrollRef.current;
+    if (node) {
+      const bottom = Math.max(0, node.scrollHeight - node.clientHeight);
+      node.scrollTop = bottom;
+      lastScrollTop.current = bottom;
+      leftAt.current = { top: bottom, height: node.scrollHeight };
+    }
+    void scrollToBottom();
+  }, [props.scrollSignal, scrollRef, scrollToBottom]);
 
   // The rows start below the "older messages" button and the padding; the virtualizer counts from the top of the scroll container.
   const isEmpty = items.length === 0;
@@ -187,8 +221,7 @@ function VirtualRows(props: ListProps) {
 
   // use-stick-to-bottom follows growth a frame later (its resize observer sits on an ancestor of the measured rows and waits a frame):
   // a list that was at the bottom is put back there before this commit is painted, so it never shows a frame off the bottom.
-  // A scroll position above where the last commit left it is the person scrolling up (the scroll event may not have reached this list yet:
-  // the virtualizer re-renders inside it), never something to undo; the browser lowering it by no more than the content got shorter is not.
+  // Only an explicit upward move unpins; height changes from read-aloud, KaTeX, Mermaid, or <details> never unpin (fixes #91).
   useLayoutEffect(() => {
     const node = scrollRef.current;
     if (!node || node.clientHeight === 0) return;
@@ -198,6 +231,7 @@ function VirtualRows(props: ListProps) {
       const bottom = node.scrollHeight - node.clientHeight;
       if (bottom - node.scrollTop > 1) node.scrollTop = bottom;
     }
+    lastScrollTop.current = node.scrollTop;
     leftAt.current = { top: node.scrollTop, height: node.scrollHeight };
   }, [items, props.memoryKey, margin, scrollRef, state]);
 
@@ -207,11 +241,21 @@ function VirtualRows(props: ListProps) {
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
+    lastScrollTop.current = node.scrollTop;
     const onScroll = () => {
-      pinned.current = node.scrollHeight - node.scrollTop - node.clientHeight <= 1;
+      const top = node.scrollTop;
+      const distFromBottom = node.scrollHeight - top - node.clientHeight;
+      const scrolledUp = top < lastScrollTop.current - 1;
+      lastScrollTop.current = top;
+      // Only unpin when the user explicitly scrolls upward away from the bottom; height growth alone keeps `pinned.current` intact (#91).
+      if (scrolledUp && distFromBottom > NEAR_BOTTOM_PX) {
+        pinned.current = false;
+      } else if (distFromBottom <= NEAR_BOTTOM_PX) {
+        pinned.current = true;
+      }
       keepAnchor();
       const now = older.current;
-      if (now.hasMore && !now.loading && node.clientHeight > 0 && node.scrollTop < OLDER_PX && node.scrollHeight > node.clientHeight) void now.onOlder();
+      if (now.hasMore && !now.loading && node.clientHeight > 0 && top < OLDER_PX && node.scrollHeight > node.clientHeight) void now.onOlder();
     };
     node.addEventListener("scroll", onScroll, { passive: true });
     return () => node.removeEventListener("scroll", onScroll);

@@ -131,6 +131,11 @@ export const zhCNProvider = {
   "models.account.deleteBlocked": "先删除这个账户下的连接，再删除账户",
   "models.account.deleted": "已删除账户",
   "models.account.empty": "这个账户下没有连接",
+  "models.account.balance": "余额 {amount}",
+  "models.account.balanceEmpty": "余额不足",
+  "models.account.balanceRefresh": "刷新余额",
+  "models.account.balanceLoading": "查询余额中…",
+  "models.account.balanceError": "余额暂不可用",
 
   // ---- purposes, levels, results ----
   "settings.purposeSpeech": "语音合成",
