@@ -11,8 +11,8 @@ import { currentRuntime } from "./settings.ts";
 
 export type ProvidersHost = ConnectionsHost & Pick<MangaProductApp, "providers" | "plugins">;
 
-const SERVICE_NAMES: Record<ProviderServiceKind, string> = { transcription: "语音识别", speech: "语音合成", search: "网页搜索" };
-const SERVICE_PURPOSE: Record<ProviderServiceKind, "transcription" | "speech" | "search"> = { transcription: "transcription", speech: "speech", search: "search" };
+const SERVICE_NAMES: Record<ProviderServiceKind, string> = { transcription: "语音识别", speech: "语音合成", search: "网页搜索", fetch: "网页抓取", ocr: "文档识别" };
+const SERVICE_PURPOSE: Record<ProviderServiceKind, "transcription" | "speech" | "search" | "fetch" | "ocr"> = { transcription: "transcription", speech: "speech", search: "search", fetch: "fetch", ocr: "ocr" };
 
 /** A model as an account can use it: the catalogue's entry, with what the service's own list says on top. */
 export type DiscoveredModel = {

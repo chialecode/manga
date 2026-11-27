@@ -10,7 +10,7 @@ export type ProviderInfo = {
   keyUrl: string | null;
   pricesCheckedAt: string | null;
   models: DiscoveredModel[];
-  services: Array<{ kind: "transcription" | "speech" | "search"; name: string; description: string; suggested: boolean }>;
+  services: Array<{ kind: "transcription" | "speech" | "search" | "fetch" | "ocr"; name: string; description: string; suggested: boolean }>;
 };
 export type ProviderAccount = { id: string; providerRef: string; label: string; credentialConfigured: boolean; connections: number; available: boolean };
 export type DiscoveredModel = {

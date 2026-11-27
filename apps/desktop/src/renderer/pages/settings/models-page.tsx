@@ -24,8 +24,8 @@ export type ProviderActions = {
 
 type AccountRef = { id: string; label: string; providerRef: string; available: boolean };
 
-/** Provider-backed non-chat services (transcription, speech, search) persist their own service test result and cannot be edited manually. */
-const SERVICE_PURPOSES = new Set(["transcription", "speech", "search"]);
+/** Provider-backed non-chat services (transcription, speech, search, fetch, ocr) persist their own service test result and cannot be edited manually. */
+const SERVICE_PURPOSES = new Set(["transcription", "speech", "search", "fetch", "ocr"]);
 const STANDARD_ADAPTERS = new Set(["", "openai-http", "openai-chat-completions", "openai-responses"]);
 function isServiceConnection(connection: Connection): boolean {
   const purpose = String(connection.purpose ?? "");

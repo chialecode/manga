@@ -215,10 +215,15 @@ export const CommandInputs = {
   }).strict(),
   "connections.test": z.object({
     connectionId: id,
-    capability: z.enum(["text", "tools", "streaming", "transcription", "embedding", "vision", "speech", "search"]),
+    capability: z.enum(["text", "tools", "streaming", "transcription", "embedding", "vision", "speech", "search", "fetch", "ocr"]),
   }).strict(),
   /** Searches the web with the configured search service (计划 4.5); for the Agent only when the person ticked "联网搜索" for the task. */
-  "web.search": z.object({ query: z.string().min(1).max(2000), count: z.number().int().min(1).max(10).optional(), connectionId: id.optional() }).strict(),
+  "web.search": z.object({
+    query: z.string().min(1).max(2000),
+    count: z.number().int().min(1).max(50).optional(),
+    needContent: z.boolean().optional(),
+    connectionId: id.optional(),
+  }).strict(),
   "connections.delete": z.object({ connectionId: id }).strict(),
   /** Brings an audio file into the folder of a work (A-79) and transcribes the copy; the original is left where it is. */
   "library.transcribeAudio": z.object({
@@ -249,6 +254,13 @@ export const CommandInputs = {
     captureSessionIds: z.array(id).max(3).optional(),
     /** Stills prepared with `material.region` / `material.frame`; at most four. */
     imageMaterialIds: z.array(id).max(4).optional(),
+    /** Optional ad-hoc file attachments picked, pasted, or dropped in the composer (uploaded via provider Files API when supported). */
+    fileAttachments: z.array(z.object({
+      pathHandle: id,
+      name: z.string().min(1).max(256),
+      mimeType: z.string().min(1).max(128).optional(),
+      purpose: z.enum(["user_data", "text_recognition", "rich_layout_recognition"]).optional(),
+    }).strict()).max(10).optional(),
     /** Opt-in commands enabled for this run only (`metadata.search`, `semantic.search`, `webpage.fetch`, `web.search`: "联网搜索", 计划 4.4). */
     allowCommands: z.array(z.enum(["metadata.search", "semantic.search", "webpage.fetch", "web.search"])).max(4).optional(),
     /** Set when the message was made by a quick task: the chat shows the task as a tag and the debug panel names it. The task changes nothing about what the run may use. */
@@ -256,6 +268,19 @@ export const CommandInputs = {
   }).strict(),
   "agent.cancel": z.object({ runId: id }).strict(),
   "agent.retry": z.object({ runId: id }).strict(),
+  /** Continues a cancelled or `max_tokens` assistant reply using trailing assistant continuation. */
+  "agent.continueRun": z.object({ runId: id }).strict(),
+  /** Regenerates a completed, failed, or cancelled assistant reply as a fresh run. */
+  "agent.regenerateRun": z.object({
+    runId: id,
+    allowCommands: z.array(z.enum(["metadata.search", "semantic.search", "webpage.fetch", "web.search"])).max(4).optional(),
+  }).strict(),
+  /** Edits an earlier user prompt and triggers a fresh run in the same session. */
+  "agent.editAndResend": z.object({
+    runId: id,
+    text: z.string().trim().min(1).max(32 * 1024),
+    allowCommands: z.array(z.enum(["metadata.search", "semantic.search", "webpage.fetch", "web.search"])).max(4).optional(),
+  }).strict(),
   "agent.getRun": z.object({ runId: id }).strict(),
   ...MediaCommandInputs,
   ...WorkspaceCommandInputs,

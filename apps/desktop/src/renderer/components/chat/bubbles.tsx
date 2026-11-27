@@ -224,7 +224,7 @@ function AnswerExtras(props: { t: T; item: StreamAgent; live: boolean }) {
       ) : null}
       {props.live && last && last.kind !== "done" ? (
         <p className="detail-muted" role="status" data-testid={`bubble-search-${item.id}`}>
-          {last.kind === "search" ? t("chat.searching", { query: last.queries.join("、") }) : t("chat.reading", { site: siteOf(last.url) })}
+          {"queries" in last ? t("chat.searching", { query: last.queries.join("、") }) : t("chat.reading", { site: siteOf(last.url) })}
         </p>
       ) : null}
       {!props.live && unique.length ? (

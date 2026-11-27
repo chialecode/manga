@@ -10,12 +10,44 @@ export const PROVIDER_FORMAT = "manga-provider-v1";
 export const PROVIDER_FILE_MAX_BYTES = 64 * 1024;
 
 /** The adapters the host implements; a provider can only name these. `openai-chat-completions` takes a dialect (only `deepseek` so far). */
-export const PROVIDER_ADAPTERS = ["openai-chat-completions", "deepseek-asr@1", "deepseek-tts@1", "deepseek-search@1"] as const;
+export const PROVIDER_ADAPTERS = [
+  "openai-chat-completions",
+  "deepseek-asr@1",
+  "deepseek-tts@1",
+  "deepseek-search@1",
+  "deepseek-fetch@1",
+  "deepseek-ocr@1",
+] as const;
 export type ProviderAdapter = (typeof PROVIDER_ADAPTERS)[number];
 
 /** The service kinds a provider can offer besides chat models, and the adapters that serve each. */
-export const PROVIDER_SERVICE_ADAPTERS = { transcription: ["deepseek-asr@1"], speech: ["deepseek-tts@1"], search: ["deepseek-search@1"] } as const;
+export const PROVIDER_SERVICE_ADAPTERS = {
+  transcription: ["deepseek-asr@1"],
+  speech: ["deepseek-tts@1"],
+  search: ["deepseek-search@1"],
+  fetch: ["deepseek-fetch@1"],
+  ocr: ["deepseek-ocr@1"],
+} as const;
+export const PROVIDER_SERVICE_KINDS = ["transcription", "speech", "search", "fetch", "ocr"] as const;
 export type ProviderServiceKind = keyof typeof PROVIDER_SERVICE_ADAPTERS;
+
+/** Service wire interface names implemented by the host protocol layer. */
+export const PROVIDER_SERVICE_INTERFACES = [
+  "deepseek_asr",
+  "deepseek_tts",
+  "deepseek_search",
+  "deepseek_fetch",
+  "deepseek_ocr",
+] as const;
+export type ProviderServiceInterface = (typeof PROVIDER_SERVICE_INTERFACES)[number];
+
+/** Account-level capabilities a provider exposes under its declared host allowlist. */
+export const PROVIDER_ACCOUNT_CAPABILITIES = ["balance", "files"] as const;
+export type ProviderAccountCapability = (typeof PROVIDER_ACCOUNT_CAPABILITIES)[number];
+
+/** Voices offered for read-aloud speech synthesis. */
+export const SPEECH_VOICES = ["stella", "tide"] as const;
+export type SpeechVoice = (typeof SPEECH_VOICES)[number];
 
 export const PROVIDER_DIALECTS = ["deepseek"] as const;
 export type ProviderDialect = (typeof PROVIDER_DIALECTS)[number];
@@ -57,8 +89,8 @@ export const ProviderModelSchema = z.object({
 export type ProviderModel = z.infer<typeof ProviderModelSchema>;
 
 export const ProviderServiceSchema = z.object({
-  kind: z.enum(["transcription", "speech", "search"]),
-  adapter: z.enum(["deepseek-asr@1", "deepseek-tts@1", "deepseek-search@1"]),
+  kind: z.enum(PROVIDER_SERVICE_KINDS),
+  adapter: z.enum(["deepseek-asr@1", "deepseek-tts@1", "deepseek-search@1", "deepseek-fetch@1", "deepseek-ocr@1"]),
   name: text(80),
   description: z.string().max(300).default(""),
   /** The service's own limits, for the host to keep under. */
@@ -69,12 +101,14 @@ export const ProviderServiceSchema = z.object({
     requestBytes: z.number().int().positive().optional(),
     queryChars: z.number().int().positive().optional(),
     results: z.number().int().positive().optional(),
+    urlChars: z.number().int().positive().optional(),
+    pages: z.number().int().positive().optional(),
   }).strict().default({}),
   /** For speech: the voices, the first being the default. */
   voices: z.array(z.object({ id: slug, name: text(40) }).strict()).max(16).optional(),
   suggested: z.boolean().default(true),
-  /** Unit of the price: seconds of audio, billed characters, or successful searches. */
-  price: PriceSchema.extend({ unit: z.enum(["second", "char", "search"]) }).strict().optional(),
+  /** Unit of the price: seconds of audio, billed characters, successful searches, page fetches, or OCR pages. */
+  price: PriceSchema.extend({ unit: z.enum(["second", "char", "search", "fetch", "page"]) }).strict().optional(),
 }).strict();
 export type ProviderService = z.infer<typeof ProviderServiceSchema>;
 
@@ -89,6 +123,8 @@ export const ProviderFileSchema = z.object({
   /** How the host lists the models of an account. */
   discovery: z.enum(["openai-models"]).optional(),
   dialect: z.enum(PROVIDER_DIALECTS).optional(),
+  /** Account-level capabilities exposed under the declared host allowlist (e.g. balance query, Files API). */
+  accountCapabilities: z.array(z.enum(PROVIDER_ACCOUNT_CAPABILITIES)).max(PROVIDER_ACCOUNT_CAPABILITIES.length).optional(),
   models: z.array(ProviderModelSchema).max(32),
   services: z.array(ProviderServiceSchema).max(8),
   /** When the prices were read off the provider's page (YYYY-MM-DD); estimates say so. */
@@ -112,6 +148,110 @@ export const ProviderFileSchema = z.object({
   }
 });
 export type ProviderFile = z.infer<typeof ProviderFileSchema>;
+
+/** One currency entry returned by a provider account balance query (e.g. DeepSeek `GET /user/balance`). */
+export const ProviderBalanceInfoSchema = z.object({
+  currency: z.string().min(1).max(16),
+  totalBalance: z.string(),
+  grantedBalance: z.string().optional(),
+  toppedUpBalance: z.string().optional(),
+}).strict();
+export type ProviderBalanceInfo = z.infer<typeof ProviderBalanceInfoSchema>;
+
+/** Account balance / availability snapshot returned by `providers.balance`. */
+export const ProviderBalanceSchema = z.object({
+  accountId: z.string().min(1),
+  providerRef: z.string().min(1),
+  available: z.boolean(),
+  checkedAt: z.string().min(1),
+  balances: z.array(ProviderBalanceInfoSchema),
+  error: z.string().optional(),
+}).strict();
+export type ProviderBalance = z.infer<typeof ProviderBalanceSchema>;
+
+/** OCR recognition modes supported by `deepseek-ocr@1`. */
+export const OCR_PURPOSES = ["text_recognition", "rich_layout_recognition"] as const;
+export type OcrPurpose = (typeof OCR_PURPOSES)[number];
+
+export const OcrPageSchema = z.object({
+  page: z.number().int().min(1),
+  text: z.string(),
+}).strict();
+export type OcrPage = z.infer<typeof OcrPageSchema>;
+
+/** Paged text and usage returned by `ocr.recognize` / `deepseek-ocr@1`. */
+export const OcrResultSchema = z.object({
+  text: z.string(),
+  pages: z.array(OcrPageSchema),
+  purpose: z.enum(OCR_PURPOSES),
+  usage: z.object({
+    pages: z.number().int().nonnegative().optional(),
+    inputTokens: z.number().int().nonnegative().optional(),
+    outputTokens: z.number().int().nonnegative().optional(),
+  }).strict().optional(),
+}).strict();
+export type OcrResult = z.infer<typeof OcrResultSchema>;
+
+/** Web page fetch result returned by `deepseek-fetch@1` or local `webpage.fetch` extensions. */
+export const WebFetchResultSchema = z.object({
+  url: z.string().min(1),
+  finalUrl: z.string().min(1).optional(),
+  title: z.string(),
+  content: z.string(),
+  site: z.string().optional(),
+  siteIcon: z.string().optional(),
+  publishedAt: z.string().optional(),
+  source: z.enum(["local", "deepseek_fetch"]).optional(),
+  truncated: z.boolean().optional(),
+}).strict();
+export type WebFetchResult = z.infer<typeof WebFetchResultSchema>;
+
+/** One web search result item returned by standalone search or built-in server search. */
+export const WebSearchItemSchema = z.object({
+  url: z.string().min(1),
+  title: z.string(),
+  site: z.string().optional(),
+  siteIcon: z.string().optional(),
+  publishedAt: z.string().optional(),
+  snippet: z.string().optional(),
+  summary: z.string().optional(),
+  content: z.string().optional(),
+}).strict();
+export type WebSearchItem = z.infer<typeof WebSearchItemSchema>;
+
+/** Upload purpose values accepted by DeepSeek Files API (`POST /v1/files`). */
+export const FILE_UPLOAD_PURPOSES = ["user_data", "text_recognition", "rich_layout_recognition"] as const;
+export type FileUploadPurpose = (typeof FILE_UPLOAD_PURPOSES)[number];
+
+/** Reference to a file uploaded to a provider's Files API. */
+export const ProviderFileRefSchema = z.object({
+  fileId: z.string().min(1),
+  filename: z.string().min(1),
+  bytes: z.number().int().nonnegative().optional(),
+  purpose: z.enum(FILE_UPLOAD_PURPOSES).optional(),
+  mimeType: z.string().optional(),
+  createdAt: z.string().optional(),
+}).strict();
+export type ProviderFileRef = z.infer<typeof ProviderFileRefSchema>;
+
+/** Main-process single source of truth for active chat and provider capabilities (`providers.capabilities`). */
+export const ProviderCapabilitiesSchema = z.object({
+  hasAvailableTextModel: z.boolean(),
+  webSearchAvailable: z.boolean(),
+  nativeWebSearchAvailable: z.boolean(),
+  standaloneWebSearchAvailable: z.boolean(),
+  readUrlAvailable: z.boolean(),
+  speechAvailable: z.boolean(),
+  speechVoices: z.array(z.object({ id: z.string().min(1), name: z.string().min(1) }).strict()),
+  streamingTtsAvailable: z.boolean(),
+  fetchAvailable: z.boolean(),
+  ocrAvailable: z.boolean(),
+  filesAvailable: z.boolean(),
+  balanceAvailable: z.boolean(),
+  activeTextModelId: z.string().nullable(),
+  activeTextDialect: z.enum(PROVIDER_DIALECTS).nullable(),
+}).strict();
+export type ProviderCapabilities = z.infer<typeof ProviderCapabilitiesSchema>;
 
 /** Reads a provider file's bytes: the size, the JSON and the schema, with one sentence for why it is refused. */
 export function parseProviderFile(bytes: Uint8Array): { ok: true; file: ProviderFile } | { ok: false; problem: string } {

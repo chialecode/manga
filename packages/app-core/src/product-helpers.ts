@@ -131,7 +131,7 @@ export const refusedByService = (contextWindow: number) => new MangaError("BUDGE
 /** Whether the words of an error mean the request was longer than the model takes. */
 export const isContextOverflow = (error: unknown): boolean => error instanceof MangaError && (error.details as { kind?: string } | undefined)?.kind === "context";
 
-export type ModelPurposeName = "text" | "transcription" | "embedding" | "vision" | "speech" | "search";
+export type ModelPurposeName = "text" | "transcription" | "embedding" | "vision" | "speech" | "search" | "fetch" | "ocr";
 
 export type ConnectionRow = {
   id: string;

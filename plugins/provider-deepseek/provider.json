@@ -7,6 +7,7 @@
   "keyUrl": "https://platform.deepseek.com/api_keys",
   "discovery": "openai-models",
   "dialect": "deepseek",
+  "accountCapabilities": ["balance", "files"],
   "models": [
     {
       "id": "deepseek-flash",
@@ -29,7 +30,7 @@
       "contextWindow": 1048576,
       "maxOutput": 393216,
       "inputTypes": ["text"],
-      "capabilities": ["tools", "web_search", "reasoning"],
+      "capabilities": ["tools", "reasoning"],
       "reasoning": { "levels": ["low", "high", "max"], "default": "high", "canDisable": true },
       "suggested": false,
       "price": { "input": { "usd": 1.32, "per": 1000000 }, "cachedInput": { "usd": 0.044, "per": 1000000 }, "output": { "usd": 3.96, "per": 1000000 } }
@@ -63,6 +64,22 @@
       "limits": { "queryChars": 128, "results": 10 },
       "suggested": true,
       "price": { "usd": 0.75, "per": 1000, "unit": "search" }
+    },
+    {
+      "kind": "fetch",
+      "adapter": "deepseek-fetch@1",
+      "name": "网页抓取",
+      "description": "抓取并提取网页正文为 Markdown，支持动态渲染页面",
+      "limits": { "urlChars": 2048 },
+      "suggested": false
+    },
+    {
+      "kind": "ocr",
+      "adapter": "deepseek-ocr@1",
+      "name": "文档识别 (OCR)",
+      "description": "提取图片与 PDF 页面文字及版面内容",
+      "limits": { "uploadBytes": 67108864 },
+      "suggested": false
     }
   ],
   "pricesCheckedAt": "2026-11-14",
