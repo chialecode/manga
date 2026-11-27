@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { AlertCircle, Check, ChevronDown, ChevronRight, FileText, Globe, Image, Link2, Search, Sparkles, Wrench } from "lucide-react";
 import type { AgentSearchStep, AgentServerToolStep, AgentToolStep, StreamAgent } from "@manga/contracts";
 import type { Translator } from "@manga/i18n";
@@ -337,7 +338,9 @@ export const ThinkingTimeline = memo(function ThinkingTimeline(props: {
             className={`bubble-thinking-summary ${activeWorking ? "timeline-shimmer" : ""}`}
             onClick={(event) => {
               event.preventDefault();
-              setUserOpen(!isOpen);
+              flushSync(() => {
+                setUserOpen(!isOpen);
+              });
             }}
           >
             <Sparkles size={13} className="bubble-thinking-spark" aria-hidden="true" />

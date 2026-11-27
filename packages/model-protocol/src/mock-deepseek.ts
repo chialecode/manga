@@ -473,9 +473,12 @@ export function startMockDeepSeek(options: MockDeepSeekOptions = {}): Promise<{
     const wantTitle = Boolean((body.title as { enabled?: boolean } | undefined)?.enabled);
     const thinking = (body.thinking as { type?: string } | undefined)?.type !== "disabled";
 
-    // Live DeepSeek contract: `deepseek-v4-pro` rejects server-side tools and inline title generation with HTTP 400.
+    // Live DeepSeek contract: `deepseek-v4-pro` rejects server-side tools, inline title generation, and `latest_reminder` with HTTP 400.
     if (model === "deepseek-v4-pro" && (search || readUrl || wantTitle)) {
       return error(res, 400, "The server-side tool calls (deepseek_web_search, deepseek_read_url) and the title generation feature are unavailable for model deepseek-v4-pro. Please use deepseek-flash instead.");
+    }
+    if (model === "deepseek-v4-pro" && messages.some((m) => m.role === "latest_reminder")) {
+      return error(res, 400, "The latest_reminder message is unavailable for model deepseek-v4-pro. Please use deepseek-flash instead.");
     }
 
     // Validate `latest_reminder` messages the same way the live service does.

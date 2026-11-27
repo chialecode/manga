@@ -57,7 +57,8 @@
 .shell-card > .sidebar { height: auto; max-height: 100%; flex: 0 1 auto; }
 .shell-card .sidebar-scroll { flex: 0 1 auto; }
 /* The main area meets the sidebar, the rail and the top row square (UI-01): a 1 px line and the ground tell them apart, no rounded corner. */
-.shell-main { display: flex; flex-direction: column; background: var(--color-surface); border-left: 1px solid var(--color-border); overflow: hidden; isolation: isolate; }
+/* `overflow: clip` (not `hidden`) prevents Chromium focus/click scrollIntoView from ever scrolling the chrome and tab strip off screen. */
+.shell-main { display: flex; flex-direction: column; background: var(--color-surface); border-left: 1px solid var(--color-border); overflow: clip; isolation: isolate; }
 .shell-compact .shell-main, .manga-shell[data-immersive="true"] .shell-main { border-left: 0; }
 /* The right end of the title bar over the main area's tab strip, while the dock is not docked (A-136). */
 .main-top-end { position: absolute; top: 0; right: 0; z-index: 31; display: flex; height: var(--column-top-h); }
@@ -91,7 +92,7 @@
 @media (prefers-reduced-motion: reduce) { .shell-top[data-immersive="true"] { transition: none; } }
 
 /* ---- the main area: the docks of the contexts kept on screen ---- */
-.workspace-area { position: relative; flex: 1 1 0; min-height: 0; min-width: 0; }
+.workspace-area { position: relative; flex: 1 1 0; min-height: 0; min-width: 0; overflow: clip; }
 /*
  * The one way a layer that stays mounted is hidden (计划 4.8): the workspace behind the settings (A-101), the dock of a view out of sight and the parking
  * layer (A-107), a panel the dock has put behind another. `visibility: hidden` keeps the layer laid out (React Flow does not measure again when it comes

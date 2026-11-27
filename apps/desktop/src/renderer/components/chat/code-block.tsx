@@ -145,6 +145,20 @@ function isDarkTheme(): boolean {
   return typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "dark";
 }
 
+function useIsDarkTheme(): boolean {
+  const [dark, setDark] = useState<boolean>(isDarkTheme);
+  useEffect(() => {
+    if (typeof document === "undefined" || typeof MutationObserver === "undefined") return;
+    const root = document.documentElement;
+    const sync = () => setDark(root.getAttribute("data-theme") === "dark");
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
+}
+
 async function loadMermaid(): Promise<MermaidApi> {
   if (!mermaidLoader) {
     mermaidLoader = import("mermaid").then((mod) => (mod.default ?? mod) as unknown as MermaidApi);
@@ -161,10 +175,10 @@ export function sanitizeMermaidSvg(svg: string): string {
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
 }
 
-function enqueueMermaidRender(id: string, code: string): Promise<string> {
+function enqueueMermaidRender(id: string, code: string, dark: boolean): Promise<string> {
   const job = mermaidQueue.then(async () => {
     const api = await loadMermaid();
-    const theme = isDarkTheme() ? "dark" : "default";
+    const theme = dark ? "dark" : "default";
     if (mermaidThemeApplied !== theme) {
       api.initialize({
         startOnLoad: false,
@@ -174,7 +188,7 @@ function enqueueMermaidRender(id: string, code: string): Promise<string> {
       });
       mermaidThemeApplied = theme;
     }
-    const result = await api.render(id, code);
+    const result = await api.render(`${id}-${dark ? "d" : "l"}`, code);
     return sanitizeMermaidSvg(result.svg);
   });
   mermaidQueue = job.catch(() => undefined);
@@ -231,6 +245,7 @@ export const CodeBlock = memo(function CodeBlock(props: CodeBlockProps) {
   const copyTimer = useRef<number | undefined>(undefined);
   const rawId = useId();
   const mermaidId = `manga-mmd-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const darkTheme = useIsDarkTheme();
 
   useEffect(() => () => { window.clearTimeout(copyTimer.current); }, []);
 
@@ -261,13 +276,13 @@ export const CodeBlock = memo(function CodeBlock(props: CodeBlockProps) {
     return () => { active = false; };
   }, [code, lang, isMermaid, view]);
 
-  // Lazy serialized Mermaid rendering with last-valid retention during streaming.
+  // Lazy serialized Mermaid rendering with last-valid retention during streaming and live dark/light theme sync.
   useEffect(() => {
     if (!isMermaid || view !== "diagram") return;
     const source = code.trim();
     if (!source) return;
     let active = true;
-    void enqueueMermaidRender(mermaidId, source).then((rendered) => {
+    void enqueueMermaidRender(mermaidId, source, darkTheme).then((rendered) => {
       if (!active) return;
       lastValidSvg.current = rendered;
       setSvg(rendered);
@@ -282,7 +297,7 @@ export const CodeBlock = memo(function CodeBlock(props: CodeBlockProps) {
       }
     });
     return () => { active = false; };
-  }, [code, isMermaid, view, streaming, mermaidId]);
+  }, [code, isMermaid, view, streaming, mermaidId, darkTheme]);
 
   const onCopy = () => {
     void copyText(code).then((ok) => {

@@ -96,7 +96,8 @@ export function collectSources(
 export function SourceFavicon(props: { icon?: string; site: string; size?: number }) {
   const [broken, setBroken] = useState(false);
   const size = props.size ?? 14;
-  if (!props.icon || broken || !/^https?:\/\//i.test(props.icon)) {
+  // Renderer CSP restricts `img-src` to local schemes (`data:`, `blob:`, `manga-media:`); never emit external `https:` img requests.
+  if (!props.icon || broken || !/^(data:image\/|blob:|manga-media:)/i.test(props.icon)) {
     return <span className="cite-favicon-fallback" aria-hidden="true"><Globe size={Math.max(10, size - 2)} /></span>;
   }
   return (

@@ -1,7 +1,6 @@
 import { MangaError, type FileUploadPurpose, type ProviderFileRef } from "@manga/contracts";
 import {
   createRequestSignal,
-  extractExpiredFileIds,
   joinApiPath,
   mapHttpError,
   networkError,
@@ -10,8 +9,6 @@ import {
   requireMachineAnswer,
 } from "./http.ts";
 import type { DeepSeekFileDeleteOptions, DeepSeekFileUploadOptions } from "./types.ts";
-
-export { extractExpiredFileIds };
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".avif"]);
 const RICH_LAYOUT_EXTS = new Set([".pdf", ".doc", ".docx", ".ppt", ".pptx"]);

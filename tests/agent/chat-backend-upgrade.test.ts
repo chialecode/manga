@@ -274,8 +274,10 @@ describe("Enriched StreamAgent, DeepSeek product capabilities, and agent run com
     expect(bodies.length).toBeGreaterThanOrEqual(2);
     for (const body of bodies) {
       const tools = (body.tools as Array<Record<string, any>> | undefined) ?? [];
+      const msgs = (body.messages as Array<Record<string, any>> | undefined) ?? [];
       expect(tools.some((t) => t.type === "deepseek_web_search")).toBe(false);
       expect(tools.some((t) => t.type === "deepseek_read_url")).toBe(false);
+      expect(msgs.some((m) => m.role === "latest_reminder")).toBe(false);
       expect(body.title).toBeUndefined();
     }
     expect(rig.server.requests.some((r) => r.path === "/v1/tools/search")).toBe(true);
@@ -336,6 +338,7 @@ describe("Enriched StreamAgent, DeepSeek product capabilities, and agent run com
     const body = chatBodies(rig.server.requests).at(-1)!;
     expect(body.thinking).toEqual({ type: "disabled" });
     expect(body.tools).toContainEqual({ type: "deepseek_web_search" });
+    expect((body.messages as Array<{ role: string }>).some((m) => m.role === "system")).toBe(false);
     const items = await streamItems(rig);
     const agent = items.find((i): i is StreamAgent => i.kind === "agent")!;
     expect(agent.thinkingRaised).toBeFalsy();

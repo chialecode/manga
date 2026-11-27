@@ -249,8 +249,9 @@ stateDiagram-v2
 - **退出恢复：** `command_requests` 只证明命令开始，不能当作完成证据。同步操作按命令一致且成功的 `operations` 回执恢复为 `applied`。项目包导出在发布前保存仅限主进程的临时文件与成品摘要；发布后退出但尚无回执时，重启核对成品大小与 SHA-256，可补回执并恢复为已执行。未完成的操作退回 `pending`，清除对应的未完成命令请求，用户可重新选位置确认。粗剪导出把任务编号与回执一起登记，重启按导出任务的完成或中断状态恢复，不能把任务登记当作导出成功。
 - **结果回到 Agent：** 已执行、拒绝、失效与失败的简短结果放在下一轮材料上下文前部；只消费实际 Token 预算容纳的结果，在创建该轮任务的同一事务里以 `result_json.reportedRunId` 标记。容纳不下的结果留给后续任务，重试沿用已冻结的上下文。失败只汇报简短中文类别，可能含本机路径或任意外部文本的原始诊断只给所有者查看。
 - **按任务加上的外部调用：** 输入框左侧“+”（本次任务）菜单提供三项可按次勾选的外部工具：`metadata.search`（联网搜索 Bangumi 资料）、`semantic.search`（调用 Embedding 服务做语义检索，仅在 `manga.semantic` 模块开启且配好 Embedding 连接时显示）与 `webpage.fetch`（抓取指定 URL 保存为本项目网页版本，仅在项目对话且 `manga.research` 模块开启时显示）。勾选写入本次运行的临时授权（`allowCommands`），重试同一运行沿用，下一次新任务清空；模块关闭或未勾选时工具不进入清单且命令层直接拒绝，不因开启外部调用放宽任务的资料读取范围或防剧透边界。
-- **联网搜索（MODEL-07、SEARCH-03，A-134）：** “本次任务”菜单的“联网搜索”与其他外部工具一样按次勾选、重试沿用、下一轮清除，授权写作 `web.search`。所选模型配置有 `web_search` 且方言是 `deepseek` 时，由模型自己搜索：请求加 `{"type": "deepseek_web_search"}`，`web.search` 工具不提供；推理等级为“关闭”时这次改为“低”并说明。否则配置了网页搜索服务时提供 `web.search` 工具，结果只返回给模型、不保存。两样都没有时菜单项不可用并说明原因；没有勾选时命令层拒绝 `web.search`。搜索词由模型根据对话生成，宿主不把资料库里的文件名、路径或正文放进去；联网搜索不放宽资料范围。
-- **思考内容的保存与回传（MODEL-07）：** DeepSeek 对话模型的思考内容（`reasoning_content`）随助手消息保存；同一轮（最后一条用户消息之后）带工具的每个助手消息在之后的每次请求里原样带回，更早轮次的不带。模型自己搜索的记录（`server_tool_calls`）原样保存，并随这条回答带回之后的每一轮。
+- **联网搜索、读取链接与回退（MODEL-07、SEARCH-03，A-134）：** “本次任务”菜单与工具栏的“联网搜索”按次勾选、重试沿用、下一轮清除，授权写作 `web.search`。所选模型配置有 `web_search` 且方言是 `deepseek` 时（并校验模型目录能力，防止对 `deepseek-v4-pro` 等不支持内置搜索的模型发送服务端搜索工具），由模型自己搜索：请求加 `{"type": "deepseek_web_search"}`，`web.search` 工具不提供；仅当同时向模型提供客户端函数工具且推理等级为“关闭”时才将本次推理提升为“低”并标记 `thinkingRaised`（纯内置搜索无函数工具时保持关闭以降低首字延迟）。当提示词包含 `http(s)://` 链接且模型支持 DeepSeek 服务端工具时，自动附加 `{"type": "deepseek_read_url"}` 并在后续轮次原样回传 `read_link` 类型的 `server_tool_calls`。对不支持内置搜索的模型（含 `deepseek-v4-pro` 及旧持久化配置）或非 DeepSeek 模型，若已配置网页搜索服务则自动回退提供 `web.search` 工具（支持最多 50 条与 `needContent` 抓正文，返回 `siteIcon` 与摘要），结果只返回给模型、不保存。两样都没有时菜单项不可用并说明原因；没有勾选时命令层拒绝 `web.search`。搜索词由模型根据对话生成，宿主不把资料库里的文件名、路径或正文放进去；联网搜索不放宽资料范围。
+- **思考内容、实时上下文与内联标题（MODEL-07）：** DeepSeek 对话模型的思考内容（`reasoning_content`）随助手消息保存；同一轮（最后一条用户消息之后）带工具的每个助手消息在之后的每次请求里原样带回，更早轮次的不带。模型服务端工具记录（`server_tool_calls`，含搜索、打开网页、页内查找与读取链接）原样保存，并随这条回答带回之后的每一轮。`pi` 运行时对 DeepSeek 扩展请求（内置搜索、`read_url`、内联标题、`latest_reminder`、续写预填、`fileRefs` 与 `server_tool_calls`）统一走完整 DeepSeek 方言流通道，实现与 `native` 运行时的完全对等。未命名会话的首轮请求在 DeepSeek 方言下附加内联标题生成与 `latest_reminder` 时间上下文提示，并在收到标题后自动持久化到 `agent_sessions` 与向界面推送 `title` 事件。
+- **Files API 附件、续写/重生成/编辑重发：** DeepSeek 提供者账户声明 `accountCapabilities: ["balance", "files"]`。开启且插件启用时，对话附件可通过 `/v1/files` 上传（`purpose` 字段严格位于 `file` 之前；PDF/文档为 `rich_layout_recognition`，文本/代码为 `user_data`，图片省略 `purpose`），以扁平 `{ type: "file", file_id }` 引用送入对话，遇 `file_id` 过期 400 错误时自动重新上传并至多自愈重试一次，临时文件在运行结束后调用 `DELETE /v1/files/{id}` 清理；插件停用时零请求。新增所有者命令 `agent.continueRun`（使用预填续写且不生成重复用户气泡）、`agent.regenerateRun`（标记旧运行为已被替代并重跑）与 `agent.editAndResend`（在原会话修改并重发提示词）。
 - **听写、本地模型与学词命令的所有者专属边界（VOICE-10、VOICE-17）：** 应用内听写（`dictation.*`）、本地语音模型管理（`asrModel.*`）、词典维护与编辑观测（`dictionary.*`，含 `dictionary.importBatch`、`dictionary.cancelImportMetadata`、`dictionary.observeEdit`）以及学词建议确认（`dictionary.suggestions.*`）全部登记于 `OWNER_COMMANDS` 并强制校验 `owner(envelope)`，不出现在任何 Agent 工具清单或提议类型中。本机听写记录表 `dictation_history` 不建立全文或向量索引，不进入 `library.search`、会话消息流、运行材料（`agent-materials`）或上下文快照（`agent-context`），Agent 无法启动听写，也无法读取听写音频与历史记录。
 
 ### 6.2 凭据与敏感信息
@@ -370,8 +371,10 @@ MANGA 拥有公开插件 SDK、命令、上下文和数据协议。运行时实�
 | --- | --- | --- |
 | LLM | 文本/已授权材料 → 回复、整理、工具调用 | 不接收原始音频；对话成功只证明文本调用，不证明嵌入或转录；听写润色仅接收识别与音近替换后的文本及受限候选词 |
 | Embedding | 授权文本片段 → 数值向量 | 独立向量模型；记录维度、模型/索引版本；缺配置时语义检索不可用，已有本地全文检索继续 |
-| 语音合成 | 回答或小说的文字 → 音频（只在内存） | 用途 `speech` 的连接，用户在“设置 › 语音转录 › 朗读”选定；不从对话或识别连接推定 |
-| 网页搜索 | 模型生成的搜索词 → 结果列表 | 用途 `search` 的连接；只经“联网搜索”的按次授权或用户在材料搜寻里主动搜索使用 |
+| 语音合成 | 回答或小说的文字 → 音频（只在内存） | 用途 `speech` 的连接，用户在“设置 › 语音转录 › 朗读”选定；不从对话或识别连接推定；支持 `stella`/`tide` 音色、预清洗 Markdown 文本，以及支持时的 WebSocket 流式合成（`wss://.../v1/tools/tts`，经 `Sec-WebSocket-Protocol` 鉴权，失败自动退回 HTTP） |
+| 网页搜索 | 模型生成的搜索词 → 结果列表 | 用途 `search` 的连接；只经“联网搜索”的按次授权或用户在材料搜寻里主动搜索使用；支持单次最多 50 条与 `needContent` 正文抓取 |
+| 网页抓取 | 指定 URL → 净化正文 | 用途 `fetch` 的连接（`deepseek-fetch@1`）；供 `webpage.fetch` 按 `backend: "auto" | "local" | "deepseek"` 选用并在不可用时回退本地抓取，调用记入 `service_usage` |
+| 文档识别（OCR） | PDF 或图片字节 → 分页文本与全文 | 用途 `ocr` 的连接（`deepseek-ocr@1`）；由所有者命令 `ocr.recognize` 调用并记入 `service_usage` |
 | ASR | 经用户授权的音频 → 转录文本 | 只发往用户为听写或录音笔记独立选定的唯一引擎（本机 `sherpa-onnx` 模型，或 `purpose = 'transcription'` 的外部连接）；不可用时明确报错、零跨引擎自动回退、绝不回退普通文本连接 |
 
 连接/模型目录按用途筛选；目录响应只是候选，不自动选择或变更当前模型。用途、配置版本和请求序号共同约束晚到探测结果；修改连接/模型后清除旧能力验证。发送前检查任务用途和模型用途，错配必须在网络前拒绝；不以试着上传音频的方法探测文本模型是否支持 ASR。未提供的 ASR/Embedding 保持未配置及 not-run，不能写成服务失败。用途隔离、LLM/ASR 路由与设置已落实；语义索引见 SEARCH-02。
@@ -394,7 +397,7 @@ MANGA 拥有公开插件 SDK、命令、上下文和数据协议。运行时实�
 
 本地端点和远程端点分别表达网络与数据授权。回退模型只能使用用户已允许的路由；本地模型失败不会自动把材料提交给未经授权的远程服务。
 
-**提供者插件（PLUG-07、MODEL-06）。** 声明式提供者插件不运行代码，它的提供者文件只能引用宿主已有的接法：`openai-chat-completions`（方言 `deepseek`：显式 `thinking`、`reasoning_effort` 为 `low`/`high`/`max`、思考时不发采样参数、`reasoning_content` 与 `server_tool_calls` 按上节回传）、`deepseek-asr@1`、`deepseek-tts@1`、`deepseek-search@1`。从提供者加入的连接记下提供者账户（共用一把密钥）与目录里的模型 id；每次调用前宿主确认插件仍启用且受信任、地址在声明的主机里，否则不发请求。新接法要在宿主里实现并补假服务与契约后才能被提供者文件引用。
+**提供者插件（PLUG-07、MODEL-06）。** 声明式提供者插件不运行代码，它的提供者文件只能引用宿主已有的接法：`openai-chat-completions`（方言 `deepseek`：显式 `thinking`、`reasoning_effort` 为 `low`/`high`/`max`、思考时不发采样参数、`reasoning_content` 与 `server_tool_calls` 按上节回传，支持 `deepseek_web_search`、`deepseek_read_url`、内联标题、`latest_reminder` 与预填续写）、`deepseek-asr@1`、`deepseek-tts@1`（含 HTTP 与 WebSocket 流式合成）、`deepseek-search@1`、`deepseek-fetch@1`、`deepseek-ocr@1`，并可声明账户能力 `accountCapabilities`（如 `balance` 查询 `/user/balance` 与 `files` 使用 `/v1/files`）。从提供者加入的连接记下提供者账户（共用一把密钥）与目录里的模型 id；每次调用前宿主确认插件仍启用且受信任、地址在声明的主机里，否则不发请求。新接法要在宿主里实现并补假服务与契约后才能被提供者文件引用。
 
 ### 9.3 可靠性与成本
 

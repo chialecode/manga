@@ -587,11 +587,11 @@ const AgentBubble = memo(function AgentBubble(props: { t: T; item: StreamAgent; 
               type="button"
               className="bubble-action-btn bubble-action-subtle"
               data-testid={`bubble-trace-${item.id}`}
-              aria-label={t("trace.open")}
               title={t("trace.open")}
               onClick={() => trace(item.runId)}
             >
               <ScrollText size={13} aria-hidden="true" />
+              <span>{t("trace.open")}</span>
             </button>
           ) : null}
 

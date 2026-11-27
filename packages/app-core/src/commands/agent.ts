@@ -599,7 +599,7 @@ export function startRunLoop(
       ...(result.toolSteps ? { toolSteps: result.toolSteps } : {}),
     };
     finish("succeeded", "usage_json", JSON.stringify(usagePayload));
-    if (!app.closed) {
+    if (!app.closed && app.runAbort.get(runId) === controller) {
       app.emitAgentStream({
         kind: "done",
         sessionId,
@@ -616,6 +616,8 @@ export function startRunLoop(
       });
     }
   }).catch((error) => {
+    // If `cancelRun` already detached this controller and emitted the cancelled terminal event, do not clobber a replacement run.
+    if (app.closed || app.runAbort.get(runId) !== controller) return;
     const cancelled = controller.signal.aborted || deadline.aborted;
     const isDeadlineTimeout = deadline.aborted && !controller.signal.aborted;
     const status: "failed" | "cancelled" = cancelled ? (isDeadlineTimeout ? "failed" : "cancelled") : "failed";
@@ -639,7 +641,7 @@ export function startRunLoop(
       };
       finish("failed", "error_json", JSON.stringify(payload));
       mergeUsageMeta({ stopReason, errorCode });
-      if (!app.closed) {
+      if (!app.closed && app.runAbort.get(runId) === controller) {
         app.emitAgentStream({
           kind: "done",
           sessionId,
@@ -663,7 +665,7 @@ export function startRunLoop(
     };
     finish(status, "error_json", JSON.stringify(payload));
     mergeUsageMeta({ stopReason, errorCode, ...(refusal ? { refusal: true } : {}) });
-    if (!app.closed) {
+    if (!app.closed && app.runAbort.get(runId) === controller) {
       app.emitAgentStream({
         kind: "done",
         sessionId,
@@ -677,8 +679,10 @@ export function startRunLoop(
       });
     }
   }).finally(() => {
-    endLiveExtras(runId);
-    if (app.runAbort.get(runId) === controller) app.runAbort.delete(runId);
+    if (app.runAbort.get(runId) === controller) {
+      endLiveExtras(runId);
+      app.runAbort.delete(runId);
+    }
     if (!app.closed) app.trace.prune();
   });
 }

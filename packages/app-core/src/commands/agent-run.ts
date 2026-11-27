@@ -528,7 +528,19 @@ async function agentLoop(
   // visible material and the user's instruction agree with the snapshot the receipt records.
   const frozenContext = typeof snapshot.contextText === "string" ? snapshot.contextText : undefined;
   const materialMessage = frozenContext ? { role: "system" as const, content: clipMaterial(frozenContext, shares.material) } : materialContextMessage(app, snapshot, shares.material);
-  let messages: ChatMessage[] = [...history, ...(materialMessage ? [materialMessage] : []), ...runMessages];
+  // When DeepSeek built-in server tools (`deepseek_web_search` / `deepseek_read_url`) are offered alongside client function tools,
+  // remind the model that built-in server tools are active (otherwise `deepseek-flash` tends to focus only on client function tools).
+  const serverToolsHint = offered.length > 0 && (nativeSearch || autoReadUrl)
+    ? {
+        role: "system" as const,
+        content: nativeSearch && autoReadUrl
+          ? "本次对话已开启内置联网搜索与网页链接读取能力；涉及实时信息、公开网页或用户提供的 URL 时请直接使用内置联网搜索/链接读取并保留来源引用，涉及用户本地资料库或笔记时再调用本地工具。"
+          : nativeSearch
+            ? "本次对话已开启内置联网搜索能力；涉及实时信息、公开网页或最新资料时请直接使用内置联网搜索并保留来源引用，涉及用户本地资料库或笔记时再调用本地工具。"
+            : "本次对话已开启内置网页链接读取能力；当用户提供 HTTP/HTTPS 链接并要求读取或总结时，请直接使用内置链接读取功能获取网页内容，涉及用户本地资料库或笔记时再调用本地工具。",
+      }
+    : undefined;
+  let messages: ChatMessage[] = [...(serverToolsHint ? [serverToolsHint] : []), ...history, ...(materialMessage ? [materialMessage] : []), ...runMessages];
   const images: FrozenImage[] = snapshot.media?.images ?? [];
   const delivery: DeliveryNote[] = [];
   if (images.length) {
@@ -753,7 +765,7 @@ async function agentLoop(
     const isContinueStep = hasContinuePrefill && step === stepsUsed;
     const stepBaseText = isContinueStep ? initialBaseText : "";
     const wantInlineTitle = Boolean(snapshot.wantInlineTitle && !generatedTitle && !isContinueStep && extras.dialect === "deepseek" && !isV4Pro);
-    const latestReminder = extras.dialect === "deepseek" ? formatLatestReminder(new Date()) : undefined;
+    const latestReminder = extras.dialect === "deepseek" && !isV4Pro ? formatLatestReminder(new Date()) : undefined;
 
     let scale = 1;
     let attemptsLeft = 3;
@@ -830,6 +842,10 @@ async function agentLoop(
         for await (const event of modelStream(app, {
           runId, step, connection, apiKey, protocol, runtime: frozenRuntime, delivery, request,
         })) {
+          if (signal.aborted) {
+            flushLiveText(true);
+            throw new MangaError("CANCELLED", "run cancelled", { retryable: true, details: { errorCode: "cancelled" } });
+          }
           if (event.type === "reasoning-delta") {
             if (!reasoningStartedAt) {
               reasoningStartedAt = new Date().toISOString();
@@ -1224,13 +1240,38 @@ export function cancelRun(app: AgentRunHost, envelope: CommandEnvelope) {
   app.assertWritable();
   const input = envelope.input as { runId: string };
   const live = app.runAbort.get(input.runId);
+  const row = app.store.sqlite.prepare("SELECT session_id, usage_json FROM agent_runs WHERE id = ?").get(input.runId) as { session_id: string; usage_json: string | null } | undefined;
+  const now = new Date().toISOString();
   // Flush any buffered in-memory text before aborting so `agent.continueRun` never loses streamed tokens.
   const extras = liveRunExtras(input.runId);
   if (extras?.text) {
-    app.store.sqlite.prepare("UPDATE agent_runs SET live_text = ?, updated_at = ? WHERE id = ? AND status IN ('queued','running','waiting_input')").run(extras.text, new Date().toISOString(), input.runId);
+    app.store.sqlite.prepare("UPDATE agent_runs SET live_text = ?, updated_at = ? WHERE id = ? AND status IN ('queued','running','waiting_input')").run(extras.text, now, input.runId);
   }
-  live?.abort();
-  const changed = app.store.sqlite.prepare("UPDATE agent_runs SET status = 'cancelled', updated_at = ? WHERE id = ? AND status IN ('queued','running','waiting_input')").run(new Date().toISOString(), input.runId).changes;
+  // Detach from `runAbort` and live extras immediately so a subsequent `continueRun` / `retry` / `regenerateRun`
+  // is never blocked while the aborted HTTP stream finishes tearing down in the background.
+  if (live) {
+    app.runAbort.delete(input.runId);
+    endLiveExtras(input.runId);
+    live.abort();
+  }
+  const prevUsage = (row?.usage_json ? safeJsonValue(row.usage_json) : {}) as Record<string, unknown>;
+  const changed = app.store.sqlite.prepare("UPDATE agent_runs SET status = 'cancelled', usage_json = ?, updated_at = ? WHERE id = ? AND status IN ('queued','running','waiting_input')").run(
+    JSON.stringify({ ...prevUsage, stopReason: "cancelled", errorCode: "cancelled" }),
+    now,
+    input.runId,
+  ).changes;
+  if (changed > 0 && row?.session_id && !app.closed) {
+    app.emitAgentStream({
+      kind: "done",
+      sessionId: row.session_id,
+      runId: input.runId,
+      status: "cancelled",
+      stopReason: "cancelled",
+      canContinue: true,
+      errorCode: "cancelled",
+      error: null,
+    });
+  }
   return { cancelled: Boolean(live) || changed > 0 };
 }
 

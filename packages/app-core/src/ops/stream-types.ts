@@ -1,12 +1,6 @@
-import type { SourceLocator } from "@manga/contracts";
-
 export type {
-  AgentSearchStep,
   StreamAgent,
   StreamItem,
-  StreamNote,
-  StreamUser,
-  StreamVoice,
 } from "@manga/contracts";
 
 /** The slice of the capture service the message stream reads; kept narrow so the stream stays a plain query. */

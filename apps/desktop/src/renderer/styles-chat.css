@@ -536,6 +536,8 @@
 }
 .chat-pill:hover:not(:disabled) { background: var(--color-muted); color: var(--color-text); }
 .chat-pill.is-active { background: var(--color-accent-soft); border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border)); color: var(--color-accent); font-weight: 500; }
+.chat-composer[data-narrow="true"] .chat-bar { gap: 3px; }
+.chat-composer[data-narrow="true"] .chat-switch > button { padding: 3px 7px; }
 .chat-composer[data-narrow="true"] .chat-pill { padding: 0 7px; }
 .chat-stop-inline { color: var(--color-danger-text); }
 .chat-stop-inline:hover { background: var(--color-danger-soft); }

@@ -5,7 +5,7 @@
 | 模块 ID / 产品名称 / 负责人 | `manga.agent` / Agent / 开发者 |
 | 文档状态 / 实现状态 | 会话/运行循环、即时 runId、材料快照、持久消息/工具检查点、同 run 重试与双 runtime 已接线；停靠栏是聊天窗口、对话标签没有停靠栏、上下文调试面板、快捷任务模板与使用记录（A-47、A-48、A-52）已实现并自检（见[实现现状](../delivery/status.md)）；对话记录可以在设置里删除（A-89）、模型的添加与编辑在弹窗里（A-90）已实现并自检；技能与完整阅读上下文待实现；产品验收为 not-run |
 | 需求 / 设计依据 | AGENT-01—07、MODEL-01、MODEL-04—MODEL-07、SEARCH-03、AT-49/50、AT-184—AT-188、AT-192、AT-193、AT-95—AT-97 |
-| 包与公开入口 | `packages/app-core`、`packages/model-protocol`；`agent.createSession`、`agent.send`、`agent.cancel`、`agent.retry`、`agent.getRun`；另有 `session.stream`、`debug.context`、`quickTasks.list/save/delete/reorder/restore`、`usage.query`（契约见 `packages/contracts/src/inputs-workspace.ts`） |
+| 包与公开入口 | `packages/app-core`、`packages/model-protocol`；`agent.createSession`、`agent.send`、`agent.cancel`、`agent.retry`、`agent.continueRun`、`agent.regenerateRun`、`agent.editAndResend`、`agent.getRun`、`providers.capabilities`、`providers.balance`、`ocr.recognize`；另有 `session.stream`、`debug.context`、`quickTasks.list/save/delete/reorder/restore`、`usage.query`（契约见 `packages/contracts/src/inputs-workspace.ts` 与 `packages/contracts/src/inputs-models.ts`） |
 
 ## 1. 责任与依赖
 
@@ -15,7 +15,7 @@
 
 ## 2. 数据与公开能力
 
-AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历史、连接与预算；`agent.send` 立即返回当前 `runId`，完成态经 `agent.getRun` 轮询，流式文字写入 `live_text`。任务 grant 只含用户勾选的可读材料，不附带资源写权限，Agent 只能改自己创建的笔记。已执行工具按同一 run 的命令回执恢复，重试不得因模型改参数再生成一条副作用。截止时间与已用步数跨恢复保持。无报价不写假费用。取消只作用于未结束的运行。
+AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历史、连接与预算；`agent.send` 立即返回当前 `runId`，实时输出经 `MangaProductApp.onAgentStream` 与主进程约 33 ms 合并通道 `manga:agent-stream` 推给渲染端（增量合并、结构事件即时送达），同时 `live_text` 的 SQLite 写入节流到约 280 ms（步骤切换、完成或取消时立即刷盘），兼顾流畅度与崩溃恢复。`session.stream` 返回的 `StreamAgent` 携带 `reasoningStartedAt`、`reasoningElapsedMs`、`search`、`serverToolSteps`、`toolSteps`、`citations`、`usage`（含缓存命中、思考令牌、搜索/抓页次数与估算费用）、`modelId`、`stopReason`、`canContinue`、`refusal`、`generatedTitle`、`errorCode` 与 `thinkingRaised`；`StreamUser` 携带脱敏附件摘要。`agent.continueRun`（续写不重复用户消息）、`agent.regenerateRun`（标记旧运行已替代并重跑）与 `agent.editAndResend`（编辑重发）均为所有者命令。任务 grant 只含用户勾选的可读材料，不附带资源写权限，Agent 只能改自己创建的笔记。已执行工具按同一 run 的命令回执恢复，重试不得因模型改参数再生成一条副作用。截止时间与已用步数跨恢复保持。无报价不写假费用。取消只作用于未结束的运行。
 
 媒体材料（漫画区域图、视频帧、字幕窗口、转写、资源库摘要）在发送时冻结进 run 快照。图像按预算重编码为 JPEG：每任务 ≤ 4 张、每张 ≤ 1.5 MB、合计 ≤ 4 MB，字节保存在 `agent_runs.snapshot_json`，使重试与恢复发送同一画面；会话与运行列表不读取快照字段，对外的 run 详情去掉图像字节，资料包不导出运行记录，完整备份按数据库原样包含。改为附件引用并给历史图像定保留期记为 [LOOP-05](../delivery/status.md#loop-05)。
 
@@ -30,19 +30,19 @@ AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历�
 
 ### 提供者、账户与 DeepSeek 对话模型（PLUG-07、MODEL-06、MODEL-07，A-133、A-134）
 
-- **提供者注册表**（`packages/app-core/src/providers/registry.ts`）：启用且受信任的提供者插件的提供者文件；`providers.list` 列出可加入的提供者，`providers.discover` 用密钥按 `GET /models` 读取账户的模型列表（离线或失败时用文件里的目录），`providers.add` 一次加入勾选的模型与服务，`providers.setKey` 改账户的密钥，`providers.deleteAccount` 删除账户与它的连接。这些是所有者命令，不在 Agent 的命令表里。
+- **提供者注册表与能力查询**（`packages/app-core/src/providers/registry.ts`、`commands/providers.ts`）：启用且受信任的提供者插件的提供者文件；`providers.list` 列出可加入的提供者，`providers.discover` 用密钥按 `GET /models` 读取账户的模型列表（离线或失败时用文件里的目录），`providers.add` 一次加入勾选的模型与服务（含 `transcription`、`speech`、`search`、`fetch`、`ocr`），`providers.setKey` 改账户的密钥，`providers.deleteAccount` 删除账户与它的连接，`providers.capabilities` 综合核验账户与插件可用性返回当前聊天栏能力快照，`providers.balance` 查询声明了 `balance` 能力的提供者账户余额（`/user/balance`）。这些是所有者命令，不在 Agent 的命令表里。
 - **访问门**（`providers/access.ts`）：每次调用前确认插件仍启用且受信任、地址在声明的主机里，再从保险库取账户的密钥；不满足时以原因拒绝、不发请求；插件停用时进行中的请求被取消（`providerAbortReason`）。
-- **连接**：从提供者加入的连接记下账户与目录里的模型 id，地址与模型不能改成别的；新的用途 `speech`（语音合成）与 `search`（网页搜索）；新加入的连接只在该用途还没有选定时成为默认。
-- **思考**：DeepSeek 方言下两个运行时都显式发送 `thinking: {type}`，推理等级映射为 `low`/`high`/`max`（`deepseekEffort`），关掉思考时不发等级；思考中不发 `temperature` 等无效参数。带工具的一轮里，每个助手消息的 `reasoning_content` 在之后的每次请求里原样带回（缺少时服务返回 400），更早的轮次不带。思考内容随回答保存在 `agent_messages.payload_json`，对话里折叠为“思考过程”。标题等后台小任务关闭思考。
-- **联网搜索**：任务勾选 `web.search` 且所选模型的配置有 `web_search`、方言是 `deepseek` 时，请求在函数工具之外加 `{"type": "deepseek_web_search"}`，`web.search` 工具不再提供；推理等级为关闭时这次改为“低”并在回答上说明（`thinkingRaised`）。流式的 `server_tool_event` 显示为搜索进度，`annotations` 显示为来源列表，`server_tool_calls` 原样保存，下一轮（同一任务的下一步与同一会话的下一个任务）随这条回答带回。计费的搜索次数记入 `service_usage`。PI 运行时下只发起搜索（LOOP-47）。
-- **网页搜索工具**（SEARCH-03）：模型不用内置搜索、配置了网页搜索服务时，勾选“联网搜索”提供 `web.search`（`providers/web-search.ts`）；结果只返回给模型、不保存；命令层在没有勾选时拒绝。
-- **错误**：余额不足（402）、内容被拒（`content_filter`）、流式中途的 `error`、限流与过载分别给出中文原因；费用由提供者文件的价格估算，回答与使用记录标为“估算”并写价格的核对日期。
+- **连接与扩展服务**：从提供者加入的连接记下账户与目录里的模型 id，地址与模型不能改成别的；服务用途涵盖 `transcription`、`speech`（支持 `stella`/`tide` 音色、预清洗 Markdown 与 WebSocket 流式合成及 HTTP 回退）、`search`（单次最多 50 条、支持 `needContent` 与 `siteIcon`）、`fetch`（`deepseek-fetch@1`，经 `webpage.fetch` 按 `backend: "auto" | "local" | "deepseek"` 选用并回退本地抓取）与 `ocr`（`deepseek-ocr@1`，经所有者命令 `ocr.recognize` 调用）；新加入的连接只在该用途还没有选定时成为默认。
+- **思考、内联标题、时间提示与 Files API**：DeepSeek 方言下两个运行时都显式发送 `thinking: {type}`，推理等级映射为 `low`/`high`/`max`（`deepseekEffort`），关掉思考时不发等级；思考中不发 `temperature` 等无效参数。带工具的一轮里，每个助手消息的 `reasoning_content` 在之后的每次请求里原样带回（缺少时服务返回 400），更早的轮次不带。思考内容随回答保存在 `agent_messages.payload_json`，对话里折叠为“思考过程”统一时间线。未命名会话首轮在 DeepSeek 方言下启用内联标题生成（写回 `agent_sessions` 并推送 `title` 事件）与 `latest_reminder` 注入；独立后台小任务仍关闭思考。附件可通过 DeepSeek `/v1/files` 上传（`purpose` 严格先于 `file`），以扁平 `file_id` 送入对话，遇到过期 400 自动重传自愈一次并在结束后清理；插件停用时零请求。
+- **联网搜索、读取链接与 PI 对等**：任务勾选 `web.search` 且所选模型具备 `web_search` 能力、方言是 `deepseek` 时（并排除不支持内置搜索的 `deepseek-v4-pro`，即使旧配置残留也自动回退独立 `web.search`），请求附加 `{"type": "deepseek_web_search"}`，`web.search` 工具不再提供；仅在同时提供客户端函数工具且推理关闭时才将本次推理提升为“低”并标记 `thinkingRaised`。当用户输入包含 HTTP(S) 链接时自动启用 `deepseek_read_url` 并原样保存和回传 `read_link` 的 `server_tool_calls`。流式 `server_tool_event` 聚合为 `serverToolSteps` 与三级引用 `citations`，`server_tool_calls` 原样保存并在后续轮次带回。计费的搜索与抓页次数记入 `service_usage`。`pi` 运行时通过 `usesDeepSeekExtendedStream` 走完整 DeepSeek 扩展流路径，与 `native` 运行时完全对等。
+- **网页搜索工具**（SEARCH-03）：模型不用内置搜索（含 `deepseek-v4-pro` 自动回退）、配置了网页搜索服务时，勾选“联网搜索”提供 `web.search`（`providers/web-search.ts`）；结果只返回给模型、不保存；命令层在没有勾选时拒绝。
+- **错误**：通过 `classifyAgentError` 与 `extractExpiredFileIds` 统一分类认证失败、余额不足（402）、内容被拒（`content_filter`/`refusal`）、文件过期或无效、上下文超长、流式中途错误、限流、过载与插件停用，界面展示对应中文原因与恢复入口；费用由提供者文件的价格估算，回答与使用记录标为“估算”并写价格的核对日期。
 
 ## 3. Agent 与界面
 
 来源正文中的指令不能授予权限。模型不能填写 actor、scopeHandle 或磁盘路径。
 
-**聊天窗口（A-48）。** 停靠栏是当前会话的对话记录：`session.stream` 把该会话的笔记气泡、语音气泡、用户消息与 Agent 消息按时间合并（渲染端每页 200 条）；输入框含引用标签行（选区、漫画区域、视频时间点或 A-B 区间）、“笔记/问 Agent”切换（只在打开的资源与作品主页出现；书架等没有归属的页面只问 Agent，不改动记住的选择）、麦克风、附件与“+”菜单、发送。材料、字幕范围、联网等选项在“+”菜单与材料对话框里；发送失败时输入不丢，Agent 运行中仍可记笔记，附件不因运行中而禁用。停靠栏收起时留下悬浮胶囊，可记笔记与录音（没有归属的页面只有麦克风）。对话页不显示停靠栏：消息流与输入框居中，对话列表在左栏下部。没有模型连接时显示“尚未配置模型”并仍可记笔记。
+**聊天窗口（A-48）。** 停靠栏是当前会话的对话记录：`session.stream` 把该会话的笔记气泡、语音气泡、用户消息与 Agent 消息按时间合并（渲染端每页 200 条），流式运行通过 `manga:agent-stream` 实时推送并在渲染端按帧合并，滚动粘性仅在用户主动向上滚动时释放；回复区支持富文本 Markdown/GFM 表格、按需加载的 PrismJS 代码高亮、KaTeX 公式与严格模式 Mermaid 图表、统一思考与工具时间线、三级引用角标/悬停卡/来源栏，以及复制、朗读（含音色切换与流式 TTS）、续写、重新生成、存为笔记、编辑重发与查看调用记录。输入框采用自适应镜像高度与独立草稿订阅，含引用标签行（选区、漫画区域、视频时间点或 A-B 区间）、文件拖放/粘贴/挑选附件、“笔记/问 Agent”切换（只在打开的资源与作品主页出现；书架等没有归属的页面只问 Agent，不改动记住的选择）、“深度思考”与“联网搜索”直达胶囊（窄宽自动折叠图标）、麦克风、附件与“+”菜单、发送。材料、字幕范围、联网等选项在“+”菜单与材料对话框里；发送失败时输入不丢，Agent 运行中仍可记笔记，附件不因运行中而禁用，点快捷任务自动切到“问 Agent”。停靠栏收起时留下悬浮胶囊，可记笔记与录音（没有归属的页面只有麦克风）。对话页不显示停靠栏：空会话居中欢迎态、消息流与输入框居中配外置稳定滚动条，对话列表在左栏下部。没有可用模型连接时按 `providers.capabilities` 显示“尚未配置模型”并仍可记笔记。
 
 **上下文调试面板。** 标题栏按钮与快捷键在主面板下方打开，页签为当前、上次任务、事件、复制 JSON；高度可调（120—640 px），开合状态按会话保存在本地。内容来自 `debug.context`（模型、工具、预算、上次运行）和已冻结的快照，不另造一份；复制时由 `redactForDebug` 二次处理：凭据与令牌键值、`data:` 图像与大块二进制只保留字符数与短哈希，本机路径已由主进程去掉。面板打开不改变阅读器的尺寸测量。
 
@@ -56,6 +56,6 @@ AgentRun 固定会话、grant、材料修订快照、冻结 runtime、会话历�
 
 ## 5. 验证与未决
 
-DeepSeek：`tests/agent/deepseek-thinking.test.ts`（两个运行时的思考开关、等级映射、`reasoning_content` 回传与拒绝、内置搜索的请求与解析、错误分类）、`tests/agent/deepseek-agent.test.ts`（3 步工具循环、联网搜索与下一轮回传、后台任务关思考、插件停用时中止与零请求）、`tests/agent/models-providers.test.tsx`、`tests/research/web-search.test.ts`、`tests/research/usage-services.test.ts`；真实接口 `tests/real/deepseek-contract.test.ts`（只在有密钥文件时运行）。AT-09/11/12/13/44/49/50 的子场景（`tests/agent/loop.test.ts`、`protocol-faults.test.ts`，`tests/runtime/grants-package-inventory.test.ts`、`location-ownership-idempotency.test.ts`）。真实 API 契约按独立用途读取忽略的本地配置，普通 CI 不联网。A-22 自研/PI 双 runtime 已接入 `completeText`/`streamText`，设置可切换，运行中冻结。不得因子场景通过宣称模块或产品验收完成。AT-64、AT-66、AT-67 与 AT-54/58/59 的结果见[实现现状](../delivery/status.md)；调试面板脱敏、快捷任务渲染与校验、使用记录写入分别有单元测试，打包烟测 `window-walk` 阶段走过聊天窗口、调试面板与快捷任务。
+DeepSeek：`tests/agent/deepseek-thinking.test.ts`（两个运行时的思考开关、等级映射、`reasoning_content` 回传与拒绝、内置搜索的请求与解析、错误分类）、`tests/agent/deepseek-agent.test.ts`（3 步工具循环、联网搜索与下一轮回传、后台任务关思考、插件停用时中止与零请求）、`tests/agent/deepseek-extended.test.ts`（`deepseek_read_url`、内联标题、`latest_reminder`、续写预填、PI 扩展流对等、Files API、`/v1/tools/fetch`、`/v1/tools/ocr`、`/user/balance` 与 WebSocket 流式 TTS）、`tests/agent/chat-backend-upgrade.test.ts`（实时 IPC 推送与 DB 节流、富化 `StreamAgent`、`deepseek-v4-pro` 自动回退 `web.search`、自动读取链接、Files API 过期自愈与清理、`agent.continueRun`/`regenerateRun`/`editAndResend`）、`tests/shell/chat-upgrade.test.tsx`（Markdown/代码/公式/Mermaid/三级引用/思考与工具时间线/流式增量合并/滚动粘性/消息操作/输入框胶囊）、`tests/voice/read-aloud-ws.test.ts`（WebSocket 流式朗读与 HTTP 回退）、`tests/agent/models-providers.test.tsx`、`tests/research/web-search.test.ts`、`tests/research/usage-services.test.ts`；真实接口 `tests/real/deepseek-contract.test.ts`（只在有密钥文件时运行）。AT-09/11/12/13/44/49/50 的子场景（`tests/agent/loop.test.ts`、`protocol-faults.test.ts`，`tests/runtime/grants-package-inventory.test.ts`、`location-ownership-idempotency.test.ts`）。真实 API 契约按独立用途读取忽略的本地配置，普通 CI 不联网。A-22 自研/PI 双 runtime 已接入 `completeText`/`streamText`，设置可切换，运行中冻结。不得因子场景通过宣称模块或产品验收完成。AT-64、AT-66、AT-67 与 AT-54/58/59 的结果见[实现现状](../delivery/status.md)；调试面板脱敏、快捷任务渲染与校验、使用记录写入分别有单元测试，打包烟测 `window-walk`、`deepseek`、`trace` 与 `loop` 阶段走过聊天窗口、思考与来源、调用追踪、长会话、调试面板与快捷任务。
 
 `getRun` 返回用户输入、消息检查点与 live text；App 刷新恢复当前 run；重试从已执行工具回执续作。
