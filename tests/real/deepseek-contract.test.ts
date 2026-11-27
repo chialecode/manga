@@ -3,8 +3,23 @@ import path from "node:path";
 import { deflateSync } from "node:zlib";
 import { afterAll, describe, expect, it } from "vitest";
 import {
-  searchDeepSeek, speechBilledChars, streamText, synthesizeDeepSeek, transcribeDeepSeek,
-  type AiRuntimeId, type ChatMessage, type StreamEvent, type TextRequest,
+  createDeepSeekTtsStream,
+  deleteDeepSeekFile,
+  fetchDeepSeekBalance,
+  fetchDeepSeekWeb,
+  formatLatestReminder,
+  ocrDeepSeekDocument,
+  searchDeepSeek,
+  searchDeepSeekWeb,
+  speechBilledChars,
+  streamText,
+  synthesizeDeepSeek,
+  transcribeDeepSeek,
+  uploadDeepSeekFile,
+  type AiRuntimeId,
+  type ChatMessage,
+  type StreamEvent,
+  type TextRequest,
 } from "@manga/model-protocol";
 import { buildPluginPackage } from "../../packages/app-core/src/plugins/package.ts";
 import { startApp, tempProfile, waitForRun } from "../helpers/app.ts";
@@ -21,7 +36,7 @@ import { makeKey, tmpDir } from "../helpers/plugin-fixtures.ts";
 const keyFile = process.env.MANGA_LIVE_DEEPSEEK_KEY_FILE;
 const enabled = Boolean(keyFile) && !process.env.CI;
 const BASE = "https://api.deepseek.com";
-const MAX_REQUESTS = 40;
+const MAX_REQUESTS = 70;
 const MODEL = "deepseek-flash";
 
 let used = 0;
@@ -34,16 +49,30 @@ const key = () => fs.readFileSync(keyFile!, "utf8").trim();
 const scrub = (text: string) => (enabled ? text.split(key()).join("<key>") : text);
 const record = (name: string, outcome: "ok" | "failed", detail: Record<string, unknown>) => results.push({ case: name, outcome, detail: JSON.parse(scrub(JSON.stringify(detail))) as Record<string, unknown> });
 
-type Streamed = { text: string; reasoning: string; calls: Array<{ id: string; name: string; arguments: string }>; server: number; citations: number; usage?: Record<string, unknown>; serverToolCalls?: unknown[]; ms: number; firstMs: number | null };
+type Streamed = {
+  text: string;
+  reasoning: string;
+  title: string;
+  calls: Array<{ id: string; name: string; arguments: string }>;
+  server: number;
+  serverSteps: string[];
+  citations: number;
+  usage?: Record<string, unknown>;
+  serverToolCalls?: unknown[];
+  stopReason?: string;
+  ms: number;
+  firstMs: number | null;
+};
 async function chat(request: Omit<TextRequest, "model"> & { model?: string }, runtime: AiRuntimeId = "native"): Promise<Streamed> {
   take();
   const started = Date.now();
-  const out: Streamed = { text: "", reasoning: "", calls: [], server: 0, citations: 0, ms: 0, firstMs: null };
+  const out: Streamed = { text: "", reasoning: "", title: "", calls: [], server: 0, serverSteps: [], citations: 0, ms: 0, firstMs: null };
   const calls = new Map<string, { id: string; name: string; arguments: string }>();
   for await (const event of streamText("openai-chat-completions", BASE, key(), { model: MODEL, dialect: "deepseek", maxOutputTokens: 800, maxTokensField: "max_tokens", ...request } as TextRequest, runtime) as AsyncIterable<StreamEvent>) {
     if ((event.type === "text-delta" || event.type === "reasoning-delta") && out.firstMs === null) out.firstMs = Date.now() - started;
     if (event.type === "text-delta") out.text += event.text;
     else if (event.type === "reasoning-delta") out.reasoning += event.text;
+    else if (event.type === "title-delta") out.title += event.text;
     else if (event.type === "server-tool") out.server += 1;
     else if (event.type === "tool-call-delta") {
       const call = calls.get(event.callId) ?? { id: event.callId, name: event.name, arguments: "" };
@@ -53,14 +82,42 @@ async function chat(request: Omit<TextRequest, "model"> & { model?: string }, ru
     } else if (event.type === "completed") {
       out.usage = event.usage as Record<string, unknown> | undefined;
       out.serverToolCalls = event.serverToolCalls;
+      out.serverSteps = (event.serverToolSteps ?? []).map((step) => `${step.kind}:${step.status}`);
       out.citations = event.citations?.length ?? 0;
+      out.stopReason = event.stopReason;
+      if (event.title && !out.title) out.title = event.title;
     } else if (event.type === "error") throw Object.assign(new Error(event.message), { code: event.code });
   }
   out.calls = [...calls.values()];
   out.ms = Date.now() - started;
   return out;
 }
-const shape = (streamed: Streamed) => ({ textChars: streamed.text.length, reasoningChars: streamed.reasoning.length, toolCalls: streamed.calls.length, serverEvents: streamed.server, citations: streamed.citations, ms: streamed.ms, firstMs: streamed.firstMs, inputTokens: streamed.usage?.inputTokens, outputTokens: streamed.usage?.outputTokens, cachedInputTokens: streamed.usage?.cachedInputTokens, searches: streamed.usage?.searches });
+const shape = (streamed: Streamed) => ({
+  textChars: streamed.text.length,
+  reasoningChars: streamed.reasoning.length,
+  titleChars: streamed.title.length,
+  toolCalls: streamed.calls.length,
+  serverEvents: streamed.server,
+  serverSteps: streamed.serverSteps,
+  citations: streamed.citations,
+  stopReason: streamed.stopReason,
+  ms: streamed.ms,
+  firstMs: streamed.firstMs,
+  inputTokens: streamed.usage?.inputTokens,
+  outputTokens: streamed.usage?.outputTokens,
+  cachedInputTokens: streamed.usage?.cachedInputTokens,
+  reasoningTokens: streamed.usage?.reasoningTokens,
+  searches: streamed.usage?.searches,
+  fetches: streamed.usage?.fetches,
+});
+
+/** Minimal valid 1-page synthetic PDF holding the string "Fog Bay Harbor 42". */
+function syntheticPdf(): Buffer {
+  return Buffer.from(
+    "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 200 100]/Parent 2 0 R/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 10 50 Td (Fog Bay Harbor 42) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000056 00000 n \n0000000111 00000 n \n0000000232 00000 n \n0000000325 00000 n \ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n393\n%%EOF\n",
+    "ascii",
+  );
+}
 
 /** A 96×64 picture: the left half red, the right half blue, drawn here. */
 function syntheticPng(): string {
@@ -323,6 +380,151 @@ describe.skipIf(!enabled)("DeepSeek, the real service", () => {
     } finally {
       ctx.app.close();
     }
+  });
+
+  it("exercises extended DeepSeek dialect, PI search parity, Files API, fetch, OCR, balance, and WS TTS live", { timeout: 600_000 }, async () => {
+    // (E1) Account balance (record only availability & currency codes, never monetary amounts).
+    take();
+    const balStarted = Date.now();
+    const balance = await fetchDeepSeekBalance({ baseUrl: BASE, apiKey: key(), timeoutMs: 15_000 });
+    record("balance", "ok", { isAvailable: balance.isAvailable, currencies: balance.balances.map((b) => b.currency), ms: Date.now() - balStarted });
+    expect(typeof balance.isAvailable).toBe("boolean");
+
+    // (E2) Built-in web search on PI runtime (parity with native: server events, citations, serverToolCalls, usage).
+    const piSearch = await chat({
+      messages: [{ role: "user", content: "请务必先联网搜索：DeepSeek 官方网站首页现在的标题是什么？用一句话回答，并说明来源网站。" }],
+      tools: [LOOKUP],
+      reasoningEffort: "low",
+      nativeWebSearch: true,
+    }, "pi");
+    record("native-search-pi", piSearch.server > 0 ? "ok" : "failed", { ...shape(piSearch), serverToolCalls: piSearch.serverToolCalls?.length ?? 0 });
+    expect(piSearch.server).toBeGreaterThan(0);
+    expect(piSearch.text.length).toBeGreaterThan(0);
+
+    // (E3) Built-in read_url + inline title + latest_reminder + reasoning_tokens on deepseek-flash.
+    const readAndTitle = await chat({
+      messages: [{ role: "user", content: "请读取 https://example.com 并用一句话概括，同时说明今天是星期几。" }],
+      reasoningEffort: "low",
+      readUrl: true,
+      inlineTitle: true,
+      safetyCheck: "high",
+      latestReminder: formatLatestReminder(new Date(), { language: "中文", platform: "App" }),
+    });
+    record("read-url-title-reminder", readAndTitle.text.length > 0 && readAndTitle.title.length > 0 ? "ok" : "failed", shape(readAndTitle));
+    expect(readAndTitle.text.length).toBeGreaterThan(0);
+    expect(readAndTitle.title.length).toBeGreaterThan(0);
+    expect(readAndTitle.server).toBeGreaterThan(0);
+
+    // (E4) Continuation prefill on deepseek-flash.
+    const continued = await chat({
+      messages: [
+        { role: "user", content: "用一句话继续写关于虚构港口雾湾的描写。" },
+        { role: "assistant", content: "雾湾的灯塔每晚" },
+      ],
+      continuePrefill: true,
+      maxOutputTokens: 64,
+    });
+    record("continuation-prefill", continued.text.length > 0 ? "ok" : "failed", shape(continued));
+    expect(continued.text.length).toBeGreaterThan(0);
+
+    // (E5) deepseek-v4-pro reasoning works and native deepseek_web_search is explicitly rejected with 400.
+    const v4Think = await chat({
+      model: "deepseek-v4-pro",
+      messages: [{ role: "user", content: "13 × 19 等于多少？只答数字。" }],
+      reasoningEffort: "low",
+      maxOutputTokens: 128,
+    });
+    record("v4-pro-reasoning", /247/.test(v4Think.text) ? "ok" : "failed", shape(v4Think));
+    expect(v4Think.text).toContain("247");
+    take();
+    const v4SearchReject = await fetch(`${BASE}/chat/completions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key()}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: "deepseek-v4-pro", thinking: { type: "enabled" }, reasoning_effort: "low", tools: [{ type: "deepseek_web_search" }], messages: [{ role: "user", content: "hi" }], max_tokens: 32 }),
+    });
+    record("v4-pro-rejects-native-search", v4SearchReject.status === 400 ? "ok" : "failed", { status: v4SearchReject.status });
+    expect(v4SearchReject.status).toBe(400);
+
+    // (E6) Files API (/v1/files) upload -> chat with flat file_id -> delete cleanup (PDF + text).
+    const uploadedIds: string[] = [];
+    try {
+      take(2);
+      const pdfRef = await uploadDeepSeekFile({ baseUrl: BASE, apiKey: key(), filename: "sample.pdf", mimeType: "application/pdf", data: syntheticPdf() });
+      uploadedIds.push(pdfRef.fileId);
+      const txtRef = await uploadDeepSeekFile({ baseUrl: BASE, apiKey: key(), filename: "note.txt", mimeType: "text/plain", data: Buffer.from("Fog Bay code is 7391.\n", "utf8") });
+      uploadedIds.push(txtRef.fileId);
+
+      const readPdf = await chat({
+        messages: [{ role: "user", content: "这两个文件里的两个数字分别是什么？只回答两个数字。", fileRefs: [pdfRef, txtRef] }],
+        maxOutputTokens: 64,
+      });
+      const matched = /42/.test(readPdf.text) && /7391/.test(readPdf.text);
+      record("files-api-roundtrip", matched ? "ok" : "failed", { ...shape(readPdf), matched, pdfPurpose: pdfRef.purpose, txtPurpose: txtRef.purpose });
+      expect(matched).toBe(true);
+    } finally {
+      for (const fileId of uploadedIds) {
+        take();
+        const del = await deleteDeepSeekFile({ baseUrl: BASE, apiKey: key(), fileId });
+        expect(del.deleted).toBe(true);
+      }
+    }
+
+    // (E7) Standalone /v1/tools/search (needContent + siteIcon), /v1/tools/fetch, /v1/tools/ocr.
+    take();
+    const searchStart = Date.now();
+    const richSearch = await searchDeepSeekWeb({ baseUrl: BASE, apiKey: key(), query: "DeepSeek API", count: 2, needContent: true, timeoutMs: 30_000 });
+    record("web-search-content", richSearch.results.length > 0 ? "ok" : "failed", {
+      ms: Date.now() - searchStart,
+      results: richSearch.results.length,
+      hasSiteIcon: Boolean(richSearch.results[0]?.siteIcon),
+      contentChars: richSearch.results[0]?.content?.length ?? 0,
+    });
+    expect(richSearch.results.length).toBeGreaterThan(0);
+
+    take();
+    const fetchStart = Date.now();
+    const fetched = await fetchDeepSeekWeb({ baseUrl: BASE, apiKey: key(), url: "https://example.com", timeoutMs: 30_000 });
+    record("web-fetch", fetched.content.length > 0 ? "ok" : "failed", { ms: Date.now() - fetchStart, titleChars: fetched.title.length, contentChars: fetched.content.length, source: fetched.source });
+    expect(fetched.content.length).toBeGreaterThan(0);
+
+    take();
+    const ocrStart = Date.now();
+    const ocr = await ocrDeepSeekDocument({ baseUrl: BASE, apiKey: key(), filename: "sample.pdf", mimeType: "application/pdf", data: syntheticPdf(), purpose: "text_recognition", timeoutMs: 60_000 });
+    record("ocr-pdf", ocr.text.includes("42") ? "ok" : "failed", { ms: Date.now() - ocrStart, pages: ocr.pages.length, textChars: ocr.text.length, usage: ocr.usage });
+    expect(ocr.text).toContain("42");
+
+    // (E8) HTTP TTS with `tide` voice + live WebSocket streaming TTS (`wss://api.deepseek.com/v1/tools/tts`).
+    take();
+    let tideBytes = 0;
+    const tideStart = Date.now();
+    const tide = await synthesizeDeepSeek(BASE, key(), { text: "雾湾灯塔。", voice: "tide", timeoutMs: 60_000, onChunk: (pcmChunk) => { tideBytes += pcmChunk.length; } });
+    record("speech-tide", tideBytes > 0 ? "ok" : "failed", { billedChars: tide.billedChars, pcmBytes: tideBytes, firstChunkMs: tide.firstChunkMs, ms: Date.now() - tideStart });
+    expect(tideBytes).toBeGreaterThan(0);
+
+    take();
+    const wsChunks: Uint8Array[] = [];
+    const wsStart = Date.now();
+    const wsSession = createDeepSeekTtsStream({
+      baseUrl: BASE,
+      apiKey: key(),
+      voice: "stella",
+      timeoutMs: 60_000,
+      onChunk: (pcmChunk) => wsChunks.push(pcmChunk),
+    });
+    wsSession.push("星穹航路的灯塔，");
+    wsSession.push("在黄昏时亮起。");
+    const wsDone = await wsSession.finish();
+    record("speech-ws-stream", wsDone.bytes > 0 ? "ok" : "failed", {
+      transport: wsDone.transport,
+      billedChars: wsDone.billedChars,
+      chunks: wsChunks.length,
+      pcmBytes: wsDone.bytes,
+      firstChunkMs: wsDone.firstChunkMs,
+      ms: Date.now() - wsStart,
+    });
+    expect(wsDone.bytes).toBeGreaterThan(0);
+    expect(wsDone.bytes % 2).toBe(0);
+    expect(wsDone.firstChunkMs).not.toBeNull();
   });
 });
 

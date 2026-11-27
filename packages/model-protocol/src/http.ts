@@ -1,4 +1,49 @@
-import { MangaError } from "@manga/contracts";
+import { MangaError, type AgentErrorCode } from "@manga/contracts";
+import type { RequestSignal } from "./types.ts";
+
+export type {
+  AgentCitation,
+  AgentErrorCode,
+  AgentSearchStep,
+  AgentServerToolStep,
+  AgentStopReason,
+  ChatMessage,
+  Citation,
+  CompletedText,
+  DeepSeekBalanceOptions,
+  DeepSeekBalanceResult,
+  DeepSeekCommonOptions,
+  DeepSeekFetchOptions,
+  DeepSeekFileDeleteOptions,
+  DeepSeekFileUploadOptions,
+  DeepSeekOcrOptions,
+  DeepSeekSearchOptions,
+  DeepSeekTtsWsOptions,
+  DeepSeekTtsWsResult,
+  DeepSeekTtsWsSession,
+  FilePart,
+  FileUploadPurpose,
+  ImagePart,
+  MessageFileRef,
+  OcrPurpose,
+  OcrResult,
+  ProviderBalanceInfo,
+  ProviderFileRef,
+  RequestSignal,
+  ServerToolEvent,
+  SpeechVoice,
+  StreamEvent,
+  StreamUsage,
+  TextRequest,
+  ToolDefinition,
+  TranscriptionRequest,
+  TranscriptionResult,
+  TranscriptionSegment,
+  VideoPart,
+  WebFetchResult,
+  WebSearchItem,
+  WebSource,
+} from "./types.ts";
 
 export function rejectCredentialUrl(url: string): void {
   let parsed: URL;
@@ -32,12 +77,6 @@ export function joinApiPath(baseUrl: string, suffix: string): string {
   return `${base}${path}`;
 }
 
-export type RequestSignal = {
-  signal: AbortSignal;
-  clear: () => void;
-  isTimedOut: () => boolean;
-};
-
 /** Combines a timeout with an optional caller AbortSignal and clears timer + listener cleanly in `clear()`. */
 export function createRequestSignal(timeoutMs: number, external?: AbortSignal): RequestSignal {
   const controller = new AbortController();
@@ -70,12 +109,12 @@ export function createRequestSignal(timeoutMs: number, external?: AbortSignal): 
 
 /** Sleeps for `ms` milliseconds, waking immediately with `CANCELLED` if `signal` aborts. */
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) return Promise.reject(new MangaError("CANCELLED", "request cancelled", { retryable: true }));
+  if (signal?.aborted) return Promise.reject(new MangaError("CANCELLED", "request cancelled", { retryable: true, details: { errorCode: "cancelled" } }));
   if (ms <= 0) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new MangaError("CANCELLED", "request cancelled", { retryable: true }));
+      reject(new MangaError("CANCELLED", "request cancelled", { retryable: true, details: { errorCode: "cancelled" } }));
     };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
@@ -85,136 +124,113 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
   });
 }
 
-/** What a service counted for one answer. DeepSeek also says how much of the input came from its cache and how many searches it ran (计划 4.4, 4.9). */
-export type StreamUsage = { inputTokens?: number; outputTokens?: number; costUsd?: number; cachedInputTokens?: number; searches?: number };
-
 /**
- * A step of a search the service runs itself (DeepSeek's `server_tool_event`, 计划 4.4): a search started with its queries, a page being opened, a step
- * finished with the sources it found. Only what the interface shows is kept.
+ * Extracts expired/missing DeepSeek Files API identifiers (`file-api-...`) from an error message or error object so
+ * callers can invalidate cached remote file references and re-upload from local storage.
  */
-export type ServerToolEvent =
-  | { kind: "search"; callId: string; queries: string[] }
-  | { kind: "open"; callId: string; url: string }
-  | { kind: "done"; callId: string; sources: WebSource[]; page?: WebSource };
+const FILE_API_ID = /\bfile-api-[A-Za-z0-9_-]+\b/g;
+const FILE_EXPIRED_HINT = /(file[_ -]?id|file[_ -]?data|file\b).*(not[ _-]?found|missing|expired|invalid|deleted|does ?n[o']t exist|not exist)|(not[ _-]?found|missing|expired|invalid|deleted).*(file[_ -]?id|file-api-)/i;
+const FILE_INVALID_HINT = /(file[_ -]?(count|size|type|format|parse)|storage[ _-]?limit|password[ _-]?protected|unsupported file|failed to parse|file_data only accepts)/i;
 
-/** A web page a search found or an answer cites. */
-export type WebSource = { url: string; title: string; site?: string; publishedAt?: string; snippet?: string };
-
-/** A citation in an answer: the source, and where in the answer's text it applies (character offsets). */
-export type Citation = { url: string; title: string; start?: number; end?: number };
-
-export type StreamEvent =
-  | { type: "text-delta"; text: string }
-  | { type: "reasoning-delta"; text: string }
-  | { type: "server-tool"; event: ServerToolEvent }
-  | { type: "tool-call-delta"; callId: string; name: string; argumentsDelta: string }
-  | { type: "completed"; finishReason: string; usage?: StreamUsage; serverToolCalls?: unknown[]; citations?: Citation[] }
-  | { type: "error"; code: string; message: string; retryable: boolean };
-
-/** A still the model may look at. Only images travel to a chat model: audio is transcribed first and never sent as sound. */
-export type ImagePart = { mediaType: "image/jpeg" | "image/png" | "image/webp"; base64: string };
-
-/** A whole file handed to the model as it is (a PDF, 计划 4.5). Only the native runtime sends it, and only to a model whose profile takes PDF. */
-export type FilePart = { mediaType: "application/pdf"; filename: string; base64: string; /** For the budget only; not sent. */ pages: number };
-
-/** A stretch of video handed to the model as a clip (计划 4.5). Only the native runtime sends it, and only over Chat Completions (`video_url`). */
-export type VideoPart = { mediaType: "video/mp4"; base64: string; /** For the budget only; not sent. */ seconds: number };
-
-export type ChatMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-  /** Attached to user messages only. */
-  images?: ImagePart[];
-  /** Attached to user messages only. */
-  files?: FilePart[];
-  /** Attached to user messages only; the Responses protocol never carries them (the caller sends frames instead). */
-  videos?: VideoPart[];
-  toolCallId?: string;
-  toolCalls?: Array<{ id: string; name: string; arguments: string }>;
-  /**
-   * What the model thought before this assistant message (`reasoning_content`). Sent back only within the turn it belongs to, the way DeepSeek asks for
-   * it during a tool loop; earlier turns go without it (计划 4.3, the rule checked against the real service is in the stage report).
-   */
-  reasoning?: string;
-  /** The searches the service ran itself for this assistant message, as it gave them; sent back unchanged (DeepSeek `server_tool_calls`). */
-  serverToolCalls?: unknown[];
-};
-
-export type ToolDefinition = {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-};
-
-export type TextRequest = {
-  model: string;
-  messages: ChatMessage[];
-  tools?: ToolDefinition[];
-  stream?: boolean;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  /** The most tokens the model may answer with; left out, the service decides. */
-  maxOutputTokens?: number;
-  /** Chat Completions names the limit `max_tokens`, or `max_completion_tokens` for models that reason. */
-  maxTokensField?: "max_tokens" | "max_completion_tokens";
-  /** How hard a reasoning model thinks: `reasoning_effort` for Chat Completions, `reasoning.effort` for Responses. Left out when the model does not reason. */
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "max";
-  /**
-   * How the service differs from plain Chat Completions. `deepseek`: thinking is switched by `thinking: {type}` and always said (the service thinks by
-   * default), `reasoning_effort` takes low, high or max, `reasoning_content` is read and sent back, and the built-in web search can be offered.
-   */
-  dialect?: "deepseek";
-  /** Offer the service's own web search with the tools (only the deepseek dialect has one; it needs thinking on). */
-  nativeWebSearch?: boolean;
-  /** Sampling temperature when the model does not reason; omitted when `reasoningEffort` is set. */
-  temperature?: number;
-  /** The model's window, for runtimes that need to know it. */
-  contextWindow?: number;
-};
-
-export type TranscriptionRequest = {
-  model: string;
-  fileName: string;
-  bytes: Uint8Array;
-  mimeType: string;
-  /** Names and terms the speaker is likely to say; helps the recogniser spell them. */
-  prompt?: string;
-  /** ISO-639-1 hint, when the speaker's language is known. */
-  language?: string;
-  /** Ask for per-segment times (`verbose_json`). Providers that do not support it answer plain text. */
-  timestamps?: boolean;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-};
-
-export type TranscriptionSegment = { start: number; end: number; text: string };
-export type TranscriptionResult = { text: string; segments?: TranscriptionSegment[]; duration?: number; language?: string };
+export function extractExpiredFileIds(errorOrMessage: unknown): string[] {
+  if (errorOrMessage instanceof MangaError) {
+    const details = errorOrMessage.details as { expiredFileIds?: unknown; reason?: unknown } | undefined;
+    if (Array.isArray(details?.expiredFileIds)) {
+      const fromDetails = details.expiredFileIds.filter((item): item is string => typeof item === "string" && item.length > 0);
+      if (fromDetails.length) return [...new Set(fromDetails)];
+    }
+    const text = `${errorOrMessage.message} ${typeof details?.reason === "string" ? details.reason : ""}`;
+    return extractExpiredFileIds(text);
+  }
+  const text = typeof errorOrMessage === "string"
+    ? errorOrMessage
+    : errorOrMessage instanceof Error
+      ? errorOrMessage.message
+      : "";
+  if (!text) return [];
+  const matches = text.match(FILE_API_ID);
+  if (!matches?.length) return [];
+  return [...new Set(matches)];
+}
 
 /**
- * Why an answer with an error status is an error, in one word: the request is longer than the model takes, the model is not there, the path is not there, or none is known. Only the word is kept, never the
- * body: a provider can reflect request text or authorization into its error body, and public command errors are persisted and displayed.
+ * Why an answer with an error status is an error, in one word: the request is longer than the model takes, the model is not there, the path is not there,
+ * an uploaded file expired or is invalid, or none is known.
  */
 const CONTEXT_TOO_LONG = /context[ _-]?(length|window)|maximum context|too many tokens|token limit|prompt is too long|input is too long|reduce the length|exceeds? the (model'?s )?(maximum|limit)|string too long/i;
 
-function reasonOf(status: number, body: string): "model" | "path" | "context" | undefined {
+function reasonOf(status: number, body: string): "model" | "path" | "context" | "file_expired" | "file_invalid" | undefined {
   if ((status === 400 || status === 413 || status === 422) && CONTEXT_TOO_LONG.test(body)) return "context";
+  const expiredIds = extractExpiredFileIds(body);
+  if ((status === 400 || status === 404 || status === 422) && expiredIds.length && FILE_EXPIRED_HINT.test(body)) return "file_expired";
+  if ((status === 400 || status === 413 || status === 415 || status === 422) && FILE_INVALID_HINT.test(body)) return "file_invalid";
   const names = /model/i.test(body) && /(not[ _-]?found|does ?n[o']t exist|not exist|unknown|invalid|no such|unsupported|not available|not_found)/i.test(body);
   if (status === 404) return names ? "model" : "path";
   if ((status === 400 || status === 422) && names) return "model";
   return undefined;
 }
 
+function errorCodeOfHttp(status: number, kind: string | undefined, body: string): AgentErrorCode {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 402) return "balance";
+  if (status === 429) return "rate_limit";
+  if (status >= 500) return "server";
+  if (kind === "context") return "context_overflow";
+  if (kind === "file_expired" || kind === "file_invalid") return "file_invalid";
+  if (kind === "model" || kind === "path" || status === 404) return "capability_missing";
+  if (/content[_ ]?filter|safety[_ ]?check|refusal/i.test(body)) return "refusal";
+  return "unknown";
+}
+
 export function mapHttpError(status: number, body: string): MangaError {
-  // Out of credit and too busy are their own kinds: the person tops up the account, or waits (计划 4.3, 4.9).
-  if (status === 402) return new MangaError("PROVIDER_UNAVAILABLE", "the account has no balance left", { details: { status, kind: "billing" } });
-  if (status === 503) return new MangaError("PROVIDER_UNAVAILABLE", "the service is busy", { retryable: true, details: { status, kind: "busy" } });
+  // Out of credit and too busy are their own kinds: the person tops up the account, or waits.
+  if (status === 402) return new MangaError("PROVIDER_UNAVAILABLE", "the account has no balance left", { details: { status, kind: "billing", errorCode: "balance" satisfies AgentErrorCode } });
+  if (status === 503) return new MangaError("PROVIDER_UNAVAILABLE", "the service is busy", { retryable: true, details: { status, kind: "busy", errorCode: "server" satisfies AgentErrorCode } });
   const kind = reasonOf(status, body);
-  const details = { status, ...(kind ? { kind } : {}) };
+  const errorCode = errorCodeOfHttp(status, kind, body);
+  const expiredFileIds = kind === "file_expired" ? extractExpiredFileIds(body) : [];
+  const details: Record<string, unknown> = {
+    status,
+    errorCode,
+    ...(kind ? { kind } : {}),
+    ...(expiredFileIds.length ? { expiredFileIds } : {}),
+  };
   if (status === 401) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details });
   if (status === 429) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details });
   if (status === 404) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details });
   const reason = status >= 400 && status < 500 ? providerReason(body) : null;
-  return new MangaError("PROVIDER_UNAVAILABLE", reason ? `provider HTTP ${status}: ${reason}` : `provider HTTP ${status}`, { retryable: status >= 500, details: reason ? { ...details, reason } : details });
+  return new MangaError("PROVIDER_UNAVAILABLE", reason ? `provider HTTP ${status}: ${reason}` : `provider HTTP ${status}`, {
+    retryable: status >= 500,
+    details: reason ? { ...details, reason } : details,
+  });
+}
+
+/** Classifies any thrown error into a structured `AgentErrorCode` (and expired `file_id`s when self-healing applies). */
+export function classifyAgentError(error: unknown): { errorCode: AgentErrorCode; expiredFileIds?: string[]; fileExpired?: boolean } {
+  if (error instanceof MangaError) {
+    const details = (error.details ?? {}) as { errorCode?: unknown; kind?: unknown; reason?: unknown; status?: unknown; expiredFileIds?: unknown };
+    const expiredFileIds = extractExpiredFileIds(error);
+    const fileExpired = details.kind === "file_expired" || (expiredFileIds.length > 0 && FILE_EXPIRED_HINT.test(error.message));
+    if (fileExpired) return { errorCode: "file_invalid", expiredFileIds, fileExpired: true };
+    if (typeof details.errorCode === "string") {
+      return { errorCode: details.errorCode as AgentErrorCode, ...(expiredFileIds.length ? { expiredFileIds } : {}) };
+    }
+    if (error.code === "CANCELLED") return { errorCode: "cancelled" };
+    if (error.code === "AUTHENTICATION_FAILED" || error.code === "CREDENTIAL_UNAVAILABLE") return { errorCode: "auth" };
+    if (error.code === "RATE_LIMITED") return { errorCode: "rate_limit" };
+    if (error.code === "MODEL_CAPABILITY_MISSING") return { errorCode: "capability_missing" };
+    if (error.code === "BUDGET_EXCEEDED") return { errorCode: "budget_exceeded" };
+    if (details.reason === "plugin_disabled") return { errorCode: "plugin_disabled" };
+    if (details.kind === "billing" || details.status === 402) return { errorCode: "balance" };
+    if (details.kind === "content_filter") return { errorCode: "refusal" };
+    if (details.kind === "context") return { errorCode: "context_overflow" };
+    if (details.kind === "file_invalid") return { errorCode: "file_invalid" };
+    if (details.kind === "busy" || (typeof details.status === "number" && details.status >= 500)) return { errorCode: "server" };
+    if (details.kind === "timeout" || details.kind === "address" || details.kind === "network" || details.kind === "tls") return { errorCode: "network" };
+  }
+  const expiredFileIds = extractExpiredFileIds(error);
+  if (expiredFileIds.length) return { errorCode: "file_invalid", expiredFileIds, fileExpired: true };
+  return { errorCode: "unknown" };
 }
 
 /**
@@ -242,13 +258,19 @@ export function providerReason(body: string): string | null {
   const error = (parsed as { error?: unknown } | null)?.error;
   const message = typeof error === "string" ? error : typeof (error as { message?: unknown } | null)?.message === "string" ? (error as { message: string }).message : null;
   if (!message) return null;
-  // Nothing key- or token-shaped goes on (an error is shown and logged); the service's own words about the request do.
-  const text = withoutRequestId(message)
+  // Preserve DeepSeek `file-api-...` ids (needed for self-healing) while scrubbing API keys and bearer tokens.
+  const preserved: string[] = [];
+  const shielded = withoutRequestId(message).replace(FILE_API_ID, (match) => {
+    const slot = preserved.push(match) - 1;
+    return `__FILE_REF_${slot}__`;
+  });
+  const redacted = shielded
     .replace(/\bBearer\s+\S+/gi, "Bearer <key>")
     .replace(/\b(?:sk|pk|rk|key)-[A-Za-z0-9_-]{8,}/gi, "<key>")
     .replace(/[A-Za-z0-9_-]{32,}/g, "<token>")
+    .replace(/__FILE_REF_(\d+)__/g, (_, index) => preserved[Number(index)] ?? "<file>")
     .replace(/\s+/g, " ").trim();
-  return text ? (text.length > 240 ? `${text.slice(0, 239)}…` : text) : null;
+  return redacted ? (redacted.length > 240 ? `${redacted.slice(0, 239)}…` : redacted) : null;
 }
 
 /**
@@ -256,19 +278,25 @@ export function providerReason(body: string): string | null {
  * the details so a test of a connection can tell the person which; the text stays the system's own.
  */
 export function networkError(error: unknown, signal?: AbortSignal): MangaError {
-  if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true });
+  if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true, details: { errorCode: "cancelled" satisfies AgentErrorCode } });
   const failure = error as { name?: string; code?: string; message?: string; cause?: { code?: string; message?: string } } | undefined;
   const code = failure?.cause?.code ?? failure?.code;
   let kind = "network";
   if (failure?.name === "AbortError" || failure?.name === "TimeoutError") kind = "timeout";
   else if (code === "ENOTFOUND" || code === "EAI_AGAIN" || code === "ECONNREFUSED" || code === "ERR_INVALID_URL" || code === "EHOSTUNREACH" || code === "ENETUNREACH") kind = "address";
   else if (typeof code === "string" && /CERT|SSL|TLS/i.test(code)) kind = "tls";
-  return new MangaError("PROVIDER_UNAVAILABLE", failure?.message ?? "network failure", { retryable: true, details: { kind, ...(typeof code === "string" ? { code } : {}) } });
+  return new MangaError("PROVIDER_UNAVAILABLE", failure?.message ?? "network failure", {
+    retryable: true,
+    details: { kind, errorCode: "network" satisfies AgentErrorCode, ...(typeof code === "string" ? { code } : {}) },
+  });
 }
 
 /** An answer that is not what the protocol says it should be: a page of HTML where JSON should be, a body that does not parse, a shape nobody speaks. */
 export function protocolError(what: string): MangaError {
-  return new MangaError("PROVIDER_UNAVAILABLE", `provider answered in an unexpected form: ${what}`, { retryable: false, details: { kind: "protocol" } });
+  return new MangaError("PROVIDER_UNAVAILABLE", `provider answered in an unexpected form: ${what}`, {
+    retryable: false,
+    details: { kind: "protocol", errorCode: "server" satisfies AgentErrorCode },
+  });
 }
 
 /** A successful answer must look like what was asked for; a web page at the address (a login page, a proxy's notice) never does. */
@@ -293,7 +321,7 @@ export async function* readSseLines(body: ReadableStream<Uint8Array>, signal?: A
   let finished = false;
   try {
     while (true) {
-      if (signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
+      if (signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true, details: { errorCode: "cancelled" satisfies AgentErrorCode } });
       const chunk = await reader.read();
       if (chunk.done) {
         finished = true;

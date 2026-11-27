@@ -4,10 +4,10 @@ import { createModels, createProvider } from "@earendil-works/pi-ai/models";
 import type { Context, JsonObject, Model, Tool } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
-import { MangaError } from "@manga/contracts";
-import { completeChatCompletions, completeResponses, contentFiltered, streamChatCompletions, streamResponses, type CompletedText } from "./openai-http.ts";
+import { MangaError, type AgentErrorCode } from "@manga/contracts";
+import { completeChatCompletions, completeResponses, contentFiltered, stopReasonOf, streamChatCompletions, streamResponses, type CompletedText } from "./openai-http.ts";
 import { toolNamesOf, toWireRequest, withLocalToolNames } from "./tool-names.ts";
-import type { ChatMessage, StreamEvent, TextRequest, ToolDefinition } from "./http.ts";
+import { extractExpiredFileIds, type StreamEvent, type TextRequest, type ToolDefinition } from "./http.ts";
 
 export type AiRuntimeId = "native" | "pi";
 
@@ -26,6 +26,37 @@ const paramsOf = (request: TextRequest): PiParams => ({
   maxTokens: request.maxOutputTokens ?? 8192,
   maxTokensField: request.maxTokensField ?? "max_tokens",
 });
+
+/**
+ * DeepSeek extended Chat Completions features (`deepseek_web_search`, `deepseek_read_url`, inline `title`,
+ * `latest_reminder`, continuation prefill, `safety_check`, `server_tool_calls` passback, and flat `file_id` refs)
+ * emit DeepSeek-specific SSE/JSON fields that `@earendil-works/pi-ai`'s generic OpenAI stream parser drops.
+ * Routing those requests through the unified DeepSeek dialect stream guarantees 100% parity under `pi`.
+ */
+export function usesDeepSeekExtendedStream(
+  protocol: "openai-responses" | "openai-chat-completions",
+  request: TextRequest,
+): boolean {
+  if (protocol !== "openai-chat-completions" || request.dialect !== "deepseek") return false;
+  if (
+    request.nativeWebSearch
+    || request.readUrl
+    || request.inlineTitle
+    || Boolean(request.latestReminder)
+    || request.continuePrefill
+    || Boolean(request.safetyCheck)
+    || Boolean(request.responseFormat)
+  ) {
+    return true;
+  }
+  return request.messages.some(
+    (message) =>
+      message.role === "latest_reminder"
+      || Boolean(message.serverToolCalls?.length)
+      || Boolean(message.fileRefs?.length)
+      || Boolean(message.files?.some((file) => Boolean(file.fileId))),
+  );
+}
 
 function piModel(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, params: PiParams): Model<"openai-responses" | "openai-completions"> {
   const input: Array<"text" | "image"> = params.vision ? ["text", "image"] : ["text"];
@@ -56,7 +87,6 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
     cost: unknownCost(),
     contextWindow: params.contextWindow,
     maxTokens: params.maxTokens,
-    // DeepSeek's levels are low, high and max; MANGA's names map onto them the same way the native runtime maps them (计划 4.3).
     ...(deepseek ? { thinkingLevelMap: { minimal: "low", low: "low", medium: "high", high: "high", xhigh: "max", max: "max" } } : {}),
     compat: {
       supportsStore: false,
@@ -72,7 +102,6 @@ function piModel(protocol: "openai-responses" | "openai-chat-completions", baseU
 
 function piTools(tools?: ToolDefinition[]): Tool[] | undefined {
   if (!tools?.length) return undefined;
-  // The command contract already produced a JSON schema; hand it to PI unchanged so both runtimes advertise the same tool surface.
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
@@ -88,9 +117,9 @@ function providerCallId(id: string): string {
 
 function piContext(request: TextRequest, api: "openai-responses" | "openai-completions"): Context {
   const messages: Context["messages"] = [];
-  // The thinking of the turn under way goes back as a thinking block, which pi sends as `reasoning_content`; an earlier turn's does not (计划 4.3).
   const turnStart = request.messages.map((message) => message.role).lastIndexOf("user");
   for (const [index, message] of request.messages.entries()) {
+    if (message.role === "latest_reminder") continue;
     if (message.role === "tool") {
       messages.push({
         role: "toolResult",
@@ -125,7 +154,7 @@ function piContext(request: TextRequest, api: "openai-responses" | "openai-compl
       continue;
     }
     messages.push({
-      role: message.role === "system" ? "user" : "user",
+      role: "user",
       content: message.images?.length && message.role === "user"
         ? [{ type: "text" as const, text: message.content }, ...message.images.map((image) => ({ type: "image" as const, data: image.base64, mimeType: image.mediaType }))]
         : message.role === "system" ? `System: ${message.content}` : message.content,
@@ -135,7 +164,7 @@ function piContext(request: TextRequest, api: "openai-responses" | "openai-compl
   return { messages, tools: piTools(request.tools) };
 }
 
-/** A tool call's arguments as pi-ai 1.x wants them: a JSON object (the text came from JSON.parse, so every value is JSON). */
+/** A tool call's arguments as pi-ai 1.x wants them: a JSON object. */
 function safeJson(text: string): JsonObject {
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -146,36 +175,55 @@ function safeJson(text: string): JsonObject {
 }
 
 /**
- * PI reports a failure as text. The words it uses for the status codes and the network are matched here so a failure means the same thing to the person
- * as it does under the native runtime: the code, the status and the kind.
+ * PI reports a failure as text. The words it uses for status codes, expired files, and network faults are mapped here so
+ * a failure carries the same code, status, kind, and `AgentErrorCode` under both runtimes.
  */
 function mapPiError(message: string | undefined, signal?: AbortSignal): MangaError {
   const text = message ?? "provider failed";
-  if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true });
+  if (signal?.aborted) return new MangaError("CANCELLED", "request cancelled", { retryable: true, details: { errorCode: "cancelled" satisfies AgentErrorCode } });
   const status = Number(/\b(40[0-9]|41[0-9]|42[0-9]|5[0-9]{2})\b/.exec(text)?.[1]);
   const known = Number.isFinite(status) ? { status } : {};
-  if (/content[_ ]?filter/i.test(text)) return contentFiltered();
-  if (status === 402 || /insufficient[_ ]?balance|out of credit/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "the account has no balance left", { details: { status: 402, kind: "billing" } });
-  if (status === 503 || /overloaded|service unavailable/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "the service is busy", { retryable: true, details: { status: 503, kind: "busy" } });
-  if (/context[ _-]?(length|window)|maximum context|too many tokens|token limit|prompt is too long|input is too long/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider HTTP 400", { details: { status: 400, kind: "context" } });
-  if (status === 401 || /unauthor|invalid api key|incorrect api key/i.test(text)) return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status: 401 } });
-  if (status === 429 || /rate.?limit/i.test(text)) return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details: { status: 429 } });
-  if (status === 404 || (!Number.isFinite(status) && /\bnot found\b/i.test(text))) return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", { details: { status: 404, kind: /model/i.test(text) ? "model" : "path" } });
-  if (/time.?out|timed out|abort/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "request timed out", { retryable: true, details: { kind: "timeout" } });
-  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo|connection error|fetch failed|invalid url/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider is not reachable", { retryable: true, details: { kind: "address" } });
-  if (/unexpected token|not valid json|<!doctype|<html|unexpected end of json|without finish_reason|stream ended|empty (response|stream)/i.test(text)) return new MangaError("PROVIDER_UNAVAILABLE", "provider answered in an unexpected form", { details: { kind: "protocol" } });
-  return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", { retryable: !Number.isFinite(status) || status >= 500, details: Number.isFinite(status) ? known : { kind: "network" } });
-}
-
-/** DeepSeek's own web search is a tool pi does not know; it is added to the request pi built (计划 4.4). Its progress and citations are not read under pi. */
-function payloadHook(request: TextRequest) {
-  if (request.dialect !== "deepseek" || !request.nativeWebSearch) return {};
-  return {
-    onPayload: (params: unknown) => {
-      const body = params as { tools?: unknown[] };
-      return { ...body, tools: [...(body.tools ?? []), { type: "deepseek_web_search" }] };
-    },
-  };
+  const expiredFileIds = extractExpiredFileIds(text);
+  if (expiredFileIds.length) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "an uploaded file reference expired or is missing", {
+      details: { ...known, kind: "file_expired", errorCode: "file_invalid" satisfies AgentErrorCode, expiredFileIds },
+    });
+  }
+  if (/content[_ ]?filter|safety[_ ]?check|refusal/i.test(text)) return contentFiltered();
+  if (status === 402 || /insufficient[_ ]?balance|out of credit/i.test(text)) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "the account has no balance left", { details: { status: 402, kind: "billing", errorCode: "balance" satisfies AgentErrorCode } });
+  }
+  if (status === 503 || /overloaded|service unavailable/i.test(text)) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "the service is busy", { retryable: true, details: { status: 503, kind: "busy", errorCode: "server" satisfies AgentErrorCode } });
+  }
+  if (/context[ _-]?(length|window)|maximum context|too many tokens|token limit|prompt is too long|input is too long/i.test(text)) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "provider HTTP 400", { details: { status: 400, kind: "context", errorCode: "context_overflow" satisfies AgentErrorCode } });
+  }
+  if (status === 401 || /unauthor|invalid api key|incorrect api key/i.test(text)) {
+    return new MangaError("AUTHENTICATION_FAILED", "provider rejected the credentials", { details: { status: 401, errorCode: "auth" satisfies AgentErrorCode } });
+  }
+  if (status === 429 || /rate.?limit/i.test(text)) {
+    return new MangaError("RATE_LIMITED", "provider rate limited the request", { retryable: true, details: { status: 429, errorCode: "rate_limit" satisfies AgentErrorCode } });
+  }
+  if (status === 404 || (!Number.isFinite(status) && /\bnot found\b/i.test(text))) {
+    return new MangaError("MODEL_CAPABILITY_MISSING", "provider reported a missing capability", {
+      details: { status: 404, kind: /model/i.test(text) ? "model" : "path", errorCode: "capability_missing" satisfies AgentErrorCode },
+    });
+  }
+  if (/time.?out|timed out|abort/i.test(text)) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "request timed out", { retryable: true, details: { kind: "timeout", errorCode: "network" satisfies AgentErrorCode } });
+  }
+  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo|connection error|fetch failed|invalid url/i.test(text)) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "provider is not reachable", { retryable: true, details: { kind: "address", errorCode: "network" satisfies AgentErrorCode } });
+  }
+  if (/unexpected token|not valid json|<!doctype|<html|unexpected end of json|without finish_reason|stream ended|empty (response|stream)/i.test(text)) {
+    return new MangaError("PROVIDER_UNAVAILABLE", "provider answered in an unexpected form", { details: { kind: "protocol", errorCode: "server" satisfies AgentErrorCode } });
+  }
+  const errorCode: AgentErrorCode = Number.isFinite(status) ? (status >= 500 ? "server" : "unknown") : "network";
+  return new MangaError("PROVIDER_UNAVAILABLE", "provider request failed", {
+    retryable: !Number.isFinite(status) || status >= 500,
+    details: Number.isFinite(status) ? { ...known, errorCode } : { kind: "network", errorCode },
+  });
 }
 
 function createByokModels(protocol: "openai-responses" | "openai-chat-completions", baseUrl: string, modelId: string, params: PiParams) {
@@ -203,10 +251,14 @@ export async function* streamTextPi(
   apiKey: string,
   request: TextRequest,
 ): AsyncGenerator<StreamEvent> {
+  if (usesDeepSeekExtendedStream(protocol, request)) {
+    yield* streamChatCompletions(baseUrl, apiKey, request);
+    return;
+  }
   const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
   const stream = request.reasoningEffort
-    ? models.streamSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...payloadHook(request) })
-    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}), ...payloadHook(request) });
+    ? models.streamSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
+    : models.stream(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}) });
   const args = new Map<number, { id: string; name: string; last: string }>();
   for await (const event of stream) {
     if (event.type === "text_delta") yield { type: "text-delta", text: event.delta };
@@ -243,6 +295,7 @@ export async function* streamTextPi(
       yield {
         type: "completed",
         finishReason: event.reason,
+        stopReason: stopReasonOf(event.reason),
         usage: {
           inputTokens: usage.input,
           outputTokens: usage.output,
@@ -261,13 +314,15 @@ export async function completeTextPi(
   apiKey: string,
   request: TextRequest,
 ): Promise<CompletedText> {
+  if (usesDeepSeekExtendedStream(protocol, request)) {
+    return completeChatCompletions(baseUrl, apiKey, request);
+  }
   const { models, model } = createByokModels(protocol, baseUrl, request.model, paramsOf(request));
   const message = request.reasoningEffort
-    ? await models.completeSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...payloadHook(request) })
-    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}), ...payloadHook(request) });
+    ? await models.completeSimple(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, reasoning: request.reasoningEffort, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}) })
+    : await models.complete(model, piContext(request, model.api), { apiKey, signal: request.signal, timeoutMs: request.timeoutMs, ...(request.maxOutputTokens ? { maxTokens: request.maxOutputTokens } : {}), ...(request.temperature !== undefined ? { temperature: request.temperature } : {}) });
   if (message.stopReason === "aborted") {
-    // Aborted by the caller is a cancel; aborted without the caller asking is the time running out.
-    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
+    if (request.signal?.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true, details: { errorCode: "cancelled" satisfies AgentErrorCode } });
     throw mapPiError("request timed out", request.signal);
   }
   if (message.stopReason === "error") throw mapPiError(message.errorMessage, request.signal);
@@ -282,6 +337,7 @@ export async function completeTextPi(
   return {
     text,
     toolCalls,
+    stopReason: stopReasonOf(message.stopReason),
     ...(reasoning ? { reasoning } : {}),
     usage: {
       inputTokens: message.usage.input,
@@ -299,7 +355,6 @@ export async function completeText(
   request: TextRequest,
   runtime: AiRuntimeId = "native",
 ): Promise<CompletedText> {
-  // The tools go out under names the service accepts and their calls come back under the tools' own (`tool-names.ts`).
   const names = toolNamesOf(request);
   const wire = toWireRequest(request, names);
   const done = runtime === "pi" ? await completeTextPi(protocol, baseUrl, apiKey, wire)
