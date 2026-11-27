@@ -7,6 +7,7 @@ Closes #
 ## 验证
 
 <!-- 实际执行的命令、版本与结果；证据链接；合成样本与真实服务、真实资料分开写；没运行的写 not-run 和原因。 -->
+<!-- 仅真正的验证任务项使用 `- [ ]`；`not-run` 项与纯说明请使用普通列表 `- `（不要用 `- [ ]`）；开 PR 后才完成的异步验证项（如 CI、审核前本机 `install-dev`）完成后在正文里勾选为 `- [x]`。 -->
 
 - [ ] `node scripts/quick-gate.mjs`
 
@@ -14,7 +15,6 @@ Closes #
 
 <!-- 公共 API、数据/迁移、权限、插件、模型/外部服务、平台或 UI 的影响与恢复方式；是否碰了高风险清单（docs/dev-rules/development-workflow.md#high-risk），碰了就加 risk:high 标签。 -->
 
-- [ ] 低风险
-- [ ] 高风险（已加 `risk:high`，等用户合并）
+风险等级：低风险 / 高风险（选一，删掉另一项；高风险需加 `risk:high` 标签，完成审核前本机 dev 安装并等用户测试后合并）
 
 每个提交都带 `Signed-off-by`（`git commit -s`，本仓 hook 会自动补）。
