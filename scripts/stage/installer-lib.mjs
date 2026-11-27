@@ -402,26 +402,27 @@ export function installerInclude(channel, { testIdentity = false } = {}) {
  * so electron-builder neither makes nor removes them):
  * - an interactive installation shows a page with both boxes, checked on a first installation and otherwise as the shortcuts are now; a box
  *   cleared removes that shortcut;
- * - a silent installation (`/S`, the updater's `--updated /S` and `install-dev`) makes both on a first installation; over an installation it
- *   keeps the shortcuts that are there and makes no new one, except that the development channel makes the desktop shortcut again every time,
- *   so a new build is noticed;
+ * - a silent installation (`/S`, the updater's `--updated /S` and `install-dev`) makes both on a first installation; on an over-installation or
+ *   update it leaves the Start menu shortcut untouched (never recreated if absent, never overwritten or deleted if still present; for release only,
+ *   restored if a legacy uninstaller removed one that existed in `customInit`), while the development channel creates the desktop shortcut on every
+ *   silent over-installation (`MANGA_DESKTOP_ON_UPDATE`) and the release channel leaves the desktop shortcut untouched too;
  * - the uninstaller removes both, except when it runs for an over-installation or update (`--updated`, which electron-builder always passes to
  *   the old uninstaller).
- * Whether the shortcuts existed is read in `customInit`, before the old version's uninstaller runs: uninstallers of earlier versions removed
- * them during an over-installation, and those are put back. Variables and the page exist only in the installer build (`customPageAfterChangeDir`,
- * `customInit` and `customInstall` are not compiled into the uninstaller).
+ * Whether the shortcuts existed is read in `customInit`, before the old version's uninstaller runs. Variables and the page exist only in the
+ * installer build (`customPageAfterChangeDir`, `customInit` and `customInstall` are not compiled into the uninstaller).
  */
 export function shortcutsNsis(channel) {
   const startMenu = '"$SMPROGRAMS\\${SHORTCUT_NAME}.lnk"';
   const desktop = '"$DESKTOP\\${SHORTCUT_NAME}.lnk"';
-  const make = (link) => [
-    `    CreateShortCut ${link} "$appExe" "" "$appExe" 0 "" "" "\${APP_DESCRIPTION}"`,
-    "    ClearErrors",
-    `    WinShell::SetLnkAUMI ${link} "\${APP_ID}"`,
+  const make = (link, indent = "    ") => [
+    `${indent}CreateShortCut ${link} "$appExe" "" "$appExe" 0 "" "" "\${APP_DESCRIPTION}"`,
+    `${indent}ClearErrors`,
+    `${indent}WinShell::SetLnkAUMI ${link} "\${APP_ID}"`,
   ];
   const remove = (link, indent = "    ") => [`${indent}WinShell::UninstShortcut ${link}`, `${indent}Delete ${link}`];
+  const notify = (indent = "  ") => `${indent}System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'`;
   return [
-    ...(channel === "development" ? ["; The development channel makes the desktop shortcut again on every silent over-installation.", "!define MANGA_DESKTOP_ON_UPDATE", ""] : []),
+    ...(channel === "development" ? ["; The development channel creates the desktop shortcut on every silent over-installation, without touching the Start menu shortcut.", "!define MANGA_DESKTOP_ON_UPDATE", ""] : []),
     "!macro customPageAfterChangeDir",
     "  Var MangaFirstInstall",
     "  Var MangaHadStartMenu",
@@ -489,34 +490,50 @@ export function shortcutsNsis(channel) {
     "  ${endIf}",
     "!macroend",
     "",
-    "; In customInstall ($appExe is set): $R8 / $R9 say whether the Start menu / desktop shortcut should be there.",
+    "; In customInstall ($appExe is set):",
+    "; - silent or updated (${Silent} / ${isUpdated}):",
+    ';   - first install ($MangaFirstInstall == "1"): create both Start menu and desktop shortcuts;',
+    ';   - over-install ($MangaFirstInstall != "1"): never create, overwrite, or delete the Start menu shortcut when',
+    ";     absent or still present; development creates the desktop shortcut (MANGA_DESKTOP_ON_UPDATE), while release",
+    ";     leaves existing shortcuts untouched and only restores one a legacy uninstaller removed during this update.",
+    "; - interactive wizard: create or remove each shortcut as the checkboxes specify.",
     "!macro MangaShortcutsInstall",
-    "  StrCpy $R8 $MangaWantStartMenu",
-    "  StrCpy $R9 $MangaWantDesktop",
     "  ${if} ${Silent}",
     "  ${orIf} ${isUpdated}",
-    "    ; No one to ask: keep what is there (put back what an earlier uninstaller removed), make both only on a first installation.",
-    "    StrCpy $R8 $MangaHadStartMenu",
-    "    StrCpy $R9 $MangaHadDesktop",
     '    ${if} $MangaFirstInstall == "1"',
-    '      StrCpy $R8 "1"',
-    '      StrCpy $R9 "1"',
+    ...make(startMenu, "      "),
+    ...make(desktop, "      "),
+    notify("      "),
+    "    ${else}",
+    "      !ifdef MANGA_DESKTOP_ON_UPDATE",
+    ...make(desktop, "        "),
+    notify("        "),
+    "      !else",
+    '        ${if} $MangaHadStartMenu == "1"',
+    `        \${andIfNot} \${FileExists} ${startMenu}`,
+    ...make(startMenu, "          "),
+    notify("          "),
+    "        ${endIf}",
+    '        ${if} $MangaHadDesktop == "1"',
+    `        \${andIfNot} \${FileExists} ${desktop}`,
+    ...make(desktop, "          "),
+    notify("          "),
+    "        ${endIf}",
+    "      !endif",
     "    ${endIf}",
-    "    !ifdef MANGA_DESKTOP_ON_UPDATE",
-    '      StrCpy $R9 "1"',
-    "    !endif",
-    "  ${endIf}",
-    '  ${if} $R8 == "1"',
-    ...make(startMenu),
     "  ${else}",
-    ...remove(startMenu),
+    '    ${if} $MangaWantStartMenu == "1"',
+    ...make(startMenu, "      "),
+    "    ${else}",
+    ...remove(startMenu, "      "),
+    "    ${endIf}",
+    '    ${if} $MangaWantDesktop == "1"',
+    ...make(desktop, "      "),
+    "    ${else}",
+    ...remove(desktop, "      "),
+    "    ${endIf}",
+    notify("    "),
     "  ${endIf}",
-    '  ${if} $R9 == "1"',
-    ...make(desktop),
-    "  ${else}",
-    ...remove(desktop),
-    "  ${endIf}",
-    "  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'",
     "!macroend",
     "",
     "; In customUnInstall: an uninstallation removes both; an over-installation or update (--updated) leaves them to the new version.",

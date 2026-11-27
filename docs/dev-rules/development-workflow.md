@@ -35,9 +35,9 @@
 3. **验证**：跑[快速门禁](quality-gates.md#gate-tiers) `node scripts/quick-gate.mjs`（改到打包相关时用 `--phases` 点名烟测阶段）；发布前以及改到打包、安装、更新、签名或发布链路时跑整套 `node scripts/stage.mjs gate`。失败先定位，不删断言、不放宽需求。
 4. **提交**：Conventional Commits（`feat: …`、`fix(capture): …`），每个提交带 DCO 签名；按路径暂存并核对 `git diff --cached`。一个 PR 只做一件事；PR 合并时 squash 成一个提交，分支里提交几次都可以。
 5. **PR**：push 后建 PR，按模板写关联 issue、做了什么、验证（命令 / 结果 / 未运行项）、风险。碰了高风险清单就加 `risk:high` 标签。
-6. **审查**：CI 通过后，由干净上下文的审查者（新开的子代理，或交给另一个 Agent）按 [REVIEW](../../REVIEW.md) 审查完整改动；作者不能自己审自己。阻塞项修完再审。
-7. **合并**：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 的 PR 留给用户合并。不轮询长挂命令（如 `gh pr checks --watch`）。
-8. **合并后**：本地 `git switch main && git pull --ff-only`，运行[开发版自动安装](#dev-install-at-handoff)；在 issue 或对话里报告结果与一个首选下一步。
+6. **审查与审核前实机安装**：CI 通过后，由干净上下文的审查者（新开的子代理，或交给另一个 Agent）按 [REVIEW](../../REVIEW.md) 审查完整改动；作者不能自己审自己。阻塞项修完再审。凡是需要用户审核/实机测试的 PR（尤其是 `risk:high` 或界面/交互/安装行为改动），在请用户审核之前先在 PR 分支执行[开发版自动安装](#dev-install-at-handoff)更新本机 `MANGA Dev`，并把 `install-dev.json` 回执摘要写入 PR 正文或 `Agent：` 评论，让用户先测再审（A-140）。
+7. **合并**：低风险 PR 审查通过后由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 的 PR 留给用户实机测试并审核后合并。不轮询长挂命令（如 `gh pr checks --watch`）。
+8. **合并后**：本地 `git switch main && git pull --ff-only`，运行[开发版自动安装](#dev-install-at-handoff)同步 `main`；在 issue 或对话里报告结果与一个首选下一步。
 
 <a id="high-risk"></a>
 ### 2.1 高风险清单
@@ -56,14 +56,16 @@ PR 只要碰到下列任一项就是高风险，加 `risk:high`，Agent 不自�
 <a id="dev-install-at-handoff"></a>
 ### 2.2 开发版自动安装
 
-每次合并进 `main` 后（本机拉取 `main` 后），以及请用户做人工检查前，Agent 在本机执行（窗口开着时 `install-dev` 最多等 10 分钟，加上打包可能超过单条命令的时限，放到后台运行，等它写出 `install-dev.json`）：
+在以下两个时机，Agent 在本机执行（窗口开着时 `install-dev` 最多等 10 分钟，加上打包可能超过单条命令的时限，放到后台运行，等它写出 `install-dev.json`）：
+
+1. **请用户审核 PR 前（PR 分支上）**：凡是需要用户审核或实机测试的 PR（尤其是 `risk:high` 或界面/交互/安装行为改动），在 CI 通过与独立审查通过后、请用户审核之前，先在当前干净的 PR 分支上构建并安装本机 `MANGA Dev`，把回执写进 PR 正文或 `Agent：` 评论，方便用户先在实机验证再决定审核合并（A-140）。
+2. **合并进 `main` 后（本机拉取 `main` 后）**：以及请用户做人工检查前，同步本机 `MANGA Dev` 到最新 `main`。
 
 ```powershell
-node scripts/stage.mjs package
 node scripts/stage.mjs install-dev
 ```
 
-`package` 做出与当前源码指纹一致的开发版安装包；`install-dev` 在开发版没装时静默装到默认目录（首次安装也自动）；`MANGA Dev` 有看得见的窗口（最小化也算，隐藏到托盘不算）时每 2 秒检查、最多等 10 分钟，仍开着就跳过（`reason: "window_open"`，不算失败）；之后让运行中的 `MANGA Dev` 保存并退出、静默更新，再以 `--background` 在托盘打开（A-135、A-139），写统一字段的 `install-dev.json`，从不碰正式版。卸载项是 `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\io.github.chialecode.manga-dev`。`MANGA_DEV_AUTO_INSTALL=0` 时跳过；门禁、单元测试与 CI 不调用它。装好的版本写进 PR 或 issue 评论。
+（若本轮已跑过 `node scripts/stage.mjs package`，`install-dev` 会直接复用当前指纹对应的安装包；否则会自动只构建安装包、不跑窗口走查。）`install-dev` 同时支持 PR 分支与 `main`，并在回执中记录 `branch` 与 `commit`；在开发版没装时静默装到默认目录（首次安装创建开始菜单与桌面快捷方式）；覆盖重装时只创建桌面快捷方式，不重新生成、不覆写也不删除开始菜单快捷方式（A-140）；`MANGA Dev` 有看得见的窗口（最小化也算，隐藏到托盘不算）时每 2 秒检查、最多等 10 分钟，仍开着就跳过（`reason: "window_open"`，不算失败）；之后让运行中的 `MANGA Dev` 保存并退出、静默更新，再以 `--background` 在托盘打开（A-135、A-139），写统一字段的 `install-dev.json`，从不碰正式版。卸载项是 `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\io.github.chialecode.manga-dev`。`MANGA_DEV_AUTO_INSTALL=0` 时跳过；门禁、单元测试与 CI 不调用它。装好的版本写进 PR 或 issue 评论。
 
 <a id="next-step"></a>
 ### 2.3 收尾报告

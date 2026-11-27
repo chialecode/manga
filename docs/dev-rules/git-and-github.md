@@ -28,8 +28,8 @@
 
 - push 与建 PR 长期授权。push 前确认目标分支与待推送提交的公开内容（[公开内容检查](quality-gates.md#11-公开内容检查)），`pre-push` hook 会跑 `verify.mjs --skip-tests` 与改动文件相关的 `vitest related`（改动共享配置或夹具、或设 `MANGA_PRE_PUSH_FULL=1` 时跑完整 `node scripts/verify.mjs`）；首次推送设置 upstream，不用 `--all`、`--mirror` 或强推。
 - 使用 [PR 模板](../../.github/PULL_REQUEST_TEMPLATE.md)：关联 issue、做了什么、验证（命令 / 结果 / 未运行项）、风险。碰了[高风险清单](development-workflow.md#high-risk)加 `risk:high`。
-- CI `repository-quality` 通过、非作者的独立审查无阻塞项后：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；`risk:high` 等用户合并。独立审查通过前不用 `gh pr merge --auto`：规则集不要求审批，自动合并会在 CI 通过后立即合并。审查修复推到同一分支，只按新提交查一次必要结果，不循环 `push → 等 CI → 小修 → push`，不通过反复推送调试能在本地复现的问题。
-- 合并后 GitHub 删除远端分支；本地 `git switch main && git pull --ff-only`，再[安装开发版](development-workflow.md#dev-install-at-handoff)。
+- CI `repository-quality` 通过、非作者的独立审查无阻塞项后：低风险 PR 由 Agent `gh pr merge <号> --squash --match-head-commit <头提交>` 合并；需要用户审核/实机测试的 PR（含全部 `risk:high`）先在 PR 分支执行[开发版自动安装](development-workflow.md#dev-install-at-handoff)并将回执记录在 PR 中，等用户实机测试后审核合并（A-140）。独立审查通过前不用 `gh pr merge --auto`：规则集不要求审批，自动合并会在 CI 通过后立即合并。审查修复推到同一分支，只按新提交查一次必要结果，不循环 `push → 等 CI → 小修 → push`，不通过反复推送调试能在本地复现的问题。
+- 合并后 GitHub 删除远端分支；本地 `git switch main && git pull --ff-only`，再[安装开发版](development-workflow.md#dev-install-at-handoff)同步 `main`。
 
 <a id="local-git"></a>
 ### 1.4 本地 Git 配置

@@ -13,7 +13,7 @@ import {
   snapshotRealInstallations,
 } from "./installer-lib.mjs";
 import { currentStage, loadGate, packagedFingerprintKeys, repoRoot, runDir, stageFingerprints } from "./lib.mjs";
-import { readBuildInfoIfPresent } from "./version-lib.mjs";
+import { readBuildInfoIfPresent, readGitShortCommit } from "./version-lib.mjs";
 import { isProcessAlive, readUninstallRegistryEntries } from "./win-process.mjs";
 import { askLightToQuit, LIGHT_QUIT_WAIT_MS } from "../../apps/desktop/src/main/light-runtime.ts";
 
@@ -326,10 +326,27 @@ export function devWindowOpen(executable) {
   return count > 0;
 }
 
+/** Read the current Git branch name in `cwd`, or null when unavailable or on a detached HEAD. */
+export function readGitBranch(cwd = repoRoot) {
+  try {
+    const result = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd,
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 10_000,
+    });
+    const branch = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    return result.status === 0 && branch.length > 0 && branch !== "HEAD" ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Automatic local update of the `development` channel (`node scripts/stage.mjs install-dev`, 计划 4.2, AT-158, A-139).
+ * Automatic local update of the `development` channel (`node scripts/stage.mjs install-dev`, 计划 4.2, AT-158, A-139, A-140).
  *
  * Rules:
+ * - Works on both PR branches (before asking the user to review/merge a PR) and `main` (to keep `main` synced after merge).
  * - Skips when `MANGA_DEV_AUTO_INSTALL=0` or on CI (`CI=true` / `GITHUB_ACTIONS=true`).
  * - Only touches the `development` channel (`MANGA Dev`, or `MANGA Dev Test` when `testIdentity: true`), found by its uninstall entry
  *   `io.github.chialecode.<identity>`; never installs, closes, or modifies the `release` channel (`MANGA` / `MANGA Test`).
@@ -345,7 +362,7 @@ export function devWindowOpen(executable) {
  * - Writes `install-dev.json` with the camelCase fields the author's desktop apps share (`identity`, `installed`, `skipped`, `reason`, `error`,
  *   `guidance`, `firstInstall`, `oldVersion`, `newVersion`, `installLocation`, `wasRunning`, `windowOpen`, `deferred`, `deferMs`, `quitMs`,
  *   `relaunched`, `background`, `inJob`, `elapsedMs`, `at`) and MANGA's own (`status`, the stage and its fingerprints, `channel`,
- *   `productName`, `testIdentity`, `viaShell`, `releaseUntouched`, `releaseChanges`, `draftPreserved`, `recoveryVersion`). `reason` is a code.
+ *   `productName`, `testIdentity`, `branch`, `commit`, `viaShell`, `releaseUntouched`, `releaseChanges`, `draftPreserved`, `recoveryVersion`). `reason` is a code.
  */
 export async function runInstallDev(options = {}) {
   const startedMs = Date.now();
@@ -368,6 +385,13 @@ export async function runInstallDev(options = {}) {
   } catch {
     // allow running in isolated unit tests
   }
+  const gitMeta = (() => {
+    if (options.gitMeta !== undefined) return options.gitMeta;
+    const branch = (options.readGitBranchFn ?? readGitBranch)(repoRoot);
+    const rawCommit = (options.readGitCommitFn ?? readGitShortCommit)(repoRoot);
+    const commit = typeof rawCommit === "string" && rawCommit.trim() && rawCommit !== "unknown" ? rawCommit.trim() : null;
+    return { branch: branch || null, commit };
+  })();
 
   const realBefore = snapshotRealInstallations({
     channels: ["release"],
@@ -423,6 +447,8 @@ export async function runInstallDev(options = {}) {
       channel: "development",
       productName: meta.productName,
       testIdentity,
+      ...(gitMeta?.branch ? { branch: gitMeta.branch } : {}),
+      ...(gitMeta?.commit ? { commit: gitMeta.commit } : {}),
       ...(payload.viaShell !== undefined ? { viaShell: Boolean(payload.viaShell) } : {}),
       releaseUntouched,
       ...(releaseChanges.length > 0 ? { releaseChanges } : {}),
