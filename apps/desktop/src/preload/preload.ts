@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AgentStreamEvent, SpeechStreamPushRequest, SpeechStreamStartRequest } from "@manga/contracts";
 
 ipcRenderer.setMaxListeners(50);
 
@@ -18,11 +19,19 @@ contextBridge.exposeInMainWorld("manga", {
   // A chosen file handed back as a path handle, so the renderer can repair a stale source.
   choosePath: () => ipcRenderer.invoke("manga:choose-path"),
   pick: (request: { mode: "file" | "directory"; filter?: string; defaultPath?: string }) => ipcRenderer.invoke("manga:pick", request),
+  // Stashes a drag-dropped or pasted attachment in cache staging and returns a registered path handle.
+  stashAttachment: (input: { name: string; mimeType?: string; bytes: Uint8Array }) => ipcRenderer.invoke("manga:stash-attachment", input),
   // Main-process notices (import progress, background job changes). Returns an unsubscribe function.
   onNotice: (listener: (notice: { topic: string; payload: Record<string, unknown> }) => void) => {
     const handler = (_event: unknown, notice: { topic: string; payload: Record<string, unknown> }) => listener(notice);
     ipcRenderer.on("manga:notice", handler);
     return () => { ipcRenderer.removeListener("manga:notice", handler); };
+  },
+  // Real-time Agent stream events pushed from the main process (`AGENT_STREAM_CHANNEL`). Returns an unsubscribe function.
+  onAgentStream: (listener: (event: AgentStreamEvent) => void) => {
+    const handler = (_event: unknown, event: AgentStreamEvent) => listener(event);
+    ipcRenderer.on("manga:agent-stream", handler);
+    return () => { ipcRenderer.removeListener("manga:agent-stream", handler); };
   },
   stashSecret: (value: string) => ipcRenderer.invoke("manga:secret", value),
   reveal: (id: string) => ipcRenderer.invoke("manga:reveal", id),
@@ -44,8 +53,12 @@ contextBridge.exposeInMainWorld("manga", {
   // Only the metadata source's own pages open, in the system browser; the main process decides.
   openExternal: (url: string) => ipcRenderer.invoke("manga:open-external", url),
   // Reading aloud: the PCM (24 kHz, 16-bit, mono) of a request comes back in pieces, then its end or failure.
-  speak: (id: string, request: { text: string; voice?: string; connectionId?: string; task?: "read-aloud" | "novel" | "test" }) => ipcRenderer.send("manga:speak", id, request),
+  speak: (id: string, request: { text: string; voice?: string; connectionId?: string; task?: "read-aloud" | "novel" | "test"; streaming?: boolean }) => ipcRenderer.send("manga:speak", id, request),
   stopSpeaking: (id: string) => ipcRenderer.send("manga:speak-stop", id),
+  speechStreamStart: (id: string, request?: SpeechStreamStartRequest) => ipcRenderer.send("manga:speech-stream-start", id, request ?? {}),
+  speechStreamPush: (id: string, request: SpeechStreamPushRequest) => ipcRenderer.send("manga:speech-stream-push", id, request),
+  speechStreamFinish: (id: string) => ipcRenderer.send("manga:speech-stream-finish", id),
+  speechStreamStop: (id: string) => ipcRenderer.send("manga:speech-stream-stop", id),
   onSpeech: (listener: (message: { id: string; kind: "chunk" | "end" | "error"; pcm?: Uint8Array; result?: unknown; error?: { code: string; message: string; retryable?: boolean; details?: Record<string, unknown> } }) => void) => {
     const handler = (_event: unknown, message: { id: string; kind: "chunk" | "end" | "error" }) => listener(message);
     ipcRenderer.on("manga:speech", handler);

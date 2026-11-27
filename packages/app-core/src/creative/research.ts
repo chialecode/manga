@@ -113,12 +113,19 @@ export class ResearchService {
     };
   }
 
-  /** Fetches the page, keeps its text, and says whether it is new, changed since the last time, or the same. */
+  /** Fetches the page locally through the network broker, keeps its text, and reports whether it is new, changed, or unchanged. */
   async fetch(rawUrl: string, signal?: AbortSignal): Promise<{ page: PageSummary; created: boolean; changed: boolean; previousId: string | null }> {
     const fetched = await this.hooks.broker.fetchText(rawUrl, signal);
-    const url = pageKey(fetched.requestedUrl);
     const host = new URL(fetched.finalUrl).hostname;
     const { title, text } = extractPage(fetched.text, fetched.contentType, host);
+    return this.saveFetchedPage({ requestedUrl: fetched.requestedUrl, title, text });
+  }
+
+  /** Persists already-extracted page content (from local Readability or a provider fetch service) with versioning, indexing, and pruning. */
+  saveFetchedPage(input: { requestedUrl: string; title: string; text: string }): { page: PageSummary; created: boolean; changed: boolean; previousId: string | null } {
+    const url = pageKey(input.requestedUrl);
+    const text = input.text;
+    const title = input.title.trim() || url;
     if (!text.trim()) throw new MangaError("UNSUPPORTED_FORMAT", "no readable text was found on that page", { details: { reason: "empty" } });
     const hash = hashOf(text);
     const last = this.latest(url);

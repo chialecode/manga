@@ -1,6 +1,6 @@
 /** Model connections: listing, saving, probing and testing them. */
 import { MangaError, createId, type CommandEnvelope } from "@manga/contracts";
-import { completeText, streamText, transcribeAudio, transcribeChatAudio, transcribeDeepSeek, synthesizeDeepSeek, searchDeepSeek, normalizeBaseUrl, rejectCredentialUrl, syntheticWav, joinApiPath, type AiRuntimeId } from "@manga/model-protocol";
+import { completeText, streamText, transcribeAudio, transcribeChatAudio, transcribeDeepSeek, synthesizeDeepSeek, searchDeepSeek, fetchDeepSeekWeb, ocrDeepSeekDocument, normalizeBaseUrl, rejectCredentialUrl, syntheticWav, joinApiPath, type AiRuntimeId } from "@manga/model-protocol";
 import sharp from "sharp";
 import { applyProfile, effectiveProfile, forgetDetected, ModelProfileSchema, type ConnectionTestResult, type ModelProfile } from "@manga/contracts/models";
 import { failureOf, modelLimitsOf, parseLastTest } from "../model-probe.ts";
@@ -300,9 +300,16 @@ export async function secretFor(app: ConnectionsHost, connectionId: string, purp
 
 export async function testConnection(app: ConnectionsHost, envelope: CommandEnvelope, signal: AbortSignal) {
   app.assertWritable();
-  const input = envelope.input as { connectionId: string; capability: "text" | "tools" | "streaming" | "transcription" | "embedding" | "vision" | "speech" | "search" };
+  const input = envelope.input as { connectionId: string; capability: "text" | "tools" | "streaming" | "transcription" | "embedding" | "vision" | "speech" | "search" | "fetch" | "ocr" };
   // A text model that can look at pictures is tested as text; a model kept only for pictures is its own kind of connection.
-  const purpose: ModelPurposeName | ModelPurposeName[] = input.capability === "transcription" ? "transcription" : input.capability === "embedding" ? "embedding" : input.capability === "vision" ? ["text", "vision"] : input.capability === "speech" ? "speech" : input.capability === "search" ? "search" : "text";
+  const purpose: ModelPurposeName | ModelPurposeName[] = input.capability === "transcription" ? "transcription"
+    : input.capability === "embedding" ? "embedding"
+      : input.capability === "vision" ? ["text", "vision"]
+        : input.capability === "speech" ? "speech"
+          : input.capability === "search" ? "search"
+            : input.capability === "fetch" ? "fetch"
+              : input.capability === "ocr" ? "ocr"
+                : "text";
   const opened = await openConnection(app, input.connectionId, purpose, signal);
   const { row, apiKey } = opened;
   const runSignal = opened.signal ?? signal;
@@ -310,7 +317,7 @@ export async function testConnection(app: ConnectionsHost, envelope: CommandEnve
   const runtime = (row.runtime === "pi" ? "pi" : "native") as AiRuntimeId;
   const timeoutMs = row.timeout_ms;
   try {
-    if (input.capability === "speech" || input.capability === "search" || (input.capability === "transcription" && row.adapter_id === "deepseek-asr@1")) {
+    if (input.capability === "speech" || input.capability === "search" || input.capability === "fetch" || input.capability === "ocr" || (input.capability === "transcription" && row.adapter_id === "deepseek-asr@1")) {
       return await testService(app, row, apiKey, input.capability, signal, opened.providerSignal);
     }
     if (input.capability === "embedding") {
@@ -479,10 +486,16 @@ const SPEECH_TEST_TEXT = "你好，这是朗读测试。";
  * The test of a provider's recognition, speech or search (计划 4.9): a built-in synthetic WAV, a fixed short sentence, a fixed word with one result. Only
  * when the person presses the button; the result is kept with the connection and the use is recorded like any other.
  */
-async function testService(app: ConnectionsHost, row: ConnectionRow, apiKey: string, kind: "transcription" | "speech" | "search", signal: AbortSignal, providerSignal?: AbortSignal) {
+async function testService(app: ConnectionsHost, row: ConnectionRow, apiKey: string, kind: "transcription" | "speech" | "search" | "fetch" | "ocr", signal: AbortSignal, providerSignal?: AbortSignal) {
   const at = new Date().toISOString();
   const started = Date.now();
   const runSignal = providerSignal ?? signal;
+  const unitFor = (serviceKind: typeof kind): "second" | "char" | "search" | "fetch" | "page" =>
+    serviceKind === "transcription" ? "second"
+      : serviceKind === "speech" ? "char"
+        : serviceKind === "fetch" ? "fetch"
+          : serviceKind === "ocr" ? "page"
+            : "search";
   const save = (result: { ok: boolean; latencyMs: number; failure?: ReturnType<typeof failureOf>; service?: { kind: typeof kind; detail: string } }) => {
     app.store.sqlite.prepare("UPDATE provider_connections SET last_test_json = ? WHERE id = ?").run(JSON.stringify({ at, ...result }), row.id);
     app.notify("settings.changed", {});
@@ -501,17 +514,28 @@ async function testService(app: ConnectionsHost, row: ConnectionRow, apiKey: str
       recordServiceUse(app, { connectionId: row.id, service: "speech", task: "test", unit: "char", quantity: spoken.billedChars, status: "ok" });
       return save({ ok: true, latencyMs: spoken.firstChunkMs ?? Date.now() - started, service: { kind, detail: `${(bytes / 48_000).toFixed(1)} s` } });
     }
+    if (kind === "fetch") {
+      const fetched = await fetchDeepSeekWeb({ baseUrl: row.base_url, apiKey, url: "https://example.com", signal: runSignal, timeoutMs: row.timeout_ms });
+      recordServiceUse(app, { connectionId: row.id, service: "fetch", task: "test", unit: "fetch", quantity: 1, status: "ok" });
+      return save({ ok: true, latencyMs: Date.now() - started, service: { kind, detail: [...fetched.title.trim()].slice(0, 40).join("") || "已抓取" } });
+    }
+    if (kind === "ocr") {
+      const probe = await sharp({ create: { width: PROBE_PICTURE_SIDE, height: PROBE_PICTURE_SIDE, channels: 3, background: { r: 245, g: 245, b: 245 } } }).png().toBuffer();
+      const recognized = await ocrDeepSeekDocument({ baseUrl: row.base_url, apiKey, filename: "probe.png", mimeType: "image/png", data: probe, purpose: "text_recognition", signal: runSignal, timeoutMs: row.timeout_ms });
+      recordServiceUse(app, { connectionId: row.id, service: "ocr", task: "test", unit: "page", quantity: recognized.usage?.pages ?? recognized.pages.length, status: "ok" });
+      return save({ ok: true, latencyMs: Date.now() - started, service: { kind, detail: [...recognized.text.trim()].slice(0, 40).join("") || `${recognized.pages.length} 页` } });
+    }
     const found = await searchDeepSeek(row.base_url, apiKey, { query: "MANGA", count: 1, signal: runSignal, timeoutMs: row.timeout_ms });
     recordServiceUse(app, { connectionId: row.id, service: "search", task: "test", unit: "search", quantity: 1, status: "ok" });
     return save({ ok: true, latencyMs: Date.now() - started, service: { kind, detail: found.results[0]?.title ?? "没有找到" } });
   } catch (error) {
     const abortedByProvider = providerAbortReason(providerSignal);
     if (abortedByProvider) {
-      recordServiceUse(app, { connectionId: row.id, service: kind, task: "test", unit: kind === "transcription" ? "second" : kind === "speech" ? "char" : "search", quantity: 0, status: "error", errorCode: abortedByProvider.code });
+      recordServiceUse(app, { connectionId: row.id, service: kind, task: "test", unit: unitFor(kind), quantity: 0, status: "error", errorCode: abortedByProvider.code });
       return save({ ok: false, latencyMs: Date.now() - started, failure: failureOf(abortedByProvider) });
     }
     if (signal.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
-    recordServiceUse(app, { connectionId: row.id, service: kind, task: "test", unit: kind === "transcription" ? "second" : kind === "speech" ? "char" : "search", quantity: 0, status: "error", errorCode: error instanceof MangaError ? error.code : "UNKNOWN" });
+    recordServiceUse(app, { connectionId: row.id, service: kind, task: "test", unit: unitFor(kind), quantity: 0, status: "error", errorCode: error instanceof MangaError ? error.code : "UNKNOWN" });
     return save({ ok: false, latencyMs: Date.now() - started, failure: failureOf(error) });
   }
 }

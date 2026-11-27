@@ -510,7 +510,7 @@ if (!quitForUpdateFlag) void app.whenReady().then(async () => {
 
   window.webContents.on("did-start-navigation", () => { ipc.abortAllSpeech(); });
   window.on("closed", () => {
-    ipc.abortAllSpeech();
+    ipc.dispose();
     destroyWindowTray();
     overlay.close();
   });

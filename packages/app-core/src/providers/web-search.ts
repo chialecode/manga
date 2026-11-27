@@ -14,14 +14,27 @@ export type WebSearchAnswer = {
   query: string;
   /** The words were longer than the service takes and were cut. */
   truncated: boolean;
-  results: Array<{ title: string; url: string; site: string | null; publishedAt: string | null; snippet: string | null; summary: string | null }>;
+  results: Array<{
+    title: string;
+    url: string;
+    site: string | null;
+    siteIcon?: string;
+    publishedAt: string | null;
+    snippet: string | null;
+    summary: string | null;
+    content?: string;
+  }>;
 };
 
 /**
- * One web search through a provider's search service (`web.search`, 计划 4.5): the connection given, or the first search connection. The result goes back
- * to whoever asked (the Agent's tool, or the material search panel) and is not saved; the use is recorded. An empty result is an answer, not a failure.
+ * One web search through a provider's search service (`web.search`): supports up to 50 results, optional full page
+ * `needContent`, and preserves `siteIcon` & `content`. Enforces the provider access gate and records `service_usage`.
  */
-export async function webSearch(app: WebSearchHost, input: { query: string; count?: number; connectionId?: string; runId?: string; task?: string }, signal: AbortSignal): Promise<WebSearchAnswer> {
+export async function webSearch(
+  app: WebSearchHost,
+  input: { query: string; count?: number; needContent?: boolean; connectionId?: string; runId?: string; task?: string },
+  signal: AbortSignal,
+): Promise<WebSearchAnswer> {
   const row = (input.connectionId
     ? app.store.sqlite.prepare("SELECT * FROM provider_connections WHERE id = ? AND purpose = 'search'").get(input.connectionId)
     : app.store.sqlite.prepare("SELECT * FROM provider_connections WHERE purpose = 'search' ORDER BY created_at, rowid LIMIT 1").get()) as ConnectionRow | undefined;
@@ -31,7 +44,13 @@ export async function webSearch(app: WebSearchHost, input: { query: string; coun
     if (!access.apiKey) throw new MangaError("AUTHENTICATION_FAILED", "the search connection has no key");
     const apiKey = access.apiKey;
     const found = await withRetries(
-      () => searchDeepSeek(row.base_url, apiKey, { query: input.query, count: input.count, signal: access.signal ?? signal, timeoutMs: row.timeout_ms }),
+      () => searchDeepSeek(row.base_url, apiKey, {
+        query: input.query,
+        count: input.count,
+        needContent: input.needContent,
+        signal: access.signal ?? signal,
+        timeoutMs: row.timeout_ms,
+      }),
       RETRY_STATUSES, { signal: access.signal ?? signal },
     );
     recordServiceUse(app, { connectionId: row.id, service: "search", task: input.task ?? "search", unit: "search", quantity: 1, status: "ok", ...(input.runId ? { runId: input.runId } : {}) });
@@ -51,5 +70,14 @@ export async function webSearch(app: WebSearchHost, input: { query: string; coun
 function shape(result: WebSearchResult): WebSearchAnswer["results"][number] {
   let site = result.site ?? null;
   if (!site) { try { site = new URL(result.url).hostname.replace(/^www\./, ""); } catch { site = null; } }
-  return { title: result.title, url: result.url, site, publishedAt: result.publishedAt ?? null, snippet: result.snippet ?? null, summary: result.summary ?? null };
+  return {
+    title: result.title,
+    url: result.url,
+    site,
+    ...(result.siteIcon ? { siteIcon: result.siteIcon } : {}),
+    publishedAt: result.publishedAt ?? null,
+    snippet: result.snippet ?? null,
+    summary: result.summary ?? null,
+    ...(result.content !== undefined ? { content: result.content } : {}),
+  };
 }

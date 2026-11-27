@@ -1,4 +1,6 @@
 export { MangaProductApp, type ProductAppOptions } from "./product-app.ts";
+export { createAgentStreamCoalescer, type AgentStreamCoalescer, type LiveRunExtras } from "./ops/live-extras.ts";
+export type { SpeechStreamSession } from "./providers/speech.ts";
 export { AGENT_COMMANDS, AGENT_OPT_IN_COMMANDS, NOTE_CONTENT_COMMANDS, OWNER_COMMANDS } from "./commands/access.ts";
 export { resolveLaunchLayout, persistPointer, defaultPointerPath, channelFolderName, type LaunchRequest } from "./locations.ts";
 export { TestVault, UnavailableVault, ElectronSafeStorageVault, type CredentialVault } from "./credentials.ts";

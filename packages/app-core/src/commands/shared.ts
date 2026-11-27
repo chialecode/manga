@@ -41,6 +41,7 @@ export type AgentCommandHost = CoreCommandHost & Pick<
   | "comics"
   | "conversations"
   | "danmaku"
+  | "emitAgentStream"
   | "extras"
   | "followFiles"
   | "grants"

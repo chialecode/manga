@@ -1,15 +1,25 @@
-/** Adding models from a provider plugin (计划 4.2): the providers on offer, the models an account can use, and the accounts with their shared key. */
-import { MangaError, createId, type CommandEnvelope, type ProviderModel, type ProviderServiceKind } from "@manga/contracts";
-import { applyProfile, DEFAULT_MODEL_PROFILE, type ModelProfile, type ReasoningEffort } from "@manga/contracts/models";
-import { joinApiPath, mapHttpError, networkError } from "@manga/model-protocol";
+/** Adding models from a provider plugin (计划 4.2): the providers on offer, capabilities, balances, and accounts with their shared key. */
+import {
+  MangaError,
+  createId,
+  type CommandEnvelope,
+  type ProviderBalance,
+  type ProviderCapabilities,
+  type ProviderModel,
+  type ProviderServiceKind,
+} from "@manga/contracts";
+import { applyProfile, DEFAULT_MODEL_PROFILE, effectiveProfile, type ModelProfile, type ReasoningEffort } from "@manga/contracts/models";
+import { fetchDeepSeekBalance, joinApiPath, mapHttpError, networkError } from "@manga/model-protocol";
+import { readAgentSettings } from "../agent-settings.ts";
 import { failureOf } from "../model-probe.ts";
 import type { MangaProductApp } from "../product-app.ts";
 import { readCredential, saveCredential } from "../credentials.ts";
-import type { ProviderEntry } from "../providers/registry.ts";
+import { dialectOf, type ProviderEntry } from "../providers/registry.ts";
+import { readRecordingSettings } from "../voice/settings.ts";
 import { checkedProfile, type ConnectionsHost } from "./connections.ts";
 import { currentRuntime } from "./settings.ts";
 
-export type ProvidersHost = ConnectionsHost & Pick<MangaProductApp, "providers" | "plugins">;
+export type ProvidersHost = ConnectionsHost & Pick<MangaProductApp, "providers" | "plugins"> & Partial<Pick<MangaProductApp, "projects">>;
 
 const SERVICE_NAMES: Record<ProviderServiceKind, string> = { transcription: "语音识别", speech: "语音合成", search: "网页搜索", fetch: "网页抓取", ocr: "文档识别" };
 const SERVICE_PURPOSE: Record<ProviderServiceKind, "transcription" | "speech" | "search" | "fetch" | "ocr"> = { transcription: "transcription", speech: "speech", search: "search", fetch: "fetch", ocr: "ocr" };
@@ -40,6 +50,7 @@ export function listProviders(app: ProvidersHost) {
     keyUrl: entry.file.keyUrl ?? null,
     pricesCheckedAt: entry.file.pricesCheckedAt ?? null,
     priceNote: entry.file.priceNote ?? null,
+    accountCapabilities: entry.file.accountCapabilities ?? [],
     models: entry.file.models.map((model) => ({ ...catalogModel(model), listed: false })),
     services: entry.file.services.map((service) => ({ kind: service.kind, name: service.name, description: service.description, suggested: service.suggested, voices: service.voices ?? [] })),
   }));
@@ -202,7 +213,7 @@ export async function addFromProvider(app: ProvidersHost, envelope: CommandEnvel
         const profile = kind === "transcription" ? applyProfile(DEFAULT_MODEL_PROFILE, { transcriptionInterface: "deepseek_asr", capabilities: [] }, "detected") : applyProfile(DEFAULT_MODEL_PROFILE, { capabilities: [] }, "detected");
         const connectionId = createId("conn");
         const modelId = service.adapter.replace(/@\d+$/, "");
-        insert.run(connectionId, `${entry.file.name} · ${service.name || SERVICE_NAMES[kind]}`, service.adapter, "openai-chat-completions", runtime, entry.baseUrl, credentialRef, kind === "transcription" ? 120_000 : 60_000, SERVICE_PURPOSE[kind], modelId, "[]", JSON.stringify(profile), now, accountId, kind);
+        insert.run(connectionId, `${entry.file.name} · ${service.name || SERVICE_NAMES[kind]}`, service.adapter, "openai-chat-completions", runtime, entry.baseUrl, credentialRef, kind === "transcription" || kind === "ocr" ? 120_000 : 60_000, SERVICE_PURPOSE[kind], modelId, "[]", JSON.stringify(profile), now, accountId, kind);
         created.push({ id: connectionId, purpose: SERVICE_PURPOSE[kind], modelId });
       }
     })();
@@ -249,4 +260,208 @@ export function deleteAccount(app: ProvidersHost, envelope: CommandEnvelope) {
   })();
   app.notify("settings.changed", {});
   return { ok: true, credentialRemoved: Boolean(account.credential_ref) };
+}
+
+const DEFAULT_SPEECH_VOICES = [
+  { id: "stella", name: "Stella（女声）" },
+  { id: "tide", name: "Tide（男声）" },
+];
+
+/**
+ * Single main-process source of truth for active chat and provider capabilities (`providers.capabilities`, #92).
+ * Verifies `account.available !== false` (enabled provider plugin) for every connection so disabled plugins never report available.
+ */
+export function providerCapabilities(
+  app: ProvidersHost,
+  input: { projectId?: string | null; connectionId?: string | null } = {},
+): ProviderCapabilities {
+  const rows = app.store.sqlite.prepare(`SELECT c.id, c.adapter_id, c.base_url, c.purpose, c.model_id, c.verified_capabilities_json, c.profile_json, c.account_id, c.provider_model, a.provider_ref
+    FROM provider_connections c LEFT JOIN provider_accounts a ON a.id = c.account_id ORDER BY c.rowid`).all() as Array<{
+    id: string;
+    adapter_id: string;
+    base_url: string;
+    purpose: string;
+    model_id: string;
+    verified_capabilities_json: string | null;
+    profile_json: string | null;
+    account_id: string | null;
+    provider_model: string | null;
+    provider_ref: string | null;
+  }>;
+
+  const entryOf = (row: { account_id: string | null; provider_ref: string | null }): ProviderEntry | undefined =>
+    row.account_id ? (row.provider_ref ? app.providers.get(row.provider_ref) : undefined) : undefined;
+  const isAvailable = (row: { account_id: string | null; provider_ref: string | null }): boolean =>
+    !row.account_id || Boolean(entryOf(row));
+
+  const availableRows = rows.filter(isAvailable);
+  const availableText = availableRows.filter((row) => row.purpose === "text");
+  const hasAvailableTextModel = availableText.length > 0;
+
+  const projectConnId = input.projectId && app.projects?.exists(input.projectId)
+    ? app.projects.modelConnectionOf(input.projectId)
+    : null;
+  const chatConnId = readAgentSettings(app.store).chat.connectionId;
+  const pickText = (id: string | null | undefined) => (id ? availableText.find((row) => row.id === id) : undefined);
+  const activeText = pickText(input.connectionId) ?? pickText(projectConnId) ?? pickText(chatConnId) ?? availableText[0];
+
+  let activeTextModelId: string | null = null;
+  let activeTextDialect: "deepseek" | null = null;
+  let nativeWebSearchAvailable = false;
+  let readUrlAvailable = false;
+  let filesAvailable = false;
+
+  if (activeText) {
+    const verified = (() => { try { return JSON.parse(String(activeText.verified_capabilities_json || "[]")) as string[]; } catch { return []; } })();
+    const profile = effectiveProfile(activeText.profile_json, verified);
+    const dialect = dialectOf(profile, activeText.base_url) ?? null;
+    const providerEntry = entryOf(activeText);
+    const modelKey = (activeText.provider_model ?? activeText.model_id).toLowerCase();
+    const isV4Pro = dialect === "deepseek" && modelKey === "deepseek-v4-pro";
+    activeTextModelId = activeText.model_id;
+    activeTextDialect = dialect;
+    nativeWebSearchAvailable = Boolean(dialect === "deepseek" && !isV4Pro && profile.capabilities.includes("web_search"));
+    readUrlAvailable = Boolean(dialect === "deepseek" && !isV4Pro);
+    filesAvailable = Boolean(dialect === "deepseek" && !isV4Pro && (!activeText.account_id || providerEntry?.file.accountCapabilities?.includes("files")));
+  }
+
+  const standaloneWebSearchAvailable = availableRows.some((row) => row.purpose === "search");
+  const webSearchAvailable = nativeWebSearchAvailable || standaloneWebSearchAvailable;
+
+  const availableSpeech = availableRows.filter((row) => row.purpose === "speech");
+  const preferredSpeechId = readRecordingSettings(app.store).speechConnectionId;
+  const speechConn = (preferredSpeechId ? availableSpeech.find((row) => row.id === preferredSpeechId) : undefined) ?? availableSpeech[0];
+  const speechAvailable = Boolean(speechConn);
+  const speechEntry = speechConn ? entryOf(speechConn) : undefined;
+  const declaredVoices = speechEntry?.file.services.find((service) => service.kind === "speech")?.voices;
+  const speechVoices = speechAvailable
+    ? (declaredVoices?.length ? declaredVoices.map((voice) => ({ id: voice.id, name: voice.name })) : DEFAULT_SPEECH_VOICES)
+    : [];
+  const streamingTtsAvailable = Boolean(speechConn && speechConn.adapter_id === "deepseek-tts@1");
+
+  const fetchAvailable = availableRows.some((row) => row.purpose === "fetch");
+  const ocrAvailable = availableRows.some((row) => row.purpose === "ocr");
+
+  const accountRows = app.store.sqlite.prepare("SELECT provider_ref, credential_ref FROM provider_accounts").all() as Array<{ provider_ref: string; credential_ref: string | null }>;
+  const balanceAvailable = accountRows.some((account) => {
+    if (!account.credential_ref) return false;
+    const entry = app.providers.get(account.provider_ref);
+    return Boolean(entry?.file.accountCapabilities?.includes("balance"));
+  });
+
+  return {
+    hasAvailableTextModel,
+    webSearchAvailable,
+    nativeWebSearchAvailable,
+    standaloneWebSearchAvailable,
+    readUrlAvailable,
+    speechAvailable,
+    speechVoices,
+    streamingTtsAvailable,
+    fetchAvailable,
+    ocrAvailable,
+    filesAvailable,
+    balanceAvailable,
+    activeTextModelId,
+    activeTextDialect,
+  };
+}
+
+/**
+ * Reads account balance and availability via the provider access gate (`providers.balance`).
+ * Enforces enabled-plugin and declared-host checks before any network request (zero requests when disabled).
+ */
+export async function providerBalance(
+  app: ProvidersHost,
+  envelope: CommandEnvelope,
+  signal: AbortSignal,
+): Promise<{
+  accounts: ProviderBalance[];
+  accountId?: string;
+  providerRef?: string;
+  available: boolean;
+  checkedAt: string;
+  balances: ProviderBalance["balances"];
+}> {
+  const input = envelope.input as { accountId?: string; providerRef?: string };
+  const now = new Date().toISOString();
+
+  type AccountRow = { id: string; provider_ref: string; credential_ref: string | null };
+  let rows: AccountRow[];
+  if (input.accountId) {
+    const found = app.store.sqlite.prepare("SELECT id, provider_ref, credential_ref FROM provider_accounts WHERE id = ?").get(input.accountId) as AccountRow | undefined;
+    if (!found) throw new MangaError("NOT_FOUND", "account missing");
+    rows = [found];
+  } else if (input.providerRef) {
+    // Explicit providerRef enforces plugin availability right away.
+    app.providers.require(input.providerRef);
+    rows = app.store.sqlite.prepare("SELECT id, provider_ref, credential_ref FROM provider_accounts WHERE provider_ref = ? ORDER BY created_at, rowid").all(input.providerRef) as AccountRow[];
+  } else {
+    rows = app.store.sqlite.prepare("SELECT id, provider_ref, credential_ref FROM provider_accounts ORDER BY created_at, rowid").all() as AccountRow[];
+  }
+
+  const results: ProviderBalance[] = [];
+  for (const row of rows) {
+    const entry = input.accountId ? app.providers.require(row.provider_ref) : app.providers.get(row.provider_ref);
+    if (!entry) {
+      results.push({
+        accountId: row.id,
+        providerRef: row.provider_ref,
+        available: false,
+        checkedAt: now,
+        balances: [],
+        error: "插件已停用：去插件页启用",
+      });
+      continue;
+    }
+    if (!entry.file.accountCapabilities?.includes("balance")) {
+      if (input.accountId) {
+        throw new MangaError("MODEL_CAPABILITY_MISSING", "this provider does not support balance queries", { details: { capability: "balance" } });
+      }
+      continue;
+    }
+    const key = row.credential_ref ? await readCredential(app, row.credential_ref) : undefined;
+    if (!key) {
+      if (input.accountId) throw new MangaError("AUTHENTICATION_FAILED", "the account has no key");
+      results.push({ accountId: row.id, providerRef: entry.ref, available: false, checkedAt: now, balances: [], error: "账户未配置密钥" });
+      continue;
+    }
+    const tracked = app.providers.track(entry.ref, signal);
+    try {
+      await app.providers.checkAddress(entry, entry.baseUrl);
+      const balance = await fetchDeepSeekBalance({
+        baseUrl: entry.baseUrl,
+        apiKey: key,
+        signal: tracked.signal,
+      });
+      results.push({
+        accountId: row.id,
+        providerRef: entry.ref,
+        available: balance.available,
+        checkedAt: balance.checkedAt,
+        balances: balance.balances,
+      });
+    } catch (error) {
+      if (signal.aborted) throw new MangaError("CANCELLED", "request cancelled", { retryable: true });
+      if (input.accountId && error instanceof MangaError && (error.details as { reason?: string } | undefined)?.reason === "plugin_disabled") throw error;
+      results.push({
+        accountId: row.id,
+        providerRef: entry.ref,
+        available: false,
+        checkedAt: new Date().toISOString(),
+        balances: [],
+        error: error instanceof Error ? error.message.slice(0, 200) : "balance query failed",
+      });
+    } finally {
+      tracked.release();
+    }
+  }
+
+  const first = results[0];
+  return {
+    accounts: results,
+    ...(first
+      ? { accountId: first.accountId, providerRef: first.providerRef, available: first.available, checkedAt: first.checkedAt, balances: first.balances }
+      : { available: false, checkedAt: now, balances: [] }),
+  };
 }

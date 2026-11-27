@@ -1,17 +1,46 @@
 import { createHash } from "node:crypto";
-import { MangaError } from "@manga/contracts";
-import { speechBilledChars, synthesizeDeepSeek, DEEPSEEK_TTS_LIMITS } from "@manga/model-protocol";
+import { MangaError, SPEECH_VOICES, type SpeechVoice } from "@manga/contracts";
+import {
+  createDeepSeekTtsStream,
+  DEEPSEEK_TTS_LIMITS,
+  speechBilledChars,
+  stripMarkdownForSpeech,
+  synthesizeDeepSeek,
+} from "@manga/model-protocol";
 import type { ConnectionRow } from "../product-helpers.ts";
 import { connectionAccess, providerAbortReason, providerOf, type ProviderAccessHost } from "./access.ts";
 import { recordServiceUse } from "./usage.ts";
 
-/** The voices of DeepSeek's speech (计划 4.7): `stella` (女声, the default) and `tide` (男声). */
-export const SPEECH_VOICES = ["stella", "tide"] as const;
-export type SpeechVoice = (typeof SPEECH_VOICES)[number];
+export { SPEECH_VOICES, type SpeechVoice };
 
-/** What the speech service is asked: the text, and which connection and voice speak it; `task` is what the use is recorded under. */
-export type SpeakRequest = { text: string; connectionId?: string | null; voice?: string | null; task?: "read-aloud" | "novel" | "test" };
-export type SpeakResult = { billedChars: number; cached: boolean; firstChunkMs: number | null; bytes: number };
+/** What the speech service is asked: the text, which connection and voice speak it, and whether to prefer WS streaming. */
+export type SpeakRequest = {
+  text: string;
+  connectionId?: string | null;
+  voice?: SpeechVoice | string | null;
+  task?: "read-aloud" | "novel" | "test";
+  streaming?: boolean;
+};
+
+export type SpeakResult = {
+  billedChars: number;
+  cached: boolean;
+  firstChunkMs: number | null;
+  bytes: number;
+  transport?: "http" | "ws";
+};
+
+export type SpeechStreamStartOptions = {
+  connectionId?: string | null;
+  voice?: SpeechVoice | string | null;
+  task?: "read-aloud" | "novel" | "test";
+};
+
+export type SpeechStreamSession = {
+  push(textChunk: string): void;
+  finish(): Promise<SpeakResult & { transport: "http" | "ws" }>;
+  abort(): void;
+};
 
 const CACHE_TTL_MS = 10 * 60_000;
 const CACHE_ENTRY_BYTES = 8 * 1024 * 1024;
@@ -67,12 +96,27 @@ export function splitForSpeech(text: string, limit = DEEPSEEK_TTS_LIMITS.billedC
   return pieces;
 }
 
+function resolveVoice(requested: string | null | undefined, fallback: string): SpeechVoice {
+  const candidate = requested ?? fallback;
+  return SPEECH_VOICES.includes(candidate as SpeechVoice) ? (candidate as SpeechVoice) : "stella";
+}
+
+function isNonFallbackError(error: unknown, signal: AbortSignal): boolean {
+  if (signal.aborted) return true;
+  if (!(error instanceof MangaError)) return false;
+  if (error.code === "CANCELLED" || error.code === "AUTHENTICATION_FAILED") return true;
+  const details = (error.details ?? {}) as { reason?: string; kind?: string; errorCode?: string; status?: number };
+  if (details.reason === "plugin_disabled" || details.kind === "content_filter" || details.errorCode === "refusal" || details.kind === "billing" || details.status === 402) {
+    return true;
+  }
+  return false;
+}
+
 type Cached = { pcm: Buffer; at: number };
 
 /**
- * Speech from a provider's speech service (计划 4.7, 4.8): the PCM is handed on as it arrives; nothing is written to disk. The same text in the same voice
- * within 10 minutes is answered from memory and not billed again (Q-41 第 15 项). A connection whose plugin is off makes no request, and one turned off
- * while it speaks is cut short.
+ * Speech from a provider's speech service (VOICE-19): in-memory PCM only (never written to disk), pre-TTS Markdown
+ * stripping before billing/splitting, 10-minute in-memory cache, and WebSocket incremental streaming with clean HTTP fallback.
  */
 export class SpeechService {
   private readonly cache = new Map<string, Cached>();
@@ -96,11 +140,11 @@ export class SpeechService {
   }
 
   async speak(request: SpeakRequest, onChunk: (pcm: Uint8Array) => void, signal: AbortSignal): Promise<SpeakResult> {
-    const text = request.text.trim();
+    const text = stripMarkdownForSpeech(request.text).trim();
     if (!text) throw new MangaError("VALIDATION_ERROR", "nothing to read aloud");
     const row = this.connection(request.connectionId);
     if (!row) throw new MangaError("MODEL_CAPABILITY_MISSING", "没有配置语音合成：在“设置 › 模型”里从 DeepSeek 加入“语音合成”", { details: { reason: "no_speech_service" } });
-    const voice = SPEECH_VOICES.includes((request.voice ?? this.settings().voice) as SpeechVoice) ? (request.voice ?? this.settings().voice) : "stella";
+    const voice = resolveVoice(request.voice, this.settings().voice);
     const key = createHash("sha256").update(`${row.id}\u0000${voice}\u0000${text}`).digest("hex");
     const started = this.now();
     // A connection whose plugin is off does not read aloud, not even from memory (计划 4.1).
@@ -108,8 +152,9 @@ export class SpeechService {
     const hit = this.fromCache(key);
     if (hit) {
       onChunk(hit);
-      return { billedChars: 0, cached: true, firstChunkMs: this.now() - started, bytes: hit.length };
+      return { billedChars: 0, cached: true, firstChunkMs: this.now() - started, bytes: hit.length, transport: "http" };
     }
+
     const access = await connectionAccess(this.app, row, signal, verifiedProvider);
     let billed = 0;
     let firstChunkMs: number | null = null;
@@ -117,36 +162,64 @@ export class SpeechService {
     let keptBytes = 0;
     let totalBytes = 0;
     let cacheable = true;
+    const recordChunk = (chunk: Uint8Array) => {
+      if (firstChunkMs === null) firstChunkMs = this.now() - started;
+      totalBytes += chunk.length;
+      if (cacheable) {
+        if (keptBytes + chunk.length <= CACHE_ENTRY_BYTES) {
+          kept.push(Buffer.from(chunk));
+          keptBytes += chunk.length;
+        } else {
+          cacheable = false;
+          kept.length = 0;
+          keptBytes = 0;
+        }
+      }
+      onChunk(chunk);
+    };
+
     try {
       if (!access.apiKey) throw new MangaError("AUTHENTICATION_FAILED", "the speech connection has no key");
+      const runSignal = access.signal ?? signal;
+
+      // When caller opts into streaming TTS and the text fits in a single WS session, prefer WS with transparent HTTP fallback.
+      if (request.streaming && speechBilledChars(text) <= DEEPSEEK_TTS_LIMITS.billedChars) {
+        try {
+          const ws = createDeepSeekTtsStream({
+            baseUrl: row.base_url,
+            apiKey: access.apiKey,
+            voice,
+            format: "pcm",
+            filterMarkdown: true,
+            signal: runSignal,
+            timeoutMs: row.timeout_ms,
+            onChunk: recordChunk,
+          });
+          ws.push(text);
+          const wsResult = await ws.finish();
+          billed = wsResult.billedChars;
+          recordServiceUse(this.app, { connectionId: row.id, service: "speech", task: request.task ?? "read-aloud", unit: "char", quantity: billed, status: "ok" });
+          if (cacheable && keptBytes > 0) this.remember(key, Buffer.concat(kept));
+          return { billedChars: billed, cached: false, firstChunkMs, bytes: totalBytes, transport: "ws" };
+        } catch (wsError) {
+          const pluginOff = providerAbortReason(access.signal);
+          if (pluginOff || totalBytes > 0 || isNonFallbackError(wsError, signal)) throw pluginOff ?? wsError;
+          // WS failed before producing audio: fall through cleanly to HTTP TTS.
+        }
+      }
+
       for (const piece of splitForSpeech(text)) {
         const spoken = await synthesizeDeepSeek(row.base_url, access.apiKey, {
-          text: piece, voice, signal: access.signal ?? signal, timeoutMs: row.timeout_ms,
-          onChunk: (chunk) => {
-            if (firstChunkMs === null) firstChunkMs = this.now() - started;
-            totalBytes += chunk.length;
-            if (cacheable) {
-              if (keptBytes + chunk.length <= CACHE_ENTRY_BYTES) {
-                kept.push(Buffer.from(chunk));
-                keptBytes += chunk.length;
-              } else {
-                cacheable = false;
-                kept.length = 0;
-                keptBytes = 0;
-              }
-            }
-            onChunk(chunk);
-          },
+          text: piece, voice, signal: runSignal, timeoutMs: row.timeout_ms,
+          onChunk: recordChunk,
         });
         billed += spoken.billedChars;
       }
       recordServiceUse(this.app, { connectionId: row.id, service: "speech", task: request.task ?? "read-aloud", unit: "char", quantity: billed, status: "ok" });
       if (cacheable && keptBytes > 0) this.remember(key, Buffer.concat(kept));
-      return { billedChars: billed, cached: false, firstChunkMs, bytes: totalBytes };
+      return { billedChars: billed, cached: false, firstChunkMs, bytes: totalBytes, transport: "http" };
     } catch (error) {
-      // What was spoken before the failure or cancel was billed all the same; it is recorded with the failure.
       const pluginOff = providerAbortReason(access.signal);
-      // A reading the user stopped before any piece finished is not a failure; partial billed usage or a plugin/service failure is recorded.
       if (pluginOff || !signal.aborted || billed > 0) {
         const cause = pluginOff ?? error;
         recordServiceUse(this.app, {
@@ -163,6 +236,185 @@ export class SpeechService {
     } finally {
       access.release();
     }
+  }
+
+  /**
+   * Opens a real-time incremental WebSocket streaming TTS session (`VOICE-19`: in-memory PCM only, zero disk writes).
+   * Falls back cleanly to HTTP TTS if the WebSocket fails before emitting audio.
+   */
+  async startStream(
+    request: SpeechStreamStartOptions,
+    onChunk: (pcm: Uint8Array) => void,
+    signal: AbortSignal,
+  ): Promise<SpeechStreamSession> {
+    const row = this.connection(request.connectionId);
+    if (!row) {
+      throw new MangaError("MODEL_CAPABILITY_MISSING", "没有配置语音合成：在“设置 › 模型”里从 DeepSeek 加入“语音合成”", {
+        details: { reason: "no_speech_service" },
+      });
+    }
+    const voice = resolveVoice(request.voice, this.settings().voice);
+    const verifiedProvider = await providerOf(this.app, row);
+    const access = await connectionAccess(this.app, row, signal, verifiedProvider);
+    if (!access.apiKey) {
+      access.release();
+      throw new MangaError("AUTHENTICATION_FAILED", "the speech connection has no key");
+    }
+    const apiKey = access.apiKey;
+    const runSignal = access.signal ?? signal;
+    const task = request.task ?? "read-aloud";
+    const started = this.now();
+
+    let firstChunkMs: number | null = null;
+    let totalBytes = 0;
+    let wsBytes = 0;
+    let released = false;
+    let finished = false;
+    const rawChunks: string[] = [];
+    // Lightweight fence tracker so incremental streaming skips fenced code blocks.
+    let inFence = false;
+    let fenceCarry = "";
+
+    const releaseOnce = () => {
+      if (released) return;
+      released = true;
+      access.release();
+    };
+
+    const ws = createDeepSeekTtsStream({
+      baseUrl: row.base_url,
+      apiKey,
+      voice,
+      format: "pcm",
+      filterMarkdown: true,
+      signal: runSignal,
+      timeoutMs: row.timeout_ms,
+      onChunk: (chunk) => {
+        if (firstChunkMs === null) firstChunkMs = this.now() - started;
+        totalBytes += chunk.length;
+        wsBytes += chunk.length;
+        onChunk(chunk);
+      },
+    });
+
+    const sanitizeIncremental = (chunk: string): string => {
+      const combined = fenceCarry + chunk;
+      fenceCarry = "";
+      let out = "";
+      let i = 0;
+      while (i < combined.length) {
+        const fenceAt = combined.indexOf("```", i);
+        if (fenceAt < 0) {
+          // Hold trailing 1-2 backticks in case a fence splits across chunks.
+          const tailTicks = combined.endsWith("``") ? 2 : combined.endsWith("`") ? 1 : 0;
+          const body = tailTicks ? combined.slice(i, combined.length - tailTicks) : combined.slice(i);
+          if (tailTicks) fenceCarry = combined.slice(combined.length - tailTicks);
+          if (!inFence) out += body;
+          break;
+        }
+        if (!inFence) {
+          out += combined.slice(i, fenceAt);
+          inFence = true;
+          // Skip fence language header line if present inside this chunk.
+          const nl = combined.indexOf("\n", fenceAt + 3);
+          i = nl >= 0 ? nl + 1 : combined.length;
+        } else {
+          inFence = false;
+          i = fenceAt + 3;
+        }
+      }
+      if (!out) return "";
+      const stripped = stripMarkdownForSpeech(out);
+      return stripped;
+    };
+
+    const app = this.app;
+    const now = this.now;
+    return {
+      push(textChunk: string) {
+        if (finished || !textChunk) return;
+        rawChunks.push(textChunk);
+        const cleaned = sanitizeIncremental(textChunk);
+        if (cleaned) ws.push(cleaned);
+      },
+      async finish(): Promise<SpeakResult & { transport: "http" | "ws" }> {
+        if (finished) return { billedChars: 0, cached: false, firstChunkMs, bytes: totalBytes, transport: wsBytes > 0 ? "ws" : "http" };
+        finished = true;
+        try {
+          if (fenceCarry && !inFence) {
+            const tail = stripMarkdownForSpeech(fenceCarry);
+            fenceCarry = "";
+            if (tail) ws.push(tail);
+          }
+          const wsResult = await ws.finish();
+          recordServiceUse(app, { connectionId: row.id, service: "speech", task, unit: "char", quantity: wsResult.billedChars, status: "ok" });
+          return { billedChars: wsResult.billedChars, cached: false, firstChunkMs, bytes: totalBytes, transport: "ws" };
+        } catch (wsError) {
+          const pluginOff = providerAbortReason(access.signal);
+          if (!pluginOff && wsBytes === 0 && !isNonFallbackError(wsError, signal)) {
+            // Transparent HTTP fallback when WebSocket handshake or stream failed before emitting any audio.
+            const fallbackText = stripMarkdownForSpeech(rawChunks.join("")).trim();
+            if (!fallbackText) {
+              return { billedChars: 0, cached: false, firstChunkMs: null, bytes: 0, transport: "http" };
+            }
+            let httpBilled = 0;
+            try {
+              for (const piece of splitForSpeech(fallbackText)) {
+                const spoken = await synthesizeDeepSeek(row.base_url, apiKey, {
+                  text: piece,
+                  voice,
+                  signal: runSignal,
+                  timeoutMs: row.timeout_ms,
+                  onChunk: (chunk) => {
+                    if (firstChunkMs === null) firstChunkMs = now() - started;
+                    totalBytes += chunk.length;
+                    onChunk(chunk);
+                  },
+                });
+                httpBilled += spoken.billedChars;
+              }
+              recordServiceUse(app, { connectionId: row.id, service: "speech", task, unit: "char", quantity: httpBilled, status: "ok" });
+              return { billedChars: httpBilled, cached: false, firstChunkMs, bytes: totalBytes, transport: "http" };
+            } catch (httpError) {
+              const httpPluginOff = providerAbortReason(access.signal);
+              if (httpPluginOff || !signal.aborted || httpBilled > 0) {
+                const cause = httpPluginOff ?? httpError;
+                recordServiceUse(app, {
+                  connectionId: row.id,
+                  service: "speech",
+                  task,
+                  unit: "char",
+                  quantity: httpBilled,
+                  status: "error",
+                  errorCode: cause instanceof MangaError ? cause.code : signal.aborted ? "CANCELLED" : "UNKNOWN",
+                });
+              }
+              throw httpPluginOff ?? httpError;
+            }
+          }
+          if (pluginOff || !signal.aborted) {
+            const cause = pluginOff ?? wsError;
+            recordServiceUse(app, {
+              connectionId: row.id,
+              service: "speech",
+              task,
+              unit: "char",
+              quantity: 0,
+              status: "error",
+              errorCode: cause instanceof MangaError ? cause.code : signal.aborted ? "CANCELLED" : "UNKNOWN",
+            });
+          }
+          throw pluginOff ?? wsError;
+        } finally {
+          releaseOnce();
+        }
+      },
+      abort() {
+        finished = true;
+        ws.abort();
+        releaseOnce();
+      },
+    };
   }
 
   private fromCache(key: string): Buffer | undefined {

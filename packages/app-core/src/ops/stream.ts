@@ -1,9 +1,21 @@
-import type { ProposalCard, SourceLocator } from "@manga/contracts";
+import type {
+  AgentCitation,
+  AgentErrorCode,
+  AgentRunUsage,
+  AgentSearchStep,
+  AgentServerToolStep,
+  AgentStopReason,
+  AgentToolStep,
+  ProposalCard,
+  SourceLocator,
+  StreamUserAttachment,
+} from "@manga/contracts";
 import { MangaError } from "@manga/contracts";
+import { aggregateServerToolSteps, classifyAgentError } from "@manga/model-protocol";
 import type { DrizzleStore } from "@manga/storage-drizzle";
 import { readLayout } from "../domain/revision-layout.ts";
-import { liveRunExtras } from "./live-extras.ts";
-import type { AgentSearchStep, StreamAgent, StreamItem, VoiceSessionLike } from "./stream-types.ts";
+import { liveRunExtras, type LiveRunExtras } from "./live-extras.ts";
+import type { StreamAgent, StreamItem, VoiceSessionLike } from "./stream-types.ts";
 
 export type { StreamItem } from "./stream-types.ts";
 
@@ -23,6 +35,133 @@ function queryInChunks<T>(ids: string[], query: (chunk: string[], placeholders: 
     out.push(...query(chunk, placeholders));
   }
   return out;
+}
+
+const NOT_SUPERSEDED_SQL = "(usage_json IS NULL OR NOT json_valid(usage_json) OR json_extract(usage_json, '$.supersededBy') IS NULL)";
+
+type StoredRunUsage = {
+  costUsd?: number;
+  estimatedCost?: number;
+  currency?: string;
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
+  searches?: number;
+  fetches?: number;
+  latencyMs?: number;
+  pricesCheckedAt?: string;
+  thinkingRaised?: boolean;
+  stopReason?: AgentStopReason;
+  refusal?: boolean;
+  generatedTitle?: string;
+  reasoningStartedAt?: string;
+  reasoningElapsedMs?: number;
+  errorCode?: AgentErrorCode;
+  supersededBy?: string;
+  toolSteps?: Record<string, { startedAt?: string; elapsedMs?: number; summary?: string; error?: string }>;
+};
+
+type StoredError = {
+  code: string;
+  message: string;
+  errorCode?: AgentErrorCode;
+  details?: Record<string, unknown>;
+};
+
+type ToolEventRow = {
+  id: string;
+  run_id: string;
+  command_id: string;
+  status: string;
+  input_summary: string;
+  result_summary: string | null;
+  created_at: string;
+};
+
+function deriveErrorCode(err: StoredError | null, status: string, usageMeta: StoredRunUsage, live: LiveRunExtras | undefined): AgentErrorCode | undefined {
+  if (err?.errorCode) return err.errorCode;
+  if (typeof err?.details?.errorCode === "string") return err.details.errorCode as AgentErrorCode;
+  if (usageMeta.errorCode) return usageMeta.errorCode;
+  if (live?.errorCode) return live.errorCode;
+  if (status === "cancelled") return "cancelled";
+  if (!err) return undefined;
+  const synthetic = new MangaError(err.code as never, err.message, { details: err.details });
+  return classifyAgentError(synthetic).errorCode;
+}
+
+function mapToolEventStatus(status: string): AgentToolStep["status"] {
+  if (status === "executed") return "done";
+  if (status === "proposed") return "wip";
+  return "error";
+}
+
+function assembleToolSteps(
+  rows: ToolEventRow[],
+  usageMeta: StoredRunUsage,
+  live: LiveRunExtras | undefined,
+): AgentToolStep[] | undefined {
+  const steps: AgentToolStep[] = [];
+  const byId = new Map<string, AgentToolStep>();
+  for (const row of rows) {
+    const meta = usageMeta.toolSteps?.[row.id];
+    const parsedResult = parse<{ status?: string; error?: { message?: string } } | null>(row.result_summary, null);
+    const status = mapToolEventStatus(row.status);
+    const error = meta?.error ?? (status === "error"
+      ? (parsedResult?.error?.message?.slice(0, 240) || (row.status === "denied" ? "工具调用未获授权" : undefined))
+      : undefined);
+    const step: AgentToolStep = {
+      id: row.id,
+      name: row.command_id,
+      status,
+      startedAt: meta?.startedAt ?? row.created_at,
+      ...(typeof meta?.elapsedMs === "number" ? { elapsedMs: meta.elapsedMs } : {}),
+      ...(meta?.summary ? { summary: meta.summary } : {}),
+      ...(error ? { error } : {}),
+    };
+    steps.push(step);
+    byId.set(step.id, step);
+  }
+  for (const liveStep of live?.toolSteps ?? []) {
+    const existing = byId.get(liveStep.id);
+    if (existing) {
+      if (existing.elapsedMs === undefined && liveStep.elapsedMs !== undefined) existing.elapsedMs = liveStep.elapsedMs;
+      if (!existing.summary && liveStep.summary) existing.summary = liveStep.summary;
+      if (!existing.error && liveStep.error) existing.error = liveStep.error;
+    } else {
+      steps.push(liveStep);
+      byId.set(liveStep.id, liveStep);
+    }
+  }
+  return steps.length ? steps : undefined;
+}
+
+function assembleUsage(
+  run: { input_tokens: number | null; output_tokens: number | null; duration_ms: number | null },
+  usageMeta: StoredRunUsage,
+  live: LiveRunExtras | undefined,
+): AgentRunUsage | undefined {
+  const inputTokens = live?.usage?.inputTokens ?? (typeof run.input_tokens === "number" ? run.input_tokens : undefined);
+  const outputTokens = live?.usage?.outputTokens ?? (typeof run.output_tokens === "number" ? run.output_tokens : undefined);
+  const cachedInputTokens = live?.usage?.cachedInputTokens ?? usageMeta.cachedInputTokens;
+  const reasoningTokens = live?.usage?.reasoningTokens ?? usageMeta.reasoningTokens;
+  const searches = live?.usage?.searches ?? usageMeta.searches;
+  const fetches = live?.usage?.fetches ?? usageMeta.fetches;
+  const estimatedCost = live?.usage?.estimatedCost ?? usageMeta.estimatedCost ?? usageMeta.costUsd;
+  const currency = live?.usage?.currency ?? usageMeta.currency ?? (estimatedCost !== undefined ? "USD" : undefined);
+  const latencyMs = live?.usage?.latencyMs ?? usageMeta.latencyMs ?? (typeof run.duration_ms === "number" ? run.duration_ms : undefined);
+  const pricesCheckedAt = live?.usage?.pricesCheckedAt ?? usageMeta.pricesCheckedAt;
+  const usage: AgentRunUsage = {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+    ...(searches !== undefined ? { searches } : {}),
+    ...(fetches !== undefined ? { fetches } : {}),
+    ...(estimatedCost !== undefined ? { estimatedCost } : {}),
+    ...(currency ? { currency } : {}),
+    ...(latencyMs !== undefined ? { latencyMs } : {}),
+    ...(pricesCheckedAt ? { pricesCheckedAt } : {}),
+  };
+  return Object.keys(usage).length ? usage : undefined;
 }
 
 export type ProposalStreamLike = {
@@ -139,13 +278,28 @@ export function sessionStream(
     }
   }
 
-  // The questions asked of the Agent in this session, and its answers.
-  if (from && store.sqlite.prepare("SELECT 1 FROM agent_runs WHERE session_id = ? AND created_at < ? LIMIT 1").get(session.id, from)) older = true;
-  const runs = store.sqlite.prepare("SELECT id, status, input_text, live_text, error_json, usage_json, created_at, updated_at FROM agent_runs WHERE session_id = ? AND created_at < ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?").all(session.id, before, from, limit + 1) as Array<{
-    id: string; status: string; input_text: string; live_text: string | null; error_json: string | null; usage_json: string | null; created_at: string; updated_at: string;
+  // The questions asked of the Agent in this session, and its answers (skipping superseded regenerated/edited turns).
+  if (from && store.sqlite.prepare(`SELECT 1 FROM agent_runs WHERE session_id = ? AND created_at < ? AND ${NOT_SUPERSEDED_SQL} LIMIT 1`).get(session.id, from)) older = true;
+  const runs = store.sqlite.prepare(`SELECT id, status, input_text, live_text, error_json, usage_json, model_id, input_tokens, output_tokens, duration_ms, created_at, updated_at
+    FROM agent_runs
+    WHERE session_id = ? AND created_at < ? AND created_at >= ? AND ${NOT_SUPERSEDED_SQL}
+    ORDER BY created_at DESC LIMIT ?`).all(session.id, before, from, limit + 1) as Array<{
+    id: string;
+    status: string;
+    input_text: string;
+    live_text: string | null;
+    error_json: string | null;
+    usage_json: string | null;
+    model_id: string | null;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    duration_ms: number | null;
+    created_at: string;
+    updated_at: string;
   }>;
   const firstUserPayloadByRun = new Map<string, string | null>();
   const assistantRowsByRun = new Map<string, Array<{ text: string; payload_json: string | null }>>();
+  const toolEventsByRun = new Map<string, ToolEventRow[]>();
   if (runs.length) {
     const runIds = runs.map((run) => run.id);
     const msgRows = queryInChunks(runIds, (chunk, placeholders) =>
@@ -160,20 +314,69 @@ export function sessionStream(
         list.push({ text: msg.text, payload_json: msg.payload_json });
       }
     }
+    const toolRows = queryInChunks(runIds, (chunk, placeholders) =>
+      store.sqlite.prepare(`SELECT id, run_id, command_id, status, input_summary, result_summary, created_at FROM agent_tool_events WHERE run_id IN (${placeholders}) ORDER BY created_at, rowid`).all(...chunk) as ToolEventRow[],
+    );
+    for (const row of toolRows) {
+      let list = toolEventsByRun.get(row.run_id);
+      if (!list) toolEventsByRun.set(row.run_id, list = []);
+      list.push(row);
+    }
   }
   const proposalsByRun = proposals ? proposals.byRunForSession(session.id) : null;
   for (const run of runs) {
-    const quick = parse<{ quickTask?: { id?: string | null; name?: string } }>(firstUserPayloadByRun.get(run.id), {}).quickTask;
-    items.push({ kind: "user", id: `${run.id}:user`, at: run.created_at, runId: run.id, text: run.input_text, quickTask: quick?.name ? { id: quick.id ?? null, name: quick.name } : null });
+    const userPayload = parse<{ quickTask?: { id?: string | null; name?: string }; attachments?: StreamUserAttachment[] }>(firstUserPayloadByRun.get(run.id), {});
+    const quick = userPayload.quickTask;
+    items.push({
+      kind: "user",
+      id: `${run.id}:user`,
+      at: run.created_at,
+      runId: run.id,
+      text: run.input_text,
+      quickTask: quick?.name ? { id: quick.id ?? null, name: quick.name } : null,
+      ...(Array.isArray(userPayload.attachments) && userPayload.attachments.length ? { attachments: userPayload.attachments } : {}),
+    });
     const assistantRows = assistantRowsByRun.get(run.id) ?? [];
     const answer = assistantRows.map((row) => row.text).filter(Boolean).join("\n");
     const runProposals = proposalsByRun?.get(run.id);
-    items.push({
-      kind: "agent", id: `${run.id}:agent`, at: run.created_at, runId: run.id, status: run.status,
-      text: (run.status === "running" || run.status === "queued" ? run.live_text : answer || run.live_text) ?? "", error: parse<{ code: string; message: string } | null>(run.error_json, null),
+    const live = liveRunExtras(run.id);
+    const usageMeta = parse<StoredRunUsage>(run.usage_json, {});
+    const parsedError = parse<StoredError | null>(run.error_json, null);
+    const errorCode = deriveErrorCode(parsedError, run.status, usageMeta, live);
+    const error = parsedError
+      ? { code: parsedError.code, message: parsedError.message, ...(errorCode ? { errorCode } : {}) }
+      : null;
+    const extras = answerExtras(assistantRows, live, usageMeta);
+    const toolSteps = assembleToolSteps(toolEventsByRun.get(run.id) ?? [], usageMeta, live);
+    const usage = assembleUsage(run, usageMeta, live);
+    const modelId = run.model_id ?? live?.modelId ?? undefined;
+    const stopReason = usageMeta.stopReason ?? live?.stopReason ?? (run.status === "cancelled" ? "cancelled" : run.status === "failed" ? "error" : undefined);
+    const refusal = usageMeta.refusal === true || live?.refusal === true || stopReason === "refusal";
+    const canContinue = !refusal && (run.status === "cancelled" || stopReason === "max_tokens");
+    const generatedTitle = usageMeta.generatedTitle ?? live?.generatedTitle;
+    const isLiveStatus = run.status === "running" || run.status === "queued";
+    const text = (isLiveStatus ? (live?.text || run.live_text || answer) : (answer || live?.text || run.live_text)) ?? "";
+
+    const agentItem: StreamAgent = {
+      kind: "agent",
+      id: `${run.id}:agent`,
+      at: run.created_at,
+      runId: run.id,
+      status: run.status,
+      text,
+      error,
       ...(runProposals?.length ? { proposals: runProposals } : {}),
-      ...answerExtras(assistantRows, liveRunExtras(run.id), parse<{ thinkingRaised?: boolean }>(run.usage_json, {}).thinkingRaised === true),
-    });
+      ...extras,
+      ...(toolSteps ? { toolSteps } : {}),
+      ...(usage ? { usage } : {}),
+      ...(modelId ? { modelId } : {}),
+      ...(stopReason ? { stopReason } : {}),
+      ...(canContinue ? { canContinue: true } : {}),
+      ...(refusal ? { refusal: true } : {}),
+      ...(generatedTitle ? { generatedTitle } : {}),
+      ...(errorCode ? { errorCode } : {}),
+    };
+    items.push(agentItem);
   }
 
   // Newest `limit` items, oldest first. At equal times a question comes before its answer.
@@ -196,23 +399,61 @@ export function sessionStream(
   return { items: start > 0 ? items.slice(start) : items, hasMore: start > 0 || older, session: { id: session.id, kind: session.kind, targetId: session.target_id, workId, resourceId } };
 }
 
-/** The thinking, the searches and the cited sources of a run's answer: what its steps kept, then what the step under way has so far (计划 4.3/4.4). */
-function answerExtras(rows: Array<{ payload_json: string | null }>, live: { reasoning: string; search: AgentSearchStep[] } | undefined, thinkingRaised: boolean): Pick<StreamAgent, "reasoning" | "search" | "citations" | "thinkingRaised"> {
+/** Assembles persisted and live thinking, server-side search/browse steps, and cited sources for a run. */
+function answerExtras(
+  rows: Array<{ payload_json: string | null }>,
+  live: LiveRunExtras | undefined,
+  usageMeta: StoredRunUsage,
+): Pick<StreamAgent, "reasoning" | "reasoningStartedAt" | "reasoningElapsedMs" | "search" | "serverToolSteps" | "citations" | "thinkingRaised"> {
   const thoughts: string[] = [];
   const search: AgentSearchStep[] = [];
-  let citations: StreamAgent["citations"];
+  const serverToolSteps: AgentServerToolStep[] = [];
+  let citations: AgentCitation[] | undefined;
+  let reasoningStartedAt = usageMeta.reasoningStartedAt ?? live?.reasoningStartedAt;
+  let reasoningElapsedMs = usageMeta.reasoningElapsedMs ?? live?.reasoningElapsedMs;
+
   for (const row of rows) {
-    const payload = parse<{ reasoning?: unknown; search?: AgentSearchStep[]; citations?: StreamAgent["citations"] }>(row.payload_json, {});
+    const payload = parse<{
+      reasoning?: unknown;
+      reasoningStartedAt?: string;
+      reasoningElapsedMs?: number;
+      search?: AgentSearchStep[];
+      serverToolSteps?: AgentServerToolStep[];
+      citations?: AgentCitation[];
+    }>(row.payload_json, {});
     if (typeof payload.reasoning === "string" && payload.reasoning) thoughts.push(payload.reasoning);
-    if (Array.isArray(payload.search)) search.push(...payload.search);
+    if (!reasoningStartedAt && typeof payload.reasoningStartedAt === "string") reasoningStartedAt = payload.reasoningStartedAt;
+    if (reasoningElapsedMs === undefined && typeof payload.reasoningElapsedMs === "number") reasoningElapsedMs = payload.reasoningElapsedMs;
+    if (Array.isArray(payload.search) && payload.search.length) {
+      search.push(...payload.search);
+      if (Array.isArray(payload.serverToolSteps) && payload.serverToolSteps.length) {
+        serverToolSteps.push(...payload.serverToolSteps);
+      } else {
+        serverToolSteps.push(...aggregateServerToolSteps(payload.search));
+      }
+    } else if (Array.isArray(payload.serverToolSteps) && payload.serverToolSteps.length) {
+      serverToolSteps.push(...payload.serverToolSteps);
+    }
     if (Array.isArray(payload.citations) && payload.citations.length) citations = payload.citations;
   }
   if (live?.reasoning) thoughts.push(live.reasoning);
-  if (live?.search.length) search.push(...live.search);
+  if (live?.search.length) {
+    search.push(...live.search);
+    if (live.serverToolSteps.length) serverToolSteps.push(...live.serverToolSteps);
+    else serverToolSteps.push(...aggregateServerToolSteps(live.search));
+  } else if (live?.serverToolSteps.length) {
+    serverToolSteps.push(...live.serverToolSteps);
+  }
+  if (!citations && live?.citations.length) citations = live.citations;
+  const thinkingRaised = usageMeta.thinkingRaised === true || live?.thinkingRaised === true;
+
   return {
     ...(thoughts.length ? { reasoning: thoughts.join("\n\n") } : {}),
+    ...(reasoningStartedAt ? { reasoningStartedAt } : {}),
+    ...(reasoningElapsedMs !== undefined ? { reasoningElapsedMs } : {}),
     ...(search.length ? { search } : {}),
+    ...(serverToolSteps.length ? { serverToolSteps } : {}),
     ...(citations ? { citations } : {}),
-    ...(thinkingRaised ? { thinkingRaised } : {}),
+    ...(thinkingRaised ? { thinkingRaised: true } : {}),
   };
 }

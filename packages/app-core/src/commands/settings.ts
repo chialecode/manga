@@ -17,7 +17,8 @@ import { QuickTaskService } from "../quick-tasks.ts";
 import type { MangaProductApp } from "../product-app.ts";
 import { INDEXABLE_PARTITIONS } from "../product-helpers.ts";
 import { listConnections, upsertConnection, testConnection, deleteConnection, setProfile, probeConnection } from "./connections.ts";
-import { addFromProvider, deleteAccount, discoverModels, listProviders, setAccountKey } from "./providers.ts";
+import { addFromProvider, deleteAccount, discoverModels, listProviders, providerBalance, providerCapabilities, setAccountKey } from "./providers.ts";
+import { recognizeOcrDocument } from "../providers/ocr.ts";
 import { indexRootRecord } from "./inventory.ts";
 import type { UpdateBusyReason, UpdateSettingsPatch } from "@manga/contracts";
 import type { CoreCommandHost } from "./shared.ts";
@@ -25,7 +26,7 @@ import type { CoreCommandHost } from "./shared.ts";
 /** What these commands use of the application. */
 export type SettingsHost = CoreCommandHost & Partial<Pick<MangaProductApp, "appVersion" | "buildInfo" | "update">>;
 
-export function settingsModule(app: SettingsHost & Pick<MangaProductApp, "plugins">): MangaModule {
+export function settingsModule(app: SettingsHost & Pick<MangaProductApp, "plugins" | "projects" | "comics" | "grants" | "requireModule" | "resolvePathFor">): MangaModule {
   return defineModule({
     manifest: {
       moduleId: "manga.settings",
@@ -115,6 +116,9 @@ export function settingsModule(app: SettingsHost & Pick<MangaProductApp, "plugin
       app.runtime.registerCommand("manga.settings", "providers.add", (envelope, signal) => addFromProvider(app, envelope, signal));
       app.runtime.registerCommand("manga.settings", "providers.setKey", (envelope) => setAccountKey(app, envelope));
       app.runtime.registerCommand("manga.settings", "providers.deleteAccount", (envelope) => deleteAccount(app, envelope));
+      app.runtime.registerCommand("manga.settings", "providers.balance", (envelope, signal) => providerBalance(app, envelope, signal));
+      app.runtime.registerCommand("manga.settings", "providers.capabilities", (envelope) => providerCapabilities(app, envelope.input as { projectId?: string | null; connectionId?: string | null }));
+      app.runtime.registerCommand("manga.settings", "ocr.recognize", (envelope, signal) => recognizeOcrDocument(app, envelope, signal));
       app.runtime.registerCommand("manga.settings", "settings.getAgent", () => readAgentSettings(app.store));
       app.runtime.registerCommand("manga.settings", "settings.setAgent", (envelope) => {
         app.assertWritable();
