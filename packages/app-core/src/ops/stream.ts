@@ -340,22 +340,23 @@ export function sessionStream(
     const answer = assistantRows.map((row) => row.text).filter(Boolean).join("\n");
     const runProposals = proposalsByRun?.get(run.id);
     const live = liveRunExtras(run.id);
+    const isLiveStatus = run.status === "running" || run.status === "queued";
+    const activeLive = isLiveStatus ? live : undefined;
     const usageMeta = parse<StoredRunUsage>(run.usage_json, {});
     const parsedError = parse<StoredError | null>(run.error_json, null);
-    const errorCode = deriveErrorCode(parsedError, run.status, usageMeta, live);
+    const errorCode = deriveErrorCode(parsedError, run.status, usageMeta, activeLive);
     const error = parsedError
       ? { code: parsedError.code, message: parsedError.message, ...(errorCode ? { errorCode } : {}) }
       : null;
-    const extras = answerExtras(assistantRows, live, usageMeta);
-    const toolSteps = assembleToolSteps(toolEventsByRun.get(run.id) ?? [], usageMeta, live);
-    const usage = assembleUsage(run, usageMeta, live);
-    const modelId = run.model_id ?? live?.modelId ?? undefined;
-    const stopReason = usageMeta.stopReason ?? live?.stopReason ?? (run.status === "cancelled" ? "cancelled" : run.status === "failed" ? "error" : undefined);
-    const refusal = usageMeta.refusal === true || live?.refusal === true || stopReason === "refusal";
+    const extras = answerExtras(assistantRows, activeLive, usageMeta);
+    const toolSteps = assembleToolSteps(toolEventsByRun.get(run.id) ?? [], usageMeta, activeLive);
+    const usage = assembleUsage(run, usageMeta, activeLive);
+    const modelId = run.model_id ?? activeLive?.modelId ?? undefined;
+    const stopReason = usageMeta.stopReason ?? activeLive?.stopReason ?? (run.status === "cancelled" ? "cancelled" : run.status === "failed" ? "error" : undefined);
+    const refusal = usageMeta.refusal === true || activeLive?.refusal === true || stopReason === "refusal";
     const canContinue = !refusal && (run.status === "cancelled" || stopReason === "max_tokens");
-    const generatedTitle = usageMeta.generatedTitle ?? live?.generatedTitle;
-    const isLiveStatus = run.status === "running" || run.status === "queued";
-    const text = (isLiveStatus ? (live?.text || run.live_text || answer) : (answer || live?.text || run.live_text)) ?? "";
+    const generatedTitle = usageMeta.generatedTitle ?? activeLive?.generatedTitle;
+    const text = (isLiveStatus ? (activeLive?.text || run.live_text || answer) : (answer || run.live_text)) ?? "";
 
     const agentItem: StreamAgent = {
       kind: "agent",

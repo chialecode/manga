@@ -461,7 +461,14 @@ export async function providerBalance(
   return {
     accounts: results,
     ...(first
-      ? { accountId: first.accountId, providerRef: first.providerRef, available: first.available, checkedAt: first.checkedAt, balances: first.balances }
+      ? {
+          accountId: first.accountId,
+          providerRef: first.providerRef,
+          available: first.available,
+          checkedAt: first.checkedAt,
+          balances: first.balances,
+          ...(first.error ? { error: first.error } : {}),
+        }
       : { available: false, checkedAt: now, balances: [] }),
   };
 }

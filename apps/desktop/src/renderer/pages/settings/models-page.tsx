@@ -144,20 +144,23 @@ export function ModelsPage(props: {
     const api = typeof window !== "undefined" ? (window as { manga?: Partial<MangaHost> }).manga : undefined;
     if (!api?.command) return;
     setBalances((current) => ({ ...current, [accountId]: { ...current[accountId], loading: true, failed: false } }));
-    const res = await attempt<{ balances?: ProviderBalance[]; balance?: ProviderBalance } | ProviderBalance>("providers.balance", { accountId });
+    const res = await attempt<{ accounts?: ProviderBalance[]; balances?: ProviderBalance[]; balance?: ProviderBalance; error?: string } | ProviderBalance>("providers.balance", { accountId });
     if (!res.ok) {
       setBalances((current) => ({ ...current, [accountId]: { loading: false, failed: true } }));
       return;
     }
-    const raw = res.value;
-    const found: ProviderBalance | undefined = "accountId" in raw && typeof raw.accountId === "string"
-      ? (raw as ProviderBalance)
-      : "balance" in raw && raw.balance
-        ? raw.balance
-        : Array.isArray((raw as { balances?: ProviderBalance[] }).balances)
-          ? (raw as { balances: ProviderBalance[] }).balances.find((item) => item.accountId === accountId) ?? (raw as { balances: ProviderBalance[] }).balances[0]
-          : undefined;
-    setBalances((current) => ({ ...current, [accountId]: { loading: false, ...(found ? { data: found } : { failed: true }) } }));
+    const raw = res.value as { accounts?: ProviderBalance[]; balances?: ProviderBalance[]; balance?: ProviderBalance; error?: string } & Partial<ProviderBalance>;
+    const found: ProviderBalance | undefined = Array.isArray(raw.accounts)
+      ? raw.accounts.find((item) => item.accountId === accountId) ?? raw.accounts[0]
+      : typeof raw.accountId === "string"
+        ? (raw as ProviderBalance)
+        : raw.balance
+          ? raw.balance
+          : Array.isArray(raw.balances) && raw.balances[0] && "accountId" in raw.balances[0]
+            ? raw.balances.find((item) => item.accountId === accountId) ?? raw.balances[0]
+            : undefined;
+    const failed = !found || Boolean(found.error) || Boolean(raw.error);
+    setBalances((current) => ({ ...current, [accountId]: { loading: false, ...(failed ? { failed: true } : { data: found }) } }));
   }, []);
   const resolveAvailable = (account: AccountRef): boolean => {
     if (!hasLiveProviders || !providerData) return account.available;

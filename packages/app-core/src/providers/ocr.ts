@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { MangaError, type CommandEnvelope, type OcrPurpose, type OcrResult } from "@manga/contracts";
-import { ocrDeepSeekDocument } from "@manga/model-protocol";
+import { DEEPSEEK_FILE_LIMITS, ocrDeepSeekDocument } from "@manga/model-protocol";
 import type { MangaProductApp } from "../product-app.ts";
 import type { ConnectionRow } from "../product-helpers.ts";
 import { resolveLocation } from "../library-locations.ts";
@@ -31,9 +31,27 @@ function mimeOfFile(filename: string): string {
   return OCR_MIME_BY_EXT[path.extname(filename).toLowerCase()] ?? "application/octet-stream";
 }
 
+function readBoundedOcrFile(filePath: string, missingMessage: string): Uint8Array {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    throw new MangaError("NOT_FOUND", missingMessage);
+  }
+  if (!stat.isFile() || stat.size <= 0) {
+    throw new MangaError("VALIDATION_ERROR", "OCR file is empty or unreadable", { details: { kind: "file_invalid", errorCode: "file_invalid" } });
+  }
+  if (stat.size > DEEPSEEK_FILE_LIMITS.richLayoutBytes) {
+    throw new MangaError("VALIDATION_ERROR", "OCR file exceeds the 64 MiB upload limit", {
+      details: { kind: "file_invalid", errorCode: "file_invalid", bytes: stat.size, maxBytes: DEEPSEEK_FILE_LIMITS.richLayoutBytes },
+    });
+  }
+  return fs.readFileSync(filePath);
+}
+
 /**
  * Recognizes text or rich layout from a picked file handle or an authorized library resource / comic page
- * via a configured OCR provider service (`deepseek-ocr@1`), enforcing the provider access gate and recording usage.
+ * via a configured OCR provider service (`deepseek-ocr@1`), enforcing the provider access gate, bounded file size, and usage recording.
  */
 export async function recognizeOcrDocument(
   app: OcrHost,
@@ -60,54 +78,61 @@ export async function recognizeOcrDocument(
     });
   }
 
-  let filename: string;
-  let mimeType: string;
-  let data: Uint8Array;
-
-  if (input.pathHandle) {
-    const filePath = app.resolvePathFor(input.pathHandle, ["file", "import"]);
-    if (!fs.existsSync(filePath)) throw new MangaError("NOT_FOUND", "OCR file is missing");
-    data = fs.readFileSync(filePath);
-    filename = path.basename(filePath);
-    mimeType = mimeOfFile(filename);
-  } else if (input.resourceId) {
-    if (!app.grants.canRead(grant, input.resourceId)) {
-      throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
-    }
-    const revisionId = input.resourceRevisionId ?? (app.store.sqlite.prepare(
-      "SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
-    ).get(input.resourceId) as { id: string } | undefined)?.id;
-    if (!revisionId) throw new MangaError("NOT_FOUND", "resource revision missing");
-
-    if (input.pageId) {
-      app.requireModule("comic.pages", "comic reading");
-      const rendered = await app.comics.pageImage({
-        resourceId: input.resourceId,
-        revisionId,
-        pageId: input.pageId,
-        maxEdge: 2048,
-        format: "png",
-        signal,
-      });
-      data = rendered.bytes;
-      filename = `${input.pageId}.png`;
-      mimeType = "image/png";
-    } else {
-      const loc = resolveLocation(app.store, revisionId);
-      if (!loc?.path || !fs.existsSync(loc.path)) {
-        throw new MangaError("NOT_FOUND", "resource file is not available locally");
-      }
-      data = fs.readFileSync(loc.path);
-      filename = path.basename(loc.path);
-      mimeType = mimeOfFile(filename);
-    }
-  } else {
-    throw new MangaError("VALIDATION_ERROR", "provide either a path handle or a library resource");
-  }
-
+  // Enforce provider availability and credentials BEFORE reading files from disk or rendering comic pages.
   const access = await connectionAccess(app, row, signal);
+  let calledProvider = false;
   try {
     if (!access.apiKey) throw new MangaError("AUTHENTICATION_FAILED", "the OCR connection has no key");
+    let filename: string;
+    let mimeType: string;
+    let data: Uint8Array;
+
+    if (input.pathHandle) {
+      const filePath = app.resolvePathFor(input.pathHandle, ["file", "import"]);
+      data = readBoundedOcrFile(filePath, "OCR file is missing");
+      filename = path.basename(filePath);
+      mimeType = mimeOfFile(filename);
+    } else if (input.resourceId) {
+      if (!app.grants.canRead(grant, input.resourceId)) {
+        throw new MangaError("SCOPE_DENIED", "resource is outside the authorized set");
+      }
+      const revisionId = input.resourceRevisionId ?? (app.store.sqlite.prepare(
+        "SELECT id FROM resource_revisions WHERE resource_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+      ).get(input.resourceId) as { id: string } | undefined)?.id;
+      if (!revisionId) throw new MangaError("NOT_FOUND", "resource revision missing");
+
+      if (input.pageId) {
+        app.requireModule("comic.pages", "comic reading");
+        const rendered = await app.comics.pageImage({
+          resourceId: input.resourceId,
+          revisionId,
+          pageId: input.pageId,
+          maxEdge: 2048,
+          format: "png",
+          signal: access.signal ?? signal,
+        });
+        if (rendered.bytes.byteLength === 0 || rendered.bytes.byteLength > DEEPSEEK_FILE_LIMITS.richLayoutBytes) {
+          throw new MangaError("VALIDATION_ERROR", "rendered page exceeds the 64 MiB upload limit", {
+            details: { kind: "file_invalid", errorCode: "file_invalid", bytes: rendered.bytes.byteLength, maxBytes: DEEPSEEK_FILE_LIMITS.richLayoutBytes },
+          });
+        }
+        data = rendered.bytes;
+        filename = `${input.pageId}.png`;
+        mimeType = "image/png";
+      } else {
+        const loc = resolveLocation(app.store, revisionId);
+        if (!loc?.path) {
+          throw new MangaError("NOT_FOUND", "resource file is not available locally");
+        }
+        data = readBoundedOcrFile(loc.path, "resource file is not available locally");
+        filename = path.basename(loc.path);
+        mimeType = mimeOfFile(filename);
+      }
+    } else {
+      throw new MangaError("VALIDATION_ERROR", "provide either a path handle or a library resource");
+    }
+
+    calledProvider = true;
     const result = await ocrDeepSeekDocument({
       baseUrl: row.base_url,
       apiKey: access.apiKey,
@@ -130,7 +155,7 @@ export async function recognizeOcrDocument(
     return result;
   } catch (error) {
     const pluginOff = providerAbortReason(access.signal);
-    if (pluginOff || !signal.aborted) {
+    if (calledProvider && (pluginOff || !signal.aborted)) {
       const cause = pluginOff ?? error;
       recordServiceUse(app, {
         connectionId: row.id,

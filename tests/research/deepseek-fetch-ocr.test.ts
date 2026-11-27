@@ -109,7 +109,35 @@ describe("upgraded web.search, deepseek-fetch@1 (webpage.fetch), and ocr.recogni
     expect(rig.server.count("/v1/tools/fetch")).toBe(countBefore);
   });
 
-  it("runs ocr.recognize for text_recognition and rich_layout_recognition, records usage, and blocks when plugin is disabled", async () => {
+  it("blocks credentialed and private/local URLs from reaching DeepSeek /v1/tools/fetch (SSRF & secret leak protection)", async () => {
+    const rig = await deepseekApp({
+      add: { models: ["deepseek-flash"], services: ["fetch"] },
+    });
+    closers.push(rig.close);
+
+    // Credentialed URL must fail immediately in BOTH deepseek and auto modes with 0 cloud requests.
+    const credentialedUrl = `https://${["demo", "token"].join(":")}@example.com/page`;
+    for (const backend of ["deepseek", "auto"] as const) {
+      const cred = await call(rig.ctx, "webpage.fetch", { url: credentialedUrl, backend });
+      expect(cred.status).toBe("error");
+      expect(cred.error?.code).toBe("VALIDATION_ERROR");
+    }
+    expect(rig.server.count("/v1/tools/fetch")).toBe(0);
+
+    // Private IP & intranet/local hostnames must fail in deepseek mode AND skip cloud fetch in auto mode with 0 cloud requests.
+    for (const url of ["http://127.0.0.1:8080/internal", "http://intranet.local/doc", "http://localhost:9000/secret"]) {
+      const dsBlocked = await call(rig.ctx, "webpage.fetch", { url, backend: "deepseek" });
+      expect(dsBlocked.status).toBe("error");
+      expect(dsBlocked.error?.code).toBe("PATH_ESCAPE");
+
+      const autoBlocked = await call(rig.ctx, "webpage.fetch", { url, backend: "auto" });
+      expect(autoBlocked.status).toBe("error");
+      expect(autoBlocked.error?.code).toBe("PATH_ESCAPE");
+    }
+    expect(rig.server.count("/v1/tools/fetch")).toBe(0);
+  });
+
+  it("runs ocr.recognize for text_recognition and rich_layout_recognition, enforces 64 MiB cap before reading, and blocks when plugin is disabled", async () => {
     const rig = await deepseekApp({
       add: { models: ["deepseek-flash"], services: ["ocr"] },
       mock: { ocrText: (_bytes, purpose) => `识别结果(${purpose})` },
@@ -143,11 +171,22 @@ describe("upgraded web.search, deepseek-fetch@1 (webpage.fetch), and ocr.recogni
       { service: "ocr", unit: "page", quantity: 1, status: "ok" },
     ]);
 
-    // Plugin disabled -> refuses with PROVIDER_UNAVAILABLE and makes ZERO requests to /v1/tools/ocr.
+    // Oversized (>64 MiB) file is rejected via fs.statSync BEFORE reading into RAM, with 0 OCR requests.
+    const bigPath = path.join(dir, "huge.pdf");
+    fs.writeFileSync(bigPath, Buffer.alloc(0));
+    fs.truncateSync(bigPath, 64 * 1024 * 1024 + 1);
+    const bigHandle = rig.ctx.app.registerPath("file", bigPath);
+    const ocrCountBeforeBig = rig.server.count("/v1/tools/ocr");
+    const tooBig = await call(rig.ctx, "ocr.recognize", { pathHandle: bigHandle, purpose: "text_recognition" });
+    expect(tooBig.status).toBe("error");
+    expect(tooBig.error?.code).toBe("VALIDATION_ERROR");
+    expect(rig.server.count("/v1/tools/ocr")).toBe(ocrCountBeforeBig);
+
+    // Plugin disabled -> refuses with PROVIDER_UNAVAILABLE BEFORE touching disk (even on a missing path) and makes ZERO requests to /v1/tools/ocr.
     await call(rig.ctx, "plugin.disable", { pluginId: "demo.provider" });
     const ocrBefore = rig.server.count("/v1/tools/ocr");
-    const handle3 = rig.ctx.app.registerPath("file", imgPath);
-    const blocked = await call(rig.ctx, "ocr.recognize", { pathHandle: handle3, purpose: "text_recognition" });
+    const missingHandle = rig.ctx.app.registerPath("file", path.join(dir, "does-not-exist.png"));
+    const blocked = await call(rig.ctx, "ocr.recognize", { pathHandle: missingHandle, purpose: "text_recognition" });
     expect(blocked.status).toBe("error");
     expect(blocked.error?.code).toBe("PROVIDER_UNAVAILABLE");
     expect(rig.server.count("/v1/tools/ocr")).toBe(ocrBefore);

@@ -8,7 +8,7 @@ import { writeExportFile } from "../creative/export-file.ts";
 import { readShell } from "../reading-service.ts";
 import type { MangaProductApp, CreativeReg } from "../product-app.ts";
 import { webSearch } from "../providers/web-search.ts";
-import { fetchWithDeepSeek, hasAvailableFetchService } from "../providers/web-fetch.ts";
+import { classifyCloudFetchUrl, fetchWithDeepSeek, hasAvailableFetchService } from "../providers/web-fetch.ts";
 
 /** What these commands use of the application. */
 export type CreativeHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "closed" | "drafts" | "embeds" | "grantOf" | "grants" | "mindmaps" | "pluginRuntime" | "plugins" | "projects" | "proposals" | "providers" | "requireModule" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runtime" | "semantic" | "store" | "uiFacets" | "vault" | "whiteboards">;
@@ -374,12 +374,14 @@ export function researchModule(app: CreativeHost): MangaModule {
         const backend = value.backend ?? "auto";
         const runId = envelope.actor.kind === "agent" && envelope.actor.id.startsWith("agent:") ? envelope.actor.id.slice("agent:".length) : undefined;
         const task = runId ? "agent" : "research";
+        // Reject invalid schemes and credentialed URLs before any provider or fallback call.
+        const target = classifyCloudFetchUrl(value.url);
         if (backend === "deepseek") {
           const fetched = await fetchWithDeepSeek(app, { url: value.url, task, ...(runId ? { runId } : {}) }, signal);
           const saved = app.research.saveFetchedPage({ requestedUrl: fetched.url, title: fetched.title, text: fetched.content });
           return { ...saved, source: "deepseek_fetch" as const, ...(fetched.site ? { site: fetched.site } : {}), ...(fetched.siteIcon ? { siteIcon: fetched.siteIcon } : {}) };
         }
-        if (backend === "auto" && hasAvailableFetchService(app)) {
+        if (backend === "auto" && !target.privateOrLocal && hasAvailableFetchService(app)) {
           try {
             const fetched = await fetchWithDeepSeek(app, { url: value.url, task, ...(runId ? { runId } : {}) }, signal);
             if (fetched.content.trim()) {
@@ -387,8 +389,8 @@ export function researchModule(app: CreativeHost): MangaModule {
               return { ...saved, source: "deepseek_fetch" as const, ...(fetched.site ? { site: fetched.site } : {}), ...(fetched.siteIcon ? { siteIcon: fetched.siteIcon } : {}) };
             }
           } catch (error) {
-            if (signal.aborted || (error instanceof MangaError && error.code === "CANCELLED")) throw error;
-            // Fall back cleanly to the local Readability fetcher.
+            if (signal.aborted || (error instanceof MangaError && (error.code === "CANCELLED" || error.code === "VALIDATION_ERROR"))) throw error;
+            // Fall back cleanly to the local Readability fetcher (where NetworkBroker enforces allowPrivate / DNS checks).
           }
         }
         const local = await app.research.fetch(value.url, signal);

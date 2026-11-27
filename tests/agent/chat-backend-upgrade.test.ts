@@ -616,4 +616,50 @@ describe("Enriched StreamAgent, DeepSeek product capabilities, and agent run com
     expect(agents).toHaveLength(1);
     expect(agents[0]!.runId).toBe(r4Id);
   });
+
+  it("preserves top-level error on providers.balance failure and never duplicates live/persisted reasoning or server steps on done", async () => {
+    // 1. Failing /user/balance preserves `error` at top level (so UI shows balanceError, not balanceEmpty).
+    const failRig = await boot({ fail: [{ path: "/user/balance", status: 500, times: 2 }] });
+    const bal = await call(failRig.ctx, "providers.balance", { accountId: failRig.accountId });
+    expect(bal.status, JSON.stringify(bal)).toBe("ok");
+    const balVal = bal.value as { available: boolean; error?: string; accounts: Array<{ error?: string }> };
+    expect(balVal.available).toBe(false);
+    expect(balVal.error).toBeTruthy();
+    expect(balVal.accounts[0]?.error).toBeTruthy();
+
+    // 2. Multi-step tool + web search run queried immediately on `done` has zero duplicated reasoning / serverToolSteps.
+    const dupRig = await boot({
+      toolScript: [{ name: "library.list", arguments: "{}" }],
+      answer: "完成两步汇总。",
+    });
+    let onDonePromise: Promise<StreamAgent | undefined> | undefined;
+    const off = dupRig.ctx.app.onAgentStream((ev) => {
+      if (ev.sessionId === dupRig.sessionId && ev.kind === "done") {
+        // Read stream inside `done` listener (before `.finally()` runs) to catch any live/DB duplication window.
+        const raw = dupRig.ctx.app.store.sqlite.prepare("SELECT status FROM agent_runs WHERE id = ?").get(ev.runId) as { status: string };
+        expect(raw.status).toBe("succeeded");
+        onDonePromise = call(dupRig.ctx, "session.stream", { sessionId: dupRig.sessionId }).then((res) =>
+          (res.value as { items: StreamItem[] }).items.find((i): i is StreamAgent => i.kind === "agent"),
+        );
+      }
+    });
+    const sent = await call(dupRig.ctx, "agent.send", {
+      sessionId: dupRig.sessionId,
+      text: "先查资料再联网汇总",
+      allowCommands: ["web.search"],
+    });
+    const runId = String((sent.value as { runId: string }).runId);
+    const done = await waitForRun(dupRig.ctx.app, dupRig.ctx.actor, dupRig.ctx.grant.handle, runId);
+    off();
+    expect(done.value?.status).toBe("succeeded");
+    const onDoneSnapshot = await onDonePromise;
+    expect(onDoneSnapshot).toBeDefined();
+    const finalItems = await streamItems(dupRig);
+    const finalAgent = finalItems.find((i): i is StreamAgent => i.kind === "agent")!;
+    expect(onDoneSnapshot!.reasoning).toBe(finalAgent.reasoning);
+    expect(onDoneSnapshot!.serverToolSteps?.length ?? 0).toBe(finalAgent.serverToolSteps?.length ?? 0);
+    // Two model steps => reasoning appears once per step (never doubled by leftover live extras).
+    const segments = (finalAgent.reasoning ?? "").split("\n\n").filter(Boolean);
+    expect(segments.length).toBe(2);
+  });
 });

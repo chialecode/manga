@@ -1063,6 +1063,10 @@ async function agentLoop(
       } else {
         persistRunMessage(app, runId, messagePayload, messageExtras);
       }
+      // Clear step-local live fields immediately after DB persistence so concurrent `session.stream` reads never double-count them.
+      liveRun.reasoning = "";
+      liveRun.search = [];
+      liveRun.serverToolSteps = [];
       const usageSummary = buildUsageSummary();
       liveRun.text = finalText;
       liveRun.status = "succeeded";
@@ -1169,6 +1173,12 @@ async function agentLoop(
       };
       const toolMessage: ChatMessage = { role: "tool", toolCallId: callId, content: JSON.stringify(result) };
       persistRunMessage(app, runId, assistantCall, firstOfStep ? { search, ...(serverToolSteps.length ? { serverToolSteps } : {}) } : {});
+      if (firstOfStep) {
+        // Clear step-local live fields immediately after DB persistence so `session.stream` between steps never duplicates them.
+        liveRun.reasoning = "";
+        liveRun.search = [];
+        liveRun.serverToolSteps = [];
+      }
       firstOfStep = false;
       persistRunMessage(app, runId, toolMessage);
       messages.push(assistantCall, toolMessage);

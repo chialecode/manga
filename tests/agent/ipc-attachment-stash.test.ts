@@ -44,11 +44,20 @@ describe("stashComposerAttachment", () => {
     expect(fs.existsSync(stagedPath)).toBe(true);
     expect(tracked.has(stagedPath)).toBe(true);
 
-    // Rejects blocked executable extensions, empty payloads, and malformed objects.
+    // Rejects blocked executable extensions (including Windows trailing-dot/space tricks), dot segments, empty payloads, and malformed objects.
     expect(stashComposerAttachment({ name: "payload.exe", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
-    expect(stashComposerAttachment({ name: "script.ps1", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
+    expect(stashComposerAttachment({ name: "payload.exe.", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
+    expect(stashComposerAttachment({ name: "script.ps1 . ", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
+    expect(stashComposerAttachment({ name: "run.bat...", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
+    expect(stashComposerAttachment({ name: `${"a".repeat(205)}.exe`, bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
+    expect(stashComposerAttachment({ name: ".", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
+    expect(stashComposerAttachment({ name: "..", bytes: new Uint8Array([1, 2, 3]) }, cacheDir, registerPath, tracked)).toBeNull();
     expect(stashComposerAttachment({ name: "empty.txt", bytes: new Uint8Array(0) }, cacheDir, registerPath, tracked)).toBeNull();
     expect(stashComposerAttachment({ name: "   ", bytes: new Uint8Array([1]) }, cacheDir, registerPath, tracked)).toBeNull();
     expect(stashComposerAttachment(null, cacheDir, registerPath, tracked)).toBeNull();
+
+    // Enforces per-session stashed attachment cap (100 files max).
+    const capped = new Set<string>(Array.from({ length: 100 }, (_, i) => path.join(cacheDir, "composer-attachments", `att_${i}`)));
+    expect(stashComposerAttachment({ name: "extra.txt", bytes: new Uint8Array([1]) }, cacheDir, registerPath, capped)).toBeNull();
   });
 });

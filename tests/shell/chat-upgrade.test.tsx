@@ -73,6 +73,25 @@ describe("Chat Markdown, Code, Math, Mermaid, and Citations", () => {
     expect(links[0]!.getAttribute("href")).toBe("https://example.com/guide");
     fireEvent.click(links[0]!);
     expect(openExternal).toHaveBeenCalledWith("https://example.com/guide");
+
+    // External Markdown images never render <img> (preventing CSP violations & tracking pixels), while local safe schemes do.
+    cleanup();
+    const imgMd = [
+      "![追踪像素](https://tracker.example/pixel.png)",
+      "![恶意SVG](data:image/svg+xml,<svg/>)",
+      "![本地图](manga-media://thumb/1)",
+      "![内联图](data:image/png;base64,iVBORw0KGgo=)",
+    ].join("\n\n");
+    const { container: imgContainer } = render(<ChatMarkdown t={t} text={imgMd} />);
+    const renderedImgs = imgContainer.querySelectorAll("img");
+    expect(renderedImgs).toHaveLength(2);
+    expect(renderedImgs[0]!.getAttribute("src")).toBe("manga-media://thumb/1");
+    expect(renderedImgs[0]!.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(renderedImgs[1]!.getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo=");
+    const extImgLink = screen.getByTestId("chat-markdown-external-img");
+    expect(extImgLink.textContent).toBe("追踪像素");
+    fireEvent.click(extImgLink);
+    expect(openExternal).toHaveBeenCalledWith("https://tracker.example/pixel.png");
   });
 
   it("renders code blocks with language badge, line wrap toggle, and copy feedback", async () => {
@@ -526,6 +545,70 @@ describe("Composer Pills, Note-While-Running, Drag/Paste, Balance & Dark Danger 
     });
 
     await waitFor(() => expect(screen.getByTestId("account-balance-acc-ds").textContent).toContain("CNY 42.50"));
+
+    // Balance query error renders balanceError ("余额查询失败") rather than falsely showing "余额不足".
+    cleanup();
+    const errCommand = vi.fn(async ({ commandId }: { commandId: string }) => {
+      if (commandId === "providers.balance") {
+        return {
+          status: "ok",
+          value: {
+            accounts: [
+              {
+                accountId: "acc-ds",
+                providerRef: "manga-provider-deepseek/deepseek",
+                available: false,
+                checkedAt: "2026-11-27T10:00:00Z",
+                balances: [],
+                error: "provider HTTP 500",
+              },
+            ],
+            accountId: "acc-ds",
+            providerRef: "manga-provider-deepseek/deepseek",
+            available: false,
+            checkedAt: "2026-11-27T10:00:00Z",
+            balances: [],
+            error: "provider HTTP 500",
+          },
+        };
+      }
+      return { status: "error", error: { code: "UNKNOWN", message: "skip" } };
+    });
+    (window as unknown as { manga?: unknown }).manga = { command: errCommand };
+    await act(async () => {
+      render(
+        <ModelsPage
+          i18n={i18n}
+          settings={{
+            aiRuntime: "native",
+            connections: [
+              {
+                id: "c1",
+                label: "DeepSeek · DeepSeek Chat",
+                protocol: "openai-chat-completions",
+                baseUrl: "https://api.deepseek.com/v1",
+                modelId: "deepseek-chat",
+                purpose: "text",
+                account: { id: "acc-ds", label: "主账户", providerRef: "manga-provider-deepseek/deepseek", available: true },
+              },
+            ],
+          }}
+          providers={{
+            providers: [{ ref: "manga-provider-deepseek/deepseek", name: "DeepSeek", models: [], services: [] }],
+            accounts: [{ id: "acc-ds", label: "主账户", providerRef: "manga-provider-deepseek/deepseek", available: true }],
+            offered: [],
+          }}
+          onRuntime={async () => {}}
+          onSaveConnection={async () => ({ ok: true, id: "c1" })}
+          onDeleteConnection={async () => {}}
+          onTestConnection={async () => ({ ok: true, message: "ok" })}
+          onProbeConnection={async () => {}}
+          onSkip={() => {}}
+        />,
+      );
+    });
+    await waitFor(() => expect(screen.getByTestId("account-balance-acc-ds").textContent).toBe(t("models.account.balanceError")));
+    expect(screen.getByTestId("account-balance-acc-ds").textContent).not.toBe(t("models.account.balanceEmpty"));
   });
 
   it("uses --color-danger-text (not low-contrast --color-danger) for chat error and recording text", () => {

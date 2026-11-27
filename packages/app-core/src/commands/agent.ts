@@ -599,6 +599,7 @@ export function startRunLoop(
       ...(result.toolSteps ? { toolSteps: result.toolSteps } : {}),
     };
     finish("succeeded", "usage_json", JSON.stringify(usagePayload));
+    if (app.runAbort.get(runId) === controller) endLiveExtras(runId);
     if (!app.closed && app.runAbort.get(runId) === controller) {
       app.emitAgentStream({
         kind: "done",
@@ -641,6 +642,7 @@ export function startRunLoop(
       };
       finish("failed", "error_json", JSON.stringify(payload));
       mergeUsageMeta({ stopReason, errorCode });
+      if (app.runAbort.get(runId) === controller) endLiveExtras(runId);
       if (!app.closed && app.runAbort.get(runId) === controller) {
         app.emitAgentStream({
           kind: "done",
@@ -665,6 +667,7 @@ export function startRunLoop(
     };
     finish(status, "error_json", JSON.stringify(payload));
     mergeUsageMeta({ stopReason, errorCode, ...(refusal ? { refusal: true } : {}) });
+    if (app.runAbort.get(runId) === controller) endLiveExtras(runId);
     if (!app.closed && app.runAbort.get(runId) === controller) {
       app.emitAgentStream({
         kind: "done",

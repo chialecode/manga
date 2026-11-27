@@ -135,9 +135,12 @@ const REMARK_PLUGINS = [
   remarkCitations,
 ] as const;
 
-function sanitizeUrl(url: string): string {
+const SAFE_LOCAL_IMAGE_RE = /^(data:image\/(?:png|jpeg|jpg|gif|webp|avif);base64,|blob:|manga-media:)/i;
+
+function sanitizeUrl(url: string, key?: string): string {
   const trimmed = url.trim();
   if (trimmed.startsWith(CITE_SCHEME)) return trimmed;
+  if (key === "src" && SAFE_LOCAL_IMAGE_RE.test(trimmed)) return trimmed;
   return isSafeHref(trimmed) ? trimmed : "";
 }
 
@@ -193,6 +196,29 @@ export const ChatMarkdown = memo(function ChatMarkdown(props: ChatMarkdownProps)
           {children}
         </a>
       );
+    },
+    img: ({ src, alt }) => {
+      const url = (src ?? "").trim();
+      if (SAFE_LOCAL_IMAGE_RE.test(url)) {
+        return <img src={url} alt={alt ?? ""} className="chat-markdown-img" loading="lazy" referrerPolicy="no-referrer" />;
+      }
+      const label = alt?.trim() || url;
+      if (url && /^https?:\/\//i.test(url)) {
+        return (
+          <a
+            href={url}
+            rel="noopener noreferrer"
+            data-testid="chat-markdown-external-img"
+            onClick={(event) => {
+              event.preventDefault();
+              openExternalLink(url);
+            }}
+          >
+            {label}
+          </a>
+        );
+      }
+      return label ? <span>{label}</span> : null;
     },
     pre: ({ children }) => {
       const first = Array.isArray(children) ? children[0] : children;

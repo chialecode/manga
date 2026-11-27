@@ -23,6 +23,7 @@ const PICK_FILTERS: Record<string, Electron.FileFilter[]> = {
 };
 
 const MAX_ATTACHMENT_BYTES = 64 * 1024 * 1024;
+const MAX_STASHED_ATTACHMENTS = 100;
 const BLOCKED_ATTACHMENT_EXTS = new Set([
   ".exe", ".bat", ".cmd", ".com", ".msi", ".ps1", ".vbs", ".scr", ".dll", ".sh", ".app", ".jar", ".hta", ".lnk", ".pif", ".reg",
 ]);
@@ -74,9 +75,15 @@ export function stashComposerAttachment(
     data = Buffer.from(req.bytes.buffer, req.bytes.byteOffset, req.bytes.byteLength);
   }
   if (!data || data.byteLength === 0 || data.byteLength > MAX_ATTACHMENT_BYTES) return null;
+  if (trackedFiles && trackedFiles.size >= MAX_STASHED_ATTACHMENTS) return null;
 
-  const base = path.basename(req.name).replace(/[\0<>:"/\\|?*\x00-\x1f]/g, "_").trim();
-  const safeName = (base || "attachment.bin").slice(0, 200);
+  // Strip trailing dots/spaces (Windows NTFS silently trims them, which would otherwise bypass extension checks) and reject dot segments.
+  const rawBase = path.basename(req.name).replace(/[\0<>:"/\\|?*\x00-\x1f]/g, "_").trim().replace(/[. ]+$/g, "");
+  if (!rawBase || rawBase === "." || rawBase === "..") return null;
+  if (BLOCKED_ATTACHMENT_EXTS.has(path.extname(rawBase).toLowerCase())) return null;
+
+  const safeName = rawBase.slice(0, 200).replace(/[. ]+$/g, "");
+  if (!safeName || safeName === "." || safeName === "..") return null;
   const ext = path.extname(safeName).toLowerCase();
   if (BLOCKED_ATTACHMENT_EXTS.has(ext)) return null;
 
@@ -84,9 +91,11 @@ export function stashComposerAttachment(
     ? req.mimeType.trim()
     : undefined;
 
-  const stagingDir = path.join(cacheDir, "composer-attachments");
+  const stagingDir = path.resolve(cacheDir, "composer-attachments");
   fs.mkdirSync(stagingDir, { recursive: true });
-  const targetPath = path.join(stagingDir, `${createId("att")}-${safeName}`);
+  const targetPath = path.resolve(stagingDir, `${createId("att")}-${safeName}`);
+  const stagingPrefix = stagingDir.endsWith(path.sep) ? stagingDir : `${stagingDir}${path.sep}`;
+  if (!targetPath.startsWith(stagingPrefix)) return null;
   fs.writeFileSync(targetPath, data);
   trackedFiles?.add(targetPath);
   const pathHandle = registerPath("file", targetPath);
@@ -182,6 +191,11 @@ export function registerMainIpcHandlers(input: {
   };
   const speechStreams = new Map<string, ActiveSpeechStream>();
   const stashedAttachments = new Set<string>();
+  // Prune any orphaned composer attachment files left behind by an abrupt crash in an earlier session.
+  try {
+    const staleDir = path.resolve(input.layout.partitions.cache, "composer-attachments");
+    if (fs.existsSync(staleDir)) fs.rmSync(staleDir, { recursive: true, force: true });
+  } catch { /* best-effort startup cleanup */ }
 
   const stopStreamById = (id: string) => {
     const entry = speechStreams.get(id);

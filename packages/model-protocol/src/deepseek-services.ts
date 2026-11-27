@@ -7,6 +7,7 @@ import {
   networkError,
   parseJsonAnswer,
   protocolError,
+  rejectCredentialUrl,
   requireMachineAnswer,
   type DeepSeekBalanceOptions,
   type DeepSeekBalanceResult,
@@ -331,6 +332,7 @@ export async function fetchDeepSeekWeb(options: DeepSeekFetchOptions): Promise<W
   if (!url || !WEB.test(url) || url.length > 2048) {
     throw new MangaError("VALIDATION_ERROR", "a valid http(s) URL up to 2048 characters is required");
   }
+  rejectCredentialUrl(url);
   const req = createRequestSignal(options.timeoutMs ?? 60_000, options.signal);
   try {
     const response = await (options.fetchImpl ?? fetch)(joinApiPath(options.baseUrl, "/v1/tools/fetch"), {

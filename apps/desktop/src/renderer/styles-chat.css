@@ -65,6 +65,7 @@
   border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
   color: var(--color-text);
 }
+.bubble-markdown .chat-markdown-img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--color-border); }
 
 /* Horizontal-scroll GFM tables */
 .chat-table-wrap { width: 100%; overflow-x: auto; margin: 0.75em 0; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
