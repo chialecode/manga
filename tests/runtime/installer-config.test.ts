@@ -93,7 +93,7 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
     expect(installerInclude("release")).toMatch(/InstallLocation[\s\S]*GetDParameter[\s\S]*\$\{If\} \$R1 == ""[\s\S]*\$\{AndIf\} \$R0 == ""/);
   });
 
-  it("makes the shortcuts itself: both optional in the wizard, both on a silent first install, only dev's desktop one again on a silent over-install", () => {
+  it("makes the shortcuts itself: both optional in the wizard, both on a silent first install, never touches Start menu on silent over-install, and only dev creates desktop again", () => {
     for (const channel of ["release", "development"] as const) {
       const config = make(channel);
       const include = installerInclude(channel);
@@ -106,10 +106,34 @@ describe("the per-user installer's configuration (AT-150, AT-162)", () => {
       // Before anything changes: installed or not, and which shortcuts exist.
       expect(include).toMatch(/!macro customInit[\s\S]*!insertmacro MangaShortcutsInit\r\n!macroend/);
       expect(include).toMatch(/ReadRegStr \$R2 HKCU "\$\{INSTALL_REGISTRY_KEY\}" InstallLocation/);
-      // Silent or updated: keep what is there, both on a first install; only the development channel forces the desktop shortcut.
-      expect(include).toMatch(/\$\{if\} \$\{Silent\}\r\n {2}\$\{orIf\} \$\{isUpdated\}\r\n[^\r]*\r\n {4}StrCpy \$R8 \$MangaHadStartMenu\r\n {4}StrCpy \$R9 \$MangaHadDesktop\r\n {4}\$\{if\} \$MangaFirstInstall == "1"\r\n {6}StrCpy \$R8 "1"\r\n {6}StrCpy \$R9 "1"/);
-      expect(include).toMatch(/!ifdef MANGA_DESKTOP_ON_UPDATE\r\n {6}StrCpy \$R9 "1"\r\n {4}!endif/);
+      // Extract MangaShortcutsInstall macro body and inspect its silent/updated vs interactive branches.
+      const installMacro = /!macro MangaShortcutsInstall\r\n([\s\S]*?)\r\n!macroend/.exec(include)?.[1] ?? "";
+      expect(installMacro).not.toBe("");
+      const silentBlock = /\$\{if\} \$\{Silent\}\r\n {2}\$\{orIf\} \$\{isUpdated\}\r\n([\s\S]*?)\r\n {2}\$\{else\}\r\n/.exec(installMacro)?.[1] ?? "";
+      const interactiveBlock = /\r\n {2}\$\{else\}\r\n([\s\S]*?)\r\n {2}\$\{endIf\}$/.exec(installMacro)?.[1] ?? "";
+      expect(silentBlock).not.toBe("");
+      expect(interactiveBlock).not.toBe("");
+      // Silent/updated never removes shortcuts.
+      expect(silentBlock).not.toContain("WinShell::UninstShortcut");
+      expect(silentBlock).not.toContain("Delete ");
+      // Silent/updated first install creates both Start menu and desktop shortcuts.
+      const firstInstallBlock = /\$\{if\} \$MangaFirstInstall == "1"\r\n([\s\S]*?)\r\n {4}\$\{else\}\r\n/.exec(silentBlock)?.[1] ?? "";
+      expect(firstInstallBlock).toContain('CreateShortCut "$SMPROGRAMS\\${SHORTCUT_NAME}.lnk"');
+      expect(firstInstallBlock).toContain('CreateShortCut "$DESKTOP\\${SHORTCUT_NAME}.lnk"');
+      // Silent/updated over-install:
+      const overInstallBlock = /\r\n {4}\$\{else\}\r\n([\s\S]*?)\r\n {4}\$\{endIf\}$/.exec(silentBlock)?.[1] ?? "";
+      const devOverInstallBlock = /!ifdef MANGA_DESKTOP_ON_UPDATE\r\n([\s\S]*?)\r\n {6}!else\r\n/.exec(overInstallBlock)?.[1] ?? "";
+      const releaseOverInstallBlock = /\r\n {6}!else\r\n([\s\S]*?)\r\n {6}!endif$/.exec(overInstallBlock)?.[1] ?? "";
+      // Development over-install creates the desktop shortcut and never touches the Start menu shortcut.
+      expect(devOverInstallBlock).toContain('CreateShortCut "$DESKTOP\\${SHORTCUT_NAME}.lnk"');
+      expect(devOverInstallBlock).not.toContain("$SMPROGRAMS");
+      // Release over-install leaves absent or still-present shortcuts untouched, only restoring one removed by a legacy uninstaller.
+      expect(releaseOverInstallBlock).toMatch(/\$\{if\} \$MangaHadStartMenu == "1"\r\n {8}\$\{andIfNot\} \$\{FileExists\} "\$SMPROGRAMS\\\$\{SHORTCUT_NAME\}\.lnk"/);
+      expect(releaseOverInstallBlock).toMatch(/\$\{if\} \$MangaHadDesktop == "1"\r\n {8}\$\{andIfNot\} \$\{FileExists\} "\$DESKTOP\\\$\{SHORTCUT_NAME\}\.lnk"/);
       expect(include.includes("!define MANGA_DESKTOP_ON_UPDATE")).toBe(channel === "development");
+      // Interactive wizard still creates or removes each shortcut per checkbox selection.
+      expect(interactiveBlock).toMatch(/\$\{if\} \$MangaWantStartMenu == "1"[\s\S]*CreateShortCut "\$SMPROGRAMS\\\$\{SHORTCUT_NAME\}\.lnk"[\s\S]*Delete "\$SMPROGRAMS\\\$\{SHORTCUT_NAME\}\.lnk"/);
+      expect(interactiveBlock).toMatch(/\$\{if\} \$MangaWantDesktop == "1"[\s\S]*CreateShortCut "\$DESKTOP\\\$\{SHORTCUT_NAME\}\.lnk"[\s\S]*Delete "\$DESKTOP\\\$\{SHORTCUT_NAME\}\.lnk"/);
       expect(include).toMatch(/!macro customInstall\r\n {2}!insertmacro MangaShortcutsInstall/);
       expect(include).toMatch(/!macro customUnInstall\r\n {2}!insertmacro MangaShortcutsUninstall/);
       // Uninstall removes both, but not for an over-install or update (the old uninstaller always gets --updated).

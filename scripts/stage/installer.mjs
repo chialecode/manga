@@ -248,8 +248,12 @@ try {
   }
   await sleep(1000);
   const exited = new Promise((resolve) => running.once("exit", () => resolve(true)));
-  // The person removed the desktop shortcut and kept the Start menu one: a silent over-installation keeps that and makes no new shortcut.
-  fs.rmSync(shortcuts("release")[1], { force: true });
+  // The person removed the desktop shortcut and kept the Start menu one: a silent over-installation leaves the existing Start menu shortcut untouched (same mtime) and makes no new desktop shortcut.
+  const [releaseStartMenuLink, releaseDesktopLink] = shortcuts("release");
+  const releaseStamp = new Date(Date.now() - 60_000);
+  fs.utimesSync(releaseStartMenuLink, releaseStamp, releaseStamp);
+  const releaseStartMenuMtimeBefore = fs.statSync(releaseStartMenuLink).mtimeMs;
+  fs.rmSync(releaseDesktopLink, { force: true });
   const again = install(upgradeInstaller.installer, "release", false);
   const closed = await Promise.race([exited, sleep(15_000).then(() => false)]);
   if (!closed) running.kill();
@@ -269,14 +273,27 @@ try {
   );
   {
     const [startMenuLink, desktopLink] = shortcuts("release");
-    step("release: silent over-install kept the Start menu shortcut and did not make the removed desktop one again",
-      fs.existsSync(startMenuLink) && !fs.existsSync(desktopLink));
+    const mtimeAfter = fs.existsSync(startMenuLink) ? fs.statSync(startMenuLink).mtimeMs : null;
+    step("release: silent over-install kept the Start menu shortcut untouched and did not make the removed desktop one again",
+      fs.existsSync(startMenuLink) && mtimeAfter === releaseStartMenuMtimeBefore && !fs.existsSync(desktopLink),
+      { startMenuMtimeUnchanged: mtimeAfter === releaseStartMenuMtimeBefore });
   }
   {
-    // Development: with both shortcuts removed, a silent over-installation makes the desktop one again (the sign of a new build) and no Start menu one.
+    // Development (Start menu present, desktop removed): a silent over-installation creates the desktop shortcut again and leaves the existing Start menu shortcut untouched (exact mtime preserved).
+    const [startMenuLink, desktopLink] = shortcuts("development");
+    const devStamp = new Date(Date.now() - 60_000);
+    fs.utimesSync(startMenuLink, devStamp, devStamp);
+    const devStartMenuMtimeBefore = fs.statSync(startMenuLink).mtimeMs;
+    fs.rmSync(desktopLink, { force: true });
+    const devKeep = install(installers.development, "development");
+    const devStartMenuMtimeAfter = fs.existsSync(startMenuLink) ? fs.statSync(startMenuLink).mtimeMs : null;
+    step("development: silent over-install created the desktop shortcut and left the existing Start menu shortcut untouched",
+      devKeep.status === 0 && fs.existsSync(desktopLink) && fs.existsSync(startMenuLink) && devStartMenuMtimeAfter === devStartMenuMtimeBefore,
+      { startMenuMtimeUnchanged: devStartMenuMtimeAfter === devStartMenuMtimeBefore });
+
+    // Development (both shortcuts removed): a silent over-installation creates the desktop shortcut again and does not recreate the removed Start menu shortcut.
     for (const file of shortcuts("development")) fs.rmSync(file, { force: true });
     const devAgain = install(installers.development, "development");
-    const [startMenuLink, desktopLink] = shortcuts("development");
     step("development: silent over-install made the desktop shortcut again and no Start menu shortcut",
       devAgain.status === 0 && fs.existsSync(desktopLink) && !fs.existsSync(startMenuLink));
   }

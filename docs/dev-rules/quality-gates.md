@@ -51,7 +51,7 @@ node scripts/stage.mjs test        # 全部 Vitest + 脚本自测，按必需用
 node scripts/stage.mjs bench       # 10,000 元数据 / 50,000 检索块的服务与隐藏 Electron 窗口基准，另含 5000 文件后台扫描、封面读取与 1000 条消息停靠栏、3000 条弹幕的播放、后台保留一个播放器的内存增量、调用追踪的开销与笔记写成 Markdown 文件的耗时，以及更新与发布的记录项
 node scripts/stage.mjs package     # Windows 未签名包及其烟测阶段，写 package.json 与 scenarios.json，做出本通道的按用户安装包；不更新本机开发版
 node scripts/stage.mjs installer   # 两个通道以测试安装身份（MANGA Test / MANGA Dev Test）装到临时目录、启动、0.1.1→0.1.2 覆盖升级演练、卸载，核对真实安装快照前后一致
-node scripts/stage.mjs install-dev # 每次合并进 main 后由 Agent 在本机执行（开发流程 2.2）：没装开发版（MANGA Dev，卸载项 io.github.chialecode.manga-dev）时静默装到默认目录；有看得见的窗口时每 2 秒检查、最多等 10 分钟，仍开着就跳过（reason: "window_open"，A-139）；让运行中的开发版保存并退出、静默更新，然后不论原来是否在运行或窗口是否打开都以 --background 在托盘打开（A-135；在作业对象里先请桌面外壳 explorer.exe 启动并核实父进程后记 viaShell: true 与 inJob: false，无法脱离时记 inJob: true），写 install-dev.json，绝不碰正式版；已装的就是这个构建（版本相同且 app.asar 内容相同）时跳过，不请开发版退出
+node scripts/stage.mjs install-dev # 请用户审核 PR 前在 PR 分支执行（供实机先测，A-140）以及每次合并进 main 后由 Agent 在本机执行（开发流程 2.2）：支持 PR 分支与 main 并在回执记 branch/commit；没装开发版（MANGA Dev，卸载项 io.github.chialecode.manga-dev）时静默装到默认目录（首次安装创建开始菜单与桌面快捷方式）；覆盖重装时只创建桌面快捷方式，绝不重新生成、覆写或删除开始菜单快捷方式；有看得见的窗口时每 2 秒检查、最多等 10 分钟，仍开着就跳过（reason: "window_open"，A-139）；让运行中的开发版保存并退出、静默更新，然后不论原来是否在运行或窗口是否打开都以 --background 在托盘打开（A-135；在作业对象里先请桌面外壳 explorer.exe 启动并核实父进程后记 viaShell: true 与 inJob: false，无法脱离时记 inJob: true），写 install-dev.json，绝不碰正式版；已装的就是这个构建（版本相同且 app.asar 内容相同）时跳过，不请开发版退出
 node scripts/stage.mjs release     # 在门禁通过的干净 main 上生成正式版安装包、块图、latest.yml、.sig、SHA256SUMS、发布说明并完成升级演练，写 release.json（无当次授权时不发布）
 node scripts/stage.mjs report      # 核对上述结果并写 report.json
 ```

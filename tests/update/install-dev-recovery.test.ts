@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeBuildInfo } from "@manga/app-core";
+import { inspectPublication } from "../../scripts/check-publication.mjs";
 import {
   WINDOW_POLL_MS,
   WINDOW_WAIT_MS,
@@ -12,6 +13,7 @@ import {
   launchArgsAfterInstall,
   launchOutsideJob,
   quoteWindowsArg,
+  readGitBranch,
   resolveDesktopShellLaunch,
   runInstallDev,
 } from "../../scripts/stage/install-dev.mjs";
@@ -437,4 +439,49 @@ describe("Development installer recovery review (AT-158)", () => {
       expect(noArgs.viaShell).toBe(false);
     }
   }, 60_000);
+
+  it("supports installing from a non-main PR branch before user review and records branch and commit in the receipt (A-140)", async () => {
+    const fixture = devFixture();
+    const outFile = path.join(fixture.root, "pr-branch", "install-dev.json");
+    const detectedBranch = readGitBranch();
+    expect(detectedBranch === null || (typeof detectedBranch === "string" && detectedBranch.length > 0)).toBe(true);
+    expect(readGitBranch(fixture.root)).toBeNull();
+
+    const result = await runInstallDev({
+      ...fixture.options,
+      outputFile: outFile,
+      readGitBranchFn: () => "fix/139-skip-start-menu-on-dev-reinstall",
+      readGitCommitFn: () => "abc1234",
+      spawnInstallerFn: async () => {
+        writeBuildInfo(fixture.resources, { version: fixture.version, channel: "development", commit: "abc1234", builtAt: "2026-11-27T04:30:00.000Z", schemaVersion: 17 });
+        return { status: 0 };
+      },
+    });
+    expect(result).toMatchObject({
+      status: "passed",
+      installed: true,
+      branch: "fix/139-skip-start-menu-on-dev-reinstall",
+      commit: "abc1234",
+      releaseUntouched: true,
+    });
+    const receiptText = fs.readFileSync(outFile, "utf8");
+    const receipt = JSON.parse(receiptText);
+    expect(receipt).toMatchObject({ branch: "fix/139-skip-start-menu-on-dev-reinstall", commit: "abc1234" });
+    for (const key of Object.keys(receipt)) expect(key).toMatch(/^[a-z][A-Za-z0-9]*$/);
+    expect(inspectPublication("install-dev.json", Buffer.from(receiptText)).findings).toEqual([]);
+
+    // Detached HEAD or unavailable git omits branch/commit cleanly rather than failing.
+    const detached = await runInstallDev({
+      ...fixture.options,
+      readGitBranchFn: () => null,
+      readGitCommitFn: () => "unknown",
+      spawnInstallerFn: async () => {
+        writeBuildInfo(fixture.resources, { version: fixture.version, channel: "development", commit: "abc1234", builtAt: "2026-11-27T04:30:00.000Z", schemaVersion: 17 });
+        return { status: 0 };
+      },
+    });
+    expect(detached.status).toBe("passed");
+    expect(detached).not.toHaveProperty("branch");
+    expect(detached).not.toHaveProperty("commit");
+  });
 });

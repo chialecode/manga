@@ -151,11 +151,11 @@ if (buildOnly) {
   const appDigest = directoryDigest(appPath);
   const installerDir = path.join(path.dirname(desktopPackageDir), "installer");
   const stamped = Object.fromEntries(packagedFingerprintKeys(config).map((key) => [key, fingerprints[key]]));
-  // The installer made before from this same directory is used as it is.
+  // The installer made before from these same inputs and directory is used as it is.
   const kept = (() => {
     const record = readEvidence(path.dirname(devBuildRecord), path.basename(devBuildRecord));
     const file = record?.installer ? path.resolve(root, record.installer.output) : null;
-    if (!record || record.appDigest !== appDigest || !file || !fs.existsSync(file) || sha256(fs.readFileSync(file)) !== record.installer.sha256) return null;
+    if (!record || record.appDigest !== appDigest || !packagedFingerprintKeys(config).every((key) => record[key] === stamped[key]) || !file || !fs.existsSync(file) || sha256(fs.readFileSync(file)) !== record.installer.sha256) return null;
     return record.installer;
   })();
   let installer = kept;
