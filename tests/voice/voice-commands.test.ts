@@ -134,14 +134,28 @@ describe("recording commands", () => {
 
   it("AT-172 keeps recording settings with position-only overlay, migrates legacy 280×84 coordinates, rejects key clashes, and keeps media preferences", async () => {
     const ctx = await boot();
-    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "lower", boundaryMarginMs: 300, overlay: {} });
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F9", toggleKey: "F8", retention: "keep", duckPlayback: "none", boundaryMarginMs: 300, overlay: {} });
     ok(await run(ctx, "settings.setRecording", { holdKey: "F7", retention: "discard", overlay: { x: 420, y: 120 } }));
-    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F7", retention: "discard", overlay: { x: 420, y: 120 } });
-    // Legacy 280×84 setting in meta is converted on read by right-edge alignment (x + 280 - 116) and stripped of width/height.
-    ctx.app.store.setMeta("settings.recording", JSON.stringify({ holdKey: "F7", toggleKey: "F8", retention: "discard", overlay: { x: 1624, y: 16, width: 280, height: 84 } }));
-    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ overlay: { x: 1788, y: 16 } });
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ holdKey: "F7", retention: "discard", duckPlayback: "none", overlay: { x: 420, y: 120 } });
+    // Legacy 280×84 setting in meta is converted on read by right-edge alignment (x + 280 - 116) and stripped of width/height,
+    // and an unconfirmed legacy `"lower"` duckPlayback default resolves to `"none"` without leaking internal markers (A-141).
+    ctx.app.store.setMeta("settings.recording", JSON.stringify({ holdKey: "F7", toggleKey: "F8", retention: "discard", duckPlayback: "lower", overlay: { x: 1624, y: 16, width: 280, height: 84 } }));
+    const migrated = ok(await run(ctx, "settings.getRecording", {}));
+    expect(migrated).toMatchObject({ duckPlayback: "none", overlay: { x: 1788, y: 16 } });
+    expect("duckPlaybackExplicit" in migrated).toBe(false);
     ok(await run(ctx, "settings.setRecording", { overlay: { x: null, y: null } }));
-    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ overlay: {} });
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ duckPlayback: "none", overlay: {} });
+    // Explicit opt-in to `"lower"` or `"pause"` persists across unrelated recording setting patches without leaking internal markers.
+    const optedLower = ok(await run(ctx, "settings.setRecording", { duckPlayback: "lower" }));
+    expect(optedLower.duckPlayback).toBe("lower");
+    expect("duckPlaybackExplicit" in optedLower).toBe(false);
+    ok(await run(ctx, "settings.setRecording", { boundaryMarginMs: 350 }));
+    const afterUnrelated = ok(await run(ctx, "settings.getRecording", {}));
+    expect(afterUnrelated).toMatchObject({ duckPlayback: "lower", boundaryMarginMs: 350 });
+    expect("duckPlaybackExplicit" in afterUnrelated).toBe(false);
+    ok(await run(ctx, "settings.setRecording", { duckPlayback: "pause" }));
+    ok(await run(ctx, "settings.setRecording", { boundaryMarginMs: 300 }));
+    expect(ok(await run(ctx, "settings.getRecording", {}))).toMatchObject({ duckPlayback: "pause", boundaryMarginMs: 300 });
     expect((await run(ctx, "settings.setRecording", { holdKey: "F8" })).status).toBe("error");
     // The next recording follows the setting when the command names none.
     const started = ok(await run(ctx, "capture.start", { mode: "hold" }));

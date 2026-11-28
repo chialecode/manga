@@ -62,7 +62,7 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   holdKey: "F9",
   toggleKey: "F8",
   retention: "keep",
-  duckPlayback: "lower",
+  duckPlayback: "none",
   boundaryMarginMs: 300,
   overlay: {},
   language: null,
