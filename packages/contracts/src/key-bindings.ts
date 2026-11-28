@@ -47,9 +47,10 @@ export const KEY_ACTIONS: readonly KeyActionDef[] = [
   action("global.dock", ["Ctrl+Alt+B"]),
   action("global.newConversation", ["Ctrl+N"]),
   action("global.newProject", ["Ctrl+Shift+N"]),
-  // The search box, the settings and in-app voice dictation (A-100, A-101, A-130).
+  // The search box, the settings, quick note and in-app voice dictation (A-100, A-101, A-130).
   action("global.search", ["Ctrl+K"]),
   action("global.settings", ["Ctrl+,"]),
+  action("global.quickNote", ["N", "Alt+N"]),
   action("global.dictationHold", ["RightAlt"]),
 
   action("video.toggle", ["Space", "K"]),
@@ -85,6 +86,7 @@ export const KEY_ACTIONS: readonly KeyActionDef[] = [
 
   action("novel.next", ["ArrowRight", "PageDown", "Space"]),
   action("novel.prev", ["ArrowLeft", "PageUp", "Shift+Space"]),
+  action("novel.fullscreen", ["F"]),
 ];
 
 const BY_ID = new Map(KEY_ACTIONS.map((entry) => [entry.id, entry]));

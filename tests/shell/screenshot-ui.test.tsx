@@ -108,10 +108,11 @@ describe("a screenshot of a video (AT-91)", () => {
     for (const action of ["folder", "note", "board"]) expect(within(notice).getByTestId(`toast-action-${action}`)).toBeTruthy();
   });
 
-  it("takes it from the button on the bar as well, and opens the folder of the picture from the notice", async () => {
+  it("takes it from the right-dock composer button (not the video bottom bar), and opens the folder of the picture from the notice", async () => {
     const host = installShotHost();
     await openVideo();
-    fireEvent.click(screen.getByTestId("video-screenshot"));
+    expect(screen.queryByTestId("video-screenshot")).toBeNull();
+    fireEvent.click(screen.getByTestId("composer-screenshot"));
     await waitFor(() => expect(host.of("screenshot.save")).toHaveLength(1));
     fireEvent.click(await screen.findByTestId("toast-action-folder"));
     await waitFor(() => expect(host.revealed).toEqual(["screenshot:shot_1"]));
@@ -186,7 +187,8 @@ describe("a screenshot of a comic page (AT-91)", () => {
   it("saves the page on screen at its original size, with the page it is and the way it is read", async () => {
     const host = installShotHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
     await openComic();
-    fireEvent.click(screen.getByTestId("comic-screenshot"));
+    expect(screen.queryByTestId("comic-screenshot")).toBeNull();
+    fireEvent.click(screen.getByTestId("composer-screenshot"));
     await waitFor(() => expect(host.of("screenshot.save")).toHaveLength(1));
     const saved = host.of("screenshot.save")[0]!.input;
     expect(saved).toMatchObject({ resourceId: "res_c1", resourceRevisionId: "rev_res_c1", data: "iVBORw==" });
@@ -210,7 +212,7 @@ describe("a screenshot of a comic page (AT-91)", () => {
     capture = installCapture({ image: null });
     const host = installShotHost({ "progress.get": () => ({ locator: null, completion: "new" }) });
     await openComic();
-    fireEvent.click(screen.getByTestId("comic-screenshot"));
+    fireEvent.click(screen.getByTestId("composer-screenshot"));
     expect((await screen.findByTestId("toast-error")).textContent).toContain("现在没有画面可以截取");
     expect(host.of("screenshot.save")).toHaveLength(0);
   });

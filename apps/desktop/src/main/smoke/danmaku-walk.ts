@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import { clickTestId, pressKey, setField, setSelect, viewport, waitForTestId, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
+import { clickScreenshot, clickTestId, pressKey, setField, setSelect, viewport, waitForTestId, waitFrames, waitUntil, waitWindowFullscreen } from "./driver.ts";
 import { exitScreenFullscreen, js, leaveSettings, openSettingsPage } from "./common.ts";
 import { SMOKE_DANMAKU_CREDENTIALS } from "../danmaku-credentials.ts";
 import { hitTestOpenPopup, realClick } from "./player-menus-walk.ts";
@@ -112,8 +112,8 @@ async function checkShot(view: BrowserWindow, detail: Record<string, unknown>, n
   const list = () => js<Shot[]>(view, `window.manga.command({ commandId: "screenshot.list", idempotencyKey: crypto.randomUUID(), input: { limit: 200 } }).then((result) => { if (result.status !== "ok") throw new Error(result.error?.message ?? "screenshot.list failed"); return result.value.items; })`);
   const native = await js<{ w: number; h: number }>(view, `(() => { const v = document.querySelector('[data-testid="video-element"]'); return { w: v.videoWidth, h: v.videoHeight }; })()`);
   const known = new Set((await list()).map((item) => item.id));
-  // Pressed the way the other screenshot walks press it; the real pointer may rest on the comments panel of a narrow window.
-  if (!await clickTestId(view, "video-screenshot", 4000)) return [`${name}: the button could not be pressed`];
+  // Pressed via the unified right-side screenshot button (composer when docked, edge handle when folded).
+  if (!await clickScreenshot(view, 4000)) return [`${name}: the button could not be pressed`];
   let taken: Shot | undefined;
   const deadline = Date.now() + 15_000;
   while (!taken && Date.now() < deadline) {

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Camera, Captions, Fullscreen, Gauge, Languages, ListVideo, Maximize2, Minimize2, MoreHorizontal, Pause, Play, Repeat, Shrink } from "lucide-react";
+import { Captions, Fullscreen, Gauge, Languages, ListVideo, Maximize2, Minimize2, MoreHorizontal, NotebookPen, Pause, Play, Repeat, Shrink, Sparkles, X } from "lucide-react";
+import { chordLabel } from "@manga/contracts/keys";
 import type { Translator } from "@manga/i18n";
+import { SelectionBubble } from "../components/capture/selection-bubble.tsx";
 import { Menu, type MenuGroup, type MenuItem } from "../components/menu.tsx";
 import type { SourceCard } from "../lib/types.ts";
+import { captureBridge, useCaptureActions, useQuickNoteSession } from "../lib/capture-bridge.ts";
 import { isImeEvent } from "../lib/ime.ts";
 import { readerContext } from "../lib/reader-context.ts";
 import { useTab } from "../workspace/tab-context.tsx";
 import { tabMarks } from "../workspace/marks.ts";
 import { useKeyTable } from "../lib/key-table.tsx";
-import { quoteTags, useQuoteTags } from "../lib/quote-tags.ts";
+import { quoteTags, useQuoteTags, type QuoteTag } from "../lib/quote-tags.ts";
 import { useAutoHide } from "../reader/use-auto-hide.ts";
 import { SourceBanner } from "./source-banner.tsx";
 import { isTypingTarget, useFullscreen } from "./use-fullscreen.ts";
@@ -66,6 +69,8 @@ export type VideoSettings = {
   subtitlePlacement: "auto" | "inside"; subtitleSizePct: number; subtitleFont: "sans" | "serif" | "kai"; subtitleOutline: boolean; assStyle: "keep" | "standard";
   /** A screenshot has the subtitles on screen drawn into it (A-92). */
   shotSubtitles: boolean;
+  /** Opening quick-note pauses playback and resumes on close; false by default. */
+  pauseOnQuickNote: boolean;
 };
 
 /** Where a note's source points. `play` plays the interval and stops at its end; otherwise the player waits at the start. */
@@ -155,6 +160,46 @@ export function VideoPlayer(props: {
     if (ducking && playbackRef.current.playing) { pausedForRecording.current = true; playbackRef.current.pause(); }
     if (!ducking && pausedForRecording.current) { pausedForRecording.current = false; void playbackRef.current.play(); }
   }, [ducking]);
+
+  // Optional pause-on-quick-note: default false (watching continues while typing). When enabled, auto-pauses playing
+  // video on open and resumes on close only if the user did not manually toggle playback while the modal was open.
+  const captureActions = useCaptureActions();
+  const quickNoteState = useQuickNoteSession();
+  const quickNoteOpenForMe = quickNoteState.open && quickNoteState.resourceId === doc.resourceId;
+  const pausedForQuickNote = useRef(false);
+  const prevQuickNoteOpen = useRef(false);
+  const pauseOnQuickNoteRef = useRef(settings.pauseOnQuickNote);
+  pauseOnQuickNoteRef.current = settings.pauseOnQuickNote;
+  const elementRef = useRef(element);
+  elementRef.current = element;
+
+  useEffect(() => {
+    if (!element || !quickNoteOpenForMe) return;
+    const onPlay = () => { pausedForQuickNote.current = false; };
+    element.addEventListener("play", onPlay);
+    return () => element.removeEventListener("play", onPlay);
+  }, [element, quickNoteOpenForMe]);
+
+  useEffect(() => {
+    const wasOpen = prevQuickNoteOpen.current;
+    prevQuickNoteOpen.current = quickNoteOpenForMe;
+    if (!wasOpen && quickNoteOpenForMe) {
+      const el = elementRef.current;
+      const isPlaying = playbackRef.current.playing || Boolean(el && !el.paused && !el.ended);
+      if (pauseOnQuickNoteRef.current && isPlaying) {
+        playbackRef.current.pause();
+        pausedForQuickNote.current = true;
+      } else {
+        pausedForQuickNote.current = false;
+      }
+    } else if (wasOpen && !quickNoteOpenForMe) {
+      if (pausedForQuickNote.current) {
+        pausedForQuickNote.current = false;
+        void playbackRef.current.play();
+      }
+    }
+  }, [quickNoteOpenForMe]);
+  useEffect(() => () => { pausedForQuickNote.current = false; }, []);
 
   const subtitleStyle = useMemo(() => normalizeStyle({ placement: settings.subtitlePlacement, sizePct: settings.subtitleSizePct, font: settings.subtitleFont, outline: settings.subtitleOutline, assStyle: settings.assStyle }), [settings.subtitlePlacement, settings.subtitleSizePct, settings.subtitleFont, settings.subtitleOutline, settings.assStyle]);
   const subtitles = useSubtitles({ target, video: element, ready: ready && playback.ready, sourceKey: url ?? "", style: subtitleStyle, originMs });
@@ -277,6 +322,22 @@ export function VideoPlayer(props: {
     danmakuCanvas,
   });
 
+  // Expose screenshot trigger & exact unthrottled clock to right-side capture surfaces (EdgeHandle, Composer, QuickNoteModal).
+  const takeScreenshotRef = useRef(takeScreenshot);
+  takeScreenshotRef.current = takeScreenshot;
+  useEffect(() => {
+    if (!props.screenshots) return;
+    captureBridge.register({
+      kind: "video",
+      resourceId: doc.resourceId,
+      label: t("screenshot.take"),
+      disabled: !ready,
+      take: () => takeScreenshotRef.current(),
+      getExactVideoMs: () => Math.round(playbackRef.current.currentMs),
+    }, tab.tabId);
+    return () => captureBridge.unregister(doc.resourceId, tab.tabId);
+  }, [props.screenshots, doc.resourceId, ready, tab.tabId, t]);
+
   // ---- keyboard ----
   // ← and → (or remapped seek keys) step when tapped and hold when held; activeArrow remembers the pressed key for keyup matching.
   const live = useRef({ playback, settings });
@@ -346,6 +407,7 @@ export function VideoPlayer(props: {
       // A range slider is a control of this player: its arrow keys are the player's. Text fields keep their own keys.
       const slider = node instanceof HTMLInputElement && node.type === "range";
       if (isTypingTarget(node) && !slider) return;
+      if (document.querySelector('[role="dialog"]')) return;
       if (node instanceof HTMLElement && (node.closest("[role='dialog']") || node.closest("[role='menu']"))) return;
       if (event.defaultPrevented) return;
       if (act(event)) event.preventDefault();
@@ -483,9 +545,35 @@ export function VideoPlayer(props: {
   const alternateAudio = audioIndex !== undefined && audioIndex !== defaultAudio?.index;
   const showPlayButton = ready && playback.ready && !playback.playing && !playback.ended;
 
+  const quickNoteKey = keys["global.quickNote"]?.[0] ? chordLabel(keys["global.quickNote"]![0]!) : "N";
+  const shotKey = keys["video.screenshot"]?.[0] ? chordLabel(keys["video.screenshot"]![0]!) : "S";
+  const buildIntervalTag = (range: TimeRange): QuoteTag => ({
+    id: `interval:${doc.resourceId}`,
+    kind: "interval",
+    resourceId: doc.resourceId,
+    revisionId: doc.revisionId,
+    startMs: Math.round(range.startMs),
+    endMs: Math.round(range.endMs),
+    label: t("chat.tag.interval", { start: formatClock(range.startMs), end: formatClock(range.endMs) }),
+  });
+
+  const openNoteFromVideo = () => {
+    if (!captureActions) return;
+    if (interval) {
+      captureActions.openQuickNote({ tag: buildIntervalTag(interval) });
+      return;
+    }
+    const atMs = Math.max(0, Math.round(playbackRef.current.currentMs));
+    captureActions.openQuickNote({
+      anchor: { resourceId: doc.resourceId, resourceRevisionId: doc.revisionId, quoteText: formatClock(atMs), locator: { kind: "temporal", startMs: atMs } },
+      anchorLabel: formatClock(atMs),
+    });
+  };
+
   const openContextMenu = (clientX: number, clientY: number) => {
-    const menuWidth = 180;
-    const menuHeight = Math.min(360, (settings.rates.length + 1) * 34 + 16);
+    const menuWidth = 200;
+    const extraItems = 2 + (props.screenshots ? 1 : 0) + (captureActions?.voiceEnabled ? 1 : 0);
+    const menuHeight = Math.min(460, (settings.rates.length + extraItems) * 34 + 24);
     const maxX = Math.max(8, (window.innerWidth || 1280) - menuWidth - 8);
     const maxY = Math.max(8, (window.innerHeight || 720) - menuHeight - 8);
     setMenuAt({ x: Math.max(8, Math.min(clientX, maxX)), y: Math.max(8, Math.min(clientY, maxY)) });
@@ -565,8 +653,53 @@ export function VideoPlayer(props: {
               <button type="button" className="secondary-button" data-testid="video-replay" onClick={() => { playback.seekTo(0); void playback.play(); }}><Repeat size={14} />{t("video.replay")}</button>
             </div>
           ) : null}
+          {interval ? (
+            <SelectionBubble
+              kind="video"
+              inline
+              label={t("capture.bubble")}
+              badge={t("chat.tag.interval", { start: formatClock(interval.startMs), end: formatClock(interval.endMs) })}
+              actions={[
+                {
+                  id: "note",
+                  testId: "selection-bubble-note",
+                  label: t("capture.note"),
+                  icon: <NotebookPen size={14} aria-hidden="true" />,
+                  accent: true,
+                  onClick: () => captureActions?.openQuickNote({ tag: buildIntervalTag(interval) }),
+                },
+                {
+                  id: "ask",
+                  testId: "selection-bubble-ask",
+                  label: t("capture.askAgent"),
+                  icon: <Sparkles size={14} aria-hidden="true" />,
+                  onClick: () => captureActions?.askAgentWithTag(buildIntervalTag(interval)),
+                },
+                {
+                  id: "clear",
+                  testId: "selection-bubble-clear",
+                  label: t("capture.clearInterval"),
+                  icon: <X size={14} aria-hidden="true" />,
+                  onClick: () => { setMarkA(null); setMarkB(null); quoteTags.removeKind("interval", doc.resourceId); },
+                },
+              ]}
+              extra={props.tools && !more ? props.tools({ currentMs: playback.currentMs, durationMs: duration, interval }) : null}
+            />
+          ) : null}
           {menuAt ? (
             <div ref={showOnTopLayer} popover="manual" className="video-context" role="menu" aria-label={t("video.menu")} data-testid="video-context" style={{ left: menuAt.x, top: menuAt.y, right: "auto", bottom: "auto" }} onMouseDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+              <button type="button" role="menuitem" data-testid="video-context-note" onClick={() => { setMenuAt(null); openNoteFromVideo(); }}>{t("capture.noteHereKey", { key: quickNoteKey })}</button>
+              {captureActions?.voiceEnabled ? (
+                <button type="button" role="menuitem" data-testid="video-context-record" onClick={() => { setMenuAt(null); captureActions.toggleRecording(); }}>
+                  {captureActions.recordingActive
+                    ? t("capture.recordStopKey", { key: captureActions.recordingToggleKey })
+                    : t("capture.recordStartKey", { key: captureActions.recordingToggleKey })}
+                </button>
+              ) : null}
+              {props.screenshots ? (
+                <button type="button" role="menuitem" data-testid="video-context-screenshot" disabled={!ready} onClick={() => { setMenuAt(null); void takeScreenshot(); }}>{t("capture.shotKey", { key: shotKey })}</button>
+              ) : null}
+              <div className="context-menu-separator" role="separator" />
               <button type="button" role="menuitem" onClick={() => { setMenuAt(null); playback.toggle(); }}>{playback.playing ? t("video.pause") : t("video.play")}</button>
               {settings.rates.map((preset) => (
                 <button key={preset} type="button" role="menuitemradio" aria-checked={preset === rate} onClick={() => { setMenuAt(null); props.onSettings({ rate: preset }); }}>{t("video.rateValue", { rate: preset })}</button>
@@ -602,7 +735,6 @@ export function VideoPlayer(props: {
               <DanmakuControl t={t} view={danmaku} settings={danmakuSettings.settings} shown={danmakuShown} open={danmakuOpen} active={tab.visible} onOpen={setDanmakuOpen} onToggle={toggleDanmaku} onOpenSettings={props.onDanmakuSettings} />
             ) : null}
             <VolumeControl t={t} volume={settings.volume} muted={settings.muted} open={volumeOpen} onOpen={setVolumeOpen} onChange={(patch) => props.onSettings(patch)} />
-            {props.screenshots ? <button type="button" className="icon-button" data-testid="video-screenshot" aria-label={t("screenshot.take")} title={`${t("screenshot.takeHint")}`} disabled={!ready} onClick={() => void takeScreenshot()}><Camera size={18} /></button> : null}
             <button type="button" className="icon-button" data-testid="video-window-fullscreen" aria-pressed={windowFull.active} aria-label={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} title={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} onClick={windowFull.toggle}>{windowFull.active ? <Shrink size={18} /> : <Fullscreen size={18} />}</button>
             <button type="button" className="icon-button" data-testid="video-fullscreen" aria-label={fullscreen ? t("video.exitFullscreen") : t("video.fullscreen")} title={fullscreen ? t("video.exitFullscreen") : t("video.fullscreen")} onClick={toggleFullscreen}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
             <button ref={moreAnchor} type="button" className="icon-button" data-testid="video-more" aria-expanded={more} aria-label={t("video.more")} title={t("video.more")} onClick={() => setMore((open) => !open)}><MoreHorizontal size={18} /></button>

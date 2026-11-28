@@ -45,7 +45,7 @@ function installHost(overrides: Record<string, Handler> = {}, secrets: string[] 
 }
 
 const comicDefaults = { direction: "rtl", layout: "single", coverAlone: true, fit: "page", zoom: 1, autoFlipSeconds: 0, animation: "fade" } as const;
-const videoDefaults = { rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false, subtitlePlacement: "auto" as const, subtitleSizePct: 5, subtitleFont: "sans" as const, subtitleOutline: true, assStyle: "keep" as const, shotSubtitles: true };
+const videoDefaults = { rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false, subtitlePlacement: "auto" as const, subtitleSizePct: 5, subtitleFont: "sans" as const, subtitleOutline: true, assStyle: "keep" as const, shotSubtitles: true, pauseOnQuickNote: false };
 
 /**
  * Settings are separate pages now (modules, reading, recording, sources); each is rendered by its own component and shown by the
@@ -225,8 +225,11 @@ describe("settings for media, recording and metadata", () => {
     fireEvent.blur(step);
     fireEvent.change(screen.getByTestId("msettings-video-hold"), { target: { value: "3" } });
     fireEvent.click(screen.getByTestId("msettings-video-autonext"));
+    const pauseBox = screen.getByTestId("msettings-video-pause-quicknote") as HTMLInputElement;
+    expect(pauseBox.checked).toBe(false);
+    fireEvent.click(pauseBox);
     expect(comic.mock.calls.map((call) => call[0])).toEqual([{ direction: "ltr" }, { coverAlone: false }]);
-    expect(video.mock.calls.map((call) => call[0])).toEqual([{ seekStepSeconds: 10 }, { seekStepSeconds: 120 }, { holdRate: 3 }, { autoNext: true }]);
+    expect(video.mock.calls.map((call) => call[0])).toEqual([{ seekStepSeconds: 10 }, { seekStepSeconds: 120 }, { holdRate: 3 }, { autoNext: true }, { pauseOnQuickNote: true }]);
   });
 
   it("keeps the subtitles in a screenshot unless the person turns that off, and a reset of the style leaves it alone (AT-109)", async () => {

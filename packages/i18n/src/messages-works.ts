@@ -1,7 +1,6 @@
 /** Screenshots and the folders of the works (NOTE-05, DATA-05). */
 export const zhCNWorks = {
   "screenshot.take": "截图",
-  "screenshot.takeHint": "把当前画面保存为图片（S）",
   "screenshot.page": "保存为截图",
   "screenshot.region": "把框选区域保存为截图",
   "screenshot.saved": "已保存截图：{title}",

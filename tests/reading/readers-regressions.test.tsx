@@ -276,7 +276,7 @@ describe("video playback, source, and keyboard regressions", () => {
     const doc: VideoDoc = { resourceId: "r_v", revisionId: "rev_v", title: "Demo", episodeLabel: null, durationMs: 60_000, available: true, audio: [], episodes: [] };
     const settings: VideoSettings = {
       rate: 1, rates: [1, 2], customRate: 1.5, holdRate: 2.5, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false,
-      subtitlePlacement: "auto", subtitleSizePct: 100, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true,
+      subtitlePlacement: "auto", subtitleSizePct: 100, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true, pauseOnQuickNote: false,
     };
     const customKeys = resolveKeys({ "video.seekForward": ["L"] });
     render(

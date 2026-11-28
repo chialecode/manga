@@ -501,6 +501,8 @@ export const zhCNMedia = {
   "msettings.videoCustomRate": "自定义倍速",
   "msettings.videoCustomRateHint": "播放时按“切换自定义倍速”键，在 1× 与这个倍速之间切换。",
   "msettings.videoAutoNext": "播完自动播放下一集",
+  "msettings.videoPauseOnQuickNote": "快速记笔记时暂停播放",
+  "msettings.videoPauseOnQuickNoteHint": "开启后，打开快速记笔记弹窗时自动暂停正在播放的视频，保存或关闭后恢复；关闭则边看边记，打开瞬间仍会锁定当前时间点。",
   "msettings.subtitle": "字幕样式",
   "msettings.subtitleHint": "默认按广电标准排版：对白在画面底部，宽为画面的 90%，下沿距画面底边 5%，字高为画面高的 5%，白字加描边，居中。只用于 SRT、WebVTT 和内嵌文本字幕；ASS 默认保留自带样式。",
   "msettings.subtitleSize": "字高（占画面高的百分比，标准为 5）",

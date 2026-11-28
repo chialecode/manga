@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import type { BrowserWindow } from "electron";
 import { readPngText, type MangaProductApp } from "@manga/app-core";
-import { DRAWN, clickTestId, pressKey, setField, waitFrames, waitUntil } from "./driver.ts";
+import { DRAWN, clickScreenshot, clickTestId, pressKey, setField, waitFrames, waitUntil } from "./driver.ts";
 import { caller, ensureDock, js, leaveSettings } from "./common.ts";
 import { centreOf, hitTestOpenPopup, realClick } from "./player-menus-walk.ts";
 import type { Observe } from "./reader-controls-walk.ts";
@@ -204,7 +204,7 @@ export function screenshotWalk(input: { view: BrowserWindow; appService: MangaPr
     const pages = input.comicId ? ((await call("comic.pages", { resourceId: input.comicId })).value as { pages?: Array<{ width: number; height: number }> } | undefined)?.pages ?? [] : [];
     await waitUntil(view, `document.querySelector('.comic-page[data-state="ready"]')`, 20_000);
     await waitFrames(view);
-    const clicked = await clickTestId(view, "comic-screenshot", 4000);
+    const clicked = await clickScreenshot(view, 4000);
     const noticed = clicked && await waitUntil(view, `(document.querySelector('[data-testid="toast-notice"]')?.textContent ?? "").includes("截图")`, 8000);
     const notice = await noticeOf(view);
     const saved = noticed ? newestSince(appService, known) : null;

@@ -218,19 +218,23 @@ describe("AT-60 AT-61 AT-62 AT-111 shell", () => {
   it("shows the floating capsule only while the dock is folded away, and neither the dock nor the capsule where there is no dock", () => {
     const folded = structuredClone(DEFAULT_SHELL_PREFERENCE);
     folded.dock.visible = false;
-    frame(1280, 840, { preference: folded, capsule: <div data-testid="capsule-slot">胶囊</div> });
+    frame(1280, 840, { preference: folded, edgeHandle: <div data-testid="edge-handle-slot">快速记录</div> });
     expect(screen.getByTestId("shell-dock").getAttribute("data-shell-state")).toBe("hidden");
-    expect(screen.getByTestId("shell-main").contains(screen.getByTestId("capsule-slot"))).toBe(true);
+    expect(screen.getByTestId("shell-main").contains(screen.getByTestId("edge-handle-slot"))).toBe(true);
     cleanup();
-    frame(1600, 900, { capsule: <div data-testid="capsule-slot">胶囊</div> });
+    frame(1600, 900, { edgeHandle: <div data-testid="edge-handle-slot">快速记录</div> });
     expect(screen.getByTestId("shell-dock")).toBeTruthy();
-    expect(screen.queryByTestId("capsule-slot")).toBeNull();
+    expect(screen.queryByTestId("edge-handle-slot")).toBeNull();
     cleanup();
-    // A conversation tab is the conversation itself: no dock, no switch for one, and no capsule.
-    frame(1600, 900, { hasDock: false, dock: null, capsule: <div data-testid="capsule-slot">胶囊</div> });
+    // Window fullscreen hides the docked pane and shows the unified right-edge handle.
+    frame(1600, 900, { immersive: true, edgeHandle: <div data-testid="edge-handle-slot">快速记录</div> });
+    expect(screen.getByTestId("shell-main").contains(screen.getByTestId("edge-handle-slot"))).toBe(true);
+    cleanup();
+    // A conversation tab is the conversation itself: no dock, no switch for one, and no edge handle.
+    frame(1600, 900, { hasDock: false, dock: null, edgeHandle: <div data-testid="edge-handle-slot">快速记录</div> });
     expect(screen.queryByTestId("shell-dock")).toBeNull();
     expect(screen.queryByTestId("shell-dock-toggle")).toBeNull();
-    expect(screen.queryByTestId("capsule-slot")).toBeNull();
+    expect(screen.queryByTestId("edge-handle-slot")).toBeNull();
   });
 
   it("marks the view the sidebar is on in the rail, and puts settings apart from the others", () => {

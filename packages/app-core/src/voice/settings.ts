@@ -52,13 +52,15 @@ export type MediaSettings = {
     assStyle: "keep" | "standard";
     /** A screenshot has the subtitles that are on screen drawn into it (A-92); the text is kept in its record either way. */
     shotSubtitles: boolean;
+    /** Opening quick note pauses a playing video and resumes it when closed; off by default so watching continues while typing. */
+    pauseOnQuickNote: boolean;
   };
 };
 
 export const DEFAULT_MEDIA_SETTINGS: MediaSettings = {
   keys: {},
   comic: { direction: "rtl", layout: "single", coverAlone: true, fit: "page", zoom: 1, autoFlipSeconds: 0, animation: "fade" },
-  video: { rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false, subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true },
+  video: { rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false, subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true, pauseOnQuickNote: false },
 };
 
 /** The least and the most a playback rate may be. */

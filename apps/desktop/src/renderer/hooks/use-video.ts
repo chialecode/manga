@@ -26,7 +26,7 @@ export type VideoDeps = {
 
 export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {
   rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 1, muted: false, seekStepSeconds: 5, autoNext: false,
-  subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true,
+  subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true, pauseOnQuickNote: false,
 };
 
 type OpenOptions = {

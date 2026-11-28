@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { nativeImage, type BrowserWindow } from "electron";
 import { readPngText, type MangaProductApp } from "@manga/app-core";
-import { clickTestId, sleep, waitUntil } from "./driver.ts";
+import { clickScreenshot, clickTestId, sleep, waitUntil } from "./driver.ts";
 import { differenceMask, glyphCells } from "./glyph-cells.ts";
 import type { Measure } from "./subtitle-check.ts";
 
@@ -16,7 +16,7 @@ export type TakenShot = { id: string; file: string; width: number; height: numbe
 /** The player's button is pressed, and the picture the app saved for it is read back from its file. Null when nothing was saved in time. */
 export async function takeShot(view: BrowserWindow, appService: MangaProductApp): Promise<TakenShot | null> {
   const known = new Set(appService.screenshots.list({ limit: 500 }).items.map((item) => item.id));
-  if (!await clickTestId(view, "video-screenshot", 4000)) return null;
+  if (!await clickScreenshot(view, 4000)) return null;
   let found: { id: string } | undefined;
   for (let attempt = 0; attempt < 100 && !found; attempt += 1) {
     found = appService.screenshots.list({ limit: 500 }).items.find((item) => !known.has(item.id));

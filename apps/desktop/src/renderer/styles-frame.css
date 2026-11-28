@@ -135,14 +135,11 @@
 .elsewhere-bar { display: flex; align-items: center; gap: 10px; flex: none; padding: 6px 12px; font-size: 12.5px; color: var(--color-accent); background: var(--color-accent-soft); }
 .elsewhere-bar > .truncate { flex: 1 1 0; min-width: 0; }
 
-/* The capsule that stands in for a folded dock and the right end of the title bar sit in the tab-strip chrome at the top right of the main area, outside
-   `.tab-panel`, so neither covers a video frame, comic page, or reading canvas; the top-right tab/column strip leaves room for both (A-136). */
-.shell-main { --main-top-end: calc(var(--title-end-w, 0px) + var(--capsule-room, 0px)); }
-.shell-main:has(> .chat-capsule) { --capsule-room: var(--capsule-bar-w, 72px); }
+/* The right end of the title bar sits in the tab-strip chrome at the top right of the main area while the dock is not docked (A-136). */
+.shell-main { --main-top-end: var(--title-end-w, 0px); }
 .shell-main .context-host[data-active="true"] .view-dock:not([data-hidden-layer]) > .column-switcher { padding-right: calc(8px + var(--main-top-end)); }
 .shell-main .context-host[data-active="true"] .view-dock:not([data-hidden-layer]):not(:has(> .column-switcher)) .dv-tabs-and-actions-container:has(.tab-actions[data-top-right="true"]) { padding-right: var(--main-top-end); }
-/* Too narrow for tabs beside the end of the title bar: the title bar takes a row of its own over the main area (a drag area, with the end and the capsule
-   in it) and the tabs start under it. */
+/* Too narrow for tabs beside the end of the title bar: the title bar takes a row of its own over the main area and the tabs start under it. */
 .shell-main[data-title-row="own"] { padding-top: var(--column-top-h); --main-top-end: 0px; }
 .shell-main[data-title-row="own"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); -webkit-app-region: drag; app-region: drag; }
 

@@ -341,8 +341,8 @@ describe("AT-81 AT-111 window frame: the title bar, the rail and the columns (A-
   it("hides a column from its switch and shows it again, and has no dock, switch or capsule where nothing is shown there", () => {
     const hide = vi.fn();
     const show = vi.fn();
-    frame(1600, 900, { onHide: hide, onShow: show, capsule: <div data-testid="capsule-slot">胶囊</div> });
-    // A docked column is hidden from its switch; the capsule is only for a dock that is folded away.
+    frame(1600, 900, { onHide: hide, onShow: show, edgeHandle: <div data-testid="capsule-slot">快速记录</div> });
+    // A docked column is hidden from its switch; the right-edge handle is only for a dock that is folded away.
     fireEvent.click(screen.getByTestId("shell-sidebar-toggle"));
     expect(hide).toHaveBeenCalledWith("sidebar");
     fireEvent.click(screen.getByTestId("shell-dock-toggle"));
@@ -351,13 +351,13 @@ describe("AT-81 AT-111 window frame: the title bar, the rail and the columns (A-
     cleanup();
     const folded = structuredClone(DEFAULT_SHELL_PREFERENCE);
     folded.dock.visible = false;
-    frame(1600, 900, { preference: folded, onShow: show, capsule: <div data-testid="capsule-slot">胶囊</div> });
+    frame(1600, 900, { preference: folded, onShow: show, edgeHandle: <div data-testid="capsule-slot">快速记录</div> });
     expect(screen.getByTestId("shell-main").contains(screen.getByTestId("capsule-slot"))).toBe(true);
     fireEvent.click(screen.getByTestId("shell-dock-toggle"));
     expect(show).toHaveBeenCalledWith("dock");
     cleanup();
-    // A conversation tab in front: the same conversation is not shown twice, so there is no dock, no switch for one and no capsule.
-    frame(1600, 900, { hasDock: false, capsule: <div data-testid="capsule-slot">胶囊</div> });
+    // A conversation tab in front: the same conversation is not shown twice, so there is no dock, no switch for one and no handle.
+    frame(1600, 900, { hasDock: false, edgeHandle: <div data-testid="capsule-slot">快速记录</div> });
     expect(screen.queryByTestId("shell-dock")).toBeNull();
     expect(screen.queryByTestId("shell-dock-toggle")).toBeNull();
     expect(screen.queryByTestId("capsule-slot")).toBeNull();

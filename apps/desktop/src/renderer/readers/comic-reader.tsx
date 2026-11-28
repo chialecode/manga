@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Camera, ChevronLeft, ChevronRight, Crop, Fullscreen, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Shrink } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Crop, Fullscreen, Maximize2, Minimize2, Minus, MoreHorizontal, NotebookPen, Plus, Shrink, Sparkles, X } from "lucide-react";
+import { chordLabel } from "@manga/contracts/keys";
 import type { Translator } from "@manga/i18n";
+import { SelectionBubble } from "../components/capture/selection-bubble.tsx";
+import { captureBridge, useCaptureActions } from "../lib/capture-bridge.ts";
 import type { SourceCard } from "../lib/types.ts";
 import {
   buildSpreads, comicKeyAction, effectiveAnimation, pageBoxes, prefetchPages, spreadIndexOf, stepSpread, stripLayout, tapAction, topPageOfStrip, visibleStripRange, visualOrder,
@@ -21,7 +24,7 @@ import type { ScreenshotPort } from "../hooks/use-screenshots.tsx";
 import { readerContext } from "../lib/reader-context.ts";
 import { useTab } from "../workspace/tab-context.tsx";
 import { useKeyTable } from "../lib/key-table.tsx";
-import { quoteTags, useQuoteTags } from "../lib/quote-tags.ts";
+import { quoteTags, useQuoteTags, type QuoteTag } from "../lib/quote-tags.ts";
 
 type T = Translator["t"];
 
@@ -113,8 +116,14 @@ export function ComicReader(props: {
   const [autoOn, setAutoOn] = useState(false);
   const [ended, setEnded] = useState(false);
   const [more, setMore] = useState(false);
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const [regionAnchor, setRegionAnchor] = useState<{ x: number; y: number } | null>(null);
+  const captureActions = useCaptureActions();
+  const showOnTopLayer = useCallback((node: HTMLDivElement | null) => {
+    try { if (node && typeof node.showPopover === "function" && !node.matches(":popover-open")) node.showPopover(); } catch { /* shown in place */ }
+  }, []);
   const immersive = fullscreen || windowFull.active;
-  const controls = useAutoHide(root, { enabled: immersive, hold: more, wakeOnAnyPointerMove: true });
+  const controls = useAutoHide(root, { enabled: immersive, hold: more || menuAt !== null, wakeOnAnyPointerMove: true });
   const [failed, setFailed] = useState<Record<string, true>>({});
   const retried = useRef(new Set<string>());
   // A page that was forgotten is asked for again on the next pass.
@@ -271,8 +280,8 @@ export function ComicReader(props: {
   /** The key reaches the capture that is defined further down. */
   const shotRef = useRef<(() => Promise<void>) | null>(null);
   // A key or a timer reads the latest navigation without re-binding.
-  const latest = useRef({ go, jump, ended, toggleFullscreen, zoom, applyZoom, more, selecting, drawn });
-  latest.current = { go, jump, ended, toggleFullscreen, zoom, applyZoom, more, selecting, drawn };
+  const latest = useRef({ go, jump, ended, toggleFullscreen, zoom, applyZoom, more, menuAt, selecting, drawn });
+  latest.current = { go, jump, ended, toggleFullscreen, zoom, applyZoom, more, menuAt, selecting, drawn };
 
   const stripSnapRef = useRef({ pageIndex, stripBoxes });
   stripSnapRef.current = { pageIndex, stripBoxes };
@@ -339,7 +348,8 @@ export function ComicReader(props: {
       else if (action === "fullscreen") current.toggleFullscreen();
       else if (action === "screenshot") void shotRef.current?.();
       else if (action === "escape") {
-        if (current.more) setMore(false);
+        if (current.menuAt) setMenuAt(null);
+        else if (current.more) setMore(false);
         else if (current.selecting || current.drawn || current.ended) { setSelecting(false); setDrawn(null); setEnded(false); }
         else return;
       } else return;
@@ -434,6 +444,59 @@ export function ComicReader(props: {
 
   shotRef.current = takeScreenshot;
 
+  // Expose screenshot action to right-side capture surfaces (EdgeHandle & right-dock Composer).
+  const shotLabel = visibleDraft ? t("screenshot.region") : t("screenshot.page");
+  useEffect(() => {
+    if (!props.screenshots) return;
+    captureBridge.register({
+      kind: "comic",
+      resourceId: doc.resourceId,
+      label: shotLabel,
+      disabled: pages.length === 0,
+      take: () => shotRef.current?.(),
+    }, tab.tabId);
+    return () => captureBridge.unregister(doc.resourceId, tab.tabId);
+  }, [props.screenshots, doc.resourceId, shotLabel, pages.length, tab.tabId]);
+
+  useEffect(() => {
+    if (!menuAt) return;
+    const close = () => setMenuAt(null);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [menuAt]);
+
+  // Measure the drawn region rectangle so the floating SelectionBubble tracks it cleanly.
+  useLayoutEffect(() => {
+    if (!visibleDraft || !stage.current) { setRegionAnchor(null); return; }
+    const rect = stage.current.querySelector<HTMLElement>('[data-testid="comic-region-rect"]')?.getBoundingClientRect();
+    if (rect && (rect.width > 0 || rect.height > 0)) {
+      setRegionAnchor({ x: rect.left + rect.width / 2, y: Math.max(56, rect.top - 8) });
+    } else {
+      setRegionAnchor({ x: (window.innerWidth || 1280) / 2, y: 120 });
+    }
+  }, [visibleDraft, scrollTop, zoom, viewport.width, viewport.height]);
+
+  const buildRegionTag = (entry: { pageIndex: number; region: Region }): QuoteTag => ({
+    id: `region:${doc.resourceId}`,
+    kind: "region",
+    resourceId: doc.resourceId,
+    revisionId: doc.revisionId,
+    pageId: pages[entry.pageIndex]!.id,
+    pageNumber: entry.pageIndex + 1,
+    region: entry.region,
+    label: t("chat.tag.region", { page: entry.pageIndex + 1 }),
+  });
+
+  const quickNoteKey = keys["global.quickNote"]?.[0] ? chordLabel(keys["global.quickNote"]![0]!) : "N";
+  const shotKey = keys["comic.screenshot"]?.[0] ? chordLabel(keys["comic.screenshot"]![0]!) : "S";
+  const openContextMenu = (clientX: number, clientY: number) => {
+    const menuWidth = 190;
+    const menuHeight = 140;
+    const maxX = Math.max(8, (window.innerWidth || 1280) - menuWidth - 8);
+    const maxY = Math.max(8, (window.innerHeight || 720) - menuHeight - 8);
+    setMenuAt({ x: Math.max(8, Math.min(clientX, maxX)), y: Math.max(8, Math.min(clientY, maxY)) });
+  };
+
   // ---- render ----
   const boxes = spread ? pageBoxes(settings.fit, spread.pages.map((index) => pages[index]!), viewport, zoom) : [];
   const visual = spread ? visualOrder(spread, reading) : [];
@@ -500,6 +563,11 @@ export function ComicReader(props: {
             const action = tapAction(event.clientX - box.left, box.width, reading);
             if (action === "next") go(1); else if (action === "prev") go(-1);
           }}
+          onContextMenu={(event) => {
+            if (total === 0) return;
+            event.preventDefault();
+            openContextMenu(event.clientX, event.clientY);
+          }}
         >
           {total === 0 ? <p className="detail-muted comic-empty" data-testid="comic-empty">{t("comic.empty")}</p> : null}
           {total > 0 && strip && stripBoxes ? (
@@ -520,6 +588,63 @@ export function ComicReader(props: {
             </div>
           ) : null}
         </div>
+        {visibleDraft ? (
+          <SelectionBubble
+            kind="comic"
+            label={t("capture.bubble")}
+            anchor={regionAnchor ?? { x: (window.innerWidth || 1280) / 2, y: 120 }}
+            actions={[
+              {
+                id: "note",
+                testId: "selection-bubble-note",
+                label: t("capture.note"),
+                icon: <NotebookPen size={14} aria-hidden="true" />,
+                accent: true,
+                onClick: () => captureActions?.openQuickNote({ tag: buildRegionTag(visibleDraft) }),
+              },
+              {
+                id: "ask",
+                testId: "selection-bubble-ask",
+                label: t("capture.askAgent"),
+                icon: <Sparkles size={14} aria-hidden="true" />,
+                onClick: () => captureActions?.askAgentWithTag(buildRegionTag(visibleDraft)),
+              },
+              ...(props.screenshots ? [{
+                id: "screenshot",
+                testId: "selection-bubble-screenshot",
+                label: t("capture.saveShot"),
+                icon: <Camera size={14} aria-hidden="true" />,
+                onClick: () => { void takeScreenshot(); },
+              }] : []),
+              {
+                id: "cancel",
+                testId: "selection-bubble-cancel",
+                label: t("chat.cancel"),
+                icon: <X size={14} aria-hidden="true" />,
+                onClick: () => { setSelecting(false); setDrawn(null); quoteTags.removeKind("region", doc.resourceId); },
+              },
+            ]}
+          />
+        ) : null}
+        {menuAt ? (
+          <div ref={showOnTopLayer} popover="manual" className="reader-context-menu" role="menu" aria-label={t("comic.menu")} data-testid="comic-context" style={{ left: menuAt.x, top: menuAt.y, right: "auto", bottom: "auto" }} onMouseDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+            <button type="button" role="menuitem" data-testid="comic-context-note" onClick={() => {
+              setMenuAt(null);
+              if (visibleDraft) captureActions?.openQuickNote({ tag: buildRegionTag(visibleDraft) });
+              else captureActions?.openQuickNote();
+            }}>{t("capture.noteKey", { key: quickNoteKey })}</button>
+            {captureActions?.voiceEnabled ? (
+              <button type="button" role="menuitem" data-testid="comic-context-record" onClick={() => { setMenuAt(null); captureActions.toggleRecording(); }}>
+                {captureActions.recordingActive
+                  ? t("capture.recordStopKey", { key: captureActions.recordingToggleKey })
+                  : t("capture.recordStartKey", { key: captureActions.recordingToggleKey })}
+              </button>
+            ) : null}
+            {props.screenshots ? (
+              <button type="button" role="menuitem" data-testid="comic-context-screenshot" onClick={() => { setMenuAt(null); void takeScreenshot(); }}>{t("capture.shotKey", { key: shotKey })}</button>
+            ) : null}
+          </div>
+        ) : null}
         {ended ? (
           <div className="comic-end" role="status" data-testid="comic-end">
             <p>{t("comic.lastPage")}</p>
@@ -573,7 +698,6 @@ export function ComicReader(props: {
         </div>
         <div className="reader-group comic-tools" role="toolbar" aria-label={t("comic.toolbar")} data-testid="comic-toolbar">
           <button type="button" className="icon-button" data-testid="comic-region-tool" aria-pressed={selecting} aria-label={t("comic.regionTool")} title={t("comic.regionTool")} onClick={() => { setSelecting(!selecting); setDrawn(null); }}><Crop size={16} /></button>
-          {props.screenshots ? <button type="button" className="icon-button" data-testid="comic-screenshot" aria-label={visibleDraft ? t("screenshot.region") : t("screenshot.page")} title={visibleDraft ? t("screenshot.region") : t("screenshot.page")} onClick={() => void takeScreenshot()}><Camera size={16} /></button> : null}
           <button type="button" className="icon-button" data-testid="comic-window-fullscreen" aria-pressed={windowFull.active} aria-label={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} title={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} onClick={windowFull.toggle}>{windowFull.active ? <Shrink size={16} /> : <Fullscreen size={16} />}</button>
           <button type="button" className="icon-button" data-testid="comic-fullscreen" aria-pressed={fullscreen} aria-label={t("comic.fullscreen")} title={t("comic.fullscreen")} onClick={toggleFullscreen}>{fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
           <button ref={moreAnchor} type="button" className="icon-button" data-testid="comic-more-settings" aria-expanded={more} aria-label={t("comic.settings")} title={t("comic.settings")} onClick={() => setMore((open) => !open)}><MoreHorizontal size={18} /></button>

@@ -107,8 +107,9 @@ export async function runFormatsSmoke(appService: MangaProductApp, grant: string
         const state = ${PDF_STATE};
         return { ok: true, epoch: state.epoch, spans: state.spans, connected: node.isConnected, selected: String(selection) };
       })()`);
-      // The passage that was held becomes a tag in the right pane's input.
-      const tagged = atSelect.ok && await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 4000);
+      // Plan D: selecting a passage surfaces the floating bubble; choosing "问 Agent" tags the right-dock input.
+      const bubbled = atSelect.ok && await clickTestId(view, "selection-bubble-ask", 4000);
+      const tagged = bubbled && await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 4000);
       const atEnd = await js<{ epoch: number; spans: number; nodeConnected: boolean; layer: string; error: string; review: boolean }>(view, `(() => {
         const state = ${PDF_STATE};
         return {

@@ -102,23 +102,21 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
     await waitUntil(view, `document.documentElement.scrollWidth <= window.innerWidth + 1`, 2000);
     await waitFrames(view, 4);
   };
-  // The floating capsule (microphone and quick note) shows while the dock is folded. On a page with a bar of controls it must not sit on
-  // any of them, with its note box open or closed: the dock is folded for the check when it is open, then put back as it was.
+  // The unified right-edge magnetic capture handle replaces the old top capsule while the dock is folded. On a page with a bar of controls,
+  // neither the collapsed/expanded right-edge handle nor the centered quick-note modal may sit on top of reader controls.
   const capsuleRows: Array<Record<string, unknown>> = [];
   const capsuleCheck = async (label: string, selectors: string[]) => {
-    const paneWasOpen = !(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="chat-capsule"]'))`));
+    const paneWasOpen = !(await js<boolean>(view, `Boolean(document.querySelector('[data-testid="edge-handle-zone"]'))`));
     if (paneWasOpen) {
       await clickTestId(view, "shell-dock-toggle", 1500);
-      await waitUntil(view, `document.querySelector('[data-testid="chat-capsule"]')`, 2500);
+      await waitUntil(view, `document.querySelector('[data-testid="edge-handle-zone"]')`, 2500);
     }
-    const shown = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="chat-capsule"]'))`);
+    const shown = await js<boolean>(view, `Boolean(document.querySelector('[data-testid="edge-handle-zone"]'))`);
     if (!shown) { capsuleRows.push({ label, shown: false }); return; }
-    // What the capsule draws (its bar and, when open, the note box) must not overlap a control, and nothing of the capsule may take the
-    // pointer at a control's centre (the space between the bar and a box that opens further down included).
-    const measure = () => js<{ capsule: Rect[]; covered: string[]; checked: number }>(view, `(() => {
+    const measure = (surfaceSelector: string) => js<{ capsule: Rect[]; covered: string[]; checked: number }>(view, `(() => {
       const rect = ${RECT};
-      const root = document.querySelector('[data-testid="chat-capsule"]');
-      const capsule = [...root.children].map(rect).filter((r) => r.w > 0 && r.h > 0);
+      const roots = [...document.querySelectorAll(${JSON.stringify(surfaceSelector)})];
+      const capsule = roots.map(rect).filter((r) => r.w > 0 && r.h > 0);
       const covered = []; let checked = 0;
       for (const el of document.querySelectorAll(${JSON.stringify(selectors.join(", "))})) {
         const r = rect(el);
@@ -126,7 +124,7 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
         checked += 1;
         const overlaps = capsule.some((c) => r.x < c.r - 1 && r.r > c.x + 1 && r.y < c.b - 1 && r.b > c.y + 1);
         const hit = document.elementFromPoint(r.x + r.w / 2, r.y + r.h / 2);
-        if (overlaps || (hit && root.contains(hit))) covered.push((el.getAttribute("data-testid") || el.tagName.toLowerCase()) + "@" + Math.round(r.x) + "," + Math.round(r.y));
+        if (overlaps || (hit && roots.some((root) => root.contains(hit)))) covered.push((el.getAttribute("data-testid") || el.tagName.toLowerCase()) + "@" + Math.round(r.x) + "," + Math.round(r.y));
       }
       return { capsule, covered, checked };
     })()`);
@@ -137,13 +135,20 @@ export async function runWindowWalkSmoke(input: { appService: MangaProductApp; g
       await waitFrames(view);
     };
     await wake();
-    const closed = await measure();
-    await clickTestId(view, "capsule-note");
-    await waitFrames(view, 2);
+    await clickTestId(view, "edge-handle-hotzone", 1500);
+    await waitUntil(view, `document.querySelector('[data-testid="edge-handle"]')?.getAttribute("data-expanded") === "true"`, 2000);
     await wake();
-    const open = await measure();
-    await clickTestId(view, "capsule-note");
-    capsuleRows.push({ label, shown: true, checked: closed.checked, covered: [...closed.covered, ...open.covered.map((item) => `note-open:${item}`)] });
+    const closed = await measure('[data-testid="edge-handle"]');
+    let openCovered: string[] = [];
+    if (await clickTestId(view, "edge-note", 1500)) {
+      await waitDrawn(view, "quick-note-modal", 2500);
+      await wake();
+      const open = await measure('[data-testid="quick-note-modal"]');
+      openCovered = open.covered.map((item) => `note-open:${item}`);
+      await clickTestId(view, "quick-note-close", 1500);
+      await waitUntil(view, `!document.querySelector('[data-testid="quick-note-modal"]')`, 2000);
+    }
+    capsuleRows.push({ label, shown: true, checked: closed.checked, covered: [...closed.covered, ...openCovered] });
     if (paneWasOpen) { await clickTestId(view, "shell-dock-toggle", 1500); await waitDrawn(view, "shell-dock", 3000); }
   };
   await call("settings.skipAi", {});

@@ -5,7 +5,8 @@ import { createTranslator } from "@manga/i18n";
 import { BUILTIN_QUICK_TASKS, type QuickTask } from "@manga/contracts";
 import { DEFAULT_SHELL_PREFERENCE } from "@manga/contracts/reading";
 import { App } from "../../apps/desktop/src/renderer/App.tsx";
-import { Capsule } from "../../apps/desktop/src/renderer/components/chat/capsule.tsx";
+import { EdgeHandle } from "../../apps/desktop/src/renderer/components/capture/edge-handle.tsx";
+import { QuickNoteModal } from "../../apps/desktop/src/renderer/components/capture/quick-note-modal.tsx";
 import { MessageList, type BubbleActions } from "../../apps/desktop/src/renderer/components/chat/messages.tsx";
 import { resetCovers } from "../../apps/desktop/src/renderer/lib/covers.ts";
 import { quoteTags } from "../../apps/desktop/src/renderer/lib/quote-tags.ts";
@@ -884,79 +885,126 @@ describe("notes in the message list: four kinds of source (A-48)", () => {
 // ---- the capsule ------------------------------------------------------------------------------------------
 
 describe("the floating capsule: the same note and microphone as the pane (A-47)", () => {
-  const idle = { phase: "idle", elapsedMs: 0 } as never;
-  const mic = (patch: Record<string, unknown> = {}) => ({ t, state: idle, enabled: true, toggleKey: "F8", onToggle: () => undefined, onHoldStart: () => undefined, onHoldEnd: () => undefined, onStop: () => undefined, ...patch }) as never;
+  const idle = { phase: "idle" as const, elapsedMs: 0, level: 0 };
+  const mic = (patch: Record<string, unknown> = {}) => ({ state: idle, enabled: true, toggleKey: "F8", onToggle: () => undefined, onStop: () => undefined, ...patch }) as never;
 
-  it("writes a note from a small box and closes it once the note is saved", async () => {
+  it("writes a note from the centered quick-note modal and closes it once the note is saved", async () => {
     const notes: string[] = [];
-    render(<Capsule t={t} mic={null} onNote={async (text) => { notes.push(text); return true; }} />);
-    expect(screen.queryByTestId("capsule-note-box")).toBeNull();
-    fireEvent.click(screen.getByTestId("capsule-note"));
-    expect(screen.getByTestId("capsule-note-box")).toBeTruthy();
-    expect((screen.getByTestId("capsule-note-send") as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByTestId("capsule-note-input"), { target: { value: "胶囊里写的笔记" } });
-    fireEvent.keyDown(screen.getByTestId("capsule-note-input"), { key: "Enter" });
-    await waitFor(() => expect(notes).toEqual(["胶囊里写的笔记"]));
-    await waitFor(() => expect(screen.queryByTestId("capsule-note-box")).toBeNull());
-    fireEvent.click(screen.getByTestId("capsule-note"));
-    expect((screen.getByTestId("capsule-note-input") as HTMLTextAreaElement).value).toBe("");
+    const drafts = new Map<string, string>();
+    let open = false;
+    let nonce = 0;
+    const renderView = () => (
+      <>
+        <EdgeHandle t={t} mic={null} noteable={true} onOpenQuickNote={() => { open = true; nonce += 1; rerender(renderView()); }} />
+        <QuickNoteModal
+          t={t}
+          open={open}
+          openNonce={nonce}
+          targetKey="t1"
+          initialItems={[]}
+          initialDraft={drafts.get("t1") ?? ""}
+          onDraftChange={(k, v) => { if (v) drafts.set(k, v); else drafts.delete(k); }}
+          onSave={async (text) => { notes.push(text); return true; }}
+          onClose={() => { open = false; rerender(renderView()); }}
+        />
+      </>
+    );
+    const { rerender } = render(renderView());
+    expect(screen.queryByTestId("quick-note-modal")).toBeNull();
+    fireEvent.click(screen.getByTestId("edge-handle-hotzone"));
+    fireEvent.click(screen.getByTestId("edge-note"));
+    expect(screen.getByTestId("quick-note-modal")).toBeTruthy();
+    expect((screen.getByTestId("quick-note-send") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("quick-note-input"), { target: { value: "右侧速记写的笔记" } });
+    fireEvent.keyDown(screen.getByTestId("quick-note-input"), { key: "Enter" });
+    await waitFor(() => expect(notes).toEqual(["右侧速记写的笔记"]));
+    await waitFor(() => expect(screen.queryByTestId("quick-note-modal")).toBeNull());
+    fireEvent.click(screen.getByTestId("edge-handle-hotzone"));
+    fireEvent.click(screen.getByTestId("edge-note"));
+    expect((screen.getByTestId("quick-note-input") as HTMLTextAreaElement).value).toBe("");
   });
 
   it("keeps the text when the note could not be saved, and does not send while composing", async () => {
     const notes: string[] = [];
-    render(<Capsule t={t} mic={null} onNote={async (text) => { notes.push(text); return false; }} />);
-    fireEvent.click(screen.getByTestId("capsule-note"));
-    const input = screen.getByTestId("capsule-note-input");
+    let open = true;
+    const renderView = () => (
+      <QuickNoteModal
+        t={t}
+        open={open}
+        openNonce={1}
+        targetKey="t1"
+        initialItems={[]}
+        initialDraft=""
+        onDraftChange={() => undefined}
+        onSave={async (text) => { notes.push(text); return false; }}
+        onClose={() => { open = false; rerender(renderView()); }}
+      />
+    );
+    const { rerender } = render(renderView());
+    const input = screen.getByTestId("quick-note-input");
     fireEvent.change(input, { target: { value: "还没写完" } });
     fireEvent.compositionStart(input);
     fireEvent.keyDown(input, { key: "Enter" });
-    fireEvent.keyDown(input, { key: "Escape" });
+    fireEvent.keyDown(window, { key: "Escape" });
     expect(notes).toEqual([]);
-    expect(screen.getByTestId("capsule-note-box")).toBeTruthy();
+    expect(screen.getByTestId("quick-note-modal")).toBeTruthy();
     fireEvent.compositionEnd(input);
     fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
     expect(notes).toEqual([]);
-    fireEvent.click(screen.getByTestId("capsule-note-send"));
+    fireEvent.click(screen.getByTestId("quick-note-send"));
     await waitFor(() => expect(notes).toEqual(["还没写完"]));
-    expect((screen.getByTestId("capsule-note-input") as HTMLTextAreaElement).value).toBe("还没写完");
-    fireEvent.keyDown(screen.getByTestId("capsule-note-input"), { key: "Escape" });
-    expect(screen.queryByTestId("capsule-note-box")).toBeNull();
+    expect((screen.getByTestId("quick-note-input") as HTMLTextAreaElement).value).toBe("还没写完");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("quick-note-modal")).toBeNull();
   });
 
   it("lets a tag alone make a note, and shows the tag it will anchor to", async () => {
     const notes: string[] = [];
-    render(<Capsule t={t} mic={null} tagLabel="0:10—0:20" onNote={async (text) => { notes.push(text); return true; }} />);
-    fireEvent.click(screen.getByTestId("capsule-note"));
-    expect(screen.getByTestId("capsule-tag").textContent).toContain("0:10—0:20");
-    fireEvent.click(screen.getByTestId("capsule-note-send"));
+    const tag = { id: "interval:r1", kind: "interval" as const, resourceId: "r1", revisionId: "v1", startMs: 10_000, endMs: 20_000, label: "0:10—0:20" };
+    render(
+      <QuickNoteModal
+        t={t}
+        open={true}
+        openNonce={1}
+        targetKey="r1"
+        initialItems={[{ id: tag.id, kind: "interval", label: tag.label, tag }]}
+        initialDraft=""
+        onDraftChange={() => undefined}
+        onSave={async (text) => { notes.push(text); return true; }}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId("quick-note-tag-interval").textContent).toContain("0:10—0:20");
+    fireEvent.click(screen.getByTestId("quick-note-send"));
     await waitFor(() => expect(notes).toEqual([""]));
   });
 
   it("has the microphone only when the voice module gives one, and starts a recording with it", () => {
     const toggles: string[] = [];
-    const view = render(<Capsule t={t} mic={null} onNote={async () => true} />);
-    expect(screen.queryByTestId("chat-mic")).toBeNull();
+    const view = render(<EdgeHandle t={t} mic={null} noteable={true} onOpenQuickNote={() => undefined} />);
+    expect(screen.queryByTestId("edge-mic")).toBeNull();
     view.unmount();
-    render(<Capsule t={t} mic={mic({ onToggle: () => toggles.push("toggle") })} onNote={async () => true} />);
-    const button = screen.getByTestId("chat-mic");
+    render(<EdgeHandle t={t} mic={mic({ onToggle: () => toggles.push("toggle") })} noteable={true} onOpenQuickNote={() => undefined} />);
+    const button = screen.getByTestId("edge-mic");
     expect(button.getAttribute("aria-label")).toContain("F8");
-    // A keyboard press arrives as a click with no pointer detail.
-    fireEvent.click(button, { detail: 0 });
+    fireEvent.click(button);
     expect(toggles).toEqual(["toggle"]);
   });
 
   it("shows the elapsed time while recording and stops with the same button", () => {
     const stops: string[] = [];
-    render(<Capsule t={t} mic={mic({ state: { phase: "recording", elapsedMs: 65_000 }, onStop: () => stops.push("stop") })} onNote={async () => true} />);
-    expect(screen.getByTestId("chat-mic-time").textContent).toBe("1:05");
-    expect(screen.getByTestId("chat-mic").getAttribute("data-phase")).toBe("recording");
-    fireEvent.click(screen.getByTestId("chat-mic"), { detail: 0 });
+    render(<EdgeHandle t={t} mic={mic({ state: { phase: "recording", elapsedMs: 65_000, level: 0.4 }, onStop: () => stops.push("stop") })} noteable={true} onOpenQuickNote={() => undefined} />);
+    expect(screen.getByTestId("edge-handle-recording-pill")).toBeTruthy();
+    expect(screen.getByTestId("edge-mic-time").textContent).toBe("1:05");
+    expect(screen.getByTestId("edge-mic").getAttribute("data-phase")).toBe("recording");
+    fireEvent.click(screen.getByTestId("edge-mic"));
     expect(stops).toEqual(["stop"]);
   });
+
   it("has no note button where a note would belong to nothing", () => {
-    render(<Capsule t={t} mic={mic()} />);
-    expect(screen.getByTestId("chat-mic")).toBeTruthy();
-    expect(screen.queryByTestId("capsule-note")).toBeNull();
+    render(<EdgeHandle t={t} mic={mic()} noteable={false} />);
+    expect(screen.getByTestId("edge-mic")).toBeTruthy();
+    expect(screen.queryByTestId("edge-note")).toBeNull();
   });
 });
 

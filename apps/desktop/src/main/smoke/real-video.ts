@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import type { MangaProductApp } from "@manga/app-core";
-import { clickTestId, openFromShelf, sleep } from "./driver.ts";
+import { clickScreenshot, clickTestId, openFromShelf, sleep } from "./driver.ts";
 import { toRail } from "./common.ts";
 
 /**
@@ -158,7 +158,7 @@ export async function runRealVideoTrial(input: TrialInput): Promise<TrialResult 
       const native = await js<{ w: number; h: number }>(`(() => { const v = document.querySelector('[data-testid="video-element"]'); return { w: v.videoWidth, h: v.videoHeight }; })()`);
       const known = new Set(appService.screenshots.list({ limit: 500 }).items.map((item) => item.id));
       const clickedAt = Date.now();
-      const clicked = await clickTestId(view, "video-screenshot", 4000);
+      const clicked = await clickScreenshot(view, 4000);
       // The record is what counts: the notice of an earlier screenshot may still be on screen, so it is not waited for.
       let saved: ReturnType<typeof appService.screenshots.list>["items"][number] | undefined;
       for (let waited = 0; clicked && !saved && waited < 20_000; waited += 250) {
