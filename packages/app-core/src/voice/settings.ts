@@ -99,9 +99,24 @@ function normalizeOverlay(raw: unknown): Overlay {
   return { x, y: Math.round(box.y) };
 }
 
+type StoredRecordingSettings = RecordingSettings & { duckPlaybackExplicit?: boolean };
+
+function hasExplicitDuckPlayback(store: DrizzleStore): boolean {
+  const raw = store.getMeta(RECORDING_KEY);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { duckPlaybackExplicit?: unknown };
+    return parsed?.duckPlaybackExplicit === true;
+  } catch {
+    return false;
+  }
+}
+
 export function readRecordingSettings(store: DrizzleStore): RecordingSettings {
-  const settings = read(store, RECORDING_KEY, DEFAULT_RECORDING_SETTINGS);
-  return { ...settings, overlay: normalizeOverlay(settings.overlay) };
+  const { duckPlaybackExplicit, ...settings } = read<StoredRecordingSettings>(store, RECORDING_KEY, DEFAULT_RECORDING_SETTINGS);
+  // Existing profiles wrote the previous default `"lower"` whenever any recording setting was saved; treat unconfirmed `"lower"` as `"none"` (A-141).
+  const duckPlayback = settings.duckPlayback === "lower" && duckPlaybackExplicit !== true ? "none" : settings.duckPlayback;
+  return { ...settings, duckPlayback, overlay: normalizeOverlay(settings.overlay) };
 }
 
 export function writeRecordingSettings(
@@ -109,6 +124,7 @@ export function writeRecordingSettings(
   patch: RecordingSettingsPatch,
 ): RecordingSettings {
   const current = readRecordingSettings(store);
+  const explicitDuck = hasExplicitDuckPlayback(store) || patch.duckPlayback !== undefined;
   const byConnection = { ...current.promptCharsByConnection };
   for (const [connectionId, value] of Object.entries(patch.promptCharsByConnection ?? {})) {
     if (value === null) delete byConnection[connectionId];
@@ -136,6 +152,8 @@ export function writeRecordingSettings(
   }
   const next: RecordingSettings = { ...current, ...patch, promptCharsByConnection: byConnection, polishPrompts, overlay };
   if (next.deviceId === undefined) next.deviceId = null;
+  if (next.duckPlayback === undefined) next.duckPlayback = current.duckPlayback;
+  delete (next as StoredRecordingSettings).duckPlaybackExplicit;
   for (const key of [next.holdKey, next.toggleKey, next.dictationHoldKey]) {
     if (!KEY_NAME.test(key)) throw new MangaError("VALIDATION_ERROR", "a recording key must be a key name such as F9");
   }
@@ -152,7 +170,8 @@ export function writeRecordingSettings(
   if (!Number.isInteger(next.localIdleMinutes) || next.localIdleMinutes < 1 || next.localIdleMinutes > 120) {
     throw new MangaError("VALIDATION_ERROR", "localIdleMinutes must be an integer between 1 and 120");
   }
-  store.setMeta(RECORDING_KEY, JSON.stringify(next));
+  const stored: StoredRecordingSettings = explicitDuck ? { ...next, duckPlaybackExplicit: true } : next;
+  store.setMeta(RECORDING_KEY, JSON.stringify(stored));
   return next;
 }
 

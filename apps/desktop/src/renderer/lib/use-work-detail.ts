@@ -19,7 +19,7 @@ export type DetailState = {
   relatedStatus: "idle" | "loading" | "ready" | "off" | "error";
   notes: NoteRow[];
   captures: CaptureRow[];
-  reload: () => Promise<void>;
+  reload: () => Promise<WorkDetail | null>;
 };
 
 /**
@@ -37,11 +37,11 @@ export function useWorkDetail(workId: string, options: { metadata: boolean; voic
   const [captures, setCaptures] = useState<CaptureRow[]>([]);
   const token = useRef(0);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (): Promise<WorkDetail | null> => {
     const mine = ++token.current;
     const core = await attempt<WorkDetail>("works.get", { workId });
-    if (mine !== token.current) return;
-    if (!core.ok) { setStatus("error"); setError(core.error.message); return; }
+    if (mine !== token.current) return null;
+    if (!core.ok) { setStatus("error"); setError(core.error.message); return null; }
     setDetail(core.value);
     setStatus("ready");
     setError(undefined);
@@ -51,9 +51,19 @@ export function useWorkDetail(workId: string, options: { metadata: boolean; voic
 
     if (options.metadata) {
       setRelatedStatus("loading");
-      void attempt<RelatedWorks>("metadata.related", { workId }).then((result) => {
+      void attempt<Partial<RelatedWorks>>("metadata.related", { workId }).then((result) => {
         if (mine !== token.current) return;
-        if (result.ok) { setRelated(result.value); setRelatedStatus("ready"); return; }
+        if (result.ok) {
+          const raw = result.value ?? {};
+          setRelated({
+            workId: typeof raw.workId === "string" ? raw.workId : workId,
+            source: raw.source ?? null,
+            relations: asArray(raw.relations),
+            similar: asArray(raw.similar),
+          });
+          setRelatedStatus("ready");
+          return;
+        }
         setRelatedStatus(result.error.code === "CAPABILITY_UNAVAILABLE" ? "off" : "error");
       });
     } else setRelatedStatus("off");
@@ -80,6 +90,7 @@ export function useWorkDetail(workId: string, options: { metadata: boolean; voic
         setCaptures(value);
       });
     }
+    return core.value;
   }, [workId, options.metadata, options.voice]);
 
   useEffect(() => {

@@ -399,6 +399,13 @@ describe("video player: playing and seeking", () => {
     view.rerender(<VideoPlayer t={i18n.t} doc={baseDoc} settings={baseSettings} {...view.handlers} duck={{ active: false, mode: "lower" }} />);
     await waitFor(() => expect(media.state(element()).volume).toBe(0.5));
   });
+
+  it("keeps playback volume unchanged while a recording runs when duckPlayback is none", async () => {
+    const view = await ready({ duck: { active: true, mode: "none" } });
+    await waitFor(() => expect(media.state(element()).volume).toBeCloseTo(0.5, 5));
+    view.rerender(<VideoPlayer t={i18n.t} doc={baseDoc} settings={baseSettings} {...view.handlers} duck={{ active: false, mode: "none" }} />);
+    await waitFor(() => expect(media.state(element()).volume).toBeCloseTo(0.5, 5));
+  });
 });
 
 describe("video player: frames", () => {

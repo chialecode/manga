@@ -129,7 +129,7 @@ export const zhCNMedia = {
   "detail.lockField": "锁定",
   "detail.unlockField": "取消锁定",
   "detail.resetField": "恢复自动",
-  "detail.sourceLine": "资料来源 {provider} · 抓取时间 {time}",
+  "detail.sourceLine": "来自 {provider} · {time}",
   "detail.resourcesNone": "这部作品还没有可打开的内容",
   "detail.unavailable": "文件不可用",
   "detail.progress": "进度",

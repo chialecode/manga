@@ -214,12 +214,13 @@ describe("media pages in the app", () => {
     await openWork("comic", "open-res_c1");
     expect(screen.getByTestId("work-back").textContent).toBe("返回漫画");
     expect(screen.getByTestId("page-work").textContent).not.toMatch(/书架|书籍/);
-    expect(within(screen.getByTestId("page-work")).getByRole("tab", { name: "卷与话" })).toBeTruthy();
+    expect(within(screen.getByTestId("page-work")).getAllByRole("tab").map((node) => node.textContent)).toEqual(["作品资料", "我的记录"]);
+    expect(within(screen.getByTestId("detail-resources")).getByRole("heading", { name: /卷与话/ })).toBeTruthy();
     cleanup();
     host();
     await openWork("video", "open-res_v1");
     expect(screen.getByTestId("work-back").textContent).toBe("返回动漫");
-    expect(within(screen.getByTestId("page-work")).getByRole("tab", { name: "剧集" })).toBeTruthy();
+    expect(within(screen.getByTestId("detail-resources")).getByRole("heading", { name: /剧集/ })).toBeTruthy();
     expect(screen.getByTestId("page-work").textContent).not.toMatch(/书架|书籍/);
   });
 

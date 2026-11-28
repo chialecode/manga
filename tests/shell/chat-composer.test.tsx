@@ -322,8 +322,6 @@ describe("related works: on the work's own page now", () => {
     });
     const opened: string[] = [];
     const view = renderHome(["library", "comic", "metadata"], opened);
-    await waitFor(() => expect(screen.getByTestId("detail-tab-related")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("detail-tab-related"));
     await waitFor(() => expect(screen.getByTestId("related-relations")).toBeTruthy());
     expect(host.of("metadata.related")[0]!.input).toEqual({ workId: "wc" });
     expect(screen.getByTestId("detail-related").textContent).toContain("Bangumi");
@@ -335,16 +333,12 @@ describe("related works: on the work's own page now", () => {
 
     installHost({ ...workHomeBase, "works.get": () => detail(), "metadata.related": () => ({ workId: "wc", source: null, relations: [], similar: [] }) });
     renderHome(["library", "comic", "metadata"]);
-    await waitFor(() => expect(screen.getByTestId("detail-tab-related")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("detail-tab-related"));
     await waitFor(() => expect(screen.getByTestId("related-none")).toBeTruthy());
   });
 
   it("says the related works could not be read instead of showing a stale list", async () => {
     installHost({ ...workHomeBase, "works.get": () => detail(), "metadata.related": () => { throw Object.assign(new Error("offline"), { code: "NETWORK_UNAVAILABLE" }); } });
     renderHome(["library", "comic", "metadata"]);
-    await waitFor(() => expect(screen.getByTestId("detail-tab-related")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("detail-tab-related"));
     await waitFor(() => expect(screen.getByTestId("detail-related").textContent).toContain("暂时无法读取相关作品"));
   });
 
@@ -352,7 +346,7 @@ describe("related works: on the work's own page now", () => {
     const host = installHost({ "works.get": () => detail(), ...workHomeBase });
     renderHome(["library", "comic"]);
     await waitFor(() => expect(screen.getByTestId("detail-title")).toBeTruthy());
-    expect(screen.queryByTestId("detail-tab-related")).toBeNull();
+    expect(screen.queryByTestId("detail-related")).toBeNull();
     expect(host.of("metadata.related")).toHaveLength(0);
   });
 });

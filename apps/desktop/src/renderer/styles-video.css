@@ -39,9 +39,9 @@
 .video-shell[data-idle] .video-controls { opacity: 0; pointer-events: none; }
 .video-shell[data-idle] .video-controls * { pointer-events: none !important; }
 .video-shell[data-idle] .video-stage { cursor: none; }
-/* In full screen (the screen's or the window's) the picture fills the shell and keeps its size; the controls float over it as glass, so showing or hiding
+/* In full screen (the screen's or the window's) the picture fills the shell and keeps its size; the controls float over it as dark translucent glass, so showing or hiding
    them never moves the picture. Only the dialogue of the subtitles is lifted above the bar (the player passes the bar's height to the subtitle layer). */
-.video-shell[data-full] .video-controls { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; background: var(--color-player-bar-overlay); backdrop-filter: blur(18px) saturate(1.3); }
+.video-shell[data-full] .video-controls { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; background: var(--color-player-bar-overlay); backdrop-filter: blur(18px) saturate(1.25); color-scheme: dark; --color-surface: var(--color-fullscreen-surface); --color-muted: var(--color-fullscreen-hover); --color-border: var(--color-fullscreen-border); --color-text: var(--color-fullscreen-ink); --color-subtle: var(--color-fullscreen-ink-muted); --color-accent: var(--color-fullscreen-accent); --color-accent-soft: var(--color-fullscreen-accent-soft); --color-primary-foreground: var(--color-fullscreen-surface); --color-focus: var(--color-fullscreen-accent); --color-danger-text: var(--color-fullscreen-danger-text); --color-player-bar: var(--color-fullscreen-surface); --color-player-ink: var(--color-fullscreen-ink-muted); --color-player-ink-strong: var(--color-fullscreen-ink); --color-player-hover: var(--color-fullscreen-hover); --color-player-line: var(--color-fullscreen-line); --color-player-track: var(--color-fullscreen-track); --color-player-buffer: var(--color-fullscreen-buffer); --color-player-progress: var(--color-fullscreen-accent); --color-player-selected: var(--color-fullscreen-accent-soft); --color-player-selected-ink: var(--color-fullscreen-accent); }
 .video-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
 .video-controls .icon-button, .video-controls .menu-button { color: var(--color-player-ink); }
 .video-controls .icon-button:hover:not(:disabled), .video-controls .menu-button:hover, .video-controls .menu-button[aria-expanded="true"] { background: var(--color-player-hover); color: var(--color-player-ink-strong); }
@@ -70,7 +70,7 @@ button.video-time:hover:not(:disabled) { border-color: var(--color-player-line);
 .video-controls .secondary-button:disabled { opacity: .4; }
 .video-controls .link-button { color: var(--color-player-selected-ink); }
 .video-interval { font-variant-numeric: tabular-nums; color: var(--color-player-selected-ink); }
-.video-input-error { color: var(--color-danger); font-size: 12px; }
+.video-input-error { color: var(--color-danger-text); font-size: 12px; }
 
 /* timeline */
 .video-seek { position: relative; height: 20px; display: flex; align-items: center; }

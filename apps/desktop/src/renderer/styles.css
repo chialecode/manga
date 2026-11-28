@@ -30,10 +30,22 @@
   --color-accent-deep: #84204D;
   --color-brand: #DE6C9B;
   --color-scroll: #C9CED9;
-  /* The window frame: the top of every column and the bars under the readers. It is the sidebar's gray, and a translucent version of it when the page fills the window. */
+  /* The window frame: the top of every column and the bars under the readers. When the page fills the window or screen, the floating bars switch to dark translucent glass (A-141). */
   --color-frame: #F3F4F7;
   --color-on-frame: #687184;
-  --color-frame-glass: #F3F4F7E6;
+  --color-frame-glass: #10141EC7;
+  /* Fullscreen and window-fullscreen floating chrome tokens: dark translucent frosted glass with readable ink over both dark scenes and white pages (A-141). */
+  --color-fullscreen-surface: #1B202C;
+  --color-fullscreen-border: #363F54;
+  --color-fullscreen-ink: #F3F5FA;
+  --color-fullscreen-ink-muted: #C8CFE0;
+  --color-fullscreen-accent: #F5A3C7;
+  --color-fullscreen-accent-soft: #422035;
+  --color-fullscreen-hover: #FFFFFF24;
+  --color-fullscreen-line: #FFFFFF24;
+  --color-fullscreen-track: #FFFFFF38;
+  --color-fullscreen-buffer: #FFFFFF66;
+  --color-fullscreen-danger-text: #FFA099;
   --color-glass-surface: rgba(255, 255, 255, 0.88);
   --color-glass-border: rgba(48, 54, 71, 0.14);
   --shadow-float: 0 12px 36px rgba(21, 25, 37, 0.24), 0 2px 8px rgba(21, 25, 37, 0.12);
@@ -108,10 +120,19 @@
   --color-scroll: #3E4556;
   --color-frame: #14171F;
   --color-on-frame: #9AA3B8;
-  --color-frame-glass: #14171FE6;
+  --color-frame-glass: #10141EC7;
   --color-glass-surface: rgba(31, 35, 46, 0.90);
   --color-glass-border: rgba(230, 233, 242, 0.16);
   --shadow-float: 0 14px 40px rgba(0, 0, 0, 0.48), 0 2px 10px rgba(0, 0, 0, 0.30);
+  --color-player-ink: #B8C0D4;
+  --color-player-ink-strong: #E6E9F2;
+  --color-player-hover: #2A2F3D;
+  --color-player-line: #343A4A;
+  --color-player-track: #343A4A;
+  --color-player-buffer: #4B5368;
+  --color-player-progress: #E27AA8;
+  --color-player-selected: #3A2230;
+  --color-player-selected-ink: #F49AC1;
   --color-sidebar: #1A1D27;
   --color-pill: #2C3140;
   --color-on-pill: #B6BED0;
