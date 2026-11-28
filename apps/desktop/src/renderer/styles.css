@@ -36,7 +36,6 @@
   --color-frame-glass: #10141EC7;
   /* Fullscreen and window-fullscreen floating chrome tokens: dark translucent frosted glass with readable ink over both dark scenes and white pages (A-141). */
   --color-fullscreen-surface: #1B202C;
-  --color-fullscreen-muted: #2A3142;
   --color-fullscreen-border: #363F54;
   --color-fullscreen-ink: #F3F5FA;
   --color-fullscreen-ink-muted: #C8CFE0;
