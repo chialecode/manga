@@ -111,6 +111,139 @@ export function speechBilledChars(text: string): number {
   return n;
 }
 
+function isAsciiAlpha(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isTagNameChar(code: number): boolean {
+  return isAsciiAlpha(code) || (code >= 48 && code <= 57) || code === 45 || code === 58;
+}
+
+function isAsciiSpace(code: number): boolean {
+  return code === 32 || code === 9 || code === 10 || code === 13 || code === 12;
+}
+
+/** Finds the index just past a matching `</tagName ...>` closing tag, or -1 if none is present. */
+function findClosingRawTagEnd(input: string, from: number, tagName: string): number {
+  const lower = input.toLowerCase();
+  const needle = `</${tagName}`;
+  let pos = from;
+  while (pos < lower.length) {
+    const idx = lower.indexOf(needle, pos);
+    if (idx === -1) return -1;
+    let j = idx + needle.length;
+    if (j < lower.length && !isAsciiSpace(lower.charCodeAt(j)) && lower.charCodeAt(j) !== 62 /* > */) {
+      pos = idx + 2;
+      continue;
+    }
+    while (j < lower.length && isAsciiSpace(lower.charCodeAt(j))) j += 1;
+    if (j < lower.length && lower.charCodeAt(j) === 62 /* > */) return j + 1;
+    pos = idx + 2;
+  }
+  return -1;
+}
+
+/** Single pass of a non-regex HTML tag scanner for plain-text speech cleanup. */
+function stripHtmlTagsPass(input: string): string {
+  let out = "";
+  let i = 0;
+  const len = input.length;
+  while (i < len) {
+    if (input.charCodeAt(i) !== 60 /* < */) {
+      out += input[i];
+      i += 1;
+      continue;
+    }
+    if (input.startsWith("<!--", i)) {
+      const commentEnd = input.indexOf("-->", i + 4);
+      if (commentEnd !== -1) {
+        i = commentEnd + 3;
+        continue;
+      }
+    }
+    let j = i + 1;
+    let isClosing = false;
+    if (j < len && input.charCodeAt(j) === 47 /* / */) {
+      isClosing = true;
+      j += 1;
+    }
+    if (j >= len || !isAsciiAlpha(input.charCodeAt(j))) {
+      out += "<";
+      i += 1;
+      continue;
+    }
+    const nameStart = j;
+    while (j < len && isTagNameChar(input.charCodeAt(j))) j += 1;
+    const tagName = input.slice(nameStart, j).toLowerCase();
+    if (j >= len) {
+      out += "<";
+      i += 1;
+      continue;
+    }
+    const afterName = input.charCodeAt(j);
+    if (afterName !== 62 /* > */ && afterName !== 47 /* / */ && !isAsciiSpace(afterName)) {
+      out += "<";
+      i += 1;
+      continue;
+    }
+    let quote = 0;
+    let firstGt = -1;
+    let closeIdx = -1;
+    let aborted = false;
+    for (let k = j; k < len; k += 1) {
+      const ch = input.charCodeAt(k);
+      if (quote !== 0) {
+        if (ch === quote) quote = 0;
+        else if (ch === 62 /* > */ && firstGt === -1) firstGt = k;
+        continue;
+      }
+      if (ch === 34 /* " */ || ch === 39 /* ' */) {
+        quote = ch;
+      } else if (ch === 60 /* < */) {
+        aborted = true;
+        break;
+      } else if (ch === 62 /* > */) {
+        closeIdx = k;
+        break;
+      }
+    }
+    if (closeIdx === -1 && !aborted && firstGt !== -1) {
+      closeIdx = firstGt;
+    }
+    if (closeIdx === -1) {
+      out += "<";
+      i += 1;
+      continue;
+    }
+    let selfClosing = false;
+    if (!isClosing) {
+      let prev = closeIdx - 1;
+      while (prev >= j && isAsciiSpace(input.charCodeAt(prev))) prev -= 1;
+      if (prev >= j && input.charCodeAt(prev) === 47 /* / */) selfClosing = true;
+    }
+    if (!isClosing && !selfClosing && (tagName === "script" || tagName === "style")) {
+      const blockEnd = findClosingRawTagEnd(input, closeIdx + 1, tagName);
+      if (blockEnd !== -1) {
+        i = blockEnd;
+        continue;
+      }
+    }
+    i = closeIdx + 1;
+  }
+  return out;
+}
+
+/** Iteratively strips inline HTML tags, comments, and `<script>`/`<style>` blocks without single-pass regexes. */
+function stripHtmlTagsForSpeech(input: string): string {
+  let current = input;
+  while (current.includes("<")) {
+    const next = stripHtmlTagsPass(current);
+    if (next === current) break;
+    current = next;
+  }
+  return current;
+}
+
 /**
  * Strips non-spoken Markdown artifacts before TTS splitting and billing:
  * fenced code blocks, markdown tables, display math blocks, inline `[citation:N]` tags, raw URLs,
@@ -135,8 +268,8 @@ export function stripMarkdownForSpeech(text: string): string {
   // Strip raw URLs and bare www links.
   out = out.replace(/\bhttps?:\/\/[^\s<>()[\]"'。，、；：！？]+/gi, "");
   out = out.replace(/\bwww\.[^\s<>()[\]"'。，、；：！？]+/gi, "");
-  // Strip inline HTML tags.
-  out = out.replace(/<\/?[a-z][a-z0-9-]*(?:\s+[^>]*)?>/gi, "");
+  // Strip inline HTML tags iteratively using a character scanner (no single-pass tag regex).
+  out = stripHtmlTagsForSpeech(out);
   // Strip horizontal rules.
   out = out.replace(/(^|\n)[ \t]*(?:[-*_][ \t]*){3,}(?=\n|$)/g, "\n");
   // Strip heading markers, blockquote prefixes, and list bullets/checkboxes.

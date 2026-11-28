@@ -166,13 +166,79 @@ async function loadMermaid(): Promise<MermaidApi> {
   return mermaidLoader;
 }
 
-/** Strips `<img` and `<image` tags from generated SVG as defense-in-depth against external resource fetches. */
+const FORBIDDEN_SVG_TAGS = new Set([
+  "script",
+  "img",
+  "image",
+  "iframe",
+  "object",
+  "embed",
+]);
+
+const SVG_URL_ATTRS = new Set(["href", "xlink:href", "src"]);
+
+function hasUnsafeSvgUrl(value: string): boolean {
+  const trimmed = value.trim();
+  let normalized = "";
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const code = trimmed.charCodeAt(i);
+    // Ignore ASCII control chars and spaces so obfuscated schemes like `java\tscript:` are caught.
+    if (code <= 0x20 || code === 0x7f) continue;
+    normalized += trimmed[i]!.toLowerCase();
+  }
+  return (
+    normalized.startsWith("javascript:")
+    || normalized.startsWith("vbscript:")
+    || normalized.startsWith("data:text/html")
+    || normalized.startsWith("data:image/svg+xml")
+  );
+}
+
+/**
+ * Sanitizes generated Mermaid SVG via XML DOM parsing (`image/svg+xml`), stripping dangerous
+ * elements (`script`, `img`, `image`, `iframe`, `object`, `embed`), inline `on*` event handlers,
+ * and unsafe URL protocols while preserving `<foreignObject>` labels. Returns `""` on parse failure.
+ */
 export function sanitizeMermaidSvg(svg: string): string {
-  return svg
-    .replace(/<image\b[^>]*>[\s\S]*?<\/image>/gi, "")
-    .replace(/<image\b[^>]*\/?>/gi, "")
-    .replace(/<img\b[^>]*\/?>/gi, "")
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  if (!svg || typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") return "";
+  let doc: Document;
+  try {
+    doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  } catch {
+    return "";
+  }
+  if (doc.getElementsByTagName("parsererror").length > 0 || doc.getElementsByTagNameNS("*", "parsererror").length > 0) {
+    return "";
+  }
+  const root = doc.documentElement;
+  if (!root || (root.localName || root.tagName).toLowerCase() !== "svg") return "";
+
+  const stack: Element[] = [root];
+  while (stack.length > 0) {
+    const el = stack.pop()!;
+    const local = (el.localName || el.tagName).toLowerCase();
+    if (local === "parsererror") return "";
+    if (FORBIDDEN_SVG_TAGS.has(local)) {
+      el.parentNode?.removeChild(el);
+      continue;
+    }
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const attrLocal = (attr.localName || attr.name).toLowerCase();
+      if (name.startsWith("on") || attrLocal.startsWith("on")) {
+        el.removeAttributeNode(attr);
+        continue;
+      }
+      if ((SVG_URL_ATTRS.has(name) || SVG_URL_ATTRS.has(attrLocal)) && hasUnsafeSvgUrl(attr.value)) {
+        el.removeAttributeNode(attr);
+      }
+    }
+    for (const child of Array.from(el.childNodes)) {
+      if (child.nodeType === 1) stack.push(child as Element);
+    }
+  }
+
+  return new XMLSerializer().serializeToString(root);
 }
 
 function enqueueMermaidRender(id: string, code: string, dark: boolean): Promise<string> {

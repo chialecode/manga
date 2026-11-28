@@ -370,6 +370,23 @@ describe("DeepSeek standalone tools: search, fetch, OCR, balance, pre-TTS markdo
     expect(cleaned).not.toContain("| 列A |");
     expect(cleaned).not.toContain("E = mc^2");
     expect(cleaned).not.toContain("**");
+
+    // Iterative HTML stripping removes nested tags, whitespace end tags, comments, and `<script>` blocks
+    // while keeping plain text and math inequalities intact.
+    const htmlDirty = [
+      '保留<b>强调</b>与<span data-x="1 > 0">短语</span><br/>',
+      "前缀 <scr<script></script>ipt>中间</script > 后缀",
+      "<script>alert(1)</script > <!-- 隐藏注释 --> a < b 且 1 < 2",
+    ].join("\n");
+    const htmlClean = stripMarkdownForSpeech(htmlDirty);
+    expect(htmlClean).toContain("保留强调与短语");
+    expect(htmlClean).toContain("前缀 中间 后缀");
+    expect(htmlClean).toContain("a < b 且 1 < 2");
+    expect(htmlClean).not.toContain("<script");
+    expect(htmlClean).not.toContain("</script");
+    expect(htmlClean).not.toContain("alert(1)");
+    expect(htmlClean).not.toContain("隐藏注释");
+    expect(htmlClean).not.toMatch(/<\/?(?:b|span|br|script)\b/i);
   });
 
   it("streams 24 kHz 16-bit PCM incrementally over WebSocket TTS with odd-byte sample alignment", async () => {

@@ -129,18 +129,50 @@ describe("pre-TTS markdown stripping, voice selection, and streaming WebSocket T
     closers.push(() => upstream.close());
 
     // Local proxy forwards HTTP POST /v1/tools/tts to upstream, but rejects WebSocket upgrades with 501.
+    const upstreamUrl = new URL(upstream.url);
+    const allowedPaths = new Map<string, string>([
+      ["/v1/tools/tts", "/v1/tools/tts"],
+      ["/v1/models", "/v1/models"],
+    ]);
     const proxy = http.createServer((req, res) => {
       const bodyChunks: Buffer[] = [];
       req.on("data", (c: Buffer) => bodyChunks.push(c));
       req.on("end", () => {
+        const reqPath = typeof req.url === "string" ? req.url : "";
+        if (!reqPath.startsWith("/") || reqPath.startsWith("//")) {
+          res.writeHead(400);
+          res.end("invalid path");
+          return;
+        }
+        const targetPath = allowedPaths.get(reqPath);
+        if (!targetPath) {
+          res.writeHead(404);
+          res.end("not found");
+          return;
+        }
+        const method = req.method === "POST" ? "POST" : req.method === "GET" ? "GET" : null;
+        if (!method) {
+          res.writeHead(405);
+          res.end("method not allowed");
+          return;
+        }
         const headers: Record<string, string | string[]> = {};
         for (const [k, v] of Object.entries(req.headers)) {
           if (k.toLowerCase() !== "host" && v !== undefined) headers[k] = v;
         }
-        const fwd = http.request(new URL(req.url ?? "/", upstream.url), { method: req.method, headers }, (upRes) => {
-          res.writeHead(upRes.statusCode ?? 500, upRes.headers);
-          upRes.pipe(res);
-        });
+        const fwd = http.request(
+          {
+            hostname: upstreamUrl.hostname,
+            port: upstreamUrl.port,
+            path: targetPath,
+            method,
+            headers,
+          },
+          (upRes) => {
+            res.writeHead(upRes.statusCode ?? 500, upRes.headers);
+            upRes.pipe(res);
+          },
+        );
         fwd.on("error", (err) => { res.writeHead(502); res.end(String(err)); });
         fwd.end(Buffer.concat(bodyChunks));
       });

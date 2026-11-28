@@ -123,7 +123,38 @@ describe("Chat Markdown, Code, Math, Mermaid, and Citations", () => {
     expect(clean).not.toContain("<image");
     expect(clean).not.toContain("<img");
     expect(clean).not.toContain("<script");
-    expect(clean).toContain("<rect/>");
+    expect(clean).toContain("<rect");
+
+    // Nested/malformed script injection fails XML parse safely -> empty fallback.
+    expect(sanitizeMermaidSvg("<svg><scr<script></script>ipt>alert(1)</script><rect/></svg>")).toBe("");
+    // Unclosed HTML <img> fails XML parse safely -> empty fallback.
+    expect(sanitizeMermaidSvg('<svg><img src="https://evil.example/track.png"><rect/></svg>')).toBe("");
+
+    // Script end tag with trailing whitespace (`</script >`), forbidden embeds, inline `on*` handlers,
+    // unsafe `href`/`xlink:href`/`src` protocols, and `<img>` inside `<foreignObject>` are all stripped while
+    // preserving safe `<foreignObject>` HTML labels and internal `#ref` links.
+    const complex = [
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" onload="alert(1)">',
+      "<script>alert(1)</script >",
+      '<iframe src="https://evil.example/f"/><object data="x"/><embed src="y"/>',
+      '<g onclick="evil()">',
+      '<a href=" &#x09;&#x0a;javascript:alert(1)" xlink:href="vbscript:msgbox(1)"><text>bad</text></a>',
+      '<a href="data:text/html,&lt;svg/&gt;"><text>data</text></a>',
+      '<use href="#arrow"/>',
+      '<foreignObject width="120" height="40"><div xmlns="http://www.w3.org/1999/xhtml" onmouseover="x()"><img src="https://evil.example/p.png"/><span>节点标签</span></div></foreignObject>',
+      "<rect/>",
+      "</g>",
+      "</svg>",
+    ].join("");
+    const sanitized = sanitizeMermaidSvg(complex);
+    expect(sanitized).not.toMatch(/<(?:script|img|image|iframe|object|embed)\b/i);
+    expect(sanitized).not.toMatch(/\bon(?:load|click|mouseover)\s*=/i);
+    expect(sanitized).not.toMatch(/javascript:|vbscript:|data:text\/html/i);
+    expect(sanitized).not.toContain("alert(1)");
+    expect(sanitized).toContain("<foreignObject");
+    expect(sanitized).toContain("节点标签");
+    expect(sanitized).toContain('href="#arrow"');
+    expect(sanitized).toContain("<rect");
   });
 
   it("parses inline and display LLM math delimiters ($...$, \\(...\\), \\[...\\]) and preserves last-valid HTML while streaming", async () => {

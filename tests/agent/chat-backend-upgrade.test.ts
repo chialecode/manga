@@ -348,14 +348,50 @@ describe("Enriched StreamAgent, DeepSeek product capabilities, and agent run com
     // Wrap mock DeepSeek behind a deterministic local proxy that expires uploaded file_id ONCE on the first chat request.
     const upstream = await startMockDeepSeek({ key: PROVIDER_KEY, answer: "已读取附件内容。" });
     closers.push(() => upstream.close());
+    const upstreamUrl = new URL(upstream.url);
+    const allowedStaticPaths = new Map<string, string>([
+      ["/v1/files", "/v1/files"],
+      ["/v1/chat/completions", "/v1/chat/completions"],
+      ["/chat/completions", "/chat/completions"],
+      ["/v1/models", "/v1/models"],
+      ["/models", "/models"],
+    ]);
+    const seenFileIds = new Set<string>();
     let expiredOnce = false;
     const proxy = http.createServer((req, res) => {
       const chunks: Buffer[] = [];
       req.on("data", (c: Buffer) => chunks.push(c));
       req.on("end", () => {
         const raw = Buffer.concat(chunks);
-        const urlPath = req.url ?? "/";
-        if (!expiredOnce && req.method === "POST" && urlPath.endsWith("/chat/completions") && upstream.files.size > 0) {
+        const reqPath = typeof req.url === "string" ? req.url : "";
+        if (!reqPath.startsWith("/") || reqPath.startsWith("//")) {
+          res.writeHead(400);
+          res.end("invalid path");
+          return;
+        }
+        const method = req.method === "POST" ? "POST" : req.method === "DELETE" ? "DELETE" : req.method === "GET" ? "GET" : null;
+        if (!method) {
+          res.writeHead(405);
+          res.end("method not allowed");
+          return;
+        }
+        for (const id of upstream.files.keys()) seenFileIds.add(id);
+        let targetPath = allowedStaticPaths.get(reqPath);
+        if (!targetPath) {
+          for (const knownId of seenFileIds) {
+            const candidate = `/v1/files/${knownId}`;
+            if (reqPath === candidate) {
+              targetPath = candidate;
+              break;
+            }
+          }
+        }
+        if (!targetPath) {
+          res.writeHead(404);
+          res.end("not found");
+          return;
+        }
+        if (!expiredOnce && method === "POST" && targetPath.endsWith("/chat/completions") && upstream.files.size > 0) {
           expiredOnce = true;
           // Force the mock server to reject with 400 expired file_id on attempt 1!
           upstream.files.clear();
@@ -364,11 +400,19 @@ describe("Enriched StreamAgent, DeepSeek product capabilities, and agent run com
         for (const [k, v] of Object.entries(req.headers)) {
           if (k.toLowerCase() !== "host" && v !== undefined) headers[k] = v;
         }
-        const target = new URL(urlPath, upstream.url);
-        const fwd = http.request(target, { method: req.method, headers }, (upRes) => {
-          res.writeHead(upRes.statusCode ?? 500, upRes.headers);
-          upRes.pipe(res);
-        });
+        const fwd = http.request(
+          {
+            hostname: upstreamUrl.hostname,
+            port: upstreamUrl.port,
+            path: targetPath,
+            method,
+            headers,
+          },
+          (upRes) => {
+            res.writeHead(upRes.statusCode ?? 500, upRes.headers);
+            upRes.pipe(res);
+          },
+        );
         fwd.on("error", (err) => { res.writeHead(502); res.end(String(err)); });
         fwd.end(raw);
       });
