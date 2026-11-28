@@ -48,7 +48,7 @@ export function isSafeExternalUrl(url: string | null | undefined): url is string
 
 function resourceProgressOf(resource: WorkResourceRow): { percent: number; completed: boolean } {
   const raw = resource.progress as unknown;
-  if (typeof raw === "number") {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
     const pct = percentOf(raw);
     const completed = (resource as { completionState?: string }).completionState === "completed" || pct >= 100;
     return { percent: completed ? 100 : pct, completed };
@@ -56,7 +56,7 @@ function resourceProgressOf(resource: WorkResourceRow): { percent: number; compl
   if (raw && typeof raw === "object") {
     const obj = raw as { percent?: number; completion?: string };
     const completed = obj.completion === "completed";
-    const pct = typeof obj.percent === "number" ? percentOf(obj.percent) : 0;
+    const pct = typeof obj.percent === "number" && Number.isFinite(obj.percent) ? percentOf(obj.percent) : 0;
     return { percent: completed ? 100 : pct, completed };
   }
   return { percent: 0, completed: false };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowLeft, MoreHorizontal, Pencil, Play } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { AddToProject } from "../components/add-to-project.tsx";
@@ -7,7 +7,7 @@ import { useAsyncGuard } from "../hooks/use-async-guard.ts";
 import { asArray, attempt } from "../lib/api.ts";
 import { coverMeta, forgetCover, useCovers } from "../lib/covers.ts";
 import { useWorkDetail, type CoverSummary } from "../lib/use-work-detail.ts";
-import { SHELF_ORDER, formatContextPosition, percentOf, type Facets, type ProjectedField, type ShelfState, type WorkMediaKind } from "../lib/works.ts";
+import { SHELF_ORDER, formatContextPosition, percentOf, type Facets, type ProjectedField, type ShelfState, type WorkDetail, type WorkMediaKind } from "../lib/works.ts";
 import { DeleteEntryDialog } from "./delete-entry-dialog.tsx";
 import { MoveDialog } from "./move-resource-dialog.tsx";
 import { ResourceContent } from "./resource-content.tsx";
@@ -72,7 +72,9 @@ export function WorkHome(props: {
   const metadataOn = props.facets.has("metadata");
   const voiceOn = props.facets.has("voice");
   const state = useWorkDetail(props.workId, { metadata: metadataOn, voice: voiceOn });
-  const { detail } = state;
+  // Guard against stale detail from the previous workId during the render before useWorkDetail's reset effect commits.
+  const detail = state.detail && state.detail.id === props.workId ? state.detail : null;
+  const tabsId = useId();
   const [tab, setTab] = useState<WorkTab>("overview");
   const [editMode, setEditMode] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -154,7 +156,7 @@ export function WorkHome(props: {
     if (!result.ok) { props.onError(result.error.message); return false; }
     return true;
   }
-  async function changed() { await state.reload(); props.onChanged(); }
+  async function changed(): Promise<WorkDetail | null> { const next = await state.reload(); props.onChanged(); return next; }
 
   async function chooseCover(cover: CoverSummary) { if (await act("covers.select", { workId: props.workId, coverId: cover.id })) { forgetCover(cover.id); await changed(); } }
   async function lockCover() { if (await act("covers.lock", { workId: props.workId, locked: state.covers?.state !== "locked" })) await changed(); }
@@ -372,11 +374,12 @@ export function WorkHome(props: {
               <button
                 key={item.id}
                 ref={(node) => { tabRefs.current[item.id] = node; }}
-                id={`work-tab-${item.id}`}
+                id={`${tabsId}-tab-${item.id}`}
                 type="button"
                 role="tab"
+                tabIndex={tab === item.id ? 0 : -1}
                 aria-selected={tab === item.id}
-                aria-controls={`work-panel-${item.id}`}
+                aria-controls={`${tabsId}-panel-${item.id}`}
                 data-testid={`detail-tab-${item.id}`}
                 onClick={() => setTab(item.id)}
                 onKeyDown={(event) => onTabKeyDown(event, index)}
@@ -386,7 +389,7 @@ export function WorkHome(props: {
             ))}
           </div>
 
-          <div role="tabpanel" id={`work-panel-${tab}`} aria-labelledby={`work-tab-${tab}`} className="work-tab-panel">
+          <div role="tabpanel" id={`${tabsId}-panel-${tab}`} aria-labelledby={`${tabsId}-tab-${tab}`} className="work-tab-panel">
             {tab === "overview" ? (
               <WorkOverviewTab
                 key={detail.id}
@@ -447,9 +450,14 @@ export function WorkHome(props: {
               onOpenExternal={external}
               onError={props.onError}
               onApplied={(message) => {
+                const prevKey = linkedKey;
                 setMatch(null);
                 props.onNotice(message);
-                void changed().then(() => { if (metadataOn) void loadCredits(); });
+                void changed().then((next) => {
+                  const nextLinked = next?.linkedSource ?? null;
+                  const nextKey = nextLinked ? `${nextLinked.providerId}:${nextLinked.externalId}:${nextLinked.fetchedAt ?? ""}` : "";
+                  if (metadataOn && nextKey && nextKey === prevKey) void loadCredits();
+                });
               }}
             />
           ) : null}

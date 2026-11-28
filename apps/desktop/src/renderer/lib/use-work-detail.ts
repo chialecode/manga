@@ -19,7 +19,7 @@ export type DetailState = {
   relatedStatus: "idle" | "loading" | "ready" | "off" | "error";
   notes: NoteRow[];
   captures: CaptureRow[];
-  reload: () => Promise<void>;
+  reload: () => Promise<WorkDetail | null>;
 };
 
 /**
@@ -37,11 +37,11 @@ export function useWorkDetail(workId: string, options: { metadata: boolean; voic
   const [captures, setCaptures] = useState<CaptureRow[]>([]);
   const token = useRef(0);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (): Promise<WorkDetail | null> => {
     const mine = ++token.current;
     const core = await attempt<WorkDetail>("works.get", { workId });
-    if (mine !== token.current) return;
-    if (!core.ok) { setStatus("error"); setError(core.error.message); return; }
+    if (mine !== token.current) return null;
+    if (!core.ok) { setStatus("error"); setError(core.error.message); return null; }
     setDetail(core.value);
     setStatus("ready");
     setError(undefined);
@@ -90,6 +90,7 @@ export function useWorkDetail(workId: string, options: { metadata: boolean; voic
         setCaptures(value);
       });
     }
+    return core.value;
   }, [workId, options.metadata, options.voice]);
 
   useEffect(() => {

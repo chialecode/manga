@@ -434,6 +434,70 @@ describe("work home unified Bangumi layout", () => {
     expect(screen.queryByTestId("work-episode-grid")).toBeNull();
     expect(host.of("metadata.characters")).toHaveLength(0);
   });
+
+  it("does not fire metadata.characters for a newly navigated unlinked work, and gives split-screen panes unique tab/panel IDs with roving tabindex", async () => {
+    const host = installHost({
+      "works.get": (input) => (input.workId === "wv_bgm"
+        ? bangumiDetail({ id: "wv_bgm" })
+        : bangumiDetail({
+          id: "wv_unlinked",
+          title: "未关联续作",
+          linked: false,
+          linkedSource: null,
+          fields: { title: field("未关联续作", "filename") },
+          resources: [makeResource(1, { progress: { percent: Number.NaN, completion: "new", locator: null, lastInteractionAt: null, contextId: null, contextName: null } })],
+        })),
+      "metadata.characters": () => ({
+        source: { providerId: "bangumi", fetchedAt: "2026-10-01T00:00:00.000Z" },
+        characters: [{ id: "c1", name: "芙莉莲", relation: "主角", summary: "", avatar: null, actors: [] }],
+        persons: [],
+        avatarLimit: 20,
+      }),
+      "metadata.related": () => ({ workId: "wv_bgm", source: null, relations: [], similar: [] }),
+    });
+
+    const props = (workId: string) => ({
+      t,
+      workId,
+      facets: new Set(["library", "video", "metadata"]),
+      formatDate: i18n.formatDate,
+      onBack: () => undefined,
+      onOpenResource: () => undefined,
+      onOpenNote: () => undefined,
+      onOpenWork: () => undefined,
+      onChanged: () => undefined,
+      onError: () => undefined,
+      onNotice: () => undefined,
+    });
+
+    const { rerender } = render(<WorkHome {...props("wv_bgm")} />);
+    await waitFor(() => expect(screen.getByTestId("character-c1")).toBeTruthy());
+    expect(host.of("metadata.characters").map((call) => call.input.workId)).toEqual(["wv_bgm"]);
+
+    // Switching the mounted WorkHome from a linked work to an unlinked work must NOT trigger a spurious credits fetch for the unlinked work.
+    rerender(<WorkHome {...props("wv_unlinked")} />);
+    await waitFor(() => expect(screen.getByTestId("detail-title").textContent).toBe("未关联续作"));
+    expect(host.of("metadata.characters").map((call) => call.input.workId)).toEqual(["wv_bgm"]);
+    // Malformed NaN progress renders safely as 0%, never NaN%.
+    expect(screen.getByTestId("detail-resource-res_1").textContent).toContain("0%");
+    expect(screen.getByTestId("detail-resource-res_1").textContent).not.toContain("NaN");
+
+    // Two WorkHome panes mounted side by side (split-screen) have unique tab/panel IDs and roving tabindex.
+    cleanup();
+    render(
+      <div>
+        <WorkHome {...props("wv_bgm")} />
+        <WorkHome {...props("wv_unlinked")} />
+      </div>,
+    );
+    await waitFor(() => expect(screen.getAllByTestId("detail-tab-overview")).toHaveLength(2));
+    const overviewTabs = screen.getAllByTestId("detail-tab-overview");
+    const recordsTabs = screen.getAllByTestId("detail-tab-records");
+    expect(overviewTabs[0]!.id).not.toBe(overviewTabs[1]!.id);
+    expect(overviewTabs[0]!.getAttribute("aria-controls")).not.toBe(overviewTabs[1]!.getAttribute("aria-controls"));
+    expect(overviewTabs[0]!.getAttribute("tabindex")).toBe("0");
+    expect(recordsTabs[0]!.getAttribute("tabindex")).toBe("-1");
+  });
 });
 
 // ---- the match dialog -------------------------------------------------------------------------------------
