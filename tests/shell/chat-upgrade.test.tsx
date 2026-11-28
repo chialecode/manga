@@ -139,7 +139,9 @@ describe("Chat Markdown, Code, Math, Mermaid, and Citations", () => {
       '<iframe src="https://evil.example/f"/><object data="x"/><embed src="y"/>',
       '<g onclick="evil()">',
       '<a href=" &#x09;&#x0a;javascript:alert(1)" xlink:href="vbscript:msgbox(1)"><text>bad</text></a>',
-      '<a href="data:text/html,&lt;svg/&gt;"><text>data</text></a>',
+      '<a href="data:text/html,&lt;svg/&gt;" xlink:href=" &#x09;data:image/svg+xml,&lt;svg/&gt;"><text>data-html</text></a>',
+      '<a href="data:text/plain;base64,SGVsbG8=" xlink:href="file:///etc/passwd"><text>data-any</text></a>',
+      '<a href="https://example.com/docs"><text>safe-link</text></a>',
       '<use href="#arrow"/>',
       '<foreignObject width="120" height="40"><div xmlns="http://www.w3.org/1999/xhtml" onmouseover="x()"><img src="https://evil.example/p.png"/><span>节点标签</span></div></foreignObject>',
       "<rect/>",
@@ -149,11 +151,12 @@ describe("Chat Markdown, Code, Math, Mermaid, and Citations", () => {
     const sanitized = sanitizeMermaidSvg(complex);
     expect(sanitized).not.toMatch(/<(?:script|img|image|iframe|object|embed)\b/i);
     expect(sanitized).not.toMatch(/\bon(?:load|click|mouseover)\s*=/i);
-    expect(sanitized).not.toMatch(/javascript:|vbscript:|data:text\/html/i);
+    expect(sanitized).not.toMatch(/javascript:|vbscript:|data:|file:/i);
     expect(sanitized).not.toContain("alert(1)");
     expect(sanitized).toContain("<foreignObject");
     expect(sanitized).toContain("节点标签");
     expect(sanitized).toContain('href="#arrow"');
+    expect(sanitized).toContain('href="https://example.com/docs"');
     expect(sanitized).toContain("<rect");
   });
 

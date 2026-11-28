@@ -177,27 +177,31 @@ const FORBIDDEN_SVG_TAGS = new Set([
 
 const SVG_URL_ATTRS = new Set(["href", "xlink:href", "src"]);
 
-function hasUnsafeSvgUrl(value: string): boolean {
+function isSafeSvgUrl(value: string): boolean {
   const trimmed = value.trim();
   let normalized = "";
   for (let i = 0; i < trimmed.length; i += 1) {
     const code = trimmed.charCodeAt(i);
-    // Ignore ASCII control chars and spaces so obfuscated schemes like `java\tscript:` are caught.
+    // Strip ASCII control chars and spaces so obfuscated schemes cannot bypass the allowlist.
     if (code <= 0x20 || code === 0x7f) continue;
     normalized += trimmed[i]!.toLowerCase();
   }
+  if (!normalized) return false;
+  // Explicit allowlist: internal SVG fragment references and safe external links only.
+  // Rejects all other schemes (including `javascript:`, `vbscript:`, `data:`, `file:`, `blob:`).
   return (
-    normalized.startsWith("javascript:")
-    || normalized.startsWith("vbscript:")
-    || normalized.startsWith("data:text/html")
-    || normalized.startsWith("data:image/svg+xml")
+    normalized.startsWith("#")
+    || normalized.startsWith("https://")
+    || normalized.startsWith("http://")
+    || normalized.startsWith("mailto:")
   );
 }
 
 /**
  * Sanitizes generated Mermaid SVG via XML DOM parsing (`image/svg+xml`), stripping dangerous
  * elements (`script`, `img`, `image`, `iframe`, `object`, `embed`), inline `on*` event handlers,
- * and unsafe URL protocols while preserving `<foreignObject>` labels. Returns `""` on parse failure.
+ * and non-allowlisted URL attributes (allowing only `#` fragment refs and `https://`/`http://`/`mailto:`)
+ * while preserving `<foreignObject>` labels. Returns `""` on parse failure.
  */
 export function sanitizeMermaidSvg(svg: string): string {
   if (!svg || typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") return "";
@@ -229,7 +233,7 @@ export function sanitizeMermaidSvg(svg: string): string {
         el.removeAttributeNode(attr);
         continue;
       }
-      if ((SVG_URL_ATTRS.has(name) || SVG_URL_ATTRS.has(attrLocal)) && hasUnsafeSvgUrl(attr.value)) {
+      if ((SVG_URL_ATTRS.has(name) || SVG_URL_ATTRS.has(attrLocal)) && !isSafeSvgUrl(attr.value)) {
         el.removeAttributeNode(attr);
       }
     }
