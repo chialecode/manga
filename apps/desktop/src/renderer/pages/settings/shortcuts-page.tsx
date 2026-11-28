@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { KEY_ACTIONS, MAX_CHORDS, chordLabel, chordOf, conflictsWith, keyAction, type KeyGroup, type RecordingKeyPair } from "@manga/contracts/keys";
 import type { MessageKey, Translator } from "@manga/i18n";
 import type { useKeyBindings } from "../../hooks/use-key-bindings.ts";
+import { isContextDebugEnabled } from "../../lib/api.ts";
 import { keyLabel } from "../settings-media.tsx";
 import { SettingsPage, SettingsRow, SettingsSection } from "./rows.tsx";
 
@@ -91,19 +92,21 @@ function ActionRow(props: { t: T; id: string; keys: KeyBindings; recording: Reco
  * Settings › Shortcuts (A-78, Q-26): every key of the readers and the window, grouped by reader, from the same table the key handling reads.
  * A key is added by clicking Add and pressing it; a key two actions would share is refused with the name of the action that has it.
  */
-export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: RecordingKeyPair; onGoto: () => void }) {
+export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: RecordingKeyPair; showDebug?: boolean; onGoto: () => void }) {
   const { t, keys } = props;
+  const showDebug = props.showDebug ?? isContextDebugEnabled();
   const [adding, setAdding] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const changed = Object.keys(keys.overrides).length;
+  const visibleOverrideIds = Object.keys(keys.overrides).filter((id) => showDebug || id !== "global.debug");
+  const changed = visibleOverrideIds.length;
 
   const resetAll = () => {
     const withDefaults = { ...keys.table };
-    for (const id of Object.keys(keys.overrides)) {
+    for (const id of visibleOverrideIds) {
       const entry = keyAction(id);
       if (entry) withDefaults[id] = [...entry.defaults];
     }
-    for (const id of Object.keys(keys.overrides)) {
+    for (const id of visibleOverrideIds) {
       const entry = keyAction(id);
       if (!entry) continue;
       for (const chord of entry.defaults) {
@@ -114,7 +117,7 @@ export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: Recor
         }
       }
     }
-    void keys.save(Object.fromEntries(Object.keys(keys.overrides).map((id) => [id, null]))).then((refused) => setMessage(refused ? t("shortcuts.refused", { reason: refused }) : ""));
+    void keys.save(Object.fromEntries(visibleOverrideIds.map((id) => [id, null]))).then((refused) => setMessage(refused ? t("shortcuts.refused", { reason: refused }) : ""));
   };
 
   return (
@@ -134,7 +137,7 @@ export function ShortcutsPage(props: { t: T; keys: KeyBindings; recording: Recor
           testId={`shortcuts-${group}`}
           actions={position === 0 ? <button type="button" className="secondary-button" data-testid="keys-reset-all" disabled={changed === 0} onClick={resetAll}>{t("shortcuts.resetAll")}</button> : undefined}
         >
-          {KEY_ACTIONS.filter((entry) => entry.group === group).map((entry) => (
+          {KEY_ACTIONS.filter((entry) => entry.group === group && (showDebug || entry.id !== "global.debug")).map((entry) => (
             <ActionRow key={entry.id} t={t} id={entry.id} keys={keys} recording={props.recording} adding={adding} setAdding={setAdding} message={setMessage} />
           ))}
         </SettingsSection>

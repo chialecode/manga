@@ -1,5 +1,5 @@
 /** The renderer's one door to the main process: typed `window.manga`, and `call` for commands that throw on failure. */
-import type { BuildInfo } from "@manga/contracts";
+import type { BuildInfo, Channel } from "@manga/contracts";
 import { announceCommand } from "./lists-changed.ts";
 
 export type CommandResult<T = Record<string, unknown>> = {
@@ -50,6 +50,8 @@ export type OverlayState = {
 export type WindowControlsState = { controls: boolean; maximized: boolean };
 
 export interface MangaHost {
+  /** Build channel supplied synchronously by preload from launch metadata, available before `state()` resolves. */
+  readonly channel?: Channel;
   command(payload: { commandId: string; idempotencyKey: string; input: unknown }): Promise<CommandResult>;
   state(): Promise<HostState>;
   chooseDirectory(): Promise<string | null>;
@@ -128,3 +130,21 @@ export const messageOf = (error: unknown): string => error instanceof Error ? er
 
 /** A module that is turned off answers with this code; pages show their "turned off" state instead of an error. */
 export const isModuleOff = (error: unknown): boolean => error instanceof CommandError && (error.code === "CAPABILITY_UNAVAILABLE" || error.code === "COMMAND_UNAVAILABLE" || error.code === "UNKNOWN_COMMAND");
+
+/**
+ * Effective build channel for renderer UI gates: prefers authoritative `host` state (supports dynamic channel switches),
+ * falls back to preload's synchronous `window.manga.channel` (prevents startup flash in release builds), and defaults
+ * to `"development"` when neither is present (e.g. isolated component unit tests without `build.json`).
+ */
+export function effectiveChannel(host?: Pick<HostState, "buildInfo" | "layout"> | null): string {
+  const fromHost = host?.buildInfo?.channel ?? host?.layout?.channel;
+  if (fromHost) return fromHost;
+  const fromPreload = typeof window !== "undefined" ? window.manga?.channel : undefined;
+  if (fromPreload) return fromPreload;
+  return "development";
+}
+
+/** Context debug controls (titlebar beetle button, Ctrl+Shift+D, DebugPanel, shortcut row) are enabled outside `release`. */
+export function isContextDebugEnabled(host?: Pick<HostState, "buildInfo" | "layout"> | null): boolean {
+  return effectiveChannel(host) !== "release";
+}

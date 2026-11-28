@@ -10,7 +10,17 @@ ipcRenderer.on("manga:save-now", (_event: unknown, token: string) => {
   });
 });
 
+const CHANNEL_ARG = "--manga-channel=";
+const VALID_CHANNELS = new Set(["release", "development", "test"]);
+function readPreloadChannel(): "release" | "development" | "test" | undefined {
+  if (typeof process === "undefined" || !Array.isArray(process.argv)) return undefined;
+  const raw = process.argv.find((arg) => arg.startsWith(CHANNEL_ARG))?.slice(CHANNEL_ARG.length);
+  return raw && VALID_CHANNELS.has(raw) ? (raw as "release" | "development" | "test") : undefined;
+}
+const preloadChannel = readPreloadChannel();
+
 contextBridge.exposeInMainWorld("manga", {
+  ...(preloadChannel ? { channel: preloadChannel } : {}),
   command: (payload: unknown) => ipcRenderer.invoke("manga:command", payload),
   state: () => ipcRenderer.invoke("manga:state"),
   chooseDirectory: () => ipcRenderer.invoke("manga:choose-directory"),

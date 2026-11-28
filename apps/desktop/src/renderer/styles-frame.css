@@ -9,6 +9,7 @@
 /* The right end of the title bar (A-136): the state and debugging switches, the stop button, the dock's switch, the window's own buttons. */
 .title-end { display: flex; align-items: center; align-self: stretch; gap: 8px; flex: 0 0 auto; height: 100%; }
 .title-end > [data-testid="shell-title-actions"] { align-self: center; }
+.title-end > [data-testid="shell-title-actions"]:empty { display: none; }
 .shell-top .shell-icon, .shell-top .menu-button, .title-end .shell-icon, .rail-top .shell-icon { width: 28px; height: 28px; }
 .titlebar-menu { display: inline-flex; }
 .titlebar-menu .menu-button { width: auto; height: 28px; padding: 0 8px; justify-content: center; border-radius: 6px; color: var(--color-on-frame); }
