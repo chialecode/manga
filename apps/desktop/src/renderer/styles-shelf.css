@@ -1,6 +1,6 @@
 /* ---- shared controls -------------------------------------------------- */
 .primary-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border-radius: 9px; font-size: 13px; white-space: nowrap; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); }
-.primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-primary-foreground); }
+.primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-primary-foreground); text-shadow: none; }
 .secondary-button:hover:not(:disabled) { background: var(--color-muted); }
 .primary-button:hover:not(:disabled) { filter: brightness(1.06); }
 .link-button { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--color-subtle); }
@@ -9,7 +9,7 @@
 .menu-button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border-radius: 8px; color: var(--color-subtle); font-size: 12px; }
 .menu-button:hover, .menu-button[aria-expanded="true"], .menu-button[data-active="true"] { background: var(--color-muted); color: var(--color-text); }
 /* A popup is on the top layer (components/popup.tsx), placed beside its anchor by anchor positioning; it turns over when the other side has more room. */
-.popup { position: fixed; inset: auto; margin: 0; width: max-content; max-width: min(100%, calc(100vw - 16px)); max-height: min(100%, 80vh); overflow: auto; color: var(--color-text); position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline; }
+.popup { position: fixed; inset: auto; margin: 0; width: max-content; max-width: min(100%, calc(100vw - 16px)); max-height: min(100%, 80vh); overflow: auto; color: var(--color-text); text-shadow: none; position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline; }
 .popup[data-placement="below"] { margin-top: 4px; }
 .popup[data-placement="above"] { margin-bottom: 6px; }
 .popup[data-placement="below"][data-align="start"] { position-area: bottom span-right; }
