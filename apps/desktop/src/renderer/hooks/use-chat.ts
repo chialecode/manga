@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { StreamAgent } from "@manga/contracts";
 import type { Translator } from "@manga/i18n";
 import type { QuickTask } from "@manga/contracts/quick-tasks";
 import { asArray, attempt, call, messageOf } from "../lib/api.ts";
@@ -8,6 +9,7 @@ import { autoAddMaterial } from "../lib/materials.ts";
 import { mediaContextFor, readerContext, useReaderContext, type ReaderContext } from "../lib/reader-context.ts";
 import type { AttachedImage, ComposerState } from "../lib/types.ts";
 import type { ChatMode } from "../components/chat/composer.tsx";
+import { collectSources } from "../components/chat/citations.tsx";
 import { useSessionStream } from "./use-session-stream.ts";
 
 const MODE_KEY = "manga.chat.mode";
@@ -31,6 +33,9 @@ export type ChatDeps = {
   page: string;
   target: ChatTarget;
   composer: ComposerState;
+  /** Optional isolated draft reader so typing does not re-render `useChat`. */
+  getDraft?: () => string;
+  draftKey?: string;
   patchComposer: (patch: Partial<ComposerState>) => void;
   updateComposer: (patch: (current: ComposerState) => Partial<ComposerState>) => void;
   /** The Agent's send: the same function the page used before the pane became a chat. */
@@ -47,6 +52,7 @@ export type ChatDeps = {
   prepareImage: (live: ReaderContext) => Promise<AttachedImage | null>;
   /** The context the pane is in: a note written there becomes a material of the project. */
   contextId: string | null;
+  onTitle?: (title: string) => void;
 };
 
 /**
@@ -64,11 +70,14 @@ export function useChat(deps: ChatDeps) {
   const mode: ChatMode = noteable ? stored : "ask";
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
+  const [scrollSignal, setScrollSignal] = useState(0);
   const [quickTasks, setQuickTasks] = useState<QuickTask[]>([]);
   const context = useReaderContext();
   const tags = useQuoteTags(target.resourceId);
-  const stream = useSessionStream(target.sessionId, { version: deps.version, running: deps.running });
+  const stream = useSessionStream(target.sessionId, { version: deps.version, running: deps.running, onTitle: deps.onTitle });
   const setMode = useCallback((next: ChatMode) => { if (!noteable) return; setModeState(next); writeMode(next); }, [noteable]);
+
+  const readDraft = () => (deps.getDraft ? deps.getDraft() : composer.draft);
 
   // Quick tasks come from settings, for this page; the list is read again when settings change it.
   const quickPage = quickPageFor(page);
@@ -109,6 +118,7 @@ export function useChat(deps: ChatDeps) {
       deps.patchComposer({ draft: "" });
       deps.setError(undefined);
       deps.bump();
+      setScrollSignal((n) => n + 1);
       void stream.reload();
       return true;
     } catch (error) {
@@ -122,12 +132,18 @@ export function useChat(deps: ChatDeps) {
   }
 
   async function sendAsk(text: string, extra: { attach?: "page" | "frame"; library?: boolean; quickTask?: { id: string | null; name: string } } = {}): Promise<boolean> {
-    if (sendingRef.current || deps.running || !text.trim()) return false;
+    const hasFiles = (composer.files?.length ?? 0) > 0;
+    if (sendingRef.current || deps.running || (!text.trim() && !hasFiles)) return false;
     sendingRef.current = true;
     setSending(true);
     try {
+      setScrollSignal((n) => n + 1);
       const sent = await deps.sendAgent({ text, ...extra, tags });
-      if (sent) { for (const tag of tags) quoteTags.remove(tag.id); void stream.reload(); }
+      if (sent) {
+        for (const tag of tags) quoteTags.remove(tag.id);
+        setScrollSignal((n) => n + 1);
+        void stream.reload();
+      }
       return sent;
     } finally {
       sendingRef.current = false;
@@ -135,14 +151,44 @@ export function useChat(deps: ChatDeps) {
     }
   }
 
-  const send = () => (mode === "note" ? sendNote(composer.draft) : sendAsk(composer.draft));
+  const send = () => (mode === "note" ? sendNote(readDraft()) : sendAsk(readDraft()));
 
   /** A quick task renders its template with what is on screen. Sent: it goes out as a visible message with the task's name. Filled: it lands in the input. */
   async function runQuick(task: QuickTask): Promise<void> {
-    const rendered = renderQuick(task, quickValuesNow(composer.draft), t);
-    if (task.sendMode === "fill") { deps.patchComposer({ draft: rendered.text }); setMode("ask"); return; }
+    const rendered = renderQuick(task, quickValuesNow(readDraft()), t);
+    if (noteable && mode !== "ask") setMode("ask");
+    if (task.sendMode === "fill") { deps.patchComposer({ draft: rendered.text }); return; }
     if (rendered.truncated.length) deps.setNotice(t("chat.quick.truncatedNotice"));
     await sendAsk(rendered.text, { attach: task.includeFrame ? (context?.kind === "comic" ? "page" : context?.kind === "video" ? "frame" : undefined) : undefined, library: task.includeLibrary, quickTask: { id: task.id, name: task.name } });
+  }
+
+  /** Save a finished assistant answer (with formatted sources when present) into notes for this surface. */
+  async function saveAnswerAsNote(item: StreamAgent): Promise<boolean> {
+    if (!noteable || !item.text.trim()) return false;
+    const sources = collectSources(item.citations, item.search, item.serverToolSteps);
+    const body = sources.length > 0
+      ? `${item.text.trim()}\n\n---\n${t("chat.sources")}\n${sources.map((s) => `${s.index}. [${s.title}](${s.url})`).join("\n")}`
+      : item.text.trim();
+    const title = noteTitleOf(item.text, target.title ?? deps.workTitle ?? t("notes.newTitle"));
+    const live = readerContext.get();
+    const place = live && live.resourceId === target.resourceId ? live : null;
+    const anchor = place ? anchorFromContext(place, t) : null;
+    try {
+      const created = await call<{ objectId?: string }>("notes.create", {
+        title,
+        text: body,
+        ...(anchor ? { resourceId: anchor.resourceId, resourceRevisionId: anchor.resourceRevisionId, locator: anchor.locator } : target.resourceId ? { resourceId: target.resourceId } : {}),
+        ...(target.workId ? { workId: target.workId } : {}),
+      });
+      if (created.objectId) void autoAddMaterial(deps.contextId, "note", created.objectId);
+      deps.setNotice(t("chat.action.savedNote"));
+      deps.bump();
+      void stream.reload();
+      return true;
+    } catch (error) {
+      deps.setError(messageOf(error));
+      return false;
+    }
   }
 
   /** Change the text of a note's own paragraph; a note that only has a quote gets one. */
@@ -183,11 +229,14 @@ export function useChat(deps: ChatDeps) {
   }
 
   const quick = useMemo(() => quickTasks.filter((task) => task.enabled).map((task) => ({ task, label: task.name })), [quickTasks]);
+  const bumpScroll = useCallback(() => setScrollSignal((n) => n + 1), []);
 
   return {
-    stream, mode, setMode, noteable, sending, send, sendNote, sendAsk, runQuick, editNote, deleteNote, quoteNote, quick, tags, context,
+    stream, mode, setMode, noteable, sending, send, sendNote, sendAsk, runQuick, editNote, deleteNote, quoteNote, saveAnswerAsNote, quick, tags, context,
+    scrollSignal, bumpScroll,
     mediaContextFor,
     removeTag: (id: string) => quoteTags.remove(id),
     removeImage: (materialId: string) => deps.updateComposer((current) => ({ images: current.images.filter((item) => item.materialId !== materialId) })),
+    removeFile: (fileId: string) => deps.updateComposer((current) => ({ files: (current.files ?? []).filter((item) => item.id !== fileId) })),
   };
 }

@@ -57,6 +57,7 @@ describe("model-protocol: streaming, usage, pi-ai, responses, retries", () => {
     expect(completed[0]).toEqual({
       type: "completed",
       finishReason: "stop",
+      stopReason: "end_turn",
       usage: { inputTokens: 100, outputTokens: 40, cachedInputTokens: 60, searches: 2 },
     });
   });
@@ -136,6 +137,7 @@ describe("model-protocol: streaming, usage, pi-ai, responses, retries", () => {
     expect(events).toContainEqual({
       type: "completed",
       finishReason: "stop",
+      stopReason: "end_turn",
       usage: { inputTokens: 15, outputTokens: 7, cachedInputTokens: 4 },
     });
 

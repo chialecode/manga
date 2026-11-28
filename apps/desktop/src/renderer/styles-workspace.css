@@ -12,9 +12,9 @@
 
 /* ---- short notices ---- */
 .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 70; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: min(420px, calc(100vw - 32px)); pointer-events: none; }
-.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 14px; font-size: 13px; line-height: 1.5; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: 10px; box-shadow: 0 8px 24px #30364722; overflow-wrap: anywhere; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 14px; font-size: 13px; line-height: 1.5; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: 10px; box-shadow: var(--shadow-popover); overflow-wrap: anywhere; }
 .toast > span { min-width: 0; }
-.toast-danger { border-left-color: var(--color-danger); color: var(--color-danger); }
+.toast-danger { border-left-color: var(--color-danger); color: var(--color-danger-text); }
 .toast[data-rich] { flex-wrap: wrap; row-gap: 6px; }
 .toast-thumb { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface-muted, #eef0f4); flex: none; }
 
@@ -24,21 +24,21 @@
 
 /* ---- the conversation (the right pane and the chat page) ---- */
 .chat-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; font-size: 13px; }
-.chat-page { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 20px 16px; }
-.chat-pane-page { width: 100%; max-width: 820px; margin: 0 auto; }
+.chat-page { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.chat-pane-page { width: 100%; max-width: none; margin: 0; }
 .chat-context { flex-shrink: 0; padding: 0 0 8px; font-size: 12px; color: var(--color-subtle); border-bottom: 1px solid var(--color-border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-error { flex-shrink: 0; color: var(--color-danger); font-size: 12px; padding: 6px 0; }
+.chat-error { flex-shrink: 0; color: var(--color-danger-text); font-size: 12px; padding: 6px 0; }
 .chat-log { position: relative; flex: 1; min-height: 0; }
-.chat-log-content { display: flex; flex-direction: column; gap: 12px; padding: 10px 2px 14px; }
-.chat-log-wide { max-width: 760px; margin: 0 auto; width: 100%; }
+.chat-log-content { display: flex; flex-direction: column; gap: 12px; padding: 10px 2px 18px; }
+.chat-log-wide { max-width: 780px; margin: 0 auto; width: 100%; padding: 14px 24px 24px; }
 .chat-empty { padding: 28px 10px; text-align: center; }
 .chat-older { align-self: center; }
 /* Only the rows near the viewport are rendered (LOOP-07); each sits at its measured offset and carries the gap below it. */
 .chat-rows { position: relative; width: 100%; flex: none; }
 .chat-row { position: absolute; top: 0; left: 0; width: 100%; display: flex; flex-direction: column; padding-bottom: 12px; }
 .chat-row[data-highlight] > .bubble { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.chat-scroll-bottom { position: absolute; right: 14px; bottom: 12px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-subtle); box-shadow: var(--shadow-control); }
-.chat-scroll-bottom:hover { color: var(--color-accent); }
+.chat-scroll-bottom { position: absolute; right: 18px; bottom: 14px; z-index: 6; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-subtle); box-shadow: var(--shadow-control); transition: color 120ms ease, border-color 120ms ease, transform 120ms ease; }
+.chat-scroll-bottom:hover { color: var(--color-accent); border-color: var(--color-accent); transform: translateY(1px); }
 
 .bubble { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); min-width: 0; overflow-wrap: anywhere; }
 .bubble-note { background: var(--color-surface); }
@@ -54,7 +54,7 @@ button.bubble-source:disabled { opacity: 1; color: var(--color-subtle); backgrou
 ul.bubble-sources { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; padding: 0; margin: 0; }
 .bubble-quote { margin: 0; padding: 4px 10px; border-left: 3px solid var(--color-brand); color: var(--color-subtle); font-size: 12px; line-height: 1.6; max-height: 6.5em; overflow: hidden; }
 .bubble-text { margin: 0; line-height: 1.7; white-space: pre-wrap; }
-.bubble-markdown { white-space: normal; }
+.bubble-markdown { white-space: normal; line-height: 1.72; color: var(--color-text); }
 .bubble-markdown :where(p, ul, ol, pre, blockquote, table) { margin: 0 0 .7em; }
 .bubble-markdown :where(p:last-child, ul:last-child, ol:last-child, pre:last-child) { margin-bottom: 0; }
 .bubble-markdown :where(ul, ol) { padding-left: 1.4em; list-style: revert; }
@@ -62,7 +62,7 @@ ul.bubble-sources { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; 
 .bubble-markdown code { font-family: var(--font-mono); font-size: .92em; }
 .bubble-markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
 .bubble-markdown :where(th, td) { border: 1px solid var(--color-border); padding: 3px 8px; }
-.bubble-error { margin: 0; color: var(--color-danger); font-size: 12px; }
+.bubble-error { margin: 0; color: var(--color-danger-text); font-size: 12px; }
 /* An answer's thinking (folded) and the sources it cites (计划 4.3/4.4). */
 .bubble-thinking summary { cursor: pointer; color: var(--color-subtle); font-size: 12px; }
 .bubble-thinking .bubble-text { margin-top: 4px; font-size: 12px; }
@@ -98,7 +98,7 @@ div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20p
 .chat-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .chat-chip { padding: 4px 11px; font-size: 12px; border: 1px solid var(--color-border); border-radius: 14px; color: var(--color-text); background: var(--color-surface); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-chip:hover:not(:disabled) { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-soft); }
-.chat-box { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px; border: 1px solid var(--color-border); border-radius: 15px; background: var(--color-surface); box-shadow: var(--shadow-control); }
+.chat-box { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px; border: 1px solid var(--color-border); border-radius: 15px; background: var(--color-surface); box-shadow: var(--shadow-control); transition: border-color 120ms ease, box-shadow 120ms ease; }
 .chat-box:focus-within { border-color: var(--color-focus); }
 .chat-tags { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
 .chat-tag { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 1px 2px 1px 9px; font-size: 11px; color: var(--color-accent); background: var(--color-accent-soft); border-radius: 11px; }
@@ -108,20 +108,20 @@ div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20p
 .chat-tag-image img { width: 22px; height: 22px; object-fit: cover; border-radius: 6px; }
 .chat-input { width: 100%; min-height: 44px; max-height: 180px; resize: none; border: 0; outline: 0; background: transparent; color: var(--color-text); font-size: 13px; line-height: 1.6; padding: 2px 0; }
 .chat-input::placeholder { color: var(--color-subtle); }
-.chat-bar { display: flex; align-items: center; gap: 4px; }
+.chat-bar { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; }
 /* The model picker (A-137): the model, its thinking and its window in one short line that gives way first when the bar is narrow. */
 .chat-model { display: inline-flex; min-width: 0; flex: 0 1 auto; }
 .chat-model .menu-button { display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; height: 28px; padding: 0 6px 0 8px; border-radius: 7px; font-size: 12px; color: var(--color-subtle); }
 .chat-model .menu-button:hover, .chat-model .menu-button[aria-expanded="true"] { background: var(--color-muted); color: var(--color-text); }
 .chat-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-switch { display: inline-flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--color-muted); }
-.chat-switch > button { padding: 3px 11px; border-radius: 7px; font-size: 12px; color: var(--color-subtle); }
+.chat-switch { display: inline-flex; flex-shrink: 0; padding: 2px; gap: 2px; border-radius: 9px; background: var(--color-muted); }
+.chat-switch > button { padding: 3px 11px; border-radius: 7px; font-size: 12px; color: var(--color-subtle); white-space: nowrap; }
 .chat-switch > button[aria-pressed="true"] { color: var(--color-accent); background: var(--color-surface); box-shadow: var(--shadow-control); font-weight: 600; }
 .chat-send { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--color-primary-foreground); background: var(--color-accent); }
 .chat-send:hover:not(:disabled) { filter: brightness(1.08); }
 .chat-mic { position: relative; }
-.chat-mic[data-recording="true"], .chat-mic[aria-pressed="true"] { color: var(--color-danger); background: #B4231418; }
-.chat-mic-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-danger); margin-left: 2px; }
+.chat-mic[data-recording="true"], .chat-mic[aria-pressed="true"] { color: var(--color-danger-text); background: var(--color-danger-soft); }
+.chat-mic-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-danger-text); margin-left: 2px; }
 
 /* the header-docked capsule that stands in for the right pane without covering the page */
 .chat-capsule { position: absolute; top: 4px; right: calc(6px + var(--title-end-w, 0px)); left: 6px; bottom: auto; z-index: 30; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 6px; pointer-events: none; }
@@ -130,7 +130,7 @@ div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20p
 .capsule-bar { display: inline-flex; align-items: center; height: 28px; gap: 2px; padding: 0 3px; border-radius: 7px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-control); }
 .capsule-bar .icon-button { width: 24px; height: 24px; padding: 0; border-radius: 5px; }
 .capsule-bar .chat-mic[data-recording="true"], .capsule-bar .chat-mic[aria-pressed="true"] { width: auto; padding: 0 6px; gap: 4px; }
-.capsule-note { display: flex; flex-direction: column; gap: 6px; width: min(320px, 100%); padding: 10px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 8px 24px var(--color-player-pop-shadow); }
+.capsule-note { display: flex; flex-direction: column; gap: 6px; width: min(320px, 100%); padding: 10px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-popover); }
 .capsule-note textarea { width: 100%; resize: none; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; line-height: 1.6; }
 .capsule-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 
@@ -256,7 +256,7 @@ div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20p
 .match-table tbody th { font-weight: 600; white-space: nowrap; }
 .match-table tr[data-protected="true"] { background: var(--color-muted); }
 .match-cover { display: block; border-radius: 4px; border: 1px solid var(--color-border); }
-.match-warn { margin: 0; padding: 6px 10px; border-radius: 8px; color: var(--color-danger); background: #B4231410; font-size: 12px; }
+.match-warn { margin: 0; padding: 6px 10px; border-radius: 8px; color: var(--color-danger-text); background: var(--color-danger-soft); font-size: 12px; }
 .note-page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 
 /* ---- settings: layout ---- */
@@ -342,7 +342,7 @@ div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20p
 .log-time { min-width: 128px; font-variant-numeric: tabular-nums; }
 .log-summary { min-width: 0; overflow-wrap: anywhere; }
 .log-object { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--color-subtle); }
-.log-error { font-size: 12px; color: var(--color-danger); }
+.log-error { font-size: 12px; color: var(--color-danger-text); }
 .usage-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--color-surface); }
 .usage-table :where(th, td) { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--color-border); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .usage-table thead th { color: var(--color-subtle); font-weight: 500; }
@@ -470,4 +470,4 @@ div.bubble-sources ol, .bubble-citations ol { margin: 4px 0 0; padding-left: 20p
 .rate-new .rate-input { width: 7ch; text-align: left; }
 
 /* Reading an answer aloud: the controls sit in the bubble's action row. */
-.read-aloud { display: inline-flex; align-items: center; gap: 6px; }
+.read-aloud { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }

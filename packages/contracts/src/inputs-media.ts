@@ -6,6 +6,7 @@ import {
   POLISH_MODES,
   PolishPromptsSchema,
 } from "./dictation.ts";
+import { SPEECH_VOICES } from "./provider.ts";
 import { SourceLocatorSchema } from "./location.ts";
 import { KeyActionIdSchema } from "./key-bindings.ts";
 import { PROMPT_LIMIT_MAX, PROMPT_LIMIT_MIN } from "./inputs-creative.ts";
@@ -261,7 +262,7 @@ export const MediaCommandInputs = {
     localIdleMinutes: z.number().int().min(1).max(120).optional(),
     retainDictationAudio24h: z.boolean().optional(),
     speechConnectionId: id.nullable().optional(),
-    speechVoice: z.enum(["stella", "tide"]).optional(),
+    speechVoice: z.enum(SPEECH_VOICES).optional(),
     novelCostHint: z.boolean().optional(),
   }).strict(),
   "settings.getModules": z.object({}).strict(),

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type AsrEngineSelection, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant, type UpdateBusyReason } from "@manga/contracts";
+import { contextKey, MangaError, ProfileConfigSchema, createId, validateCommandInput, type Actor, type AgentStreamEvent, type AsrEngineSelection, type CommandEnvelope, type CommandResult, type ContextId, type LocationLayout, type RoughcutExportView, type ScopeGrant, type UpdateBusyReason } from "@manga/contracts";
 import { MangaRuntime } from "@manga/kernel";
 import { DrizzleStore, acquireHostLock, releaseHostLock } from "@manga/storage-drizzle";
 import type { ChatMessage } from "@manga/model-protocol";
@@ -211,6 +211,7 @@ export class MangaProductApp {
   private readonly vadEngine: VadEngine;
   readonly onlineProviders: OnlineProvider[];
   private readonly noticeListeners = new Set<(notice: AppNotice) => void>();
+  private readonly agentStreamListeners = new Set<(event: AgentStreamEvent) => void>();
   readonly uiFacets = new Set<string>();
   private readonly lock;
   readonly vault: CredentialVault;
@@ -1401,6 +1402,17 @@ export class MangaProductApp {
   onNotice(listener: (notice: AppNotice) => void): () => void {
     this.noticeListeners.add(listener);
     return () => { this.noticeListeners.delete(listener); };
+  }
+
+  onAgentStream(listener: (event: AgentStreamEvent) => void): () => void {
+    this.agentStreamListeners.add(listener);
+    return () => { this.agentStreamListeners.delete(listener); };
+  }
+
+  emitAgentStream(event: AgentStreamEvent): void {
+    for (const listener of this.agentStreamListeners) {
+      try { listener(event); } catch { /* a broken subscriber must not stop an agent run */ }
+    }
   }
 
   notify(topic: string, payload: Record<string, unknown>): void {

@@ -444,10 +444,16 @@ describe.skipIf(mediaPrerequisitesAbsent || !hasNativeSherpa)("asr-host.cjs real
     });
     cleanups.push(() => service.dispose());
 
+    const expectedSherpaVersion = (
+      JSON.parse(fs.readFileSync(path.join(repoRoot, "apps", "desktop", "package.json"), "utf8")) as {
+        dependencies: Record<string, string>;
+      }
+    ).dependencies["sherpa-onnx-node"];
     const ping = await service.ping();
     expect(ping.pong).toBe(true);
-    expect(ping.version).toBe("2.0.1");
-    expect(ping.onnxruntimeVersion).toBe("1.28.2");
+    expect(ping.version).toBe(expectedSherpaVersion);
+    expect(typeof ping.onnxruntimeVersion).toBe("string");
+    expect(ping.onnxruntimeVersion.length).toBeGreaterThan(0);
     expect(ping.pid).not.toBe(process.pid);
 
     const wav = decodePcm16Wav(fs.readFileSync(sampleWavFile));

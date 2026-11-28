@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OCR_PURPOSES, PROVIDER_SERVICE_KINDS } from "./provider.ts";
 
 const id = z.string().min(1).max(256);
 
@@ -170,8 +171,8 @@ export type ConnectionTestResult = {
   capabilities?: string[];
   /** What the service said about its own limits, when it did. */
   detected?: { contextWindow?: number; maxOutput?: number };
-  /** For a speech, recognition or search service: what the test got back (characters spoken, text heard, results found). */
-  service?: { kind: "speech" | "transcription" | "search"; detail: string };
+  /** For a provider service (speech, recognition, search, fetch, OCR): what the test got back. */
+  service?: { kind: (typeof PROVIDER_SERVICE_KINDS)[number]; detail: string };
   failure?: { category: ConnectionFailure; status?: number; detail?: string };
 };
 
@@ -222,7 +223,7 @@ export const TRACE_KINDS = ["model", "tool", "compaction"] as const;
 export type TraceKind = (typeof TRACE_KINDS)[number];
 
 const providerRef = z.string().min(3).max(200).regex(/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\/[a-z0-9][a-z0-9._-]*$/);
-const SERVICE_KINDS = ["transcription", "speech", "search"] as const;
+const SERVICE_KINDS = PROVIDER_SERVICE_KINDS;
 
 export const ModelInputs = {
   /** The providers the enabled provider plugins offer, with their catalogues, and the accounts already set up for each (计划 4.2). */
@@ -243,6 +244,27 @@ export const ModelInputs = {
   "providers.setKey": z.object({ accountId: id, credentialHandle: id }).strict(),
   /** Removes an account with its key; only when no connection uses it any more. */
   "providers.deleteAccount": z.object({ accountId: id }).strict(),
+  /** Reads balance and availability for an account (or all balance-capable accounts) from providers declaring `balance`. */
+  "providers.balance": z.object({
+    accountId: id.optional(),
+    providerRef: providerRef.optional(),
+  }).strict(),
+  /** Main-process single source of truth for active chat and provider capabilities. */
+  "providers.capabilities": z.object({
+    projectId: id.nullable().optional(),
+    connectionId: id.nullable().optional(),
+  }).strict(),
+  /** Recognizes text or layout from an image or PDF using a configured OCR service (e.g. `deepseek-ocr@1`). */
+  "ocr.recognize": z.object({
+    pathHandle: id.optional(),
+    resourceId: id.optional(),
+    resourceRevisionId: id.optional(),
+    pageId: id.optional(),
+    purpose: z.enum(OCR_PURPOSES).default("text_recognition"),
+    connectionId: id.optional(),
+  }).strict().refine((value) => Boolean(value.pathHandle) !== Boolean(value.resourceId), {
+    message: "provide either a path handle or a library resource",
+  }),
   /** Set the numbers and switches of a connection's model; anything left out keeps its value. */
   "connections.setProfile": z.object({ connectionId: id, profile: ModelProfilePatchSchema }).strict(),
   /** Ask a connection one question and look at what it can do; the result is kept with the connection. */

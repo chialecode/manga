@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { attempt } from "../lib/api.ts";
+import { Sparkles } from "lucide-react";
+import { AGENT_STREAM_NOTICE_TOPIC, type AgentStreamEvent, type ProviderCapabilities } from "@manga/contracts";
+import { attempt, uid } from "../lib/api.ts";
 import { contextSurface, type AgentSurface } from "../agent-surface.ts";
 import { ConversationBar } from "../components/conversation-bar.tsx";
 import { useChatView } from "../components/chat/chat-view.tsx";
 import { mediaContextFor, readerContext, type ReaderContext } from "../lib/reader-context.ts";
 import type { QuoteTag } from "../lib/quote-tags.ts";
-import type { AttachedImage } from "../lib/types.ts";
-import { useDraft } from "./drafts.ts";
+import type { AttachedImage, ComposerFileAttachment } from "../lib/types.ts";
+import { useDraftMeta } from "./drafts.ts";
 import { useModelChoice } from "./model-choice.tsx";
 import { useServices } from "./services.tsx";
 
 const ACTIVE = ["queued", "running", "waiting_input"];
+const MAX_ATTACH_FILES = 10;
 
 export type AgentHandle = {
   pane: ReactNode;
@@ -22,23 +25,31 @@ export type AgentHandle = {
 
 /**
  * The Agent's conversation for one surface (A-94): the dock's, which follows the focused tab, and a conversation tab's own. It finds or opens the session the
- * surface names, follows the task that runs in it, and sends from the composer kept for that subject. The tab in front is read from the one
- * `readerContext`, so what a send carries (the page, the moment, the picked region) is the focused reader's and nobody else's.
+ * surface names, follows the task that runs in it, and sends from the composer kept for that subject. Typing in the composer is isolated to `Composer` via
+ * `useDraftMeta` so keystrokes never re-render `MessageList` or any `Bubble`.
  */
 export function useAgent(surface: AgentSurface | null, options: { wide?: boolean } = {}): AgentHandle {
   const s = useServices();
   const { i18n, t } = s;
   const active = surface !== null;
   const shown = surface ?? contextSurface(null);
-  const { composer, patch, update } = useDraft(shown.draftKey);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [run, setRun] = useState<Record<string, unknown> | null>(null);
+  const [liveTitle, setLiveTitle] = useState<string | undefined>();
+  const [capabilities, setCapabilities] = useState<ProviderCapabilities | null>(null);
   const surfaceRef = useRef(shown);
   surfaceRef.current = shown;
   const sRef = useRef(s);
   sRef.current = s;
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
+
+  // Per-session in-memory draft preservation: once a sessionId resolves, adopt any early draft from the surface key.
+  const effectiveDraftKey = sessionId ? `session:${sessionId}` : shown.draftKey;
+  const { composer, getDraft, patch, update, drafts } = useDraftMeta(effectiveDraftKey);
+  useEffect(() => {
+    if (sessionId) drafts.adoptIfEmpty(shown.draftKey, `session:${sessionId}`);
+  }, [sessionId, shown.draftKey, drafts]);
 
   // The conversation of the surface: a subject's own session is opened (and made once), the context's current one is read.
   const subject = `${shown.contextId ?? ""}|${shown.open?.kind ?? ""}|${shown.open?.targetId ?? ""}|${shown.sessionId ?? ""}`;
@@ -68,7 +79,11 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   // The pane starts without a task when it shows another conversation.
   const lastSession = useRef(sessionId);
   useEffect(() => {
-    if (lastSession.current !== sessionId) { lastSession.current = sessionId; setRun(null); }
+    if (lastSession.current !== sessionId) {
+      lastSession.current = sessionId;
+      setRun(null);
+      setLiveTitle(undefined);
+    }
   }, [sessionId]);
 
   useEffect(() => {
@@ -82,12 +97,35 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     return () => { cancelled = true; };
   }, [sessionId, s.workspace]);
 
+  // Fast completion sync via live IPC `done` events so we don't wait for polling intervals.
+  const lastRunPushAt = useRef(0);
+  useEffect(() => {
+    if (!sessionId) return;
+    const handleEvent = (event: AgentStreamEvent) => {
+      if (event.sessionId !== sessionId) return;
+      lastRunPushAt.current = performance.now();
+      if (event.kind === "done") {
+        setRun((prev) => ({ ...(prev ?? {}), runId: event.runId, id: event.runId, sessionId: event.sessionId, status: event.status }));
+      }
+    };
+    const offStream = window.manga?.onAgentStream?.(handleEvent);
+    const offNotice = window.manga?.onNotice?.((notice) => {
+      if (notice.topic !== AGENT_STREAM_NOTICE_TOPIC) return;
+      const payload = notice.payload as unknown as AgentStreamEvent;
+      if (payload && typeof payload.kind === "string" && typeof payload.sessionId === "string" && typeof payload.runId === "string") {
+        handleEvent(payload);
+      }
+    });
+    return () => { offStream?.(); offNotice?.(); };
+  }, [sessionId]);
+
   useEffect(() => {
     const runId = String(run?.runId ?? run?.id ?? "");
     const status = String(run?.status ?? "");
     if (!runId || !ACTIVE.includes(status)) return;
     let cancelled = false;
     const tick = async () => {
+      if (lastRunPushAt.current > 0 && performance.now() - lastRunPushAt.current < 4000) return;
       const result = await attempt("agent.getRun", { runId });
       if (!cancelled && result.ok) setRun(result.value);
     };
@@ -159,9 +197,102 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     s.setNotice(t("rp.attach.done", { what: image.extraction }));
   }
 
-  const { picker: modelPicker, activeConnection } = useModelChoice(shown.contextId);
+  async function pickFile() {
+    if (!window.manga?.pick) return;
+    const picked = await window.manga.pick({ mode: "file", filter: "any" });
+    if (!picked) return;
+    const currentCount = composer.files?.length ?? 0;
+    if (currentCount >= MAX_ATTACH_FILES) {
+      s.setNotice(t("chat.attach.tooMany", { count: MAX_ATTACH_FILES }));
+      return;
+    }
+    const isImage = /\.(png|jpe?g|webp|gif|bmp)$/i.test(picked.name);
+    const attachment: ComposerFileAttachment = {
+      id: uid(),
+      pathHandle: picked.pathHandle,
+      name: picked.name,
+      kind: isImage ? "image" : "file",
+    };
+    update((current) => ({ files: [...(current.files ?? []), attachment].slice(0, MAX_ATTACH_FILES) }));
+  }
+
+  async function dropFiles(dropped: File[]) {
+    if (!dropped.length) return;
+    const stash = window.manga?.stashAttachment;
+    if (!stash) {
+      s.setNotice(t("chat.attach.unsupported"));
+      return;
+    }
+    const existing = composer.files?.length ?? 0;
+    const room = Math.max(0, MAX_ATTACH_FILES - existing);
+    if (room === 0) {
+      s.setNotice(t("chat.attach.tooMany", { count: MAX_ATTACH_FILES }));
+      return;
+    }
+    const added: ComposerFileAttachment[] = [];
+    for (const file of dropped.slice(0, room)) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const stashed = await stash({ name: file.name, mimeType: file.type || undefined, bytes: new Uint8Array(buffer) });
+        if (!stashed) continue;
+        const isImage = file.type.startsWith("image/");
+        let preview: string | undefined;
+        if (isImage && file.size <= 5 * 1024 * 1024) {
+          preview = await new Promise<string | undefined>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : undefined);
+            reader.onerror = () => resolve(undefined);
+            reader.readAsDataURL(file);
+          });
+        }
+        added.push({
+          id: uid(),
+          pathHandle: stashed.pathHandle,
+          name: stashed.name || file.name,
+          mimeType: stashed.mimeType || file.type || undefined,
+          bytes: file.size,
+          kind: isImage ? "image" : "file",
+          ...(preview ? { preview } : {}),
+        });
+      } catch {
+        // Skip unreadable file cleanly.
+      }
+    }
+    if (added.length > 0) {
+      update((current) => ({ files: [...(current.files ?? []), ...added].slice(0, MAX_ATTACH_FILES) }));
+    }
+  }
+
+  const { picker: modelPicker, activeConnection, thinking } = useModelChoice(shown.contextId);
   const activeConnectionRef = useRef(activeConnection);
   activeConnectionRef.current = activeConnection;
+
+  // Query main-process single source of truth for capabilities; gracefully fall back to local derivation if unavailable.
+  const activeConnId = activeConnection?.id ?? null;
+  useEffect(() => {
+    if (!active) return;
+    let live = true;
+    void attempt<ProviderCapabilities>("providers.capabilities", {
+      projectId: shown.contextId,
+      connectionId: activeConnId,
+    }).then((res) => {
+      if (live) setCapabilities(res.ok ? res.value : null);
+    });
+    return () => { live = false; };
+  }, [active, shown.contextId, activeConnId, s.settings, s.shelfKey]);
+
+  const buildAllowCommands = (origin: AgentSurface): string[] => {
+    const conns = (s.settings?.connections as Array<Record<string, unknown>> | undefined) ?? [];
+    const canSemantic = s.facets.has("semantic") && conns.some((item) => item.purpose === "embedding");
+    const canWebpage = s.facets.has("research") && origin.contextId !== null;
+    const canWebSearch = capabilities ? capabilities.webSearchAvailable : webSearchAvailable(conns, activeConnectionRef.current as Record<string, unknown> | null);
+    const allowCommands: string[] = [];
+    if (composer.allowOnline && s.facets.has("metadata")) allowCommands.push("metadata.search");
+    if (composer.allowSemantic && canSemantic) allowCommands.push("semantic.search");
+    if (composer.allowWebpage && canWebpage) allowCommands.push("webpage.fetch");
+    if (composer.allowWebSearch && canWebSearch) allowCommands.push("web.search");
+    return allowCommands;
+  };
 
   /**
    * The Agent's send. The conversation is the surface's own; the picked tags become the task's selection, picture and interval, so what the user sees
@@ -169,7 +300,8 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
    */
   async function sendAgent(input: { text: string; attach?: "page" | "frame"; library?: boolean; quickTask?: { id: string | null; name: string }; tags: readonly QuoteTag[] }): Promise<boolean> {
     const text = input.text;
-    if (!text.trim()) return false;
+    const files = composer.files ?? [];
+    if (!text.trim() && files.length === 0) return false;
     const origin = surfaceRef.current;
     const originSubject = subjectRef.current;
     const sid = await ensureSession(origin);
@@ -200,15 +332,13 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     const framed = place?.kind === "comic" ? (regionTags.find((tag) => tag.pageId === place.pageId)?.region ?? composer.images.find((image) => image.pageId === place.pageId && image.region)?.region) : undefined;
     const placed = place?.kind === "video" && intervalTag ? { ...place, interval: { startMs: intervalTag.startMs, endMs: intervalTag.endMs } } : place;
     const mediaContext = placed ? mediaContextFor(placed, { region: framed, subtitleAheadMs: composer.subtitleAheadMin * 60_000 }) : undefined;
-    const conns = (s.settings?.connections as Array<{ purpose?: string }> | undefined) ?? [];
-    const canSemantic = s.facets.has("semantic") && conns.some((item) => item.purpose === "embedding");
-    const canWebpage = s.facets.has("research") && origin.contextId !== null;
-    const canWebSearch = webSearchAvailable(conns as Array<Record<string, unknown>>, activeConnectionRef.current as Record<string, unknown> | null);
-    const allowCommands: string[] = [];
-    if (composer.allowOnline && s.facets.has("metadata")) allowCommands.push("metadata.search");
-    if (composer.allowSemantic && canSemantic) allowCommands.push("semantic.search");
-    if (composer.allowWebpage && canWebpage) allowCommands.push("webpage.fetch");
-    if (composer.allowWebSearch && canWebSearch) allowCommands.push("web.search");
+    const allowCommands = buildAllowCommands(origin);
+    const fileAttachments = files.map((file) => ({
+      pathHandle: file.pathHandle,
+      name: file.name,
+      ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+      ...(file.purpose ? { purpose: file.purpose } : {}),
+    }));
     const result = await attempt("agent.send", {
       sessionId: sid,
       text,
@@ -217,14 +347,15 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
       ...(mediaContext ? { mediaContext } : {}),
       ...(composer.recordings.length ? { captureSessionIds: composer.recordings } : {}),
       ...(imageIds.length ? { imageMaterialIds: imageIds.slice(0, 4) } : {}),
+      ...(fileAttachments.length ? { fileAttachments } : {}),
       ...(allowCommands.length ? { allowCommands } : {}),
       ...(input.quickTask ? { quickTask: input.quickTask } : {}),
       ...(selectionTag ? { selection: { resourceId: selectionTag.resourceId, resourceRevisionId: selectionTag.revisionId, partId: selectionTag.partId, start: selectionTag.start, end: selectionTag.end } } : {}),
     });
     if (!result.ok) { s.setError(result.error.message); return false; }
     if (subjectRef.current === originSubject || sessionIdRef.current === sid) setRun(result.value);
-    // What was chosen for this task is spent: pictures, recordings, widening and online search are asked for again each time.
-    patch({ ...(text === composer.draft ? { draft: "" } : {}), images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, allowWebSearch: false, subtitleAheadMin: 0 });
+    // What was chosen for this task is spent: pictures, files, recordings, widening and online search are asked for again each time.
+    patch({ ...(text === getDraft() ? { draft: "" } : {}), images: [], files: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, allowWebSearch: false, subtitleAheadMin: 0 });
     s.setError(undefined);
     s.conversationsChanged();
     await s.refresh();
@@ -239,6 +370,41 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     await s.refresh();
   }
 
+  async function regenerate(runId: string) {
+    const originSession = sessionIdRef.current;
+    const allowCommands = buildAllowCommands(surfaceRef.current);
+    const result = await attempt("agent.regenerateRun", { runId, ...(allowCommands.length ? { allowCommands } : {}) });
+    if (!result.ok) {
+      if (result.error.code === "UNKNOWN_COMMAND" || result.error.code === "COMMAND_UNAVAILABLE") {
+        await retry(runId);
+        return;
+      }
+      s.setError(result.error.message);
+      return;
+    }
+    if (sessionIdRef.current === originSession) setRun(result.value);
+    await s.refresh();
+  }
+
+  async function continueRun(runId: string) {
+    const originSession = sessionIdRef.current;
+    const result = await attempt("agent.continueRun", { runId });
+    if (!result.ok) { s.setError(result.error.message); return; }
+    if (sessionIdRef.current === originSession) setRun(result.value);
+    await s.refresh();
+  }
+
+  async function editUser(runId: string, text: string): Promise<boolean> {
+    const originSession = sessionIdRef.current;
+    const allowCommands = buildAllowCommands(surfaceRef.current);
+    const result = await attempt("agent.editAndResend", { runId, text, ...(allowCommands.length ? { allowCommands } : {}) });
+    if (!result.ok) { s.setError(result.error.message); return false; }
+    if (sessionIdRef.current === originSession) setRun(result.value);
+    s.conversationsChanged();
+    await s.refresh();
+    return true;
+  }
+
   async function stop() {
     const runId = String(visibleRun?.runId ?? visibleRun?.id ?? "");
     if (!runId) return;
@@ -248,16 +414,30 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     if (latest.ok && sessionIdRef.current === originSession) setRun(latest.value);
   }
 
-  const connections = (s.settings?.connections as Array<{ purpose?: string }> | undefined) ?? [];
-  const noModel = s.settings !== null && !connections.some((item) => item.purpose === "text");
+  const connections = (s.settings?.connections as Array<Record<string, unknown>> | undefined) ?? [];
+  const hasAvailableText = capabilities
+    ? capabilities.hasAvailableTextModel
+    : hasAvailableTextModel(connections);
+  const noModel = s.settings !== null && !hasAvailableText;
   const semantic = s.facets.has("semantic") && connections.some((item) => item.purpose === "embedding");
   const webpage = s.facets.has("research") && shown.contextId !== null;
-  const webSearch = webSearchAvailable(connections as Array<Record<string, unknown>>, activeConnection as Record<string, unknown> | null);
-  const readAloudOn = speechAvailable(connections as Array<Record<string, unknown>>);
+  const webSearch = capabilities ? capabilities.webSearchAvailable : webSearchAvailable(connections, activeConnection as Record<string, unknown> | null);
+  const readAloudOn = capabilities ? capabilities.speechAvailable : speechAvailable(connections);
+  const streamingTts = Boolean(capabilities?.streamingTtsAvailable);
   const resources = (s.workspace?.resources as Array<{ id: string; title: string }> | undefined) ?? [];
   const reader = readerContext.get();
   const mediaResourceId = shown.resourceId;
   const title = shown.page === "work" ? shown.label : shown.resourceTitle;
+
+  const emptyState = options.wide ? (
+    <div className="chat-welcome" data-testid="chat-welcome">
+      <span className="chat-welcome-icon" aria-hidden="true"><Sparkles size={22} /></span>
+      <h2 className="chat-welcome-title">{t("chat.empty.title")}</h2>
+      <p className="detail-muted chat-welcome-hint">{t("chat.empty.page")}</p>
+    </div>
+  ) : (
+    <p className="detail-muted">{t("chat.empty")}</p>
+  );
 
   const chatView = useChatView({
     i18n,
@@ -270,6 +450,8 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
       title,
     },
     composer,
+    getDraft,
+    draftKey: effectiveDraftKey,
     patchComposer: patch,
     updateComposer: update,
     sendAgent,
@@ -283,19 +465,27 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     author: shown.author ?? null,
     prepareImage: (live) => prepareImage(live),
     contextId: shown.contextId,
+    onTitle: setLiveTitle,
     formatDate: i18n.formatDate,
     recorder: s.voiceOn ? s.recorder : null,
     dictation: s.voiceOn ? s.dictation ?? null : null,
     noModel,
     modelPicker,
+    thinking,
     onSettings: () => s.open.settings("models"),
     onStop: () => void stop(),
     onRetry: (runId) => void retry(runId),
+    onRegenerate: (runId) => void regenerate(runId),
+    onContinue: (runId) => void continueRun(runId),
+    onEditUser: (runId, text) => editUser(runId, text),
+    onPickFile: window.manga?.pick ? () => void pickFile() : undefined,
+    onDropFiles: (files) => void dropFiles(files),
     online: s.facets.has("metadata"),
     semantic,
     webpage,
     webSearch,
     readAloud: readAloudOn,
+    streamingTts,
     resources,
     recordingsOf: s.voiceOn ? mediaResourceId ?? null : null,
     onAttach: (what) => void attachImage(what),
@@ -307,15 +497,16 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
       else s.reviewRecording({ sessionId: voice.id });
     },
     onOpenRecording: (voice) => s.reviewRecording({ sessionId: voice.id }),
-    empty: <p className="detail-muted">{options.wide ? t("chat.empty.page") : t("chat.empty")}</p>,
+    empty: emptyState,
     wide: options.wide,
     header: (
       <ConversationBar
         t={t}
         contextId={shown.contextId}
-        title={shown.label ?? ""}
+        title={shown.label || liveTitle || ""}
         version={s.conversationVersion}
         formatDate={i18n.formatDate}
+        compact={!options.wide}
         onNew={() => s.open.newConversation()}
         onResume={(id) => s.open.resumeConversation(id)}
         onError={s.setError}
@@ -324,6 +515,11 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   });
 
   return { pane: chatView.pane, capsule: active ? chatView.capsule : null, running, stop: () => void stop(), sessionId };
+}
+
+/** Whether at least one usable text model is available (fixes #92 when a provider plugin is disabled). */
+export function hasAvailableTextModel(connections: Array<Record<string, unknown>>): boolean {
+  return connections.some((item) => item.purpose === "text" && (item.account as { available?: boolean } | null | undefined)?.available !== false);
 }
 
 /** Whether answers and novels can be read aloud (计划 4.7): a speech connection whose plugin is on. */

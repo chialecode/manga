@@ -7,10 +7,10 @@ export type UsageHost = { readonly store: { readonly sqlite: { prepare(sql: stri
 export type ServiceUse = {
   connectionId: string | null;
   modelId?: string | null;
-  service: "transcription" | "speech" | "search" | "chat-search";
-  /** What the call was for: `dictation`, `recording`, `read-aloud`, `agent`, `research`, `test`. */
+  service: "transcription" | "speech" | "search" | "chat-search" | "fetch" | "ocr";
+  /** What the call was for: `dictation`, `recording`, `read-aloud`, `agent`, `research`, `test`, `ocr`. */
   task: string;
-  unit: "second" | "char" | "search";
+  unit: "second" | "char" | "search" | "fetch" | "page";
   quantity: number;
   status: "ok" | "error";
   errorCode?: string | null;

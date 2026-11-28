@@ -8,6 +8,7 @@ import { writeExportFile } from "../creative/export-file.ts";
 import { readShell } from "../reading-service.ts";
 import type { MangaProductApp, CreativeReg } from "../product-app.ts";
 import { webSearch } from "../providers/web-search.ts";
+import { classifyCloudFetchUrl, fetchWithDeepSeek, hasAvailableFetchService } from "../providers/web-fetch.ts";
 
 /** What these commands use of the application. */
 export type CreativeHost = Pick<MangaProductApp, "acquisition" | "agentAccess" | "assertWritable" | "closed" | "drafts" | "embeds" | "grantOf" | "grants" | "mindmaps" | "pluginRuntime" | "plugins" | "projects" | "proposals" | "providers" | "requireModule" | "research" | "resolvePath" | "resolvePathFor" | "roughcuts" | "runtime" | "semantic" | "store" | "uiFacets" | "vault" | "whiteboards">;
@@ -368,10 +369,36 @@ export function researchModule(app: CreativeHost): MangaModule {
     moduleId: "manga.research", featureId: "research", displayName: "材料搜寻",
     register: (reg, input) => {
       reg("research.search", (envelope) => app.research.search(input(envelope)), { write: false });
-      reg("webpage.fetch", (envelope, signal) => app.research.fetch(input<{ url: string }>(envelope).url, signal));
+      reg("webpage.fetch", async (envelope, signal) => {
+        const value = input<{ url: string; backend?: "auto" | "local" | "deepseek" }>(envelope);
+        const backend = value.backend ?? "auto";
+        const runId = envelope.actor.kind === "agent" && envelope.actor.id.startsWith("agent:") ? envelope.actor.id.slice("agent:".length) : undefined;
+        const task = runId ? "agent" : "research";
+        // Reject invalid schemes and credentialed URLs before any provider or fallback call.
+        const target = classifyCloudFetchUrl(value.url);
+        if (backend === "deepseek") {
+          const fetched = await fetchWithDeepSeek(app, { url: value.url, task, ...(runId ? { runId } : {}) }, signal);
+          const saved = app.research.saveFetchedPage({ requestedUrl: fetched.url, title: fetched.title, text: fetched.content });
+          return { ...saved, source: "deepseek_fetch" as const, ...(fetched.site ? { site: fetched.site } : {}), ...(fetched.siteIcon ? { siteIcon: fetched.siteIcon } : {}) };
+        }
+        if (backend === "auto" && !target.privateOrLocal && hasAvailableFetchService(app)) {
+          try {
+            const fetched = await fetchWithDeepSeek(app, { url: value.url, task, ...(runId ? { runId } : {}) }, signal);
+            if (fetched.content.trim()) {
+              const saved = app.research.saveFetchedPage({ requestedUrl: fetched.url, title: fetched.title, text: fetched.content });
+              return { ...saved, source: "deepseek_fetch" as const, ...(fetched.site ? { site: fetched.site } : {}), ...(fetched.siteIcon ? { siteIcon: fetched.siteIcon } : {}) };
+            }
+          } catch (error) {
+            if (signal.aborted || (error instanceof MangaError && (error.code === "CANCELLED" || error.code === "VALIDATION_ERROR"))) throw error;
+            // Fall back cleanly to the local Readability fetcher (where NetworkBroker enforces allowPrivate / DNS checks).
+          }
+        }
+        const local = await app.research.fetch(value.url, signal);
+        return { ...local, source: "local" as const };
+      });
       // A web search through the provider's search service (计划 4.5): for the panel, and for the Agent when the task allows it; nothing is saved.
       reg("web.search", (envelope, signal) => {
-        const value = input<{ query: string; count?: number; connectionId?: string }>(envelope);
+        const value = input<{ query: string; count?: number; needContent?: boolean; connectionId?: string }>(envelope);
         const runId = envelope.actor.kind === "agent" && envelope.actor.id.startsWith("agent:") ? envelope.actor.id.slice("agent:".length) : undefined;
         return webSearch(app, { ...value, ...(runId ? { runId, task: "agent" } : { task: "research" }) }, signal);
       }, { write: false });

@@ -455,7 +455,11 @@ export function ShellFrame(props: {
               onBlur={chrome.dock === "overlay" ? onOverlayBlur : undefined}
             >
               {endInDock ? <div className="dock-top shell-drag" data-testid="dock-top"><span className="top-fill" />{titleEnd}</div> : null}
-              {chrome.dock === "overlay" ? <button type="button" className="m-2 text-sm border px-2 py-1 rounded" data-testid="shell-dock-hide" onClick={() => { setHover(initialHover()); dockButton.current?.focus(); }}>{labels.hideDock}</button> : null}
+              {chrome.dock === "overlay" ? (
+                <div className="shell-dock-overlay-bar">
+                  <button type="button" className="secondary-button shell-dock-overlay-close" data-testid="shell-dock-hide" onClick={() => { setHover(initialHover()); dockButton.current?.focus(); }}>{labels.hideDock}</button>
+                </div>
+              ) : null}
               <div className="shell-dock-body">{props.dock}</div>
             </aside>
           </Activity>

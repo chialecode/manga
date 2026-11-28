@@ -118,6 +118,15 @@
       "noteContent": false
     },
     {
+      "commandId": "agent.continueRun",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "agent.createSession",
       "moduleId": "manga.agent",
       "owner": true,
@@ -127,7 +136,25 @@
       "noteContent": false
     },
     {
+      "commandId": "agent.editAndResend",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "agent.getRun",
+      "moduleId": "manga.agent",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "agent.regenerateRun",
       "moduleId": "manga.agent",
       "owner": true,
       "agent": false,
@@ -1954,6 +1981,15 @@
       "noteContent": true
     },
     {
+      "commandId": "ocr.recognize",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
       "commandId": "package.importResolved",
       "moduleId": "manga.library",
       "owner": true,
@@ -2351,6 +2387,24 @@
     },
     {
       "commandId": "providers.add",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "providers.balance",
+      "moduleId": "manga.settings",
+      "owner": true,
+      "agent": false,
+      "agentProject": false,
+      "agentOptIn": false,
+      "noteContent": false
+    },
+    {
+      "commandId": "providers.capabilities",
       "moduleId": "manga.settings",
       "owner": true,
       "agent": false,

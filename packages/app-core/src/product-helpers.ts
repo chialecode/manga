@@ -131,7 +131,7 @@ export const refusedByService = (contextWindow: number) => new MangaError("BUDGE
 /** Whether the words of an error mean the request was longer than the model takes. */
 export const isContextOverflow = (error: unknown): boolean => error instanceof MangaError && (error.details as { kind?: string } | undefined)?.kind === "context";
 
-export type ModelPurposeName = "text" | "transcription" | "embedding" | "vision" | "speech" | "search";
+export type ModelPurposeName = "text" | "transcription" | "embedding" | "vision" | "speech" | "search" | "fetch" | "ocr";
 
 export type ConnectionRow = {
   id: string;
@@ -151,11 +151,16 @@ export type ConnectionRow = {
   label?: string;
 };
 
-/** The receipt of a run shows what was frozen without the picture bytes; those stay in the main process. */
+/** The receipt of a run shows what was frozen without the picture bytes or local path handles; those stay in the main process. */
 export function redactSnapshot(snapshot: unknown): unknown {
   if (!snapshot || typeof snapshot !== "object") return snapshot;
-  const value = snapshot as { media?: FrozenMedia };
-  return value.media ? { ...value, media: publicMedia(value.media) } : value;
+  const value = snapshot as { media?: FrozenMedia; fileAttachments?: Array<{ id: string; name: string; kind: string; mimeType?: string; bytes?: number; purpose?: string; pathHandle?: string }> };
+  const next: Record<string, unknown> = { ...value };
+  if (value.media) next.media = publicMedia(value.media);
+  if (Array.isArray(value.fileAttachments)) {
+    next.fileAttachments = value.fileAttachments.map(({ pathHandle: _pathHandle, ...rest }) => rest);
+  }
+  return next;
 }
 
 export function mimeForAudio(file: string): string {

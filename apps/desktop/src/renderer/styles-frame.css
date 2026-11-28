@@ -54,18 +54,21 @@
 .shell-sidebar { display: flex; flex-direction: column; min-height: 0; background: var(--color-sidebar); color: var(--color-text); outline: none; }
 /* The card of a view, out of the rail while the sidebar is folded away: it starts under the top row beside the rail, is as high as its content up to the window, and has a
    border, round corners and a shadow of its own. */
-.shell-card { max-height: calc(100% - var(--column-top-h)); border: 1px solid var(--color-border); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: 0 10px 28px #30364726; }
+.shell-card { max-height: calc(100% - var(--column-top-h)); border: 1px solid var(--color-border); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow-popover); }
 .shell-card > .sidebar { height: auto; max-height: 100%; flex: 0 1 auto; }
 .shell-card .sidebar-scroll { flex: 0 1 auto; }
 /* The main area meets the sidebar, the rail and the top row square (UI-01): a 1 px line and the ground tell them apart, no rounded corner. */
-.shell-main { display: flex; flex-direction: column; background: var(--color-surface); border-left: 1px solid var(--color-border); overflow: hidden; isolation: isolate; }
+/* `overflow: clip` (not `hidden`) prevents Chromium focus/click scrollIntoView from ever scrolling the chrome and tab strip off screen. */
+.shell-main { display: flex; flex-direction: column; background: var(--color-surface); border-left: 1px solid var(--color-border); overflow: clip; isolation: isolate; }
 .shell-compact .shell-main, .manga-shell[data-immersive="true"] .shell-main { border-left: 0; }
 /* The right end of the title bar over the main area's tab strip, while the dock is not docked (A-136). */
 .main-top-end { position: absolute; top: 0; right: 0; z-index: 31; display: flex; height: var(--column-top-h); }
 /* The dock's part of the title bar, with the right end of the title bar in it; sits above the dock resize divider so overflowing status pills stay clickable. */
 .dock-top { position: relative; z-index: 31; display: flex; align-items: center; justify-content: flex-end; flex: none; height: var(--column-top-h); background: var(--color-frame); border-bottom: 1px solid var(--color-border); }
 .shell-dock { display: flex; flex-direction: column; min-height: 0; background: var(--color-surface); border-left: 1px solid var(--color-border); outline: none; }
-.shell-dock[data-shell-state="overlay"] { box-shadow: var(--shadow-panel); }
+.shell-dock[data-shell-state="overlay"] { box-shadow: var(--shadow-popover); }
+.shell-dock-overlay-bar { display: flex; align-items: center; justify-content: flex-end; padding: 6px 12px 2px; border-bottom: 1px solid var(--color-border); background: var(--color-frame); }
+.shell-dock-overlay-close { font-size: 12px; padding: 3px 10px; }
 .shell-dock-body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; padding: 8px 16px 12px; }
 /* The divider is the one-pixel line between two regions; the pointer's room around it is wider than it looks. */
 .shell-divider { position: relative; flex: 0 0 1px; width: 1px; background: var(--color-border); cursor: col-resize; z-index: 5; touch-action: none; }
@@ -91,7 +94,7 @@
 @media (prefers-reduced-motion: reduce) { .shell-top[data-immersive="true"] { transition: none; } }
 
 /* ---- the main area: the docks of the contexts kept on screen ---- */
-.workspace-area { position: relative; flex: 1 1 0; min-height: 0; min-width: 0; }
+.workspace-area { position: relative; flex: 1 1 0; min-height: 0; min-width: 0; overflow: clip; }
 /*
  * The one way a layer that stays mounted is hidden (计划 4.8): the workspace behind the settings (A-101), the dock of a view out of sight and the parking
  * layer (A-107), a panel the dock has put behind another. `visibility: hidden` keeps the layer laid out (React Flow does not measure again when it comes
@@ -126,7 +129,7 @@
 .tab-panel:focus { outline: none; }
 .tab-boundary-body { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: auto; position: relative; }
 .tab-reader { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; position: relative; }
-.tab-crashed { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; color: var(--color-danger); }
+.tab-crashed { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; color: var(--color-danger-text); }
 .tab-unavailable { color: var(--color-subtle); display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .records-tab { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; min-width: 0; }
 .records-tab > .settings-view { flex: 1 1 0; }
@@ -287,7 +290,7 @@
 .sidebar-rename { flex: 1 1 0; min-width: 0; padding: 2px 4px; }
 .sidebar-rename input { width: 100%; padding: 3px 6px; font-size: 13px; border: 1px solid var(--color-accent); border-radius: 6px; background: var(--color-surface); color: var(--color-text); }
 /* The small card an entry shows when the pointer rests on it: the whole title, the project it belongs to, when it was last active. */
-.sidebar-tip { position: fixed; z-index: 55; display: flex; flex-direction: column; gap: 2px; width: 280px; max-width: calc(100vw - 16px); padding: 8px 10px; font-size: 12px; color: var(--color-subtle); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 9px; box-shadow: 0 8px 24px #30364722; pointer-events: none; }
+.sidebar-tip { position: fixed; z-index: 55; display: flex; flex-direction: column; gap: 2px; width: 280px; max-width: calc(100vw - 16px); padding: 8px 10px; font-size: 12px; color: var(--color-subtle); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 9px; box-shadow: var(--shadow-popover); pointer-events: none; }
 .sidebar-tip > strong { color: var(--color-text); font-weight: 600; overflow-wrap: anywhere; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

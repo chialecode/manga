@@ -13,8 +13,8 @@ export const ModelCapabilitySchema = z.enum([
 ]);
 export type ModelCapability = z.infer<typeof ModelCapabilitySchema>;
 
-/** What a connection is for. `speech` (reading text aloud) and `search` (web search) come only from a provider plugin's services (计划 4.2). */
-export const ModelPurposeSchema = z.enum(["text", "transcription", "embedding", "vision", "speech", "search"]);
+/** What a connection is for. `speech`, `search`, `fetch`, and `ocr` come from a provider plugin's declarative services. */
+export const ModelPurposeSchema = z.enum(["text", "transcription", "embedding", "vision", "speech", "search", "fetch", "ocr"]);
 export type ModelPurpose = z.infer<typeof ModelPurposeSchema>;
 
 export const AiRuntimeSchema = z.enum(["native", "pi"]);

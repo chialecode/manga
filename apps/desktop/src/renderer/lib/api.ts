@@ -1,5 +1,13 @@
 /** The renderer's one door to the main process: typed `window.manga`, and `call` for commands that throw on failure. */
-import type { BuildInfo, Channel } from "@manga/contracts";
+import type {
+  AgentStreamEvent,
+  BuildInfo,
+  Channel,
+  SpeechEvent,
+  SpeechRequest,
+  SpeechStreamPushRequest,
+  SpeechStreamStartRequest,
+} from "@manga/contracts";
 import { announceCommand } from "./lists-changed.ts";
 
 export type CommandResult<T = Record<string, unknown>> = {
@@ -74,9 +82,18 @@ export interface MangaHost {
   /** Only pages on the allow list open, in the system browser. */
   openExternal?(url: string): Promise<boolean>;
   /** Reading aloud (计划 4.7): PCM comes back through `onSpeech` in pieces, then the end or the failure. */
-  speak?(id: string, request: { text: string; voice?: string; connectionId?: string; task?: "read-aloud" | "novel" | "test" }): void;
+  speak?(id: string, request: Omit<SpeechRequest, "voice"> & { voice?: string }): void;
   stopSpeaking?(id: string): void;
-  onSpeech?(listener: (message: { id: string; kind: "chunk" | "end" | "error"; pcm?: Uint8Array; result?: unknown; error?: { code: string; message: string; retryable?: boolean; details?: Record<string, unknown> } }) => void): () => void;
+  onSpeech?(listener: (message: SpeechEvent) => void): () => void;
+  /** Optional WebSocket streaming TTS hooks wired by the desktop main/preload bridge. */
+  speechStreamStart?(id: string, request: SpeechStreamStartRequest): void;
+  speechStreamPush?(id: string, request: SpeechStreamPushRequest): void;
+  speechStreamFinish?(id: string): void;
+  speechStreamStop?(id: string): void;
+  /** Optional real-time agent stream channel wired by the desktop main/preload bridge. */
+  onAgentStream?(listener: (event: AgentStreamEvent) => void): () => void;
+  /** Optional helper to turn a dropped/pasted File into a validated main-process pathHandle. */
+  stashAttachment?(input: { name: string; mimeType?: string; bytes: Uint8Array }): Promise<{ pathHandle: string; name: string; mimeType?: string } | null>;
   overlay?: {
     publish(state: OverlayState | null): void;
     onStop(listener: () => void): () => void;

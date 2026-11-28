@@ -42,6 +42,8 @@ export type ComposerState = {
   noteMaterials: string[];
   /** Pictures prepared for the next task; the main process holds the bytes, this holds a thumbnail and the facts. */
   images: AttachedImage[];
+  /** Files or images picked, dropped, or pasted in the composer for upload with the next task. */
+  files?: ComposerFileAttachment[];
   /** Recordings whose transcripts go with the next task. */
   recordings: string[];
   /** The user turned online metadata search on for the next task only. */
@@ -69,7 +71,18 @@ export type AttachedImage = {
   region?: { x: number; y: number; width: number; height: number };
 };
 
-export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], noteMaterials: [], images: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, allowWebSearch: false, subtitleAheadMin: 0 });
+export type ComposerFileAttachment = {
+  id: string;
+  pathHandle: string;
+  name: string;
+  mimeType?: string;
+  bytes?: number;
+  kind: "image" | "file";
+  preview?: string;
+  purpose?: "user_data" | "text_recognition" | "rich_layout_recognition";
+};
+
+export const emptyComposer = (): ComposerState => ({ draft: "", materials: [], noteMaterials: [], images: [], files: [], recordings: [], allowOnline: false, allowSemantic: false, allowWebpage: false, allowWebSearch: false, subtitleAheadMin: 0 });
 
 export type AgentSelection = { resourceId: string; resourceRevisionId: string; partId?: string; start: number; end: number; quote: string };
 

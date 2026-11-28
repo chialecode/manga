@@ -10,8 +10,11 @@ import { NoteEditor } from "../../apps/desktop/src/renderer/note-editor.tsx";
 import { productWindow } from "../../apps/desktop/src/main/window-options.ts";
 import { readingSelection, ReadingPane, highlightSlices } from "../../apps/desktop/src/renderer/reading.tsx";
 
-/** jsdom has no layout, so the "bring the jump target into view" call the reader makes needs a stub. */
+/** jsdom has no layout, so the "bring the jump target into view" call the reader makes and ProseMirror's caret scrolling need stubs. */
 Element.prototype.scrollIntoView = () => {};
+const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
+Range.prototype.getClientRects = noRects;
+Range.prototype.getBoundingClientRect = () => new DOMRect();
 
 
 const editorLabels = {

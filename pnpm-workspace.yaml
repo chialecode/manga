@@ -32,3 +32,5 @@ overrides:
   "minimatch@9": "11.0.8"
   "minimatch@10": "11.0.8"
   "glob@13": "14.0.6"
+  # GHSA-238p-pmpm-9mq7 (katex < 0.18.2) via micromark-extension-llm-math; deduplicates transitive katex to 0.19.1.
+  "katex": "0.19.1"

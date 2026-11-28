@@ -16,7 +16,10 @@ export const ResearchCommandInputs = {
     limit: z.number().int().positive().max(100).optional(),
   }).strict(),
   /** Fetches the page at an address the person gave, and keeps its text as a version of that address. */
-  "webpage.fetch": z.object({ url: z.string().trim().min(1).max(2048) }).strict(),
+  "webpage.fetch": z.object({
+    url: z.string().trim().min(1).max(2048),
+    backend: z.enum(["auto", "local", "deepseek"]).optional(),
+  }).strict(),
   "webpage.list": z.object({ limit: z.number().int().positive().max(500).optional() }).strict(),
   "webpage.get": z.object({ pageId: id }).strict(),
   "webpage.delete": z.object({ pageId: id }).strict(),

@@ -127,6 +127,34 @@ export class ConversationService {
     return changed ? name : null;
   }
 
+  /** Whether this general conversation is still untitled on its first turn and eligible for model-generated inline titling. */
+  isEligibleForInlineTitle(sessionId: string): boolean {
+    const row = this.store.sqlite.prepare("SELECT id, title, kind, created_at FROM agent_sessions WHERE id = ?").get(sessionId) as Pick<Row, "id" | "title" | "kind" | "created_at"> | undefined;
+    if (!row || (row.kind !== "shared" && row.kind !== "project")) return false;
+    if (row.title !== autoName(row.created_at)) return false;
+    const spoken = this.store.sqlite.prepare("SELECT COUNT(*) AS n FROM agent_runs WHERE session_id = ?").get(sessionId) as { n: number };
+    return spoken.n <= 1;
+  }
+
+  /**
+   * Persists a model-generated inline title for an untitled general conversation, leaving any manual user rename untouched.
+   * Accepts replacing either the original timestamp auto-name or the synchronous first-line fallback title from `autoTitle`.
+   */
+  applyGeneratedTitle(sessionId: string, title: string, fallbackTitle?: string | null): string | null {
+    const cleaned = title.replace(/\s+/g, " ").trim();
+    if (!cleaned) return null;
+    const chars = [...cleaned];
+    const name = chars.length > 60 ? chars.slice(0, 60).join("").trim() : cleaned;
+    if (!name) return null;
+    const row = this.store.sqlite.prepare("SELECT id, title, kind, created_at FROM agent_sessions WHERE id = ?").get(sessionId) as Pick<Row, "id" | "title" | "kind" | "created_at"> | undefined;
+    if (!row || (row.kind !== "shared" && row.kind !== "project")) return null;
+    const matchesAuto = row.title === autoName(row.created_at);
+    const matchesFallback = Boolean(fallbackTitle && row.title === fallbackTitle);
+    if (!matchesAuto && !matchesFallback) return null;
+    const changed = this.store.sqlite.prepare("UPDATE agent_sessions SET title = ? WHERE id = ? AND title = ?").run(name, sessionId, row.title).changes;
+    return changed ? name : null;
+  }
+
   /** A new name for a conversation of any kind. */
   rename(sessionId: string, title: string): ConversationView {
     const name = title.replace(/\s+/g, " ").trim();
