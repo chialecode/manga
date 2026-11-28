@@ -364,6 +364,86 @@ describe("QuickNoteModal: anchor freeze, pauseOnQuickNote, draft persistence, ex
     await waitFor(() => expect(screen.queryByTestId("quick-note-modal")).toBeNull());
     expect(video().paused).toBe(true);
   });
+
+  it("closes QuickNoteModal cleanly on tab switch (no cross-resource mis-anchoring or stuck pauseOnQuickNote), respects pre-handled dictation Esc, and blocks video shortcuts behind the modal", async () => {
+    // Register a prior capture Escape handler (as dictation-hotkey.ts does at app boot before QuickNoteModal opens).
+    let dictationActive = false;
+    const cancelDictation = (event: KeyboardEvent) => {
+      if (dictationActive && event.key === "Escape") event.preventDefault();
+    };
+    window.addEventListener("keydown", cancelDictation, true);
+    try {
+      const host = installAppHost({
+        "settings.getMedia": () => ({ video: { pauseOnQuickNote: true } }),
+      });
+      render(<App />);
+
+      // Open Novel in novel view first so switching views later jumps directly between two noteable tabs (agent.noteable stays true).
+      await openShelf("novel");
+      await openWorkPage("open-res_n1");
+      fireEvent.click(screen.getByTestId("work-read"));
+      await screen.findByTestId("reading-body");
+
+      // Now open a new library tab (Ctrl+T) and open Video so both res_n1 and res_v1 are open noteable tabs.
+      fireEvent.keyDown(window, { key: "t", ctrlKey: true });
+      await openShelf("video");
+      fireEvent.click(await screen.findByTestId("open-res_v1"));
+      const focusedPanel = () => document.querySelector<HTMLElement>('[data-testid="tab-panel"][data-focused="true"]')!;
+      await waitFor(() => expect((within(focusedPanel()).getByTestId("work-read") as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(within(focusedPanel()).getByTestId("work-read"));
+      const video = () => screen.getByTestId("video-element") as HTMLVideoElement;
+      await waitFor(() => expect(video().getAttribute("src")).toBeTruthy());
+      act(() => media.loaded(video(), 120));
+      await act(async () => { await video().play(); });
+      expect(video().paused).toBe(false);
+
+      // Open QuickNoteModal on video -> video pauses.
+      fireEvent.keyDown(window, { key: "n" });
+      const input = await screen.findByTestId("quick-note-input") as HTMLTextAreaElement;
+      await waitFor(() => expect(video().paused).toBe(true));
+      fireEvent.change(input, { target: { value: "视频草稿" } });
+
+      // P2 #3: A prior capture listener preventing Escape (active RightAlt dictation cancel) must NOT close QuickNoteModal.
+      dictationActive = true;
+      const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      act(() => { window.dispatchEvent(esc); });
+      dictationActive = false;
+      expect(esc.defaultPrevented).toBe(true);
+      expect(screen.getByTestId("quick-note-modal")).toBeTruthy();
+
+      // P2 #4: Removing the anchor tag returns focus to the textarea, and even if focus moves to body, video shortcuts do NOT leak behind the modal.
+      fireEvent.click(screen.getByTestId("quick-note-tag-remove-position"));
+      expect(document.activeElement).toBe(screen.getByTestId("quick-note-input"));
+      (document.activeElement as HTMLElement).blur();
+      expect(document.activeElement).toBe(document.body);
+      fireEvent.keyDown(document.body, { key: " " });
+      fireEvent.keyDown(document.body, { key: "s" });
+      fireEvent.keyDown(document.body, { key: "i" });
+      expect(video().paused).toBe(true);
+      expect(host.of("screenshot.save")).toHaveLength(0);
+
+      // P1 #2: Switching directly to another noteable tab (novel) auto-closes QuickNoteModal, resets quickNoteSession, and preserves video draft without leaking res_v1 anchor into res_n1.
+      fireEvent.click(screen.getByTestId("nav-novel"));
+      await waitFor(() => expect(screen.queryByTestId("quick-note-modal")).toBeNull());
+      expect(quickNoteSession.get()).toEqual({ open: false, resourceId: null });
+
+      // Opening QuickNote on the novel shows a fresh novel draft & anchor, NOT res_v1's draft or anchor.
+      fireEvent.keyDown(window, { key: "n" });
+      const novelInput = await screen.findByTestId("quick-note-input") as HTMLTextAreaElement;
+      expect(novelInput.value).toBe("");
+      fireEvent.keyDown(window, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByTestId("quick-note-modal")).toBeNull());
+
+      // Returning to the video tab restores the preserved "视频草稿" draft.
+      fireEvent.click(screen.getByTestId("nav-video"));
+      await waitFor(() => expect(screen.getByTestId("video-element")).toBeTruthy());
+      fireEvent.keyDown(window, { key: "n" });
+      expect(((await screen.findByTestId("quick-note-input")) as HTMLTextAreaElement).value).toBe("视频草稿");
+      fireEvent.keyDown(window, { key: "Escape" });
+    } finally {
+      window.removeEventListener("keydown", cancelDictation, true);
+    }
+  });
 });
 
 describe("Dual fullscreen consistency (W & F) and temporary right-dock overlay drawer", () => {
@@ -551,6 +631,20 @@ describe("Plan D context triggers across Novel, Comic, and Video", () => {
     expect(screen.getByTestId("selection-bubble-ask")).toBeTruthy();
     expect(within(bubble).getByTestId("add-to-roughcut")).toBeTruthy();
     expect(screen.getByTestId("selection-bubble-clear")).toBeTruthy();
+
+    // P1 #1: Opening AddToRoughcut modal from SelectionBubble must NOT have its portaled inputs/selects blocked by SelectionBubble's onMouseDown.
+    fireEvent.click(within(bubble).getByTestId("add-to-roughcut"));
+    const roughcutDialog = await screen.findByTestId("add-to-roughcut-dialog");
+    const inField = within(roughcutDialog).getByTestId("add-to-roughcut-in");
+    const projectSelect = within(roughcutDialog).getByTestId("add-to-roughcut-project");
+    const inDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    inField.dispatchEvent(inDown);
+    expect(inDown.defaultPrevented).toBe(false);
+    const selectDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    projectSelect.dispatchEvent(selectDown);
+    expect(selectDown.defaultPrevented).toBe(false);
+    fireEvent.click(within(roughcutDialog).getByTestId("add-to-roughcut-cancel"));
+    await waitFor(() => expect(screen.queryByTestId("add-to-roughcut-dialog")).toBeNull());
 
     fireEvent.click(screen.getByTestId("selection-bubble-clear"));
     expect(screen.queryByTestId("selection-bubble")).toBeNull();

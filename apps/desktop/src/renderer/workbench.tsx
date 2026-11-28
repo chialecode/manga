@@ -159,20 +159,23 @@ export function Workbench(props: {
   // ---- Centered Quick-Note Modal & Plan D capture triggers -----------------------------------------------------------------------------
   const quickNoteTargetKey = shown.resourceId ?? shown.workId ?? shown.draftKey;
   const quickNoteDrafts = useRef(new Map<string, string>());
-  const [quickNote, setQuickNote] = useState<{ open: boolean; nonce: number; items: readonly FrozenQuickNoteItem[] }>({ open: false, nonce: 0, items: [] });
+  const [quickNote, setQuickNote] = useState<{ open: boolean; nonce: number; targetKey: string | null; items: readonly FrozenQuickNoteItem[] }>({ open: false, nonce: 0, targetKey: null, items: [] });
 
   const closeQuickNote = useCallback(() => {
-    setQuickNote((current) => (current.open ? { ...current, open: false } : current));
+    setQuickNote((current) => (current.open ? { ...current, open: false, targetKey: null } : current));
     quickNoteSession.set(false, null);
   }, []);
 
   useEffect(() => () => { quickNoteSession.set(false, null); }, []);
   useEffect(() => {
-    if (quickNote.open && (settingsOn || !agent.noteable)) closeQuickNote();
-  }, [quickNote.open, settingsOn, agent.noteable, closeQuickNote]);
+    if (!quickNote.open) return;
+    if (settingsOn || !agent.noteable || (quickNote.targetKey !== null && quickNote.targetKey !== quickNoteTargetKey)) {
+      closeQuickNote();
+    }
+  }, [quickNote.open, quickNote.targetKey, quickNoteTargetKey, settingsOn, agent.noteable, closeQuickNote]);
 
-  const openQuickNoteRef = useRef({ shown, agent, t, settingsOn });
-  openQuickNoteRef.current = { shown, agent, t, settingsOn };
+  const openQuickNoteRef = useRef({ shown, quickNoteTargetKey, agent, t, settingsOn });
+  openQuickNoteRef.current = { shown, quickNoteTargetKey, agent, t, settingsOn };
 
   const openQuickNote = useCallback((request?: OpenQuickNoteRequest) => {
     const cur = openQuickNoteRef.current;
@@ -230,7 +233,7 @@ export function Workbench(props: {
         }
       }
     }
-    setQuickNote((current) => ({ open: true, nonce: current.nonce + 1, items: frozen }));
+    setQuickNote((current) => ({ open: true, nonce: current.nonce + 1, targetKey: cur.quickNoteTargetKey, items: frozen }));
     quickNoteSession.set(true, cur.shown.resourceId ?? null);
   }, []);
 
@@ -536,9 +539,9 @@ export function Workbench(props: {
           t={t}
           open={quickNote.open}
           openNonce={quickNote.nonce}
-          targetKey={quickNoteTargetKey}
+          targetKey={quickNote.targetKey ?? quickNoteTargetKey}
           initialItems={quickNote.items}
-          initialDraft={quickNoteDrafts.current.get(quickNoteTargetKey) ?? ""}
+          initialDraft={quickNoteDrafts.current.get(quickNote.targetKey ?? quickNoteTargetKey) ?? ""}
           onDraftChange={(key, value) => {
             if (value) quickNoteDrafts.current.set(key, value);
             else quickNoteDrafts.current.delete(key);

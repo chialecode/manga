@@ -427,7 +427,7 @@ export function ReadingPane(props: {
 
   const copySelection = () => {
     if (!selection) return;
-    void navigator.clipboard?.writeText?.(selection.quote);
+    void navigator.clipboard?.writeText?.(selection.quote)?.catch(() => undefined);
     captureActions?.notify(t("capture.copied"));
     clearSelection();
   };

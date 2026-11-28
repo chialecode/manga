@@ -407,6 +407,7 @@ export function VideoPlayer(props: {
       // A range slider is a control of this player: its arrow keys are the player's. Text fields keep their own keys.
       const slider = node instanceof HTMLInputElement && node.type === "range";
       if (isTypingTarget(node) && !slider) return;
+      if (document.querySelector('[role="dialog"]')) return;
       if (node instanceof HTMLElement && (node.closest("[role='dialog']") || node.closest("[role='menu']"))) return;
       if (event.defaultPrevented) return;
       if (act(event)) event.preventDefault();

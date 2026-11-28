@@ -44,7 +44,11 @@ export function SelectionBubble(props: {
       role="toolbar"
       aria-label={props.label}
       style={style}
-      onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+      onMouseDown={(event) => {
+        if (!event.currentTarget.contains(event.target as Node)) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.stopPropagation()}

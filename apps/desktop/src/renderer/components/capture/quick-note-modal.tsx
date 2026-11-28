@@ -77,6 +77,7 @@ export function QuickNoteModal(props: QuickNoteModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key !== "Escape") return;
       if (isImeEvent(event, composingRef.current)) return;
       event.preventDefault();
@@ -99,6 +100,7 @@ export function QuickNoteModal(props: QuickNoteModalProps) {
 
   const removeItem = (id: string) => {
     setItems((current) => current.filter((item) => item.id !== id));
+    areaRef.current?.focus();
   };
 
   async function save() {
