@@ -297,6 +297,16 @@ describe("AT-105 what the page may ask of the window", () => {
     expect(preload).not.toContain("windowChrome");
     for (const name of ["windowState", "windowAction", "onWindowState"]) expect(preload).toContain(name);
   });
+
+  it("passes the resolved build channel synchronously into the main window preload without touching the recording overlay (#124)", () => {
+    const main = readFileSync(new URL("../../apps/desktop/src/main/index.ts", import.meta.url), "utf8");
+    expect(main).toContain("additionalArguments: [`--manga-channel=${buildInfo.channel}`]");
+    const preload = readFileSync(new URL("../../apps/desktop/src/preload/preload.ts", import.meta.url), "utf8");
+    expect(preload).toContain('const CHANNEL_ARG = "--manga-channel=";');
+    expect(preload).toContain("...(preloadChannel ? { channel: preloadChannel } : {}),");
+    const overlayBlock = /exposeInMainWorld\("mangaOverlay",\s*\{([\s\S]*?)\}\);/.exec(preload)![1]!;
+    expect(overlayBlock).not.toContain("channel");
+  });
 });
 
 describe("an abandoned update or quit", () => {

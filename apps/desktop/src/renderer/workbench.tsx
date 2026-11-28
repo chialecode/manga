@@ -10,7 +10,7 @@ import { TitleActions } from "./components/title-actions.tsx";
 import { DebugPanel, loadDebugView, saveDebugView, useNoticeLog, type DebugView } from "./pages/debug-panel.tsx";
 import { DictationCapsule } from "./voice/dictation-capsule.tsx";
 import { DictationPill } from "./voice/dictation-pill.tsx";
-import { attempt } from "./lib/api.ts";
+import { attempt, isContextDebugEnabled } from "./lib/api.ts";
 import { createPatchQueue, type PatchQueue } from "./lib/patch-queue.ts";
 import { useKeyTable } from "./lib/key-table.tsx";
 import { quoteTags } from "./lib/quote-tags.ts";
@@ -145,7 +145,8 @@ export function Workbench(props: {
   const shown = surface ?? contextSurface(context);
   const { composer } = useDraft(shown.draftKey);
 
-  // ---- the debug panel (A-48) -----------------------------------------------------------------------------------------------------------
+  // ---- the debug panel (A-48; non-release channels only, #124) -------------------------------------------------------------------------
+  const contextDebugEnabled = isContextDebugEnabled(s.host);
   const debugKey = shown.sessionId ?? shown.draftKey;
   const debugKeyRef = useRef(debugKey);
   const [debugView, setDebugView] = useState<DebugView>(() => loadDebugView(debugKey));
@@ -154,14 +155,15 @@ export function Workbench(props: {
     debugKeyRef.current = debugKey;
     setDebugView(loadDebugView(debugKey));
   }, [debugKey]);
-  const changeDebugView = (next: DebugView) => { setDebugView(next); saveDebugView(debugKeyRef.current, next); };
-  const toggleDebug = () => changeDebugView({ ...debugView, open: !debugView.open });
-  const noticeLog = useNoticeLog();
+  const debugOpen = contextDebugEnabled && debugView.open;
+  const changeDebugView = (next: DebugView) => { if (!contextDebugEnabled) return; setDebugView(next); saveDebugView(debugKeyRef.current, next); };
+  const toggleDebug = () => { if (!contextDebugEnabled) return; changeDebugView({ ...debugView, open: !debugView.open }); };
+  const noticeLog = useNoticeLog(60, contextDebugEnabled);
   const videoNow = useVideoFacts();
 
   // ---- keys: the actions of the one key table ---------------------------------------------------------------------------------------------
-  const latest = useRef({ s, controller, keyTable, toggleDebug });
-  latest.current = { s, controller, keyTable, toggleDebug };
+  const latest = useRef({ s, controller, keyTable, toggleDebug, contextDebugEnabled });
+  latest.current = { s, controller, keyTable, toggleDebug, contextDebugEnabled };
   useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
@@ -208,7 +210,7 @@ export function Workbench(props: {
       else if (is("global.splitToggle")) handled(() => workspace.toggleSplit());
       else if (is("global.newConversation") && services.facets.has("agent")) handled(() => { void services.open.newConversation(); });
       else if (is("global.newProject") && services.facets.has("projects")) handled(() => services.open.newProject());
-      else if (is("global.debug")) { event.preventDefault(); latest.current.toggleDebug(); }
+      else if (latest.current.contextDebugEnabled && is("global.debug")) { event.preventDefault(); latest.current.toggleDebug(); }
     };
     window.addEventListener("keydown", onKey);
     // The back and forward buttons of a mouse.
@@ -275,9 +277,10 @@ export function Workbench(props: {
   const busyItemsLabel = (s.update.busyDialog ?? [])
     .map((reason) => t(`update.busy.item.${reason}` as MessageKey))
     .join("、");
-  const debugPanel = debugView.open ? (
+  const debugPanel = debugOpen ? (
     <DebugPanel
       t={t}
+      enabled={contextDebugEnabled}
       view={debugView}
       onView={changeDebugView}
       scope={{ sessionId: agent.sessionId, resourceId: shown.resourceId, workId: shown.workId, page: shown.page }}
@@ -325,7 +328,8 @@ export function Workbench(props: {
         titleActions={(
           <TitleActions
             t={t}
-            debugOpen={debugView.open}
+            showDebug={contextDebugEnabled}
+            debugOpen={debugOpen}
             onDebug={toggleDebug}
             recorder={s.voiceOn ? s.recorder.state : null}
             onStopRecording={() => void s.recorder.stop("user")}

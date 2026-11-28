@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Bug, Loader2 } from "lucide-react";
 import type { Translator } from "@manga/i18n";
+import { isContextDebugEnabled } from "../lib/api.ts";
 import { isImeEvent } from "../lib/ime.ts";
 import { useKeyTable } from "../lib/key-table.tsx";
 import { Popup } from "./popup.tsx";
@@ -17,6 +18,7 @@ type T = Translator["t"];
  */
 export function TitleActions(props: {
   t: T;
+  showDebug?: boolean;
   debugOpen: boolean;
   onDebug: () => void;
   recorder: RecorderState | null;
@@ -26,6 +28,7 @@ export function TitleActions(props: {
   update?: UpdateHandle;
 }) {
   const { t, update } = props;
+  const showDebug = props.showDebug ?? isContextDebugEnabled();
   const keyTable = useKeyTable();
   const notesAnchor = useRef<HTMLButtonElement>(null);
   const status = update?.status ?? null;
@@ -33,8 +36,8 @@ export function TitleActions(props: {
   const justUpdated = status?.justUpdated ?? null;
   const notesText = status?.releaseNotes || justUpdated?.releaseNotes || t("update.notesEmpty");
   const notesShown = Boolean(update?.notesOpen && (readyVersion || justUpdated));
-  const debugChord = keyTable["global.debug"]?.[0];
-  const debugTitle = debugChord ? `${t("debug.open")} (${debugChord})` : t("debug.open");
+  const debugChord = showDebug ? keyTable["global.debug"]?.[0] : undefined;
+  const debugTitle = showDebug ? (debugChord ? `${t("debug.open")} (${debugChord})` : t("debug.open")) : undefined;
 
   useEffect(() => {
     if (!notesShown) return;
@@ -145,7 +148,9 @@ export function TitleActions(props: {
           <span>{props.scan.total > 0 ? t("scan.indicator.count", { done: props.scan.processed, total: props.scan.total }) : t("scan.indicator")}</span>
         </button>
       ) : null}
-      <button type="button" className="shell-icon" data-testid="debug-toggle" aria-pressed={props.debugOpen} aria-label={t("debug.open")} title={debugTitle} onClick={props.onDebug}><Bug size={17} /></button>
+      {showDebug ? (
+        <button type="button" className="shell-icon" data-testid="debug-toggle" aria-pressed={props.debugOpen} aria-label={t("debug.open")} title={debugTitle} onClick={props.onDebug}><Bug size={17} /></button>
+      ) : null}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Copy, X } from "lucide-react";
 import type { Translator } from "@manga/i18n";
-import { attempt } from "../lib/api.ts";
+import { attempt, isContextDebugEnabled } from "../lib/api.ts";
 import { redactForDebug } from "../lib/debug-redact.ts";
 import type { NovelDebug } from "../lib/reader-context.ts";
 import type { VideoFacts } from "../readers/video-health.ts";
@@ -34,9 +34,10 @@ export function saveDebugView(sessionKey: string, view: DebugView): void {
 export type NoticeEntry = { at: string; topic: string; payload: unknown };
 
 /** The last notices the host sent, for the "events" tab. A ring: the window never keeps more than a screenful of them. */
-export function useNoticeLog(limit = 60): NoticeEntry[] {
+export function useNoticeLog(limit = 60, enabled = true): NoticeEntry[] {
   const [entries, setEntries] = useState<NoticeEntry[]>([]);
   useEffect(() => {
+    if (!enabled) return;
     const off = window.manga.onNotice?.((notice) => {
       // Progress ticks arrive many times a second; only the latest of each topic is kept in a row.
       setEntries((current) => {
@@ -46,7 +47,7 @@ export function useNoticeLog(limit = 60): NoticeEntry[] {
       });
     });
     return () => off?.();
-  }, [limit]);
+  }, [limit, enabled]);
   return entries;
 }
 
@@ -67,6 +68,7 @@ type DebugReport = {
  */
 export function DebugPanel(props: {
   t: T;
+  enabled?: boolean;
   view: DebugView;
   onView: (view: DebugView) => void;
   scope: { sessionId?: string; resourceId?: string; workId?: string; page: string };
@@ -81,6 +83,7 @@ export function DebugPanel(props: {
   onNotice: (message: string) => void;
 }) {
   const { t, view } = props;
+  const allowed = props.enabled ?? isContextDebugEnabled();
   const [report, setReport] = useState<DebugReport | null>(null);
   const [error, setError] = useState<string>();
   const request = useRef(0);
@@ -94,10 +97,10 @@ export function DebugPanel(props: {
     setError(undefined);
     setReport(result.value);
   }, [sessionId, resourceId, workId, page]);
-  useEffect(() => { if (view.open) void load(); }, [view.open, load, props.version]);
+  useEffect(() => { if (allowed && view.open) void load(); }, [allowed, view.open, load, props.version]);
   const audio = useSyncExternalStore(subscribeMicDiagnostics, getMicDiagnostics, () => null);
   const drag = useRef<{ y: number; height: number } | null>(null);
-  if (!view.open) return null;
+  if (!allowed || !view.open) return null;
 
   const document = redactForDebug({ generatedAt: report?.generatedAt ?? new Date().toISOString(), page, current: { ...props.live, ...(audio ? { audio } : {}), scope: report?.scope, model: report?.model, tools: report?.tools, budget: report?.budget }, lastRun: report?.lastRun ?? null, events: props.events.slice(-30) });
 
