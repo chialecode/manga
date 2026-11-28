@@ -61,7 +61,7 @@ export function parseClock(text: string): number | null {
 export const RATE_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
 export const RATE_MIN = 0.25;
 export const RATE_MAX = 4;
-/** Share of the volume that stays while a recording lowers the picture's sound (Q-05 default: 30%). */
+/** Share of the volume that stays when the user opts into lowering playback sound while recording (30%). */
 export const DUCK_FACTOR = 0.3;
 /** How long → or ← must be down before it is a hold (the temporary rate, the rewind) and not a step. */
 export const HOLD_MS = 300;
