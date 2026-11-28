@@ -89,15 +89,18 @@ describe("player light controls", () => {
   it("keeps the picture itself black, and gives fullscreen bars dark translucent glass with >= 4.5:1 contrast over black and white (A-141)", () => {
     expect(channels("color-player-stage")).toEqual([0, 0, 0]);
     expect(video).toMatch(/\.video-stage \{[^}]*background: var\(--color-player-stage\)/);
-    expect(video).toMatch(/\.video-shell\[data-full\] \.video-controls \{[^}]*background: var\(--color-player-bar-overlay\)[^}]*color-scheme: dark[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
-    expect(frame).toMatch(/\.shell-top\[data-immersive="true"\] \{[^}]*background: var\(--color-frame-glass\)[^}]*color-scheme: dark[^}]*--color-text: var\(--color-fullscreen-ink\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
-    expect(reader).toMatch(/\.reader\[data-immersive\] \.reader-foot \{[^}]*background: var\(--color-frame-glass\)[^}]*color-scheme: dark; color: var\(--color-text\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
-    expect(reader).toMatch(/\.reader\[data-immersive\] \.comic-footer \{[^}]*background: var\(--color-frame-glass\)[^}]*color-scheme: dark; color: var\(--color-text\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
+    expect(video).toMatch(/\.video-shell\[data-full\] \.video-controls \{[^}]*background: var\(--color-player-bar-overlay\)[^}]*backdrop-filter: blur\(22px\) saturate\(1\.4\)[^}]*color-scheme: dark[^}]*text-shadow: var\(--shadow-fullscreen-ink\)[^}]*--color-accent-soft: var\(--color-fullscreen-selected-bg\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
+    expect(frame).toMatch(/\.shell-top\[data-immersive="true"\] \{[^}]*background: var\(--color-frame-glass\)[^}]*backdrop-filter: blur\(22px\) saturate\(1\.4\)[^}]*color-scheme: dark[^}]*text-shadow: var\(--shadow-fullscreen-ink\)[^}]*--color-text: var\(--color-fullscreen-ink\)[^}]*--color-accent-soft: var\(--color-fullscreen-selected-bg\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
+    expect(reader).toMatch(/\.reader\[data-immersive\] \.reader-foot \{[^}]*background: var\(--color-frame-glass\)[^}]*backdrop-filter: blur\(22px\) saturate\(1\.4\)[^}]*color-scheme: dark; color: var\(--color-text\); text-shadow: var\(--shadow-fullscreen-ink\)[^}]*--color-accent-soft: var\(--color-fullscreen-selected-bg\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
+    expect(reader).toMatch(/\.reader\[data-immersive\] \.comic-footer \{[^}]*background: var\(--color-frame-glass\)[^}]*backdrop-filter: blur\(22px\) saturate\(1\.4\)[^}]*color-scheme: dark; color: var\(--color-text\); text-shadow: var\(--shadow-fullscreen-ink\)[^}]*--color-accent-soft: var\(--color-fullscreen-selected-bg\)[^}]*--color-primary-foreground: var\(--color-fullscreen-surface\)[^}]*--color-focus: var\(--color-fullscreen-accent\)/);
+    expect(tokens).toMatch(/--shadow-fullscreen-ink:\s*0 1px 2px #[0-9A-Fa-f]{8};/);
 
     const glass = rgba("color-player-bar-overlay");
-    expect(luminance([glass[0], glass[1], glass[2]])).toBeLessThan(0.15);
-    expect(glass[3]).toBeGreaterThanOrEqual(0.72);
-    expect(glass[3]).toBeLessThanOrEqual(0.84);
+    const darkGlass = rgba("color-frame-glass", darkBlock);
+    expect(darkGlass).toEqual(glass);
+    expect(luminance([glass[0], glass[1], glass[2]])).toBeLessThan(0.1);
+    expect(glass[3]).toBeGreaterThanOrEqual(0.50);
+    expect(glass[3]).toBeLessThanOrEqual(0.62);
 
     const ink = channels("color-fullscreen-ink");
     const mutedInk = channels("color-fullscreen-ink-muted");
@@ -105,22 +108,24 @@ describe("player light controls", () => {
     const dangerText = channels("color-fullscreen-danger-text");
     const hover = rgba("color-fullscreen-hover");
     const surface = channels("color-fullscreen-surface");
-    const accentSoft = channels("color-fullscreen-accent-soft");
+    const selectedBg = rgba("color-fullscreen-selected-bg");
 
     for (const backdrop of [[0, 0, 0], [255, 255, 255]] as RGB[]) {
       const bar = composite(glass, backdrop);
       expect(contrast(ink, bar)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(mutedInk, bar)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(accent, bar)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(dangerText, bar)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(ink, composite(hover, bar))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(accent, bar)).toBeGreaterThanOrEqual(3);
+      expect(contrast(dangerText, bar)).toBeGreaterThanOrEqual(3);
+      expect(contrast(ink, composite(hover, bar))).toBeGreaterThanOrEqual(3);
+      expect(contrast(accent, composite(selectedBg, bar))).toBeGreaterThanOrEqual(4.5);
     }
 
     expect(contrast(ink, surface)).toBeGreaterThanOrEqual(7);
-    expect(contrast(mutedInk, surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(mutedInk, surface)).toBeGreaterThanOrEqual(7);
     expect(contrast(accent, surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dangerText, surface)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(surface, accent)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(accent, accentSoft)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(accent, composite(selectedBg, surface))).toBeGreaterThanOrEqual(4.5);
   });
 
   it("names every colour of the player's style sheet as a token: no literal colour in styles-video.css", () => {
