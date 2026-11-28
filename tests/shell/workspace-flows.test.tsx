@@ -387,9 +387,11 @@ describe("work home unified Bangumi layout", () => {
     expect(screen.getByTestId("person-p9")).toBeTruthy();
     expect(screen.getByTestId("credits-limit").textContent).toContain("20");
 
-    // 7. Related works with fold/expand (> 8).
+    // 7. Related works with fold/expand (> 8) and no repeated per-row provider name matching the section source.
     await waitFor(() => expect(screen.getByTestId("related-relations")).toBeTruthy());
     expect(screen.getByTestId("related-relations").querySelectorAll("li")).toHaveLength(8);
+    expect(screen.getByTestId("related-relations").textContent).not.toContain("Bangumi");
+    expect(screen.getByTestId("detail-related").textContent).toContain("Bangumi");
     fireEvent.click(screen.getByTestId("related-toggle"));
     expect(screen.getByTestId("related-relations").querySelectorAll("li")).toHaveLength(10);
 

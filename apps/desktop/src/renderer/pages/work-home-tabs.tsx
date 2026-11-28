@@ -558,7 +558,7 @@ function WorkRelatedSection(props: {
               <li key={`${item.relation}:${item.externalId}`} className="related-row">
                 <span className="chip">{item.relation}</span>
                 <span className="related-title">{item.title}</span>
-                <span className="detail-muted">{providerName(item.providerId, t)}</span>
+                {item.providerId !== related?.source?.providerId ? <span className="detail-muted">{providerName(item.providerId, t)}</span> : null}
                 <span className="related-actions">
                   {item.inLibraryWorkId ? <button type="button" className="link-button" data-testid={`related-open-${item.inLibraryWorkId}`} onClick={() => props.onOpenWork(item.inLibraryWorkId!)}>{t("detail.inLibrary")}</button> : null}
                   {isSafeExternalUrl(item.sourceUrl) ? <button type="button" className="link-button" onClick={() => props.onOpenExternal(item.sourceUrl!)}>{t("match.openPage")}<ExternalLink size={12} aria-hidden="true" /></button> : null}
