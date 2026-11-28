@@ -83,7 +83,7 @@ function mountHome(opened: { work: string[]; resource: string[]; add: number[]; 
   return { opened, ...props };
 }
 
-const tab = async (id: string) => { await waitFor(() => expect(screen.getByTestId(`detail-tab-${id}`)).toBeTruthy()); fireEvent.click(screen.getByTestId(`detail-tab-${id}`)); };
+const waitResources = async () => { await waitFor(() => expect(screen.getByTestId("detail-resources")).toBeTruthy()); };
 
 describe("what the user made outlives the file (AT-77)", () => {
   const content = (over: Record<string, unknown> = {}) => ({
@@ -102,7 +102,7 @@ describe("what the user made outlives the file (AT-77)", () => {
       "library.resourceContent": () => content(),
     });
     const home = mountHome();
-    await tab("resources");
+    await waitResources();
     // An available resource opens its reader; an unavailable one says what it offers instead.
     expect(screen.getByTestId("detail-open-r1").textContent).toContain("观看");
     expect(screen.getByTestId("detail-open-r2").textContent).toBe("查看记录");
@@ -124,7 +124,7 @@ describe("what the user made outlives the file (AT-77)", () => {
     // Nothing was opened as a file.
     expect(home.opened.resource).toEqual(["r1"]);
     fireEvent.click(screen.getByTestId("resource-content-back"));
-    await tab("resources");
+    await waitResources();
     expect(screen.getByTestId("detail-resources")).toBeTruthy();
   });
 
@@ -136,7 +136,7 @@ describe("what the user made outlives the file (AT-77)", () => {
       "library.repairSource": () => { available = true; return { pointersKept: 2 }; },
     }, { choosePath: async () => "handle-1" });
     const home = mountHome();
-    await tab("resources");
+    await waitResources();
     fireEvent.click(screen.getByTestId("detail-open-r2"));
     await screen.findByTestId("resource-content-relocate");
     fireEvent.click(screen.getByTestId("resource-content-relocate"));
@@ -160,7 +160,7 @@ describe("what the user made outlives the file (AT-77)", () => {
   it("shows a resource's progress as a percent of one, not as a fraction", async () => {
     installHost({ "works.get": () => detail({ resources: [resource("r1", { progress: { percent: 0.4, completion: "inProgress", locator: null, lastInteractionAt: null } })] }) });
     mountHome();
-    await tab("resources");
+    await waitResources();
     expect(within(screen.getByTestId("detail-resource-r1")).getByText("40%")).toBeTruthy();
     expect((within(screen.getByTestId("detail-resource-r1")).getByRole("progressbar") as HTMLProgressElement).value).toBe(40);
   });
@@ -206,7 +206,7 @@ describe("two releases of one title are one entry with versions (AT-78)", () => 
       "works.list": () => ({ items: [summary({ id: "w2", title: "另一部" })], total: 1, nextCursor: null }),
     });
     mountHome();
-    await tab("resources");
+    await waitResources();
     fireEvent.click(screen.getByTestId("detail-move-r1"));
     await screen.findByTestId("work-move-to-w2");
     expect(host.of("works.list").every((call) => call.input.group === false)).toBe(true);
@@ -221,7 +221,7 @@ describe("the library is what the library paths hold (AT-79)", () => {
     expect(screen.getByTestId("work-outside").textContent).toContain("有 1 个资源的文件不在任何资源库位置里");
     fireEvent.click(screen.getByTestId("work-outside-add"));
     expect(home.opened.add).toEqual([1]);
-    await tab("resources");
+    await waitResources();
     expect(screen.getByTestId("detail-outside-r1")).toBeTruthy();
     expect(screen.queryByTestId("detail-outside-r2")).toBeNull();
   });
@@ -270,7 +270,7 @@ describe("a resource's file is a library path and a path inside it (AT-93)", () 
   });
   const openContent = async () => {
     mountHome();
-    await tab("resources");
+    await waitResources();
     fireEvent.click(screen.getByTestId("detail-open-r2"));
     await screen.findByTestId("resource-content");
   };

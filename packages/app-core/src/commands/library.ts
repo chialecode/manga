@@ -173,8 +173,17 @@ export function libraryModule(app: LibraryHost): MangaModule {
           ...work,
           suggestedQuery: app.suggestedQuery(workId),
           linkedSource: linked ? {
-            providerId: linked.providerId, externalId: linked.externalId, namespace: linked.namespace, fetchedAt: linked.fetchedAt, detached: linked.detached, sourceUrl: linked.sourceUrl,
-            rating: linked.snapshot.rating, episodeCount: linked.snapshot.episodes.length, relatedCount: linked.snapshot.related.length,
+            providerId: linked.providerId,
+            externalId: linked.externalId,
+            namespace: linked.namespace,
+            fetchedAt: linked.fetchedAt,
+            detached: linked.detached,
+            sourceUrl: linked.sourceUrl,
+            rating: linked.snapshot.rating ?? null,
+            episodeCount: Array.isArray(linked.snapshot.episodes) ? linked.snapshot.episodes.length : 0,
+            relatedCount: Array.isArray(linked.snapshot.related) ? linked.snapshot.related.length : 0,
+            aliases: Array.isArray(linked.snapshot.aliases) ? linked.snapshot.aliases : [],
+            episodes: Array.isArray(linked.snapshot.episodes) ? linked.snapshot.episodes : [],
           } : null,
         };
       });

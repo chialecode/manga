@@ -91,12 +91,18 @@ describe("the work's profile: blanks can be filled, locked and put back (A-51)",
   function profileHost() {
     let override = { fields: {} as Record<string, unknown>, locked: [] as string[], cleared: [] as string[] };
     const detail = () => {
-      const fields: Record<string, Field> = { title: field("合成作品", "filename"), author: field(null), studio: field(null), tags: field(["校园"], "online", "provider") };
+      const fields: Record<string, Field> = {
+        title: field("合成作品", "filename"),
+        author: field(null),
+        studio: field(null),
+        releaseDate: field("2025-04-01", "online", "provider"),
+        tags: field(["校园"], "online", "provider"),
+      };
       for (const [key, value] of Object.entries(override.fields)) fields[key] = field(value as Field["value"], "user", override.locked.includes(key) ? "locked" : "user");
       for (const key of override.locked) if (!(key in override.fields) && fields[key]) fields[key] = { ...fields[key]!, policy: "locked" };
       return {
         id: "wc", title: "合成作品", author: null, mediaKind: "comic", shelf: "reading", coverId: null, lastResource: null, progress: 0, finishedCount: 0, resourceCount: 0, linked: false,
-        createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null, originalTitle: "合成作品", fields, override, links: [], snapshots: [], coverState: "auto", coverCount: 0, resources: [],
+        createdAt: "2026-01-01T00:00:00.000Z", lastOpenedAt: null, originalTitle: "[RawGroup] 合成作品", fields, override, links: [], snapshots: [], coverState: "auto", coverCount: 0, resources: [],
       };
     };
     const host = installHost({
@@ -111,11 +117,22 @@ describe("the work's profile: blanks can be filled, locked and put back (A-51)",
     profileHost();
     mount();
     await waitFor(() => expect(screen.getByTestId("detail-fields")).toBeTruthy());
-    expect(screen.getByTestId("field-title")).toBeTruthy();
-    expect(screen.getByTestId("field-tags")).toBeTruthy();
+    // Reading mode infobox shows supplementary facts without repeating hero title/tags or per-row provenance spam.
+    expect(screen.getByTestId("detail-fields").getAttribute("data-editing")).toBe("false");
+    expect(screen.getByTestId("detail-title").textContent).toBe("合成作品");
+    expect(screen.getByTestId("work-tags").textContent).toContain("校园");
+    expect(screen.queryByTestId("detail-subtitle")).toBeNull();
+    expect(screen.getByTestId("field-releaseDate").textContent).toContain("2025-04-01");
+    expect(screen.queryByTestId("field-source-releaseDate")).toBeNull();
+    expect(screen.queryByTestId("field-title")).toBeNull();
+    expect(screen.queryByTestId("field-tags")).toBeNull();
     expect(screen.queryByTestId("field-author")).toBeNull();
     expect(screen.queryByTestId("field-studio")).toBeNull();
     fireEvent.click(screen.getByTestId("detail-edit"));
+    expect(screen.getByTestId("detail-fields").getAttribute("data-editing")).toBe("true");
+    expect(screen.getByTestId("field-title")).toBeTruthy();
+    expect(screen.getByTestId("field-tags")).toBeTruthy();
+    expect(screen.getByTestId("field-source-title")).toBeTruthy();
     expect(screen.getByTestId("field-author").textContent).toContain("（空）");
     expect(screen.getByTestId("field-edit-author").textContent).toBe("填写");
     expect(screen.getByTestId("field-edit-title").textContent).toBe("编辑");
@@ -158,14 +175,330 @@ describe("the work's profile: blanks can be filled, locked and put back (A-51)",
     fireEvent.click(screen.getByTestId("field-lock-studio"));
     await waitFor(() => expect(host.of("works.setOverride")).toHaveLength(1));
     fireEvent.click(screen.getByTestId("detail-edit"));
-    // A locked blank stays shown, so the lock is not forgotten.
+    // A locked blank stays shown with a lock indicator, without verbose provenance clutter.
     await waitFor(() => expect(screen.getByTestId("field-studio")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("detail-edit"));
+    expect(screen.getByTestId("field-locked-studio")).toBeTruthy();
+    expect(screen.queryByTestId("field-source-studio")).toBeNull();
+    fireEvent.click(screen.getByTestId("infobox-edit"));
     fireEvent.click(screen.getByTestId("field-edit-tags"));
     fireEvent.change(screen.getByTestId("field-input-tags"), { target: { value: "冒险，校园、 日常" } });
     fireEvent.click(screen.getByTestId("field-save-tags"));
     await waitFor(() => expect(host.of("works.setOverride")).toHaveLength(2));
     expect(host.of("works.setOverride")[1]!.input).toMatchObject({ fields: { tags: ["冒险", "校园", "日常"] }, locked: ["studio"] });
+  });
+});
+
+describe("work home unified Bangumi layout", () => {
+  const makeEpisode = (ep: number, title: string, airdate: string) => ({ ep, sort: ep, type: 0, title, airdate });
+  const makeResource = (n: number, extra: Record<string, unknown> = {}) => ({
+    id: `res_${n}`,
+    title: `EP${String(n).padStart(2, "0")}`,
+    kind: "video",
+    ordinalLabel: `第 ${n} 话`,
+    ordinalNumber: n,
+    ordinalType: "episode",
+    revisionId: `rev_${n}`,
+    available: true,
+    outside: false,
+    unit: "ms",
+    total: 1_440_000,
+    progress: { percent: 0, completion: "new", locator: null, lastInteractionAt: null, contextId: null, contextName: null },
+    ...extra,
+  });
+
+  const bangumiDetail = (patch: Record<string, unknown> = {}) => ({
+    id: "wv_bgm",
+    title: "葬送的芙莉莲",
+    author: "山田钟人",
+    mediaKind: "video",
+    shelf: "reading",
+    coverId: null,
+    lastResource: { id: "res_1", title: "EP01", ordinalLabel: "第 1 话", revisionId: "rev_1" },
+    progress: 0.5,
+    finishedCount: 1,
+    resourceCount: 10,
+    versionCount: 1,
+    outsideCount: 0,
+    missingCount: 0,
+    linked: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    lastOpenedAt: null,
+    originalTitle: "[SweetSub][Sousou no Frieren][01-28][WebRip 1080p]",
+    fields: {
+      title: field("葬送的芙莉莲", "online", "provider"),
+      titleOriginal: field("葬送のフリーレン", "online", "provider"),
+      author: field("山田钟人", "online", "provider"),
+      studio: field("MADHOUSE", "online", "provider"),
+      summary: field("勇者辛美尔一行人打倒魔王后迎来了和平的时代。".repeat(16), "online", "provider"),
+      releaseDate: field("2023-09-29", "online", "provider"),
+      platform: field("TV", "online", "provider"),
+      episodeCount: { value: 28, source: "online", policy: "provider", candidates: [] },
+      tags: field(["奇幻", "治愈", "冒险"], "online", "provider"),
+    },
+    override: { fields: {}, locked: [], cleared: [] },
+    links: [{ providerId: "bangumi", externalId: "400602", namespace: "bangumi:subject", subjectType: 2, linkState: "linked", matchBasis: "manual", confirmedAt: "2026-10-01T00:00:00.000Z" }],
+    snapshots: [],
+    coverState: "auto",
+    coverCount: 1,
+    linkedSource: {
+      providerId: "bangumi",
+      externalId: "400602",
+      namespace: "bangumi:subject",
+      fetchedAt: "2026-10-01T00:00:00.000Z",
+      detached: false,
+      sourceUrl: "https://bgm.tv/subject/400602",
+      rating: { score: 8.8, total: 15230, rank: 12, scale: "bangumi-10" },
+      episodeCount: 28,
+      relatedCount: 10,
+      aliases: ["Frieren: Beyond Journey's End", "フリーレン"],
+      episodes: Array.from({ length: 10 }, (_, idx) => makeEpisode(idx + 1, `第${idx + 1}集标题`, `2023-10-${String(idx + 1).padStart(2, "0")}`)),
+    },
+    resources: [
+      makeResource(1, { progress: { percent: 1, completion: "completed", locator: null, lastInteractionAt: null, contextId: null, contextName: null } }),
+      makeResource(2, { progress: { percent: 0.45, completion: "in_progress", locator: null, lastInteractionAt: null, contextId: null, contextName: null } }),
+      makeResource(3, { available: false }),
+      ...Array.from({ length: 7 }, (_, idx) => makeResource(idx + 4)),
+    ],
+    ...patch,
+  });
+
+  it("renders two tabs only, true titleOriginal subtitle, Bangumi rating card, compact infobox, synopsis collapse, episode grid with Bangumi titles, and eager credits/related", async () => {
+    const openedResources: string[] = [];
+    const openedExternal: string[] = [];
+    const host = installHost({
+      "works.get": () => bangumiDetail(),
+      "metadata.characters": () => ({
+        source: { providerId: "bangumi", fetchedAt: "2026-10-01T00:00:00.000Z" },
+        characters: Array.from({ length: 10 }, (_, idx) => ({
+          id: `c${idx + 1}`,
+          name: `角色 ${idx + 1}`,
+          relation: idx < 2 ? "主角" : "配角",
+          summary: "",
+          avatar: null,
+          actors: [{ id: `a${idx + 1}`, name: `声优 ${idx + 1}` }],
+        })),
+        persons: Array.from({ length: 12 }, (_, idx) => ({
+          id: `p${idx + 1}`,
+          name: `制作人 ${idx + 1}`,
+          relation: "导演",
+          career: ["director"],
+          episodes: "ep1-10",
+          avatar: null,
+        })),
+        avatarLimit: 20,
+      }),
+      "metadata.related": () => ({
+        workId: "wv_bgm",
+        source: { providerId: "bangumi", fetchedAt: "2026-10-01T00:00:00.000Z", detached: false },
+        relations: Array.from({ length: 10 }, (_, idx) => ({
+          relation: "续集",
+          externalId: `rel_${idx + 1}`,
+          title: `关联条目 ${idx + 1}`,
+          subjectType: 2,
+          providerId: "bangumi",
+          inLibraryWorkId: idx === 0 ? "w_seq" : null,
+          sourceUrl: `https://bgm.tv/subject/${5000 + idx}`,
+        })),
+        similar: [],
+      }),
+      "workFolders.forWork": () => ({ groups: [] }),
+    });
+    (window as unknown as { manga: { openExternal?: (url: string) => void } }).manga.openExternal = (url: string) => openedExternal.push(url);
+
+    render(
+      <WorkHome
+        t={t}
+        workId="wv_bgm"
+        facets={new Set(["library", "video", "metadata", "voice"])}
+        formatDate={i18n.formatDate}
+        onBack={() => undefined}
+        onOpenResource={(id) => openedResources.push(id)}
+        onOpenNote={() => undefined}
+        onOpenWork={() => undefined}
+        onChanged={() => undefined}
+        onError={() => undefined}
+        onNotice={() => undefined}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("work-bangumi-layout")).toBeTruthy());
+
+    // 1. Two tabs only, separating 作品资料 and 我的记录.
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((node) => node.textContent)).toEqual(["作品资料", "我的记录"]);
+    expect(screen.queryByTestId("detail-tab-resources")).toBeNull();
+    expect(screen.queryByTestId("detail-tab-characters")).toBeNull();
+    expect(screen.queryByTestId("detail-tab-staff")).toBeNull();
+    expect(screen.queryByTestId("detail-tab-related")).toBeNull();
+
+    // 2. Hero header: true titleOriginal subtitle (NEVER raw release folder name), rating badge card with score/rank/votes.
+    expect(screen.getByTestId("detail-subtitle").textContent).toBe("葬送のフリーレン");
+    expect(screen.getByTestId("page-work").textContent).not.toContain("[SweetSub]");
+    expect(screen.getByTestId("work-rating-score").textContent).toBe("8.8");
+    expect(screen.getByTestId("work-rating-rank").textContent).toContain("#12");
+    expect(screen.getByTestId("work-rating-votes").textContent).toContain("15230");
+
+    // 3. Compact infobox: aliases + supplementary facts, no title/tags/summary/titleOriginal duplicate, single source footer.
+    const infobox = screen.getByTestId("detail-fields");
+    expect(within(infobox).getByTestId("field-aliases").textContent).toContain("Frieren: Beyond Journey's End");
+    expect(within(infobox).getByTestId("field-studio").textContent).toContain("MADHOUSE");
+    expect(within(infobox).queryByTestId("field-title")).toBeNull();
+    expect(within(infobox).queryByTestId("field-tags")).toBeNull();
+    expect(within(infobox).queryByTestId("field-summary")).toBeNull();
+    expect(within(infobox).queryByTestId("field-titleOriginal")).toBeNull();
+    expect(within(infobox).queryByTestId("field-source-studio")).toBeNull();
+    expect(within(infobox).getByTestId("detail-source-line").textContent).toContain("Bangumi");
+    fireEvent.click(within(infobox).getByTestId("detail-open-page"));
+    expect(openedExternal).toEqual(["https://bgm.tv/subject/400602"]);
+
+    // 4. Synopsis block with collapse/expand.
+    expect(screen.getByTestId("work-summary")).toBeTruthy();
+    const sumToggle = screen.getByTestId("summary-toggle");
+    expect(sumToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(sumToggle);
+    expect(sumToggle.getAttribute("aria-expanded")).toBe("true");
+
+    // 5. Bangumi episode cell grid + resource list with Bangumi episode titles and fold/expand (> 8).
+    expect(screen.getByTestId("work-episode-grid")).toBeTruthy();
+    expect(screen.getByTestId("episode-cell-res_1").getAttribute("data-state")).toBe("completed");
+    expect(screen.getByTestId("episode-cell-res_1").getAttribute("title")).toContain("第1集标题");
+    expect(screen.getByTestId("episode-cell-res_1").getAttribute("title")).toContain("2023-10-01");
+    expect(screen.getByTestId("episode-cell-res_2").getAttribute("data-state")).toBe("in-progress");
+    expect(screen.getByTestId("episode-cell-res_3").getAttribute("data-state")).toBe("unavailable");
+    expect(screen.getByTestId("episode-cell-res_4").getAttribute("data-state")).toBe("unwatched");
+    fireEvent.click(screen.getByTestId("episode-cell-res_2"));
+    expect(openedResources).toEqual(["res_2"]);
+    expect(screen.getByTestId("detail-resource-ep-res_1").textContent).toContain("第1集标题");
+    expect(screen.queryByTestId("detail-resource-res_9")).toBeNull();
+    fireEvent.click(screen.getByTestId("resources-toggle"));
+    expect(screen.getByTestId("detail-resource-res_9")).toBeTruthy();
+
+    // 6. Eager characters & staff with fold/expand (> 8) and avatar limit note (10 + 12 = 22 > 20).
+    await waitFor(() => expect(screen.getByTestId("credit-characters")).toBeTruthy());
+    expect(host.of("metadata.characters")).toHaveLength(1);
+    expect(screen.getByTestId("character-c1").textContent).toContain("声优 1");
+    expect(screen.queryByTestId("character-c9")).toBeNull();
+    fireEvent.click(screen.getByTestId("characters-toggle"));
+    expect(screen.getByTestId("character-c9")).toBeTruthy();
+
+    expect(screen.getByTestId("credit-persons")).toBeTruthy();
+    expect(screen.queryByTestId("person-p9")).toBeNull();
+    fireEvent.click(screen.getByTestId("staff-toggle"));
+    expect(screen.getByTestId("person-p9")).toBeTruthy();
+    expect(screen.getByTestId("credits-limit").textContent).toContain("20");
+
+    // 7. Related works with fold/expand (> 8) and no repeated per-row provider name matching the section source.
+    await waitFor(() => expect(screen.getByTestId("related-relations")).toBeTruthy());
+    expect(screen.getByTestId("related-relations").querySelectorAll("li")).toHaveLength(8);
+    expect(screen.getByTestId("related-relations").textContent).not.toContain("Bangumi");
+    expect(screen.getByTestId("detail-related").textContent).toContain("Bangumi");
+    fireEvent.click(screen.getByTestId("related-toggle"));
+    expect(screen.getByTestId("related-relations").querySelectorAll("li")).toHaveLength(10);
+
+    // 8. Keyboard switch to 我的记录 tab separates personal notes/recordings/work folder.
+    fireEvent.keyDown(screen.getByTestId("detail-tab-overview"), { key: "ArrowRight" });
+    await waitFor(() => expect(screen.getByTestId("detail-notes")).toBeTruthy());
+    expect(screen.queryByTestId("work-bangumi-layout")).toBeNull();
+    expect(screen.getByTestId("work-folder")).toBeTruthy();
+  });
+
+  it("shows a quiet infobox hint and hides empty credits sections for an unlinked work", async () => {
+    const host = installHost({
+      "works.get": () => bangumiDetail({
+        linked: false,
+        linkedSource: null,
+        fields: { title: field("未关联作品", "filename") },
+        originalTitle: "[Raw] 未关联作品",
+        resources: [makeResource(1)],
+      }),
+      "metadata.related": () => ({ workId: "wv_bgm", source: null, relations: [], similar: [] }),
+    });
+    render(
+      <WorkHome
+        t={t}
+        workId="wv_bgm"
+        facets={new Set(["library", "video", "metadata"])}
+        formatDate={i18n.formatDate}
+        onBack={() => undefined}
+        onOpenResource={() => undefined}
+        onOpenNote={() => undefined}
+        onOpenWork={() => undefined}
+        onChanged={() => undefined}
+        onError={() => undefined}
+        onNotice={() => undefined}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("infobox-empty")).toBeTruthy());
+    expect(screen.queryByTestId("work-rating")).toBeNull();
+    expect(screen.queryByTestId("work-summary")).toBeNull();
+    expect(screen.queryByTestId("detail-characters")).toBeNull();
+    expect(screen.queryByTestId("detail-staff")).toBeNull();
+    expect(screen.queryByTestId("work-episode-grid")).toBeNull();
+    expect(host.of("metadata.characters")).toHaveLength(0);
+  });
+
+  it("does not fire metadata.characters for a newly navigated unlinked work, and gives split-screen panes unique tab/panel IDs with roving tabindex", async () => {
+    const host = installHost({
+      "works.get": (input) => (input.workId === "wv_bgm"
+        ? bangumiDetail({ id: "wv_bgm" })
+        : bangumiDetail({
+          id: "wv_unlinked",
+          title: "未关联续作",
+          linked: false,
+          linkedSource: null,
+          fields: { title: field("未关联续作", "filename") },
+          resources: [makeResource(1, { progress: { percent: Number.NaN, completion: "new", locator: null, lastInteractionAt: null, contextId: null, contextName: null } })],
+        })),
+      "metadata.characters": () => ({
+        source: { providerId: "bangumi", fetchedAt: "2026-10-01T00:00:00.000Z" },
+        characters: [{ id: "c1", name: "芙莉莲", relation: "主角", summary: "", avatar: null, actors: [] }],
+        persons: [],
+        avatarLimit: 20,
+      }),
+      "metadata.related": () => ({ workId: "wv_bgm", source: null, relations: [], similar: [] }),
+    });
+
+    const props = (workId: string) => ({
+      t,
+      workId,
+      facets: new Set(["library", "video", "metadata"]),
+      formatDate: i18n.formatDate,
+      onBack: () => undefined,
+      onOpenResource: () => undefined,
+      onOpenNote: () => undefined,
+      onOpenWork: () => undefined,
+      onChanged: () => undefined,
+      onError: () => undefined,
+      onNotice: () => undefined,
+    });
+
+    const { rerender } = render(<WorkHome {...props("wv_bgm")} />);
+    await waitFor(() => expect(screen.getByTestId("character-c1")).toBeTruthy());
+    expect(host.of("metadata.characters").map((call) => call.input.workId)).toEqual(["wv_bgm"]);
+
+    // Switching the mounted WorkHome from a linked work to an unlinked work must NOT trigger a spurious credits fetch for the unlinked work.
+    rerender(<WorkHome {...props("wv_unlinked")} />);
+    await waitFor(() => expect(screen.getByTestId("detail-title").textContent).toBe("未关联续作"));
+    expect(host.of("metadata.characters").map((call) => call.input.workId)).toEqual(["wv_bgm"]);
+    // Malformed NaN progress renders safely as 0%, never NaN%.
+    expect(screen.getByTestId("detail-resource-res_1").textContent).toContain("0%");
+    expect(screen.getByTestId("detail-resource-res_1").textContent).not.toContain("NaN");
+
+    // Two WorkHome panes mounted side by side (split-screen) have unique tab/panel IDs and roving tabindex.
+    cleanup();
+    render(
+      <div>
+        <WorkHome {...props("wv_bgm")} />
+        <WorkHome {...props("wv_unlinked")} />
+      </div>,
+    );
+    await waitFor(() => expect(screen.getAllByTestId("detail-tab-overview")).toHaveLength(2));
+    const overviewTabs = screen.getAllByTestId("detail-tab-overview");
+    const recordsTabs = screen.getAllByTestId("detail-tab-records");
+    expect(overviewTabs[0]!.id).not.toBe(overviewTabs[1]!.id);
+    expect(overviewTabs[0]!.getAttribute("aria-controls")).not.toBe(overviewTabs[1]!.getAttribute("aria-controls"));
+    expect(overviewTabs[0]!.getAttribute("tabindex")).toBe("0");
+    expect(recordsTabs[0]!.getAttribute("tabindex")).toBe("-1");
   });
 });
 

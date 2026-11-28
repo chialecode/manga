@@ -442,4 +442,43 @@ describe("characters, voice actors and staff", () => {
       }
     } finally { ctx.app.close(); }
   });
+
+  it("returns stored aliases, episodes and rating in works.get linkedSource for the unified work page", async () => {
+    const ctx = await boot();
+    try {
+      fake.subject(201, {
+        type: 2,
+        name: "Sousou no Frieren",
+        name_cn: "葬送的芙莉莲",
+        imageName: "b.png",
+        infobox: [
+          { key: "别名", value: [{ v: "Frieren: Beyond Journey's End" }, { v: "フリーレン" }] },
+          { key: "导演", value: "斋藤圭一郎" },
+          { key: "动画制作", value: "MADHOUSE" },
+        ],
+        rating: { score: 8.8, total: 12345, rank: 18 },
+      });
+      fake.episodes.set(201, [
+        { id: 1001, type: 0, name: "冒険の終わり", name_cn: "冒险的终点", sort: 1, ep: 1, airdate: "2023-09-29", duration: "24:00" },
+        { id: 1002, type: 0, name: "別に魔法じゃなくたって…", name_cn: "哪怕不是魔法也无所谓", sort: 2, ep: 2, airdate: "2023-09-29", duration: "24:00" },
+      ]);
+      const target = comic(ctx, "[SweetSub] Frieren");
+      ok(await run(ctx, "metadata.link", { workId: target.workId, providerId: "bangumi", externalId: "201" }));
+      const detail = ok<{
+        linkedSource: {
+          rating: { score: number; total: number; rank: number | null; scale: string } | null;
+          aliases: string[];
+          episodes: Array<{ ep: number | null; sort: number; type: number; title: string; airdate?: string }>;
+          episodeCount: number;
+        } | null;
+      }>(await run(ctx, "works.get", { workId: target.workId }));
+      expect(detail.linkedSource?.rating).toEqual({ score: 8.8, total: 12345, rank: 18, scale: "bangumi-10" });
+      expect(detail.linkedSource?.aliases).toEqual(["Frieren: Beyond Journey's End", "フリーレン"]);
+      expect(detail.linkedSource?.episodeCount).toBe(2);
+      expect(detail.linkedSource?.episodes).toEqual([
+        expect.objectContaining({ ep: 1, sort: 1, type: 0, title: "冒险的终点", airdate: "2023-09-29" }),
+        expect.objectContaining({ ep: 2, sort: 2, type: 0, title: "哪怕不是魔法也无所谓", airdate: "2023-09-29" }),
+      ]);
+    } finally { ctx.app.close(); }
+  });
 });
