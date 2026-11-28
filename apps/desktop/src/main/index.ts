@@ -426,6 +426,7 @@ if (!quitForUpdateFlag) void app.whenReady().then(async () => {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: [`--manga-channel=${buildInfo.channel}`],
       enableBlinkFeatures: "AudioVideoTracks",
       ...(smoke ? { backgroundThrottling: false } : {}),
     },

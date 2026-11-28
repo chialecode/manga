@@ -9,6 +9,7 @@
 /* The right end of the title bar (A-136): the state and debugging switches, the stop button, the dock's switch, the window's own buttons. */
 .title-end { display: flex; align-items: center; align-self: stretch; gap: 8px; flex: 0 0 auto; height: 100%; }
 .title-end > [data-testid="shell-title-actions"] { align-self: center; }
+.title-end > [data-testid="shell-title-actions"]:empty { display: none; }
 .shell-top .shell-icon, .shell-top .menu-button, .title-end .shell-icon, .rail-top .shell-icon { width: 28px; height: 28px; }
 .titlebar-menu { display: inline-flex; }
 .titlebar-menu .menu-button { width: auto; height: 28px; padding: 0 8px; justify-content: center; border-radius: 6px; color: var(--color-on-frame); }
@@ -82,8 +83,9 @@
 .shell-pullout:hover, .shell-pullout:active { background: transparent; box-shadow: none; }
 @media (max-width: 959px) { [data-shell-state="dock"] { display: none; } }
 
-/* The window fills with the page: the top floats over it as glass and comes down when the pointer reaches the top edge. It takes no room, so the page keeps its size. */
-.shell-top[data-immersive="true"] { position: absolute; top: 0; left: 0; right: 0; background: var(--color-frame-glass); backdrop-filter: blur(14px); transform: translateY(-100%); transition: transform 160ms ease; box-shadow: var(--shadow-panel); }
+/* The window fills with the page: the top floats over it as dark translucent glass and comes down when the pointer reaches the top edge. It takes no room, so the page keeps its size. */
+.shell-top[data-immersive="true"] { position: absolute; top: 0; left: 0; right: 0; background: var(--color-frame-glass); backdrop-filter: blur(18px) saturate(1.25); border-bottom: 1px solid var(--color-fullscreen-line); color-scheme: dark; --color-surface: var(--color-fullscreen-surface); --color-muted: var(--color-fullscreen-hover); --color-border: var(--color-fullscreen-border); --color-text: var(--color-fullscreen-ink); --color-subtle: var(--color-fullscreen-ink-muted); --color-on-frame: var(--color-fullscreen-ink-muted); --color-accent: var(--color-fullscreen-accent); --color-accent-soft: var(--color-fullscreen-accent-soft); --color-primary-foreground: var(--color-fullscreen-surface); --color-focus: var(--color-fullscreen-accent); --color-danger-text: var(--color-fullscreen-danger-text); transform: translateY(-100%); transition: transform 160ms ease; box-shadow: var(--shadow-panel); }
+.shell-top[data-immersive="true"] .shell-icon:hover { color: var(--color-text); }
 .shell-top[data-immersive="true"][data-revealed="true"], .shell-top[data-immersive="true"]:hover, .shell-top[data-immersive="true"]:focus-within { transform: none; }
 /* In that state the top edge is still a place to take hold of the window: an invisible strip is a drag area, and the zone under it brings the top down. */
 .immersive-drag { position: absolute; top: 0; left: 0; right: 0; height: 8px; z-index: 42; }

@@ -1,6 +1,6 @@
 import type { ReadingStylePatch, ShellPreference } from "@manga/contracts/reading";
 import type { Translator } from "@manga/i18n";
-import type { HostState } from "../../lib/api.ts";
+import { isContextDebugEnabled, type HostState } from "../../lib/api.ts";
 import type { ConnectionForm } from "../../lib/types.ts";
 import type { SettingsPageId } from "../../lib/shell-model.ts";
 import type { PackageFlow } from "../../hooks/use-package.ts";
@@ -168,7 +168,7 @@ export function SettingsView(props: SettingsViewProps) {
           </SettingsPage>
         );
       case "shortcuts":
-        return <ShortcutsPage t={t} keys={props.keys} recording={props.recording.settings} onGoto={() => props.onGoto("recording")} />;
+        return <ShortcutsPage t={t} keys={props.keys} recording={props.recording.settings} showDebug={isContextDebugEnabled(props.host)} onGoto={() => props.onGoto("recording")} />;
       case "models":
         return <ModelsPage i18n={i18n} settings={props.settings} firstRunLocations={<LocationGroups t={i18n.t} layout={props.host.layout} />} {...props.models} />;
       case "agent":
