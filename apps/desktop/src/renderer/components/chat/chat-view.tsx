@@ -5,7 +5,6 @@ import type { DictationHandle } from "../../voice/use-dictation.ts";
 import type { StreamNote, StreamVoice } from "../../hooks/use-session-stream.ts";
 import type { ComposerProps } from "./composer.tsx";
 import { ChatPane } from "./chat-pane.tsx";
-import { Capsule } from "./capsule.tsx";
 import { MaterialsDialog } from "./materials-dialog.tsx";
 import { TraceDialog } from "../trace-dialog.tsx";
 
@@ -34,6 +33,7 @@ export type ChatViewProps = ChatDeps & {
   /** The open resource whose recordings can be taken along, when the voice module is on. */
   recordingsOf?: string | null;
   onAttach: (what: "page" | "frame") => void;
+  screenshot?: ComposerProps["screenshot"];
   onJumpNote: (note: StreamNote) => void;
   onJumpVoice: (voice: StreamVoice, source?: StreamVoice["sources"][number]) => void;
   onOpenRecording: (voice: StreamVoice) => void;
@@ -43,9 +43,8 @@ export type ChatViewProps = ChatDeps & {
 };
 
 /**
- * The conversation as the right pane and the chat page show it: the message list, the input with its tags, quick tasks and "+" menu,
- * and the capsule that stands in for the pane when it is folded away. One place builds the three from the same `useChat`, so the
- * pane, the page and the capsule can never disagree about what a note or a question does.
+ * The conversation as the right pane and the chat page show it: the message list, the input with its tags, quick tasks,
+ * screenshot trigger, "+" menu and pure-toggle microphone.
  */
 export function useChatView(props: ChatViewProps) {
   const { i18n, composer, recorder } = props;
@@ -62,8 +61,6 @@ export function useChatView(props: ChatViewProps) {
       enabled: true,
       toggleKey: recorder.settings.toggleKey,
       onToggle: recorder.toggle,
-      onHoldStart: () => { void recorder.begin("hold"); },
-      onHoldEnd: recorder.endHold,
       onStop: () => { void recorder.stop("user"); },
     }
     : null;
@@ -110,6 +107,7 @@ export function useChatView(props: ChatViewProps) {
     onToggleWebSearch: () => props.updateComposer((current) => ({ allowWebSearch: !current.allowWebSearch })),
     onSubtitleAhead: (minutes) => props.patchComposer({ subtitleAheadMin: minutes }),
     onMaterials: () => setMaterials(true),
+    screenshot: props.screenshot ?? null,
     mic,
     dictation: props.dictation
       ? {
@@ -162,6 +160,5 @@ export function useChatView(props: ChatViewProps) {
     </>
   );
 
-  const capsule = <Capsule t={t} mic={mic} tagLabel={chat.tags[0]?.label} onNote={chat.noteable ? chat.sendNote : undefined} />;
-  return { chat, pane, capsule };
+  return { chat, pane };
 }

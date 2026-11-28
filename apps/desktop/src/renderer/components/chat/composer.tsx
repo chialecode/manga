@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, Mic, Plus, Sparkles, Square, TextQuote, X } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { ArrowUp, Camera, Mic, Plus, Sparkles, Square, TextQuote, X } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import type { QuickTask } from "@manga/contracts/quick-tasks";
 import { Menu, type MenuItem } from "../menu.tsx";
@@ -13,39 +13,16 @@ type T = Translator["t"];
 
 export type ChatMode = "note" | "ask";
 export const SUBTITLE_AHEAD = [0, 1, 3, 10] as const;
-const HOLD_AFTER_MS = 320;
 
 /**
- * The microphone of the right pane: a short press starts and stops a recording, holding the button records while it is held and ends
- * when it is let go. Losing the pointer ends a hold, so a button that was never released cannot leave the microphone open.
+ * Pure ON/OFF recording toggle button in the right pane composer: click once to start recording, click again to stop and save.
+ * Keyboard F8 (toggle) and F9 (hold) remain handled globally by `useRecorder`.
  */
-export function MicButton(props: { t: T; state: RecorderState; enabled: boolean; toggleKey: string; onToggle: () => void; onHoldStart: () => void; onHoldEnd: () => void; onStop: () => void; className?: string }) {
+export function MicButton(props: { t: T; state: RecorderState; enabled: boolean; toggleKey: string; onToggle: () => void; onStop: () => void; className?: string }) {
   const { t, state } = props;
-  const timer = useRef<number | undefined>(undefined);
-  const holding = useRef(false);
-  const pressing = useRef(false);
-  const onHoldEndRef = useRef(props.onHoldEnd);
-  onHoldEndRef.current = props.onHoldEnd;
-  useEffect(() => () => {
-    window.clearTimeout(timer.current);
-    if (holding.current) {
-      holding.current = false;
-      onHoldEndRef.current();
-    }
-  }, []);
   if (!props.enabled) return null;
   const active = state.phase !== "idle";
   const label = active ? t("record.stop") : t("record.startKey", { key: props.toggleKey });
-
-  const release = (cancelled: boolean) => {
-    window.clearTimeout(timer.current);
-    if (!pressing.current) return;
-    pressing.current = false;
-    if (holding.current) { holding.current = false; props.onHoldEnd(); return; }
-    if (cancelled) return;
-    if (state.phase === "idle") props.onToggle();
-    else if (state.phase === "recording") props.onStop();
-  };
 
   return (
     <button
@@ -57,19 +34,7 @@ export function MicButton(props: { t: T; state: RecorderState; enabled: boolean;
       aria-label={label}
       title={t("chat.mic.hint")}
       onDragStart={(event) => event.preventDefault()}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        pressing.current = true;
-        holding.current = false;
-        if (state.phase === "idle") timer.current = window.setTimeout(() => { holding.current = true; props.onHoldStart(); }, HOLD_AFTER_MS);
-      }}
-      onPointerUp={() => release(false)}
-      onPointerCancel={() => release(true)}
-      onLostPointerCapture={() => release(true)}
-      onClick={(event) => {
-        // A keyboard press arrives as a click with no pointer; a mouse press was already handled on release.
-        if (event.detail !== 0) return;
+      onClick={() => {
         if (state.phase === "idle") props.onToggle();
         else if (state.phase === "recording") props.onStop();
       }}
@@ -159,6 +124,8 @@ export type ComposerProps = {
   onToggleWebSearch?: () => void;
   onSubtitleAhead: (minutes: number) => void;
   onMaterials: () => void;
+  /** Capture & save a screenshot of the focused video/comic reader (distinct from AI attachImage in "+" menu). */
+  screenshot?: { label: string; key?: string; disabled?: boolean; onTake: () => void } | null;
   mic: Parameters<typeof MicButton>[0] | null;
   dictation?: { active: boolean; onToggle: (target: HTMLTextAreaElement | null) => void } | null;
   placeholder?: string;
@@ -249,6 +216,19 @@ export function Composer(props: ComposerProps) {
           {props.mode === "ask" && props.modelPicker ? props.modelPicker : null}
           <span className="flex-1" />
           <Menu label={t("chat.plus")} testId="chat-plus" align="end" trigger={<Plus size={16} />} items={plus} />
+          {props.screenshot ? (
+            <button
+              type="button"
+              className="icon-button chat-screenshot"
+              data-testid="composer-screenshot"
+              aria-label={props.screenshot.key ? t("edge.screenshotKey", { label: props.screenshot.label, key: props.screenshot.key }) : props.screenshot.label}
+              title={props.screenshot.key ? t("edge.screenshotKey", { label: props.screenshot.label, key: props.screenshot.key }) : props.screenshot.label}
+              disabled={props.screenshot.disabled}
+              onClick={props.screenshot.onTake}
+            >
+              <Camera size={16} />
+            </button>
+          ) : null}
           {props.mode === "ask" && props.dictation ? (
             <button
               type="button"

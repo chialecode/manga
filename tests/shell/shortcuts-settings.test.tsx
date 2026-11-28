@@ -122,17 +122,17 @@ describe("Settings › Shortcuts (AT-90)", () => {
   it("refuses to put a default back where another action has taken the key, and puts every default back in one step", async () => {
     const store = installStore();
     render(<Harness />);
-    // Mute moves from M to N; the custom-rate key takes M.
+    // Mute moves from M to U; the custom-rate key takes M (N is reserved by global.quickNote).
     fireEvent.click(screen.getByTestId("key-remove-video.mute-0"));
     await waitFor(() => expect(screen.getByTestId("key-none-video.mute")).toBeTruthy());
-    add("video.mute", "n");
-    await waitFor(() => expect(chords("video.mute")).toEqual(["N"]));
+    add("video.mute", "u");
+    await waitFor(() => expect(chords("video.mute")).toEqual(["U"]));
     add("video.customRate", "m");
     await waitFor(() => expect(chords("video.customRate")).toEqual(["R", "M"]));
     fireEvent.click(screen.getByTestId("key-reset-video.mute"));
     expect(screen.getByTestId("key-message").textContent).toContain("M 现在被“切换自定义倍速");
-    expect(chords("video.mute")).toEqual(["N"]);
-    expect(store.saved()).toEqual({ "video.mute": ["N"], "video.customRate": ["R", "M"] });
+    expect(chords("video.mute")).toEqual(["U"]);
+    expect(store.saved()).toEqual({ "video.mute": ["U"], "video.customRate": ["R", "M"] });
     fireEvent.click(screen.getByTestId("keys-reset-all"));
     await waitFor(() => expect(chords("video.mute")).toEqual(["M"]));
     expect(chords("video.customRate")).toEqual(["R"]);

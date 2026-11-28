@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { chordLabel } from "@manga/contracts/keys";
 import { attempt } from "../lib/api.ts";
 import { contextSurface, type AgentSurface } from "../agent-surface.ts";
 import { ConversationBar } from "../components/conversation-bar.tsx";
 import { useChatView } from "../components/chat/chat-view.tsx";
+import { useFocusedScreenshot } from "../lib/capture-bridge.ts";
+import type { NoteAnchor } from "../lib/chat-model.ts";
+import { useKeyTable } from "../lib/key-table.tsx";
 import { mediaContextFor, readerContext, type ReaderContext } from "../lib/reader-context.ts";
-import type { QuoteTag } from "../lib/quote-tags.ts";
+import { quoteTags, type QuoteTag } from "../lib/quote-tags.ts";
 import type { AttachedImage } from "../lib/types.ts";
 import { useDraft } from "./drafts.ts";
 import { useModelChoice } from "./model-choice.tsx";
@@ -14,10 +18,13 @@ const ACTIVE = ["queued", "running", "waiting_input"];
 
 export type AgentHandle = {
   pane: ReactNode;
-  capsule: ReactNode;
   running: boolean;
   stop: () => void;
   sessionId: string | undefined;
+  noteable: boolean;
+  sendNote: (text: string, options?: { frozenAnchor?: NoteAnchor | null; frozenTags?: readonly QuoteTag[]; clearComposerDraft?: boolean }) => Promise<boolean>;
+  expandToDock: (text: string, frozenTags: readonly QuoteTag[]) => void;
+  askWithTag: (tag: QuoteTag) => void;
 };
 
 /**
@@ -256,8 +263,20 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
   const readAloudOn = speechAvailable(connections as Array<Record<string, unknown>>);
   const resources = (s.workspace?.resources as Array<{ id: string; title: string }> | undefined) ?? [];
   const reader = readerContext.get();
+  const focusedShot = useFocusedScreenshot();
+  const keyTable = useKeyTable();
   const mediaResourceId = shown.resourceId;
   const title = shown.page === "work" ? shown.label : shown.resourceTitle;
+  const composerScreenshot = !options.wide && focusedShot && shown.resourceId === focusedShot.resourceId
+    ? {
+      label: focusedShot.label,
+      key: (keyTable[focusedShot.kind === "comic" ? "comic.screenshot" : "video.screenshot"]?.[0])
+        ? chordLabel(keyTable[focusedShot.kind === "comic" ? "comic.screenshot" : "video.screenshot"]![0]!)
+        : undefined,
+      disabled: focusedShot.disabled,
+      onTake: () => { void focusedShot.take(); },
+    }
+    : null;
 
   const chatView = useChatView({
     i18n,
@@ -299,6 +318,7 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     resources,
     recordingsOf: s.voiceOn ? mediaResourceId ?? null : null,
     onAttach: (what) => void attachImage(what),
+    screenshot: composerScreenshot,
     onJumpNote: (note) => { if (note.resourceId && note.locator) void s.open.anchor({ resourceId: note.resourceId, resourceRevisionId: note.resourceRevisionId ?? undefined, locator: note.locator } as never); },
     onJumpVoice: (voice, source) => {
       const where = source ?? voice.sources[0];
@@ -323,7 +343,31 @@ export function useAgent(surface: AgentSurface | null, options: { wide?: boolean
     ),
   });
 
-  return { pane: chatView.pane, capsule: active ? chatView.capsule : null, running, stop: () => void stop(), sessionId };
+  const expandToDock = useCallback((text: string, frozenTags: readonly QuoteTag[]) => {
+    for (const tag of frozenTags) quoteTags.put(tag);
+    if (text.trim()) {
+      update((current) => ({
+        draft: current.draft.trim() ? `${current.draft}\n${text}` : text,
+      }));
+    }
+    chatView.chat.setMode("note");
+  }, [update, chatView.chat]);
+
+  const askWithTag = useCallback((tag: QuoteTag) => {
+    quoteTags.put(tag);
+    chatView.chat.setMode("ask");
+  }, [chatView.chat]);
+
+  return {
+    pane: chatView.pane,
+    running,
+    stop: () => void stop(),
+    sessionId,
+    noteable: active && chatView.chat.noteable,
+    sendNote: chatView.chat.sendNote,
+    expandToDock,
+    askWithTag,
+  };
 }
 
 /** Whether answers and novels can be read aloud (计划 4.7): a speech connection whose plugin is on. */

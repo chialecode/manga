@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { chordOf } from "@manga/contracts/keys";
+import { chordLabel, chordOf } from "@manga/contracts/keys";
 import { moveRailView, railOrder, type RailView } from "@manga/contracts";
 import type { MessageKey } from "@manga/i18n";
 import type { ShellPreference } from "@manga/contracts/reading";
 import { MAIN_FLOOR } from "../../../../packages/app-core/src/domain/shell-layout.ts";
+import { EdgeHandle } from "./components/capture/edge-handle.tsx";
+import { QuickNoteModal, type FrozenQuickNoteItem } from "./components/capture/quick-note-modal.tsx";
 import { Modal } from "./components/modal.tsx";
 import { Toasts } from "./components/toast.tsx";
 import { TitleActions } from "./components/title-actions.tsx";
@@ -11,9 +13,13 @@ import { DebugPanel, loadDebugView, saveDebugView, useNoticeLog, type DebugView 
 import { DictationCapsule } from "./voice/dictation-capsule.tsx";
 import { DictationPill } from "./voice/dictation-pill.tsx";
 import { attempt, isContextDebugEnabled } from "./lib/api.ts";
+import { CaptureActionsProvider, captureBridge, quickNoteSession, useFocusedScreenshot, type CaptureActions, type OpenQuickNoteRequest } from "./lib/capture-bridge.ts";
+import { anchorFromContext } from "./lib/chat-model.ts";
+import { FullscreenPortal } from "./lib/fullscreen-portal.tsx";
+import { isTypingTarget } from "./lib/ime.ts";
 import { createPatchQueue, type PatchQueue } from "./lib/patch-queue.ts";
 import { useKeyTable } from "./lib/key-table.tsx";
-import { quoteTags } from "./lib/quote-tags.ts";
+import { quoteTags, type QuoteTag } from "./lib/quote-tags.ts";
 import { readerContext, useReaderContext, type ReaderContext } from "./lib/reader-context.ts";
 import { railViewsFor } from "./lib/shell-model.ts";
 import { useVideoFacts } from "./lib/video-facts.ts";
@@ -24,7 +30,7 @@ import { SettingsNav } from "./pages/settings/settings-nav.tsx";
 import { SettingsPane } from "./pages/settings/settings-pane.tsx";
 import { hiddenSettingsPages } from "./pages/settings/settings-view.tsx";
 import { SearchBox } from "./search-box.tsx";
-import { ShellFrame, type ShellLabels, type ShellRail, type SidebarContent } from "./shell.tsx";
+import { ShellFrame, type ShellControl, type ShellLabels, type ShellRail, type SidebarContent } from "./shell.tsx";
 import { useShellState } from "./shell-state.ts";
 import { useRail } from "./sidebar-data.ts";
 import { Sidebar, VIEW_LABEL } from "./sidebar.tsx";
@@ -65,10 +71,14 @@ export function Workbench(props: {
   const columns = useWorkspaceValue((c) => c.columns());
   const context = s.currentContext;
   const [viewport, setViewport] = useState({ width: window.innerWidth || 1280, height: window.innerHeight || 840 });
-  const chrome = useRef<{ toggle: (side: Side) => void } | null>(null);
+  const chrome = useRef<ShellControl | null>(null);
   const { state: shellStore, snapshot } = useShellState();
   const { rail, change: changeRail } = useRail();
   const settingsOn = snapshot.settings.on;
+
+  useLayoutEffect(() => {
+    captureBridge.focus(focused?.id ?? null);
+  }, [focused?.id]);
 
   useEffect(() => {
     const onResize = () => setViewport({ width: window.innerWidth || 1280, height: window.innerHeight || 840 });
@@ -144,6 +154,133 @@ export function Workbench(props: {
   const hasDock = surface !== null;
   const shown = surface ?? contextSurface(context);
   const { composer } = useDraft(shown.draftKey);
+  const focusedShot = useFocusedScreenshot();
+
+  // ---- Centered Quick-Note Modal & Plan D capture triggers -----------------------------------------------------------------------------
+  const quickNoteTargetKey = shown.resourceId ?? shown.workId ?? shown.draftKey;
+  const quickNoteDrafts = useRef(new Map<string, string>());
+  const [quickNote, setQuickNote] = useState<{ open: boolean; nonce: number; items: readonly FrozenQuickNoteItem[] }>({ open: false, nonce: 0, items: [] });
+
+  const closeQuickNote = useCallback(() => {
+    setQuickNote((current) => (current.open ? { ...current, open: false } : current));
+    quickNoteSession.set(false, null);
+  }, []);
+
+  useEffect(() => () => { quickNoteSession.set(false, null); }, []);
+  useEffect(() => {
+    if (quickNote.open && (settingsOn || !agent.noteable)) closeQuickNote();
+  }, [quickNote.open, settingsOn, agent.noteable, closeQuickNote]);
+
+  const openQuickNoteRef = useRef({ shown, agent, t, settingsOn });
+  openQuickNoteRef.current = { shown, agent, t, settingsOn };
+
+  const openQuickNote = useCallback((request?: OpenQuickNoteRequest) => {
+    const cur = openQuickNoteRef.current;
+    if (cur.settingsOn || !cur.agent.noteable) return;
+    const frozen: FrozenQuickNoteItem[] = [];
+    if (request?.tag) {
+      frozen.push({
+        id: request.tag.id,
+        kind: request.tag.kind,
+        label: request.tag.label,
+        title: request.tag.kind === "selection" ? request.tag.quote : request.tag.label,
+        tag: request.tag,
+      });
+    } else if (request?.anchor) {
+      frozen.push({
+        id: "position",
+        kind: "position",
+        label: request.anchorLabel ?? cur.t("quickNote.anchor"),
+        anchor: request.anchor,
+      });
+    } else {
+      const pendingTag = cur.shown.resourceId ? captureBridge.getPendingTag(cur.shown.resourceId) : null;
+      const resourceTags = cur.shown.resourceId ? quoteTags.all().filter((tag) => tag.resourceId === cur.shown.resourceId) : [];
+      if (pendingTag) {
+        frozen.push({
+          id: pendingTag.id,
+          kind: pendingTag.kind,
+          label: pendingTag.label,
+          title: pendingTag.kind === "selection" ? pendingTag.quote : pendingTag.label,
+          tag: pendingTag,
+        });
+      } else if (resourceTags.length > 0) {
+        for (const tag of resourceTags) {
+          frozen.push({
+            id: tag.id,
+            kind: tag.kind,
+            label: tag.label,
+            title: tag.kind === "selection" ? tag.quote : tag.label,
+            tag,
+          });
+        }
+      } else {
+        const live = readerContext.get();
+        if (live && live.resourceId === cur.shown.resourceId) {
+          const exactLive: ReaderContext = live.kind === "video"
+            ? { ...live, positionMs: captureBridge.getExactVideoMs(live.resourceId) ?? live.positionMs }
+            : live;
+          const anchor = anchorFromContext(exactLive, cur.t);
+          frozen.push({
+            id: `position:${exactLive.resourceId}`,
+            kind: "position",
+            label: anchor.quoteText ?? cur.t("quickNote.anchor"),
+            anchor,
+          });
+        }
+      }
+    }
+    setQuickNote((current) => ({ open: true, nonce: current.nonce + 1, items: frozen }));
+    quickNoteSession.set(true, cur.shown.resourceId ?? null);
+  }, []);
+
+  const focusDockComposer = useCallback(() => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>('[data-testid="shell-dock"] [data-testid="agent-composer"]')?.focus();
+    });
+  }, []);
+
+  const expandQuickNoteToDock = useCallback((text: string, items: readonly FrozenQuickNoteItem[]) => {
+    closeQuickNote();
+    if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => undefined);
+    const frozenTags = items.map((item) => item.tag).filter((tag): tag is QuoteTag => tag !== undefined);
+    agent.expandToDock(text, frozenTags);
+    chrome.current?.ensureDockVisible();
+    focusDockComposer();
+  }, [agent, closeQuickNote, focusDockComposer]);
+
+  const askAgentWithTag = useCallback((tag: QuoteTag) => {
+    if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => undefined);
+    agent.askWithTag(tag);
+    chrome.current?.ensureDockVisible();
+    focusDockComposer();
+  }, [agent, focusDockComposer]);
+
+  const saveQuickNote = useCallback(async (text: string, items: readonly FrozenQuickNoteItem[]): Promise<boolean> => {
+    const frozenTags = items.map((item) => item.tag).filter((tag): tag is QuoteTag => tag !== undefined);
+    const frozenPosition = items.find((item) => item.anchor)?.anchor ?? null;
+    return agent.sendNote(text, {
+      frozenTags,
+      frozenAnchor: frozenTags.length > 0 ? undefined : frozenPosition,
+      clearComposerDraft: false,
+    });
+  }, [agent]);
+
+  const toggleRecording = useCallback(() => {
+    if (!s.voiceOn) return;
+    if (s.recorder.state.phase === "idle") s.recorder.toggle();
+    else if (s.recorder.state.phase === "recording") void s.recorder.stop("user");
+  }, [s.voiceOn, s.recorder]);
+
+  const captureActions = useMemo<CaptureActions>(() => ({
+    openQuickNote,
+    askAgentWithTag,
+    toggleRecording,
+    recordingActive: s.voiceOn && s.recorder.state.phase !== "idle",
+    voiceEnabled: s.voiceOn,
+    recordingToggleKey: s.recorder.settings.toggleKey,
+    notify: (message: string) => s.setNotice(message),
+  }), [openQuickNote, askAgentWithTag, toggleRecording, s.voiceOn, s.recorder.state.phase, s.recorder.settings.toggleKey, s.setNotice]);
 
   // ---- the debug panel (A-48; non-release channels only, #124) -------------------------------------------------------------------------
   const contextDebugEnabled = isContextDebugEnabled(s.host);
@@ -162,8 +299,8 @@ export function Workbench(props: {
   const videoNow = useVideoFacts();
 
   // ---- keys: the actions of the one key table ---------------------------------------------------------------------------------------------
-  const latest = useRef({ s, controller, keyTable, toggleDebug, contextDebugEnabled });
-  latest.current = { s, controller, keyTable, toggleDebug, contextDebugEnabled };
+  const latest = useRef({ s, controller, keyTable, toggleDebug, contextDebugEnabled, openQuickNote, noteable: agent.noteable });
+  latest.current = { s, controller, keyTable, toggleDebug, contextDebugEnabled, openQuickNote, noteable: agent.noteable };
   useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
@@ -210,6 +347,7 @@ export function Workbench(props: {
       else if (is("global.splitToggle")) handled(() => workspace.toggleSplit());
       else if (is("global.newConversation") && services.facets.has("agent")) handled(() => { void services.open.newConversation(); });
       else if (is("global.newProject") && services.facets.has("projects")) handled(() => services.open.newProject());
+      else if (!inSettings && is("global.quickNote") && !isTypingTarget(event.target) && latest.current.noteable) handled(() => latest.current.openQuickNote());
       else if (latest.current.contextDebugEnabled && is("global.debug")) { event.preventDefault(); latest.current.toggleDebug(); }
     };
     window.addEventListener("keydown", onKey);
@@ -301,8 +439,39 @@ export function Workbench(props: {
     />
   ) : null;
 
+  const quickNoteChord = keyTable["global.quickNote"]?.[0] ? chordLabel(keyTable["global.quickNote"]![0]!) : undefined;
+  const dockChord = keyTable["global.dock"]?.[0] ? chordLabel(keyTable["global.dock"]![0]!) : undefined;
+  const edgeShot = focusedShot && shown.resourceId === focusedShot.resourceId
+    ? {
+      label: focusedShot.label,
+      disabled: focusedShot.disabled,
+      key: (keyTable[focusedShot.kind === "comic" ? "comic.screenshot" : "video.screenshot"]?.[0])
+        ? chordLabel(keyTable[focusedShot.kind === "comic" ? "comic.screenshot" : "video.screenshot"]![0]!)
+        : undefined,
+      onTake: () => { void focusedShot.take(); },
+    }
+    : null;
+  const edgeHandle = (
+    <EdgeHandle
+      t={t}
+      mic={s.voiceOn ? {
+        state: s.recorder.state,
+        enabled: true,
+        toggleKey: s.recorder.settings.toggleKey,
+        onToggle: s.recorder.toggle,
+        onStop: () => { void s.recorder.stop("user"); },
+      } : null}
+      noteable={agent.noteable}
+      quickNoteKey={quickNoteChord}
+      onOpenQuickNote={() => openQuickNote()}
+      screenshot={edgeShot}
+      dock={hasDock ? { key: dockChord, onOpen: () => chrome.current?.openDockOverlay() } : null}
+    />
+  );
+
   return (
     <WindowFullscreenProvider value={windowFullscreenState}>
+      <CaptureActionsProvider value={captureActions}>
       <ShellFrame
         viewport={viewport}
         preference={pref}
@@ -323,7 +492,7 @@ export function Workbench(props: {
         onStop={agent.stop}
         sidebar={sidebar}
         dock={agent.pane}
-        capsule={agent.capsule}
+        edgeHandle={edgeHandle}
         bottom={debugPanel}
         titleActions={(
           <TitleActions
@@ -363,8 +532,23 @@ export function Workbench(props: {
           </div>
         ) : null}
         {snapshot.search.open ? <SearchBox key={snapshot.search.n} initialQuery={snapshot.search.query} initialScope={snapshot.search.scope} onClose={() => shellStore.closeSearch()} /> : null}
+        <QuickNoteModal
+          t={t}
+          open={quickNote.open}
+          openNonce={quickNote.nonce}
+          targetKey={quickNoteTargetKey}
+          initialItems={quickNote.items}
+          initialDraft={quickNoteDrafts.current.get(quickNoteTargetKey) ?? ""}
+          onDraftChange={(key, value) => {
+            if (value) quickNoteDrafts.current.set(key, value);
+            else quickNoteDrafts.current.delete(key);
+          }}
+          onSave={saveQuickNote}
+          onExpandToDock={hasDock ? expandQuickNoteToDock : undefined}
+          onClose={closeQuickNote}
+        />
         {s.dictation ? (
-          <>
+          <FullscreenPortal>
             <DictationCapsule
               t={t}
               active={s.dictation.active}
@@ -383,7 +567,7 @@ export function Workbench(props: {
               onDecideSuggestion={(id, action) => void s.dictation!.decideSuggestion(id, action)}
               onDismiss={() => s.dictation!.dismissPill()}
             />
-          </>
+          </FullscreenPortal>
         ) : null}
         {s.update.busyDialog ? (
           <Modal testId="update-busy-dialog" title={t("update.busy.title")} closeLabel={t("common.close")} onClose={() => s.update.cancelBusyRestart()}>
@@ -409,6 +593,7 @@ export function Workbench(props: {
           </Modal>
         ) : null}
       </ShellFrame>
+      </CaptureActionsProvider>
     </WindowFullscreenProvider>
   );
 }

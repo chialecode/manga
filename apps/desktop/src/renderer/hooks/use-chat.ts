@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Translator } from "@manga/i18n";
 import type { QuickTask } from "@manga/contracts/quick-tasks";
 import { asArray, attempt, call, messageOf } from "../lib/api.ts";
-import { anchorFromContext, anchorFromTag, intervalLabel, noteTitleOf, quickPageFor, quickValues, renderQuick } from "../lib/chat-model.ts";
+import { anchorFromContext, anchorFromTag, intervalLabel, noteTitleOf, quickPageFor, quickValues, renderQuick, type NoteAnchor } from "../lib/chat-model.ts";
 import { quoteTags, useQuoteTags, type QuoteTag } from "../lib/quote-tags.ts";
 import { autoAddMaterial } from "../lib/materials.ts";
 import { mediaContextFor, readerContext, useReaderContext, type ReaderContext } from "../lib/reader-context.ts";
@@ -84,19 +84,28 @@ export function useChat(deps: ChatDeps) {
     workTitle: deps.workTitle, author: deps.author, context: readerContext.get(), tags: quoteTags.all().filter((tag) => tag.resourceId === target.resourceId), userInput, t,
   }), [deps.workTitle, deps.author, target.resourceId, t]);
 
-  /** A note: the user's own text, anchored where the tag points, else where the reader is, else on the work. */
-  async function sendNote(text: string): Promise<boolean> {
+  /** A note: the user's own text, anchored where the frozen/picked tag points, else where the reader is, else on the work. */
+  async function sendNote(
+    text: string,
+    options?: { frozenAnchor?: NoteAnchor | null; frozenTags?: readonly QuoteTag[]; clearComposerDraft?: boolean },
+  ): Promise<boolean> {
     if (sendingRef.current || !noteable) return false;
     const body = text.trim();
     const live = readerContext.get();
-    const tag = tags[0];
+    const tag = options?.frozenTags !== undefined ? options.frozenTags[0] : tags[0];
     if (!body && !tag) return false;
     sendingRef.current = true;
     setSending(true);
     try {
       if (!target.sessionId) await deps.ensureTargetSession();
       const place = live && live.resourceId === target.resourceId ? live : null;
-      const anchor = tag ? anchorFromTag(tag, t) : place ? anchorFromContext(place, t) : null;
+      const anchor = tag
+        ? anchorFromTag(tag, t)
+        : options && "frozenAnchor" in options
+          ? (options.frozenAnchor ?? null)
+          : place
+            ? anchorFromContext(place, t)
+            : null;
       const title = noteTitleOf(body, target.title ?? deps.workTitle ?? t("notes.newTitle"));
       const created = await call<{ objectId?: string }>("notes.create", {
         title,
@@ -106,7 +115,7 @@ export function useChat(deps: ChatDeps) {
       });
       if (created.objectId) void autoAddMaterial(deps.contextId, "note", created.objectId);
       if (tag) quoteTags.remove(tag.id);
-      deps.patchComposer({ draft: "" });
+      if (options?.clearComposerDraft !== false) deps.patchComposer({ draft: "" });
       deps.setError(undefined);
       deps.bump();
       void stream.reload();

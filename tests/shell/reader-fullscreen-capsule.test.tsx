@@ -6,7 +6,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { createTranslator } from "@manga/i18n";
 import { resolveKeys } from "@manga/contracts/keys";
 import { App } from "../../apps/desktop/src/renderer/App.tsx";
-import { Capsule } from "../../apps/desktop/src/renderer/components/chat/capsule.tsx";
+import { EdgeHandle } from "../../apps/desktop/src/renderer/components/capture/edge-handle.tsx";
+import { QuickNoteModal } from "../../apps/desktop/src/renderer/components/capture/quick-note-modal.tsx";
+import { captureBridge, quickNoteSession } from "../../apps/desktop/src/renderer/lib/capture-bridge.ts";
 import { AUTO_HIDE_MS } from "../../apps/desktop/src/renderer/reader/use-auto-hide.ts";
 import { ComicReader, type ComicDoc, type ComicSettings } from "../../apps/desktop/src/renderer/readers/comic-reader.tsx";
 import { VideoPlayer, type VideoDoc, type VideoSettings } from "../../apps/desktop/src/renderer/readers/video-player.tsx";
@@ -43,6 +45,8 @@ beforeEach(() => {
   shelfMemory.reset();
   quoteTags.reset();
   readerContext.reset();
+  captureBridge.reset();
+  quickNoteSession.reset();
   try { window.localStorage.clear(); } catch { /* none */ }
 });
 
@@ -55,6 +59,8 @@ afterEach(() => {
   removeMatchMedia();
   quoteTags.reset();
   readerContext.reset();
+  captureBridge.reset();
+  quickNoteSession.reset();
   delete (window as unknown as Record<string, unknown>).manga;
   delete (document as unknown as Record<string, unknown>).fullscreenElement;
 });
@@ -117,6 +123,7 @@ describe("window-fullscreen bottom function bar: mouse/drag reveal and hidden no
     subtitleOutline: true,
     assStyle: "keep",
     shotSubtitles: true,
+    pauseOnQuickNote: false,
   };
   const videoDoc: VideoDoc = {
     resourceId: "res_v",
@@ -399,99 +406,86 @@ describe("header-docked capsule: recording & note controls never obstruct the pi
     const frameCss = readCss("styles-frame.css");
     const workspaceCss = readCss("styles-workspace.css");
 
-    // Capsule sits at top: 4px; height: 28px (y = 4..32 px inside the 36 px tab-strip header, which is the title bar there), left of the window's buttons,
-    // never bottom: 18px or top: 44px over content.
-    expect(workspaceCss).toMatch(/\.chat-capsule \{ position: absolute; top: 4px; right: calc\(6px \+ var\(--title-end-w, 0px\)\); left: 6px; bottom: auto;[^}]*flex-direction: column-reverse;[^}]*pointer-events: none; \}/);
-    expect(workspaceCss).toMatch(/\.capsule-bar \{[^}]*height: 28px;/);
-    expect(frameCss).not.toMatch(/top:\s*44px/);
+    // Top header-docked capsule is completely removed; replaced by unified right-edge magnetic handle and centered quick-note modal.
+    expect(workspaceCss).not.toMatch(/\.chat-capsule\b/);
+    expect(frameCss).not.toMatch(/--capsule-room|--capsule-bar-w|\.chat-capsule/);
+    expect(workspaceCss).toMatch(/\.edge-handle-zone \{[^}]*top: 25%; height: 50%; width: 12px;/);
+    expect(workspaceCss).toMatch(/\.quick-note-modal \{[^}]*position: fixed;/);
     expect(frameCss).toMatch(/--dv-tabs-and-actions-container-height:\s*var\(--column-top-h\)/);
-    // The strip of the top-right column leaves room for the title bar's end and, when there, the capsule (A-136).
-    expect(frameCss).toMatch(/\.shell-main \{ --main-top-end: calc\(var\(--title-end-w, 0px\) \+ var\(--capsule-room, 0px\)\); \}/);
-    expect(frameCss).toMatch(/\.shell-main:has\(> \.chat-capsule\) \{ --capsule-room: var\(--capsule-bar-w, 72px\); \}/);
+    expect(frameCss).toMatch(/\.shell-main \{ --main-top-end: var\(--title-end-w, 0px\); \}/);
     expect(frameCss).toMatch(/\.dv-tabs-and-actions-container:has\(\.tab-actions\[data-top-right="true"\]\) \{ padding-right: var\(--main-top-end\); \}/);
     expect(frameCss).toMatch(/> \.column-switcher \{ padding-right: calc\(8px \+ var\(--main-top-end\)\); \}/);
   });
 
-  it("reserves --capsule-bar-w on its host, clears top reader strips when opening quick note, closes note box when onNote disappears, and renders nothing when empty", async () => {
+  it("renders EdgeHandle only when actions exist, expands on click/focus, opens QuickNoteModal cleanly, and hides note when not noteable", async () => {
     const idleMic = {
-      t: i18n.t,
-      state: { phase: "idle" as const, elapsedMs: 0 },
+      state: { phase: "idle" as const, elapsedMs: 0, level: 0 },
       enabled: true,
       toggleKey: "F8",
       onToggle: vi.fn(),
-      onHoldStart: vi.fn(),
-      onHoldEnd: vi.fn(),
       onStop: vi.fn(),
     };
     const notes: string[] = [];
-    const Harness = (props: { mode: "empty" | "full" | "mic-only" }) => (
+    const Harness = (props: { mode: "empty" | "full" | "mic-only"; open?: boolean; onOpen?: () => void; onClose?: () => void }) => (
       <main data-testid="capsule-host">
-        <div data-hidden-layer="">
-          <p className="reader-notice" data-testid="hidden-notice" />
-        </div>
-        <div data-visible="false">
-          <p className="reader-notice" data-testid="inactive-notice" />
-        </div>
-        <p className="reader-notice comic-region-bar" data-testid="active-notice" />
         {props.mode === "full" ? (
-          <Capsule
+          <EdgeHandle
             t={i18n.t}
-            mic={idleMic as never}
-            tagLabel="第 1 页"
-            onNote={async (text) => { notes.push(text); return true; }}
+            mic={idleMic}
+            noteable={true}
+            quickNoteKey="N"
+            onOpenQuickNote={props.onOpen}
           />
         ) : props.mode === "mic-only" ? (
-          <Capsule t={i18n.t} mic={idleMic as never} />
+          <EdgeHandle t={i18n.t} mic={idleMic} noteable={false} />
         ) : (
-          <Capsule t={i18n.t} mic={null} />
+          <EdgeHandle t={i18n.t} mic={null} noteable={false} />
         )}
+        <QuickNoteModal
+          t={i18n.t}
+          open={Boolean(props.open)}
+          openNonce={1}
+          targetKey="t1"
+          initialItems={[{ id: "pos:1", kind: "position", label: "第 1 页" }]}
+          initialDraft=""
+          onDraftChange={() => undefined}
+          onSave={async (text) => { notes.push(text); return true; }}
+          onClose={() => props.onClose?.()}
+        />
       </main>
     );
 
-    const view = render(<Harness mode="empty" />);
-    const host = screen.getByTestId("capsule-host");
-    screen.getByTestId("hidden-notice").getBoundingClientRect = () => ({ top: 34, bottom: 260, left: 0, right: 400, width: 400, height: 226, x: 0, y: 34, toJSON: () => ({}) });
-    screen.getByTestId("inactive-notice").getBoundingClientRect = () => ({ top: 34, bottom: 220, left: 0, right: 400, width: 400, height: 186, x: 0, y: 34, toJSON: () => ({}) });
-    screen.getByTestId("active-notice").getBoundingClientRect = () => ({ top: 40, bottom: 72, left: 0, right: 400, width: 400, height: 32, x: 0, y: 40, toJSON: () => ({}) });
+    let modalOpen = false;
+    const view = render(<Harness mode="empty" open={false} />);
+    expect(screen.queryByTestId("edge-handle-zone")).toBeNull();
 
-    expect(screen.queryByTestId("chat-capsule")).toBeNull();
-    expect(host.style.getPropertyValue("--capsule-bar-w")).toBe("");
+    const rerenderFull = () => view.rerender(
+      <Harness
+        mode="full"
+        open={modalOpen}
+        onOpen={() => { modalOpen = true; rerenderFull(); }}
+        onClose={() => { modalOpen = false; rerenderFull(); }}
+      />,
+    );
+    rerenderFull();
+    expect(screen.getByTestId("edge-handle").getAttribute("data-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("edge-handle-hotzone"));
+    expect(screen.getByTestId("edge-handle").getAttribute("data-expanded")).toBe("true");
+    fireEvent.click(screen.getByTestId("edge-note"));
+    expect(screen.getByTestId("quick-note-modal")).toBeTruthy();
+    expect(screen.getByTestId("quick-note-tag-position").textContent).toContain("第 1 页");
 
-    view.rerender(<Harness mode="full" />);
-    const bar = host.querySelector(".capsule-bar") as HTMLElement;
-    bar.getBoundingClientRect = () => ({ top: 3, bottom: 31, left: 1200, right: 1258, width: 58, height: 28, x: 1200, y: 3, toJSON: () => ({}) });
-    expect(host.style.getPropertyValue("--capsule-bar-w")).toBeTruthy();
-
-    // Opening quick note drops below the active comic-region-bar (72 + 4 - 31 = 45 px) and ignores hidden/inactive layers (260 px / 220 px).
-    fireEvent.click(screen.getByTestId("capsule-note"));
-    const box = screen.getByTestId("capsule-note-box");
-    expect(box.style.marginTop).toBe("45px");
-    expect(screen.getByTestId("capsule-tag").textContent).toContain("第 1 页");
-
-    // Switching to a non-noteable tab (onNote = undefined while mic stays enabled) immediately closes capsule-note-box and resets open state.
-    view.rerender(<Harness mode="mic-only" />);
-    expect(screen.getByTestId("chat-capsule")).toBeTruthy();
-    expect(screen.queryByTestId("capsule-note")).toBeNull();
-    expect(screen.queryByTestId("capsule-note-box")).toBeNull();
-
-    // Returning to a noteable tab brings back capsule-note in its closed state until opened again.
-    view.rerender(<Harness mode="full" />);
-    const barAgain = host.querySelector(".capsule-bar") as HTMLElement;
-    barAgain.getBoundingClientRect = () => ({ top: 3, bottom: 31, left: 1200, right: 1258, width: 58, height: 28, x: 1200, y: 3, toJSON: () => ({}) });
-    expect(screen.getByTestId("capsule-note")).toBeTruthy();
-    expect(screen.queryByTestId("capsule-note-box")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("capsule-note"));
-    fireEvent.change(screen.getByTestId("capsule-note-input"), { target: { value: "不挡画面的速记" } });
-    fireEvent.click(screen.getByTestId("capsule-note-send"));
+    fireEvent.change(screen.getByTestId("quick-note-input"), { target: { value: "不挡画面的速记" } });
+    fireEvent.click(screen.getByTestId("quick-note-send"));
     await waitFor(() => expect(notes).toEqual(["不挡画面的速记"]));
-    await waitFor(() => expect(screen.queryByTestId("capsule-note-box")).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId("quick-note-modal")).toBeNull());
 
-    view.unmount();
-    expect(host.style.getPropertyValue("--capsule-bar-w")).toBe("");
+    view.rerender(<Harness mode="mic-only" open={false} />);
+    expect(screen.getByTestId("edge-handle-zone")).toBeTruthy();
+    expect(screen.queryByTestId("edge-note")).toBeNull();
   });
 
-  it("mounts the capsule in the workspace tab-strip chrome when the right dock is folded over a video reader, and cleans up in window fullscreen", async () => {
+  it("mounts EdgeHandle when right dock is folded, in window fullscreen (W), and portaled into screen fullscreen (F), hiding it when docked", async () => {
     installHost();
     render(<App />);
     await openShelf("video");
@@ -505,25 +499,34 @@ describe("header-docked capsule: recording & note controls never obstruct the pi
 
     const shellMain = screen.getByTestId("shell-main");
     expect(screen.queryByTestId("chat-capsule")).toBeNull();
+    expect(screen.queryByTestId("edge-handle-zone")).toBeNull();
 
-    // Fold the right dock: capsule appears in shell-main's top-right tab-strip chrome, reserving --capsule-bar-w.
+    // Fold the right dock: EdgeHandle mounts on the right edge of shell-main.
     fireEvent.click(screen.getByTestId("shell-dock-toggle"));
-    const capsule = await screen.findByTestId("chat-capsule");
-    expect(shellMain.contains(capsule)).toBe(true);
-    const panels = shellMain.querySelectorAll('[data-testid="tab-panel"]');
-    expect(panels.length).toBeGreaterThan(0);
-    for (const panel of panels) expect(panel.contains(capsule)).toBe(false);
-    expect(shellMain.style.getPropertyValue("--capsule-bar-w")).toMatch(/^\d+px$/);
-    expect(shellMain.querySelector('.tab-actions[data-top-right="true"]')).toBeTruthy();
-    expect(screen.getByTestId("capsule-note")).toBeTruthy();
+    const handle = await screen.findByTestId("edge-handle-zone");
+    expect(shellMain.contains(handle)).toBe(true);
+    expect(screen.getByTestId("edge-note")).toBeTruthy();
+    expect(screen.getByTestId("edge-screenshot")).toBeTruthy();
+    expect(screen.getByTestId("edge-dock")).toBeTruthy();
 
-    // Entering window fullscreen hides the capsule and removes --capsule-bar-w; leaving restores both.
+    // Entering window fullscreen (W) keeps EdgeHandle active with temporary dock drawer support.
     fireEvent.click(screen.getByTestId("video-window-fullscreen"));
-    expect(screen.queryByTestId("chat-capsule")).toBeNull();
-    expect(shellMain.style.getPropertyValue("--capsule-bar-w")).toBe("");
+    expect(screen.getByTestId("edge-handle-zone")).toBeTruthy();
+    expect(screen.getByTestId("edge-dock")).toBeTruthy();
 
+    // Entering screen fullscreen (F) portals EdgeHandle directly into document.fullscreenElement and omits dock drawer button.
+    const videoShell = screen.getByTestId("video-shell");
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => videoShell });
+    act(() => { document.dispatchEvent(new Event("fullscreenchange")); });
+    await waitFor(() => expect(videoShell.contains(screen.getByTestId("edge-handle-zone"))).toBe(true));
+    expect(screen.queryByTestId("edge-dock")).toBeNull();
+    expect(screen.getByTestId("edge-note")).toBeTruthy();
+    expect(screen.getByTestId("edge-screenshot")).toBeTruthy();
+
+    // Leaving screen fullscreen and window fullscreen returns to folded dock state with EdgeHandle back in shell-main.
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => null });
+    act(() => { document.dispatchEvent(new Event("fullscreenchange")); });
     fireEvent.click(screen.getByTestId("immersive-exit"));
-    expect(await screen.findByTestId("chat-capsule")).toBeTruthy();
-    expect(shellMain.style.getPropertyValue("--capsule-bar-w")).toMatch(/^\d+px$/);
+    await waitFor(() => expect(shellMain.contains(screen.getByTestId("edge-handle-zone"))).toBe(true));
   });
 });

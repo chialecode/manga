@@ -1,9 +1,10 @@
 import { NORMALIZATION_V1 } from "@manga/contracts/location";
-import { actionOf } from "@manga/contracts/keys";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { actionOf, chordLabel } from "@manga/contracts/keys";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { READER_PANEL_WIDTH } from "@manga/contracts/reading";
-import { Bookmark, BookmarkPlus, ChevronLeft, ChevronRight, Fullscreen, List, Maximize2, Minimize2, Pause, Play, Search, Shrink, Square, Type, Volume2 } from "lucide-react";
+import { Bookmark, BookmarkPlus, ChevronLeft, ChevronRight, Copy, Fullscreen, List, Maximize2, Minimize2, NotebookPen, Pause, Play, Search, Shrink, Sparkles, Square, Type, Volume2 } from "lucide-react";
 import { createTranslator, type MessageKey, type Translator } from "@manga/i18n";
+import { SelectionBubble } from "./components/capture/selection-bubble.tsx";
 import { Input } from "./components/ui/input.tsx";
 import { PdfPageView } from "./pdf-page.tsx";
 import { fontStack, THEME_BACKGROUND, THEME_FOREGROUND } from "./reader/fonts.ts";
@@ -15,8 +16,10 @@ import { usePager } from "./reader/use-pager.ts";
 import { useAutoHide } from "./reader/use-auto-hide.ts";
 import { EditableNumber } from "./readers/editable-number.tsx";
 import { useWindowFullscreen } from "./readers/window-fullscreen.tsx";
+import { captureBridge, useCaptureActions, useQuickNoteSession } from "./lib/capture-bridge.ts";
 import { isImeEvent, isTypingTarget } from "./lib/ime.ts";
 import { useKeyTable } from "./lib/key-table.tsx";
+import type { QuoteTag } from "./lib/quote-tags.ts";
 import { useTab } from "./workspace/tab-context.tsx";
 import { MatchLink } from "./readers/match-link.tsx";
 import { SourceBanner } from "./readers/source-banner.tsx";
@@ -97,8 +100,8 @@ export function ReadingPane(props: {
   searched?: boolean;
   onJump: (partId: string, start: number, end: number) => void;
   onProgress: () => void;
-  /** A picked passage. A reading page only reads: the shell turns the passage into a quote tag in the right pane's input. */
-  onSelect: (quote: string, start: number, end: number, partId: string) => void;
+  /** Explicit selection handoff when the user picks "问 Agent" from the selection bubble or context menu. */
+  onSelect?: (quote: string, start: number, end: number, partId: string) => void;
   /** Open a chapter at an offset; it becomes the reading position. */
   onPart: (partId: string, start: number) => void;
   /** Load a window of a chapter without moving the saved position (the pages place themselves). */
@@ -133,6 +136,13 @@ export function ReadingPane(props: {
   const scroll = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<{ quote: string; start: number; end: number } | null>(null);
+  const [selectionAnchor, setSelectionAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const captureActions = useCaptureActions();
+  const quickNoteState = useQuickNoteSession();
+  const showOnTopLayer = useCallback((node: HTMLDivElement | null) => {
+    try { if (node && typeof node.showPopover === "function" && !node.matches(":popover-open")) node.showPopover(); } catch { /* shown in place */ }
+  }, []);
   const [partIndex, setPartIndex] = useState(0);
   const [view, setView] = useState<"page" | "text">("page");
   const [panel, setPanel] = useState<ReaderPanel | null>(null);
@@ -156,22 +166,39 @@ export function ReadingPane(props: {
   const paged = (props.style.flow ?? "paged") === "paged" && !pdf && !pageView && Boolean(slice) && slice!.textLayer !== false && slice!.kind !== "image";
   const double = paged && (props.style.pageMode ?? "single") === "double";
 
+  const readSelectionAnchor = useCallback((): { x: number; y: number } | null => {
+    const current = window.getSelection();
+    if (current && current.rangeCount > 0 && !current.isCollapsed) {
+      const range = current.getRangeAt(0);
+      const rect = typeof range.getBoundingClientRect === "function" ? range.getBoundingClientRect() : null;
+      if (rect && (rect.width > 0 || rect.height > 0)) {
+        return { x: rect.left + rect.width / 2, y: Math.max(56, rect.top - 8) };
+      }
+    }
+    const bodyRect = body.current?.getBoundingClientRect();
+    if (bodyRect && bodyRect.width > 0) return { x: bodyRect.left + bodyRect.width / 2, y: Math.max(80, bodyRect.top + 48) };
+    return { x: (window.innerWidth || 1280) / 2, y: 120 };
+  }, []);
+
   useEffect(() => {
     const changed = () => {
       if (pdf && pdfBytes && pageView) return;
-      if (!body.current || !slice) { setSelection(null); return; }
+      if (!body.current || !slice) { setSelection(null); setSelectionAnchor(null); return; }
       const current = window.getSelection();
       if (pageView && current && current.rangeCount === 1 && !current.isCollapsed) {
         const mapped = pageSelectionRange(current.getRangeAt(0));
         setSelection(mapped ? { quote: mapped.quote, start: mapped.start, end: mapped.end } : null);
+        setSelectionAnchor(mapped ? readSelectionAnchor() : null);
         return;
       }
-      setSelection(readingSelection(body.current, slice.start, current));
+      const next = readingSelection(body.current, slice.start, current);
+      setSelection(next);
+      setSelectionAnchor(next ? readSelectionAnchor() : null);
     };
     changed();
     document.addEventListener("selectionchange", changed);
     return () => document.removeEventListener("selectionchange", changed);
-  }, [slice, pageView, pdf, pdfBytes]);
+  }, [slice, pageView, pdf, pdfBytes, readSelectionAnchor]);
 
   useEffect(() => {
     const index = parts.findIndex((part) => part.id === slice?.partId);
@@ -208,7 +235,7 @@ export function ReadingPane(props: {
   const currentPart = parts[partIndex];
   const immersive = fullscreen || windowFull.active;
   // The controls get out of the way while the book is read; an open panel keeps them, and in full screen any pointer move across the window brings them back.
-  const controls = useAutoHide(root, { enabled: Boolean(props.document), hold: panel !== null || settingsOpen, wakeOnAnyPointerMove: immersive });
+  const controls = useAutoHide(root, { enabled: Boolean(props.document), hold: panel !== null || settingsOpen || menuAt !== null, wakeOnAnyPointerMove: immersive });
   const measure = Math.max(0, props.style.measurePx - props.style.marginPx * 2);
   const marked = slice ? highlightSlices(slice.text, shownHighlight, slice.start, slice.end) : null;
   const spacing = props.style.paragraphSpacingPx ?? 0;
@@ -239,25 +266,48 @@ export function ReadingPane(props: {
   };
   const turnPage = (direction: 1 | -1) => (paged ? pager.go(direction) : turnPart(direction));
 
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void root.current?.requestFullscreen?.().catch(() => setFullscreen(false));
+  }, []);
+
   const keys = useKeyTable();
   const keysRef = useRef(keys);
   keysRef.current = keys;
   const turnRef = useRef(turnPage);
   turnRef.current = turnPage;
+  const fullscreenRef = useRef(toggleFullscreen);
+  fullscreenRef.current = toggleFullscreen;
+  const menuOpenRef = useRef(menuAt !== null);
+  menuOpenRef.current = menuAt !== null;
   const canTurnKeys = tab.focused && (paged || (pageView && Boolean(render)));
+  const canNovelKeys = tab.focused && Boolean(props.document);
   // Put on in the commit that makes the tab the focused one, so that a key pressed at once is not lost.
   useLayoutEffect(() => {
-    if (!canTurnKeys) return;
+    if (!canNovelKeys) return;
     const onKey = (event: KeyboardEvent) => {
       if (isImeEvent(event) || event.defaultPrevented || isTypingTarget(event.target)) return;
+      if (event.key === "Escape" && menuOpenRef.current) {
+        event.preventDefault();
+        setMenuAt(null);
+        return;
+      }
       if (document.querySelector('[role="dialog"]')) return;
       const action = actionOf(event, keysRef.current, "novel");
-      if (action === "novel.next") { event.preventDefault(); turnRef.current(1); }
-      else if (action === "novel.prev") { event.preventDefault(); turnRef.current(-1); }
+      if (action === "novel.fullscreen") { event.preventDefault(); fullscreenRef.current(); }
+      else if (canTurnKeys && action === "novel.next") { event.preventDefault(); turnRef.current(1); }
+      else if (canTurnKeys && action === "novel.prev") { event.preventDefault(); turnRef.current(-1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canTurnKeys]);
+  }, [canNovelKeys, canTurnKeys]);
+
+  useEffect(() => {
+    if (!menuAt) return;
+    const close = () => setMenuAt(null);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [menuAt]);
 
   // The wheel turns one page per gesture over the pages.
   const pagesBox = useRef<HTMLDivElement>(null);
@@ -321,19 +371,74 @@ export function ReadingPane(props: {
     if (shown) onPositionRef.current?.(slice.partId, slice.start, slice.end);
   }, [paged, slice?.partId, slice?.start, slice?.end, shown]);
 
-  // A passage the reader has picked and held for a moment becomes a tag; clearing the page selection (clicking into the input) keeps it.
-  const onSelectRef = useRef(props.onSelect);
-  onSelectRef.current = props.onSelect;
-  const picked = selection && slice ? { ...selection, partId: slice.partId } : null;
-  useEffect(() => {
-    if (!picked) return;
-    const timer = window.setTimeout(() => onSelectRef.current(picked.quote, picked.start, picked.end, picked.partId), 220);
-    return () => window.clearTimeout(timer);
-  }, [picked?.quote, picked?.start, picked?.end, picked?.partId]);
+  // Plan D: casual text selections show a floating action bubble instead of silently stuffing the right-dock composer.
+  const buildSelectionTag = (): QuoteTag | null => {
+    if (!selection || !slice || !props.document) return null;
+    return {
+      id: `selection:${props.document.resourceId}`,
+      kind: "selection",
+      resourceId: props.document.resourceId,
+      revisionId: props.document.revisionId,
+      partId: slice.partId,
+      start: selection.start,
+      end: Math.max(selection.end, selection.start),
+      quote: selection.quote,
+      label: t("chat.tag.selection", { count: Math.max(1, [...selection.quote].length) }),
+    };
+  };
 
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void root.current?.requestFullscreen?.().catch(() => setFullscreen(false));
+  // Expose active novel selection to QuickNote shortcut (`N`) / EdgeHandle without silently pushing into the right dock.
+  useEffect(() => {
+    const tag = selection && slice && props.document ? {
+      id: `selection:${props.document.resourceId}`,
+      kind: "selection" as const,
+      resourceId: props.document.resourceId,
+      revisionId: props.document.revisionId,
+      partId: slice.partId,
+      start: selection.start,
+      end: Math.max(selection.end, selection.start),
+      quote: selection.quote,
+      label: t("chat.tag.selection", { count: Math.max(1, [...selection.quote].length) }),
+    } : null;
+    captureBridge.setPendingTag(tag, tab.tabId);
+    return () => captureBridge.setPendingTag(null, tab.tabId);
+  }, [selection, slice?.partId, props.document?.resourceId, props.document?.revisionId, t, tab.tabId]);
+
+  const clearSelection = () => {
+    try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+    setSelection(null);
+    setSelectionAnchor(null);
+  };
+
+  const noteSelection = () => {
+    const tag = buildSelectionTag();
+    if (!tag) { captureActions?.openQuickNote(); return; }
+    captureActions?.openQuickNote({ tag });
+    clearSelection();
+  };
+
+  const askSelection = () => {
+    if (!selection || !slice) return;
+    const tag = buildSelectionTag();
+    props.onSelect?.(selection.quote, selection.start, selection.end, slice.partId);
+    if (tag) captureActions?.askAgentWithTag(tag);
+    clearSelection();
+  };
+
+  const copySelection = () => {
+    if (!selection) return;
+    void navigator.clipboard?.writeText?.(selection.quote);
+    captureActions?.notify(t("capture.copied"));
+    clearSelection();
+  };
+
+  const quickNoteKey = keys["global.quickNote"]?.[0] ? chordLabel(keys["global.quickNote"]![0]!) : "N";
+  const openContextMenu = (clientX: number, clientY: number) => {
+    const menuWidth = 196;
+    const menuHeight = selection ? 190 : 110;
+    const maxX = Math.max(8, (window.innerWidth || 1280) - menuWidth - 8);
+    const maxY = Math.max(8, (window.innerHeight || 720) - menuHeight - 8);
+    setMenuAt({ x: Math.max(8, Math.min(clientX, maxX)), y: Math.max(8, Math.min(clientY, maxY)) });
   };
 
   const openPanel = (next: ReaderPanel) => setPanel((current) => (current === next ? null : next));
@@ -511,7 +616,20 @@ export function ReadingPane(props: {
           </div>
         ) : null}
         {novelRead.asking ? <NovelCostAsk t={t} chars={novelRead.asking.chars} onGo={novelRead.confirm} onCancel={novelRead.cancelAsk} /> : null}
-        <div ref={scroll} className="reader-scroll" data-testid="reading-scroll" data-flow={paged ? "paged" : "scroll"} style={{ background, color }} onScroll={nearEnd} onClick={paged ? undefined : onPagesClick}>
+        <div
+          ref={scroll}
+          className="reader-scroll"
+          data-testid="reading-scroll"
+          data-flow={paged ? "paged" : "scroll"}
+          style={{ background, color }}
+          onScroll={nearEnd}
+          onClick={paged ? undefined : onPagesClick}
+          onContextMenu={(event) => {
+            if (!props.document) return;
+            event.preventDefault();
+            openContextMenu(event.clientX, event.clientY);
+          }}
+        >
           {!props.document ? <p>{props.labels.empty}</p> : (
             <article>
               {props.sourceCard ? <SourceBanner t={t} card={props.sourceCard} testPrefix="reading" onBackToNote={props.onBackToNote} onRepair={props.onRepair} /> : null}
@@ -530,7 +648,7 @@ export function ReadingPane(props: {
                   scanLabel={props.labels.scan}
                   missingLabel={props.labelsExtra.sourceNeedsReview}
                   zoomLabels={{ out: t("reading.zoomOut"), in: t("reading.zoomIn"), fit: t("reading.zoomFit") }}
-                  onSelection={(next) => setSelection(next)}
+                  onSelection={(next) => { setSelection(next); setSelectionAnchor(next ? readSelectionAnchor() : null); }}
                 />
               ) : null}
               {pageView && render ? <PageCanvas render={render} assets={props.assets} truncatedLabel={t("reading.pageTruncated")} /> : null}
@@ -582,6 +700,58 @@ export function ReadingPane(props: {
             </article>
           )}
         </div>
+        {selection && slice && !quickNoteState.open && !menuAt ? (
+          <SelectionBubble
+            kind="novel"
+            label={t("capture.bubble")}
+            anchor={selectionAnchor ?? { x: (window.innerWidth || 1280) / 2, y: 120 }}
+            actions={[
+              {
+                id: "note",
+                testId: "selection-bubble-note",
+                label: t("capture.note"),
+                icon: <NotebookPen size={14} aria-hidden="true" />,
+                accent: true,
+                onClick: noteSelection,
+              },
+              {
+                id: "ask",
+                testId: "selection-bubble-ask",
+                label: t("capture.askAgent"),
+                icon: <Sparkles size={14} aria-hidden="true" />,
+                onClick: askSelection,
+              },
+              {
+                id: "copy",
+                testId: "selection-bubble-copy",
+                label: t("capture.copy"),
+                icon: <Copy size={14} aria-hidden="true" />,
+                onClick: copySelection,
+              },
+            ]}
+          />
+        ) : null}
+        {menuAt ? (
+          <div ref={showOnTopLayer} popover="manual" className="reader-context-menu" role="menu" aria-label={t("reading.menu")} data-testid="novel-context" style={{ left: menuAt.x, top: menuAt.y, right: "auto", bottom: "auto" }} onMouseDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+            {selection ? (
+              <>
+                <button type="button" role="menuitem" data-testid="novel-context-copy" onClick={() => { setMenuAt(null); copySelection(); }}>{t("capture.copy")}</button>
+                <button type="button" role="menuitem" data-testid="novel-context-note" onClick={() => { setMenuAt(null); noteSelection(); }}>{t("capture.noteKey", { key: quickNoteKey })}</button>
+                <button type="button" role="menuitem" data-testid="novel-context-ask" onClick={() => { setMenuAt(null); askSelection(); }}>{t("capture.askAgent")}</button>
+                {captureActions?.voiceEnabled ? <div className="context-menu-separator" role="separator" /> : null}
+              </>
+            ) : (
+              <button type="button" role="menuitem" data-testid="novel-context-note" onClick={() => { setMenuAt(null); captureActions?.openQuickNote(); }}>{t("capture.noteKey", { key: quickNoteKey })}</button>
+            )}
+            {captureActions?.voiceEnabled ? (
+              <button type="button" role="menuitem" data-testid="novel-context-record" onClick={() => { setMenuAt(null); captureActions.toggleRecording(); }}>
+                {captureActions.recordingActive
+                  ? t("capture.recordStopKey", { key: captureActions.recordingToggleKey })
+                  : t("capture.recordStartKey", { key: captureActions.recordingToggleKey })}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {props.document ? (
@@ -633,7 +803,6 @@ export function ReadingPane(props: {
               </button>
             ) : null}
             <span className="flex-1" />
-            {selection ? <span className="reader-selected truncate" data-testid="reading-selected">{props.labels.quote}：{selection.quote.slice(0, 40)}</span> : null}
             <button type="button" className="secondary-button" data-testid="reading-progress" onClick={props.onProgress}>{props.labels.progress}</button>
             <button type="button" className="icon-button" data-testid="reading-window-fullscreen" aria-pressed={windowFull.active} aria-label={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} title={windowFull.active ? t("window.fullscreen.exit") : t("window.fullscreen")} onClick={windowFull.toggle}>{windowFull.active ? <Shrink size={16} /> : <Fullscreen size={16} />}</button>
             <button type="button" className="icon-button" data-testid="reading-fullscreen" aria-pressed={fullscreen} aria-label={t("reader.fullscreen")} title={t("reader.fullscreen")} onClick={toggleFullscreen}>{fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>

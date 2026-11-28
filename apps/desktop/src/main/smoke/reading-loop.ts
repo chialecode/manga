@@ -129,8 +129,9 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
   const selection = await selectText(view, '[data-testid="reading-body"]', 8, 21);
   const selectMs = selection.ms;
   const selectedQuote = selection.quote;
-  // A passage that was picked and held becomes a tag in the right pane's input.
-  const tagShown = await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 8000);
+  // Plan D: selecting text opens the floating bubble; clicking "问 Agent" attaches the selection tag to the right dock.
+  const tagBubbled = await clickTestId(view, "selection-bubble-ask", 4000);
+  const tagShown = tagBubbled && await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 8000);
   // A note from the right pane: the picked passage is its source, the typed text is the user's own.
   await clickTestId(view, "chat-mode-note");
   await setField(view, "agent-composer", NOTE_TEXT);
@@ -248,7 +249,8 @@ export async function runReadingLoopSmoke(appService: MangaProductApp, grant: st
     document.dispatchEvent(new Event("selectionchange"));
     return true;
   })()`);
-  askTagShown = picked && await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 8000);
+  const askBubbled = picked && await clickTestId(view, "selection-bubble-ask", 4000);
+  askTagShown = askBubbled && await waitUntil(view, `document.querySelector('[data-testid="chat-tag-selection"]')`, 8000);
   if (askTagShown && recorded) {
     await ensureDock(view);
     await clickTestId(view, "chat-plus");

@@ -46,7 +46,7 @@ const ptsOf = (frame: number) => (frame * 1000) / FPS;
 
 const baseSettings: VideoSettings = {
   rate: 1, rates: [0.5, 0.75, 1, 1.25, 1.5, 2, 3], customRate: 1.5, holdRate: 2, volume: 0.5, muted: false, seekStepSeconds: 5, autoNext: false,
-  subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true,
+  subtitlePlacement: "auto", subtitleSizePct: 5, subtitleFont: "sans", subtitleOutline: true, assStyle: "keep", shotSubtitles: true, pauseOnQuickNote: false,
 };
 
 const baseDoc: VideoDoc = {
@@ -717,14 +717,15 @@ describe("video player: marks and notes", () => {
     expect(screen.getByTestId("video-mark-a").getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("has no note button for the moment now, in the controls or in the right-click menu, and leaves no tag behind when it closes", async () => {
+  it("keeps bottom controls read-only while offering Plan D context menu actions, and leaves no tag behind when it closes", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { unmount } = await ready();
     act(() => media.advance(element(), 33.5));
     expect(screen.queryByTestId("video-note-here")).toBeNull();
+    expect(screen.queryByTestId("video-screenshot")).toBeNull();
     fireEvent.contextMenu(screen.getByTestId("video-stage"), { clientX: 40, clientY: 50 });
     expect(screen.getByTestId("video-context")).toBeTruthy();
-    expect(screen.queryByTestId("video-context-note")).toBeNull();
+    expect(screen.getByTestId("video-context-note")).toBeTruthy();
     fireEvent.keyDown(window, { key: "o" });
     fireEvent.keyDown(window, { key: "i" });
     unmount();
@@ -1566,7 +1567,7 @@ describe("video player: subtitles in a screenshot (AT-109)", () => {
     installHost({ "video.subtitles": () => ({ subtitles: [assTrack] }), "video.subtitleHandle": () => handleOf("s2", "ass"), "video.fonts": () => ({ fonts: [], fallback: null }) });
   }
   async function shoot() {
-    fireEvent.click(screen.getByTestId("video-screenshot"));
+    fireEvent.keyDown(window, { key: "s" });
     await waitFor(() => expect(port.save).toHaveBeenCalledTimes(1));
     return port.save.mock.calls[0]![0] as { data: string; video: Record<string, unknown> };
   }

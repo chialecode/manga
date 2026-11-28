@@ -528,8 +528,6 @@ describe("Dictation controller, capsule, and inline revert/suggestion pill (U1)"
         enabled: true,
         toggleKey: "F8",
         onToggle: onRecorderToggle,
-        onHoldStart: () => undefined,
-        onHoldEnd: () => undefined,
         onStop: () => undefined,
       },
       dictation: {

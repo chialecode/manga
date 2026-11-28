@@ -332,6 +332,23 @@ export async function waitDrawn(view: BrowserWindow, testId: string, timeoutMs =
   return waitUntil(view, `${DRAWN}(${PICK}(${JSON.stringify(testId)}))`, timeoutMs);
 }
 
+/**
+ * Click the right-side screenshot trigger: uses the right-dock composer button when the dock is open,
+ * otherwise expands the right-edge magnetic handle and presses its screenshot button.
+ */
+export async function clickScreenshot(view: BrowserWindow, timeoutMs = 4000): Promise<boolean> {
+  const inDock = await view.webContents.executeJavaScript(`(() => {
+    const el = ${PICK}("composer-screenshot");
+    return Boolean(el && !el.disabled && ${DRAWN}(el));
+  })()`) as boolean;
+  if (inDock) return clickTestId(view, "composer-screenshot", timeoutMs);
+  if (await clickTestId(view, "edge-handle-hotzone", Math.min(timeoutMs, 2000))) {
+    await waitUntil(view, `document.querySelector('[data-testid="edge-handle"]')?.getAttribute("data-expanded") === "true"`, 2000);
+    return clickTestId(view, "edge-screenshot", timeoutMs);
+  }
+  return clickTestId(view, "composer-screenshot", timeoutMs);
+}
+
 export type TabFact = { id: string; kind: string; title: string; focused: boolean; active: boolean };
 
 /** The tab chips of the context in front, in the order of the strips (column by column). */

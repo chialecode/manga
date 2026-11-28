@@ -290,6 +290,8 @@ export function MediaPrefs(props: { t: T; facets: Set<string>; reading: ShellPre
             <p className="detail-muted">{t("msettings.videoCustomRateHint")}</p>
           </div>
           <label className="msettings-check"><input type="checkbox" data-testid="msettings-video-autonext" checked={props.video.autoNext} onChange={(event) => props.onVideo({ autoNext: event.target.checked })} />{t("msettings.videoAutoNext")}</label>
+          <label className="msettings-check"><input type="checkbox" data-testid="msettings-video-pause-quicknote" checked={Boolean(props.video.pauseOnQuickNote)} onChange={(event) => props.onVideo({ pauseOnQuickNote: event.target.checked })} />{t("msettings.videoPauseOnQuickNote")}</label>
+          <p className="detail-muted">{t("msettings.videoPauseOnQuickNoteHint")}</p>
           <div className="msettings-subgroup" role="group" aria-labelledby="msettings-subtitle-title" data-testid="msettings-subtitle">
             <h4 id="msettings-subtitle-title">{t("msettings.subtitle")}</h4>
             <p className="detail-muted">{t("msettings.subtitleHint")}</p>

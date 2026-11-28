@@ -18,10 +18,12 @@ export const useWindowFullscreen = (): WindowFullscreen => useContext(Context);
 /** How long after the browser left screen full screen an Esc is still taken to be the one that did it. */
 export const ESC_AFTER_SCREEN_EXIT_MS = 400;
 
-/** Whether something other than the reader owns this Esc: an open menu, popover or dialog closes first. */
+/** Whether something other than the reader owns this Esc: an open menu, popover, dialog, or slide-over dock overlay closes first. */
 function lowerLayerOpen(): boolean {
   const open = document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]');
   if (open || popupOpen()) return true;
+  const dockOverlay = document.querySelector<HTMLElement>('[data-testid="shell-dock"][data-shell-state="overlay"]');
+  if (dockOverlay && getComputedStyle(dockOverlay).display !== "none") return true;
   try {
     return document.querySelector(":popover-open") !== null;
   } catch {

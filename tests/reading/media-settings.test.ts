@@ -17,6 +17,14 @@ describe("playback rates and the key table are kept with the media settings (AT-
     expect(DEFAULT_MEDIA_SETTINGS.video.rates).toContain(1);
   });
 
+  it("defaults pauseOnQuickNote to false and persists changes cleanly", () => {
+    const store = memory();
+    expect(readMediaSettings(store).video.pauseOnQuickNote).toBe(false);
+    expect(writeMediaSettings(store, { video: { pauseOnQuickNote: true } }).video.pauseOnQuickNote).toBe(true);
+    expect(readMediaSettings(store).video.pauseOnQuickNote).toBe(true);
+    expect(writeMediaSettings(store, { video: { autoNext: true } }).video.pauseOnQuickNote).toBe(true);
+  });
+
   it("puts the subtitles of the picture into a screenshot unless the person turned that off, and keeps the choice (AT-109)", () => {
     const store = memory();
     expect(readMediaSettings(store).video.shotSubtitles).toBe(true);

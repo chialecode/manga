@@ -6,10 +6,18 @@ import type { ShellPreference } from "@manga/contracts/reading";
 import { SIDE_WIDTH, TOP_ROW_HEIGHT, cardOf, clampSide, deriveShell, dragLimit, initialHover, reduceHover, viewOfCard, type HoverTarget } from "../../../../packages/app-core/src/domain/shell-layout.ts";
 import { WindowControls, type WindowControlLabels } from "./components/window-controls.tsx";
 import { useWindowState } from "./hooks/use-window-state.ts";
+import { useFullscreenElement } from "./lib/fullscreen-portal.tsx";
 import { Rail, type RailEntry, type RailHow, type RailLabels } from "./rail.tsx";
 import { Divider, TitleEnd, type DividerDrag, type Side } from "./shell-chrome.tsx";
 
 export type { DividerDrag };
+
+export type ShellControl = {
+  toggle: (side: Side) => void;
+  openDockOverlay: () => void;
+  closeDockOverlay: () => void;
+  ensureDockVisible: () => void;
+};
 
 /** What the icon rail shows and does (A-99): the views, the ones taken out, the one the sidebar is on, and the settings at the bottom. */
 export type ShellRail = {
@@ -79,7 +87,7 @@ export function ShellFrame(props: {
   /** The keys that open and close the two columns; they do what the buttons do (a folded column opens as an overlay). */
   keys?: { sidebar: readonly string[]; dock: readonly string[] };
   /** Filled with what the menus and keys of the window use to open and close a column the way its button does. */
-  controlRef?: MutableRefObject<{ toggle: (side: Side) => void } | null>;
+  controlRef?: MutableRefObject<ShellControl | null>;
   onHide: (side: Side) => void;
   onShow: (side: Side) => void;
   /** A column's new width, once the divider is let go or a key moved it. */
@@ -91,8 +99,8 @@ export function ShellFrame(props: {
   dock: ReactNode;
   /** Buttons before the dock's switch: the debugging switch, recording state, scan progress. */
   titleActions?: ReactNode;
-  /** Shown in the tab-strip chrome of the main area while the dock is folded away, outside the active page. */
-  capsule?: ReactNode;
+  /** Unified right-edge magnetic capture handle shown whenever the right dock is not visible (folded, narrow, window fullscreen, screen fullscreen). */
+  edgeHandle?: ReactNode;
   /** A panel under the main area (the context debug panel). */
   bottom?: ReactNode;
   children: ReactNode;
@@ -110,11 +118,13 @@ export function ShellFrame(props: {
   /** A card was opened from the keyboard: the focus goes into it once it is there. */
   const wantFocus = useRef(false);
   const windowState = useWindowState();
+  const inScreenFullscreen = useFullscreenElement() !== null;
   /** In the window-fullscreen state: the floating top has come down because the pointer reached the top edge or is on it. */
   const [revealed, setRevealed] = useState(false);
   const { immersive } = props;
   const settingsOn = props.settings;
   const dockActive = props.hasDock && !settingsOn;
+  useEffect(() => { setHover(initialHover()); }, [immersive]);
 
   // A column being dragged shows the width under the pointer; the saved width follows when it is let go. The settings directory shows whatever the sidebar's switch says.
   const preference = (() => {
@@ -200,9 +210,25 @@ export function ShellFrame(props: {
     setHover(initialHover());
   }, []);
 
+  const openDockOverlay = useCallback(() => {
+    if (!dockActive) return;
+    trigger.current = dockButton.current;
+    wantFocus.current = true;
+    setHover({ inside: true, overlay: "dock", pinned: "dock", closeAt: null, pending: null, openAt: null });
+  }, [dockActive]);
+
   function pin(side: Side) {
     // The settings directory stays while the settings are on: the switch has nothing to fold.
     if (side === "sidebar" && settingsOn && chrome.sidebar === "dock") return;
+    if (side === "dock" && immersive) {
+      if (!dockActive) return;
+      if (hover.overlay === "dock") {
+        setHover(initialHover());
+      } else {
+        openDockOverlay();
+      }
+      return;
+    }
     if (chrome[side] === "dock") {
       props.onHide(side);
       setHover(initialHover());
@@ -243,21 +269,32 @@ export function ShellFrame(props: {
 
   const pinRef = useRef(pin);
   pinRef.current = pin;
+  const dockOverlayActionsRef = useRef({ openDockOverlay, closeOverlay, dockDocked: false, dockActive });
+  dockOverlayActionsRef.current = { openDockOverlay, closeOverlay, dockDocked: chrome.dock === "dock" && dockActive && !immersive, dockActive };
   const keysRef = useRef({ keys: props.keys, hasDock: dockActive, immersive });
   keysRef.current = { keys: props.keys, hasDock: dockActive, immersive };
   useEffect(() => {
     const control = props.controlRef;
     if (!control) return;
-    control.current = { toggle: (side) => { if (side === "dock" && !keysRef.current.hasDock) return; pinRef.current(side); } };
+    control.current = {
+      toggle: (side) => { if (side === "dock" && !keysRef.current.hasDock) return; pinRef.current(side); },
+      openDockOverlay: () => { dockOverlayActionsRef.current.openDockOverlay(); },
+      closeDockOverlay: () => { dockOverlayActionsRef.current.closeOverlay(); },
+      ensureDockVisible: () => {
+        if (!dockOverlayActionsRef.current.dockActive) return;
+        if (!dockOverlayActionsRef.current.dockDocked) dockOverlayActionsRef.current.openDockOverlay();
+      },
+    };
     return () => { control.current = null; };
   }, [props.controlRef]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const { keys, hasDock, immersive: hidden } = keysRef.current;
-      if (!keys || hidden || event.defaultPrevented || event.isComposing || event.repeat) return;
+      if (!keys || event.defaultPrevented || event.isComposing || event.repeat) return;
+      if (document.querySelector('[role="dialog"]')) return;
       const chord = chordOf(event);
       if (chord === null) return;
-      if (keys.sidebar.includes(chord)) { event.preventDefault(); pinRef.current("sidebar"); }
+      if (!hidden && keys.sidebar.includes(chord)) { event.preventDefault(); pinRef.current("sidebar"); }
       else if (hasDock && keys.dock.includes(chord)) { event.preventDefault(); pinRef.current("dock"); }
     };
     window.addEventListener("keydown", onKey);
@@ -284,7 +321,7 @@ export function ShellFrame(props: {
       const target = event.target instanceof Node ? event.target : null;
       if (!target) return;
       if (sidebarPanel.current?.contains(target) || dockPanel.current?.contains(target)) return;
-      if (target instanceof Element && target.closest(".shell-rail, [data-testid='shell-sidebar-toggle'], [data-testid='shell-dock-toggle'], [data-testid='sidebar-menu'], [role='menu'], [role='dialog']")) return;
+      if (target instanceof Element && target.closest(".shell-rail, [data-testid='shell-sidebar-toggle'], [data-testid='shell-dock-toggle'], [data-testid='edge-handle-zone'], [data-testid='selection-bubble'], [data-testid='sidebar-menu'], [role='menu'], [role='dialog']")) return;
       setHover(initialHover());
     };
     document.addEventListener("pointerdown", onDown, true);
@@ -304,9 +341,12 @@ export function ShellFrame(props: {
   }, [immersive]);
 
   const sidebarOpen = chrome.sidebar !== "hidden" && !immersive;
-  const dockOpen = chrome.dock !== "hidden" && dockActive && !immersive;
+  const dockOverlayInImmersive = immersive && dockActive && hover.overlay === "dock";
+  const dockState: "dock" | "overlay" | "hidden" = dockOverlayInImmersive ? "overlay" : (immersive ? "hidden" : chrome.dock);
+  const dockOpen = dockState !== "hidden" && dockActive;
   const sidebarDocked = chrome.sidebar === "dock" && !immersive;
-  const dockDocked = chrome.dock === "dock" && dockOpen;
+  const dockDocked = dockState === "dock" && dockOpen;
+  const showEdgeHandle = dockActive && (!dockOpen || inScreenFullscreen);
   const sidebarLimit = dragLimit("sidebar", props.viewport.width, dockDocked ? chrome.dockWidth : 0, props.mainFloor);
   const dockLimit = dragLimit("dock", props.viewport.width, sidebarDocked ? chrome.sidebarWidth : 0, props.mainFloor);
   const commitWidth = (side: Side, width: number) => props.onResize(side, clampSide(side, width));
@@ -436,7 +476,7 @@ export function ShellFrame(props: {
         <main data-testid="shell-main" data-measure={chrome.measurePx} className="shell-main flex-1 min-w-0 min-h-0 relative">
           {props.children}
           {props.bottom}
-          {dockActive && !dockOpen && !immersive ? props.capsule : null}
+          {showEdgeHandle ? props.edgeHandle : null}
           {!immersive && !endInDock ? <div className="main-top-end shell-drag" data-testid="main-top-end">{titleEnd}</div> : null}
         </main>
         {dockDocked || dragging?.side === "dock" ? <Divider side="dock" width={chrome.dockWidth} limit={dockLimit} label={labels.resizeDock} onDrag={onDragDock} onCommit={(width) => commitWidth("dock", width)} onCollapse={() => collapse("dock")} /> : null}
@@ -446,16 +486,19 @@ export function ShellFrame(props: {
               ref={dockPanel}
               tabIndex={-1}
               data-testid="shell-dock"
-              data-shell-state={chrome.dock}
+              data-shell-state={dockState}
               aria-label={labels.dock}
-              className={`shell-dock ${chrome.dock === "overlay" ? "absolute bottom-0 right-0 z-20 shadow-md" : "shrink-0"}`}
-              style={{ width: chrome.dockWidth || SIDE_WIDTH.dock.initial, ...(chrome.dock === "overlay" ? { top: TOP_ROW_HEIGHT } : {}) }}
-              onMouseEnter={() => enterSide("dock")}
+              className={`shell-dock ${dockState === "overlay" ? "absolute bottom-0 right-0 shadow-md" : "shrink-0"}`}
+              style={{
+                width: chrome.dockWidth || SIDE_WIDTH.dock.initial,
+                ...(dockState === "overlay" ? { top: immersive ? 0 : TOP_ROW_HEIGHT, zIndex: immersive ? 45 : 20 } : {}),
+              }}
+              onMouseEnter={immersive ? () => enterPanel("dock") : () => enterSide("dock")}
               onMouseLeave={(event) => leave("dock", event)}
-              onBlur={chrome.dock === "overlay" ? onOverlayBlur : undefined}
+              onBlur={dockState === "overlay" ? onOverlayBlur : undefined}
             >
               {endInDock ? <div className="dock-top shell-drag" data-testid="dock-top"><span className="top-fill" />{titleEnd}</div> : null}
-              {chrome.dock === "overlay" ? <button type="button" className="m-2 text-sm border px-2 py-1 rounded" data-testid="shell-dock-hide" onClick={() => { setHover(initialHover()); dockButton.current?.focus(); }}>{labels.hideDock}</button> : null}
+              {dockState === "overlay" ? <button type="button" className="m-2 text-sm border px-2 py-1 rounded" data-testid="shell-dock-hide" onClick={() => { setHover(initialHover()); dockButton.current?.focus(); }}>{labels.hideDock}</button> : null}
               <div className="shell-dock-body">{props.dock}</div>
             </aside>
           </Activity>

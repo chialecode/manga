@@ -294,6 +294,8 @@ export const MediaCommandInputs = {
       assStyle: z.enum(["keep", "standard"]).optional(),
       /** A screenshot of the picture carries the subtitles on screen (A-92); on unless turned off. */
       shotSubtitles: z.boolean().optional(),
+      /** Opening the centered quick-note modal pauses playback and resumes on close; off by default. */
+      pauseOnQuickNote: z.boolean().optional(),
     }).strict().optional(),
     /** The keys of the readers and the window, by action (see `@manga/contracts/keys`); `null` puts the default back. The service checks the whole table for conflicts. */
     keys: z.record(KeyActionIdSchema, z.array(z.string().max(40)).max(4).nullable()).refine((value) => Object.keys(value).length <= 64, "too many actions").optional(),
