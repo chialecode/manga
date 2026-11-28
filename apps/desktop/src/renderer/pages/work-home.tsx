@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowLeft, MoreHorizontal, Pencil, Play } from "lucide-react";
 import type { Translator } from "@manga/i18n";
 import { AddToProject } from "../components/add-to-project.tsx";
@@ -14,19 +14,17 @@ import { ResourceContent } from "./resource-content.tsx";
 import { CoverImage, progressLine, shelfLabel } from "./work-card.tsx";
 import {
   WorkCoversSection,
-  WorkCreditsTab,
   WorkOverviewTab,
   WorkRecordsTab,
-  WorkRelatedTab,
-  WorkResourcesTab,
   formatFieldValue,
+  isSafeExternalUrl,
   type WorkCredits,
   type WorkCreditsState,
 } from "./work-home-tabs.tsx";
 import { MatchDialog, providerName } from "./work-match.tsx";
 
 type T = Translator["t"];
-export type WorkTab = "overview" | "resources" | "characters" | "staff" | "records" | "related";
+export type WorkTab = "overview" | "records";
 
 export const FIELD_ORDER = ["title", "titleOriginal", "author", "studio", "summary", "releaseDate", "platform", "episodeCount", "volumeCount", "tags"] as const;
 
@@ -43,9 +41,9 @@ export function fieldSource(t: T, field: ProjectedField, formatDate: (value: str
 }
 
 /**
- * One work's own page (A-47): head, the button that opens the file, the shelf state, matching, and the tabs. Opening a card on a
- * shelf lands here; only "read" or "watch" opens a file. The profile is edited here too: every field is shown and can be filled,
- * locked, or restored to what the source says.
+ * One work's own page (A-47): hero header, the button that opens the file, the shelf state, matching, and two tabs separating
+ * work info ("作品资料", Bangumi-style unified layout) from personal records ("我的记录"). Opening a card on a shelf lands here;
+ * only "read" or "watch" opens a file. The profile is edited here too: every field is shown and can be filled, locked, or restored.
  */
 export function WorkHome(props: {
   t: T;
@@ -88,6 +86,7 @@ export function WorkHome(props: {
   const [credits, setCredits] = useState<WorkCreditsState>({ status: "idle" });
   const creditsGuard = useAsyncGuard();
   const prevWorkIdRef = useRef(props.workId);
+  const tabRefs = useRef<Partial<Record<WorkTab, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
     if (prevWorkIdRef.current === props.workId) return;
@@ -111,16 +110,43 @@ export function WorkHome(props: {
 
   const coverIds = useMemo(() => state.covers?.covers.map((cover) => cover.id) ?? [], [state.covers]);
   const thumb = useCovers([detail?.coverId, ...coverIds], "detail");
-  const linkedKey = detail?.linkedSource ? `${detail.linkedSource.providerId}:${detail.linkedSource.externalId}:${detail.linkedSource.fetchedAt}` : "";
+  const linked = detail?.linkedSource ?? null;
+  const linkedKey = linked ? `${linked.providerId}:${linked.externalId}:${linked.fetchedAt ?? ""}` : "";
 
   const loadCredits = useCallback(async () => {
     const token = creditsGuard.next();
     setCredits({ status: "loading" });
-    const result = await attempt<WorkCredits>("metadata.characters", { workId: props.workId });
+    const result = await attempt<Partial<WorkCredits>>("metadata.characters", { workId: props.workId });
     if (!creditsGuard.isCurrent(token)) return;
-    setCredits(result.ok ? { status: "ready", value: result.value } : { status: "error", error: result.error.message });
+    if (!result.ok) {
+      setCredits({ status: "error", error: result.error.message });
+      return;
+    }
+    const raw = result.value ?? {};
+    const characters = asArray<WorkCredits["characters"][number]>(raw.characters).map((item) => ({
+      ...item,
+      actors: asArray<{ id: string; name: string }>(item.actors),
+    }));
+    const persons = asArray<WorkCredits["persons"][number]>(raw.persons).map((item) => ({
+      ...item,
+      career: asArray<string>(item.career),
+    }));
+    const avatarLimit = typeof raw.avatarLimit === "number" && Number.isFinite(raw.avatarLimit) ? raw.avatarLimit : 20;
+    setCredits({
+      status: "ready",
+      value: { source: raw.source ?? null, characters, persons, avatarLimit },
+    });
   }, [props.workId, creditsGuard]);
-  useEffect(() => { if ((tab === "characters" || tab === "staff") && metadataOn) void loadCredits(); }, [tab, metadataOn, loadCredits, linkedKey]);
+
+  // Load characters & staff eagerly for linked works so the unified overview displays them without extra tab clicks.
+  useEffect(() => {
+    if (!metadataOn || !linkedKey) {
+      creditsGuard.invalidate();
+      setCredits({ status: "idle" });
+      return;
+    }
+    void loadCredits();
+  }, [metadataOn, linkedKey, loadCredits, creditsGuard]);
 
   async function act(commandId: string, input: unknown): Promise<boolean> {
     const result = await attempt(commandId, input);
@@ -153,8 +179,8 @@ export function WorkHome(props: {
   }
   async function toggleLock(key: string) {
     if (!detail) return;
-    const locked = detail.override.locked.includes(key);
-    const next = locked ? detail.override.locked.filter((item) => item !== key) : [...detail.override.locked, key];
+    const lockedField = detail.override.locked.includes(key);
+    const next = lockedField ? detail.override.locked.filter((item) => item !== key) : [...detail.override.locked, key];
     if (await act("works.setOverride", { workId: props.workId, fields: detail.override.fields, locked: next, cleared: detail.override.cleared })) await changed();
   }
   async function unlink() {
@@ -162,7 +188,7 @@ export function WorkHome(props: {
     if (await act("metadata.unlink", { workId: props.workId, providerId: detail.linkedSource.providerId })) { props.onNotice(t("match.unlinked.done")); await changed(); }
   }
 
-  const external = (url: string) => { void window.manga.openExternal?.(url); };
+  const external = (url: string) => { if (isSafeExternalUrl(url)) void window.manga.openExternal?.(url); };
   const kind = (detail?.mediaKind === "comic" || detail?.mediaKind === "video" ? detail.mediaKind : "novel") as WorkMediaKind;
   // "继续" goes to a resource that can be opened: the current context's own resource when it has one (A-96), else the last one opened, else the first (A-113).
   const openable = (row: { available?: boolean; outside?: boolean }) => row.available !== false && row.outside !== true;
@@ -179,8 +205,16 @@ export function WorkHome(props: {
   const readLabel = detail && percent > 0 && detail.lastResource
     ? (kind === "video" ? t("work.continueWatch", { place: progressLine(t, detail) || `${percent}%` }) : t("work.continueRead", { place: progressLine(t, detail) || `${percent}%` }))
     : verb;
-  const linked = detail?.linkedSource ?? null;
-  const rating = linked?.rating?.score;
+
+  const titleOriginal = detail ? formatFieldValue(detail.fields.titleOriginal?.value ?? null).trim() : "";
+  const showSubtitle = Boolean(detail && titleOriginal && titleOriginal !== detail.title.trim());
+
+  const ratingScore = linked?.rating?.score;
+  const hasRating = typeof ratingScore === "number" && Number.isFinite(ratingScore) && ratingScore > 0;
+  const scoreText = hasRating ? ratingScore.toFixed(1) : "";
+  const ratingTotal = linked?.rating?.total;
+  const ratingRank = linked?.rating?.rank;
+
   const detailCoverMeta = coverMeta(detail?.coverId, "detail");
   const coverLandscape = kind === "video" && !linked && Boolean(detailCoverMeta && detailCoverMeta.width > detailCoverMeta.height);
   const detailCoverStyle = !coverLandscape && detailCoverMeta && detailCoverMeta.width > 0 && detailCoverMeta.height > 0
@@ -191,21 +225,36 @@ export function WorkHome(props: {
     { id: "refresh", label: t("match.refresh"), onSelect: () => setMatch("refresh") },
     { id: "change", label: t("match.change"), onSelect: () => setMatch("link") },
     { id: "unlink", label: t("match.unlink"), onSelect: () => void unlink() },
-    ...(linked.sourceUrl ? [{ id: "open", label: t("match.openBrowser"), onSelect: () => external(linked.sourceUrl!) }] : []),
+    ...(isSafeExternalUrl(linked.sourceUrl) ? [{ id: "open", label: t("match.openBrowser"), onSelect: () => external(linked.sourceUrl!) }] : []),
   ] : [];
   const moreMenu: MenuItem[] = [
     { id: "cover", label: t("card.cover"), onSelect: () => setCoversOpen((open) => !open) },
     { id: "delete", label: t("entry.delete"), danger: true, onSelect: () => setDeleting(true) },
   ];
 
-  const tabs: Array<{ id: WorkTab; label: string; show: boolean }> = [
-    { id: "overview", label: t("work.tab.overview"), show: true },
-    { id: "resources", label: t(`work.tab.resources.${kind}` as "work.tab.resources.novel"), show: true },
-    { id: "characters", label: t("work.tab.characters"), show: metadataOn },
-    { id: "staff", label: t("work.tab.staff"), show: metadataOn },
-    { id: "records", label: t("work.tab.records"), show: true },
-    { id: "related", label: t("work.tab.related"), show: metadataOn },
+  const tabs: Array<{ id: WorkTab; label: string }> = [
+    { id: "overview", label: t("work.tab.overview") },
+    { id: "records", label: t("work.tab.records") },
   ];
+
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) {
+    let nextIndex = -1;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex]!.id;
+    setTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  }
+
+  function toggleEditMode() {
+    setEditMode((value) => !value);
+    setEditing(null);
+    setTab("overview");
+  }
 
   if (viewing) {
     return (
@@ -238,12 +287,35 @@ export function WorkHome(props: {
               <CoverImage url={thumb(detail.coverId)} coverId={detail.coverId} kind={detail.mediaKind} title={detail.title} landscape={coverLandscape} />
             </div>
             <div className="detail-meta">
-              <h1 data-testid="detail-title">{detail.title}</h1>
-              {detail.originalTitle && detail.originalTitle !== detail.title ? <p className="detail-muted">{detail.originalTitle}</p> : null}
-              <p className="detail-muted" data-testid="work-facts">
-                {[detail.author ?? formatFieldValue(detail.fields.studio?.value ?? null), t(`shelf.kind.${kind}` as "shelf.kind.novel"), formatFieldValue(detail.fields.releaseDate?.value ?? null).slice(0, 4), detail.fields.episodeCount?.value ? t(`work.episodes.${kind}` as "work.episodes.video", { count: Number(detail.fields.episodeCount.value) }) : detail.resourceCount > 0 ? t("work.files", { count: detail.resourceCount }) : ""].filter(Boolean).join(" · ")}
-              </p>
-              {rating ? <p className="detail-muted" data-testid="work-rating">{t("work.rating", { score: rating, provider: providerName(linked!.providerId, t), time: linked!.fetchedAt ? formatDate(linked!.fetchedAt) : "—" })}</p> : null}
+              <div className="work-head-top">
+                <div className="work-head-titles">
+                  <h1 data-testid="detail-title">{detail.title}</h1>
+                  {showSubtitle ? <p className="detail-muted work-subtitle" data-testid="detail-subtitle">{titleOriginal}</p> : null}
+                  <p className="detail-muted" data-testid="work-facts">
+                    {[detail.author ?? formatFieldValue(detail.fields.studio?.value ?? null), t(`shelf.kind.${kind}` as "shelf.kind.novel"), formatFieldValue(detail.fields.releaseDate?.value ?? null).slice(0, 4), detail.fields.episodeCount?.value ? t(`work.episodes.${kind}` as "work.episodes.video", { count: Number(detail.fields.episodeCount.value) }) : detail.resourceCount > 0 ? t("work.files", { count: detail.resourceCount }) : ""].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                {hasRating ? (
+                  <div
+                    className="work-rating-card"
+                    data-testid="work-rating"
+                    title={t("work.rating", { score: scoreText, provider: providerName(linked!.providerId, t), time: linked!.fetchedAt ? formatDate(linked!.fetchedAt) : "—" })}
+                  >
+                    <div className="work-rating-score-row">
+                      <span className="work-rating-score" data-testid="work-rating-score">{scoreText}</span>
+                      {typeof ratingRank === "number" && ratingRank > 0 ? (
+                        <span className="work-rating-rank" data-testid="work-rating-rank">{t("work.rating.rank", { rank: ratingRank })}</span>
+                      ) : null}
+                    </div>
+                    <div className="work-rating-meta">
+                      <span className="work-rating-provider">{providerName(linked!.providerId, t)}</span>
+                      {typeof ratingTotal === "number" && ratingTotal > 0 ? (
+                        <span className="work-rating-votes" data-testid="work-rating-votes">{t("work.rating.votes", { count: ratingTotal })}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               {formatFieldValue(detail.fields.tags?.value ?? null) ? <p className="work-tags" data-testid="work-tags">{asArray<string>(detail.fields.tags?.value).slice(0, 12).map((tag) => <span key={tag} className="chip">{tag}</span>)}</p> : null}
               {completed || percent > 0 ? (
                 <div className="work-progress-block" data-testid="work-progress-summary">
@@ -272,7 +344,7 @@ export function WorkHome(props: {
                     ? <span className="work-linked"><button type="button" className="secondary-button" data-testid="detail-match" onClick={() => setMatch("link")}>{t("match.linkedTag", { id: linked.externalId })}</button><Menu label={t("match.menu")} testId="work-link-menu" align="end" trigger={<MoreHorizontal size={15} />} items={linkMenu} /></span>
                     : <button type="button" className="secondary-button" data-testid="detail-match" onClick={() => setMatch("link")}>{t("detail.matchAction")}</button>
                 ) : null}
-                <button type="button" className="secondary-button" data-testid="detail-edit" aria-pressed={editMode} onClick={() => { setEditMode((value) => !value); setEditing(null); setTab("overview"); }}><Pencil size={14} />{editMode ? t("work.editDone") : t("work.edit")}</button>
+                <button type="button" className="secondary-button" data-testid="detail-edit" aria-pressed={editMode} onClick={toggleEditMode}><Pencil size={14} />{editMode ? t("work.editDone") : t("work.edit")}</button>
                 {props.facets.has("projects") ? <AddToProject t={t} kind="work" targetId={props.workId} label={detail.title} onError={props.onError} onNotice={props.onNotice} /> : null}
                 <Menu label={t("work.more")} testId="work-more" align="end" trigger={<MoreHorizontal size={16} />} items={moreMenu} />
               </div>
@@ -296,67 +368,74 @@ export function WorkHome(props: {
           ) : null}
 
           <div role="tablist" className="shelf-tabs detail-tabs" aria-label={t("detail.tabs")}>
-            {tabs.filter((item) => item.show).map((item) => (
-              <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} data-testid={`detail-tab-${item.id}`} onClick={() => setTab(item.id)}>{item.label}</button>
+            {tabs.map((item, index) => (
+              <button
+                key={item.id}
+                ref={(node) => { tabRefs.current[item.id] = node; }}
+                id={`work-tab-${item.id}`}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                aria-controls={`work-panel-${item.id}`}
+                data-testid={`detail-tab-${item.id}`}
+                onClick={() => setTab(item.id)}
+                onKeyDown={(event) => onTabKeyDown(event, index)}
+              >
+                {item.label}
+              </button>
             ))}
           </div>
 
-          {tab === "overview" ? (
-            <WorkOverviewTab
-              t={t}
-              detail={detail}
-              fieldOrder={FIELD_ORDER}
-              fieldSource={fieldSource}
-              formatDate={formatDate}
-              editMode={editMode}
-              editing={editing}
-              draft={draft}
-              onStartEdit={(key, value) => { setEditing(key); setDraft(value); }}
-              onCancelEdit={() => setEditing(null)}
-              onDraft={setDraft}
-              onSaveField={(key) => void saveField(key)}
-              onToggleLock={(key) => void toggleLock(key)}
-              onResetField={(key) => void resetField(key)}
-              onOpenExternal={external}
-            />
-          ) : null}
-
-          {tab === "resources" ? (
-            <WorkResourcesTab
-              t={t}
-              detail={detail}
-              kind={kind}
-              verb={verb}
-              onOpenResource={(resourceId) => props.onOpenResource(resourceId, kind)}
-              onViewResource={setViewing}
-              onMoveResource={setMoving}
-            />
-          ) : null}
-
-          {(tab === "characters" || tab === "staff") && metadataOn ? (
-            <WorkCreditsTab t={t} tab={tab} credits={credits} formatDate={formatDate} onRefresh={() => setMatch("refresh")} />
-          ) : null}
-
-          {tab === "records" ? (
-            <WorkRecordsTab
-              t={t}
-              workId={props.workId}
-              folderVersion={`${linkedKey}:${detail.resources.length}`}
-              voiceOn={voiceOn}
-              notes={state.notes}
-              captures={state.captures}
-              formatDate={formatDate}
-              onOpenNote={props.onOpenNote}
-              onOpenRecording={props.onOpenRecording}
-              onError={props.onError}
-              onNotice={props.onNotice}
-              onChanged={() => { void state.reload(); props.onChanged(); }}
-            />
-          ) : null}
-
-          {tab === "related" && metadataOn ? (
-            <WorkRelatedTab t={t} related={state.related} relatedStatus={state.relatedStatus} formatDate={formatDate} onOpenWork={props.onOpenWork} onOpenExternal={external} />
-          ) : null}
+          <div role="tabpanel" id={`work-panel-${tab}`} aria-labelledby={`work-tab-${tab}`} className="work-tab-panel">
+            {tab === "overview" ? (
+              <WorkOverviewTab
+                key={detail.id}
+                t={t}
+                detail={detail}
+                kind={kind}
+                verb={verb}
+                metadataOn={metadataOn}
+                showSubtitleInHeader={showSubtitle}
+                fieldOrder={FIELD_ORDER}
+                fieldSource={fieldSource}
+                formatDate={formatDate}
+                editMode={editMode}
+                editing={editing}
+                draft={draft}
+                credits={credits}
+                related={state.related}
+                relatedStatus={state.relatedStatus}
+                onToggleEdit={toggleEditMode}
+                onStartEdit={(key, value) => { setEditing(key); setDraft(value); }}
+                onCancelEdit={() => setEditing(null)}
+                onDraft={setDraft}
+                onSaveField={(key) => void saveField(key)}
+                onToggleLock={(key) => void toggleLock(key)}
+                onResetField={(key) => void resetField(key)}
+                onOpenResource={(resourceId) => props.onOpenResource(resourceId, kind)}
+                onViewResource={setViewing}
+                onMoveResource={setMoving}
+                onRefreshCredits={() => setMatch("refresh")}
+                onOpenWork={props.onOpenWork}
+                onOpenExternal={external}
+              />
+            ) : (
+              <WorkRecordsTab
+                t={t}
+                workId={props.workId}
+                folderVersion={`${linkedKey}:${detail.resources.length}`}
+                voiceOn={voiceOn}
+                notes={state.notes}
+                captures={state.captures}
+                formatDate={formatDate}
+                onOpenNote={props.onOpenNote}
+                onOpenRecording={props.onOpenRecording}
+                onError={props.onError}
+                onNotice={props.onNotice}
+                onChanged={() => { void state.reload(); props.onChanged(); }}
+              />
+            )}
+          </div>
 
           {match ? (
             <MatchDialog
@@ -367,7 +446,11 @@ export function WorkHome(props: {
               onClose={() => setMatch(null)}
               onOpenExternal={external}
               onError={props.onError}
-              onApplied={(message) => { setMatch(null); props.onNotice(message); void changed().then(() => { if (tab === "characters" || tab === "staff") void loadCredits(); }); }}
+              onApplied={(message) => {
+                setMatch(null);
+                props.onNotice(message);
+                void changed().then(() => { if (metadataOn) void loadCredits(); });
+              }}
             />
           ) : null}
           {deleting ? (

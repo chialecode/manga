@@ -51,9 +51,19 @@ export function useWorkDetail(workId: string, options: { metadata: boolean; voic
 
     if (options.metadata) {
       setRelatedStatus("loading");
-      void attempt<RelatedWorks>("metadata.related", { workId }).then((result) => {
+      void attempt<Partial<RelatedWorks>>("metadata.related", { workId }).then((result) => {
         if (mine !== token.current) return;
-        if (result.ok) { setRelated(result.value); setRelatedStatus("ready"); return; }
+        if (result.ok) {
+          const raw = result.value ?? {};
+          setRelated({
+            workId: typeof raw.workId === "string" ? raw.workId : workId,
+            source: raw.source ?? null,
+            relations: asArray(raw.relations),
+            similar: asArray(raw.similar),
+          });
+          setRelatedStatus("ready");
+          return;
+        }
         setRelatedStatus(result.error.code === "CAPABILITY_UNAVAILABLE" ? "off" : "error");
       });
     } else setRelatedStatus("off");

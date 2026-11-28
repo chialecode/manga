@@ -20,6 +20,15 @@ export type ProjectedField = {
 
 export type WorkVersion = { workId: string; label: string; resourceCount: number; lastOpenedAt: string | null; current: boolean };
 
+export type WorkEpisode = {
+  ep: number | null;
+  sort: number;
+  type: number;
+  title: string;
+  titleOriginal?: string;
+  airdate?: string;
+};
+
 export type WorkDetail = WorkSummary & {
   /** The versions of the title, this work among them (A-68); only the owner is given them. */
   versions?: WorkVersion[];
@@ -33,7 +42,19 @@ export type WorkDetail = WorkSummary & {
   resources: WorkResourceRow[];
   contextPositions?: WorkContextPosition[];
   suggestedQuery?: string;
-  linkedSource?: { providerId: string; externalId: string; namespace: string; fetchedAt: string | null; detached: boolean; sourceUrl: string | null; rating: { score?: number; total?: number } | null; episodeCount: number; relatedCount: number } | null;
+  linkedSource?: {
+    providerId: string;
+    externalId: string;
+    namespace: string;
+    fetchedAt: string | null;
+    detached: boolean;
+    sourceUrl: string | null;
+    rating: { score?: number; total?: number; rank?: number | null; scale?: string } | null;
+    episodeCount: number;
+    relatedCount: number;
+    aliases?: string[];
+    episodes?: WorkEpisode[];
+  } | null;
 };
 
 export type RelatedProvider = { relation: string; externalId: string; title: string; titleOriginal?: string; subjectType: number; providerId: string; inLibraryWorkId: string | null; sourceUrl: string | null };
